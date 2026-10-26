@@ -1,7 +1,19 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
+import {
+  type ArrowFunctionExpression,
+  type CallExpression,
+  isObjectLiteralProperty,
+  type Node,
+  type ObjectProperty,
+  type ParsedSource,
+  parseSource,
+  type SpreadElement,
+  type TSType,
+  type VariableDeclarator,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 import { parseMigrationStatements } from "./check-migration-safety";
 import {
   censusSql,
@@ -15,20 +27,114 @@ const SQL_START =
   /^\s*(?:DO|PERFORM|CREATE|ALTER|DROP|REINDEX|ANALYZE|COMMENT|TRUNCATE|REFRESH|CLUSTER|VACUUM|GRANT|REVOKE|LOCK|SECURITY|IMPORT|REASSIGN)\b/iu;
 const IDENTIFIER_PLACEHOLDER = '"__online_ddl_identifier__"';
 
-type SqlVariant = { node: ts.Expression };
+type SqlVariant = { node: Node };
 type ExpandedSqlVariant = { text: string; resolved: boolean };
 type SourceContext = {
-  source: ts.SourceFile;
-  nodes: readonly ts.Node[];
+  source: ParsedSource;
+  /** Every node in source order. */
+  nodes: readonly Node[];
+  /** oxc nodes carry no parent links. */
+  parents: ReadonlyMap<Node, Node>;
 };
 
 type TemplateInterpolationAllowance = {
   shape: string;
   reason: string;
-  expand: (node: ts.Expression) => ExpandedSqlVariant[] | undefined;
+  expand: (node: Node) => ExpandedSqlVariant[] | undefined;
 };
 
 const isSql = (text: string): boolean => SQL_START.test(text);
+
+const nodeText = (node: Node, source: ParsedSource): string =>
+  source.sourceText.slice(node.start, node.end);
+
+// A string literal or a template without substitutions (TypeScript's
+// StringLiteralLike), read as its cooked text.
+const stringLiteralText = (node: Node | null): string | undefined => {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+
+const isCallTo = (
+  node: Node,
+  names: readonly string[],
+): node is CallExpression =>
+  node.type === "CallExpression" &&
+  node.callee.type === "Identifier" &&
+  names.includes(node.callee.name);
+
+/** `node` and its ancestors, nearest first. */
+const ancestry = (node: Node, context: SourceContext): Node[] => {
+  const chain: Node[] = [];
+  for (
+    let current: Node | undefined = node;
+    current !== undefined;
+    current = context.parents.get(current)
+  ) {
+    chain.push(current);
+  }
+  return chain;
+};
+
+const nearestArrow = (
+  node: Node,
+  context: SourceContext,
+): ArrowFunctionExpression | undefined => {
+  for (const current of ancestry(node, context)) {
+    if (current.type === "ArrowFunctionExpression") {
+      return current;
+    }
+  }
+  return undefined;
+};
+
+// A parameter's bound name, with or without a default value.
+const parameterIdentifier = (parameter: Node) => {
+  const binding =
+    parameter.type === "AssignmentPattern" ? parameter.left : parameter;
+  return binding.type === "Identifier" ? binding : undefined;
+};
+
+const variableDeclarator = (
+  node: Node,
+  name: string,
+): VariableDeclarator | undefined =>
+  node.type === "VariableDeclarator" &&
+  node.id.type === "Identifier" &&
+  node.id.name === name
+    ? node
+    : undefined;
+
+// A `key: value` object literal entry (TypeScript's PropertyAssignment).
+const isPropertyAssignment = (
+  property: ObjectProperty | SpreadElement,
+): property is ObjectProperty =>
+  property.type === "Property" &&
+  !property.shorthand &&
+  !property.method &&
+  property.kind === "init";
+
+const isShorthandProperty = (
+  property: ObjectProperty | SpreadElement,
+): property is ObjectProperty =>
+  property.type === "Property" && property.shorthand;
+
+// The key as written, brackets included for a computed key.
+const propertyKeyText = (
+  property: ObjectProperty | SpreadElement,
+  source: ParsedSource,
+): string | undefined => {
+  if (property.type !== "Property") {
+    return undefined;
+  }
+  const text = nodeText(property.key, source);
+  return property.computed ? `[${text}]` : text;
+};
 
 export const TEMPLATE_INTERPOLATION_ALLOWLIST: TemplateInterpolationAllowance[] =
   [
@@ -37,10 +143,7 @@ export const TEMPLATE_INTERPOLATION_ALLOWLIST: TemplateInterpolationAllowance[] 
       reason:
         "quoteIdentifier returns one validated, double-quoted PostgreSQL identifier.",
       expand: (node) =>
-        ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        node.expression.text === "quoteIdentifier" &&
-        node.arguments.length === 1
+        isCallTo(node, ["quoteIdentifier"]) && node.arguments.length === 1
           ? [{ text: IDENTIFIER_PLACEHOLDER, resolved: true }]
           : undefined,
     },
@@ -48,55 +151,77 @@ export const TEMPLATE_INTERPOLATION_ALLOWLIST: TemplateInterpolationAllowance[] 
       shape: "conditional with literal-only branches",
       reason:
         "Literal branches are enumerated independently and cannot inject uninspected SQL.",
-      expand: (node) =>
-        ts.isConditionalExpression(node) &&
-        ts.isStringLiteralLike(node.whenTrue) &&
-        ts.isStringLiteralLike(node.whenFalse)
+      expand: (node) => {
+        if (node.type !== "ConditionalExpression") {
+          return undefined;
+        }
+        const whenTrue = stringLiteralText(node.consequent);
+        const whenFalse = stringLiteralText(node.alternate);
+        return whenTrue !== undefined && whenFalse !== undefined
           ? [
-              { text: node.whenTrue.text, resolved: true },
-              { text: node.whenFalse.text, resolved: true },
+              { text: whenTrue, resolved: true },
+              { text: whenFalse, resolved: true },
             ]
-          : undefined,
+          : undefined;
+      },
     },
   ];
 
-const syntaxShape = (node: ts.Node): string => {
+// A node's syntax without positions or spelling: its type, its scalar fields
+// (names, cooked literal values, operators, flags) and its children's shapes.
+const syntaxShape = (node: Node): string => {
   const children: string[] = [];
-  ts.forEachChild(node, (child) => {
+  walk(node, (child) => {
+    if (child === node) {
+      return undefined;
+    }
     children.push(syntaxShape(child));
+    return "skip-children";
   });
-  const text =
-    ts.isIdentifier(node) ||
-    ts.isStringLiteralLike(node) ||
-    ts.isNumericLiteral(node) ||
-    ts.isRegularExpressionLiteral(node) ||
-    ts.isTemplateHead(node) ||
-    ts.isTemplateMiddle(node) ||
-    ts.isTemplateTail(node)
-      ? node.text
-      : "";
-  const operator =
-    ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)
-      ? node.operator
-      : undefined;
-  return JSON.stringify([node.kind, text, operator, children]);
+  const fields: unknown[] = [];
+  for (const [key, value] of Object.entries(node)) {
+    if (
+      key === "start" ||
+      key === "end" ||
+      key === "raw" ||
+      // The proofs have never distinguished let, const and var.
+      (node.type === "VariableDeclaration" && key === "kind")
+    ) {
+      continue;
+    }
+    if (typeof value === "bigint") {
+      fields.push(key, String(value));
+    } else if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean"
+    ) {
+      fields.push(key, value);
+    }
+  }
+  if (node.type === "TemplateElement") {
+    fields.push("cooked", node.value.cooked);
+  }
+  if (node.type === "Literal" && "regex" in node) {
+    fields.push("regex", node.regex.pattern, node.regex.flags);
+  }
+  return JSON.stringify([fields, children]);
 };
 
-const sameSyntax = (node: ts.Node, expression: string): boolean => {
-  const fixture = ts.createSourceFile(
+const sameSyntax = (node: Node, expression: string): boolean => {
+  const isBlock = node.type === "BlockStatement";
+  const fixture = parseSource(
     "proof.ts",
-    `const proof = ${ts.isBlock(node) ? `() => ${expression}` : expression};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
+    `const proof = ${isBlock ? `() => ${expression}` : expression};`,
   );
-  const statement = fixture.statements.at(0);
+  const statement = fixture.program.body.at(0);
   const initializer =
-    statement && ts.isVariableStatement(statement)
-      ? statement.declarationList.declarations.at(0)?.initializer
+    statement?.type === "VariableDeclaration"
+      ? (statement.declarations.at(0)?.init ?? undefined)
       : undefined;
   const candidate =
-    initializer && ts.isBlock(node) && ts.isArrowFunction(initializer)
+    initializer && isBlock && initializer.type === "ArrowFunctionExpression"
       ? initializer.body
       : initializer;
   return (
@@ -104,32 +229,33 @@ const sameSyntax = (node: ts.Node, expression: string): boolean => {
   );
 };
 
+// The first declaration of `name` anywhere in the source.
+const firstDeclarator = (
+  context: SourceContext,
+  name: string,
+): VariableDeclarator | undefined => {
+  for (const node of context.nodes) {
+    const declarator = variableDeclarator(node, name);
+    if (declarator !== undefined) {
+      return declarator;
+    }
+  }
+  return undefined;
+};
+
 const ownerArrow = (
   context: SourceContext,
   name: string,
-): ts.ArrowFunction | undefined => {
-  const declaration = context.nodes.find(
-    (node) =>
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === name,
-  );
-  return declaration &&
-    ts.isVariableDeclaration(declaration) &&
-    declaration.initializer &&
-    ts.isArrowFunction(declaration.initializer)
-    ? declaration.initializer
+): ArrowFunctionExpression | undefined => {
+  const declaration = firstDeclarator(context, name);
+  return declaration?.init?.type === "ArrowFunctionExpression"
+    ? declaration.init
     : undefined;
 };
 
 const provesQuotedIdentifier = (context: SourceContext): boolean => {
   const helper = ownerArrow(context, "quoteIdentifier");
-  const pattern = context.nodes.find(
-    (node) =>
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "POSTGRES_IDENTIFIER",
-  );
+  const pattern = firstDeclarator(context, "POSTGRES_IDENTIFIER");
   return (
     helper !== undefined &&
     sameSyntax(
@@ -141,21 +267,15 @@ const provesQuotedIdentifier = (context: SourceContext): boolean => {
     return \`"\${identifier}"\`;
   }`,
     ) &&
-    pattern !== undefined &&
-    ts.isVariableDeclaration(pattern) &&
-    pattern.initializer !== undefined &&
-    sameSyntax(pattern.initializer, "/^[A-Za-z_][A-Za-z0-9_]*$/u")
+    pattern?.init !== undefined &&
+    pattern.init !== null &&
+    sameSyntax(pattern.init, "/^[A-Za-z_][A-Za-z0-9_]*$/u")
   );
 };
 
 const provesSpliced = (context: SourceContext): boolean => {
   const helper = ownerArrow(context, "spliced");
-  const tag = context.nodes.find(
-    (node) =>
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "BLOCK_TAG",
-  );
+  const tag = firstDeclarator(context, "BLOCK_TAG");
   return (
     helper !== undefined &&
     sameSyntax(
@@ -167,78 +287,108 @@ const provesSpliced = (context: SourceContext): boolean => {
     return text;
   }`,
     ) &&
-    tag !== undefined &&
-    ts.isVariableDeclaration(tag) &&
-    tag.initializer !== undefined &&
-    sameSyntax(tag.initializer, '"$online_ddl$"')
+    tag?.init !== undefined &&
+    tag.init !== null &&
+    sameSyntax(tag.init, '"$online_ddl$"')
   );
 };
 
+// The parameter an uppercased receiver reads, and the property a
+// `parameter.property` receiver reads from it.
+const uppercaseReceiver = (
+  receiver: Node,
+  context: SourceContext,
+): { parameterName?: string; receiverProperty?: string } => {
+  if (receiver.type === "Identifier") {
+    return { parameterName: receiver.name };
+  }
+  if (
+    receiver.type === "MemberExpression" &&
+    !receiver.computed &&
+    receiver.object.type === "Identifier"
+  ) {
+    return {
+      parameterName: receiver.object.name,
+      receiverProperty:
+        receiver.property.type === "Identifier"
+          ? receiver.property.name
+          : nodeText(receiver.property, context.source),
+    };
+  }
+  return {};
+};
+
+// The declared type of `property` in the local type alias `type` names.
+const aliasedPropertyType = (
+  type: TSType,
+  property: string,
+  context: SourceContext,
+): TSType | undefined => {
+  if (type.type !== "TSTypeReference" || type.typeName.type !== "Identifier") {
+    return type;
+  }
+  const name = type.typeName.name;
+  const alias = context.nodes.find(
+    (entry) =>
+      entry.type === "TSTypeAliasDeclaration" && entry.id.name === name,
+  );
+  const member =
+    alias?.type === "TSTypeAliasDeclaration" &&
+    alias.typeAnnotation.type === "TSTypeLiteral"
+      ? alias.typeAnnotation.members.find(
+          (entry) =>
+            entry.type === "TSPropertySignature" &&
+            !entry.computed &&
+            nodeText(entry.key, context.source) === property,
+        )
+      : undefined;
+  return member?.type === "TSPropertySignature"
+    ? member.typeAnnotation?.typeAnnotation
+    : undefined;
+};
+
 const finiteUppercaseValues = (
-  node: ts.Expression,
+  node: Node,
   context: SourceContext,
 ): ExpandedSqlVariant[] | undefined => {
   if (
-    !ts.isCallExpression(node) ||
+    node.type !== "CallExpression" ||
     node.arguments.length !== 0 ||
-    !ts.isPropertyAccessExpression(node.expression) ||
-    node.expression.name.text !== "toUpperCase"
+    node.callee.type !== "MemberExpression" ||
+    node.callee.computed ||
+    node.callee.property.type !== "Identifier" ||
+    node.callee.property.name !== "toUpperCase"
   ) {
     return undefined;
   }
-  const receiver = node.expression.expression;
-  let parameterName: string | undefined;
-  if (ts.isIdentifier(receiver)) {
-    parameterName = receiver.text;
-  } else if (
-    ts.isPropertyAccessExpression(receiver) &&
-    ts.isIdentifier(receiver.expression)
-  ) {
-    parameterName = receiver.expression.text;
-  }
-  let current: ts.Node = node;
-  while (!ts.isArrowFunction(current) && !ts.isSourceFile(current)) {
-    current = current.parent;
-  }
-  if (!parameterName || !ts.isArrowFunction(current)) {
-    return undefined;
-  }
-  const parameter = current.parameters.find(
-    ({ name }) => ts.isIdentifier(name) && name.text === parameterName,
+  const { parameterName, receiverProperty } = uppercaseReceiver(
+    node.callee.object,
+    context,
   );
-  let type = parameter?.type;
-  if (
-    type &&
-    ts.isPropertyAccessExpression(receiver) &&
-    ts.isTypeReferenceNode(type) &&
-    ts.isIdentifier(type.typeName)
-  ) {
-    const name = type.typeName.text;
-    const alias = context.nodes.find(
-      (entry) => ts.isTypeAliasDeclaration(entry) && entry.name.text === name,
-    );
-    const property =
-      alias &&
-      ts.isTypeAliasDeclaration(alias) &&
-      ts.isTypeLiteralNode(alias.type)
-        ? alias.type.members.find(
-            (entry) =>
-              ts.isPropertySignature(entry) &&
-              entry.name.getText(context.source) === receiver.name.text,
-          )
-        : undefined;
-    type =
-      property && ts.isPropertySignature(property) ? property.type : undefined;
+  const arrow = nearestArrow(node, context);
+  if (!parameterName || arrow === undefined) {
+    return undefined;
   }
-  if (!type || !ts.isUnionTypeNode(type)) {
+  const parameter = arrow.params
+    .map(parameterIdentifier)
+    .find((name) => name?.name === parameterName);
+  let type = parameter?.typeAnnotation?.typeAnnotation;
+  if (type && receiverProperty !== undefined) {
+    type = aliasedPropertyType(type, receiverProperty, context);
+  }
+  if (!type || type.type !== "TSUnionType") {
     return undefined;
   }
   const values: ExpandedSqlVariant[] = [];
   for (const member of type.types) {
-    if (!ts.isLiteralTypeNode(member) || !ts.isStringLiteral(member.literal)) {
+    if (
+      member.type !== "TSLiteralType" ||
+      member.literal.type !== "Literal" ||
+      typeof member.literal.value !== "string"
+    ) {
       return undefined;
     }
-    values.push({ text: member.literal.text.toUpperCase(), resolved: true });
+    values.push({ text: member.literal.value.toUpperCase(), resolved: true });
   }
   return values;
 };
@@ -246,7 +396,7 @@ const finiteUppercaseValues = (
 // Policy DDL already uses ACCESS EXCLUSIVE. Its expression placeholders must
 // never turn into an exception for unresolved ALTER TABLE actions elsewhere.
 const isPolicyExpressionSplice = (
-  node: ts.CallExpression,
+  node: CallExpression,
   context: SourceContext,
 ): boolean => {
   const helper = ownerArrow(context, "policyExpressions");
@@ -262,21 +412,16 @@ const isPolicyExpressionSplice = (
   ) {
     return false;
   }
-  let owner: ts.Node = node;
-  while (!ts.isArrowFunction(owner) && !ts.isSourceFile(owner)) {
-    owner = owner.parent;
-  }
-  return owner === helper;
+  return nearestArrow(node, context) === helper;
 };
 
 const expandTemplateInterpolation = (
-  node: ts.Expression,
+  node: Node,
   context: SourceContext,
   visiting: ReadonlySet<string>,
 ): ExpandedSqlVariant[] => {
-  const expression = ts.isParenthesizedExpression(node)
-    ? node.expression
-    : node;
+  const expression =
+    node.type === "ParenthesizedExpression" ? node.expression : node;
   for (const allowance of TEMPLATE_INTERPOLATION_ALLOWLIST) {
     const variants = allowance.expand(expression);
     if (variants) {
@@ -288,10 +433,10 @@ const expandTemplateInterpolation = (
     return finite;
   }
   if (
-    ts.isCallExpression(expression) &&
-    ts.isIdentifier(expression.expression)
+    expression.type === "CallExpression" &&
+    expression.callee.type === "Identifier"
   ) {
-    const name = expression.expression.text;
+    const name = expression.callee.name;
     if (
       name === "spliced" &&
       expression.arguments.length === 1 &&
@@ -319,7 +464,7 @@ const expandTemplateInterpolation = (
       !visiting.has(name)
     ) {
       const helper = ownerArrow(context, name);
-      if (helper && !ts.isBlock(helper.body)) {
+      if (helper && helper.body.type !== "BlockStatement") {
         return expand(helper.body, context, new Set([...visiting, name]));
       }
     }
@@ -327,47 +472,45 @@ const expandTemplateInterpolation = (
   return [{ text: IDENTIFIER_PLACEHOLDER, resolved: false }];
 };
 
+const UNRESOLVED: readonly ExpandedSqlVariant[] = [
+  { text: IDENTIFIER_PLACEHOLDER, resolved: false },
+];
+
 const expand = (
-  node: ts.Expression,
+  node: Node,
   context: SourceContext,
   visiting: ReadonlySet<string> = new Set(),
 ): ExpandedSqlVariant[] => {
-  if (ts.isParenthesizedExpression(node)) {
+  if (node.type === "ParenthesizedExpression") {
     return expand(node.expression, context, visiting);
   }
-  if (
-    ts.isStringLiteralLike(node) ||
-    ts.isNoSubstitutionTemplateLiteral(node)
-  ) {
-    return [{ text: node.text, resolved: true }];
+  const literal = stringLiteralText(node);
+  if (literal !== undefined) {
+    return [{ text: literal, resolved: true }];
   }
-  if (ts.isConditionalExpression(node)) {
+  if (node.type === "ConditionalExpression") {
     return [
-      ...expand(node.whenTrue, context, visiting),
-      ...expand(node.whenFalse, context, visiting),
+      ...expand(node.consequent, context, visiting),
+      ...expand(node.alternate, context, visiting),
     ];
   }
-  if (ts.isTemplateExpression(node)) {
-    let variants = [{ text: node.head.text, resolved: true }];
-    for (const span of node.templateSpans) {
-      const values = expandTemplateInterpolation(
-        span.expression,
-        context,
-        visiting,
-      );
+  if (node.type === "TemplateLiteral") {
+    let variants = [
+      { text: node.quasis.at(0)?.value.cooked ?? "", resolved: true },
+    ];
+    for (const [index, span] of node.expressions.entries()) {
+      const values = expandTemplateInterpolation(span, context, visiting);
+      const tail = node.quasis.at(index + 1)?.value.cooked ?? "";
       variants = variants.flatMap((prefix) =>
         values.map(({ text, resolved }) => ({
-          text: `${prefix.text}${text}${span.literal.text}`,
+          text: `${prefix.text}${text}${tail}`,
           resolved: prefix.resolved && resolved,
         })),
       );
     }
     return variants;
   }
-  if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.PlusToken
-  ) {
+  if (node.type === "BinaryExpression" && node.operator === "+") {
     return expand(node.left, context, visiting).flatMap((left) =>
       expand(node.right, context, visiting).map((right) => ({
         text: `${left.text}${right.text}`,
@@ -376,25 +519,23 @@ const expand = (
     );
   }
   if (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === "join" &&
-    ts.isArrayLiteralExpression(node.expression.expression)
+    node.type === "CallExpression" &&
+    node.callee.type === "MemberExpression" &&
+    !node.callee.computed &&
+    node.callee.property.type === "Identifier" &&
+    node.callee.property.name === "join" &&
+    node.callee.object.type === "ArrayExpression"
   ) {
-    const separator = node.arguments.at(0);
-    if (
-      node.arguments.length === 1 &&
-      separator &&
-      ts.isStringLiteralLike(separator)
-    ) {
+    const separator = stringLiteralText(node.arguments.at(0) ?? null);
+    if (node.arguments.length === 1 && separator !== undefined) {
       let variants = [{ text: "", resolved: true }];
-      for (const [
-        index,
-        element,
-      ] of node.expression.expression.elements.entries()) {
+      for (const [index, element] of node.callee.object.elements.entries()) {
+        // A hole resolves to nothing, like any other unknown element.
+        const values =
+          element === null ? UNRESOLVED : expand(element, context, visiting);
         variants = variants.flatMap((prefix) =>
-          expand(element, context, visiting).map((value) => ({
-            text: `${prefix.text}${index === 0 ? "" : separator.text}${value.text}`,
+          values.map((value) => ({
+            text: `${prefix.text}${index === 0 ? "" : separator}${value.text}`,
             resolved: prefix.resolved && value.resolved,
           })),
         );
@@ -406,26 +547,20 @@ const expand = (
 };
 
 const isWithinLockTaking = (
-  node: ts.Node,
+  node: Node,
   context: SourceContext,
   visiting: ReadonlySet<string> = new Set(),
 ): boolean => {
-  let current = node;
-  while (current.kind !== ts.SyntaxKind.SourceFile) {
-    if (
-      ts.isCallExpression(current) &&
-      ts.isIdentifier(current.expression) &&
-      ["lockTaking", "accessExclusive"].includes(current.expression.text)
-    ) {
+  for (const current of ancestry(node, context)) {
+    if (isCallTo(current, ["lockTaking", "accessExclusive"])) {
       return current.arguments.some(
         (argument) =>
           argument === node ||
-          (argument.pos <= node.pos && argument.end >= node.end),
+          (argument.start <= node.start && argument.end >= node.end),
       );
     }
-    current = current.parent;
   }
-  const owner = enclosingVariableName(node);
+  const owner = enclosingVariableName(node, context);
   if (
     !owner ||
     visiting.has(owner) ||
@@ -439,168 +574,190 @@ const isWithinLockTaking = (
     return false;
   }
   const helper = ownerArrow(context, owner);
-  const declaration = helper?.parent;
-  const statement = declaration?.parent.parent;
+  const declaration = helper && context.parents.get(helper);
+  const statement = declaration && context.parents.get(declaration);
+  const statementParent = statement && context.parents.get(statement);
+  // A non-exported variable statement (not a `for` head).
   if (
     !helper ||
     !declaration ||
-    !statement ||
-    !ts.isVariableStatement(statement) ||
-    statement.modifiers?.some(
-      ({ kind }) => kind === ts.SyntaxKind.ExportKeyword,
-    )
+    statement?.type !== "VariableDeclaration" ||
+    statementParent?.type === "ExportNamedDeclaration" ||
+    statementParent?.type === "ForStatement" ||
+    statementParent?.type === "ForInStatement" ||
+    statementParent?.type === "ForOfStatement"
   ) {
     return false;
   }
-  const references = context.nodes.filter(
-    (entry) =>
-      ts.isIdentifier(entry) &&
-      entry.text === owner &&
-      !(ts.isVariableDeclaration(entry.parent) && entry.parent.name === entry),
-  );
+  const references = context.nodes.filter((entry) => {
+    if (entry.type !== "Identifier" || entry.name !== owner) {
+      return false;
+    }
+    const parent = context.parents.get(entry);
+    return !(parent?.type === "VariableDeclarator" && parent.id === entry);
+  });
   return (
     references.length > 0 &&
-    references.every(
-      (reference) =>
-        ts.isCallExpression(reference.parent) &&
-        reference.parent.expression === reference &&
-        isWithinLockTaking(
-          reference.parent,
-          context,
-          new Set([...visiting, owner]),
-        ),
-    )
+    references.every((reference) => {
+      const parent = context.parents.get(reference);
+      return (
+        parent?.type === "CallExpression" &&
+        parent.callee === reference &&
+        isWithinLockTaking(parent, context, new Set([...visiting, owner]))
+      );
+    })
   );
 };
 
-const isCreateSqlIdentifier = (node: ts.Expression): boolean =>
-  ts.isIdentifier(node) && node.text === "createSql";
+const isCreateSqlIdentifier = (node: Node): boolean =>
+  node.type === "Identifier" && node.name === "createSql";
 
-const isSplicedCreateSql = (node: ts.Expression): boolean => {
-  const argument = ts.isCallExpression(node) ? node.arguments.at(0) : undefined;
+const isSplicedCreateSql = (node: Node): boolean => {
+  const argument = isCallTo(node, ["spliced"])
+    ? node.arguments.at(0)
+    : undefined;
   return (
-    ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === "spliced" &&
+    isCallTo(node, ["spliced"]) &&
     node.arguments.length === 1 &&
     argument !== undefined &&
     isCreateSqlIdentifier(argument)
   );
 };
 
-const enclosingVariableName = (node: ts.Node): string | undefined => {
-  let current = node;
-  while (current.kind !== ts.SyntaxKind.SourceFile) {
+const enclosingVariableName = (
+  node: Node,
+  context: SourceContext,
+): string | undefined => {
+  for (const current of ancestry(node, context)) {
     if (
-      ts.isVariableDeclaration(current) &&
-      ts.isIdentifier(current.name) &&
-      current.initializer &&
-      ts.isArrowFunction(current.initializer)
+      current.type === "VariableDeclarator" &&
+      current.id.type === "Identifier" &&
+      current.init?.type === "ArrowFunctionExpression"
     ) {
-      return current.name.text;
+      return current.id.name;
     }
-    current = current.parent;
   }
   return undefined;
 };
 
-const isRuntimeAttemptCallback = (call: ts.CallExpression): boolean => {
-  let current = call.parent;
-  while (current.kind !== ts.SyntaxKind.SourceFile) {
+const isRuntimeAttemptCallback = (
+  call: CallExpression,
+  context: SourceContext,
+): boolean => {
+  for (const current of ancestry(call, context)) {
     if (
-      ts.isArrowFunction(current) &&
-      current.parameters.some(
+      current.type === "ArrowFunctionExpression" &&
+      current.params.some(
         (parameter) =>
-          ts.isIdentifier(parameter.name) &&
-          parameter.name.text === "guardedConnection",
+          parameterIdentifier(parameter)?.name === "guardedConnection",
       )
     ) {
-      const parent = current.parent;
+      const parent = context.parents.get(current);
       return (
-        ts.isCallExpression(parent) &&
-        ts.isPropertyAccessExpression(parent.expression) &&
-        parent.expression.name.text === "attempt" &&
-        ts.isIdentifier(parent.expression.expression) &&
-        parent.expression.expression.text === "runtime" &&
+        parent?.type === "CallExpression" &&
+        parent.callee.type === "MemberExpression" &&
+        !parent.callee.computed &&
+        parent.callee.property.type === "Identifier" &&
+        parent.callee.property.name === "attempt" &&
+        parent.callee.object.type === "Identifier" &&
+        parent.callee.object.name === "runtime" &&
         parent.arguments.at(0) === current
       );
     }
-    current = current.parent;
   }
   return false;
 };
 
 const constantDeclarations = (
-  statements: readonly ts.Statement[],
-  source: ts.SourceFile,
-) =>
-  statements.flatMap((statement) =>
-    ts.isVariableStatement(statement) &&
-    statement.declarationList.getFirstToken(source)?.kind ===
-      ts.SyntaxKind.ConstKeyword
-      ? [...statement.declarationList.declarations]
-      : [],
-  );
+  statements: readonly Node[],
+): VariableDeclarator[] =>
+  statements.flatMap((statement) => {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    return declaration?.type === "VariableDeclaration" &&
+      declaration.kind === "const"
+      ? declaration.declarations
+      : [];
+  });
+
+// Whether `node` ends before a token that precedes `later`. TypeScript
+// compared `node.end` with `later`'s full start (the end of the token before
+// it), so only trivia between the two does not count.
+const endsBeforeTokenOf = (
+  node: Node,
+  later: Node,
+  source: ParsedSource,
+): boolean => {
+  if (node.end > later.start) {
+    return false;
+  }
+  let cursor = node.end;
+  let between = "";
+  for (const comment of source.comments) {
+    if (comment.start >= node.end && comment.end <= later.start) {
+      between += source.sourceText.slice(cursor, comment.start);
+      cursor = comment.end;
+    }
+  }
+  between += source.sourceText.slice(cursor, later.start);
+  return between.trim() !== "";
+};
 
 const provesConcurrentCreateSql = (
-  source: ts.SourceFile,
-  call: ts.CallExpression,
+  context: SourceContext,
+  call: CallExpression,
 ): boolean => {
-  const sourceNodes = constantDeclarations(source.statements, source);
+  const { source } = context;
+  const sourceNodes = constantDeclarations(source.program.body);
   const anchoredPattern = sourceNodes.some(
     (node) =>
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === "createSqlTarget" &&
-      node.initializer &&
-      ts.isRegularExpressionLiteral(node.initializer) &&
+      node.id.type === "Identifier" &&
+      node.id.name === "createSqlTarget" &&
+      node.init?.type === "Literal" &&
+      "regex" in node.init &&
       sameSyntax(
-        node.initializer,
+        node.init,
         '/^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\\."?([A-Za-z_][A-Za-z0-9_]*)"? /u',
       ),
   );
-  let current = call.parent;
-  while (
-    current.kind !== ts.SyntaxKind.SourceFile &&
-    !(
-      ts.isVariableDeclaration(current) &&
-      current.name.getText(source) === "createIndexConcurrently"
-    )
-  ) {
-    current = current.parent;
-  }
-  if (
-    !ts.isVariableDeclaration(current) ||
-    !current.initializer ||
-    !ts.isArrowFunction(current.initializer)
-  ) {
-    return false;
-  }
-  const body = current.initializer.body;
-  if (!ts.isBlock(body)) {
-    return false;
-  }
-  const declarations = constantDeclarations(body.statements, source);
-  const guardedTarget = body.statements.some((node) => {
+  let owner: VariableDeclarator | undefined;
+  for (const current of ancestry(call, context)) {
     if (
-      !ts.isIfStatement(node) ||
+      current.type === "VariableDeclarator" &&
+      current.id.type === "Identifier" &&
+      current.id.name === "createIndexConcurrently"
+    ) {
+      owner = current;
+      break;
+    }
+  }
+  if (owner?.init?.type !== "ArrowFunctionExpression") {
+    return false;
+  }
+  const body = owner.init.body;
+  if (body.type !== "BlockStatement") {
+    return false;
+  }
+  const declarations = constantDeclarations(body.body);
+  const guardedTarget = body.body.some((node) => {
+    if (
+      node.type !== "IfStatement" ||
       !sameSyntax(
-        node.expression,
+        node.test,
         "builtName !== name || builtTable !== tableName",
       ) ||
-      !ts.isBlock(node.thenStatement) ||
-      node.thenStatement.statements.length !== 1
+      node.consequent.type !== "BlockStatement" ||
+      node.consequent.body.length !== 1
     ) {
       return false;
     }
-    const statement = node.thenStatement.statements.at(0);
+    const statement = node.consequent.body.at(0);
     return (
-      statement !== undefined &&
-      ts.isExpressionStatement(statement) &&
-      ts.isCallExpression(statement.expression) &&
-      ts.isIdentifier(statement.expression.expression) &&
-      statement.expression.expression.text === "panic" &&
-      node.end < call.pos
+      statement?.type === "ExpressionStatement" &&
+      isCallTo(statement.expression, ["panic"]) &&
+      endsBeforeTokenOf(node, call, source)
     );
   });
   const bindings = [
@@ -613,12 +770,11 @@ const provesConcurrentCreateSql = (
       expression !== undefined &&
       declarations.some(
         (node) =>
-          ts.isVariableDeclaration(node) &&
-          ts.isIdentifier(node.name) &&
-          node.name.text === name &&
-          node.initializer !== undefined &&
-          sameSyntax(node.initializer, expression) &&
-          node.end < call.pos,
+          node.id.type === "Identifier" &&
+          node.id.name === name &&
+          node.init !== null &&
+          sameSyntax(node.init, expression) &&
+          endsBeforeTokenOf(node, call, source),
       ),
   );
 
@@ -663,15 +819,10 @@ const provesDeclaredFunction = (context: SourceContext): boolean => {
   );
 };
 
-const validateStatementBrand = (source: ts.SourceFile): string[] => {
+const validateStatementBrand = (context: SourceContext): string[] => {
+  const { source } = context;
   const errors: string[] = [];
-  const nodes: ts.Node[] = [];
-  const findConstructor = (node: ts.Node): void => {
-    nodes.push(node);
-    ts.forEachChild(node, findConstructor);
-  };
-  findConstructor(source);
-  const constructor = ownerArrow({ source, nodes }, "lockTaking");
+  const constructor = ownerArrow(context, "lockTaking");
   const lockTakingConstructor =
     constructor !== undefined &&
     sameSyntax(
@@ -684,71 +835,77 @@ const validateStatementBrand = (source: ts.SourceFile): string[] => {
     );
   }
 
-  const insideConstructor = (node: ts.Node): boolean => {
-    let current = node;
-    while (current.kind !== ts.SyntaxKind.SourceFile) {
-      if (
-        ts.isVariableDeclaration(current) &&
-        ts.isIdentifier(current.name) &&
-        current.name.text === "lockTaking"
-      ) {
+  const insideConstructor = (node: Node): boolean => {
+    for (const current of ancestry(node, context)) {
+      if (variableDeclarator(current, "lockTaking") !== undefined) {
         return true;
       }
-      current = current.parent;
     }
     return false;
   };
 
-  const validateBrandUse = (node: ts.Node): void => {
-    if (ts.isIdentifier(node) && node.text === "LOCK_TAKING") {
-      const parent = node.parent;
-      const declaration =
-        ts.isVariableDeclaration(parent) && parent.name === node;
-      const typeKey =
-        ts.isComputedPropertyName(parent) &&
-        ts.isPropertySignature(parent.parent);
-      const objectKey =
-        ts.isComputedPropertyName(parent) &&
-        ts.isPropertyAssignment(parent.parent) &&
-        parent.parent.getText(source).includes("[LOCK_TAKING]: text") &&
-        insideConstructor(parent);
-      const sessionRead =
-        ts.isElementAccessExpression(parent) &&
-        parent.argumentExpression === node &&
-        parent.getText(source) === "statement[LOCK_TAKING]" &&
-        enclosingVariableName(parent) === "sessionOn";
-      if (!declaration && !typeKey && !objectKey && !sessionRead) {
-        errors.push(
-          `LOCK_TAKING may only define the brand and be read by sessionOn (line ${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1})`,
-        );
-      }
-    }
+  // The brand's declaration, its type key, the constructor's key, or the
+  // one read in sessionOn.
+  const isBrandUse = (node: Node): boolean => {
+    const parent = context.parents.get(node);
+    const grandparent = parent && context.parents.get(parent);
+    const declaration =
+      parent?.type === "VariableDeclarator" && parent.id === node;
+    const typeKey =
+      parent?.type === "TSPropertySignature" &&
+      parent.computed &&
+      parent.key === node;
+    const objectKey =
+      parent !== undefined &&
+      isObjectLiteralProperty(parent, grandparent) &&
+      isPropertyAssignment(parent) &&
+      parent.computed &&
+      parent.key === node &&
+      nodeText(parent, source).includes("[LOCK_TAKING]: text") &&
+      insideConstructor(parent);
+    const sessionRead =
+      parent?.type === "MemberExpression" &&
+      parent.computed &&
+      parent.property === node &&
+      nodeText(parent, source) === "statement[LOCK_TAKING]" &&
+      enclosingVariableName(parent, context) === "sessionOn";
+    return declaration || typeKey || objectKey || sessionRead;
+  };
+
+  for (const node of context.nodes) {
     if (
-      (ts.isAsExpression(node) ||
-        ts.isTypeAssertionExpression(node) ||
-        ts.isSatisfiesExpression(node)) &&
-      node.type.getText(source) === "LockTakingStatement"
+      node.type === "Identifier" &&
+      node.name === "LOCK_TAKING" &&
+      !isBrandUse(node)
     ) {
       errors.push(
-        `LockTakingStatement must be constructed by lockTaking (line ${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1})`,
+        `LOCK_TAKING may only define the brand and be read by sessionOn (line ${source.locate(node.start).line})`,
       );
     }
-    ts.forEachChild(node, validateBrandUse);
-  };
-  validateBrandUse(source);
+    if (
+      (node.type === "TSAsExpression" ||
+        node.type === "TSTypeAssertion" ||
+        node.type === "TSSatisfiesExpression") &&
+      nodeText(node.typeAnnotation, source) === "LockTakingStatement"
+    ) {
+      errors.push(
+        `LockTakingStatement must be constructed by lockTaking (line ${source.locate(node.start).line})`,
+      );
+    }
+  }
 
   return errors;
 };
 
 type CheckSqlOptions = {
   text: string;
-  node: ts.Node;
+  node: Node;
   description: string;
   lockQueue?: string;
 };
 type SqlCensusContext = {
   context: SourceContext;
-  checked: Set<ts.Node>;
+  checked: Set<Node>;
   errors: string[];
 };
 const checkSql = ({
@@ -763,8 +920,7 @@ const checkSql = ({
   const { source } = context;
   const variants = text.split("\n-- variant --\n");
   for (const variant of variants) {
-    const line =
-      source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const line = source.locate(node.start).line;
     const statements = parseMigrationStatements(variant);
     if (statements.length === 0) {
       errors.push(`${description} at line ${line} has an empty SQL variant`);
@@ -822,7 +978,7 @@ const checkSql = ({
 };
 
 type CheckLockCallOptions = SqlCensusContext & {
-  call: ts.CallExpression;
+  call: CallExpression;
   provedBlock: boolean;
 };
 const checkLockCall = ({
@@ -834,18 +990,16 @@ const checkLockCall = ({
 }: CheckLockCallOptions): void => {
   const { source } = context;
 
-  const line =
-    source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
+  const line = source.locate(call.start).line;
   const options = call.arguments.at(0);
   if (
     call.arguments.length !== 1 ||
     !options ||
-    !ts.isObjectLiteralExpression(options) ||
+    options.type !== "ObjectExpression" ||
     options.properties.length !== 3 ||
     options.properties.some(
       (property) =>
-        !ts.isPropertyAssignment(property) &&
-        !ts.isShorthandPropertyAssignment(property),
+        !isPropertyAssignment(property) && !isShorthandProperty(property),
     )
   ) {
     errors.push(
@@ -855,19 +1009,19 @@ const checkLockCall = ({
   }
   const properties = new Map(
     options.properties.map((property) => [
-      "name" in property ? property.name.getText(source) : undefined,
+      propertyKeyText(property, source),
       property,
     ]),
   );
   const text = properties.get("text");
   const queue = properties.get("lockQueue");
-  const sqlArg =
-    text && ts.isPropertyAssignment(text) ? text.initializer : undefined;
+  const sqlArg = text && isPropertyAssignment(text) ? text.value : undefined;
   const lockQueue =
     queue &&
-    ts.isPropertyAssignment(queue) &&
-    ts.isStringLiteral(queue.initializer)
-      ? queue.initializer.text
+    isPropertyAssignment(queue) &&
+    queue.value.type === "Literal" &&
+    typeof queue.value.value === "string"
+      ? queue.value.value
       : undefined;
   if (
     !properties.has("tableName") ||
@@ -880,7 +1034,7 @@ const checkLockCall = ({
     );
     return;
   }
-  if (enclosingVariableName(call) === "accessExclusive") {
+  if (enclosingVariableName(call, context) === "accessExclusive") {
     checked.add(sqlArg);
     if (!provedBlock) {
       errors.push(
@@ -894,7 +1048,7 @@ const checkLockCall = ({
       !isSplicedCreateSql(sqlArg) ||
       !provesSpliced(context) ||
       lockQueue !== "beside_writers" ||
-      !provesConcurrentCreateSql(source, call)
+      !provesConcurrentCreateSql(context, call)
     ) {
       errors.push(
         "createSql pass-through lacks an anchored concurrent-index AST proof",
@@ -939,25 +1093,24 @@ const provesBlockBuilder = (context: SourceContext): boolean => {
 
 const validateSessionCalls = (
   context: SourceContext,
-  sessionCalls: readonly ts.CallExpression[],
+  sessionCalls: readonly CallExpression[],
 ): string[] => {
   const { source } = context;
   const errors: string[] = [];
   for (const call of sessionCalls) {
-    const owner = enclosingVariableName(call);
+    const owner = enclosingVariableName(call, context);
     const options = call.arguments.at(0);
     const properties = new Map(
-      options && ts.isObjectLiteralExpression(options)
+      options?.type === "ObjectExpression"
         ? options.properties.map((property) => [
-            "name" in property ? property.name.getText(source) : undefined,
+            propertyKeyText(property, source),
             property,
           ])
         : [],
     );
     const closedOptions =
       call.arguments.length === 1 &&
-      options !== undefined &&
-      ts.isObjectLiteralExpression(options) &&
+      options?.type === "ObjectExpression" &&
       options.properties.length === 4 &&
       properties.size === 4 &&
       ["connection", "target", "lockRetry", "onRetry"].every((name) =>
@@ -965,25 +1118,23 @@ const validateSessionCalls = (
       ) &&
       options.properties.every(
         (property) =>
-          ts.isPropertyAssignment(property) ||
-          ts.isShorthandPropertyAssignment(property),
+          isPropertyAssignment(property) || isShorthandProperty(property),
       );
     const property = properties.get("connection");
-    let connection: ts.Expression | undefined;
-    if (property && ts.isPropertyAssignment(property)) {
-      connection = property.initializer;
-    } else if (property && ts.isShorthandPropertyAssignment(property)) {
-      connection = property.name;
+    let connection: Node | undefined;
+    if (
+      property &&
+      (isPropertyAssignment(property) || isShorthandProperty(property))
+    ) {
+      connection = property.value;
     }
-    const line =
-      source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
+    const line = source.locate(call.start).line;
     if (owner === "runGatedTableWork") {
       if (
         !closedOptions ||
-        !connection ||
-        !ts.isIdentifier(connection) ||
-        connection.text !== "guardedConnection" ||
-        !isRuntimeAttemptCallback(call)
+        connection?.type !== "Identifier" ||
+        connection.name !== "guardedConnection" ||
+        !isRuntimeAttemptCallback(call, context)
       ) {
         errors.push(
           `sessionOn at line ${line} in runGatedTableWork must use the guarded runtime.attempt connection`,
@@ -994,9 +1145,8 @@ const validateSessionCalls = (
     if (owner === "createUngatedTableGateForTests") {
       if (
         !closedOptions ||
-        !connection ||
-        !ts.isIdentifier(connection) ||
-        connection.text !== "connection"
+        connection?.type !== "Identifier" ||
+        connection.name !== "connection"
       ) {
         errors.push(
           `sessionOn at line ${line} in the test gate must use its supplied connection`,
@@ -1013,55 +1163,39 @@ const validateSessionCalls = (
 };
 
 export const censusOnlineDdlSource = (sourceText: string): string[] => {
-  const source = ts.createSourceFile(
-    OWNER_PATH,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const source = parseSource(OWNER_PATH, sourceText);
   const errors: string[] = [];
-  const lockCalls: ts.CallExpression[] = [];
-  const sessionCalls: ts.CallExpression[] = [];
-  const blockCalls: ts.CallExpression[] = [];
-  const nodes: ts.Node[] = [];
-  const context: SourceContext = { source, nodes };
+  const lockCalls: CallExpression[] = [];
+  const sessionCalls: CallExpression[] = [];
+  const blockCalls: CallExpression[] = [];
+  const nodes: Node[] = [];
+  const parents = new Map<Node, Node>();
+  const context: SourceContext = { source, nodes, parents };
   const sqlNodes: SqlVariant[] = [];
 
-  const visit = (node: ts.Node): void => {
+  walk(source.program, (node, ancestors) => {
     nodes.push(node);
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "accessExclusive"
-    ) {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
+    }
+    if (isCallTo(node, ["accessExclusive"])) {
       blockCalls.push(node);
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "lockTaking"
-    ) {
+    if (isCallTo(node, ["lockTaking"])) {
       lockCalls.push(node);
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "sessionOn"
-    ) {
+    if (isCallTo(node, ["sessionOn"])) {
       sessionCalls.push(node);
     }
-    if (
-      (ts.isStringLiteralLike(node) ||
-        ts.isNoSubstitutionTemplateLiteral(node) ||
-        ts.isTemplateExpression(node)) &&
-      (ts.isTemplateExpression(node) ? isSql(node.head.text) : isSql(node.text))
-    ) {
+    const text =
+      node.type === "TemplateLiteral"
+        ? (node.quasis.at(0)?.value.cooked ?? "")
+        : stringLiteralText(node);
+    if (text !== undefined && isSql(text)) {
       sqlNodes.push({ node });
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
 
   if (!provesQuotedIdentifier(context)) {
     errors.push(
@@ -1069,7 +1203,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
     );
   }
 
-  const checked = new Set<ts.Node>();
+  const checked = new Set<Node>();
 
   const provedBlock = provesBlockBuilder(context);
 
@@ -1079,13 +1213,11 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
 
   for (const call of blockCalls) {
     const statements = call.arguments.at(1);
-    const line =
-      source.getLineAndCharacterOfPosition(call.getStart(source)).line + 1;
+    const line = source.locate(call.start).line;
     if (
       !provedBlock ||
       call.arguments.length !== 2 ||
-      !statements ||
-      !ts.isArrayLiteralExpression(statements)
+      statements?.type !== "ArrayExpression"
     ) {
       errors.push(
         `accessExclusive at line ${line} requires the checked block builder and a literal statement array`,
@@ -1094,10 +1226,19 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
     }
     for (const statement of statements.elements) {
       if (
-        enclosingVariableName(call) === "callDeclaredFunction" &&
+        enclosingVariableName(call, context) === "callDeclaredFunction" &&
         provesDeclaredFunction(context)
       ) {
-        checked.add(statement);
+        if (statement !== null) {
+          checked.add(statement);
+        }
+        continue;
+      }
+      if (statement === null) {
+        // A hole expands to one unresolved variant.
+        errors.push(
+          `accessExclusive SQL argument at line ${line} has an unresolved SQL variant`,
+        );
         continue;
       }
       for (const variant of expand(statement, context)) {
@@ -1127,7 +1268,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
     for (const variant of expand(node, context)) {
       if (!variant.resolved) {
         errors.push(
-          `SQL literal at line ${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1} has an unresolved SQL variant`,
+          `SQL literal at line ${source.locate(node.start).line} has an unresolved SQL variant`,
         );
       } else {
         checkSql({
@@ -1144,7 +1285,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
 
   errors.push(...validateSessionCalls(context, sessionCalls));
 
-  errors.push(...validateStatementBrand(source));
+  errors.push(...validateStatementBrand(context));
 
   return [...new Set(errors)];
 };
