@@ -113,9 +113,9 @@ const TYPESCRIPT_TOOLCHAIN = {
   typescript6Astro: "6.0.3",
 } as const;
 // Workspaces whose own scripts import the TypeScript 6 compiler API; each
-// declares it so a filtered install links it.
+// declares it so a filtered install links it. apps/api reads syntax with oxc
+// and programs with tsrs, so it may not declare it.
 const TYPESCRIPT6_API_PACKAGE_PATHS: ReadonlySet<string> = new Set([
-  "apps/api/package.json",
   "packages/scripts/package.json",
 ]);
 const TYPESCRIPT6_COMPATIBILITY = {
@@ -631,7 +631,7 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       ) {
         issues.push({
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
           path: relativePackagePath,
         });
       }

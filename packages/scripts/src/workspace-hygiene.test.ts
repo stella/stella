@@ -698,15 +698,47 @@ describe("workspace hygiene", () => {
         },
         {
           message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by apps/api and packages/scripts (and the root)",
+            "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
           path: "apps/web/package.json",
         },
       ]),
     );
   });
+
+  test("rejects the TypeScript 6 compiler API in apps/api", async () => {
+    const apiTypecheck = "bun ../../packages/scripts/src/api-typecheck.ts";
+    const declaring = createWorkspaceRoot({
+      apiPackageJson: {
+        devDependencies: { typescript6: "catalog:" },
+        name: "@stll/api",
+        scripts: { typecheck: apiTypecheck },
+      },
+      rootPackageJson: {},
+      webPackageJson: { name: "@stll/web" },
+    });
+    expect(await validateWorkspaceRoot(declaring, LOCAL)).toContainEqual({
+      message:
+        "The TypeScript 6 compiler API is compatibility-only and may only be declared by packages/scripts (and the root)",
+      path: "apps/api/package.json",
+    });
+
+    const clean = createWorkspaceRoot({
+      apiPackageJson: {
+        devDependencies: { tsrs: "catalog:" },
+        name: "@stll/api",
+        scripts: { typecheck: apiTypecheck },
+      },
+      rootPackageJson: {},
+      webPackageJson: { name: "@stll/web" },
+    });
+    expect(await validateWorkspaceRoot(clean, LOCAL)).not.toContainEqual(
+      expect.objectContaining({ path: "apps/api/package.json" }),
+    );
+  });
 });
 
 type CreateWorkspaceRootOptions = {
+  apiPackageJson?: Record<string, unknown>;
   mobilePackageJson?: Record<string, unknown>;
   rootPackageJson: Record<string, unknown>;
   webPackageJson: Record<string, unknown>;
@@ -716,6 +748,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 const createWorkspaceRoot = ({
+  apiPackageJson,
   mobilePackageJson,
   rootPackageJson,
   webPackageJson,
@@ -782,6 +815,14 @@ const createWorkspaceRoot = ({
       },
     }),
   );
+
+  if (apiPackageJson) {
+    mkdirSync(path.join(rootDir, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, "apps/api/package.json"),
+      JSON.stringify(apiPackageJson),
+    );
+  }
 
   if (mobilePackageJson) {
     mkdirSync(path.join(rootDir, "apps/mobile"), { recursive: true });
