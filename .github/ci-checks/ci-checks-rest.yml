@@ -5,8 +5,13 @@
 # context, runs the selected checks concurrently (one fewer than the runner
 # CPUs) and prints their logs in this order. Workflow guards read these
 # entries as steps of the job (scripts/workflow-steps.ts).
+# Every entry declares `timeout-minutes`, its time budget: the pool kills and
+# names a check that exceeds it. A budget is about 2.5x the check's worst
+# duration in the pool's summary tables of recent successful runs, rounded up
+# to whole minutes and at least 2.
 checks:
   - name: Content delivery declarations
+    timeout-minutes: 5
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -20,6 +25,7 @@ checks:
       bun apps/api/scripts/content-delivery-guard.ts
 
   - name: Test capability shard merge and package parity
+    timeout-minutes: 7
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Capability shard pack test reads real origin/main catalog and revision."
@@ -29,6 +35,7 @@ checks:
     run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
   - name: Generated files manifest guard
+    timeout-minutes: 25
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -47,6 +54,7 @@ checks:
       bun scripts/generated-files-guard.ts --guard-b
 
   - name: Test oxlint plugins
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -56,6 +64,7 @@ checks:
       bun test scripts/oxlint-plugin-test-coverage.test.ts
 
   - name: Test release image CI gate
+    timeout-minutes: 15
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -71,6 +80,7 @@ checks:
   # checks so it is skipped on workflow-only PRs where dependencies are
   # not installed.
   - name: Test api scripts
+    timeout-minutes: 7
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Aggregate API script tests include deployment-feature-guard.test.ts reading HEAD baseline and environment-selected Postgres tests."
@@ -82,6 +92,7 @@ checks:
       apps/api/scripts/*.test.ts
 
   - name: API test timeout guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -92,6 +103,7 @@ checks:
       bun scripts/api-test-timeout-guard.ts
 
   - name: Test CLI runtime package parity
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "CLI runtime pack test selects a real merge-base against origin/main."
@@ -104,6 +116,7 @@ checks:
   # run reaches them. Other steps call some by path; this runs every
   # other one, so a new test cannot miss CI by missing a step.
   - name: Test remaining repository scripts
+    timeout-minutes: 18
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
@@ -113,6 +126,7 @@ checks:
     run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
   - name: Playwright config scope
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -128,6 +142,7 @@ checks:
       bun run check:playwright-config-scope
 
   - name: Workspace hygiene
+    timeout-minutes: 3
     id: static_check_015
     env:
       CI_CHECK_KIND: STATIC
@@ -145,6 +160,7 @@ checks:
     run: bun run lint:ws
 
   - name: Lockfile workspace-version guard
+    timeout-minutes: 2
     id: static_check_017
     env:
       CI_CHECK_KIND: STATIC
@@ -160,6 +176,7 @@ checks:
     run: bun scripts/check-lockfile-workspace-versions.ts
 
   - name: Resolution range guard
+    timeout-minutes: 2
     id: static_check_018
     env:
       CI_CHECK_KIND: STATIC
@@ -177,6 +194,7 @@ checks:
     run: bun scripts/check-resolution-ranges.ts
 
   - name: Quarantine-exclude guards
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Reads wall clock to reject first-party exclusion dates in the future."
@@ -196,6 +214,7 @@ checks:
       bun scripts/check-stll-quarantine-excludes.ts
 
   - name: Policy evidence
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -204,6 +223,7 @@ checks:
     run: bun run policies:check
 
   - name: Marketing content check
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -212,6 +232,7 @@ checks:
     run: bun run marketing:check
 
   - name: Docker host mount guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -222,6 +243,7 @@ checks:
       bun run check:docker-host-mounts
 
   - name: Railway template shape
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -230,6 +252,7 @@ checks:
     run: bun run check:railway-template
 
   - name: Check i18n sync
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -238,6 +261,7 @@ checks:
     run: bun run i18n:check
 
   - name: Release changelog guard
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -246,6 +270,7 @@ checks:
     run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
   - name: Release queue history guard
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -262,6 +287,7 @@ checks:
   # Same verdict the tag workflow gives after merge, delivered while the
   # release pull request can still wait for the Version Packages one.
   - name: Release CLI coupling guard
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -270,6 +296,7 @@ checks:
     run: bun scripts/check-cli-release-coupling.ts --base "origin/$BASE_REF"
 
   - name: CLI contract changeset guard
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -280,6 +307,7 @@ checks:
     run: bun scripts/check-cli-contract-changeset.ts --base "$CHECK_BASE_REF"
 
   - name: SQL performance suppression summary
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -288,6 +316,7 @@ checks:
     run: bun scripts/sql-perf-suppressions.ts
 
   - name: Release marketing provenance warning
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && (github.event_name == 'pull_request' || github.event_name == 'merge_group')) }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -303,6 +332,7 @@ checks:
       fi
 
   - name: Rust format
+    timeout-minutes: 5
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -311,6 +341,7 @@ checks:
     run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 
   - name: React Compiler bailout guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -328,6 +359,7 @@ checks:
     run: bun scripts/rc-bailouts.ts --check
 
   - name: Design-system lint backlog
+    timeout-minutes: 2
     id: static_check_026
     env:
       CI_CHECK_KIND: STATIC
@@ -344,6 +376,7 @@ checks:
       bun scripts/design-lint-baseline.ts --check
 
   - name: Full error toast text census
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -352,6 +385,7 @@ checks:
     run: bun run check:toast-errors
 
   - name: Query data state baseline
+    timeout-minutes: 2
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Query data state baseline')) }}
     env:
@@ -364,6 +398,7 @@ checks:
       bun run check:query-data-state
 
   - name: SQL performance baseline
+    timeout-minutes: 2
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/SQL performance baseline')) }}
     env:
@@ -376,6 +411,7 @@ checks:
       bun scripts/sql-perf-baseline.ts --check
 
   - name: Failure-as-empty baseline
+    timeout-minutes: 2
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Failure-as-empty baseline')) }}
     env:
@@ -388,6 +424,7 @@ checks:
       bun run check:failure-as-empty
 
   - name: Oxlint override union guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -410,6 +447,7 @@ checks:
         scripts/oxlint-config-liveness.test.ts
 
   - name: Oxlint rule decisions
+    timeout-minutes: 2
     id: static_check_029
     env:
       CI_CHECK_KIND: STATIC
@@ -421,6 +459,7 @@ checks:
     run: bun scripts/check-oxlint-rule-decisions.ts
 
   - name: Oxlint effective config
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -436,6 +475,7 @@ checks:
       bun scripts/check-oxlint-effective-config.ts
 
   - name: Result boundary enrolment
+    timeout-minutes: 2
     id: static_check_031
     env:
       CI_CHECK_KIND: STATIC
@@ -455,6 +495,7 @@ checks:
       bun run check:result-boundary-enrolment
 
   - name: Generated source artifact contract
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -463,6 +504,7 @@ checks:
     run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
 
   - name: Windows dry-run receipt contract
+    timeout-minutes: 2
     id: static_check_windows_receipt_contract
     env:
       CI_CHECK_KIND: STATIC
@@ -471,6 +513,7 @@ checks:
     run: bun test scripts/ci-windows-dry-run-result.test.ts
 
   - name: Test input coverage
+    timeout-minutes: 2
     id: static_check_033
     env:
       CI_CHECK_KIND: STATIC
@@ -490,6 +533,7 @@ checks:
       bun run check:test-input-coverage
 
   - name: Chat mutation targets
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -501,6 +545,7 @@ checks:
       bun apps/api/scripts/chat-mutation-matrix.ts --check
 
   - name: Desktop Rust inputs
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -515,6 +560,7 @@ checks:
       bun run check:desktop-rust-inputs
 
   - name: Test shard partition
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -529,6 +575,7 @@ checks:
     run: bun test scripts/test-shards.test.ts
 
   - name: Landing deploy scope
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -540,6 +587,7 @@ checks:
     run: bun test scripts/landing-deploy-scope.test.ts
 
   - name: Workflow cache policy
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -548,6 +596,7 @@ checks:
     run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
   - name: Store cache save supervisor
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -568,6 +617,7 @@ checks:
       ACTIONLINT_BIN="$RUNNER_TEMP/actionlint" bun scripts/check-actionlint-baseline.ts
 
   - name: Workflow YAML
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -578,6 +628,7 @@ checks:
       bun scripts/check-workflow-yaml.ts
 
   - name: Module ownership
+    timeout-minutes: 2
     id: static_check_040
     env:
       CI_CHECK_KIND: STATIC
@@ -592,6 +643,7 @@ checks:
     run: bun scripts/ownership.ts --check
 
   - name: Outbound transport ownership
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -602,6 +654,7 @@ checks:
       bun test scripts/outbound-transport-ownership.test.ts
 
   - name: Document identity ownership
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -612,6 +665,7 @@ checks:
       bun test scripts/document-identity-guard.test.ts
 
   - name: Module ownership invariants
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -622,6 +676,7 @@ checks:
     run: bun test scripts/ownership.test.ts
 
   - name: Generated artifact formatting invariants
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -632,6 +687,7 @@ checks:
     run: bun test scripts/generated-artifacts.test.ts
 
   - name: Schema introspection invariants
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -640,6 +696,7 @@ checks:
     run: bun test scripts/schema-introspection.test.ts
 
   - name: Queue authority
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     # Every BullMQ queue declares whose authority its jobs run under
     # (apps/api/src/lib/member-run-queues.ts), and a member-run queue
@@ -656,6 +713,7 @@ checks:
       bun scripts/queue-authority.ts --check
 
   - name: Design token docs
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -667,6 +725,7 @@ checks:
     run: bun scripts/design-tokens-doc.ts --check
 
   - name: Suppression waiver ledger
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -688,6 +747,7 @@ checks:
       bun scripts/suppression-waivers.ts --check
 
   - name: Crawl posture guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -714,6 +774,7 @@ checks:
       bun scripts/crawl-posture.ts --check
 
   - name: Chat fixture guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -731,6 +792,7 @@ checks:
       bun scripts/chat-fixture-guard.ts
 
   - name: Transfer timeout and fixed read guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -741,6 +803,7 @@ checks:
       bun scripts/transfer-read-guard.ts
 
   - name: Offline check transport policy
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -753,6 +816,7 @@ checks:
       bun --filter @stll/ai-catalog gen:capabilities --check
 
   - name: Model catalog generation guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -763,6 +827,7 @@ checks:
       bun --filter @stll/ai-catalog check:generations --check
 
   - name: Model task default evidence guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -772,6 +837,7 @@ checks:
       bun --filter @stll/ai-catalog check:defaults --base origin/main
 
   - name: Model catalog snapshot drift check
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -785,6 +851,7 @@ checks:
       bun --filter @stll/ai-catalog gen:capabilities --check
 
   - name: Capability description ledger
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -804,6 +871,7 @@ checks:
       bun apps/api/scripts/capability-description-guard.ts
 
   - name: MCP coverage guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -821,6 +889,7 @@ checks:
       bun apps/api/scripts/mcp-coverage-guard.ts
 
   - name: MCP surface baseline self-test
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -833,6 +902,7 @@ checks:
     run: bun apps/api/scripts/mcp-surface-baseline.ts --self-test
 
   - name: Offline catalogue pinned-content policy
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -859,6 +929,7 @@ checks:
     run: bun run --filter @stll/catalogue check-pinned
 
   - name: Property-test convention guard
+    timeout-minutes: 3
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -871,6 +942,7 @@ checks:
       bun scripts/db-property-budget-guard.ts
 
   - name: Test marketing recording verification guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -883,6 +955,7 @@ checks:
   # bridge change. Always runs (no `if:` gate) — it's seconds
   # and has no deps.
   - name: Test desktop bridge CI guards
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -893,6 +966,7 @@ checks:
       bash scripts/detect-tauri-rust-changes.test.sh
 
   - name: Check workflow shell policy
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -908,6 +982,7 @@ checks:
   # binary, S3 manifest mirror path, CloudFront invalidation
   # key). A bug here makes them silently disagree.
   - name: Test release-channel script
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -919,6 +994,7 @@ checks:
   # container is ARM64. Keep build and runtime dependency architectures
   # separated in the Docker stage graph.
   - name: Test web container platform boundary
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -931,6 +1007,7 @@ checks:
   # (or back). Needs only bun.lock, so it stays runnable when the
   # dependency install is skipped.
   - name: Test @stll resolution pin
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -942,6 +1019,7 @@ checks:
   # runtime dependencies. Guard the closure derivation and the
   # manifest-only-fails / staged-succeeds property.
   - name: Test web runtime staging
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -963,6 +1041,7 @@ checks:
   # conditions object, a target outside src, a missing root — out of a
   # publishable package.
   - name: Test published export artifact guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -971,6 +1050,7 @@ checks:
     run: bun test scripts/published-export-guards.test.ts scripts/check-published-exports.test.ts
 
   - name: Test publish manifest transformation
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -981,6 +1061,7 @@ checks:
     run: bun test scripts/publish-manifest.test.ts
 
   - name: Test journey checks
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -994,6 +1075,7 @@ checks:
   # dependencies, so it remains runnable when a PR changes only workflows
   # and the dependency install above is intentionally skipped.
   - name: Test release policy scripts
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1011,6 +1093,7 @@ checks:
       bash scripts/promote-desktop-release.test.sh
 
   - name: Test documentation and landing CI scope
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1019,6 +1102,7 @@ checks:
     run: bun test scripts/ci-package-scope.test.ts
 
   - name: Test main heavy workflow contracts
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Main heavy plan test measures the real merge-base against origin/main."
@@ -1026,6 +1110,7 @@ checks:
     run: bun test scripts/main-heavy-plan.test.ts scripts/main-heavy.test.ts scripts/validate-main-heavy-sha.test.ts
 
   - name: Test cancellation evidence
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1034,6 +1119,7 @@ checks:
     run: bun test scripts/ci-cancellation-contract.test.ts
 
   - name: Test thin merge queue contracts
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1042,6 +1128,7 @@ checks:
     run: bun test scripts/thin-queue.test.ts
 
   - name: Test service-suite dependency scope
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1050,6 +1137,7 @@ checks:
     run: bun test scripts/detect-service-suite-changes.test.ts
 
   - name: Test nightly rehearsal and retry guards
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1058,6 +1146,7 @@ checks:
     run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
 
   - name: Reject automatic test retries
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1066,6 +1155,7 @@ checks:
     run: bun scripts/check-test-retries.ts
 
   - name: Keep tests off history walks
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1074,6 +1164,7 @@ checks:
     run: bun test scripts/check-test-history-walks.test.ts
 
   - name: Test dependency malware scanners
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1082,6 +1173,7 @@ checks:
     run: bun test scripts/osv-scanner-install.test.ts scripts/scan-dependency-malware.test.ts scripts/report-dependency-malware-failure.test.ts
 
   - name: Test maintenance release preparation
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1090,6 +1182,7 @@ checks:
     run: bun test scripts/prepare-maintenance-release.property.test.ts
 
   - name: Test release queue history guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1098,6 +1191,7 @@ checks:
     run: bun test scripts/check-release-queue-history.test.ts
 
   - name: Test promoted release resolution
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1106,6 +1200,7 @@ checks:
     run: bun test scripts/resolve-promoted-release.test.ts
 
   - name: Test API and CLI contract invariants
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1121,6 +1216,7 @@ checks:
   # regression either ships stale desktop builds or reintroduces
   # pointless ~30 MB redownloads.
   - name: Test detect-desktop-release-changes script
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1129,6 +1225,7 @@ checks:
     run: bash scripts/detect-desktop-release-changes.test.sh
 
   - name: Test route smoke change detector
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1137,6 +1234,7 @@ checks:
     run: bun test scripts/detect-route-smoke-changes.test.ts
 
   - name: Test changed e2e shard selection
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1145,6 +1243,7 @@ checks:
     run: bun test scripts/e2e-spec-shards.test.ts
 
   - name: Test geometry shard plan
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1153,6 +1252,7 @@ checks:
     run: bun test scripts/e2e-geometry-shards.test.ts
 
   - name: Test e2e shard budget
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1161,6 +1261,7 @@ checks:
     run: bun test scripts/e2e-shard-budget.test.ts
 
   - name: Validate CI service image mirror inventory
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1172,6 +1273,7 @@ checks:
       bun scripts/ci-service-images.ts
 
   - name: Test CI service image workflow contracts
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1180,6 +1282,7 @@ checks:
     run: bun test scripts/ci-service-workflows.test.ts
 
   - name: Test CI workflow invariants
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1195,6 +1298,7 @@ checks:
       scripts/dependabot-changeset.test.ts
 
   - name: Test reusable workflow permission contracts
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1203,6 +1307,7 @@ checks:
     run: bun test scripts/workflow-call-permissions.test.ts
 
   - name: Test main network recording selection
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1211,6 +1316,7 @@ checks:
     run: bun test scripts/network-baseline-selection.test.ts
 
   - name: Test API duration workflow
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1219,6 +1325,7 @@ checks:
     run: bun test scripts/api-test-durations-workflow.test.ts
 
   - name: Test autofix protected paths
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1228,6 +1335,7 @@ checks:
 
   # The fixture executes the installed linter and native compiler.
   - name: Test type-aware autofix
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1236,6 +1344,7 @@ checks:
     run: bun test scripts/autofix-type-aware.test.ts
 
   - name: Test local workflow verification
+    timeout-minutes: 2
     id: static_check_097
     if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test local workflow verification')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_097 != 'true') }}
     env:
@@ -1245,6 +1354,7 @@ checks:
     run: bun test scripts/verify.test.ts scripts/verify-workflow.test.ts scripts/prepare-typecheck-base.test.ts
 
   - name: Typecheck cache contract
+    timeout-minutes: 2
     id: static_check_098
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Typecheck cache contract')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_098 != 'true') }}
     env:
@@ -1254,6 +1364,7 @@ checks:
     run: bun test scripts/typecheck-cache.test.ts
 
   - name: Task result cache contract
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1263,6 +1374,7 @@ checks:
     run: bun test scripts/task-result-cache.test.ts
 
   - name: Test CI check partition
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Partition census loads and compares actual merge-base workflow and removal declarations."
@@ -1270,6 +1382,7 @@ checks:
     run: bun test scripts/ci-checks-partition.test.ts
 
   - name: Test install-free CI commands
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1278,6 +1391,7 @@ checks:
     run: bun test scripts/install-free-ci.test.ts
 
   - name: Test pre-push secret scan ranges
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1286,6 +1400,7 @@ checks:
     run: bun test scripts/check-pushed-secrets.test.ts
 
   - name: Test merge-base network comparison
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Test generates route tree by exporting actual HEAD revision, outside a declared filesystem-only closure."
@@ -1295,6 +1410,7 @@ checks:
   # Needs the installed workspace (fast-check, property-testing), so it
   # cannot join the no-install invariants step above.
   - name: Test CLI release coupling gate
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1303,6 +1419,7 @@ checks:
     run: bun test scripts/check-cli-release-coupling.test.ts
 
   - name: Test CLI contract changeset guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1311,6 +1428,7 @@ checks:
     run: bun test scripts/check-cli-contract-changeset.test.ts
 
   - name: Test package scaffolder
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1319,6 +1437,7 @@ checks:
     run: bun test scripts/new-package.test.ts
 
   - name: Test affected code-check planner
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1330,6 +1449,7 @@ checks:
   # paths. This fails when they diverge, when a policy pathspec goes stale,
   # and when a newly published package is missing from the policy file.
   - name: Test changeset guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1338,6 +1458,7 @@ checks:
     run: bun test scripts/changeset-guard.test.ts
 
   - name: Test environment tooling
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1346,6 +1467,7 @@ checks:
     run: bun test scripts/env-tool.test.ts
 
   - name: Test retry script
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1354,6 +1476,7 @@ checks:
     run: bash scripts/retry.test.sh
 
   - name: Test CI failure digest
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1362,6 +1485,7 @@ checks:
     run: bun test scripts/ci-failure-digest.test.ts
 
   - name: Test base image pull script
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1370,6 +1494,7 @@ checks:
     run: bash scripts/pull-base-images.test.sh
 
   - name: Verify runner tool availability
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
@@ -1379,6 +1504,7 @@ checks:
       bun test scripts/check-ci-runner-tools.test.ts
 
   - name: Test preview scope tool availability
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1391,6 +1517,7 @@ checks:
   # The script imports `better-result`, so it needs the dependency install
   # above, which is itself conditional.
   - name: Verify CI job event policies
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1401,6 +1528,7 @@ checks:
       bun test scripts/check-ci-event-policy.test.ts
 
   - name: Test public document fetch
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1409,6 +1537,7 @@ checks:
     run: bun test scripts/fetch-public-documents.test.ts
 
   - name: Test migration identity logic
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1419,6 +1548,7 @@ checks:
   # Check migration identity against the branch this run merges into. In a
   # merge group that is main as it stands at merge time.
   - name: Check migration identity against the base branch
+    timeout-minutes: 2
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check migration identity against the base branch')) }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -1431,6 +1561,7 @@ checks:
   # or start flagging live ones, in both cases undermining the
   # check:dead-columns gate in the code-quality job.
   - name: Test dead-columns reference matching
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1444,6 +1575,7 @@ checks:
   # undermining the check:projection-totality gate in the code-quality
   # job.
   - name: Test projection-totality classification
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1452,6 +1584,7 @@ checks:
     run: bun test scripts/check-projection-totality.test.ts
 
   - name: Test aggregate inventories
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1460,6 +1593,7 @@ checks:
     run: bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
   - name: Test write contract inventories
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1468,6 +1602,7 @@ checks:
     run: bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
 
   - name: Office fixture metadata
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -1481,6 +1616,7 @@ checks:
   # bumping BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs.
   # See scripts/check-bridge-version.sh for rationale.
   - name: Bridge-version guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."

@@ -4,6 +4,10 @@
 # A check that ran as an ordinary step (implicit `success()`) is `!cancelled()`
 # here: the pool step itself runs only after every earlier step succeeded, and
 # the pool decides `cancelled()` but not `success()`.
+# Every entry declares `timeout-minutes`, its time budget: the pool kills and
+# names a check that exceeds it. A budget is about 2.5x the check's worst
+# duration in the pool's summary tables of recent successful runs, rounded up
+# to whole minutes and at least 2.
 checks:
   - name: Code quality (web)
     if: ${{ !cancelled() }}
@@ -23,6 +27,7 @@ checks:
       bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
 
   - name: Result consumption (web)
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -54,6 +59,7 @@ checks:
       bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"
 
   - name: Query cache types
+    timeout-minutes: 2
     if: ${{ needs.ci-plan.outputs.package_checks_required == 'true' }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -61,6 +67,7 @@ checks:
     run: bun run check:query-cache-types
 
   - name: Dead columns
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -68,6 +75,7 @@ checks:
     run: bun run check:dead-columns
 
   - name: Projection totality
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -75,6 +83,7 @@ checks:
     run: bun run check:projection-totality
 
   - name: Aggregate ownership
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -85,6 +94,7 @@ checks:
       bun run check:write-contracts
 
   - name: Split-button census
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -94,6 +104,7 @@ checks:
       bun run check:split-buttons
 
   - name: Database awaits in loops
+    timeout-minutes: 6
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -103,6 +114,7 @@ checks:
       bun run check:db-await-in-loop
 
   - name: API timeout mutation guard
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -112,6 +124,7 @@ checks:
       bun run check:api-timeout-mutations
 
   - name: Result consumption (rest)
+    timeout-minutes: 2
     if: ${{ !cancelled() }}
     env:
       CI_CHECK_KIND: CONTEXTUAL

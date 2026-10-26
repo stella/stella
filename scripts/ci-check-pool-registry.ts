@@ -24,13 +24,16 @@ export const CHECK_POOL_STEP_NAMES = {
 } as const satisfies Record<CheckPoolJob, string>;
 // The pool step writes the job's `needs` to a file and runs the pool on it:
 // ci-plan's outputs can exceed the 128 KiB limit of one environment value.
+// `exec` makes the pool the step's process: the runner signals only that
+// process when it cancels a step, so a shell in between would take the signal
+// and the pool could never report what was still running.
 const POOL_COMMAND = new RegExp(
   [
     String.raw`^needs_file=\$\(mktemp\)`,
     String.raw`cat > "\$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
     String.raw`\$\{\{ toJSON\(needs\) \}\}`,
     "CI_CHECK_POOL_NEEDS_JSON",
-    String.raw`CI_CHECK_POOL_NEEDS_FILE="\$needs_file" bun scripts/ci-check-pool\.ts run ([\w-]+)$`,
+    String.raw`CI_CHECK_POOL_NEEDS_FILE="\$needs_file" exec bun scripts/ci-check-pool\.ts run ([\w-]+)$`,
   ].join("\n"),
   "u",
 );
@@ -44,7 +47,7 @@ export const checkPoolStepRun = (job: CheckPoolJob) =>
     // broken template literal to the linter.
     ["$", "{{ toJSON(needs) }}"].join(""),
     "CI_CHECK_POOL_NEEDS_JSON",
-    `CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ${job}`,
+    `CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ${job}`,
     "",
   ].join("\n");
 
@@ -55,7 +58,8 @@ export type PoolCheck = {
   condition: string;
   run: string;
   env: Readonly<Record<string, string>>;
-  timeoutMinutes: number | undefined;
+  /** The check's time budget: the pool kills and names a check past it. */
+  timeoutMinutes: number;
   /** `continue-on-error` as declared: a literal or a `${{ }}` expression. */
   continueOnError: boolean | string | undefined;
   step: Readonly<Record<string, unknown>>;
@@ -145,10 +149,13 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
       throw new CheckPoolRegistryError(`${name}: env values must be strings`);
     }
     if (
-      timeout !== undefined &&
-      (typeof timeout !== "number" || !Number.isInteger(timeout) || timeout < 1)
+      typeof timeout !== "number" ||
+      !Number.isInteger(timeout) ||
+      timeout < 1
     ) {
-      throw new CheckPoolRegistryError(`${name}: invalid timeout-minutes`);
+      throw new CheckPoolRegistryError(
+        `${name}: declare timeout-minutes, a whole number of minutes (at least 1) that bounds the check; size it at about 2.5x its worst duration in the pool's summary table`,
+      );
     }
     if (
       continueOnError !== undefined &&
@@ -165,7 +172,7 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
       env: Object.fromEntries(
         Object.entries(env).map(([key, value]) => [key, String(value)]),
       ),
-      timeoutMinutes: typeof timeout === "number" ? timeout : undefined,
+      timeoutMinutes: timeout,
       continueOnError,
       step: entry,
     };

@@ -5,8 +5,13 @@
 # context, runs the selected checks concurrently (one fewer than the runner
 # CPUs) and prints their logs in this order. Workflow guards read these
 # entries as steps of the job (scripts/workflow-steps.ts).
+# Every entry declares `timeout-minutes`, its time budget: the pool kills and
+# names a check that exceeds it. A budget is about 2.5x the check's worst
+# duration in the pool's summary tables of recent successful runs, rounded up
+# to whole minutes and at least 2.
 checks:
   - name: Format
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -15,6 +20,7 @@ checks:
     run: bun fmt --check
 
   - name: Test unsignalled skip detection
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -23,6 +29,7 @@ checks:
     run: bun test scripts/unsignalled-skip.test.ts
 
   - name: Ratchet guard
+    timeout-minutes: 11
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -39,6 +46,7 @@ checks:
       bun scripts/ratchet.ts --check
 
   - name: Ratchet scanner invariants
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -47,6 +55,7 @@ checks:
     run: bun test scripts/ratchet-scan.test.ts
 
   - name: Test subject reachability census
+    timeout-minutes: 9
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -56,6 +65,7 @@ checks:
       bun scripts/test-subject-reachability.ts --base "$RATCHET_BASE_REF"
 
   - name: Deployment feature guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -72,6 +82,7 @@ checks:
       bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
   - name: Processed-field backlog guard
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -81,6 +92,7 @@ checks:
     run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
 
   - name: GitHub API command ownership
+    timeout-minutes: 3
     id: static_check_003
     env:
       CI_CHECK_KIND: STATIC
@@ -95,6 +107,7 @@ checks:
   # be committed; larger files sit in scripts/tracked-file-size-baseline.json
   # with a reason and a byte ceiling, and stale entries fail.
   - name: Tracked file sizes
+    timeout-minutes: 2
     id: static_check_125
     env:
       CI_CHECK_KIND: STATIC
@@ -108,6 +121,7 @@ checks:
   # Network fetches retry through scripts/retry.sh and carry a step
   # timeout; the allowlist may only shrink against the measured base.
   - name: CI network step retries and timeouts
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -117,6 +131,7 @@ checks:
       bun scripts/check-ci-network-steps.ts --base "$RATCHET_BASE_REF"
 
   - name: Sparse checkout script dependencies
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -125,6 +140,7 @@ checks:
     run: bun test scripts/sparse-checkout-dependencies.test.ts
 
   - name: SHA-256 migration ledger
+    timeout-minutes: 3
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -133,6 +149,7 @@ checks:
     run: bun scripts/sha256-migration-ledger.ts --base "$RATCHET_BASE_REF"
 
   - name: Custom lint rule coverage
+    timeout-minutes: 7
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -143,6 +160,7 @@ checks:
       bun scripts/check-oxlint-rule-coverage.ts
 
   - name: Custom lint test timeout policy
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -151,6 +169,7 @@ checks:
     run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
 
   - name: Dated waiver lifecycle guards
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -160,6 +179,7 @@ checks:
       bun test scripts/dated-waivers.test.ts scripts/dated-waiver-probes.test.ts scripts/dated-waiver-publish.test.ts scripts/dated-waiver-healing.test.ts scripts/dated-waiver-healing-workflow.test.ts
 
   - name: Documentation source policy rule
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -171,6 +191,7 @@ checks:
     run: bun run check:docs-sources
 
   - name: Instruction references
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -189,6 +210,7 @@ checks:
       bun run check:instruction-references
 
   - name: Knip production dependency checks
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -208,6 +230,7 @@ checks:
       done
 
   - name: Knip workspace dependency checks
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -218,6 +241,7 @@ checks:
     run: bun run dependencies:check
 
   - name: Knip dead-export check (packages/cli)
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
@@ -234,6 +258,7 @@ checks:
       DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include exports,types,nsExports --workspace packages/cli
 
   - name: Knip dead-export budget (all workspaces)
+    timeout-minutes: 2
     continue-on-error: ${{ github.event_name == 'merge_group' }}
     env:
       CI_CHECK_KIND: STATIC
@@ -252,6 +277,7 @@ checks:
       bun run check:knip-exports
 
   - name: Dependabot group guard (installed packages)
+    timeout-minutes: 2
     env:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs

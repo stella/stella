@@ -14,6 +14,7 @@ import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
+  type CheckPoolJob,
   checkPoolRegistryPath,
   checkPoolStepRun,
   type ReadCheckPool,
@@ -367,8 +368,39 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toBase64()}`
   ),
 ).CANONICAL_CANCEL_STEP;
+// Pooled checks once had no required budget; a merge base from before that
+// reads with the head's budgets, so a budget alone never reads as a changed
+// check. Inert once every base entry declares `timeout-minutes`.
+const withHeadBudgets = (pool: CheckPoolJob, source: string) => {
+  const { checks } = v.parse(
+    v.object({ checks: v.array(v.record(v.string(), v.unknown())) }),
+    Bun.YAML.parse(source),
+  );
+  if (checks.every((entry) => "timeout-minutes" in entry)) {
+    return source;
+  }
+  const budgets = new Map(
+    readCheckPool(pool).map(({ name, timeoutMinutes }) => [
+      name,
+      timeoutMinutes,
+    ]),
+  );
+  return Bun.YAML.stringify({
+    checks: checks.map((entry) =>
+      "timeout-minutes" in entry
+        ? entry
+        : {
+            ...entry,
+            "timeout-minutes": budgets.get(String(entry["name"])) ?? 1,
+          },
+    ),
+  });
+};
 const readBaseCheckPool: ReadCheckPool = (pool) =>
-  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]);
+  withHeadBudgets(
+    pool,
+    git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]),
+  );
 const baseCancellationSchema = cancellationJobSchema(
   baseCancellation,
   readBaseCheckPool,
@@ -385,6 +417,9 @@ const jobs = v.parse(
 // today's form, so its pooled checks still expand and compare. Matches only
 // the old form, so it is inert once the merge base carries the new one.
 const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// Pool steps then ran the pool without `exec`; that form reads as today's too.
+const preExecPoolRun = (job: CheckPoolJob) =>
+  checkPoolStepRun(job).replace(" exec bun ", " bun ");
 const withCurrentPoolSteps = (workflow: unknown): unknown => {
   const parsed = v.parse(
     v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
@@ -404,7 +439,8 @@ const withCurrentPoolSteps = (workflow: unknown): unknown => {
           }),
           step,
         ) ||
-        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+        (LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job &&
+          step.run !== preExecPoolRun(job))
       ) {
         return step;
       }

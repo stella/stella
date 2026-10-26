@@ -10,6 +10,12 @@
 // `continue-on-error` holds: then its conclusion is success. Every failed check
 // still emits an error annotation so the failure digest can report its cause.
 //
+// Nothing runs unbounded or unnamed: every check has a `timeout-minutes`
+// budget, a one-line "Finished check" record prints as each check ends (its
+// full log still waits for registry order), and the pool stops a few minutes
+// before its job's own timeout. On that deadline or a cancellation signal it
+// names every check still running, with its elapsed time and log tail.
+//
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
 import {
@@ -20,6 +26,7 @@ import {
   openSync,
   readFileSync,
   readSync,
+  statSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -238,7 +245,7 @@ const launchedOutcome = (
   if (launched.timedOut) {
     return {
       outcome: "failure",
-      detail: `timed out after ${check.timeoutMinutes ?? 0} min`,
+      detail: `timed out after ${check.timeoutMinutes} min`,
     };
   }
   return launched.exitCode === 0
@@ -256,6 +263,8 @@ type RunChecksOptions = {
   ) => Promise<Launched>;
   /** Called once per check, in registry order, as soon as it can be. */
   report: (index: number, result: CheckResult) => void;
+  /** Called as each launched check ends, before registry order allows its report. */
+  finished?: (index: number, result: CheckResult) => void;
   now?: () => number;
 };
 
@@ -268,6 +277,7 @@ export const runChecks = async ({
   concurrency,
   launch,
   report,
+  finished = () => undefined,
   now = () => performance.now(),
 }: RunChecksOptions): Promise<CheckResult[]> => {
   if (!Number.isInteger(concurrency) || concurrency < 1) {
@@ -315,28 +325,31 @@ export const runChecks = async ({
     for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
       const started = now();
       const base = { name: item.check.name, id: item.check.id };
+      let result: CheckResult;
       try {
         const launched = await launch(item.index, item.check, item.env);
         const seconds = (now() - started) / 1000;
         const outcome = launchedOutcome(launched, item.check);
-        settle(item.index, {
+        result = {
           ...base,
           seconds,
           maxRssBytes: launched.maxRssBytes,
           ...outcome,
           continuedOnError:
             item.continueOnError && outcome.outcome === "failure",
-        });
+        };
       } catch (error) {
-        settle(item.index, {
+        result = {
           ...base,
           seconds: (now() - started) / 1000,
           maxRssBytes: undefined,
           outcome: "failure",
           continuedOnError: item.continueOnError,
           detail: error instanceof Error ? error.message : String(error),
-        });
+        };
       }
+      finished(item.index, result);
+      settle(item.index, result);
     }
   };
   await Promise.all(
@@ -367,10 +380,18 @@ const killGroup = (pid: number) => {
   }
 };
 
-type ProcessLauncherOptions = { root: string; directory: string };
-/** Run a check's script the way a `shell: bash` step does, in its own group. */
+type ProcessLauncherOptions = {
+  root: string;
+  directory: string;
+  /** The length of one budget minute; only tests shorten it. */
+  minuteMs?: number;
+};
+/**
+ * Run a check's script the way a `shell: bash` step does, in its own group,
+ * and kill the group once the check's `timeout-minutes` budget is spent.
+ */
 export const processLauncher =
-  ({ root, directory }: ProcessLauncherOptions) =>
+  ({ root, directory, minuteMs = 60_000 }: ProcessLauncherOptions) =>
   async (
     index: number,
     check: PoolCheck,
@@ -395,13 +416,10 @@ export const processLauncher =
     );
     active.add(child.pid);
     let timedOut = false;
-    const timer =
-      check.timeoutMinutes === undefined
-        ? undefined
-        : setTimeout(() => {
-            timedOut = true;
-            killGroup(child.pid);
-          }, check.timeoutMinutes * 60_000);
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killGroup(child.pid);
+    }, check.timeoutMinutes * minuteMs);
     const exitCode = await child.exited;
     clearTimeout(timer);
     // Nothing a check starts may outlive it and contend with the next one.
@@ -420,8 +438,15 @@ const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
 const CANCELLATION_LOG_TAIL_BYTES = 8 * 1024;
+const CANCELLATION_LOG_TAIL_LINES = 40;
 const CANCELLATION_LOG_TOTAL_BYTES = 64 * 1024;
-type UnreportedCheck = { name: string; status: "running" | "completed" };
+/** A check whose log registry order still holds back, as the pool stops. */
+export type UnreportedCheck = {
+  name: string;
+  status: "running" | "completed";
+  /** performance.now() when the check started. */
+  started: number;
+};
 
 const readLogTail = (file: string, limit: number) => {
   const fd = openSync(file, "r");
@@ -429,21 +454,44 @@ const readLogTail = (file: string, limit: number) => {
     const { size } = fstatSync(fd);
     const buffer = Buffer.alloc(Math.min(size, limit));
     const bytes = readSync(fd, buffer, 0, buffer.length, size - buffer.length);
-    return buffer.subarray(0, bytes).toString("utf-8");
+    const lines = buffer.subarray(0, bytes).toString("utf-8").split("\n");
+    // A complete log ends with a line break: the last line counted is the
+    // one before it.
+    const kept = CANCELLATION_LOG_TAIL_LINES + (lines.at(-1) === "" ? 1 : 0);
+    return lines.slice(-kept).join("\n");
   } finally {
     closeSync(fd);
   }
 };
 
+/**
+ * Name every check still running when the pool stops, with how long it has
+ * run: the line a reader of a cancelled or timed-out job needs first.
+ */
+export const stillRunningLines = (
+  unreported: ReadonlyMap<number, UnreportedCheck>,
+  now: number,
+) =>
+  [...unreported.values()].flatMap(({ name, status, started }) =>
+    status === "running"
+      ? [`Still running: ${name} (${seconds((now - started) / 1000)})`]
+      : [],
+  );
+
 const printUnreportedLogs = (
   directory: string,
   unreported: ReadonlyMap<number, UnreportedCheck>,
+  now: number,
 ) => {
   const omitted = "Log tail omitted: cancellation output limit reached.\n";
   let remaining = CANCELLATION_LOG_TOTAL_BYTES - Buffer.byteLength(omitted);
   let flushStatus: "complete" | "truncated" = "complete";
-  for (const [index, { name, status }] of unreported) {
-    const heading = `::group::Interrupted check: ${name} (${status})\n`;
+  for (const [index, { name, status, started }] of unreported) {
+    const state =
+      status === "running"
+        ? `running for ${seconds((now - started) / 1000)}`
+        : status;
+    const heading = `::group::Interrupted check: ${name} (${state})\n`;
     const closing = "\n::endgroup::\n";
     const framingBytes = Buffer.byteLength(heading + closing);
     if (remaining < framingBytes) {
@@ -713,6 +761,184 @@ export const partitionChecks = (
   return checks.filter((_, checkIndex) => checkIndex % count === index - 1);
 };
 
+/** The workflow that declares every pooled job; a test binds the two. */
+const CI_WORKFLOW = ".github/workflows/ci.yml";
+// `<owner>/<repo>/<path>@<ref>`, as the runner sets GITHUB_WORKFLOW_REF.
+const WORKFLOW_REF = /^[^/]+\/[^/]+\/(?<path>[^@]+)@/u;
+
+/**
+ * Minutes the pool keeps before its job's `timeout-minutes`: there it stops,
+ * names every check still running and fails, so the pool rather than the
+ * runner's cancellation reports a hang.
+ */
+export const POOL_DEADLINE_MARGIN_MINUTES = 3;
+
+export type JobTimeout = { workflow: string; job: string; minutes: number };
+
+type JobTimeoutOptions = {
+  root: string;
+  poolJob: CheckPoolJob;
+  env: Readonly<Record<string, string | undefined>>;
+};
+/**
+ * The `timeout-minutes` of the workflow job that runs the pool; undefined
+ * outside a workflow job. A pooled job lives in ci.yml, also when another
+ * workflow calls ci.yml (GITHUB_WORKFLOW_REF then names the caller); any
+ * other job that runs the pool lives in the workflow its run started from.
+ */
+export const jobTimeout = ({
+  root,
+  poolJob,
+  env,
+}: JobTimeoutOptions): JobTimeout | undefined => {
+  const job = env["GITHUB_JOB"];
+  if (job === undefined || job === "") {
+    return undefined;
+  }
+  const workflow =
+    job === poolJob
+      ? CI_WORKFLOW
+      : WORKFLOW_REF.exec(env["GITHUB_WORKFLOW_REF"] ?? "")?.groups?.["path"];
+  if (workflow === undefined) {
+    throw new CheckPoolError(
+      `GITHUB_WORKFLOW_REF must name the workflow of job ${job} so the pool can read its timeout-minutes`,
+    );
+  }
+  const parsed: unknown = Bun.YAML.parse(
+    readFileSync(path.join(root, workflow), "utf-8"),
+  );
+  const jobs = record(parsed) ? parsed["jobs"] : undefined;
+  const body = record(jobs) ? jobs[job] : undefined;
+  const minutes = record(body) ? body["timeout-minutes"] : undefined;
+  if (
+    typeof minutes !== "number" ||
+    !Number.isInteger(minutes) ||
+    minutes <= POOL_DEADLINE_MARGIN_MINUTES
+  ) {
+    throw new CheckPoolError(
+      `${workflow}: job ${job} must declare a literal timeout-minutes above ${POOL_DEADLINE_MARGIN_MINUTES}; the check pool stops that many minutes before it to name the checks still running`,
+    );
+  }
+  return { workflow, job, minutes };
+};
+
+type JobStartOptions = {
+  /** mtime of GITHUB_EVENT_PATH, which the runner writes as it sets up the job. */
+  eventWrittenAt: number | undefined;
+  poolStartedAt: number;
+  timeoutMinutes: number;
+};
+/**
+ * When the job started (epoch ms). An event file time the job cannot have
+ * started at, later than the pool or longer ago than the job's timeout, falls
+ * back to the pool's own start, which can only make the deadline later.
+ */
+export const jobStartedAt = ({
+  eventWrittenAt,
+  poolStartedAt,
+  timeoutMinutes,
+}: JobStartOptions) =>
+  eventWrittenAt !== undefined &&
+  eventWrittenAt <= poolStartedAt &&
+  poolStartedAt - eventWrittenAt < timeoutMinutes * 60_000
+    ? eventWrittenAt
+    : poolStartedAt;
+
+/** The pool's deadline (epoch ms): its job's timeout less the margin. */
+export const poolDeadline = (jobStart: number, timeoutMinutes: number) =>
+  jobStart + (timeoutMinutes - POOL_DEADLINE_MARGIN_MINUTES) * 60_000;
+
+/** The live line for one check as it ends, ahead of its in-order log. */
+export const finishedCheckLine = (result: CheckResult) => {
+  const outcome =
+    result.outcome === "failure"
+      ? `${result.continuedOnError ? "failure (continue-on-error)" : "failure"}: ${result.detail}`
+      : result.outcome;
+  return `Finished check: ${result.name} (${outcome}, ${result.seconds.toFixed(1)}s)`;
+};
+
+type StopCause =
+  | { kind: "signal"; signal: "SIGINT" | "SIGTERM" }
+  | { kind: "deadline"; timeout: JobTimeout };
+
+/**
+ * Stop the pool once: kill every running check, name what still ran and for
+ * how long, print the held-back log tails and exit non-zero.
+ */
+const poolStopper = (
+  directory: string,
+  unreported: ReadonlyMap<number, UnreportedCheck>,
+) => {
+  let stopping = false;
+  return (cause: StopCause) => {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    for (const pid of active) {
+      killGroup(pid);
+    }
+    const now = performance.now();
+    try {
+      if (cause.kind === "deadline") {
+        const { minutes, workflow, job } = cause.timeout;
+        print(
+          `::error title=Check pool deadline::${escapeData(`The check pool stopped ${POOL_DEADLINE_MARGIN_MINUTES} min before the timeout-minutes (${minutes}) of job ${job} in ${workflow}.`)}`,
+        );
+        for (const { name, status, started } of unreported.values()) {
+          if (status === "running") {
+            print(
+              failedCheckRecord(
+                name,
+                `still running after ${seconds((now - started) / 1000)} at the check pool deadline`,
+              ),
+            );
+          }
+        }
+      } else {
+        print(`Received ${cause.signal}: stopping the check pool.`);
+      }
+      for (const line of stillRunningLines(unreported, now)) {
+        print(line);
+      }
+      printUnreportedLogs(directory, unreported, now);
+    } finally {
+      process.exit(cause.kind === "signal" ? 130 : 1);
+    }
+  };
+};
+
+type ArmDeadlineOptions = {
+  root: string;
+  job: CheckPoolJob;
+  eventPath: string | undefined;
+  stop: (cause: StopCause) => void;
+};
+/** Stop the pool at its deadline when it runs in a workflow job. */
+const armDeadline = ({ root, job, eventPath, stop }: ArmDeadlineOptions) => {
+  const timeout = jobTimeout({ root, poolJob: job, env: process.env });
+  if (timeout === undefined) {
+    return undefined;
+  }
+  const deadline = poolDeadline(
+    jobStartedAt({
+      eventWrittenAt: eventPath
+        ? statSync(eventPath, { throwIfNoEntry: false })?.mtimeMs
+        : undefined,
+      poolStartedAt: Date.now(),
+      timeoutMinutes: timeout.minutes,
+    }),
+    timeout.minutes,
+  );
+  print(
+    `Check pool deadline: ${new Date(deadline).toISOString()} (job timeout-minutes ${timeout.minutes} less ${POOL_DEADLINE_MARGIN_MINUTES})`,
+  );
+  return setTimeout(
+    () => stop({ kind: "deadline", timeout }),
+    Math.max(0, deadline - Date.now()),
+  );
+};
+
 const main = async () => {
   const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
   if (
@@ -773,31 +999,31 @@ const main = async () => {
     `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time`,
   );
   const unreported = new Map<number, UnreportedCheck>();
-  const stop = () => {
-    for (const pid of active) {
-      killGroup(pid);
-    }
-    try {
-      printUnreportedLogs(directory, unreported);
-    } finally {
-      process.exit(130);
-    }
-  };
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
+  const stop = poolStopper(directory, unreported);
+  process.on("SIGINT", () => stop({ kind: "signal", signal: "SIGINT" }));
+  process.on("SIGTERM", () => stop({ kind: "signal", signal: "SIGTERM" }));
+  const deadlineTimer = armDeadline({ root, job, eventPath, stop });
   const started = performance.now();
   const launch = processLauncher({ root, directory });
   const results = await runChecks({
     planned,
     concurrency,
     launch: async (index, check, env) => {
-      unreported.set(index, { name: check.name, status: "running" });
+      const entry: UnreportedCheck = {
+        name: check.name,
+        status: "running",
+        started: performance.now(),
+      };
+      unreported.set(index, entry);
       print(`Starting check: ${check.name}`);
       try {
         return await launch(index, check, env);
       } finally {
-        unreported.set(index, { name: check.name, status: "completed" });
+        unreported.set(index, { ...entry, status: "completed" });
       }
+    },
+    finished: (_index, result) => {
+      print(finishedCheckLine(result));
     },
     report: (index, result) => {
       unreported.delete(index);
@@ -827,6 +1053,7 @@ const main = async () => {
       }
     },
   });
+  clearTimeout(deadlineTimer);
   const table = summaryTable(results);
   print(
     `\n${table}\n\nWall time: ${seconds((performance.now() - started) / 1000)}`,
