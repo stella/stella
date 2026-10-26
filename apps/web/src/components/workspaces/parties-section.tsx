@@ -354,6 +354,7 @@ const ChangeClientDialog = ({
               setIsOpen(false);
             }}
             placeholder={t("workspaces.parties.changeClient")}
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
         </DialogPanel>
       </DialogPopup>
