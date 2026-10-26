@@ -25,7 +25,7 @@ describe("running headers", () => {
     expect(isRunningHeaderLine(line)).toBe(true);
   });
 
-  test("reads every page and docket spelling as a running header", () => {
+  test("running header spellings", () => {
     assertProperty(
       "running header spellings",
       fc.property(
