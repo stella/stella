@@ -15,6 +15,7 @@ import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapter
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import {
+  parsePlNsaDecision,
   plNsaParagraphs,
   plNsaStatedSuperscripts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
@@ -304,9 +305,10 @@ describe("pl-nsa superscript article numbers", () => {
     expect(mergedText).not.toContain("23¹");
   });
 
+  const read = (text: string) =>
+    plNsaParagraphs(text, plNsaStatedSuperscripts([text])).join("\n\n");
+
   test("a prime is read as a superscript only where the document writes one", () => {
-    const read = (text: string) =>
-      plNsaParagraphs(text, plNsaStatedSuperscripts([text])).join("\n\n");
     expect(read("nieważność z art. 183'§ 2 p.p.s.a.")).toBe(
       "nieważność z art. 183'§ 2 p.p.s.a.",
     );
@@ -316,11 +318,162 @@ describe("pl-nsa superscript article numbers", () => {
     expect(read("art. 55' k.c. i art. 55¹ k.c.")).toBe(
       "art. 55¹ k.c. i art. 55¹ k.c.",
     );
-    expect(read("art. 36' ust. 1, art. 36¹ i art. 36² ustawy")).toBe(
-      "art. 36' ust. 1, art. 36¹ i art. 36² ustawy",
-    );
+    expect(
+      read("art. 36' ust. 1 u.r.p., art. 36¹ u.r.p. i art. 36² u.r.p."),
+    ).toBe("art. 36' ust. 1 u.r.p., art. 36¹ u.r.p. i art. 36² u.r.p.");
     expect(read("art. 9 ² ust. 12 i art. 626 ²§ 5 k.p.c.")).toBe(
       "art. 9² ust. 12 i art. 626²§ 5 k.p.c.",
+    );
+  });
+
+  test("a prime closing a quotation stays a quotation mark", () => {
+    for (const text of [
+      "art. 23¹ k.p.; cytat: ‘art. 23’ ustawy o ochronie danych",
+      "art. 23¹ k.p.; cytat: ‘art. 23’ k.p.",
+      "art. 23¹ k.p.; cytat: 'art. 23' k.p.",
+    ]) {
+      expect(read(text)).toBe(text);
+    }
+  });
+
+  test("a prime on another statute's article stays", () => {
+    expect(read("art. 23¹ k.p. oraz art. 23' ustawy o ochronie danych")).toBe(
+      "art. 23¹ k.p. oraz art. 23' ustawy o ochronie danych",
+    );
+    expect(read("art. 23¹ Kodeksu pracy i art. 23' § 1 Kodeksu pracy")).toBe(
+      "art. 23¹ Kodeksu pracy i art. 23¹ § 1 Kodeksu pracy",
+    );
+    expect(read("art. 23¹ K. p. oraz art. 23' k.p.")).toBe(
+      "art. 23¹ K. p. oraz art. 23¹ k.p.",
+    );
+  });
+});
+
+describe("pl-nsa joins it must not make", () => {
+  test("a full stop after an ordinary short word ends the sentence", () => {
+    for (const text of [
+      ["Organ nie wykazał tych wad.", "ocena prawna należy do sądu."],
+      ["Skarżący przedstawił fakt.", "w odpowiedzi organ wniósł o oddalenie."],
+      ["Wniosek złożono w maju.", "na tej podstawie wszczęto postępowanie."],
+    ]) {
+      expect(plNsaParagraphs(text.join("\n\n"), NO_SUPERSCRIPTS)).toEqual(text);
+    }
+  });
+
+  test("a sentence goes on after an abbreviation", () => {
+    for (const [above, next] of [
+      ["naruszenie art. 7 w zw.", "z art. 77 § 1 k.p.a."],
+      ["decyzją z dnia 12.03.2020r.", "w sprawie podatku"],
+      ["skarga M. D.", "na uchwałę Rady Gminy"],
+      ["(t.j. Dz. U.", "z 2023 r., poz. 2383 ze zm.)"],
+    ] as const) {
+      expect(plNsaParagraphs(`${above}\n\n${next}`, NO_SUPERSCRIPTS)).toEqual([
+        `${above} ${next}`,
+      ]);
+    }
+  });
+
+  test("a Roman numeral of any length marks a list item", () => {
+    const text = [
+      "xvii) art. 4 ustawy, lub",
+      "xviii) art. 5 ustawy, lub",
+      "xxxiv. art. 6 ustawy, oraz",
+      "xl) art. 7 ustawy.",
+    ];
+    expect(plNsaParagraphs(text.join("\n\n"), NO_SUPERSCRIPTS)).toEqual(text);
+  });
+});
+
+describe("pl-nsa notes after the closing rule", () => {
+  test("a number before its note is the note's label", () => {
+    expect(
+      plNsaParagraphs(
+        [
+          "Treść.",
+          "-----------------------",
+          "1",
+          "Por. wyrok NSA.",
+          "2",
+          "Por. komentarz do ustawy.",
+          "3",
+        ].join("\n\n"),
+        NO_SUPERSCRIPTS,
+      ),
+    ).toEqual([
+      "Treść.",
+      "-----------------------",
+      "1",
+      "Por. wyrok NSA.",
+      "2",
+      "Por. komentarz do ustawy.",
+    ]);
+  });
+
+  test("rules with only page numbers after them all go in one reading", () => {
+    const once = plNsaParagraphs(
+      ["Treść.", "-----", "2", "-----", "Strona 3 z 4"].join("\n\n"),
+      NO_SUPERSCRIPTS,
+    );
+    expect(once).toEqual(["Treść."]);
+    expect(plNsaParagraphs(once.join("\n\n"), NO_SUPERSCRIPTS)).toEqual(once);
+  });
+});
+
+describe("pl-nsa completeness check", () => {
+  const COMPOUNDS = [
+    ["rolno-", "środowiskowych"],
+    ["techniczno-", "budowlanych"],
+    ["sądowo-", "administracyjnym"],
+    ["usługowo-", "mieszkalnego"],
+    ["słuchowo-", "ruchowej"],
+    ["wewnątrz-", "administracyjnego"],
+    ["społeczno-", "gospodarczych"],
+    ["finansowo-", "księgowej"],
+    ["organizacyjno-", "technicznych"],
+    ["handlowo-", "usługowego"],
+  ] as const;
+
+  const reasons = COMPOUNDS.map(
+    ([left, right]) => `Organ ocenił skutki ${left}\n\n${right} zmian.`,
+  ).join("\n\n");
+
+  const parse = (reference: string) =>
+    parsePlNsaDecision({
+      caseNumber: "II SA/Kr 1/11",
+      court: "Wojewódzki Sąd Administracyjny w Krakowie",
+      decisionDate: "2011-03-31",
+      decisionType: "wyrok",
+      title: "Wyrok WSA w Krakowie",
+      documentId: "0000000000",
+      sourceUrl: "https://orzeczenia.nsa.gov.pl/doc/0000000000",
+      keywords: [],
+      statutes: [],
+      sections: {
+        thesis: null,
+        sentence: "Oddala skargę.",
+        reasons,
+        dissent: null,
+      },
+      reference,
+    });
+
+  test("a line joined after its hyphen loses no word", () => {
+    const parsed = parse(
+      `SENTENCJA\n\nOddala skargę.\n\n\nUZASADNIENIE\n\n${reasons}`,
+    );
+    expect(parsed.textSource).toBe("sections");
+    expect(parsed.validation.stats.missingWords).toEqual([]);
+    expect(parsed.fulltext).toContain(
+      "Organ ocenił skutki rolno-środowiskowych zmian.",
+    );
+  });
+
+  test("a word the reading drops still shows as lost", () => {
+    const parsed = parse(
+      `SENTENCJA\n\nOddala skargę.\n\n\nUZASADNIENIE\n\n${reasons}\n\nSąd zważył okoliczności nieobecne gdzie indziej.`,
+    );
+    expect(parsed.validation.stats.missingWords).toEqual(
+      expect.arrayContaining(["nieobecne", "indziej"]),
     );
   });
 });
