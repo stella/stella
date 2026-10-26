@@ -177,7 +177,7 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read procurement documents: printed lines join into paragraphs, page numbers go, small-type indices are raised and list labels spaced.",
+        "Re-read procurement documents: printed lines join into paragraphs, page numbers go, small-type indices are raised and list labels spaced, and documents refused only for work done after their parse are read.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {

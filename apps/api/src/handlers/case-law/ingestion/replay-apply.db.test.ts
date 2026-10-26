@@ -48,6 +48,11 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import {
+  assemblePlKioDecision,
+  plKioAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { PL_KIO_DOCUMENT_REJECTION } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
+import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
@@ -679,6 +684,96 @@ test("a row that re-parses to no document keeps its text unless asked", async ()
   expect(run.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
   expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
   expect((await storedDocumentOf(id))?.fulltext).toBe(STORED_PAGE_TEXT);
+
+  await sourceLease.release();
+});
+
+test("a re-parse its parsing budget refuses keeps the stored text and records the refusal", async () => {
+  // A real procurement ruling whose markup the adapter's DOM allocation
+  // budget refuses. A row stored with text before the budget existed
+  // re-parses to a ruling with no document; the pipeline keeps the stored
+  // one (`preserveStoredDocument` in pipeline/decision-plan.ts) and the
+  // refusal is recorded on the row as the document status.
+  const fixture = (name: string) =>
+    Bun.file(new URL(`adapters/__fixtures__/${name}`, import.meta.url));
+  const html = new TextDecoder().decode(
+    Bun.gunzipSync(
+      new Uint8Array(
+        await fixture("pl-kio-content-10000.html.gz").arrayBuffer(),
+      ),
+    ),
+  );
+  const refused = assemblePlKioDecision({
+    item: {
+      id: "10000",
+      signature: "KIO 2155/17",
+      issueDate: "02-11-2017",
+      documentType: "wyrok",
+    },
+    detailHtml: await fixture("pl-kio-detail-10000.html").text(),
+    document: { type: "read", html },
+  }).decision;
+  expect(refused.fulltext ?? "").toBe("");
+  expect(refused.metadata["documentStatus"]).toBe(
+    PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  );
+  const envelope = refused.sourceRaw;
+  if (envelope === undefined) {
+    panic("Expected the procurement ruling to carry its envelope");
+  }
+
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: `replay-budget-${sourceId}`,
+    name: "replay budget fixture",
+  });
+  const id = createSafeId<"caseLawDecision">();
+  const storedText = "WYROK, as the ruling was first stored.";
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    caseNumber: refused.caseNumber,
+    sourceDocumentId: refused.sourceDocumentId,
+    court: refused.court,
+    country: refused.country,
+    language: refused.language,
+    fulltext: storedText,
+    sections: [{ index: 0, type: "unknown", title: null, text: storedText }],
+    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    sourceHash: "hash-of-the-envelope-as-first-stored",
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO] - 1,
+    metadata: {},
+  });
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (sourceLease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+
+  const run = await replayCaseLawSource({
+    adapter: plKioAdapter,
+    scopedDb,
+    sourceId,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    readStoredRaw: async () =>
+      await Promise.resolve(new TextEncoder().encode(envelope)),
+    sourceLease,
+    bound: { type: "at-most", limit: 10 },
+    pageSize: 10,
+  });
+  if (run.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+
+  const row = await storedDocumentOf(id);
+  expect(row?.fulltext).toBe(storedText);
+  expect(row?.metadata?.["documentStatus"]).toBe(
+    PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  );
 
   await sourceLease.release();
 });
