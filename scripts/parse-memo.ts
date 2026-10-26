@@ -9,6 +9,11 @@
 // tree's syntax in memory.
 import ts from "typescript6";
 
+import {
+  type ParsedSource,
+  parseSource as parseSyntaxTree,
+} from "../packages/scripts/src/syntax-tree";
+
 type ParseDialect = ts.ScriptKind.TS | ts.ScriptKind.TSX;
 
 const RECENT_TEXTS_PER_DIALECT = 2;
@@ -58,4 +63,35 @@ export const parseSource = ({
   return DECLARATION_FILE_NAME.test(fileName)
     ? parse()
     : RECENT_PARSES[dialect](text, parse);
+};
+
+// oxc picks the grammar from the file extension.
+type SyntaxDialect = "js" | "jsx" | "ts" | "tsx";
+
+const syntaxDialect = (fileName: string): SyntaxDialect => {
+  if (fileName.endsWith(".tsx")) {
+    return "tsx";
+  }
+  if (fileName.endsWith(".jsx")) {
+    return "jsx";
+  }
+  return /\.[cm]?js$/u.test(fileName) ? "js" : "ts";
+};
+
+const RECENT_SYNTAX_TREES = {
+  js: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
+  jsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
+  ts: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
+  tsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
+} as const satisfies Record<SyntaxDialect, RecentMemo<ParsedSource>>;
+
+/** The oxc syntax tree of `text`, shared by every reader of the same text. */
+export const parseSyntax = ({
+  fileName,
+  text,
+}: ParseSourceOptions): ParsedSource => {
+  const parse = () => parseSyntaxTree(fileName, text);
+  return DECLARATION_FILE_NAME.test(fileName)
+    ? parse()
+    : RECENT_SYNTAX_TREES[syntaxDialect(fileName)](text, parse);
 };
