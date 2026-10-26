@@ -34,10 +34,12 @@ const changedLinesFor = (file: string): ReadonlySet<number> => {
   mergeBase ??= execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
     cwd: ROOT,
     encoding: "utf-8",
+    maxBuffer: 2 ** 30,
   }).trim();
   const tracked = execFileSync("git", ["ls-files", "--", file], {
     cwd: ROOT,
     encoding: "utf-8",
+    maxBuffer: 2 ** 30,
   }).trim();
   // Untracked files (including isolated lint fixtures) are entirely new.
   if (tracked === "") {
@@ -49,6 +51,7 @@ const changedLinesFor = (file: string): ReadonlySet<number> => {
     {
       cwd: ROOT,
       encoding: "utf-8",
+      maxBuffer: 2 ** 30,
     },
   );
   const lines = changedLineNumbers(diff);

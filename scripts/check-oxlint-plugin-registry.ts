@@ -215,10 +215,12 @@ export const newGuardRolloutErrors = ({
 const checkNewGuardRollouts = (): string[] => {
   const base = execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
     encoding: "utf-8",
+    maxBuffer: 2 ** 30,
   }).trim();
   const changed = new Set(
     execFileSync("git", ["diff", "--name-only", base, "--", PLUGIN_DIRECTORY], {
       encoding: "utf-8",
+      maxBuffer: 2 ** 30,
     })
       .trim()
       .split("\n"),
@@ -231,6 +233,7 @@ const checkNewGuardRollouts = (): string[] => {
     }
     const previous = spawnSync("git", ["show", `${base}:${filename}`], {
       encoding: "utf-8",
+      maxBuffer: 2 ** 30,
     });
     if (previous.status !== 0 && previous.status !== 128) {
       panic(`Cannot read guard baseline: ${filename}`);
