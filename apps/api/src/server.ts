@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { HTTP_REQUEST_BODY_MAX_BYTES } from "@stll/api-contract/limits";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -240,6 +241,7 @@ const startServer = async (): Promise<void> => {
   const server = Bun.serve({
     port: getApiPort(),
     ...apiApp.serveOptions,
+    maxRequestBodySize: HTTP_REQUEST_BODY_MAX_BYTES,
   });
 
   // From here the loop serves requests; boot work before this point delays

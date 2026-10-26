@@ -130,6 +130,51 @@ const triggerShapeClassName = ({
   return "inline-flex rounded align-baseline";
 };
 
+const DecisionCitationTriggerContent = ({
+  citingText,
+  decision,
+  label,
+  paragraph,
+  presentation,
+}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
+  /** The court's number, already in the reader's formatting locale. */
+  paragraph: string | null;
+  presentation: DecisionCitationPresentation;
+}) => {
+  const t = useTranslations();
+  const badge = (
+    <DecisionCitationLabel
+      decision={decision}
+      presentation={presentation}
+      paragraphNumber={paragraph}
+    />
+  );
+  if (label !== undefined) {
+    return (
+      <>
+        {label}
+        {paragraph !== null && (
+          <span className="ms-1 whitespace-nowrap">
+            {t("caseLaw.citation.paragraphMark", { paragraph })}
+          </span>
+        )}
+      </>
+    );
+  }
+  if (citingText === undefined) {
+    return badge;
+  }
+  return (
+    <>
+      {citingText}
+      {/* The badge is not the citing text's words: as reader chrome it stays
+          off the offsets a selection is stored in, so a quote around a
+          citation still matches the decision text. */}
+      <span data-reader-chrome=""> {badge}</span>
+    </>
+  );
+};
+
 /** The same decision annotation in answers, provenance cards and reader text. */
 export const DecisionCitationChip = ({
   decision,
@@ -218,25 +263,13 @@ export const DecisionCitationChip = ({
         }
         tooltip={false}
       >
-        {label === undefined ? (
-          <>
-            {citingText !== undefined && <>{citingText} </>}
-            <DecisionCitationLabel
-              decision={decision}
-              presentation={presentation}
-              paragraphNumber={paragraph}
-            />
-          </>
-        ) : (
-          <>
-            {label}
-            {paragraph !== null && (
-              <span className="ms-1 whitespace-nowrap">
-                {t("caseLaw.citation.paragraphMark", { paragraph })}
-              </span>
-            )}
-          </>
-        )}
+        <DecisionCitationTriggerContent
+          citingText={citingText}
+          decision={decision}
+          label={label}
+          paragraph={paragraph}
+          presentation={presentation}
+        />
       </PopoverTrigger>
       <PopoverPanel
         align="start"

@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { isChatTurnInFlight } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import { getChatRuntimeContextKind } from "@/features/chat/chat-query-contract";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { emitDevCanaryError } from "@/lib/dev-canary";
@@ -598,7 +599,13 @@ export const acquireChatRuntime = ({
     initialMessages: data.messages,
     key,
     onError: (error) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "acquireChatRuntime:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-runtime.${key.scope}.${getChatRuntimeContextKind(context)}`,
+        },
+      });
       // The server persists a failed terminal outcome before emitting
       // RUN_ERROR. Reconcile the ephemeral TanStack error runtime with that
       // durable message metadata just as a successful finish does.

@@ -7,12 +7,12 @@ import {
   machineApiKeyNameSchema,
   machineApiKeyPermissionsBodySchema,
   machineApiKeyScopesSchema,
-  mintMachineApiKey,
   validateGrantablePermissions,
 } from "@/api/handlers/api-keys/mint";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { issueMachineApiKey } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 const createApiKeyBody = v.object({
   name: machineApiKeyNameSchema,
@@ -47,14 +47,7 @@ const config = {
  */
 const createMachineApiKey = createSafeRootHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    user,
-    body,
-    memberRole,
-    recordAuditEvent,
-  }) {
+  async function* ({ session, user, body, memberRole, recordAuditEvent }) {
     const validation = validateGrantablePermissions({
       memberRole,
       requested: body.permissions,
@@ -65,7 +58,8 @@ const createMachineApiKey = createSafeRootHandler(
     }
 
     const minted = yield* Result.await(
-      mintMachineApiKey({
+      issueMachineApiKey({
+        sessionId: session.id,
         name: body.name,
         scopes: [...body.scopes],
         permissions: body.permissions,
@@ -75,22 +69,18 @@ const createMachineApiKey = createSafeRootHandler(
         // in the organization the session says they are acting in.
         userId: user.id,
         organizationId: session.activeOrganizationId,
-      }),
-    );
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await recordAuditEvent(tx, {
+        recordAuditEvent,
+        auditEvent: (key) => ({
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
-          resourceId: minted.id,
+          resourceId: key.id,
           metadata: {
-            name: minted.name,
-            scopes: minted.scopes,
-            permissions: minted.permissions,
-            audience: minted.audience ?? null,
+            name: key.name,
+            scopes: key.scopes,
+            permissions: key.permissions,
+            audience: key.audience ?? null,
           },
-        });
+        }),
       }),
     );
 

@@ -91,7 +91,10 @@ export const NotificationBell = () => {
     if (listError === null) {
       return;
     }
-    analytics.captureError(listError);
+    analytics.captureError(listError, {
+      fingerprintKey: "NotificationBell:listError",
+      scope: { type: "handler", handlerId: "NotificationBell:listError" },
+    });
     notifyUserError(listError, t("common.unexpectedError"));
   }, [analytics, listError, t]);
 

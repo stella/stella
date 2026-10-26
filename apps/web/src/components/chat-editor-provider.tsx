@@ -234,7 +234,13 @@ const readMentionSources = async (
         cause: result.error,
         retryable: true,
       });
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "readMentionSources:failure",
+        scope: {
+          type: "handler",
+          handlerId: `chat-mention.${labelKey}.${read.operation}`,
+        },
+      });
       failures.push(error);
       continue;
     }

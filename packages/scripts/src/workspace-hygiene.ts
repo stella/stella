@@ -936,7 +936,7 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
       }));
     });
 
-export const validateWorkspaceRoot = (
+export const validateWorkspaceRoot = async (
   rootDir: string,
   appBoundaryOptions: AppBoundaryOptions = {},
   {
@@ -944,12 +944,12 @@ export const validateWorkspaceRoot = (
   }: {
     requirePreparedApiTypecheck?: boolean;
   } = {},
-): WorkspaceIssue[] => {
+): Promise<WorkspaceIssue[]> => {
   const issues: WorkspaceIssue[] = [
-    ...validateApiTypecheckProjects(rootDir, {
+    ...(await validateApiTypecheckProjects(rootDir, {
       requirePrepared: requirePreparedApiTypecheck,
-    }),
-    ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
+    })),
+    ...(await validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions)),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
     ...validateBabelToolchains(rootDir),
@@ -1057,7 +1057,7 @@ if (import.meta.main) {
       `Skipping API typecheck ownership: prepared configs are not generated yet (${unprepared.join(", ")}).`,
     );
   }
-  const issues = validateWorkspaceRoot(
+  const issues = await validateWorkspaceRoot(
     process.cwd(),
     {},
     {

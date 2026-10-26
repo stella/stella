@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
-  test("rejects alternate test runners and their types", () => {
+  test("rejects alternate test runners and their types", async () => {
     const deniedNames = [
       "jest",
       "vitest",
@@ -49,7 +49,7 @@ describe("workspace hygiene", () => {
     });
 
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter((issue) =>
         issue.message.endsWith(" is blocked; tests run on bun test"),
       ),
     ).toEqual(
@@ -60,7 +60,7 @@ describe("workspace hygiene", () => {
     );
   });
 
-  test("rejects telemetry packages the API replaced, naming the replacement", () => {
+  test("rejects telemetry packages the API replaced, naming the replacement", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: { "@opentelemetry/sdk-logs": "0.223.0" },
@@ -84,7 +84,7 @@ describe("workspace hygiene", () => {
     const posthogClient = "apps/api/src/lib/analytics/posthog-client.ts";
     const otlpExporter = "apps/api/src/lib/observability/otlp-log-exporter.ts";
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL).filter(
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter(
         (issue) =>
           issue.message.includes(posthogClient) ||
           issue.message.includes(otlpExporter),
@@ -117,7 +117,7 @@ describe("workspace hygiene", () => {
     ]);
   });
 
-  test("rejects exact npm text-search dependencies and accepts similar names", () => {
+  test("rejects exact npm text-search dependencies and accepts similar names", async () => {
     const deniedNames = [
       "fuse.js",
       "flexsearch",
@@ -171,7 +171,7 @@ describe("workspace hygiene", () => {
     );
 
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter((issue) =>
         issue.message.includes(" is blocked; use @stll/text-search"),
       ),
     ).toEqual(
@@ -191,7 +191,7 @@ describe("workspace hygiene", () => {
     );
   });
 
-  test("rejects exact Cargo text-search dependencies across manifest tables", () => {
+  test("rejects exact Cargo text-search dependencies across manifest tables", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {},
       webPackageJson: {
@@ -226,7 +226,7 @@ describe("workspace hygiene", () => {
     );
 
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter((issue) =>
         issue.message.includes(" is blocked; use @stll/text-search"),
       ),
     ).toEqual(
@@ -244,7 +244,7 @@ describe("workspace hygiene", () => {
     );
   });
 
-  test("accepts similar Cargo crate names and package rename targets", () => {
+  test("accepts similar Cargo crate names and package rename targets", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {},
       webPackageJson: {
@@ -265,13 +265,13 @@ describe("workspace hygiene", () => {
     );
 
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL).filter((issue) =>
+      (await validateWorkspaceRoot(rootDir, LOCAL)).filter((issue) =>
         issue.message.includes(" is blocked; use @stll/text-search"),
       ),
     ).toEqual([]);
   });
 
-  test("rejects mirrored turbo install pins", () => {
+  test("rejects mirrored turbo install pins", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -294,7 +294,7 @@ describe("workspace hygiene", () => {
       "run: bun install -g turbo@2.9.18\n",
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
       {
         message:
           "turbo install version must derive from root package.json; found mirrored pin 2.10.3",
@@ -308,7 +308,7 @@ describe("workspace hygiene", () => {
     ]);
   });
 
-  test("rejects bun --cwd <dir> run, which exits 0 without running", () => {
+  test("rejects bun --cwd <dir> run, which exits 0 without running", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -341,7 +341,7 @@ describe("workspace hygiene", () => {
     const message =
       "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`";
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL)
+      (await validateWorkspaceRoot(rootDir, LOCAL))
         .filter((issue) => issue.message === message)
         .map((issue) => issue.path)
         .toSorted(),
@@ -354,7 +354,7 @@ describe("workspace hygiene", () => {
     ]);
   });
 
-  test("accepts bun run --cwd and bun --cwd=<dir> run", () => {
+  test("accepts bun run --cwd and bun --cwd=<dir> run", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -372,10 +372,10 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("accepts turbo installs derived from the root package version", () => {
+  test("accepts turbo installs derived from the root package version", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -393,10 +393,10 @@ describe("workspace hygiene", () => {
       'RUN bun install -g "turbo@$(bun -p \'require("./package.json").devDependencies.turbo\')"\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("requires an exact root turbo version", () => {
+  test("requires an exact root turbo version", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -409,7 +409,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
       {
         message:
           "root package.json must define devDependencies.turbo as an exact semver version",
@@ -418,7 +418,7 @@ describe("workspace hygiene", () => {
     ]);
   });
 
-  test("requires CSS package imports to be owned by the importing workspace", () => {
+  test("requires CSS package imports to be owned by the importing workspace", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -436,7 +436,7 @@ describe("workspace hygiene", () => {
       '@import "@fontsource-variable/source-serif-4";\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([
       {
         message:
           "CSS import @fontsource-variable/source-serif-4 resolves to package @fontsource-variable/source-serif-4, but @fontsource-variable/source-serif-4 is not declared in this workspace package.json",
@@ -445,7 +445,7 @@ describe("workspace hygiene", () => {
     ]);
   });
 
-  test("accepts CSS package imports declared by the importing workspace", () => {
+  test("accepts CSS package imports declared by the importing workspace", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -465,10 +465,10 @@ describe("workspace hygiene", () => {
       '@import "@fontsource-variable/source-serif-4";\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("requires workspaces to own the Bun types named by their tsconfig", () => {
+  test("requires workspaces to own the Bun types named by their tsconfig", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -486,14 +486,14 @@ describe("workspace hygiene", () => {
       JSON.stringify({ compilerOptions: { types: ["bun-types"] } }),
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
         "bun-types is named by this TypeScript project but is not declared in the workspace package.json",
       path: "apps/web/tsconfig.json",
     });
   });
 
-  test("rejects a stale workspace-local package that shadows an exact catalog pin", () => {
+  test("rejects a stale workspace-local package that shadows an exact catalog pin", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         catalog: { "@stll/folio-core": "0.15.13" },
@@ -523,14 +523,14 @@ describe("workspace hygiene", () => {
       JSON.stringify({ name: "@stll/folio-core", version: "0.15.12" }),
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
         "@stll/folio-core resolves to 0.15.12, but catalog: requires 0.15.13; remove the stale nested install and reinstall",
       path: "apps/web/package.json",
     });
   });
 
-  test("accepts the exact catalog version resolved by a workspace", () => {
+  test("accepts the exact catalog version resolved by a workspace", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         catalog: { "@stll/folio-core": "0.15.13" },
@@ -551,10 +551,10 @@ describe("workspace hygiene", () => {
       JSON.stringify({ name: "@stll/folio-core", version: "0.15.13" }),
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("ignores package imports inside CSS comments", () => {
+  test("ignores package imports inside CSS comments", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -572,10 +572,10 @@ describe("workspace hygiene", () => {
       '/*\n@import "@fontsource-variable/source-serif-4";\n*/\n',
     );
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("accepts Babel 7 in the native mobile toolchain", () => {
+  test("accepts Babel 7 in the native mobile toolchain", async () => {
     const rootDir = createWorkspaceRoot({
       mobilePackageJson: {
         devDependencies: { "@babel/core": "^7.29.0" },
@@ -591,10 +591,10 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("rejects Babel major drift in a runtime workspace", () => {
+  test("rejects Babel major drift in a runtime workspace", async () => {
     const rootDir = createWorkspaceRoot({
       mobilePackageJson: {
         devDependencies: { "@babel/core": "^8.0.1" },
@@ -610,14 +610,14 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message:
         "@babel/core must declare major 7 for this runtime; found ^8.0.1",
       path: "apps/mobile/package.json",
     });
   });
 
-  test("keeps caller catalog additions from overriding toolchain pins", () => {
+  test("keeps caller catalog additions from overriding toolchain pins", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         catalog: {
@@ -635,10 +635,10 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual([]);
   });
 
-  test("accepts the API compiler aggregate while rejecting arbitrary wrappers", () => {
+  test("accepts the API compiler aggregate while rejecting arbitrary wrappers", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: { devDependencies: { turbo: "2.10.3" } },
       webPackageJson: { name: "@stll/web" },
@@ -667,19 +667,19 @@ describe("workspace hygiene", () => {
       );
     writeManifest("bun ../../packages/scripts/src/api-typecheck.ts");
     expect(
-      validateWorkspaceRoot(rootDir, LOCAL).some((issue) =>
+      (await validateWorkspaceRoot(rootDir, LOCAL)).some((issue) =>
         issue.message.startsWith("scripts.typecheck must use"),
       ),
     ).toBe(false);
     writeManifest("bun scripts/unchecked-wrapper.ts");
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       path: "apps/api/package.json",
       message:
         "scripts.typecheck must use bun check --no-pretty --all --project=<tsconfig>; found bun scripts/unchecked-wrapper.ts",
     });
   });
 
-  test("rejects workspace scripts that shadow Bun's checker", () => {
+  test("rejects workspace scripts that shadow Bun's checker", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: { devDependencies: { turbo: "2.10.3" } },
       webPackageJson: {
@@ -690,13 +690,13 @@ describe("workspace hygiene", () => {
         },
       },
     });
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message: "scripts.check shadows Bun's native checker; rename the script",
       path: "apps/web/package.json",
     });
   });
 
-  test("rejects a stale centralized lint configuration", () => {
+  test("rejects a stale centralized lint configuration", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -711,13 +711,13 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
       message: `devDependencies.@stll/oxlint-config must be ${repositoryPackage.devDependencies["@stll/oxlint-config"]}; found 0.6.0`,
       path: "package.json",
     });
   });
 
-  test("rejects deprecated Oxc and non-Bun typecheck scripts", () => {
+  test("rejects deprecated Oxc and non-Bun typecheck scripts", async () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
@@ -736,7 +736,7 @@ describe("workspace hygiene", () => {
       },
     });
 
-    expect(validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
+    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toEqual(
       expect.arrayContaining([
         {
           message:

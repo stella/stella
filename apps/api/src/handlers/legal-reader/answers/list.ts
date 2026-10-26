@@ -6,6 +6,7 @@ import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
+import { readerAnswerSpansOf } from "@/api/handlers/legal-reader/answers/operation";
 import { listAnswersQuerySchema } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -48,6 +49,7 @@ const ANSWER_PROJECTION = {
   quote: legalReaderAnswers.quote,
   startOffset: legalReaderAnswers.startOffset,
   endOffset: legalReaderAnswers.endOffset,
+  continuationSpans: legalReaderAnswers.continuationSpans,
   createdAt: legalReaderAnswers.createdAt,
   updatedAt: legalReaderAnswers.updatedAt,
 } as const;
@@ -190,12 +192,7 @@ export const listReaderAnswersHandler = async function* ({
     mine: answer.userId === userId,
     kind: answer.kind,
     visibility: answer.visibility,
-    anchor: {
-      paragraphId: answer.paragraphId,
-      quote: answer.quote,
-      startOffset: answer.startOffset,
-      endOffset: answer.endOffset,
-    },
+    anchor: { spans: readerAnswerSpansOf(answer) },
     createdAt: answer.createdAt.toISOString(),
     updatedAt: answer.updatedAt.toISOString(),
     messages: messages

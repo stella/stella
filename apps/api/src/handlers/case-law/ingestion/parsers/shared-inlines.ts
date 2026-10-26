@@ -1,4 +1,5 @@
 // parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
+// parser-output-unchanged: `<sup>` becomes a superscript only under the opt-in `superscripts` option; every walk without it unwraps it as before.
 // parser-output-unchanged: exports the existing script/style exclusion as a selector so pl-tk can clean its owned DOM clone once; other parsers keep using the unchanged tag predicate.
 // parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
@@ -146,6 +147,12 @@ export type WalkInlinesOptions = {
    * text axis; any other element is walked as usual.
    */
   pageAnchor?: (element: Element) => InlinePageAnchor | undefined;
+  /**
+   * Read `<sup>` as a superscript inline. Off, its text is unwrapped onto
+   * the baseline as before; a publisher whose markup states superscripts
+   * the reader should show opts in.
+   */
+  superscripts?: boolean;
 };
 
 type InlinePageAnchor = Extract<Inline, { type: "page-anchor" }>;
@@ -248,6 +255,14 @@ export const walkInlines = (
           inlines.push({ type: "italic", children });
         } else {
           inlines.push(...children);
+        }
+        return;
+      }
+
+      if (options.superscripts === true && tag === "sup") {
+        const children = walk($child, childAnon);
+        if (children.length > 0) {
+          inlines.push({ type: "superscript", children });
         }
         return;
       }

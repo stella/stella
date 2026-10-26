@@ -869,7 +869,7 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
     enabled: user !== null,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useMattersById:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
