@@ -1007,6 +1007,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await fixture.blocker.unsafe(`SELECT * FROM public.${fixture.table}`);
       let clock = fixture.gate.clock();
       let polls = 0;
+      const clockAdvance: { atPoll: number | null } = { atPoll: null };
       const gate = createOnlineIndexGate({
         connection: fixture.connection,
         observer: fixture.observation,
@@ -1029,9 +1030,18 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
             await Bun.sleep(5);
           }
           polls++;
-          expect(polls).toBeLessThanOrEqual(2);
-          if (polls === 2) {
+          // The first lock observation can precede the monitor's own progress
+          // observation. Advance only after the monitor has seen the wait.
+          if (
+            clockAdvance.atPoll === null &&
+            fixture.records.some((record) =>
+              JSON.stringify(record).includes(
+                "waiting for concurrent index lock",
+              ),
+            )
+          ) {
             clock += fixture.gate.config.maxSnapshotWaitMs;
+            clockAdvance.atPoll = polls;
           }
         },
       });
@@ -1039,7 +1049,13 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         expect(
           await gate.attempt(`DROP INDEX CONCURRENTLY public.${fixture.name}`),
         ).toBe("retry");
-        expect(polls).toBe(2);
+        const advancedAtPoll = clockAdvance.atPoll;
+        if (advancedAtPoll === null) {
+          throw new TypeError(
+            "Monitor wait milestone did not advance the clock",
+          );
+        }
+        expect(polls).toBe(advancedAtPoll);
         expect(
           fixture.records
             .map((record) => JSON.stringify(record))

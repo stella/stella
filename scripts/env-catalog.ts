@@ -1711,6 +1711,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_SEED_ORG_ID",
   "STELLA_SEED_USER_ID",
   "STELLA_TEST_LATEST_TAG",
+  // Runner-owned migrated database cloned by isolated PostgreSQL suites.
+  "STELLA_TEST_TEMPLATE_DATABASE",
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",

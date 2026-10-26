@@ -1472,6 +1472,12 @@
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-contender.ts",
+        "$TURBO_ROOT$/scripts/migration-rehearsal-writer-gap.ts",
+        "$TURBO_ROOT$/scripts/check-migration-safety.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-census.ts",
+        "$TURBO_ROOT$/scripts/outbound-transport-ownership.ts",
+        "$TURBO_ROOT$/scripts/ownership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
@@ -1503,7 +1509,8 @@
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
         "$TURBO_ROOT$/apps/landing/public/robots.txt",
-        "$TURBO_ROOT$/oxlint.config.ts"
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/scripts/network-baseline-scope.ts"
       ]
     },
     // The native suite compiles files it embeds from outside the crate, so its
@@ -1547,7 +1554,8 @@
       "dependsOn": ["transit"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/ui/src/styles/theme.css"
+        "$TURBO_ROOT$/packages/ui/src/styles/theme.css",
+        "$TURBO_ROOT$/scripts/generate-us-courts.ts"
       ]
     },
     "@stll/catalogue#test": {

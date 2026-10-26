@@ -44,6 +44,12 @@ type RunGatedTestsOptions = {
   validateTestPlan?:
     | ((apiRoot: string, testPaths: readonly string[]) => Promise<void>)
     | undefined;
+  withTestRun?:
+    | ((
+        testPaths: readonly string[],
+        run: () => Promise<number>,
+      ) => Promise<number>)
+    | undefined;
   prepare?: (() => Promise<void>) | undefined;
 };
 
@@ -191,6 +197,7 @@ export const runGatedTests = async ({
   validateTestPlan,
   prepare,
   shardTestFiles,
+  withTestRun,
 }: RunGatedTestsOptions): Promise<number> => {
   const runner = packageJson.ciGateTestRunners[script];
   const missing = requiredEnv.filter((name) => !process.env[name]);
@@ -263,26 +270,31 @@ export const runGatedTests = async ({
     }
   }
 
-  if (runTestFiles !== undefined) {
-    return runTestFiles({
+  const run = async () => {
+    if (runTestFiles !== undefined) {
+      return await runTestFiles({
+        bunArguments,
+        files: testFiles,
+        gate: runner.gate,
+        gateValue: runner.gateValue,
+        preload,
+      });
+    }
+    const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
+    console.log(
+      `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
+    );
+    return await runTestBatches({
+      batches,
       bunArguments,
-      files: testFiles,
+      cwd: apiRoot,
       gate: runner.gate,
       gateValue: runner.gateValue,
+      ...(spawnTestProcess === undefined ? {} : { spawn: spawnTestProcess }),
       preload,
     });
-  }
-  const batches = isolateSharedTableDdlTests(testFiles, exclusiveTestPaths);
-  console.log(
-    `Running ${String(testFiles.length)} ${runner.gate} test files in ${String(batches.length)} process batches.`,
-  );
-  return runTestBatches({
-    batches,
-    bunArguments,
-    cwd: apiRoot,
-    gate: runner.gate,
-    gateValue: runner.gateValue,
-    ...(spawnTestProcess === undefined ? {} : { spawn: spawnTestProcess }),
-    preload,
-  });
+  };
+  return withTestRun === undefined
+    ? await run()
+    : await withTestRun(testFiles, run);
 };
