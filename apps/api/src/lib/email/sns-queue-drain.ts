@@ -98,7 +98,7 @@ export type SnsQueueDelivery = {
 };
 
 /** `acknowledge` deletes the delivery; `keep` leaves it for redelivery. */
-export type SnsQueueDisposition = "acknowledge" | "keep";
+type SnsQueueDisposition = "acknowledge" | "keep";
 
 /**
  * What handling one delivery did. `work` counts the units of the run's work
