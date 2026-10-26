@@ -233,7 +233,7 @@ test("a scan visits at most its bound and names where the next one starts", asyn
 
 test("a dry run records what qualifies and writes nothing", async () => {
   const rows: EmptiedDocumentRepairRow[] = [];
-  const report = await runEmptiedDocumentRepair(
+  const run = await runEmptiedDocumentRepair(
     {
       since: SINCE,
       after: null,
@@ -252,7 +252,7 @@ test("a dry run records what qualifies and writes nothing", async () => {
     },
   );
 
-  expect(report.requeued).toBe(0);
+  expect(run.unwrap().requeued).toBe(0);
   expect(ours(rows.map(({ id }) => id))).toEqual(qualifying());
   expect(rows.every(({ outcome }) => outcome === "eligible")).toBe(true);
   expect(ours((await scanAll()).matched)).toEqual(qualifying());
@@ -281,7 +281,7 @@ test("an applied run requeues each qualifying decision into the walk once", asyn
     write: () => undefined,
   };
 
-  await runEmptiedDocumentRepair(command, options);
+  expect((await runEmptiedDocumentRepair(command, options)).isOk()).toBe(true);
 
   const requeued = qualifying();
   expect(

@@ -223,7 +223,9 @@ type RunEmptiedDocumentRepairOptions = {
 export const runEmptiedDocumentRepair = async (
   command: EmptiedDocumentRepairCommand,
   { record, scopedDb, sourceId, write }: RunEmptiedDocumentRepairOptions,
-): Promise<EmptiedDocumentRepairReport> => {
+): Promise<
+  Result<EmptiedDocumentRepairReport, EmptiedDocumentRepairArgumentsError>
+> => {
   const scan = await scanEmptiedDocuments({
     scopedDb,
     sourceId,
@@ -240,18 +242,20 @@ export const runEmptiedDocumentRepair = async (
     for (const id of scan.matched) {
       await record({ id, outcome: "eligible", reason: null, actor: null });
     }
-    return {
+    return Result.ok({
       visited: scan.visited,
       matched: scan.matched.length,
       requeued: 0,
       nextAfter,
-    };
+    });
   }
 
   if (scan.matched.length > MAX_EMPTIED_DOCUMENT_REQUEUE) {
-    throw new EmptiedDocumentRepairArgumentsError({
-      message: `The window holds ${String(scan.matched.length)} qualifying decisions, more than one run requeues (${String(MAX_EMPTIED_DOCUMENT_REQUEUE)}); lower --scan. Nothing was written.`,
-    });
+    return Result.err(
+      new EmptiedDocumentRepairArgumentsError({
+        message: `The window holds ${String(scan.matched.length)} qualifying decisions, more than one run requeues (${String(MAX_EMPTIED_DOCUMENT_REQUEUE)}); lower --scan. Nothing was written.`,
+      }),
+    );
   }
   const { actor, reason } = command.write;
   const outcomes = await requeueEmptiedDocuments({
@@ -269,10 +273,10 @@ export const runEmptiedDocumentRepair = async (
   write(
     `requeued=${String(requeued)} no_longer_eligible=${String(outcomes.length - requeued)}`,
   );
-  return {
+  return Result.ok({
     visited: scan.visited,
     matched: scan.matched.length,
     requeued,
     nextAfter,
-  };
+  });
 };

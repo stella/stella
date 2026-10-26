@@ -66,7 +66,7 @@ await runScriptWithErrorOutput(async () => {
   }
 
   try {
-    await runEmptiedDocumentRepair(command, {
+    const report = await runEmptiedDocumentRepair(command, {
       scopedDb: ingestionDb,
       sourceId,
       record: async (row) => {
@@ -76,6 +76,9 @@ await runScriptWithErrorOutput(async () => {
         console.log(line);
       },
     });
+    if (report.isErr()) {
+      throw report.error;
+    }
   } finally {
     await resultsFile?.close();
   }
