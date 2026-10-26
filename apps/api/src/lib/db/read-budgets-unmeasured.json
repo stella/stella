@@ -28,6 +28,10 @@
     "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
   },
   {
+    "id": "job:emailDeliverability.receive.fiveMinute",
+    "reason": "Consumes provider queue messages and updates account refusal metadata; the read-only corpus harness cannot replay these writes, and a rollback-aware tenant fixture is pending."
+  },
+  {
     "id": "job:fileComparisons.sweepExpired.fiveMinute",
     "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
   },

@@ -507,6 +507,24 @@
     "addEntry": "Adicionar entrada",
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
+    "approval": {
+      "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "empty": "Nada aguarda aprovação neste caso.",
+      "failed": "A alteração não foi salva. Tente novamente.",
+      "myTime": "Meu tempo",
+      "refusals": {
+        "invalidEntry": "Adicione uma descrição e confira a data do trabalho; depois aprove o registro.",
+        "notApprover": "Somente o aprovador designado ou um administrador pode aprovar este registro.",
+        "notFound": "Este registro não existe mais. Atualize a lista.",
+        "runningTimer": "Pare o cronômetro em andamento antes de aprovar este registro.",
+        "unpriced": "Este registro não tem taxa. Defina uma taxa para este caso e depois aprove o registro.",
+        "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
+      },
+      "returnComment": "Motivo da devolução",
+      "selectEntry": "Selecionar registro",
+      "timeEntries": "Registros de tempo",
+      "title": "Aprovações"
+    },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
     "batchActions": "Ações em lote",
@@ -594,6 +612,7 @@
       "openInvoice": "Abrir fatura",
       "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
       "outsideScope": "Fora do âmbito do IVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# item aguarda} other {# itens aguardam}} aprovação. Revisar aprovações.",
       "rate": "Valor/hora",
       "readyDescription": "Ao emitir, a fatura recebe o próximo número da sua série e fica bloqueada. Um rascunho ainda pode ser editado.",
       "readyTitle": "Pronta para emitir",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "ou deixe-nos saber em",
       "viewDocumentation": "Ver documentação"
     },
-    "enterKey": "↵",
     "error": "Erro",
     "expenses": "Despesas",
     "export": {
