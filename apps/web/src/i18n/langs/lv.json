@@ -4790,10 +4790,8 @@
   },
   "readerAnswers": {
     "budgetError": "Atbilžu budžets ir izsmelts.",
-    "citation": "¶{paragraph}",
     "expand": "Izvērst atbildi",
     "explain": "Izskaidrot",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Uzdot papildjautājumu",
     "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
     "loading": "Tiek ģenerēta atbilde…",

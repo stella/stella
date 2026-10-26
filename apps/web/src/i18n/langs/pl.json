@@ -4790,10 +4790,8 @@
   },
   "readerAnswers": {
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
-    "citation": "¶{paragraph}",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Zadaj dodatkowe pytanie",
     "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
     "loading": "Generowanie odpowiedzi…",

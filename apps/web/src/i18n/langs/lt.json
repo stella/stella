@@ -4790,10 +4790,8 @@
   },
   "readerAnswers": {
     "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
-    "citation": "¶{paragraph}",
     "expand": "Išskleisti atsakymą",
     "explain": "Paaiškinti",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Užduoti papildomą klausimą",
     "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
     "loading": "Generuojamas atsakymas…",

@@ -4790,10 +4790,8 @@
   },
   "readerAnswers": {
     "budgetError": "Rozpočet na odpovede je vyčerpaný.",
-    "citation": "¶{paragraph}",
     "expand": "Rozbaliť odpoveď",
     "explain": "Vysvetliť",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Položiť doplňujúcu otázku",
     "invalidCitations": "{count, plural, one {# citáciu sa nepodarilo overiť.} few {# citácie sa nepodarilo overiť.} other {# citácií sa nepodarilo overiť.}}",
     "loading": "Generovanie odpovede…",

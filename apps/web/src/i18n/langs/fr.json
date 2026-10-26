@@ -4790,10 +4790,8 @@
   },
   "readerAnswers": {
     "budgetError": "Le budget consacré aux réponses est épuisé.",
-    "citation": "¶{paragraph}",
     "expand": "Développer la réponse",
     "explain": "Expliquer",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Poser une question complémentaire",
     "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
     "loading": "Génération de la réponse…",
