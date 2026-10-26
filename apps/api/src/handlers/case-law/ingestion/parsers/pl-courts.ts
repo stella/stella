@@ -174,6 +174,7 @@ type ParserState = {
   /** A list item's marker, waiting to open the item's first paragraph. */
   pendingMarker: Inline[] | undefined;
   listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
+  listItemBoundaries: WeakMap<Element, boolean>;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -227,6 +228,7 @@ const createState = (
   markup,
   pendingMarker: undefined,
   listMarkers: new WeakMap(),
+  listItemBoundaries: new WeakMap(),
 });
 
 const nextBlockId = (state: ParserState): string => {
@@ -807,19 +809,45 @@ const isListItemBlock = (node: AnyNode): node is Element =>
   LIST_ITEM_BLOCK_TAGS.has(node.tagName.toLowerCase()) &&
   isHtmlBlock(node);
 
+const isListItemBoundary = (
+  state: ParserState,
+  node: AnyNode,
+): node is Element => {
+  if (!isTag(node) || isExcludedHtmlTag(node.tagName.toLowerCase())) {
+    return false;
+  }
+  const cached = state.listItemBoundaries.get(node);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const boundary =
+    isListItemBlock(node) ||
+    node.children.some((child) => isListItemBoundary(state, child));
+  state.listItemBoundaries.set(node, boundary);
+  return boundary;
+};
+
+type ParseListItemContentOptions = {
+  $: cheerio.CheerioAPI;
+  state: ParserState;
+  item: Element;
+  marker: string | undefined;
+};
+
 /**
  * A list item: its number opens its first text. Text around a nested list or
  * another block is a paragraph of its own, and the nested blocks are read in
  * source order, so a nested list's items count on their own counter.
  */
-const parseListItem = (
-  $: cheerio.CheerioAPI,
-  state: ParserState,
-  item: Element,
-): void => {
-  let marker = orderedListMarker(state, item);
+const parseListItemContent = ({
+  $,
+  state,
+  item,
+  marker: initialMarker,
+}: ParseListItemContentOptions): void => {
+  let marker = initialMarker;
   const children = item.children;
-  if (!children.some(isListItemBlock)) {
+  if (!children.some((child) => isListItemBoundary(state, child))) {
     parseParagraphElement($, state, $(item), marker);
     return;
   }
@@ -841,11 +869,16 @@ const parseListItem = (
     }
   };
   for (const [index, child] of children.entries()) {
-    if (!isListItemBlock(child)) {
+    if (!isListItemBoundary(state, child)) {
       continue;
     }
     readInline(index);
     start = index + 1;
+    if (!isListItemBlock(child)) {
+      parseListItemContent({ $, state, item: child, marker });
+      marker = undefined;
+      continue;
+    }
     if (marker !== undefined && child.tagName.toLowerCase() === "p") {
       if (parseParagraphElement($, state, $(child), marker)) {
         marker = undefined;
@@ -901,7 +934,12 @@ const parseNode = (
   }
 
   if (tag === "li") {
-    parseListItem($, state, node);
+    parseListItemContent({
+      $,
+      state,
+      item: node,
+      marker: orderedListMarker(state, node),
+    });
     return;
   }
 

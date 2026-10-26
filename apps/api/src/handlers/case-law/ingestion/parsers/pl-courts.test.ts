@@ -467,6 +467,14 @@ describe("ordered list items print the number a browser gives them", () => {
       ["1. Parent", "a. Child", "2. Next"],
     ],
     [
+      "<ol><li><div>Parent<ol><li>Child</li></ol></div></li></ol>",
+      ["1. Parent", "1. Child"],
+    ],
+    [
+      "<ol><li><div><span>Parent<ol><li><div>Child<ol><li>Grandchild</li></ol></div></li></ol> tail</span></div></li></ol>",
+      ["1. Parent", "1. Child", "1. Grandchild", "tail"],
+    ],
+    [
       '<ol reversed><li>P<ol><li value="5">C1</li><li>C2</li></ol> tail</li><li>Q</li></ol>',
       ["2. P", "5. C1", "6. C2", "tail", "1. Q"],
     ],
