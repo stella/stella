@@ -8,6 +8,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const { fireEvent, render, screen, cleanup } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { SourceChips } = await import("@/features/chat/source-chips");
@@ -33,39 +34,41 @@ const renderSources = () =>
   render(
     <QueryClientProvider client={new QueryClient()}>
       <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-        <SourceChips
-          messageId="answer"
-          parts={[
-            {
-              type: "tool-call",
-              id: "search",
-              name: "infosoud_lookup_case",
-              state: "complete",
-              arguments: "{}",
-              input: {},
-              output: {
-                results: [
-                  hit(
-                    "https://example.test/cases/cited",
-                    "I. ÚS 1/26",
-                    "Ústavní soud",
-                    "ÚS",
-                  ),
-                  hit(
-                    "https://example.test/cases/consulted",
-                    "2 Cdo 2/26",
-                    "Nejvyšší soud",
-                    "NS",
-                  ),
-                ],
+        <FormattingProvider locale="en" timeZone="UTC">
+          <SourceChips
+            messageId="answer"
+            parts={[
+              {
+                type: "tool-call",
+                id: "search",
+                name: "infosoud_lookup_case",
+                state: "complete",
+                arguments: "{}",
+                input: {},
+                output: {
+                  results: [
+                    hit(
+                      "https://example.test/cases/cited",
+                      "I. ÚS 1/26",
+                      "Ústavní soud",
+                      "ÚS",
+                    ),
+                    hit(
+                      "https://example.test/cases/consulted",
+                      "2 Cdo 2/26",
+                      "Nejvyšší soud",
+                      "NS",
+                    ),
+                  ],
+                },
               },
-            },
-            {
-              type: "text",
-              content: "[authority](https://example.test/cases/cited)",
-            },
-          ]}
-        />
+              {
+                type: "text",
+                content: "[authority](https://example.test/cases/cited)",
+              },
+            ]}
+          />
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );
@@ -74,26 +77,28 @@ const renderInvalidDateSource = () =>
   render(
     <QueryClientProvider client={new QueryClient()}>
       <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-        <SourceChips
-          messageId="invalid-date-answer"
-          parts={[
-            {
-              type: "tool-call",
-              id: "search",
-              name: "infosoud_lookup_case",
-              state: "complete",
-              arguments: "{}",
-              input: {},
-              output: {
-                url: "https://example.test/cases/invalid-date",
-                caseNumber: "3 Cdo 3/26",
-                court: "Nejvyšší soud",
-                courtAbbreviation: "NS",
-                decisionDate: "not-a-date",
+        <FormattingProvider locale="en" timeZone="UTC">
+          <SourceChips
+            messageId="invalid-date-answer"
+            parts={[
+              {
+                type: "tool-call",
+                id: "search",
+                name: "infosoud_lookup_case",
+                state: "complete",
+                arguments: "{}",
+                input: {},
+                output: {
+                  url: "https://example.test/cases/invalid-date",
+                  caseNumber: "3 Cdo 3/26",
+                  court: "Nejvyšší soud",
+                  courtAbbreviation: "NS",
+                  decisionDate: "not-a-date",
+                },
               },
-            },
-          ]}
-        />
+            ]}
+          />
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );
@@ -137,43 +142,45 @@ test("a decision row opens in the app on a plain click, links otherwise", () => 
   render(
     <QueryClientProvider client={new QueryClient()}>
       <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-        <SourceChips
-          messageId="decision-row-answer"
-          parts={[
-            {
-              type: "tool-call",
-              id: "search",
-              name: "infosoud_lookup_case",
-              state: "complete",
-              arguments: "{}",
-              input: {},
-              output: {
-                results: [
-                  {
-                    ...hit(
-                      "https://example.test/cases/with-id",
-                      "4 Cdo 4/26",
+        <FormattingProvider locale="en" timeZone="UTC">
+          <SourceChips
+            messageId="decision-row-answer"
+            parts={[
+              {
+                type: "tool-call",
+                id: "search",
+                name: "infosoud_lookup_case",
+                state: "complete",
+                arguments: "{}",
+                input: {},
+                output: {
+                  results: [
+                    {
+                      ...hit(
+                        "https://example.test/cases/with-id",
+                        "4 Cdo 4/26",
+                        "Nejvyšší soud",
+                        "NS",
+                      ),
+                      decisionId,
+                    },
+                    hit(
+                      "https://example.test/cases/without-id",
+                      "5 Cdo 5/26",
                       "Nejvyšší soud",
                       "NS",
                     ),
-                    decisionId,
-                  },
-                  hit(
-                    "https://example.test/cases/without-id",
-                    "5 Cdo 5/26",
-                    "Nejvyšší soud",
-                    "NS",
-                  ),
-                ],
+                  ],
+                },
               },
-            },
-            {
-              type: "text",
-              content:
-                "[a](https://example.test/cases/with-id) [b](https://example.test/cases/without-id)",
-            },
-          ]}
-        />
+              {
+                type: "text",
+                content:
+                  "[a](https://example.test/cases/with-id) [b](https://example.test/cases/without-id)",
+              },
+            ]}
+          />
+        </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );

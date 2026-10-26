@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -40,11 +40,12 @@ import {
   isTaskStatus,
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import {
   AuthorCell,
   LastUpdatedCell,
-  VersionCell,
+  VersionHistoryCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/metadata-cells";
 import { getPropertyColumnRender } from "@/routes/_protected.workspaces/$workspaceId/-components/table-column";
 import { workspaceTableSchema } from "@/routes/_protected.workspaces/$workspaceId/-components/table/entity-table-schema";
@@ -85,6 +86,10 @@ export const useWorkspaceTableSchema = ({
   );
 };
 
+type UseTableColumnDefsOptions = UseTableColumnsOptions & {
+  workspaceId: string;
+};
+
 /**
  * Shared column definitions for the flat table and every grouped section, so
  * grouped sections render the exact same columns and cells.
@@ -95,9 +100,10 @@ export const useWorkspaceTableSchema = ({
 export const useTableColumns = ({
   properties,
   view,
-}: UseTableColumnsOptions): TableColumnDef[] => {
+  workspaceId,
+}: UseTableColumnDefsOptions): TableColumnDef[] => {
   const schema = useWorkspaceTableSchema({ properties, view });
-  const toColumnDef = useColumnDefFactory(view);
+  const toColumnDef = useColumnDefFactory(view, workspaceId);
 
   return useMemo(
     () => schema.columns.map(toColumnDef),
@@ -135,6 +141,7 @@ type ColumnDefFactory = (column: WorkspaceColumnDescriptor) => TableColumnDef;
 
 const useColumnDefFactory = (
   view: WorkspaceView<"table">,
+  workspaceId: string,
 ): ColumnDefFactory => {
   const t = useTranslations();
   const format = useFormatter();
@@ -253,7 +260,12 @@ const useColumnDefFactory = (
               ...base,
               accessorKey: column.id,
               header: metadataHeader(HashIcon, "number"),
-              cell: renderVersionCell,
+              cell: ({ row }) => (
+                <VersionHistoryCell
+                  entity={row.original}
+                  workspaceId={workspaceId}
+                />
+              ),
             };
           case "property":
             return {
@@ -270,7 +282,7 @@ const useColumnDefFactory = (
           }
         }
       },
-    [format, t, view.layout.filters],
+    [format, t, view.layout.filters, workspaceId],
   );
 };
 
@@ -299,8 +311,4 @@ const renderAuthorCell = ({ row }: TableCellContext) => (
 
 const renderLastUpdatedCell = ({ row }: TableCellContext) => (
   <LastUpdatedCell entity={row.original} />
-);
-
-const renderVersionCell = ({ row }: TableCellContext) => (
-  <VersionCell entity={row.original} />
 );
