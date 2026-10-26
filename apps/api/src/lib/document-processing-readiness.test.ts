@@ -310,7 +310,7 @@ describe("document OCR worker readiness", () => {
     const rejection: unknown = await refreshDocumentOcrWorkerReadiness({
       writeLease: async () => await neverResolves,
       batchIntervalMinutes: 1440,
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     }).then(
       () => null,
       (error: unknown) => error,
