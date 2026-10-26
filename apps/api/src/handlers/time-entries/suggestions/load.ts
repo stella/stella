@@ -150,6 +150,17 @@ const excludeDecidedSignals = (
   );
 };
 
+// A fingerprint is a decision's idempotency key: once decided, a suggestion
+// with that fingerprint can never be resolved again, so it is never pending,
+// even when its decision's evidence names no signals to exclude.
+const withoutDecidedFingerprints = <T extends { fingerprint: string }>(
+  clusters: readonly T[],
+  decidedRows: readonly { fingerprint: string }[],
+) => {
+  const decided = new Set(decidedRows.map(({ fingerprint }) => fingerprint));
+  return clusters.filter(({ fingerprint }) => !decided.has(fingerprint));
+};
+
 // Recomputes the day's suggested entries from the timekeeper's own signals in
 // this matter: the chat messages they sent and the audit rows their actions
 // wrote. Nothing here is visible to anyone but the signal's author, and the
@@ -258,7 +269,10 @@ export const loadTimeSuggestions = async function* ({
           : [];
 
       const decidedRows = await tx
-        .select({ evidence: timeEntrySuggestions.evidence })
+        .select({
+          fingerprint: timeEntrySuggestions.fingerprint,
+          evidence: timeEntrySuggestions.evidence,
+        })
         .from(timeEntrySuggestions)
         .where(
           and(
@@ -354,11 +368,12 @@ export const loadTimeSuggestions = async function* ({
     tailMinutes: LIMITS.timeSuggestionTailMinutes,
   });
 
-  const uncovered = subtractRecordedTime(clusters, recordedRows);
-
   const loaded: LoadedTimeSuggestions = {
     date,
-    pending: uncovered,
+    pending: withoutDecidedFingerprints(
+      subtractRecordedTime(clusters, recordedRows),
+      decidedRows,
+    ),
     loggedMinutes: recordedRows.reduce(
       (sum, entry) => sum + entry.durationMinutes,
       0,
