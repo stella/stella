@@ -377,6 +377,7 @@ export const TAGGED_FAILURE_REASON = {
   SanctionsPublicRoleError: "tagged_failure",
   SanctionsRefreshError: "tagged_failure",
   SanctionsScreeningFailure: "tagged_failure",
+  SanctionsStartupProofError: "tagged_failure",
   SanctionsSubjectError: "tagged_failure",
   SandboxError: "tagged_failure",
   ScanEngineError: "tagged_failure",

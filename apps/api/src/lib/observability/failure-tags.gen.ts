@@ -367,6 +367,7 @@ export const FAILURE_TAGS = [
   "SanctionsPublicRoleError",
   "SanctionsRefreshError",
   "SanctionsScreeningFailure",
+  "SanctionsStartupProofError",
   "SanctionsSubjectError",
   "SandboxError",
   "ScanEngineError",
