@@ -1937,6 +1937,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-browser-storage.ts",
     "./.oxlint-plugins/no-raw-history-state.ts",
     "./.oxlint-plugins/no-literal-view-id.ts",
+    "./.oxlint-plugins/no-view-id-from-path.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -3361,6 +3362,17 @@ const config = defineConfig({
       ],
       rules: {
         "no-literal-view-id/no-literal-view-id": "error",
+      },
+    },
+    {
+      // The view on screen is read from the route match; a path parser
+      // restates the route tree and reads sibling pages as views.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-view-id-from-path.fixture.ts",
+      ],
+      rules: {
+        "no-view-id-from-path/no-view-id-from-path": "error",
       },
     },
     {
