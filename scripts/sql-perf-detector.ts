@@ -26,7 +26,7 @@ import {
   type TaggedTemplateExpression,
   type TemplateLiteral,
   walk,
-} from "../packages/scripts/src/syntax-tree";
+} from "../packages/scripts/src/syntax-tree.ts";
 
 type Expression = OxcExpression | SpreadElement;
 type SourceFile = ParsedSource & { parents: ReadonlyMap<Node, Node> };
