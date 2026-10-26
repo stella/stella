@@ -3,10 +3,8 @@ import { sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
-import {
-  foldLikePostgresSearch,
-  POSTGRES_UNACCENT_RULES,
-} from "@stll/text-normalize";
+import { foldLikePostgresSearch } from "@stll/text-normalize/postgres-search-fold";
+import { POSTGRES_UNACCENT_RULES } from "@stll/text-normalize/unaccent-rules";
 
 import { rootDb } from "@/api/db/root";
 import { findTermMatches } from "@/api/lib/entity-filters";

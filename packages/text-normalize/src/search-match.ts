@@ -1,3 +1,5 @@
+// parser-output-unchanged: `findSearchMatchRanges` hands its scan to `findFoldedRanges` with the same folded content, query and budget; the ranges it returns are unchanged.
+
 /**
  * Diacritic-insensitive substring matching with original-index mapping.
  *
