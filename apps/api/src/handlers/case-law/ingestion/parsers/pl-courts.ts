@@ -20,6 +20,7 @@
 import * as cheerio from "cheerio";
 import { type AnyNode, Element, isTag, isText } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -449,13 +450,10 @@ const cssListStyleOf = (element: Element): OrderedListType | null | undefined =>
  * safe integer range is not one a list counts from: a browser stores it in a
  * 32-bit field, and arithmetic on it here would stop being exact.
  */
-const integerAttribute = (value: string | undefined): number | undefined => {
-  if (value === undefined || !/^\s*-?\d+\s*$/u.test(value)) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
-};
+const integerAttribute = (value: string | undefined): number | undefined =>
+  value === undefined
+    ? undefined
+    : parseIntegerToken(value.trim()).unwrapOr(undefined);
 
 /**
  * The number a browser prints before an `<li>` of an `<ol>`: the list's
