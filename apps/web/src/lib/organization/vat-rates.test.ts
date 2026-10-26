@@ -22,7 +22,12 @@ test.each(VAT_RATE_PRESET_COUNTRIES)(
       },
       { preconnect: () => undefined },
     );
-    expect(await sendVatRateCommand({ type: "applyPreset", country })).toEqual({
+    expect(
+      await sendVatRateCommand(
+        { type: "applyPreset", country },
+        { headers: { "Idempotency-Key": "preset-intent" } },
+      ),
+    ).toEqual({
       added: 3,
       skipped: 2,
     });
@@ -38,3 +43,24 @@ test.each(VAT_RATE_PRESET_COUNTRIES)(
     expect(await request?.json()).toEqual({ country });
   },
 );
+
+test("VAT create carries both capability and submission intent headers", async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      requests.push(new Request(input, init));
+      return Response.json({ id: "vat-rate" });
+    },
+    { preconnect: () => undefined },
+  );
+  await sendVatRateCommand(
+    { type: "create", values: { name: "Standard", rate: 21 } },
+    { headers: { "Idempotency-Key": "create-intent" } },
+  );
+  expect(requests).toHaveLength(1);
+  const request = requests.at(0);
+  expect(request?.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
+    "vat-rates.create",
+  );
+  expect(request?.headers.get("Idempotency-Key")).toBe("create-intent");
+});
