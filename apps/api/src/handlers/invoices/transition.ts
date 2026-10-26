@@ -115,6 +115,8 @@ const validateReverseChargeBuyer = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
+        // Scoped through the joined invoice: a client invoice spans matters,
+        // so its lines belong to the invoice's matters, not only this one.
         invoiceInMatter(invoices, workspaceId),
         eq(invoiceLines.vatTreatment, "reverse_charge"),
       ),

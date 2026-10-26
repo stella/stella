@@ -174,7 +174,20 @@ const mixedCurrencyData = {
   ],
 } satisfies ClientInvoicePrefill;
 
+// The euro work after its invoice was saved: the prefill no longer offers it.
+const euroBilledData = {
+  ...mixedCurrencyData,
+  matters: mixedCurrencyData.matters.map((matter) =>
+    matter.workspaceId === FIRST_MATTER_ID
+      ? { ...matter, prefill: { ...matter.prefill, timeEntries: [] } }
+      : matter,
+  ),
+} satisfies ClientInvoicePrefill;
+
 let served: ClientInvoicePrefill = data;
+/** What the prefill serves once an invoice is saved; null keeps it as is. */
+let servedAfterSave: ClientInvoicePrefill | null = null;
+let prefillReads = 0;
 const originalFetch = globalThis.fetch;
 const requests: Record<string, unknown>[] = [];
 globalThis.fetch = Object.assign(
@@ -185,6 +198,7 @@ globalThis.fetch = Object.assign(
       request.method === "GET" &&
       path.endsWith(`/client-invoices/${CLIENT_ID}/prefill`)
     ) {
+      prefillReads += 1;
       return Response.json(served);
     }
     if (
@@ -196,6 +210,7 @@ globalThis.fetch = Object.assign(
         await request.json(),
       );
       requests.push(body);
+      served = servedAfterSave ?? served;
       return Response.json({
         id: INVOICE_ID,
         invoiceNumber: null,
@@ -232,6 +247,8 @@ afterEach(async () => {
   clients.length = 0;
   requests.length = 0;
   served = data;
+  servedAfterSave = null;
+  prefillReads = 0;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -422,4 +439,30 @@ test("work in two currencies bills only the chosen currency's matters", async ()
   await screen.findByRole("heading", {
     name: messages.billing.invoiceComposer.draftSavedTitle,
   });
+});
+
+test("a saved invoice's work is no longer offered by the client's prefill", async () => {
+  served = mixedCurrencyData;
+  servedAfterSave = euroBilledData;
+  await mount();
+  const currency = await screen.findByRole("combobox", {
+    name: messages.common.currency,
+  });
+  expect(currency.textContent).toBe("EUR");
+  expect(screen.getByRole("heading", { name: FIRST_NAME })).toBeDefined();
+  expect(prefillReads).toBe(1);
+  await click(messages.billing.invoiceComposer.continueToDetails);
+  await click(messages.billing.invoiceComposer.continueToIssue);
+  await click(messages.billing.invoiceComposer.saveDraft);
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(requests.at(0)).toMatchObject({ currency: "EUR" });
+  // Saving invalidates the client's prefill, which no longer offers the
+  // billed euro work: only koruna work remains, so no currency is left to
+  // choose and the euro matter is gone.
+  await waitFor(() => expect(prefillReads).toBe(2));
+  await screen.findByRole("heading", { name: LATER_NAME });
+  expect(screen.queryByRole("heading", { name: FIRST_NAME })).toBeNull();
+  expect(
+    screen.queryByRole("combobox", { name: messages.common.currency }),
+  ).toBeNull();
 });

@@ -65,6 +65,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
+  clientInvoicesKeys,
   invoiceByIdOptions,
   invoicesKeys,
 } from "@/lib/workspaces/queries/invoices";
@@ -512,6 +513,7 @@ const useComposerSubmit = ({
           timeEntriesKeys.all(id),
           expensesQueryRoot(id),
         ]),
+        ...(client ? [clientInvoicesKeys.prefillRoot(client.clientId)] : []),
       ]) {
         detached(
           queryClient.invalidateQueries({ queryKey }),

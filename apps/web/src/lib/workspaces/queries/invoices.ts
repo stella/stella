@@ -77,12 +77,22 @@ export type InvoicePrefill = Awaited<
 
 export type { InvoiceStatus };
 
+export const clientInvoicesKeys = {
+  /** Every period's prefill of one client, which a saved invoice makes stale. */
+  prefillRoot: (clientId: string) =>
+    ["client-invoices", clientId, "prefill"] as const,
+  prefill: (
+    clientId: string,
+    period: { periodStart: string | null; periodEnd: string | null },
+  ) => [...clientInvoicesKeys.prefillRoot(clientId), period] as const,
+};
+
 export const clientInvoicePrefillOptions = (
   clientId: string,
   period: { periodStart: string | null; periodEnd: string | null },
 ) =>
   queryOptions({
-    queryKey: ["client-invoices", clientId, "prefill", period],
+    queryKey: clientInvoicesKeys.prefill(clientId, period),
     staleTime: 0,
     refetchOnWindowFocus: false,
     queryFn: async ({ signal }) =>
