@@ -4275,6 +4275,8 @@
       "commentPlaceholder": "Napisz komentarz…",
       "commentText": "Treść komentarza",
       "commentedPassage": "Skomentowany fragment",
+      "editComment": "Edytuj komentarz",
+      "editedAt": "Edytowano {time}",
       "guestAuthor": "Ty",
       "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
       "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",

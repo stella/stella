@@ -4275,6 +4275,8 @@
       "commentPlaceholder": "Rakstiet komentāru…",
       "commentText": "Komentāra teksts",
       "commentedPassage": "Komentētais fragments",
+      "editComment": "Rediģēt komentāru",
+      "editedAt": "Rediģēts {time}",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
       "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",

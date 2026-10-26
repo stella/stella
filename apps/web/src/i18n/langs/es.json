@@ -4275,6 +4275,8 @@
       "commentPlaceholder": "Escribe un comentario…",
       "commentText": "Texto del comentario",
       "commentedPassage": "Pasaje comentado",
+      "editComment": "Editar comentario",
+      "editedAt": "Editado {time}",
       "guestAuthor": "Tú",
       "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
       "guestMigrationComplete": "Resaltados y notas guardados.",

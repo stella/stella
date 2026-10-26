@@ -4275,6 +4275,8 @@
       "commentPlaceholder": "Rašykite komentarą…",
       "commentText": "Komentaro tekstas",
       "commentedPassage": "Pakomentuota ištrauka",
+      "editComment": "Redaguoti komentarą",
+      "editedAt": "Redaguota {time}",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šiame skirtuke galima laikyti iki {count} paryškinimų ir pastabų. Norėdami išsaugoti daugiau, sukurkite paskyrą.",
       "guestMigrationComplete": "Paryškinimai ir pastabos išsaugoti.",
