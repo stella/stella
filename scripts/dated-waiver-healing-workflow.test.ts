@@ -87,10 +87,15 @@ test("package and probe execution precede conditional write credential minting",
   for (const step of steps.slice(0, steps.indexOf(token))) {
     expect(JSON.stringify(step)).not.toContain("app-token.outputs.token");
   }
-  expect(token.with).toMatchObject({
+  expect(
+    Object.fromEntries(
+      Object.entries(token.with ?? {}).filter(([key]) =>
+        key.startsWith("permission-"),
+      ),
+    ),
+  ).toEqual({
     "permission-contents": "write",
     "permission-pull-requests": "write",
-    "permission-issues": "write",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
   expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
