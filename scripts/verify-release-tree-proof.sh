@@ -202,7 +202,7 @@ else
   pulls=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/pulls?per_page=100")
   release_version=$(git show "$sha:VERSION" | tr -d '[:space:]')
   jq -e --arg repo "$repo" --arg sha "$sha" --arg base "$main" --arg title "chore: release v$release_version" '
-    [.[][] | select(.merged_at == null and .state == "open" and .title == $title and
+    [.[][] | select(.merged_at == null and .state == "open" and .draft == false and .title == $title and
       .head.sha == $sha and .head.repo.full_name == $repo and .base.repo.full_name == $repo and
       .base.ref == "main")] | length == 1
   ' <<< "$pulls" >/dev/null || refuse 'open release PR relation is unverified'

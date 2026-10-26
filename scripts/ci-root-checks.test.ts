@@ -320,7 +320,6 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Schema introspection invariants": [
     "packages/scripts/src/typescript-program.ts",
-    "scripts/db-await-in-loop.ts",
     "scripts/generated-artifacts.ts",
     "scripts/outbound-transport-ownership.ts",
     "scripts/ownership-loader.ts",
@@ -491,6 +490,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "packages/scripts/src/api-typecheck-partition.ts",
     "packages/scripts/src/turbo-typecheck-inputs.ts",
     "packages/scripts/src/typecheck-cache-contract.ts",
+    "packages/scripts/src/typescript-program.ts",
     "scripts/typecheck-cache.test.ts",
   ],
   "ci-checks-rest/Test CI check partition": [

@@ -2,8 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
 import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { findCitationPassage } from "@stll/legal-ast/citation-passage";
 import type { CitationPassageMatch } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";

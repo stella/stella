@@ -23,6 +23,7 @@ import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -882,7 +883,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
         query: {},
         recordAuditEvent: async () => undefined,
         request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork",
+        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },

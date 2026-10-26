@@ -7,6 +7,7 @@ import {
   mcpUserConnections,
 } from "@/api/db/schema";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -110,7 +111,7 @@ const setup = (
     request: new Request(
       "https://api.example.com/v1/mcp/connectors/example/connect",
     ),
-    route: "/v1/mcp/connectors/:slug/connect",
+    route: "/v1/mcp/connectors/:slug/connect" satisfies ApiRoutePath,
   });
   return {
     context,
