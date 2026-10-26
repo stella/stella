@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree.ts";
 
 // node:child_process' synchronous calls keep at most `maxBuffer` bytes of a
 // child's output (1 MiB by default) and fail with ENOBUFS past it. A tracked
@@ -12,61 +13,62 @@ const CHILD_PROCESS = /^(?:node:)?child_process$/u;
 const root = path.resolve(import.meta.dir, "..");
 
 const callsWithoutMaxBuffer = (file: string, text: string) => {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const source = parseSource(file, text);
   const named = new Set<string>();
   const namespaces = new Set<string>();
-  for (const statement of source.statements) {
+  for (const statement of source.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !CHILD_PROCESS.test(statement.moduleSpecifier.text)
+      statement.type !== "ImportDeclaration" ||
+      !CHILD_PROCESS.test(statement.source.value)
     ) {
       continue;
     }
-    const clause = statement.importClause;
-    const bindings = clause?.namedBindings;
-    if (bindings !== undefined && ts.isNamedImports(bindings)) {
-      for (const element of bindings.elements) {
-        if (SYNC_CALLS.has((element.propertyName ?? element.name).text)) {
-          named.add(element.name.text);
-        }
+    for (const specifier of statement.specifiers) {
+      const { local: binding } = specifier;
+      if (specifier.type !== "ImportSpecifier") {
+        // A namespace or default import.
+        namespaces.add(binding.name);
+        continue;
       }
-    } else if (bindings !== undefined) {
-      namespaces.add(bindings.name.text);
-    }
-    if (clause?.name !== undefined) {
-      namespaces.add(clause.name.text);
+      const imported =
+        specifier.imported.type === "Identifier"
+          ? specifier.imported.name
+          : specifier.imported.value;
+      if (SYNC_CALLS.has(imported)) {
+        named.add(binding.name);
+      }
     }
   }
   const lines: number[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      const isSyncCall = ts.isIdentifier(callee)
-        ? named.has(callee.text)
-        : ts.isPropertyAccessExpression(callee) &&
-          ts.isIdentifier(callee.expression) &&
-          namespaces.has(callee.expression.text) &&
-          SYNC_CALLS.has(callee.name.text);
-      const states = node.arguments.some(
-        (argument) =>
-          ts.isObjectLiteralExpression(argument) &&
-          argument.properties.some(
-            (property) =>
-              property.name !== undefined &&
-              ts.isIdentifier(property.name) &&
-              property.name.text === "maxBuffer",
-          ),
-      );
-      if (isSyncCall && !states) {
-        lines.push(
-          source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-        );
-      }
+  walk(source.program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    const { callee } = node;
+    const isSyncCall =
+      callee.type === "Identifier"
+        ? named.has(callee.name)
+        : callee.type === "MemberExpression" &&
+          !callee.computed &&
+          callee.object.type === "Identifier" &&
+          namespaces.has(callee.object.name) &&
+          callee.property.type === "Identifier" &&
+          SYNC_CALLS.has(callee.property.name);
+    const states = node.arguments.some(
+      (argument) =>
+        argument.type === "ObjectExpression" &&
+        argument.properties.some(
+          (property) =>
+            property.type === "Property" &&
+            !property.computed &&
+            property.key.type === "Identifier" &&
+            property.key.name === "maxBuffer",
+        ),
+    );
+    if (isSyncCall && !states) {
+      lines.push(source.locate(node.start).line);
+    }
+  });
   return lines;
 };
 

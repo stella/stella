@@ -10,12 +10,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 import { isPathInside } from "@stll/portable-path";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree.ts";
 import {
   QUARANTINE_REGISTRY_ENV,
   QUARANTINE_REPORT_DIR_ENV,
@@ -198,21 +198,9 @@ describe("flaky-test quarantine preload", () => {
         continue;
       }
       visited.add(file);
-      const source = ts.createSourceFile(
-        file,
-        readFileSync(file, "utf-8"),
-        ts.ScriptTarget.Latest,
-        false,
-        ts.ScriptKind.TS,
-      );
-      for (const statement of source.statements) {
-        if (
-          !ts.isImportDeclaration(statement) ||
-          !ts.isStringLiteral(statement.moduleSpecifier)
-        ) {
-          continue;
-        }
-        const specifier = statement.moduleSpecifier.text;
+      const { module } = parseSource(file, readFileSync(file, "utf-8"));
+      for (const { moduleRequest } of module.staticImports) {
+        const specifier = moduleRequest.value;
         if (specifier.startsWith("node:") || specifier.startsWith("bun:")) {
           continue;
         }
