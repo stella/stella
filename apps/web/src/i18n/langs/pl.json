@@ -6515,6 +6515,11 @@
       },
       "passwordLabel": "Wprowadź hasło do pliku PDF",
       "previousPage": "Poprzednia strona",
+      "selection": {
+        "explainPassagePrompt": "Wyjaśnij ten fragment {citation}:\n\n„{quote}”",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Pokaż oryginalne strony",
       "unlock": "Odblokuj"
     },

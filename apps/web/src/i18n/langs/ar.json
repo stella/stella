@@ -6515,6 +6515,11 @@
       },
       "passwordLabel": "أدخل كلمة مرور ملف PDF",
       "previousPage": "الصفحة السابقة",
+      "selection": {
+        "explainPassagePrompt": "اشرح هذا المقطع من {citation}:\n\n«{quote}»",
+        "pageLocator": "ص. {page}",
+        "pageRangeLocator": "ص. {start}–{end}"
+      },
       "showOriginal": "عرض الصفحات الأصلية",
       "unlock": "إلغاء القفل"
     },

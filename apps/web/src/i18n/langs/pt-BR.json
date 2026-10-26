@@ -6515,6 +6515,11 @@
       },
       "passwordLabel": "Digite a senha do PDF",
       "previousPage": "Página anterior",
+      "selection": {
+        "explainPassagePrompt": "Explique esta passagem de {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}-{end}"
+      },
       "showOriginal": "Mostrar páginas originais",
       "unlock": "Desbloquear"
     },

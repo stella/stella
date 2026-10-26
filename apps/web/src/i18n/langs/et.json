@@ -6515,6 +6515,11 @@
       },
       "passwordLabel": "Sisestage PDF-i parool",
       "previousPage": "Eelmine leht",
+      "selection": {
+        "explainPassagePrompt": "Selgita seda {citation} lõiku:\n\n„{quote}“",
+        "pageLocator": "lk {page}",
+        "pageRangeLocator": "lk {start}–{end}"
+      },
       "showOriginal": "Kuva originaalleheküljed",
       "unlock": "Ava lukk"
     },

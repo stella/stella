@@ -6515,6 +6515,11 @@
       },
       "passwordLabel": "Zadajte heslo k PDF",
       "previousPage": "Predchádzajúca strana",
+      "selection": {
+        "explainPassagePrompt": "Vysvetli túto pasáž z {citation}:\n\n„{quote}“",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Zobraziť pôvodné stránky",
       "unlock": "Odomknúť"
     },
