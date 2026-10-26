@@ -1656,6 +1656,7 @@ const config = defineConfig({
     // Bundled API-owned schemas: validate their source and regenerate this artifact.
     "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
+    "**/*.config.cjs",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
     "types/**/*.d.ts",
