@@ -1,6 +1,7 @@
 import type { Frame } from "@playwright/test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -96,12 +97,13 @@ test("an action includes delayed React updates without network activity", async 
     page.locator('[data-playground-section="task-metadata"]'),
   ).toBeVisible();
   const directory = await mkdtemp(
-    new URL("../render-census-delayed-", import.meta.url),
+    fileURLToPath(new URL("../render-census-delayed-", import.meta.url)),
   );
+  const componentPath = path.join(directory, "component.tsx");
   const fixture = page.locator("#render-census-delayed");
   try {
     await writeFile(
-      path.join(directory, "component.tsx"),
+      componentPath,
       `import { useState } from "react";
 export const RenderCensusDelayed = () => {
   const [status, setStatus] = useState("idle");
@@ -117,14 +119,14 @@ export const RenderCensusDelayed = () => {
     await writeFile(
       mountPath,
       `import { createRoot } from "react-dom/client";
-import { RenderCensusDelayed } from "./component";
+import { RenderCensusDelayed } from ${JSON.stringify(`/@fs${componentPath}`)};
 const host = document.createElement("div");
 host.id = "render-census-delayed";
 document.body.append(host);
 createRoot(host).render(<RenderCensusDelayed />);
 `,
     );
-    await page.evaluate(async (moduleUrl) => {
+    await page.evaluate(async (moduleUrl: string) => {
       await import(moduleUrl);
     }, `/@fs${mountPath}`);
     await expect(fixture.getByText("idle", { exact: true })).toBeVisible();
@@ -196,7 +198,7 @@ test("React Refresh keeps rendering through the probe after a source update", as
     page.locator('[data-playground-section="task-metadata"]'),
   ).toBeVisible();
   const directory = await mkdtemp(
-    new URL("../render-census-hmr-", import.meta.url),
+    fileURLToPath(new URL("../render-census-hmr-", import.meta.url)),
   );
   const componentPath = path.join(directory, "component.tsx");
   const mountPath = path.join(directory, "mount.tsx");
@@ -217,14 +219,14 @@ test("React Refresh keeps rendering through the probe after a source update", as
     await writeFile(
       mountPath,
       `import { createRoot } from "react-dom/client";
-import { RenderCensusHmr } from "./component";
+import { RenderCensusHmr } from ${JSON.stringify(`/@fs${componentPath}`)};
 const host = document.createElement("div");
 host.id = "render-census-hmr";
 document.body.append(host);
 createRoot(host).render(<RenderCensusHmr />);
 `,
     );
-    await page.evaluate(async (moduleUrl) => {
+    await page.evaluate(async (moduleUrl: string) => {
       await import(moduleUrl);
     }, `/@fs${mountPath}`);
     await expect(

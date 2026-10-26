@@ -6,7 +6,10 @@ import { promisify } from "node:util";
 import { sleep } from "@stll/concurrency/sleep";
 import type { RenderSnapshot } from "@stll/render-probe";
 
-import { readBrowserProbe } from "./render-probe-contract";
+import {
+  type BrowserProbeOperation,
+  readBrowserProbe,
+} from "./render-probe-contract";
 
 export type RenderActionMeasurement = RenderSnapshot & {
   label: string;
@@ -19,6 +22,8 @@ export type RenderActionMeasurement = RenderSnapshot & {
 
 const QUIET_MS = 500;
 const TIMEOUT_MS = 30_000;
+const READ_PROBE = { operation: "read" } satisfies BrowserProbeOperation;
+const RESET_PROBE = { operation: "reset" } satisfies BrowserProbeOperation;
 let bundle: Promise<string> | undefined;
 
 type PageNetworkState = {
@@ -85,7 +90,7 @@ const buildProbe = async () => {
   // bundler in Bun in both cases, with one cached build per caller process.
   const result = await promisify(execFile)(
     "bun",
-    [new URL("render-probe-bundle.ts", import.meta.url).pathname],
+    [new URL("../../scripts/render-probe-bundle.ts", import.meta.url).pathname],
     { maxBuffer: 4 * 1024 * 1024 },
   );
   return result.stdout;
@@ -113,7 +118,7 @@ export const measureAction = async (
   const waitUntilQuiet = async (actionEndedAt = 0) => {
     const deadline = Date.now() + TIMEOUT_MS;
     while (Date.now() < deadline) {
-      const state = await page.evaluate(readBrowserProbe, "read");
+      const state = await page.evaluate(readBrowserProbe, READ_PROBE);
       const reactQuiet =
         state.rendererCount > 0 &&
         state.observedCommits > 0 &&
@@ -132,14 +137,14 @@ export const measureAction = async (
     );
   };
   await waitUntilQuiet();
-  const reset = await page.evaluate(readBrowserProbe, "reset");
+  const reset = await page.evaluate(readBrowserProbe, RESET_PROBE);
   if (reset.startedAt === null) {
     throw new Error("The render probe did not reset its measurement");
   }
   const startedAt = reset.startedAt;
   const actionResult = await action();
   await waitUntilQuiet(Date.now());
-  const result = await page.evaluate(readBrowserProbe, "read");
+  const result = await page.evaluate(readBrowserProbe, READ_PROBE);
   if (result.rendererCount === 0 || result.observedCommits === 0) {
     throw new Error(`The render probe lost its React renderer during ${label}`);
   }

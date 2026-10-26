@@ -13,9 +13,11 @@ export type BrowserRenderMeasurement = {
   };
 };
 
+export type BrowserProbeOperation = { operation: "read" | "reset" };
+
 // Playwright serializes this function without its module scope. Keep runtime
 // checks inside it; the type import is erased in the browser callback.
-export const readBrowserProbe = (operation: "read" | "reset") => {
+export const readBrowserProbe = ({ operation }: BrowserProbeOperation) => {
   const isMeasurement = (value: unknown): value is BrowserRenderMeasurement =>
     typeof value === "object" &&
     value !== null &&
