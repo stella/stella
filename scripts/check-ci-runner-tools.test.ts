@@ -723,6 +723,47 @@ test("event-selected runners each receive an installation contract", () => {
   }
 });
 
+test("a variable-selected fallback runner receives its own installation contract", () => {
+  for (const provision of [true, false]) {
+    withFixture(
+      {
+        jobs: {
+          check: {
+            "runs-on": `\${{ vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04' }}`,
+            steps: [
+              ...(provision
+                ? [
+                    {
+                      if: "vars.DEPLOY_RUNNER == 'fallback'",
+                      run: "brew install jq",
+                    },
+                  ]
+                : []),
+              { run: "jq --version" },
+            ],
+          },
+        },
+      },
+      (root) => expect(problems(root)).toHaveLength(provision ? 0 : 1),
+    );
+  }
+});
+
+test("a variable choice nested inside an event choice resolves every runner", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": `\${{ github.event_name != 'pull_request' && (vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04') || 'ubuntu-24.04-arm' }}`,
+          steps: [{ run: "jq --version" }],
+        },
+      },
+    },
+    // Only the self-hosted leaf lacks jq.
+    (root) => expect(problems(root)).toHaveLength(1),
+  );
+});
+
 test("local actions use workspace paths and optional composite installs do not persist", () => {
   withFixture(
     {
@@ -1189,6 +1230,8 @@ test("unsupported runner expressions report the expression and fail closed", () 
     `\${{ github.event_name == 'schedule' && 'ubuntu-24.04' }}`,
     `\${{ github.event_name == 'schedule' && 'ubuntu-24.04' || 'ubuntu-24.04' || 'custom' }}`,
     `\${{ github.ref == 'main' && 'ubuntu-24.04' || 'ubuntu-24.04' }}`,
+    `\${{ vars.DEPLOY_RUNNER == 'fallback' && ('ubuntu-24.04' || 'ubuntu-24.04') }}`,
+    `\${{ vars['DEPLOY_RUNNER'] == 'fallback' && 'ubuntu-24.04' || 'ubuntu-24.04' }}`,
   ]) {
     withFixture(
       {
