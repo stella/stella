@@ -329,7 +329,7 @@ const describeColumn = (
   let builder = "?";
   let sqlName = key;
   while (current.type === "CallExpression") {
-    const callee = current.callee;
+    const callee: Expression = current.callee;
     const name = calleeName(callee) ?? "?";
     if (
       callee.type === "MemberExpression" &&
