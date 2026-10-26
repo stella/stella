@@ -219,6 +219,7 @@ type CorpusIndexSearchInput = {
   snippetFields?: string[] | undefined;
   /** Remaining whole-request budget when several searches share a deadline. */
   timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
 };
 
 export type CorpusIndexAggregateInput = {
@@ -230,6 +231,8 @@ export type CorpusIndexAggregateInput = {
   filter?: string | undefined;
   /** Engine-native aggregation request, keyed by aggregation name. */
   aggs: Record<string, unknown>;
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -269,6 +272,8 @@ type CorpusIndexScoredSearchInput = {
    * as read and could answer a short page while the engine reports matches.
    */
   requiredFields: readonly string[];
+  timeoutMs?: number | undefined;
+  signal?: AbortSignal | undefined;
 };
 
 type CorpusIndexScoredHit = {
@@ -652,6 +657,7 @@ type CorpusIndexRequest = {
   path: string;
   init: Omit<RequestInit, "signal">;
   timeoutMs: number;
+  signal?: AbortSignal | undefined;
 };
 
 const requestLabel = ({ init, path }: CorpusIndexRequest): string =>
@@ -715,6 +721,7 @@ const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
     {
       ...request.init,
       timeoutMs: request.timeoutMs,
+      signal: request.signal,
     },
     request.observer,
   ).catch((error: unknown) => {
@@ -1396,6 +1403,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
     sortBy,
     snippetFields,
     timeoutMs = CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+    signal,
   }) =>
     await Result.tryPromise({
       try: async () => {
@@ -1423,6 +1431,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             body: JSON.stringify(body),
           },
           timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS),
+          signal,
         });
         if (!isRecord(response)) {
           throw new CorpusIndexError({
@@ -1477,7 +1486,11 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           },
-          timeoutMs: CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+          timeoutMs: Math.min(
+            input.timeoutMs ?? CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+            CORPUS_INDEX_SEARCH_TIMEOUT_MS,
+          ),
+          signal: input.signal,
         });
         const parsed = parseCorpusIndexScoredSearchResponse(
           response,
@@ -1493,7 +1506,15 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  aggregate: async ({ indexId, query, filter, aggs, observer }) =>
+  aggregate: async ({
+    indexId,
+    query,
+    filter,
+    aggs,
+    observer,
+    timeoutMs = CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
+    signal,
+  }) =>
     await Result.tryPromise({
       try: async () => {
         const response = await requestJson({
@@ -1539,7 +1560,8 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
                   },
             ),
           },
-          timeoutMs: CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
+          timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_AGGREGATION_TIMEOUT_MS),
+          signal,
         });
         if (!isRecord(response) || !isRecord(response["aggregations"])) {
           throw new CorpusIndexError({

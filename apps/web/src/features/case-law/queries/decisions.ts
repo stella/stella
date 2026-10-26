@@ -257,6 +257,10 @@ export const decisionsPageOptions = ({
         const response = await api.case.decisions.search.post(
           {
             query: search,
+            facets:
+              page === 1
+                ? ["court", "year", "decisionType", "language", "source"]
+                : [],
             limit: pageSize,
             ...(offset > 0 && { offset }),
             ...(listFilters.court !== undefined && {

@@ -43,7 +43,7 @@ const DESCRIPTION_HEAD =
 const DESCRIPTION_TAIL =
   " Without strict, empty first relevance pages try some_terms hits ranked " +
   "by term coverage; short pages may append them after all_terms hits. " +
-  "Totals/facets count full matches (facets: first phrasing, page one; total: " +
+  "Totals/facets count full matches (facets: opt-in names, first phrasing, page one; courtYear only when requested; total: " +
   "uncounted for multiple phrasings). Filters: court, language, dates, " +
   "decision type, provision, source_id (facets.source value). searches[] " +
   "reports queryUsed and warnings. strict requires every word; otherwise " +

@@ -23,6 +23,7 @@ import {
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  CASE_LAW_SEARCH_FACET_NAMES,
   DEFAULT_SEARCH_SORT,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
@@ -729,6 +730,15 @@ const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
 
 const searchCaseLawArgsSchema = nullAsAbsent(
   v.strictObject({
+    facets: v.optional(
+      v.pipe(
+        v.array(v.picklist(CASE_LAW_SEARCH_FACET_NAMES)),
+        v.maxLength(CASE_LAW_SEARCH_FACET_NAMES.length),
+        v.description(
+          "Facet names to compute for the first phrasing on page one. Omit for hits and total only. Request courtYear explicitly for a court/year visual.",
+        ),
+      ),
+    ),
     queries: v.optional(
       v.pipe(
         v.array(
@@ -2663,6 +2673,7 @@ const listSearchCaseLawProvision = async ({
       body: {
         // The list ranks no text; the provision as written is what it reads.
         query: provisionText,
+        facets: args.facets ?? [],
         sentenceAlignedExcerpt: true,
         headnotePresentation: "expanded",
         limit: normalizePage(args.limit ?? DEFAULT_SEARCH_LIMIT),
@@ -2839,6 +2850,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
+      facets: index === 0 ? (parsed.output.facets ?? []) : [],
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
@@ -2873,6 +2885,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           body,
           caseLawDb: caseLawPublicReadDb,
           observer,
+          signal: context.request?.signal,
         }),
       };
     },
