@@ -584,12 +584,12 @@ describe("styleDocumentCitations", () => {
         return [];
       });
 
+    // Every marker comes back in the block or cell it was in, in order.
+    const placed = markersOf(content);
+    expect(placed.length).toBeGreaterThan(moveMarkers.length);
     for (const style of ["none", "footnotes"] as const) {
       const styled = styleDocumentCitations(marked, style, options);
-      expect(markersOf(styled.package.document.content)).toEqual([
-        ...moveMarkers,
-        ...moveMarkers,
-      ]);
+      expect(markersOf(styled.package.document.content)).toEqual(placed);
     }
     const counted = styleDocumentCitationsWithCounts(marked, "inline", options);
     expect(counted.document).toEqual(marked);
