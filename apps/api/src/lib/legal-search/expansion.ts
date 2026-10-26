@@ -177,8 +177,7 @@ type LoadedDictionary = {
 const shortHash = (contentHash: string): string => contentHash.slice(0, 12);
 
 type DictionaryLoad =
-  | (LoadedDictionary & { status: "loaded" })
-  | { status: "unavailable" };
+  (LoadedDictionary & { status: "loaded" }) | { status: "unavailable" };
 
 const UNAVAILABLE: DictionaryLoad = { status: "unavailable" };
 

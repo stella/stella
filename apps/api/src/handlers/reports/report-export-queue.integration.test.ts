@@ -234,7 +234,7 @@ describe("report export run", () => {
     conditions: readonly FieldMeta[];
   }) => {
     const templateId = createSafeId<"template">();
-    const s3Key = `report-templates/${templateId}.docx`;
+    const s3Key = `${ids.orgA}/report-templates/${templateId}.docx`;
     const body = paragraphs
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");

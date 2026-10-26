@@ -9,13 +9,12 @@
       "noOtherSessions": "Nėra kitų aktyvių sesijų",
       "revokeOtherSessions": "Atsijungti nuo kitų įrenginių",
       "revokeOtherSessionsConfirm": "Bus baigtos visos sesijos, išskyrus dabartinę.",
+      "signedInFrom": "Prisijungta per {clientName}",
       "unknownDevice": "Nežinomas įrenginys"
     }
   },
   "admin": {
     "ai": "DI",
-    "backToApp": "Grįžti į programą",
-    "billingAndUsage": "Atsiskaitymas ir naudojimas",
     "billingProfiles": "Atsiskaitymo profiliai",
     "deleteDescription": "Visam laikui ištrinkite šią organizaciją ir jos duomenis. Šio veiksmo negalima atšaukti.",
     "deleteOrganization": "Ištrinti organizaciją",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Išeiti iš organizacijos",
     "leaveRefusedOnlyOwner": "Esate vienintelis savininkas. Prieš išeidami paskirkite savininku kitą narį.",
     "modelsAndProviders": "Modeliai ir teikėjai",
-    "noPlan": "Nėra aktyvaus plano",
     "organizationDeleted": "Organizacija ištrinta.",
     "organizationId": "Organizacijos ID",
     "organizationLeft": "Išėjote iš organizacijos.",
-    "overviewDescription": "Tvarkykite organizaciją, žmones ir įrankius.",
-    "people": "Žmonės",
     "planAndUsage": "Planas ir naudojimas",
     "title": "Organizacijos administravimas",
     "toolsDescription": "Įjunkite arba išjunkite integruotus įrankius visiems šios organizacijos nariams."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Asistentas paprašys šio adreso",
-    "copiedToast": "Instrukcijos nukopijuotos. Įklijuokite jas į pokalbį su asistentu.",
     "copy": "Nukopijuokite jam instrukcijas",
     "description": "Klauskite Claude arba ChatGPT apie savo bylas ir dokumentus. Pasirinkite asistentą ir atsivers trumpas vadovas; tai užtruks apie minutę.",
     "instructions": "Prijunk mane prie stella, mano teisinės darbo srities. Vadovaukis DI agentų instrukcijomis adresu {guideUrl} ir naudok šį serverio adresą: {mcpUrl}",
     "openGuide": "Atidaryti vadovą: {assistant}",
+    "pasteHint": "Įklijuokite jas į pokalbį su asistentu.",
     "selfSetupHint": "Naudojate Claude Code ar Codex?",
     "title": "Naudokite stella savo DI asistente"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Perrašymo parinktys",
     "editWithAI": "Redaguoti su DI",
     "keyRequired": {
+      "accountRestricted": "DI teikėjo nustatymai šiai paskyrai nepasiekiami.",
+      "configUnreadable": "DI teikėjo konfigūracijos nuskaityti nepavyko. Paprašykite organizacijos administratoriaus prijungti jį iš naujo.",
       "cta": "Atidaryti DI nustatymus",
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti DI funkcijas.",
+      "permissionRequired": "DI teikėją gali prijungti tik organizacijos administratorius.",
+      "seatRequired": "Paprašykite organizacijos administratoriaus priskirti jums vietą.",
       "title": "Prijungti DI teikėją"
     },
     "refinePlaceholder": "Kaip DI turėtų pakoreguoti formuluotę?",
@@ -142,6 +142,8 @@
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
       "title": "Nepavyko jūsų prijungti"
     },
+    "handoffAccount": "Tęsti kaip <account>{email}</account> organizacijoje <organization>{organizationName}</organization>?",
+    "handoffTitle": "Tęsti į stella",
     "headline": "Aiškumas kiekvienai bylai.",
     "invitation": {
       "declined": "Kvietimas atmestas",
@@ -157,11 +159,11 @@
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
     "professionalUse": {
-      "description": "Kuriant jūsų paskyrą šis pareiškimas jums nebuvo parodytas. Norėdami tęsti, jį priimkite.",
       "title": "Patvirtinkite profesinį naudojimą"
     },
     "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
+    "reauthenticationRequired": "Norėdami tęsti šį veiksmą, prisijunkite iš naujo.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
@@ -386,6 +388,7 @@
         "reading": "Skaitymo rodinys"
       },
       "notLocated": "{count, plural, one {# teiginys originale nerastas} few {# teiginiai originale nerasti} many {# teiginio originale nerasta} other {# teiginių originale nerasta}}",
+      "pdfTextFailed": "Nepavyko perskaityti PDF teksto, todėl teiginiai puslapiuose nepažymėti.",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {
@@ -642,6 +645,7 @@
         "eso9": "ESO9 importo lentelė (XLSX)",
         "exporting": "Ruošiamas eksportas…",
         "isdoc": "ISDOC el. sąskaita (ABRA Gen ir kt.)",
+        "ksefFa3": "KSeF el. sąskaita FA(3) (XML)",
         "spreadsheets": "Skaičiuoklės",
         "xlsx": "Sąskaitos (XLSX)",
         "xlsxLines": "Sąskaitų eilutės (XLSX)"
@@ -755,6 +759,7 @@
     "sellerProfiles": {
       "add": "Pridėti pardavėjo profilį",
       "archiveConfirm": "Archyvuoti šį pardavėjo profilį? Jis nebebus prieinamas naujoms sąskaitoms.",
+      "barRegistration": "Registracija advokatūroje",
       "bic": "BIC / SWIFT kodas",
       "default": "Numatytasis pardavėjas",
       "defaultCurrency": "Numatytoji valiuta",
@@ -766,11 +771,10 @@
       "invalidCurrency": "Įveskite trijų raidžių valiutos kodą.",
       "invalidIban": "Įveskite galiojantį IBAN.",
       "legalName": "Oficialus pavadinimas",
+      "registerEntry": "Registro įrašas",
       "registrationId": "Registracijos numeris",
       "setDefault": "Nustatyti kaip numatytąjį",
       "title": "Pardavėjo profiliai",
-      "vatId": "PVM mokėtojo kodas",
-      "vatPayer": "PVM mokėtojas",
       "vatPayerHelp": "Šio pardavėjo sąskaitose taikomas PVM. Išjunkite registruotam asmeniui, kuris turi PVM mokėtojo kodą, bet nėra PVM mokėtojas.",
       "vatPayerRequiresVatId": "Įveskite PVM mokėtojo kodą, kad galėtumėte išrašyti sąskaitas kaip PVM mokėtojas."
     },
@@ -805,6 +809,8 @@
     "total": "Iš viso",
     "vatRates": {
       "add": "Pridėti PVM tarifą",
+      "addCzechia": "Pridėti Čekijos tarifus",
+      "addSlovakia": "Pridėti Slovakijos tarifus",
       "archiveConfirm": "Archyvuoti šį PVM tarifą? Jis nebebus prieinamas naujiems dokumentams.",
       "code": "Tarifo kodas",
       "current": "Dabartinis tarifas",
@@ -819,6 +825,7 @@
       "overlap": "To paties tarifo kodo galiojimo laikotarpiai negali persidengti.",
       "past": "Ankstesnis tarifas",
       "periodHelp": "Pradžios data įtraukiama; pabaigos data neįtraukiama. Atviram laikotarpiui palikite pabaigos datą tuščią.",
+      "presetResult": "Pridėta: {added}; praleista: {skipped}.",
       "rate": "PVM procentas",
       "title": "PVM tarifai",
       "validFrom": "Galioja nuo",
@@ -931,13 +938,10 @@
     },
     "coverage": {
       "completeness": "Išsamumas",
-      "countedOn": "Suskaičiuota {date}",
       "courtsHeading": "Pagal teismą",
       "courtsUnavailable": "Suskirstymas pagal teismus šiuo metu nepasiekiamas.",
       "decisionYears": "Sprendimų metai",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
-      "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
-      "gapStatusUnknown": "Spragų būsena nežinoma",
       "generatedAt": "Duomenys {date}",
       "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
@@ -958,7 +962,8 @@
       "searchable": "Prieinami paieškai",
       "title": "Teismų praktikos aprėptis",
       "totalFrom": "Bendras skaičius {date}",
-      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
+      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami.",
+      "unreadListingPeriods": "Neperskaityti sąrašo laikotarpiai"
     },
     "decisionNotFound": "Sprendimas nerastas",
     "decisionTypes": {
@@ -1027,7 +1032,10 @@
       "pageOfCount": "{page} psl. iš {pageCount}",
       "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
       "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page} psl. · apytiksliai {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithMatchCounts": "{page} psl. · {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithPartialMatchCount": "{page} psl. · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
       "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
       "perPage": "Viename puslapyje",
       "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
@@ -1478,7 +1486,7 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
-      "allModels": "Visi modeliai ({count, number})",
+      "allModels": "Visi modeliai",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
       "belowFrontier": "Žemiau geriausių kompromisų",
@@ -1596,6 +1604,7 @@
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorConnectionFailed": "Nepavyko prisijungti prie pokalbio. Patikrinkite ryšį ir bandykite dar kartą.",
+    "sendErrorContinuationRejected": "Pokalbio tęsti nepavyko. Norėdami pradėti iš naujo, išsiųskite naują žinutę.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
@@ -2120,6 +2129,7 @@
       "ZH-HANT": "Kinų (tradicinė)"
     },
     "lastUpdated": "Paskutinis atnaujinimas",
+    "layoutResetAfterProblem": "Po trikties atkurtas numatytasis išdėstymas.",
     "legalDatabase": "Teisinė duomenų bazė",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
@@ -2218,6 +2228,7 @@
     "suggested": "Pasiūlymas",
     "summarizeChanges": "Apibendrinti pakeitimus",
     "target": "Taikinys",
+    "taxId": "Mokesčių mokėtojo kodas",
     "timeBilling": "Laikas ir atsiskaitymai",
     "today": "Šiandien",
     "translate": "Versti",
@@ -2241,6 +2252,8 @@
     "urlIdentifierPlaceholder": "mano-organizacija",
     "user": "Naudotojas",
     "value": "Reikšmė",
+    "vatId": "PVM mokėtojo kodas",
+    "vatPayer": "PVM mokėtojas",
     "verified": "Patvirtinta",
     "verify": "Patvirtinti",
     "version": "Versija",
@@ -2282,6 +2295,7 @@
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",
     "scopeLawRead": "Skaityti viešus teisės aktus ir teismų praktiką",
     "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas ir užduotis",
+    "scopeMemoryWrite": "Kurti ir atnaujinti asistento atmintį",
     "scopeOfflineAccess": "Išlaikyti jus prisijungusį be pakartotinio patvirtinimo",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
@@ -2309,6 +2323,7 @@
     "summaryLineRead": "<group>Skaitymas:</group> {items}",
     "summaryLineUse": "<group>Naudojimas:</group> {items}",
     "summaryMattersWrite": "bylos ir užduotys",
+    "summaryMemoryWrite": "asistento atmintis",
     "summaryProfile": "profilis",
     "summaryRead": "dokumentai, bylos ir kontaktai",
     "summaryReadAnonymized": "anonimizuoti dokumentai ir bylos",
@@ -2429,7 +2444,9 @@
       "prefix": "Priešdėlis",
       "registrationNumber": "Registracijos numeris",
       "suffix": "Priesaga",
-      "taxId": "PVM mokėtojo kodas",
+      "vatPayer": "PVM mokėtojo statusas",
+      "vatPayerNo": "Ne PVM mokėtojas",
+      "vatPayerUnknown": "Nežinoma",
       "year": "Metai"
     },
     "filterOrganizations": "Organizacijos",
@@ -2469,7 +2486,6 @@
         "primary_phone": "Pagrindinis telefono numeris",
         "state": "Apskritis arba regionas",
         "suffix": "Priesaga",
-        "tax_id": "PVM mokėtojo kodas",
         "type": "Kontakto tipas"
       },
       "fileInvalid": "Pasirinkite vieną CSV, TSV arba TXT failą.",
@@ -2674,6 +2690,7 @@
       "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
       "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
       "contact": "Susisiekite su mumis",
+      "featureDisabled": "Ši funkcija laikinai išjungta.",
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
@@ -3529,6 +3546,12 @@
       "unsupportedVisualContent": "Šiame faile yra vaizdų arba vektorinės grafikos, kurių neįmanoma patikrinti, ar juose nėra neskelbtino teksto. Eksportuoti negalima.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
+      "unsupportedEncoding": "Šiame dokumente naudojama nepalaikoma {encoding} koduotė, todėl jo konvertuoti negalima.",
+      "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima.",
+      "unsupportedReference": "Šis dokumentas nurodo išorinį išteklių dalyje {element} {attribute}, todėl jo konvertuoti negalima."
+    },
     "external": {
       "confirmDescription": "Ketinate apsilankyti išorinėje svetainėje.",
       "confirmTitle": "Atidaryti išorinę nuorodą?",
@@ -3807,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Vienas klientas",
+      "availabilityClientBadgeHelp": "Prieinamas tik vieno kliento bylose.",
+      "availabilityClientHelp": "Naudojamas tik šio kliento bylose. Vėliau to pakeisti negalima.",
+      "availabilityFixedHelp": "Nustatyta kuriant įgūdį. To pakeisti negalima.",
+      "availabilityLabel": "Prieinama",
+      "availabilityMatter": "Viena byla",
+      "availabilityMatterBadgeHelp": "Prieinamas tik vienoje byloje.",
+      "availabilityMatterHelp": "Naudojamas tik šioje byloje. Vėliau to pakeisti negalima.",
+      "availabilityOrganization": "Visa organizacija",
+      "availabilityTeamNeedsMatter": "Norėdami bendrinti įgūdį su komanda, pasirinkite bylą, kuriai jis skirtas. Vėliau to pakeisti negalima.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
@@ -4228,6 +4261,22 @@
       "guestStorageUnavailable": "Paryškinimų ir pastabų nepavyko išsaugoti šiame skirtuke.",
       "highlight": "Paryškinti",
       "highlightedPassage": "Paryškinta ištrauka",
+      "history": {
+        "colorRestored": "Spalva atkurta",
+        "commentRemoved": "Komentaras pašalintas",
+        "commentRestored": "Komentaras atkurtas",
+        "highlightRemoved": "Paryškinimas pašalintas",
+        "highlightRestored": "Paryškinimas atkurtas",
+        "markChanged": "Šis paryškinimas ar komentaras tuo metu buvo pakeistas kitur, todėl paliktas nepakeistas.",
+        "markGone": "Šio paryškinimo ar komentaro nebėra.",
+        "nothingToRedo": "Nėra ką grąžinti",
+        "nothingToUndo": "Nėra ką anuliuoti",
+        "redoShortcut": "Grąžinti paryškinimo ar komentaro pakeitimą",
+        "styleRestored": "Stilius atkurtas",
+        "textRestored": "Komentaro tekstas atkurtas",
+        "undoShortcut": "Anuliuoti paryškinimo ar komentaro pakeitimą",
+        "visibilityRestored": "Bendrinimas atkurtas"
+      },
       "removeHighlight": "Pašalinti paryškinimą",
       "sharedBadge": "Bendrinama",
       "styleHighlight": "Paryškinimas",
@@ -4721,7 +4770,7 @@
     "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
     "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
     "regenerate": "Generuoti atsakymą iš naujo",
-    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
+    "selectionError": "Pažymėkite tekstą iš paties sprendimo.",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
     "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
@@ -4739,6 +4788,7 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "caseLawEmptyState": "Pradėkite rašyti, kad ieškotumėte teismų sprendimų.",
     "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "continueInChat": "Tęsti pokalbyje",
@@ -4773,6 +4823,8 @@
     "recentDocuments": "Naujausi dokumentai",
     "recentSearches": "Naujausios paieškos",
     "recentlyOpenedFiles": "Neseniai atidaryti failai",
+    "registryCandidateNameMismatch": "Oficialus pavadinimas „{officialName}“ nesutampa",
+    "registryCandidateNoOfficialRecord": "Oficialiame registre nėra įrašo su šiuo numeriu",
     "registryChoose": "Pasirinkite įmonių registrą",
     "registryCredentialAskAdmin": "Paprašykite organizacijos administratoriaus sukonfigūruoti prieigą prie šio registro.",
     "registryCredentialSaved": "Prieiga prie registro išsaugota",
@@ -4783,6 +4835,7 @@
       "enrichmentUnavailable": "Įmonių registro duomenys laikinai nepasiekiami"
     },
     "registryKrsHint": "KRS ieško pagal registracijos numerį, o ne įmonės pavadinimą. Įveskite 10 skaitmenų KRS numerį su nuliais pradžioje (pvz., 0000006865).",
+    "registryNameSearchNotFound": "Nė viena patikrinta įmonė neatitiko šio pavadinimo. Šie kandidatai buvo atmesti:",
     "registryVatHint": "VIES tikrina PVM mokėtojų kodus, o ne įmonių pavadinimus. Įveskite PVM mokėtojo kodą su šalies prefiksu (pvz., CZ27082440); formatas priklauso nuo šalies.",
     "renameSearchTitle": "Pervadinti išsaugotą paiešką",
     "requestCountry": "Prašyti pridėti naują šalį",
@@ -4796,6 +4849,7 @@
     "savedSearchesEmpty": "Išsaugokite paiešką, kad galėtumėte ją naudoti vėl.",
     "scopeFilter": "Paieškos sritis",
     "scopePlaceholderAll": "Ieškoti visuose <scope>šaltiniuose</scope>…",
+    "scopePlaceholderCaseLaw": "Ieškoti <scope>teismų praktikoje</scope>…",
     "scopePlaceholderMatters": "Ieškoti visose <scope>bylose</scope>…",
     "scopePlaceholderRegistries": "Ieškoti <scope>registruose</scope>…",
     "scopeRegistries": "Registrai",
@@ -4945,7 +4999,7 @@
       "description": "Naudokite stella per savo DI asistentą ir matykite, kas turi prieigą prie jūsų paskyros.",
       "developerDescription": "Serverio adresai ir komandinės eilutės įrankis techniniams nustatymams.",
       "developerTitle": "Prieiga kūrėjams",
-      "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo.",
+      "disconnectConfirmDescription": "Tai panaikins {clientName} prieigą prie jūsų paskyros ir visus jos išduotus prieigos raktus. Bet kada galėsite prisijungti iš naujo. Taip pat bus atsijungta nuo naršyklės seansų, sukurtų per šį ryšį.",
       "disconnectConfirmTitle": "Atjungti {clientName}?",
       "disconnectSuccess": "{clientName} atjungta",
       "integrationsDescription": "Išorinės paslaugos, kurias DI gali naudoti jūsų vardu, pvz., dokumentų saugykla.",
@@ -5306,7 +5360,7 @@
     "importDescription": "Stiliai ištraukiami į naują DOCX failą be turinio.",
     "importTitle": "Importuoti stilių rinkinį",
     "loadFailed": "Nepavyko įkelti stilių rinkinių",
-    "newDocument": "Naujas dokumentas",
+    "newDocument": "Naujas DOCX dokumentas",
     "pickerDescription": "Pasirinkite naujo failo formatavimo sistemą.",
     "renameTitle": "Pervadinti stilių rinkinį",
     "replace": "Pakeisti šaltinį",
@@ -5590,7 +5644,7 @@
     "moveToMatter": "Įrašyti į bylą",
     "moveToMatterAnyway": "Vis tiek įrašyti",
     "myDefaultLookupFormat": "Mano numatytasis",
-    "newFromTemplate": "Naujas dokumentas iš šablono",
+    "newFromTemplate": "Naujas DOCX dokumentas iš šablono",
     "newFromTemplateFillHint": "Užpildykite laukus; dokumentas bus sukurtas šioje byloje.",
     "newTemplate": "Naujas šablonas",
     "noTemplates": "Šablonų dar nėra",
@@ -5961,6 +6015,7 @@
         "action": "Redaguoti darbalaukio programoje",
         "authRequiredDescription": "Prieš redaguodami darbalaukyje atnaujinkite stella ir prisijunkite iš naujo.",
         "authRequiredTitle": "Sesija baigėsi",
+        "editInApplication": "Redaguoti programoje <bdi>{application}</bdi>",
         "editLocallyPrompt": "Redaguokite šį failą vietoje ir sinchronizuokite pakeitimus su stella.",
         "forceRelease": "Priverstinai atlaisvinti",
         "notOpenedDescription": "stella desktop nepatvirtino, kad atsidarė <bdi>{application}</bdi>. Paleiskite stella desktop ir bandykite dar kartą.",
@@ -5984,13 +6039,15 @@
         "alreadyInstalled": "Jau įdiegta? Prijunkite",
         "connect": "Prijungti stella desktop",
         "connected": "stella desktop prijungta",
+        "download": "Atsisiųsti stella desktop",
         "editNone": "Atsisiųskite stella desktop, kad galėtumėte redaguoti šį failą",
         "editOutdated": "Atnaujinkite stella desktop, kad galėtumėte redaguoti",
         "editReason": "Redagavimas kompiuteryje atveria failą jūsų kompiuterio programoje per stella desktop.",
         "signCurrent": "Pasirašyti su stella desktop",
         "signNone": "Atsisiųskite stella desktop, kad galėtumėte pasirašyti šį PDF",
         "signOutdated": "Atnaujinkite stella desktop, kad galėtumėte pasirašyti",
-        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop."
+        "signReason": "Pasirašymas naudoja jūsų kompiuteryje esantį sertifikatą, todėl vyksta stella desktop.",
+        "update": "Atnaujinti stella desktop"
       },
       "downloadAs": "Atsisiųsti kaip…",
       "downloadAsZip": "Atsisiųsti .zip failą",
@@ -5998,12 +6055,15 @@
       "downloadFailed": "Nepavyko atsisiųsti",
       "downloadPdf": "Atsisiųsti kaip PDF",
       "downloadSearchablePdf": "PDF su paieškos tekstu",
+      "emptyFile": "Failas tuščias.",
       "includeReferenceNumber": "Įtraukti nuorodos numerį",
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
+      "ocrBatchHelp": "Eilėje esantys dokumentai apdorojami kitame OCR pakete.",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
-      "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
+      "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
+      "ocrQueuedForBatch": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
         "alreadySigningTitle": "Pasirašymas stella desktop jau vyksta",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
@@ -6060,6 +6120,7 @@
         "waitingDescription": "Programoje stella desktop pasirinkite pasirašymo sertifikatą, kad pasirašytumėte šį PDF.",
         "waitingTitle": "Laukiama stella desktop"
       },
+      "queueForOcr": "Įtraukti į OCR eilę",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ką daryti su failu {fileName}",
@@ -6071,7 +6132,6 @@
       "removeMetadata": "Pašalinti dokumento metaduomenis",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
-      "runOcr": "Įtraukti OCR į eilę",
       "scrubFailed": "Nepavyko pašalinti šio failo metaduomenų, todėl nieko neatsisiųsta",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
@@ -6359,6 +6419,7 @@
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
       "client": "Klientas",
+      "movedToClient": "Byla <bdi>{matterName}</bdi> perkelta klientui <bdi>{clientName}</bdi>",
       "noClient": "Klientas nepriskirtas",
       "noClientOptional": "Be kliento (neprivaloma)",
       "noParties": "Šioje byloje nėra pridėtų šalių.",
@@ -6377,7 +6438,9 @@
       "personalLabel": "Asmeninė",
       "promoteCta": "Paaukštinti į klientinę",
       "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
+      "promoteToClientConfirm": "Byla <bdi>{matterName}</bdi> bus priskirta klientui <bdi>{clientName}</bdi> ir bendrinama su komanda. Jos nebebus galima grąžinti į asmeninę.",
       "promotedSuccess": "Byla paaukštinta",
+      "recentClients": "Naujausi klientai",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",
@@ -6589,6 +6652,12 @@
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {
       "parties": "Šalys"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rasti bylą…",
+      "trigger": "Pakeisti bylą",
+      "viewAll": "Rodyti visas bylas",
+      "viewAllForClient": "Rodyti visas kliento {clientName} bylas"
     },
     "table": {
       "clearFlags": "Išvalyti žymas",

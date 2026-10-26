@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test, jest } from "bun:test";
+import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";

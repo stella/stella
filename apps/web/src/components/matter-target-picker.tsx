@@ -36,9 +36,9 @@ import { filterMatterPickerItems } from "@/components/matter-picker-search.logic
 import {
   canMoveMatterFolder,
   discardPendingMatterFolder,
-  MAX_FOLDER_NAME_LENGTH,
-  matterFolderPath,
   matterFolderMoveDestinations,
+  matterFolderPath,
+  MAX_FOLDER_NAME_LENGTH,
   reparentPendingMatterFolder,
   resolveMatterTarget,
   selectExistingMatterTarget,
@@ -441,7 +441,7 @@ export const MatterTargetPicker = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const dataQuery = useQuery(workspacesOptions(activeOrganizationId));
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "MatterTargetPicker:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // The endpoint returns matters ordered by most recent activity; keep that
@@ -564,8 +564,7 @@ type FolderPickerProps = {
 };
 
 type FolderDraft =
-  | { type: "create"; name: string }
-  | { type: "edit"; name: string };
+  { type: "create"; name: string } | { type: "edit"; name: string };
 
 const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const t = useTranslations();

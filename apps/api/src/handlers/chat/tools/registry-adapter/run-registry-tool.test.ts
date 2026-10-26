@@ -7,14 +7,17 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolHandler } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import { buildMcpContextFromChat } from "./mcp-chat-context";
+import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import { dehydrateInputRefs } from "./ref-mediation";
 import { runRegistryReadTool } from "./run-registry-tool";
 
@@ -52,19 +55,21 @@ const buildContext = ({
 }: {
   accessibleWorkspaceIds?: ReturnType<typeof toSafeId<"workspace">>[];
   scopedDb?: ScopedDb;
-} = {}): McpRequestContext =>
-  buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: toSafeId<"organization">("org_1"),
-    safeDb: toSafeDbMock(scopedDb),
-    scopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds,
-      pinnedIds: [],
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: toSafeId<"organization">("org_1"),
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds,
+        pinnedIds: [],
+      }),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
     }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  );
 
 describe("runRegistryReadTool", () => {
   // Per test: the real capture path throttles identical errors to one event
@@ -454,20 +459,29 @@ describe("runRegistryReadTool", () => {
     });
   });
 
-  test("refuses a read tool the ref map keeps off the chat surface", async () => {
-    const result = await runRegistryReadTool({
-      args: {},
-      context: buildContext(),
-      refRegistry: createChatRefRegistry(),
-      toolName: "list_audit_log",
-    });
-
-    expect(Result.isError(result)).toBe(true);
-    if (Result.isError(result)) {
-      expect(result.error.message).toContain("not available in chat");
-      expect(result.error.kind).toBe("unavailable");
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-  });
+    if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
+      continue;
+    }
+    const toolName = definition.name;
+    test(`refuses ${toolName} kept off the chat surface`, async () => {
+      const result = await runRegistryReadTool({
+        args: {},
+        context: buildContext(),
+        refRegistry: createChatRefRegistry(),
+        toolName,
+      });
+
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error.message).toContain("not available in chat");
+        expect(result.error.kind).toBe("unavailable");
+      }
+    });
+  }
 
   test("classifies a structured registry error envelope by its code", async () => {
     const registry = createChatRefRegistry();

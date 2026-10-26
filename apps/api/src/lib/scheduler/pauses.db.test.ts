@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -17,7 +17,7 @@ import type { SchedulerTask } from "./types";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const LEASE_MS = 3 * 60_000;
-const CLOCK_MS = Date.parse("2040-01-01T00:00:00.000Z");
+const CLOCK_MS = Date.now() + 60 * 60_000;
 const PAUSED_BY = "test-operator";
 const PAUSE_REASON = "Scheduler maintenance";
 
@@ -75,6 +75,104 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("scheduler operator pauses (postgres)", () => {
+    test("the database bounds pauses and preserves their original start", async () => {
+      await withJob(async ({ client, db, jobId }) => {
+        const rejectedInfinity = await client`UPDATE scheduler_jobs
+          SET paused_until = 'infinity'::timestamptz, paused_by = ${PAUSED_BY}, pause_reason = ${PAUSE_REASON}
+          WHERE id = ${jobId}`
+          .execute()
+          .then(
+            () => "accepted",
+            (error: unknown) =>
+              error instanceof Error ? error.message : String(error),
+          );
+        expect(rejectedInfinity).not.toBe("accepted");
+
+        const rejectedLongPause = await client`UPDATE scheduler_jobs
+          SET paused_until = now() + interval '72 hours 1 minute', paused_by = ${PAUSED_BY}, pause_reason = ${PAUSE_REASON}
+          WHERE id = ${jobId}`
+          .execute()
+          .then(
+            () => "accepted",
+            (error: unknown) =>
+              error instanceof Error ? error.message : String(error),
+          );
+        expect(rejectedLongPause).toContain("72-hour maximum");
+
+        await client`UPDATE scheduler_jobs
+          SET paused_until = now() + interval '71 hours 59 minutes', paused_by = ${PAUSED_BY}, pause_reason = ${PAUSE_REASON}
+          WHERE id = ${jobId}`;
+        const [initial] = await db
+          .select()
+          .from(schedulerJobs)
+          .where(eq(schedulerJobs.id, jobId));
+        expect(initial?.pausedSince).toBeInstanceOf(Date);
+
+        await client`UPDATE scheduler_jobs
+          SET paused_until = now() + interval '71 hours 58 minutes'
+          WHERE id = ${jobId}`;
+        const [renewed] = await db
+          .select()
+          .from(schedulerJobs)
+          .where(eq(schedulerJobs.id, jobId));
+        expect(renewed?.pausedSince).toEqual(initial?.pausedSince);
+
+        await db
+          .update(schedulerJobs)
+          .set({ pausedUntil: null })
+          .where(eq(schedulerJobs.id, jobId));
+        const [resumed] = await db
+          .select()
+          .from(schedulerJobs)
+          .where(eq(schedulerJobs.id, jobId));
+        expect(resumed?.pausedSince).toBeNull();
+      });
+    });
+
+    test("the pause trigger initializes paused_since on insert", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db, sql: client } = openClient();
+        const jobId = `test.pause.insert.${Bun.randomUUIDv7()}`;
+        try {
+          await client`INSERT INTO scheduler_jobs
+            (id, task, schedule, enabled, paused_by, pause_reason, paused_until, next_run_at)
+            VALUES (${jobId}, 'scheduler.noop', ${JSON.stringify({ type: "interval", everyMs: 60_000 })}::text::jsonb, true,
+              ${PAUSED_BY}, ${PAUSE_REASON}, now() + interval '1 hour', now())`;
+          const [inserted] = await db
+            .select()
+            .from(schedulerJobs)
+            .where(eq(schedulerJobs.id, jobId));
+          expect(inserted?.pausedSince).toBeInstanceOf(Date);
+        } finally {
+          await db.delete(schedulerJobs).where(eq(schedulerJobs.id, jobId));
+        }
+      });
+    });
+
+    test("the pause audit job can never be paused, by insert or update", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { sql: client } = openClient();
+        // An upsert reaches the check on both paths: a fresh row is inserted
+        // paused, an existing (declared) row is updated to paused.
+        const pausedAudit = await client`INSERT INTO scheduler_jobs
+          (id, task, schedule, enabled, paused_by, pause_reason, paused_until, next_run_at)
+          VALUES ('scheduler.pauseAudit.hourly', 'scheduler.auditPauses',
+            ${JSON.stringify({ type: "interval", everyMs: 3_600_000 })}::text::jsonb, true,
+            ${PAUSED_BY}, ${PAUSE_REASON}, now() + interval '1 hour', now())
+          ON CONFLICT (id) DO UPDATE SET paused_until = EXCLUDED.paused_until,
+            paused_by = EXCLUDED.paused_by, pause_reason = EXCLUDED.pause_reason`
+          .execute()
+          .then(
+            () => "accepted",
+            (error: unknown) =>
+              error instanceof Error ? error.message : String(error),
+          );
+        expect(pausedAudit).toContain(
+          "scheduler_jobs_pause_audit_unpausable_check",
+        );
+      });
+    });
+
     test("the suite uses PostgreSQL 18", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { sql: client } = openClient();
@@ -383,23 +481,11 @@ if (!databaseUrl || !runPostgresTests) {
           pauseReason: PAUSE_REASON,
         });
         expect(resumed?.lockedBy).toBeString();
-        await db
-          .update(schedulerJobs)
-          .set({
-            lockedBy: null,
-            lockedUntil: null,
-            pausedUntil: sql`'infinity'::timestamptz`,
-          })
-          .where(eq(schedulerJobs.id, jobId));
-        clockMs += 365 * 24 * 60 * 60_000;
-        expect(await acquireNextDueJob(options)).toBeNull();
-        const [indefinite] = await db
-          .select({
-            paused: sql<boolean>`${schedulerJobs.pausedUntil} = 'infinity'::timestamptz`,
-          })
+        const [cleared] = await db
+          .select({ pausedSince: schedulerJobs.pausedSince })
           .from(schedulerJobs)
           .where(eq(schedulerJobs.id, jobId));
-        expect(indefinite?.paused).toBe(true);
+        expect(cleared?.pausedSince).toBeNull();
       });
     });
 

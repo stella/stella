@@ -6,8 +6,11 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+
 import {
   caseLawDecisions,
+  caseLawSitemapShardCounts,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -22,6 +25,7 @@ import type {
 } from "@/api/lib/case-law-public-read-db";
 import {
   refreshCaseLawSitemapShards,
+  SITEMAP_COUNT_MAX_AGE_MS,
   SITEMAP_SHARD_SPLIT_THRESHOLD,
   sitemapRefreshBudget,
   sitemapRefreshPageSql,
@@ -161,6 +165,26 @@ afterAll(async () => {
   await client.close();
 });
 
+/** A refresh with the default budget, which counts every country in one run. */
+const swappedRefresh = async (
+  ...args: Parameters<typeof refreshCaseLawSitemapShards>
+) => {
+  const outcome = await refreshCaseLawSitemapShards(...args);
+  if (outcome.type !== "swapped") {
+    return panic(`Expected one run to swap, got ${outcome.type}`);
+  }
+  return outcome;
+};
+
+/** A clock that has spent any budget by the next reading. */
+const spentClock = () => {
+  let now = 0;
+  return () => {
+    now += Number.MAX_SAFE_INTEGER / 4;
+    return now;
+  };
+};
+
 const listedShards = async () => {
   const listed = await listSitemapShardsHandler(caseLawDb);
   if (!("items" in listed)) {
@@ -271,12 +295,12 @@ const snapshot = async () =>
 test(
   "a refresh walked in many small pages writes the same snapshot as one large page",
   async () => {
-    const whole = await refreshCaseLawSitemapShards(refreshDb, {
+    const whole = await swappedRefresh(refreshDb, {
       pageSize: 1_000_000,
     });
     const wholeSnapshot = await snapshot();
 
-    const paged = await refreshCaseLawSitemapShards(refreshDb, {
+    const paged = await swappedRefresh(refreshDb, {
       pageSize: SMALL_PAGE_SIZE,
     });
     // Both walks cross page boundaries: the dated one inside the split month,
@@ -370,21 +394,25 @@ const recordingRefreshDb = (
 };
 
 test(
-  "the walk reads one snapshot, and each transaction sets its budget before it reads or writes",
+  "each country is walked in one snapshot, and each transaction sets its budget before it reads or writes",
   async () => {
     const recorded = recordingRefreshDb();
 
-    const outcome = await refreshCaseLawSitemapShards(recorded.db, {
+    const outcome = await swappedRefresh(recorded.db, {
       pageSize: SMALL_PAGE_SIZE,
       poolIdleTimeoutS: 20,
     });
 
-    // Every page in one read-only snapshot, then the swap.
-    expect(outcome.pages).toBeGreaterThan(2);
-    expect(recorded.transactions).toHaveLength(2);
-    expect(recorded.transactions[0]?.[0]?.sql).toBe(
-      "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
-    );
+    // The staged read, then a read-only snapshot and a staging write per
+    // country, then the swap.
+    const countries = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length;
+    expect(outcome.pages).toBeGreaterThan(2 * countries);
+    expect(recorded.transactions).toHaveLength(1 + 2 * countries + 1);
+    for (let country = 0; country < countries; country += 1) {
+      expect(recorded.transactions[1 + 2 * country]?.[0]?.sql).toBe(
+        "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY",
+      );
+    }
     for (const sent of recorded.transactions) {
       const budgetAt = sent.findIndex(({ sql: statement }) =>
         statement.includes("set_config('statement_timeout'"),
@@ -503,3 +531,167 @@ for (const phase of ["dated", "undated"] as const) {
     DB_TEST_TIMEOUT_MS,
   );
 }
+
+const stagedCountries = async () =>
+  (
+    await db
+      .select({ country: caseLawSitemapShardCounts.country })
+      .from(caseLawSitemapShardCounts)
+      .orderBy(asc(caseLawSitemapShardCounts.country))
+  ).map(({ country }) => country);
+
+test(
+  "a run that spends its budget stops between countries, and the run that counts the last one swaps the same snapshot",
+  async () => {
+    await swappedRefresh(refreshDb);
+    const whole = await snapshot();
+    expect(await stagedCountries()).toEqual([]);
+
+    const countries = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length;
+    const outcomes = [];
+    for (let run = 0; run < countries; run += 1) {
+      // db-await-in-loop: consecutive scheduler runs, each resuming from the staged counts
+      const outcome = await refreshCaseLawSitemapShards(refreshDb, {
+        pageSize: SMALL_PAGE_SIZE,
+        clock: spentClock(),
+      });
+      outcomes.push(outcome);
+      if (outcome.type === "counting") {
+        // Until the last country is counted the previous snapshot is served.
+        expect(await snapshot()).toEqual(whole);
+        expect(await stagedCountries()).toHaveLength(run + 1);
+      }
+    }
+
+    expect(outcomes.map(({ type }) => type)).toEqual([
+      ...Array.from({ length: countries - 1 }, () => "counting" as const),
+      "swapped",
+    ]);
+    expect(
+      outcomes.flatMap((outcome) =>
+        outcome.type === "counting" ? [outcome.counted] : [],
+      ),
+    ).toEqual(Array.from({ length: countries - 1 }, () => 1));
+    expect(await snapshot()).toEqual(whole);
+    expect(await stagedCountries()).toEqual([]);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a staged count older than its maximum age is counted again",
+  async () => {
+    const first = await refreshCaseLawSitemapShards(refreshDb, {
+      clock: spentClock(),
+    });
+    expect(first).toMatchObject({ type: "counting", counted: 1 });
+    const [staged] = await stagedCountries();
+    if (staged === undefined) {
+      panic("Expected one staged country.");
+    }
+    await db
+      .update(caseLawSitemapShardCounts)
+      .set({
+        countedAt: sql`now() - make_interval(secs => ${SITEMAP_COUNT_MAX_AGE_MS / 1000 + 60})`,
+      })
+      .where(eq(caseLawSitemapShardCounts.country, staged));
+
+    const recount = await refreshCaseLawSitemapShards(refreshDb, {
+      clock: spentClock(),
+    });
+
+    // The stale country is pending again, so this run counts one of all
+    // countries, not one of the rest.
+    expect(recount).toMatchObject({
+      type: "counting",
+      counted: 1,
+      remaining: PUBLIC_CASE_LAW_PAGE_COUNTRIES.length - 1,
+    });
+    await swappedRefresh(refreshDb);
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a staged count that expires before the final swap is counted again, not published",
+  async () => {
+    await swappedRefresh(refreshDb);
+    const before = await snapshot();
+    const countries = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length;
+    // Stage every country but the last, one per run.
+    for (let run = 0; run < countries - 1; run += 1) {
+      // db-await-in-loop: consecutive scheduler runs, each staging one country
+      await refreshCaseLawSitemapShards(refreshDb, { clock: spentClock() });
+    }
+    const [first] = await stagedCountries();
+    if (first === undefined) {
+      panic("Expected a staged country.");
+    }
+    let transactions = 0;
+    // The first staged count expires after the run reads which counts are
+    // fresh and before its swap, as a count just under its limit would
+    // while the last country is walked.
+    const ageing = {
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => {
+        transactions += 1;
+        if (transactions === 2) {
+          await db
+            .update(caseLawSitemapShardCounts)
+            .set({
+              countedAt: sql`now() - make_interval(secs => ${SITEMAP_COUNT_MAX_AGE_MS / 1000 + 60})`,
+            })
+            .where(eq(caseLawSitemapShardCounts.country, first));
+        }
+        return await db.transaction(work);
+      },
+    };
+    // SAFETY: forwards every transaction to the PGlite handle.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
+    const ageingDb = ageing as unknown as RefreshDb;
+
+    const last = await refreshCaseLawSitemapShards(ageingDb);
+
+    expect(last).toMatchObject({ type: "counting", remaining: 1 });
+    expect(await snapshot()).toEqual(before);
+    expect(await refreshCaseLawSitemapShards(refreshDb)).toMatchObject({
+      type: "swapped",
+    });
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+test(
+  "a swap that finds a country unstaged replaces nothing",
+  async () => {
+    await swappedRefresh(refreshDb);
+    const before = await snapshot();
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.caseNumber, "4 Cdo 4/undated"));
+    const countries = PUBLIC_CASE_LAW_PAGE_COUNTRIES.length;
+    let transactions = 0;
+    // An overlapping run swaps and clears the staged counts after this run
+    // staged its last country and before its own swap.
+    const overlapping = {
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => {
+        transactions += 1;
+        if (transactions === 1 + 2 * countries + 1) {
+          await db.delete(caseLawSitemapShardCounts).where(sql`true`);
+        }
+        return await db.transaction(work);
+      },
+    };
+    // SAFETY: forwards every transaction to the PGlite handle.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
+    const overlappingDb = overlapping as unknown as RefreshDb;
+
+    const outcome = await refreshCaseLawSitemapShards(overlappingDb);
+
+    expect(outcome).toMatchObject({
+      type: "counting",
+      remaining: countries,
+    });
+    expect(await snapshot()).toEqual(before);
+  },
+  DB_TEST_TIMEOUT_MS,
+);

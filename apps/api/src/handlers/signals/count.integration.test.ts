@@ -19,6 +19,7 @@ import {
 import { entities, signals, taskAssignees } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import countInbox from "@/api/handlers/signals/count";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
@@ -107,7 +108,7 @@ const countFor = async (workspaceIds: SafeId<"workspace">[]) => {
       getActiveWorkspaceIds: async () => workspaceIds,
       memberRole: sessionMemberRole("owner"),
       request: new Request("https://example.test/signals/count"),
-      route: "/test/signals/count",
+      route: "/v1/signals/count" satisfies ApiRoutePath,
       safeDb: createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
       scopedDb: createScopedDb(testDb, workspaceIds, ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },

@@ -1,3 +1,4 @@
+// parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 // parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
@@ -27,11 +28,12 @@ import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidan
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
 import {
   CORPUS_STORAGE_MODES,
-  type CorpusStorageMode,
   corpusStorageInvariantViolation,
+  type CorpusStorageMode,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
 import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
+import { killSwitchesEnvSchema } from "@/api/lib/kill-switches/registry";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -122,6 +124,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 
 export const envBaseServerSchema = {
   API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
+  KILL_SWITCHES: killSwitchesEnvSchema,
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),

@@ -5,9 +5,9 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -59,14 +59,14 @@ const createSettingsDb = (): {
   operationCount: () => number;
 } => {
   let operationCount = 0;
-  const safeDb: SafeDb = async <T>(
-    operation: (tx: Transaction) => Promise<T>,
-  ) => {
-    operationCount += 1;
-    return operationCount === 1
-      ? Result.ok(asTestRaw<T>(undecryptableRow))
-      : Result.ok(await operation(writeRejectingTx));
-  };
+  const safeDb = asTestRaw<SafeDb>(
+    async (operation: (tx: Transaction) => Promise<unknown>) => {
+      operationCount += 1;
+      return operationCount === 1
+        ? Result.ok(undecryptableRow)
+        : Result.ok(await operation(writeRejectingTx));
+    },
+  );
   return { safeDb, operationCount: () => operationCount };
 };
 

@@ -7,10 +7,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -27,9 +27,9 @@ import type {
 } from "@/features/style-sets/style-set-editor-types";
 import { StyleSetPreview } from "@/features/style-sets/style-set-preview";
 import {
+  stellaStyleEditorOptions,
   styleSetEditorOptions,
   styleSetsKeys,
-  stellaStyleEditorOptions,
 } from "@/features/style-sets/style-set-queries";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -174,7 +174,13 @@ const LoadedStyleSetEditor = ({
       // rejected request, so it has to reach analytics the same way too; the
       // catch in `handleSubmit` only ever sees the rejection.
       const apiError = toAPIError(error);
-      getAnalytics().captureError(apiError);
+      getAnalytics().captureError(apiError, {
+        fingerprintKey: "LoadedStyleSetEditor.finishSave:apiError",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.finishSave:apiError",
+        },
+      });
       setSaving(false);
       notifyUserError(apiError, t("styleSets.editor.saveFailed"));
       return;
@@ -219,7 +225,13 @@ const LoadedStyleSetEditor = ({
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     save().catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "LoadedStyleSetEditor.handleSubmit:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.handleSubmit:failure",
+        },
+      });
       setSaving(false);
       notifyUserError(error, t("styleSets.editor.saveFailed"));
     });

@@ -25,6 +25,11 @@ on:
         description: "Required reviewable reason when waiving the dependency audit"
         required: false
         type: string
+      dry_run:
+        description: "Evaluate every release gate and report them all without pushing the tag"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -62,51 +67,71 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
-      - name: Select and validate the release commit
+      - name: Select the release commit
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_SHA: ${{ inputs.sha }}
-          PROOF_SHA: ${{ inputs.proof_sha }}
-        run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" --proof-sha "$PROOF_SHA" >> "$GITHUB_OUTPUT"
+        run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" --candidate-only >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
         run: |
           cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
           cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          cp scripts/verify-release-candidate-tree.mjs "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"
           cp scripts/release-proof-chain.sh "$RUNNER_TEMP/release-proof-chain.sh"
           cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
+          cp scripts/release-gate.sh "$RUNNER_TEMP/release-gate.sh"
+
+      # Every gate below runs even when an earlier one fails; each records
+      # its outcome and the verdict step lists all failures in one run.
+      - name: Require release evidence
+        id: evidence
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
+          PROOF_SHA: ${{ inputs.proof_sha }}
+        run: bash "$RUNNER_TEMP/release-gate.sh" run release-evidence bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA" --proof-sha "$PROOF_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the verified commit
         env:
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
         run: git checkout --detach "$RELEASE_SHA"
 
+      # Only the dependency audit needs the install; a failed install leaves
+      # that gate unrun (the verdict reports it) while the others still run.
       - name: Install dependencies for the release audit
+        id: install
+        continue-on-error: true
         timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Refuse a release with known dependency advisories
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         env:
           WAIVE_DEPENDENCY_AUDIT: ${{ inputs.waive_dependency_audit }}
           WAIVER_REASON: ${{ inputs.dependency_audit_waiver_reason }}
-        run: bash scripts/check-release-dependency-audit.sh
+        run: bash "$RUNNER_TEMP/release-gate.sh" run dependency-audit bash scripts/check-release-dependency-audit.sh
 
       - name: Require release changelog file
+        continue-on-error: true
         env:
           VERSION: ${{ steps.candidate.outputs.value }}
-        run: bash scripts/check-release-changelog.sh --version "$VERSION"
+        run: bash "$RUNNER_TEMP/release-gate.sh" run changelog bash scripts/check-release-changelog.sh --version "$VERSION"
 
       # A release whose npm publish failed or never ran leaves users on an
       # older CLI and libraries while everything else moves on. The previous
       # stable tag's packages must be on npm before the next tag is cut; fix
       # the publish (publish-npm.yml) first. Runs without an install.
       - name: Refuse a tag while the previous release is missing from npm
-        run: bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD
+        continue-on-error: true
+        run: bash "$RUNNER_TEMP/release-gate.sh" run npm-publish-lag bun scripts/check-npm-publish-lag.ts --previous-release-of HEAD
 
       # The API deploys from this tag; the CLI publishes from the same commit
       # only after production serves it. A stable tag is refused while a
@@ -115,13 +140,20 @@ jobs:
       # version users install. Runs without an install: the script uses only
       # Bun and Node built-ins plus npm on the runner.
       - name: Refuse a stable tag whose CLI release is not settled
+        continue-on-error: true
         env:
           VERSION: ${{ steps.candidate.outputs.value }}
-        run: bun scripts/check-cli-release-coupling.ts --version "$VERSION"
+        run: bash "$RUNNER_TEMP/release-gate.sh" run cli-coupling bun scripts/check-cli-release-coupling.ts --version "$VERSION"
+
+      # The single verdict: lists every gate that failed or never ran. A dry
+      # run stops after it, so all gates are evaluated without a tag.
+      - name: Report every release gate
+        run: bash "$RUNNER_TEMP/release-gate.sh" verdict release-evidence dependency-audit changelog npm-publish-lag cli-coupling
 
       - name: Mint App token
+        if: ${{ !inputs.dry_run }}
         id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
@@ -134,9 +166,10 @@ jobs:
       # right before the push, so evidence that turned red since selection
       # stops it.
       - name: Push tag
+        if: ${{ !inputs.dry_run }}
         env:
           RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
-          PROOF_SHA: ${{ steps.candidate.outputs.proof-sha }}
+          PROOF_SHA: ${{ steps.evidence.outputs.proof-sha }}
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.candidate.outputs.tag }}
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
@@ -158,6 +191,7 @@ jobs:
   marketing-freshness:
     name: Warn on changed marketing recording provenance
     needs: tag
+    if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

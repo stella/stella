@@ -1,19 +1,19 @@
 import { SQSClient } from "@aws-sdk/client-sqs";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { resolveInboundMailReceiving } from "@/api/lib/email/inbound/receiving-config";
 import { receiveSesInboundMail } from "@/api/lib/email/inbound/runtime";
 import {
-  createSesS3ObjectReader,
   createSesS3ObjectDeleter,
+  createSesS3ObjectReader,
 } from "@/api/lib/email/inbound/ses";
 import { drainInboundMailQueue } from "@/api/lib/email/inbound/sqs";
 import { getFreshAbortableS3 } from "@/api/lib/s3";
 import {
-  SchedulerTaskFailure,
   type SchedulerTask,
+  SchedulerTaskFailure,
 } from "@/api/lib/scheduler/types";
 
 export const RECEIVE_INBOUND_MAIL_TASK = "inboundMail.receive" as const;

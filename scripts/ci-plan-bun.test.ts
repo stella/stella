@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { evaluate, type Context } from "./github-expression";
+import { type Context, evaluate } from "./github-expression";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const configured = v.parse(
@@ -174,32 +174,51 @@ const contexts = combinations
     }
     return true;
   })
-  .map(
-    (values) =>
-      ({
-        values,
+  .flatMap((values) => {
+    // The lookup publishes arming only for a PR code run. Queue entries and
+    // reusable callers keep it unset; they select heavy planning by event/input.
+    const armedOutputs =
+      values["github.event_name"] === "pull_request" &&
+      values["github.event.action"] !== "enqueued" &&
+      values["inputs.heavy_only"] !== true &&
+      values["github.event.pull_request.draft"] !== true
+        ? ["false", "true"]
+        : [""];
+    return armedOutputs.map((armed) => {
+      const armedValues = { ...values };
+      armedValues["steps.completed-depth.outputs.armed"] = armed;
+      return {
+        values: armedValues,
         status: {
           always: true,
           success: true,
           failure: false,
           cancelled: false,
         },
-      }) satisfies Context,
-  );
+      } satisfies Context;
+    });
+  });
 
-test("ci-plan sets up Bun exactly once before every Bun consumer across event, depth and trust branches", () => {
+test("ci-plan sets up Bun exactly once before every Bun consumer across event, depth, trust and arming branches", () => {
   let consumingPaths = 0;
   let skippedPaths = 0;
+  const consumedArmingStates = { false: 0, true: 0 };
   for (const context of contexts) {
     const { consumers } = assertBunSetupContract(plan, context);
     if (consumers > 0) {
       consumingPaths++;
+      const armed = context.values["steps.completed-depth.outputs.armed"];
+      if (armed === "true" || armed === "false") {
+        consumedArmingStates[armed]++;
+      }
     } else {
       skippedPaths++;
     }
   }
   expect(consumingPaths).toBeGreaterThan(0);
   expect(skippedPaths).toBeGreaterThan(0);
+  expect(consumedArmingStates.false).toBeGreaterThan(0);
+  expect(consumedArmingStates.true).toBeGreaterThan(0);
 });
 
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {

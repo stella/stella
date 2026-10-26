@@ -7,9 +7,9 @@ import {
   flattenWorkflowSteps,
   isWorkflowBarrier,
   synchronizeWorkflowBackgroundSteps,
+  workflowCiInstallFlags,
   workflowJobSteps,
   workflowStepByName,
-  workflowCiInstallFlags,
 } from "./workflow-steps";
 
 test("shared install flag extraction keeps order and refuses unowned or malformed inputs", () => {

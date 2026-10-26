@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -11,23 +11,31 @@ import {
 } from "@/api/lib/agent-skills/content-hash";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import {
-  RESOURCE_PATH_PATTERN,
   RESOURCE_PATH_MAX_CHARS,
+  RESOURCE_PATH_PATTERN,
 } from "@/api/lib/agent-skills/resource-path";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const renameSkillResourceParamsSchema = t.Object({
-  skillId: tSafeId("agentSkill"),
+const renameSkillResourceParamsSchema = v.object({
+  skillId: resourceIdSchema("agentSkill"),
 });
 
-const renameSkillResourceBodySchema = t.Object({
-  oldPath: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
-  newPath: t.String({ minLength: 1, maxLength: RESOURCE_PATH_MAX_CHARS }),
+const renameSkillResourceBodySchema = v.object({
+  oldPath: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(RESOURCE_PATH_MAX_CHARS),
+  ),
+  newPath: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(RESOURCE_PATH_MAX_CHARS),
+  ),
 });
 
 const config = {

@@ -536,6 +536,7 @@ test.each([
     const planned = planCheck({
       changedPaths: [file],
       presentChangedPaths,
+      repositoryPaths: presentChangedPaths,
       affectedWorkspacePaths: [],
       workspacePaths: new Set(),
     });

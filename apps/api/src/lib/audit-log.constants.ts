@@ -1,4 +1,8 @@
 export const AUDIT_ACTION = {
+  MCP_WEB_HANDOFF_CONFIRMATION_SHOWN: "mcp_web_handoff.confirmation_shown",
+  MCP_WEB_HANDOFF_ISSUED: "mcp_web_handoff.issued",
+  MCP_WEB_HANDOFF_REDEEMED: "mcp_web_handoff.redeemed",
+  MCP_WEB_HANDOFF_REFUSED: "mcp_web_handoff.refused",
   CREATE: "create",
   UPDATE: "update",
   DELETE: "delete",
@@ -13,6 +17,7 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  MCP_WEB_HANDOFF: "mcp_web_handoff",
   SERVICE_OAUTH_CLIENT: "service_oauth_client",
   LEGAL_RESOLVE: "legal_resolve",
   AUDIT_LOG: "audit_log",

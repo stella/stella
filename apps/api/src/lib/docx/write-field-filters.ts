@@ -18,15 +18,15 @@ import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
 import {
+  type FilterCall,
   isFieldPath,
   qualifyLoopPath,
   qualifyRowScopedPlaceholder,
   renderConditionTag,
   renderForOpener,
   renderValueMarker,
-  scanMarkers,
-  type FilterCall,
   type RowScope,
+  scanMarkers,
   type ScannedMarker,
 } from "@stll/template-conditions";
 

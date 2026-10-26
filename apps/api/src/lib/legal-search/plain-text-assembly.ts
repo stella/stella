@@ -9,8 +9,8 @@ import {
 import {
   EMPTY_AST,
   isPersistableSourceDocumentId,
-  toPlainTextIngestionResult,
   type RawIngestionResult,
+  toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 
 const persistableIdentity = (value: string) =>

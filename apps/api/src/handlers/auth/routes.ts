@@ -1,8 +1,8 @@
-import Elysia from "elysia";
-
 import { env } from "@/api/env";
-import { createAuthMetadataHeaders } from "@/api/handlers/auth/metadata";
+import { createAuthMetadataPreflightHeaders } from "@/api/handlers/auth/metadata";
 import metadataHandler from "@/api/handlers/auth/read-authorization-server-metadata";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
@@ -10,23 +10,38 @@ import {
 } from "@/api/lib/auth/auth-paths";
 import { isReviewAccountConfigured } from "@/api/lib/auth/review-account";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   isSelfhostFirstUserRequired,
   isSelfhostLocalPasswordAuthEnabled,
 } from "@/api/lib/selfhost-auth";
 
-const applyHeaders = ({
-  headers,
-  set,
-}: {
-  headers: Headers;
-  set: { headers: Record<string, string | number | boolean | undefined> };
-}) => {
-  for (const [key, value] of headers) {
+/**
+ * A discovery document's preflight, answered by the route itself so the
+ * credentialed CORS layer never sees it: any origin may read the metadata,
+ * a third-party MCP client's included.
+ */
+const metadataPreflight = defineEndpoint.public({ cors: "own" }, ({ set }) => {
+  for (const [key, value] of createAuthMetadataPreflightHeaders()) {
     set.headers[key] = value;
   }
-};
+  return status(204);
+});
+
+export const authMetadataRoute = routes({
+  [ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH]: {
+    GET: metadataHandler,
+    OPTIONS: metadataPreflight,
+  },
+  [OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH]: {
+    GET: metadataHandler,
+    OPTIONS: metadataPreflight,
+  },
+  [OPENID_CONFIGURATION_DISCOVERY_PATH]: {
+    GET: metadataHandler,
+    OPTIONS: metadataPreflight,
+  },
+});
 
 const getSocialAuthCapabilities = () => ({
   google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
@@ -37,41 +52,7 @@ const getSocialAuthCapabilities = () => ({
   ),
 });
 
-export const authMetadataRoute = new Elysia()
-  .onRequest(({ set }) => {
-    setSecurityHeaders(set);
-  })
-  .options(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
-    applyHeaders({
-      headers: createAuthMetadataHeaders(),
-      set,
-    });
-    set.status = 204;
-    return "";
-  })
-  .get(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, metadataHandler.handler)
-  .options(OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
-    applyHeaders({
-      headers: createAuthMetadataHeaders(),
-      set,
-    });
-    set.status = 204;
-    return "";
-  })
-  .get(OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, metadataHandler.handler)
-  .options(OPENID_CONFIGURATION_DISCOVERY_PATH, ({ set }) => {
-    applyHeaders({
-      headers: createAuthMetadataHeaders(),
-      set,
-    });
-    set.status = 204;
-    return "";
-  })
-  .get(OPENID_CONFIGURATION_DISCOVERY_PATH, metadataHandler.handler);
-
-export const authCapabilitiesRoute = new Elysia({
-  prefix: "/auth",
-}).get("/capabilities", async () => {
+const authCapabilities = defineEndpoint.public({}, async () => {
   const firstUserRequired = await isSelfhostFirstUserRequired();
   const bootstrap = firstUserRequired && !!env.SELFHOST_BOOTSTRAP_TOKEN;
   return {
@@ -89,3 +70,8 @@ export const authCapabilitiesRoute = new Elysia({
     transactionalEmail: isTransactionalEmailConfigured(),
   };
 });
+
+export const authCapabilitiesRoute = routes(
+  { "/capabilities": { GET: authCapabilities } },
+  { prefix: "/auth" },
+);

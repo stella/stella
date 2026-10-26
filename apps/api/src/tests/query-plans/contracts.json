@@ -97,7 +97,7 @@
         "position": "root/0/1/0/2",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
-        "index": "case_law_decisions_docket_family_key_idx"
+        "index": "case_law_decisions_republished_ruling_idx"
       }
     ]
   },
@@ -406,6 +406,22 @@
       }
     ]
   },
+  "case-law.provision-citing-decisions": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0/0/0/0/0",
+        "relation": "case_law_provision_citations",
+        "nodeType": "Index Scan",
+        "index": "case_law_provision_citations_work_subtree_idx"
+      },
+      {
+        "position": "root/0/0/0/0/0/0/0/1",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Scan",
+        "index": "case_law_decisions_search_candidate_published_idx"
+      }
+    ]
+  },
   "legislation.list": {
     "scans": [
       {
@@ -477,8 +493,8 @@
       {
         "position": "root/0/1/0",
         "relation": "legislation_documents",
-        "nodeType": "Bitmap Heap Scan",
-        "index": "legislation_documents_country_idx"
+        "nodeType": "Seq Scan",
+        "index": null
       }
     ],
     "allowSeqScan": "hourly scheduler snapshot of the admitted jurisdictions"
@@ -503,6 +519,16 @@
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_erase_pending_idx"
+      }
+    ]
+  },
+  "case-law.freshness-pending-states": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pending_idx"
       }
     ]
   }

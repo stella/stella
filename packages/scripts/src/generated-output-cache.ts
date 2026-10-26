@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import {
   lstatSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   utimesSync,
@@ -22,6 +22,8 @@ const cacheManifestSchema = v.record(
   v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
 );
 const GENERATED_OUTPUT_CACHE_IDENTITY_LIMIT = 2;
+const ATOMIC_GENERATED_FILE_TEMP_SUFFIX =
+  /\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.tmp$/u;
 
 type GeneratedOutputCacheOptions = {
   root: string;
@@ -61,9 +63,12 @@ export const withGeneratedOutputCache = async ({
       JSON.stringify([Bun.version, environment, name, inputs, outputs]),
     );
     for (const file of scan(included)) {
+      // Atomic generated-file writers use UUID-named siblings. A sibling of
+      // an excluded output is no more a source than its final destination.
+      const destination = file.replace(ATOMIC_GENERATED_FILE_TEMP_SUFFIX, "");
       if (
-        generated.some((glob) => glob.match(file)) ||
-        excluded.some((glob) => glob.match(file)) ||
+        generated.some((glob) => glob.match(file) || glob.match(destination)) ||
+        excluded.some((glob) => glob.match(file) || glob.match(destination)) ||
         file.includes("/node_modules/") ||
         file.includes("/.cache/") ||
         file.includes("/.turbo/")

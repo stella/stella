@@ -42,10 +42,10 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { fetchDecisionsByCelex } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
+  manifestationStem,
   PORTAL_CORPUS,
   PORTAL_DOCUMENT_CONTAINER,
   type PortalPair,
-  manifestationStem,
   portalStem,
 } from "@/api/handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/corpus";
 import { encodeGzipJson } from "@/api/lib/gzip-json";

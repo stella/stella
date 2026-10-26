@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import { E2E_API_ORIGIN, apiGet } from "../helpers/api";
+import { apiGet, E2E_API_ORIGIN } from "../helpers/api";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";

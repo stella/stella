@@ -3,8 +3,8 @@ import {
   CASE_LAW_REGION_BY_COUNTRY,
   isPublicCaseLawCountry as isSharedPublicCaseLawCountry,
   isPublicCaseLawPageCountry as isSharedPublicCaseLawPageCountry,
-  PUBLIC_CASE_LAW_PAGE_COUNTRIES as SHARED_PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   PUBLIC_CASE_LAW_COUNTRIES as SHARED_PUBLIC_CASE_LAW_COUNTRIES,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES as SHARED_PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type {
   CaseLawBrowserCountry,
@@ -27,7 +27,7 @@ export const caseLawCountryRegion = (country: string): string | null =>
   REGIONS[country.toUpperCase()] ?? null;
 
 /** Expects the corpus form (`CZE`), which `fromCaseLawCountryParam` produces. */
-export const isCaseLawBrowserCountry = (
+const isCaseLawBrowserCountry = (
   country: string,
 ): country is CaseLawBrowserCountry =>
   Object.hasOwn(REGION_BY_COUNTRY, country);

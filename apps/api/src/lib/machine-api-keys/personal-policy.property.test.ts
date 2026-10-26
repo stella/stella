@@ -9,14 +9,14 @@ import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   API_KEY_KIND,
-  PERSONAL_API_KEY_SCOPES,
   machineApiKeyMetadataSchema,
   machineApiKeyPermissionsSchema,
   parseMachineApiKeyPermissions,
+  PERSONAL_API_KEY_SCOPES,
 } from "@/api/lib/machine-api-key-config";
 import type {
-  PersonalApiKeyScope,
   PERSONAL_API_KEY_DEFAULT_SCOPES,
+  PersonalApiKeyScope,
 } from "@/api/lib/machine-api-key-config";
 import {
   personalApiKeyPermissions,

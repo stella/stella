@@ -1,11 +1,11 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -15,8 +15,8 @@ import path from "node:path";
 
 import { buildApiTestCommand } from "./api-test-command";
 import {
-  TestProcessSupervisor,
   testProcessBudgets,
+  TestProcessSupervisor,
 } from "./test-process-supervisor";
 
 const createFixture = (
@@ -698,25 +698,29 @@ posixTest(
 );
 
 posixTest(
-  "a timeout also terminates descendants that inherit the child's output pipes",
+  "a hung child tree keeps output separate, terminates descendants once, and finalizes JUnit",
   async () => {
     const fixture = createFixture();
     const markerPath = path.join(fixture.directory, "descendant-term.received");
-    const descendant = `
-    import { writeFileSync } from "node:fs";
-    process.on("SIGTERM", () => {
-      writeFileSync(${JSON.stringify(markerPath)}, "descendant received SIGTERM");
-      process.exit(0);
-    });
-    console.log("descendant progress before hang");
-    setInterval(() => {}, 1000);
-  `;
+    let junitPath = "";
     try {
       const result = await fixture.supervisor.run({
-        command: () => [
-          process.execPath,
-          "-e",
-          `
+        command: (pathForJUnit) => {
+          junitPath = pathForJUnit;
+          const descendant = `
+            import { appendFileSync, writeFileSync } from "node:fs";
+            process.on("SIGTERM", () => {
+              appendFileSync(${JSON.stringify(markerPath)}, "SIGTERM\\n");
+              writeFileSync(${JSON.stringify(pathForJUnit)}, '<testsuites tests="1" failures="1"><testsuite name="hung tree"><testcase name="descendant"><failure>timed out</failure></testcase></testsuite></testsuites>');
+              process.exit(0);
+            });
+            console.error("descendant stderr before hang");
+            setInterval(() => {}, 1000);
+          `;
+          return [
+            process.execPath,
+            "-e",
+            `
           Bun.spawn({
             cmd: [process.execPath, "-e", ${JSON.stringify(descendant)}],
             stdout: "inherit",
@@ -725,7 +729,8 @@ posixTest(
           console.log("parent progress before hang");
           setInterval(() => {}, 1000);
         `,
-        ],
+          ];
+        },
         cwd: fixture.directory,
         env: process.env,
         identity: {
@@ -737,18 +742,23 @@ posixTest(
         mode: "buffered",
       });
       expect(result.exitCode).toBe(124);
-      expect(readFileSync(markerPath, "utf-8")).toBe(
-        "descendant received SIGTERM",
+      expect(result.output).toContain("parent progress before hang");
+      expect(result.output).toContain("descendant stderr before hang");
+      expect(
+        readFileSync(markerPath, "utf-8").split("\n").filter(Boolean),
+      ).toEqual(["SIGTERM"]);
+      expect(readFileSync(junitPath, "utf-8")).toBe(
+        '<testsuites tests="1" failures="1"><testsuite name="hung tree"><testcase name="descendant"><failure>timed out</failure></testcase></testsuite></testsuites>',
       );
       expect(fixture.diagnostics).toHaveLength(1);
       expect(fixture.diagnostics.join("")).toContain(
         "parent progress before hang",
       );
       expect(fixture.diagnostics.join("")).toContain(
-        "descendant progress before hang",
+        "descendant stderr before hang",
       );
       expect(readLogs(fixture.directory)).toContain(
-        "descendant progress before hang",
+        "descendant stderr before hang",
       );
     } finally {
       fixture.cleanup();

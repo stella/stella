@@ -7,8 +7,8 @@
     "path": "/v1/chat/completions"
   },
   "source": {
-    "retrievedAt": "2026-09-30",
-    "sha256": "07652463899cfca6d30671ceee47b0079ff2ede5c210ee8d5586c201e29c4d68",
+    "retrievedAt": "2026-10-22",
+    "sha256": "43e5b709a2de7776e7175c77865de3c3bf42df2058c6ff982a482cc20f31e555",
     "url": "https://docs.mistral.ai/openapi.yaml"
   }
 }

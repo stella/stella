@@ -4,13 +4,16 @@ use aes_gcm::{
 };
 use sha2::{Digest, Sha256};
 use std::{
-  collections::{BTreeSet, HashSet},
+  collections::{BTreeMap, BTreeSet, HashSet},
   fmt, fs,
   path::{Path, PathBuf},
+  sync::{Arc, Mutex},
 };
 
-use crate::clipboard::PersistedClipboardState;
+use crate::clipboard::{ClipboardItem, PersistedClipboardState};
+use crate::foreground_app_visual::ClipboardSourceAppVisual;
 use crate::local_store::{EncryptedJsonFile, create_private_dir, write_private_atomic};
+use serde::{Deserialize, Serialize};
 
 const IMAGE_BLOB_VERSION: u8 = 1;
 const IMAGE_BLOB_NONCE_BYTES: usize = 12;
@@ -52,15 +55,125 @@ impl fmt::Display for ClipboardImageValidationError {
   }
 }
 
+// The manifest is a write-ahead transaction: after its atomic commit, replay
+// installs changed records and deletes retired records before exposing history.
+// It never contains unchanged items, including when count pruning evicts a clip.
+#[derive(Default, Serialize, Deserialize)]
+struct ClipboardRecordManifest {
+  settings: Option<PersistedClipboardState>,
+  updated_visuals: Vec<ClipboardSourceAppVisual>,
+  removed_visuals: Vec<String>,
+  updated: Vec<ClipboardItemRecord>,
+  head: Option<ClipboardRecordHead>,
+  removed: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ClipboardItemRecord {
+  item: ClipboardItem,
+  next_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ClipboardRecordHead {
+  item_id: Option<String>,
+}
+
+fn plan_record_transaction(
+  state: &PersistedClipboardState,
+  previous: Option<&PersistedClipboardState>,
+) -> ClipboardRecordManifest {
+  let previous_items: BTreeMap<_, _> = previous
+    .into_iter()
+    .flat_map(|state| &state.items)
+    .map(|item| (item.id(), item))
+    .collect();
+  let previous_next: BTreeMap<_, _> = previous
+    .into_iter()
+    .flat_map(|state| {
+      state.items.iter().enumerate().map(move |(index, item)| {
+        (item.id(), state.items.get(index + 1).map(ClipboardItem::id))
+      })
+    })
+    .collect();
+  let current_ids: HashSet<_> = state.items.iter().map(ClipboardItem::id).collect();
+  let mut settings = state.clone();
+  settings.items.clear();
+  settings.source_app_visuals.clear();
+  let previous_settings = previous.map(|state| {
+    let mut settings = state.clone();
+    settings.items.clear();
+    settings.source_app_visuals.clear();
+    settings
+  });
+  let previous_visuals: BTreeMap<_, _> = previous
+    .into_iter()
+    .flat_map(|state| &state.source_app_visuals)
+    .map(|visual| (visual.key.as_str(), visual))
+    .collect();
+  let visual_keys: HashSet<_> = state
+    .source_app_visuals
+    .iter()
+    .map(|visual| visual.key.as_str())
+    .collect();
+  ClipboardRecordManifest {
+    settings: (previous_settings.as_ref() != Some(&settings)).then_some(settings),
+    updated_visuals: state
+      .source_app_visuals
+      .iter()
+      .filter(|visual| {
+        previous_visuals.get(visual.key.as_str()).copied() != Some(*visual)
+      })
+      .cloned()
+      .collect(),
+    removed_visuals: previous_visuals
+      .keys()
+      .filter(|key| !visual_keys.contains(**key))
+      .map(|key| (*key).to_string())
+      .collect(),
+    head: Some(ClipboardRecordHead {
+      item_id: state.items.first().map(|item| item.id().to_string()),
+    }),
+    updated: state
+      .items
+      .iter()
+      .enumerate()
+      .filter(|(index, item)| {
+        previous_items.get(item.id()).copied() != Some(*item)
+          || previous_next.get(item.id()).copied().flatten()
+            != state.items.get(index + 1).map(ClipboardItem::id)
+      })
+      .map(|(index, item)| ClipboardItemRecord {
+        item: item.clone(),
+        next_id: state.items.get(index + 1).map(|item| item.id().to_string()),
+      })
+      .collect(),
+    removed: previous_items
+      .keys()
+      .filter(|id| !current_ids.contains(**id))
+      .map(|id| (*id).to_string())
+      .collect(),
+  }
+}
+
 #[derive(Clone)]
 pub struct ClipboardStore {
   key: [u8; 32],
   path: PathBuf,
+  checkpoint: Arc<Mutex<Option<PersistedClipboardState>>>,
+  #[cfg(test)]
+  written_bytes: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl ClipboardStore {
   pub fn new(key: [u8; 32], path: PathBuf) -> Self {
-    Self { key, path }
+    Self {
+      key,
+      path,
+      checkpoint: Arc::new(Mutex::new(None)),
+      #[cfg(test)]
+      written_bytes: Arc::default(),
+    }
   }
 
   fn history_file(&self) -> EncryptedJsonFile {
@@ -68,7 +181,212 @@ impl ClipboardStore {
   }
 
   pub fn load(&self) -> Result<Option<PersistedClipboardState>, String> {
-    self.history_file().load()
+    let Some(value) = self.history_file().load::<serde_json::Value>()? else {
+      Self::remove_records(&self.path)?;
+      *self
+        .checkpoint
+        .lock()
+        .map_err(crate::logging::with_cause_logged(
+          "clipboard checkpoint lock is poisoned",
+        ))? = None;
+      return Ok(None);
+    };
+    // Convert the encrypted snapshot once at startup. The replacement manifest
+    // contains the entire transaction before any record is materialized, so a
+    // crash after this atomic write resumes through ordinary journal recovery.
+    let manifest = if value.get("items").is_some() {
+      let state = serde_json::from_value::<PersistedClipboardState>(value)
+        .map_err(|error| format!("clipboard snapshot migration failed: {error}"))?;
+      let manifest = plan_record_transaction(&state, None);
+      self.write_record(&self.history_file(), &manifest)?;
+      manifest
+    } else {
+      serde_json::from_value::<ClipboardRecordManifest>(value)
+        .map_err(|error| format!("clipboard record manifest is invalid: {error}"))?
+    };
+    self.apply_pending(&manifest)?;
+    let mut state = self
+      .settings_file()
+      .load::<PersistedClipboardState>()?
+      .ok_or_else(|| "clipboard settings record is missing".to_string())?;
+    if self.visual_directory().exists() {
+      for entry in fs::read_dir(self.visual_directory())
+        .map_err(|error| format!("clipboard visuals read failed: {error}"))?
+      {
+        let path = entry
+          .map_err(|error| format!("clipboard visual read failed: {error}"))?
+          .path();
+        if path.extension().and_then(|value| value.to_str()) != Some("enc") {
+          continue;
+        }
+        let visual = self
+          .visual_file_at(path.clone())
+          .load::<ClipboardSourceAppVisual>()?
+          .ok_or_else(|| "clipboard visual disappeared during load".to_string())?;
+        if self.visual_path(&visual.key) != path {
+          return Err("clipboard visual identity does not match its path".to_string());
+        }
+        state.source_app_visuals.push(visual);
+      }
+      state
+        .source_app_visuals
+        .sort_by(|left, right| left.key.cmp(&right.key));
+    }
+    let mut records = BTreeMap::new();
+    if self.record_directory().exists() {
+      for entry in fs::read_dir(self.record_directory())
+        .map_err(|error| format!("clipboard records read failed: {error}"))?
+      {
+        let path = entry
+          .map_err(|error| format!("clipboard record read failed: {error}"))?
+          .path();
+        if path.extension().and_then(|value| value.to_str()) != Some("enc") {
+          continue;
+        }
+        let item = self
+          .record_file_at(path.clone())
+          .load::<ClipboardItemRecord>()?
+          .ok_or_else(|| "clipboard record disappeared during load".to_string())?;
+        if self.record_path(item.item.id()) != path {
+          return Err("clipboard record identity does not match its path".to_string());
+        }
+        records.insert(item.item.id().to_string(), item);
+      }
+    }
+    let mut head = self
+      .head_file()
+      .load::<ClipboardRecordHead>()?
+      .ok_or_else(|| "clipboard history head is missing".to_string())?
+      .item_id;
+    while let Some(id) = head {
+      let record = records
+        .remove(&id)
+        .ok_or_else(|| "clipboard history order is invalid".to_string())?;
+      state.items.push(record.item);
+      head = record.next_id;
+    }
+    if !records.is_empty() {
+      return Err("clipboard history contains unreachable records".to_string());
+    }
+    *self
+      .checkpoint
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))? = Some(state.clone());
+    Ok(Some(state))
+  }
+
+  fn head_file(&self) -> EncryptedJsonFile {
+    EncryptedJsonFile::new(
+      self.key,
+      self.path.with_extension("head.enc"),
+      "clipboard history head",
+    )
+  }
+
+  fn settings_file(&self) -> EncryptedJsonFile {
+    EncryptedJsonFile::new(
+      self.key,
+      self.path.with_extension("settings.enc"),
+      "clipboard settings",
+    )
+  }
+  fn visual_directory(&self) -> PathBuf {
+    self.path.with_extension("visuals")
+  }
+  fn visual_path(&self, key: &str) -> PathBuf {
+    self.visual_directory().join(format!(
+      "{}.enc",
+      hex::encode(Sha256::digest(key.as_bytes()))
+    ))
+  }
+  fn visual_file_at(&self, path: PathBuf) -> EncryptedJsonFile {
+    let binding = path.file_stem().unwrap().to_string_lossy().into_owned();
+    EncryptedJsonFile::new(self.key, path, "clipboard visual")
+      .with_associated_data(format!("clipboard-visual:{binding}").into_bytes())
+  }
+
+  fn record_directory(&self) -> PathBuf {
+    self.path.with_extension("records")
+  }
+
+  fn record_file(&self, id: &str) -> EncryptedJsonFile {
+    self.record_file_at(self.record_path(id))
+  }
+
+  fn record_file_at(&self, path: PathBuf) -> EncryptedJsonFile {
+    let binding = path.file_stem().unwrap().to_string_lossy().into_owned();
+    EncryptedJsonFile::new(self.key, path, "clipboard record")
+      .with_associated_data(format!("clipboard-record:{binding}").into_bytes())
+  }
+
+  fn record_path(&self, id: &str) -> PathBuf {
+    // A digest keeps even malformed imported IDs inside the private directory.
+    self.record_directory().join(format!(
+      "{}.enc",
+      hex::encode(Sha256::digest(id.as_bytes()))
+    ))
+  }
+
+  #[cfg_attr(
+    not(test),
+    expect(
+      clippy::unused_self,
+      reason = "the receiver owns test-only encrypted-write accounting"
+    )
+  )]
+  fn write_record<T: Serialize>(
+    &self,
+    file: &EncryptedJsonFile,
+    value: &T,
+  ) -> Result<(), String> {
+    file.persist(value)?;
+    #[cfg(test)]
+    self.written_bytes.fetch_add(
+      fs::metadata(file.path()).unwrap().len() as usize,
+      std::sync::atomic::Ordering::Relaxed,
+    );
+    Ok(())
+  }
+
+  fn apply_pending(&self, manifest: &ClipboardRecordManifest) -> Result<(), String> {
+    if let Some(settings) = &manifest.settings {
+      self.write_record(&self.settings_file(), settings)?;
+    }
+    for visual in &manifest.updated_visuals {
+      self.write_record(&self.visual_file_at(self.visual_path(&visual.key)), visual)?;
+    }
+    for key in &manifest.removed_visuals {
+      match fs::remove_file(self.visual_path(key)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("clipboard visual removal failed: {error}")),
+      }
+    }
+    for record in &manifest.updated {
+      self.write_record(&self.record_file(record.item.id()), record)?;
+    }
+    if let Some(head) = &manifest.head {
+      self.write_record(&self.head_file(), head)?;
+    }
+    for id in &manifest.removed {
+      match fs::remove_file(self.record_path(id)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("clipboard record removal failed: {error}")),
+      }
+    }
+    if manifest.head.is_some()
+      || manifest.settings.is_some()
+      || !manifest.updated.is_empty()
+      || !manifest.removed.is_empty()
+      || !manifest.updated_visuals.is_empty()
+      || !manifest.removed_visuals.is_empty()
+    {
+      self.write_record(&self.history_file(), &ClipboardRecordManifest::default())?;
+    }
+    Ok(())
   }
 
   fn image_directory(&self) -> PathBuf {
@@ -380,7 +698,36 @@ impl ClipboardStore {
     Ok(())
   }
 
+  fn remove_records(path: &Path) -> Result<(), String> {
+    for directory in [
+      path.with_extension("records"),
+      path.with_extension("visuals"),
+    ] {
+      match fs::remove_dir_all(directory) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+          return Err(format!("clipboard record store removal failed: {error}"));
+        }
+      }
+    }
+    for metadata_path in [
+      path.with_extension("settings.enc"),
+      path.with_extension("head.enc"),
+    ] {
+      match fs::remove_file(metadata_path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+          return Err(format!("clipboard settings removal failed: {error}"));
+        }
+      }
+    }
+    Ok(())
+  }
+
   pub fn remove(path: &Path) -> Result<(), String> {
+    Self::remove_records(path)?;
     let image_directory = path.with_extension("images");
     match fs::remove_dir_all(image_directory) {
       Ok(()) => {}
@@ -397,7 +744,46 @@ impl ClipboardStore {
   }
 
   pub fn persist(&self, state: &PersistedClipboardState) -> Result<(), String> {
-    self.history_file().persist(state)
+    let mut checkpoint = state.clone();
+    for item in &mut checkpoint.items {
+      item.clear_image_payload();
+    }
+    let state = &checkpoint;
+    // Finish an acknowledged transaction before replacing its recovery record.
+    if let Some(manifest) = self.history_file().load::<ClipboardRecordManifest>()? {
+      self.apply_pending(&manifest)?;
+    }
+    if self
+      .checkpoint
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))?
+      .is_none()
+    {
+      self.load()?;
+    }
+    let previous = self
+      .checkpoint
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))?
+      .clone();
+    let manifest = plan_record_transaction(state, previous.as_ref());
+    self.write_record(&self.history_file(), &manifest)?;
+    // The atomic manifest write is the commit point. A failed materialization
+    // remains durable and is retried on load or before the next transaction.
+    if let Err(error) = self.apply_pending(&manifest) {
+      tracing::warn!(error = %error, "clipboard record transaction awaits recovery");
+    }
+    *self
+      .checkpoint
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard checkpoint lock is poisoned",
+      ))? = Some(state.clone());
+    Ok(())
   }
 }
 
@@ -406,9 +792,9 @@ mod tests {
   use super::*;
   use crate::clipboard::{
     ClipboardCaptureStatus, ClipboardItem, ClipboardItemRetentionClass,
-    ClipboardRetention, ClipboardSourceAppExclusion,
+    ClipboardRetention, ClipboardSourceApp, ClipboardSourceAppExclusion,
   };
-  use chrono::Utc;
+  use chrono::{DateTime, Utc};
 
   fn unique_path() -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -417,11 +803,8 @@ mod tests {
     ))
   }
 
-  #[test]
-  fn encrypted_store_round_trips_without_plaintext_on_disk() {
-    let path = unique_path();
-    let store = ClipboardStore::new([7; 32], path.clone());
-    let state = PersistedClipboardState {
+  fn stored_snapshot_fixture() -> PersistedClipboardState {
+    PersistedClipboardState {
       capture_status: ClipboardCaptureStatus::Active,
       groups: Vec::new(),
       items: vec![ClipboardItem::Text {
@@ -441,7 +824,414 @@ mod tests {
         name: "Private App".to_string(),
       }],
       source_app_visuals: Vec::new(),
+    }
+  }
+
+  #[test]
+  fn clipboard_capture_writes_are_bounded_by_the_changed_record() {
+    use std::sync::atomic::Ordering;
+    let mut measured = Vec::new();
+    for count in [5, 500] {
+      let path = unique_path();
+      let store = ClipboardStore::new([7; 32], path.clone());
+      let now = DateTime::parse_from_rfc3339("2026-10-21T12:00:00Z")
+        .unwrap()
+        .with_timezone(&Utc);
+      let mut state = PersistedClipboardState {
+        capture_status: ClipboardCaptureStatus::Active,
+        groups: Vec::new(),
+        items: (0..count)
+          .map(|index| ClipboardItem::Text {
+            copied_at: now - chrono::Duration::seconds(index),
+            group_id: None,
+            grouped_at: None,
+            id: format!("00000000-0000-0000-0000-{index:012}"),
+            name: None,
+            plain_text: format!("{index:04}{}", "x".repeat(1020)),
+            retention_class: ClipboardItemRetentionClass::History,
+            source_app: Some(ClipboardSourceApp {
+              identifier: Some(format!("com.example.app{:03}", index % 128)),
+              name: "Editor".to_string(),
+              page: None,
+              visual_key: None,
+            }),
+          })
+          .collect(),
+        pending_image_blob_ids: Default::default(),
+        retention: ClipboardRetention::Month,
+        source_app_exclusions: Vec::new(),
+        source_app_visuals: (0..count.min(128))
+          .map(|index| ClipboardSourceAppVisual {
+            color: None,
+            icon_data_url: Some(format!("data:image/png;base64,{}", "A".repeat(49120))),
+            key: format!("com.example.app{index:03}"),
+          })
+          .collect(),
+      };
+      store.persist(&state).unwrap();
+      store.written_bytes.store(0, Ordering::Relaxed);
+      let mut item = state.items[0].clone();
+      if let ClipboardItem::Text {
+        copied_at,
+        id,
+        plain_text,
+        ..
+      } = &mut item
+      {
+        *copied_at = now + chrono::Duration::seconds(1);
+        *id = "00000000-0000-0000-0000-999999999999".to_string();
+        *plain_text = "n".repeat(1024);
+      }
+      state.items.pop();
+      state.items.insert(0, item);
+      let baseline = unique_path();
+      EncryptedJsonFile::new([7; 32], baseline.clone(), "clipboard")
+        .persist(&state)
+        .unwrap();
+      let before = fs::metadata(&baseline).unwrap().len();
+      store.persist(&state).unwrap();
+      let after = store.written_bytes.load(Ordering::Relaxed);
+      tracing::debug!(
+        "clipboard capture at {count} items: before={before} after={after} encrypted bytes"
+      );
+      measured.push(after);
+      assert!(
+        after < 13000,
+        "capture rewrote unchanged history: {after} bytes"
+      );
+      let restarted = ClipboardStore::new([7; 32], path.clone())
+        .load()
+        .unwrap()
+        .unwrap();
+      assert_eq!(restarted, state);
+      for entry in fs::read_dir(store.record_directory()).unwrap() {
+        let raw = fs::read(entry.unwrap().path()).unwrap();
+        assert!(!raw.windows(64).any(|part| part == [b'n'; 64]));
+      }
+      state.source_app_visuals[0].icon_data_url =
+        Some(format!("data:image/png;base64,{}", "B".repeat(49120)));
+      store.written_bytes.store(0, Ordering::Relaxed);
+      store.persist(&state).unwrap();
+      let visual_bytes = store.written_bytes.load(Ordering::Relaxed);
+      tracing::debug!(count, visual_bytes, "clipboard icon change encrypted bytes");
+      assert!(
+        visual_bytes < 200000,
+        "capture rewrote unchanged app icons: {visual_bytes} bytes"
+      );
+      assert_eq!(
+        ClipboardStore::new([7; 32], path.clone())
+          .load()
+          .unwrap()
+          .unwrap(),
+        state
+      );
+      ClipboardStore::remove(&path).unwrap();
+      fs::remove_file(baseline).unwrap();
+    }
+    assert_eq!(
+      measured[0], measured[1],
+      "capture writes must be independent of history length"
+    );
+  }
+
+  #[test]
+  fn clipboard_committed_capture_recovers_after_record_write_interruption() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let mut state = PersistedClipboardState {
+      capture_status: ClipboardCaptureStatus::Active,
+      groups: Vec::new(),
+      items: vec![ClipboardItem::Text {
+        copied_at: Utc::now(),
+        group_id: None,
+        grouped_at: None,
+        id: "record".to_string(),
+        name: None,
+        plain_text: "capture".to_string(),
+        retention_class: ClipboardItemRetentionClass::History,
+        source_app: None,
+      }],
+      pending_image_blob_ids: Default::default(),
+      retention: ClipboardRetention::Month,
+      source_app_exclusions: Vec::new(),
+      source_app_visuals: Vec::new(),
     };
+    let mut initial = state.clone();
+    initial.items.clear();
+    store.persist(&initial).unwrap();
+    fs::write(store.record_directory(), b"blocked directory").unwrap();
+    store.persist(&state).unwrap();
+    assert!(store.load().unwrap_err().contains("directory"));
+    fs::remove_file(store.record_directory()).unwrap();
+    let recovered = ClipboardStore::new([7; 32], path.clone());
+    assert_eq!(recovered.load().unwrap().unwrap(), state);
+    assert!(
+      recovered
+        .history_file()
+        .load::<ClipboardRecordManifest>()
+        .unwrap()
+        .unwrap()
+        .updated
+        .is_empty()
+    );
+    let record_path = recovered.record_path("record");
+    fs::remove_file(&record_path).unwrap();
+    fs::create_dir(&record_path).unwrap();
+    state.items.clear();
+    recovered.persist(&state).unwrap();
+    assert_eq!(
+      recovered
+        .history_file()
+        .load::<ClipboardRecordManifest>()
+        .unwrap()
+        .unwrap()
+        .removed,
+      vec!["record"]
+    );
+    assert!(recovered.load().unwrap_err().contains("removal failed"));
+    fs::remove_dir(&record_path).unwrap();
+    assert_eq!(
+      ClipboardStore::new([7; 32], path.clone())
+        .load()
+        .unwrap()
+        .unwrap(),
+      state
+    );
+    assert!(!record_path.exists());
+    ClipboardStore::remove(&path).unwrap();
+  }
+
+  #[test]
+  fn clipboard_record_order_survives_equal_and_reversed_capture_times() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let now = DateTime::parse_from_rfc3339("2026-10-21T12:00:00Z")
+      .unwrap()
+      .with_timezone(&Utc);
+    let mut state = PersistedClipboardState {
+      capture_status: ClipboardCaptureStatus::Active,
+      groups: Vec::new(),
+      items: [0, 0, 5, -5]
+        .into_iter()
+        .enumerate()
+        .map(|(index, seconds)| ClipboardItem::Text {
+          copied_at: now + chrono::Duration::seconds(seconds),
+          id: format!("item-{index}"),
+          group_id: None,
+          grouped_at: None,
+          name: None,
+          plain_text: index.to_string(),
+          retention_class: ClipboardItemRetentionClass::History,
+          source_app: None,
+        })
+        .collect(),
+      pending_image_blob_ids: Default::default(),
+      retention: ClipboardRetention::Month,
+      source_app_exclusions: Vec::new(),
+      source_app_visuals: Vec::new(),
+    };
+    store.persist(&state).unwrap();
+    assert_eq!(
+      ClipboardStore::new([7; 32], path.clone())
+        .load()
+        .unwrap()
+        .unwrap(),
+      state
+    );
+    state.items.swap(1, 3);
+    store.persist(&state).unwrap();
+    assert_eq!(
+      ClipboardStore::new([7; 32], path.clone())
+        .load()
+        .unwrap()
+        .unwrap(),
+      state
+    );
+    state.items.remove(1);
+    store.persist(&state).unwrap();
+    assert_eq!(
+      ClipboardStore::new([7; 32], path.clone())
+        .load()
+        .unwrap()
+        .unwrap(),
+      state
+    );
+    ClipboardStore::remove(&path).unwrap();
+  }
+
+  #[test]
+  fn clipboard_startup_migration_preserves_encrypted_history_and_recovers_interruption()
+  {
+    for interrupted in [false, true] {
+      let path = unique_path();
+      let store = ClipboardStore::new([7; 32], path.clone());
+      let mut state = stored_snapshot_fixture();
+      let mut second = state.items[0].clone();
+      if let ClipboardItem::Text { id, plain_text, .. } = &mut second {
+        *id = "item-2".to_string();
+        *plain_text = "another captured item".to_string();
+      }
+      state.items.push(second);
+      let copied_at = state.items[0].copied_at();
+      let blob_id = uuid::Uuid::new_v4().to_string();
+      store
+        .persist_image(
+          &blob_id,
+          ClipboardImagePayload {
+            image: b"image",
+            preview: b"preview",
+          },
+        )
+        .unwrap();
+      state.items.push(ClipboardItem::FormattedText {
+        copied_at,
+        group_id: Some("group".to_string()),
+        grouped_at: Some(copied_at),
+        id: "formatted".to_string(),
+        name: None,
+        html: "<b>formatted</b>".to_string(),
+        plain_text: "formatted".to_string(),
+        rtf: Some("{\\rtf1 formatted}".to_string()),
+        retention_class: ClipboardItemRetentionClass::Kept,
+        source_app: Some(ClipboardSourceApp {
+          identifier: Some("com.example.private".to_string()),
+          name: "Private App".to_string(),
+          page: None,
+          visual_key: None,
+        }),
+      });
+      state.items.push(ClipboardItem::Image {
+        blob_id: blob_id.clone(),
+        byte_size: 5,
+        checksum: hex::encode(Sha256::digest(b"image")),
+        copied_at,
+        group_id: None,
+        grouped_at: None,
+        height: 2,
+        width: 2,
+        id: "image".to_string(),
+        name: None,
+        image: None,
+        preview: None,
+        retention_class: ClipboardItemRetentionClass::History,
+        source_app: None,
+      });
+      state.groups.push(crate::clipboard::ClipboardGroup {
+        id: "group".to_string(),
+        name: "Saved group".to_string(),
+        color: crate::clipboard::ClipboardGroupColor::parse("#aabbcc").unwrap(),
+      });
+      state.capture_status = ClipboardCaptureStatus::Paused;
+      state.retention = ClipboardRetention::Year;
+      state.source_app_visuals = vec![ClipboardSourceAppVisual {
+        key: "com.example.private".to_string(),
+        color: Some("#aabbcc".to_string()),
+        icon_data_url: Some("data:image/png;base64,QUJD".to_string()),
+      }];
+      state
+        .pending_image_blob_ids
+        .insert(uuid::Uuid::new_v4().to_string());
+      store.history_file().persist(&state).unwrap();
+      if interrupted {
+        fs::write(store.record_directory(), b"blocked directory").unwrap();
+        assert!(store.load().unwrap_err().contains("directory"));
+        let committed = store
+          .history_file()
+          .load::<ClipboardRecordManifest>()
+          .unwrap()
+          .unwrap();
+        assert_eq!(committed.updated.len(), state.items.len());
+        assert_eq!(committed.updated_visuals, state.source_app_visuals);
+        fs::remove_file(store.record_directory()).unwrap();
+      }
+      let restarted = ClipboardStore::new([7; 32], path.clone());
+      assert_eq!(restarted.load().unwrap().unwrap(), state);
+      assert_eq!(restarted.load_image(&blob_id, 5).unwrap(), b"image");
+      assert_eq!(
+        restarted.load_image_preview(&blob_id, 7).unwrap(),
+        b"preview"
+      );
+      let manifest = restarted
+        .history_file()
+        .load::<ClipboardRecordManifest>()
+        .unwrap()
+        .unwrap();
+      assert!(manifest.settings.is_none());
+      assert!(manifest.updated.is_empty());
+      // A repeated startup reads only the converted records and does not rewrite them.
+      restarted
+        .written_bytes
+        .store(0, std::sync::atomic::Ordering::Relaxed);
+      assert_eq!(restarted.load().unwrap().unwrap(), state);
+      assert_eq!(
+        restarted
+          .written_bytes
+          .load(std::sync::atomic::Ordering::Relaxed),
+        0
+      );
+      ClipboardStore::remove(&path).unwrap();
+    }
+  }
+
+  #[test]
+  fn missing_history_retires_unreachable_records_before_a_new_capture() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let previous = stored_snapshot_fixture();
+    store.persist(&previous).unwrap();
+    fs::remove_file(&path).unwrap();
+    let staged_image_directory = path.with_extension("images");
+    fs::create_dir_all(&staged_image_directory).unwrap();
+    let staged_image = staged_image_directory.join("new-capture.image.enc");
+    fs::write(&staged_image, b"staged capture").unwrap();
+
+    assert!(store.load().unwrap().is_none());
+    // Capturing an image writes its blob before the first history commit.
+    assert!(staged_image.exists());
+    assert!(!store.record_directory().exists());
+    assert!(!store.visual_directory().exists());
+    assert!(!store.settings_file().path().exists());
+    assert!(!store.head_file().path().exists());
+
+    let mut next = previous;
+    next.items.clear();
+    next.source_app_visuals.clear();
+    store.persist(&next).unwrap();
+    let loaded = ClipboardStore::new([7; 32], path.clone())
+      .load()
+      .unwrap()
+      .unwrap();
+    assert_eq!(loaded, next);
+    ClipboardStore::remove(&path).unwrap();
+  }
+
+  #[test]
+  fn missing_history_refuses_obstructed_record_directories() {
+    for extension in ["records", "visuals"] {
+      let path = unique_path();
+      let store = ClipboardStore::new([7; 32], path.clone());
+      let obstruction = path.with_extension(extension);
+      fs::write(&obstruction, b"blocked directory").unwrap();
+
+      assert!(
+        store
+          .load()
+          .unwrap_err()
+          .contains("clipboard record store removal failed")
+      );
+      assert!(!path.exists());
+      assert_eq!(fs::read(&obstruction).unwrap(), b"blocked directory");
+
+      fs::remove_file(obstruction).unwrap();
+      ClipboardStore::remove(&path).unwrap();
+    }
+  }
+
+  #[test]
+  fn encrypted_store_round_trips_without_plaintext_on_disk() {
+    let path = unique_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let state = stored_snapshot_fixture();
 
     store.persist(&state).unwrap();
     let raw = fs::read_to_string(&path).unwrap();

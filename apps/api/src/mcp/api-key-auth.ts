@@ -1,6 +1,10 @@
+import { API_KEY_TABLE_NAME, defaultKeyHasher } from "@better-auth/api-key";
+import type { ApiKey } from "@better-auth/api-key/types";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import type { AuthContext } from "better-auth";
 import * as v from "valibot";
 
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
@@ -84,23 +88,81 @@ type MachineApiKeyDependencies = {
   resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
 };
 
+type ReadMachineApiKeyDependencies = {
+  clock?: Pick<typeof Temporal.Now, "instant"> | undefined;
+  getAuthContext?:
+    | (() => Promise<{ adapter: Pick<AuthContext["adapter"], "findOne"> }>)
+    | undefined;
+};
+
+/** Read the plugin's stored digest without consuming or refilling any budget. */
+const readMachineApiKey = async (
+  credential: string,
+  {
+    getAuthContext = async () => getAuth().$context,
+    clock = Temporal.Now,
+  }: ReadMachineApiKeyDependencies,
+) => {
+  const { adapter } = await getAuthContext();
+  const key = await adapter.findOne<
+    Omit<ApiKey, "permissions"> & { permissions: string | null }
+  >({
+    model: API_KEY_TABLE_NAME,
+    where: [
+      { field: "key", value: await defaultKeyHasher(credential) },
+      { field: "configId", value: MACHINE_API_KEY_CONFIG_ID },
+    ],
+  });
+  if (
+    key === null ||
+    (key.expiresAt !== null &&
+      key.expiresAt.getTime() < clock.instant().epochMilliseconds)
+  ) {
+    return null;
+  }
+  return {
+    ...key,
+    permissions:
+      key.permissions === null ? null : safeJSONParse(key.permissions),
+    metadata:
+      typeof key.metadata === "string"
+        ? safeJSONParse(key.metadata)
+        : key.metadata,
+  };
+};
+
+type PresentedMachineApiKeyOptions = MachineApiKeyDependencies &
+  ReadMachineApiKeyDependencies & {
+    mode: McpMode | typeof KEY_SELF_INSPECTION;
+    metering: "metered" | "read_only";
+  };
+
 const resolvePresentedMachineApiKey = async (
   credential: string,
-  mode: McpMode | typeof KEY_SELF_INSPECTION,
   {
-    verifyApiKey = getAuth().api.verifyApiKey,
+    mode,
+    metering,
+    verifyApiKey,
+    getAuthContext,
+    clock,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     resolvePersonalPolicy = readPersonalApiKeyPolicy,
-  }: MachineApiKeyDependencies,
+  }: PresentedMachineApiKeyOptions,
 ): Promise<MachineApiKeyCredential> => {
-  const verification = await verifyApiKey({
-    body: {
-      // Scoping to this configuration means a key minted under any other
-      // configuration fails here rather than being accepted as a machine key.
-      configId: MACHINE_API_KEY_CONFIG_ID,
-      key: credential,
-    },
-  });
+  const verification =
+    metering === "metered"
+      ? await (verifyApiKey ?? getAuth().api.verifyApiKey)({
+          body: {
+            // Scoping to this configuration means a key minted under any other
+            // configuration fails here rather than being accepted as a machine key.
+            configId: MACHINE_API_KEY_CONFIG_ID,
+            key: credential,
+          },
+        })
+      : {
+          valid: true,
+          key: await readMachineApiKey(credential, { getAuthContext, clock }),
+        };
 
   if (!verification.valid || !verification.key) {
     throw rejectCredential();
@@ -222,20 +284,41 @@ export const resolveMachineApiKeyCredential = async (
     ...dependencies
   }: MachineApiKeyDependencies & { mode?: McpMode | undefined } = {},
 ): Promise<MachineApiKeyCredential> =>
-  await resolvePresentedMachineApiKey(credential, mode, dependencies);
+  await resolvePresentedMachineApiKey(credential, {
+    ...dependencies,
+    mode,
+    metering: "metered",
+  });
 
 /** The key's own record, for its holder; any audience binding is accepted. */
 export const resolveOwnMachineApiKeyCredential = async (
   credential: string,
   dependencies: MachineApiKeyDependencies = {},
 ): Promise<MachineApiKeyCredential> =>
-  await resolvePresentedMachineApiKey(
-    credential,
-    KEY_SELF_INSPECTION,
-    dependencies,
-  );
+  await resolvePresentedMachineApiKey(credential, {
+    ...dependencies,
+    mode: KEY_SELF_INSPECTION,
+    metering: "metered",
+  });
 
 /** MCP consumers need only the session; lifecycle observers also need expiry. */
 export const resolveMachineApiKeySession = async (
   ...args: Parameters<typeof resolveMachineApiKeyCredential>
 ) => (await resolveMachineApiKeyCredential(...args)).session;
+
+/** Recheck live credential authority without recording another API request. */
+export const revalidateMachineApiKeySession = async (
+  credential: string,
+  {
+    mode = "default",
+    ...dependencies
+  }: Omit<MachineApiKeyDependencies, "verifyApiKey"> &
+    ReadMachineApiKeyDependencies & { mode?: McpMode | undefined } = {},
+): Promise<McpSession> =>
+  (
+    await resolvePresentedMachineApiKey(credential, {
+      ...dependencies,
+      mode,
+      metering: "read_only",
+    })
+  ).session;

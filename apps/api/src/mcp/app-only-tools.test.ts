@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { chatScriptReadToolNames } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { readPresent } from "@/api/lib/errors/read-outcome";
 import {
   McpAuthenticationError,
   McpOrganizationAccessError,
@@ -15,33 +15,40 @@ import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
+  listMcpTools as listWireMcpTools,
 } from "@/api/mcp/tools";
+import { MCP_WEB_HANDOFF_TOOL } from "@/api/mcp/web-handoff-links";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const appOnlyNames = [
   "read_case_law_decision_blocks",
   "preview_cited_provision",
+  MCP_WEB_HANDOFF_TOOL,
 ] as const;
 
 const requestContext = () =>
-  asTestRaw<McpRequestContext>({
+  asTestRaw<AuthorizedMcpRequestContext>({
     organizationId: toSafeId<"organization">("org_test"),
     userId: toSafeId<"user">("user_test"),
     userEmail: "reader@example.test",
     memberRole: "owner",
     grantedScopes: ["stella:read"],
-    loadEnabledRegistrySlugs: async () => await Promise.resolve(Result.ok([])),
+    loadEnabledRegistrySlugs: async () =>
+      await Promise.resolve(readPresent([])),
   });
 
 type CallOptions = {
   toolName: string;
+  method?: "tools/call" | "tools/list";
   access:
-    | "granted"
-    | "missing-scope"
-    | "unauthenticated"
-    | "organization-denied";
+    "granted" | "missing-scope" | "unauthenticated" | "organization-denied";
 };
-const call = async ({ toolName, access }: CallOptions) => {
+const call = async ({
+  toolName,
+  access,
+  method = "tools/call",
+}: CallOptions) => {
   let calls = 0;
   const handler = createMcpHttpRequestHandler({
     actionSizePolicy: () => Result.ok(undefined),
@@ -69,7 +76,8 @@ const call = async ({ toolName, access }: CallOptions) => {
       calls += 1;
       return { content: [{ type: "text", text: "app data" }] };
     },
-    listMcpTools: async () => [],
+    listMcpTools: async (context, mode, scopes) =>
+      await listWireMcpTools(context, mode, scopes),
     listMcpResources: () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
@@ -93,8 +101,9 @@ const call = async ({ toolName, access }: CallOptions) => {
       body: JSON.stringify({
         jsonrpc: "2.0",
         id: 1,
-        method: "tools/call",
-        params: { name: toolName, arguments: {} },
+        method,
+        params:
+          method === "tools/call" ? { name: toolName, arguments: {} } : {},
       }),
     }),
   );
@@ -114,6 +123,7 @@ describe("app-only reader tool authorization", () => {
       mode: "default",
       scopes: ["stella:read"],
       audience: "model",
+      enabledRegistrySlugs: [],
     });
     const chat = chatScriptReadToolNames();
     for (const name of appOnlyNames) {
@@ -123,6 +133,29 @@ describe("app-only reader tool authorization", () => {
       expect(host.some((tool) => tool.name === name)).toBe(true);
       expect(model.some((tool) => tool.name === name)).toBe(false);
       expect(chat).not.toContain(name);
+    }
+  });
+
+  test("HTTP tools/list preserves app visibility for every app-only tool", async () => {
+    const { response, calls } = await call({
+      toolName: MCP_WEB_HANDOFF_TOOL,
+      access: "granted",
+      method: "tools/list",
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toBe(0);
+    const body = await readTestJson<{
+      result: {
+        tools: { name: string; _meta?: Record<string, unknown> }[];
+      };
+    }>(response);
+    for (const name of appOnlyNames) {
+      expect(
+        body.result.tools.find((tool) => tool.name === name),
+      ).toMatchObject({
+        name,
+        _meta: { ui: { visibility: ["app"] } },
+      });
     }
   });
 

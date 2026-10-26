@@ -14,8 +14,8 @@ import { corpusIndexUnknownAppendBarrierAt } from "@/api/lib/legal-search/corpus
 import { corpusProjectionAcceptedAppendCleanupFence } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
-  entityIdsForCorpusProjectionWorkScope,
   type CorpusProjectionScopedWorkOptions,
+  entityIdsForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   corpusIndexProjectionErasureIsPending,

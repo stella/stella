@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ENTITY_VIEW_COLUMNS,
@@ -10,12 +10,12 @@ import type { ConditionNode, Operand } from "@stll/conditions";
 
 import { entityViews } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { parseViewLayout, tViewLayoutSchema } from "@/api/lib/views-schema";
 import {
@@ -23,21 +23,29 @@ import {
   hasMultipleKindFilters,
 } from "@/api/lib/views/utils";
 
-export const entityViewParams = t.Object({ viewId: tSafeId("workspaceView") });
-const viewName = t.String({ minLength: 1, maxLength: 256, pattern: "\\S" });
-export const entityViewBody = t.Object({
+export const entityViewParams = v.object({
+  viewId: resourceIdSchema("workspaceView"),
+});
+const viewName = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(256),
+  v.regex(/\S/u),
+);
+export const entityViewBody = v.object({
   name: viewName,
   layout: tViewLayoutSchema,
 });
-export const entityViewUpdateBody = t.Object({
-  name: t.Optional(viewName),
-  layout: t.Optional(tViewLayoutSchema),
+export const entityViewUpdateBody = v.object({
+  name: v.optional(viewName),
+  layout: v.optional(tViewLayoutSchema),
 });
-export const entityViewReorderBody = t.Object({
-  viewIds: t.Array(tSafeId("workspaceView"), {
-    minItems: 1,
-    maxItems: LIMITS.viewsCount,
-  }),
+export const entityViewReorderBody = v.object({
+  viewIds: v.pipe(
+    v.array(resourceIdSchema("workspaceView")),
+    v.minLength(1),
+    v.maxLength(LIMITS.viewsCount),
+  ),
 });
 export const response = (row: typeof entityViews.$inferSelect) => ({
   version: 1 as const,

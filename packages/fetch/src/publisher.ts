@@ -15,8 +15,7 @@ const PRODUCT_TOKEN = "Stella";
 const PUBLISHER_USER_AGENT = `${PRODUCT_TOKEN}/1.0 (+https://stll.app)`;
 
 export type PublisherPolicy =
-  | { type: "obey" }
-  | { type: "licensed"; basis: string; evidenceUrl: string };
+  { type: "obey" } | { type: "licensed"; basis: string; evidenceUrl: string };
 export type PublisherRobotsDecision =
   | "allowed"
   | "allow_all_4xx"

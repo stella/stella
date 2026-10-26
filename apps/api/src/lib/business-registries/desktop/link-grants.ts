@@ -8,9 +8,9 @@ import {
 } from "@/api/lib/auth";
 import { DESKTOP_ACCOUNT_PERMISSION } from "@/api/lib/business-registries/desktop/config";
 import {
-  VerifiedDesktopDeviceProof,
   desktopProofRequestUrl,
   deviceProofRefusal,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -19,10 +19,10 @@ import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
-import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 
-const desktopLinkCredentials = v.strictObject({
+/** The one-time grant a desktop redeems to link an account. */
+export const desktopLinkCredentialsSchema = v.strictObject({
   correlationId: v.pipe(v.string(), v.uuid()),
   deviceJkt: v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{43}$/u)),
   verifier: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
@@ -31,7 +31,7 @@ const desktopLinkCredentials = v.strictObject({
 });
 
 export const parseDesktopLinkCredentials = (input: unknown) =>
-  v.safeParse(desktopLinkCredentials, input);
+  v.safeParse(desktopLinkCredentialsSchema, input);
 
 export const authorizeDesktopLinkGrant = async (
   input: unknown,
@@ -107,11 +107,5 @@ export const authorizeDesktopLinkGrant = async (
       }),
     );
   }
-  return Result.ok({
-    ...identity,
-    scopedDb: createRootScopedDb({
-      ...identity,
-      workspaceIds: [],
-    }),
-  });
+  return Result.ok(identity);
 };

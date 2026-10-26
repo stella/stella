@@ -18,7 +18,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -38,9 +38,9 @@ import {
   DEADLINE_TEXT_MIN_CHARS,
   deadlineDedupeKey,
   deadlineExtractionSchema,
+  type DeadlineScanAdmission,
   deadlineScanAdmission,
   deadlineScoutFailureStatus,
-  type DeadlineScanAdmission,
   deadlineSeverity,
   filterDeadlines,
 } from "@/api/lib/scouts/document-deadlines.logic";

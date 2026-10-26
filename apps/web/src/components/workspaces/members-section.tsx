@@ -8,10 +8,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -166,7 +166,10 @@ const MemberRow = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemberRow:failure",
+        scope: { type: "handler", handlerId: "MemberRow:failure" },
+      });
     },
   });
 

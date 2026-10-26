@@ -50,7 +50,12 @@ describe("inbound acceptance", () => {
   test("membership, authentication, and scan approval are all necessary", () => {
     for (const memberAllowed of [true, false]) {
       for (const authenticated of [true, false]) {
-        for (const scan of ["pass", "fail", "unavailable"] as const) {
+        for (const scan of [
+          "pass",
+          "fail",
+          "inconclusive",
+          "unavailable",
+        ] as const) {
           const membership: SenderMembership = memberAllowed
             ? {
                 status: "allowed",

@@ -45,8 +45,8 @@ import {
   type TemplateDateFormat,
 } from "@/components/templates/template-date-format";
 import {
-  isInputType,
   type InputType,
+  isInputType,
   type LookupRegistry,
 } from "@/components/templates/template-field-manifest";
 import Tooltip from "@/components/tooltip";
@@ -810,7 +810,7 @@ type BindingCatalogData = Exclude<
 
 /** One pickable source in the binding catalog (the matter's client, a party, the
  *  matter, an attorney, or the firm), with its bindable fields and any extra
- *  selector (party `roles`, attorney `refs`). Derived from the Eden response so
+ *  selector (party `roles`, attorney `refs`). Derived from the API response so
  *  it tracks the backend catalog. */
 type CatalogSource = BindingCatalogData["sources"][number];
 

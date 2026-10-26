@@ -1,0 +1,14 @@
+{
+  "identifier": "accessibility-guide",
+  "description": "Panel docked under System Settings while Accessibility is turned on",
+  "windows": ["accessibility-guide"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-account-record-use",
+    "allow-desktop-report-error",
+    "allow-accessibility-guide-get-state"
+  ]
+}

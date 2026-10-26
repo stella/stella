@@ -117,7 +117,9 @@ describe("quarantine exclude guard", () => {
     expect(result.errors).toEqual([]);
   });
 
-  test("rejects an expired container quarantine exception", () => {
+  // scripts/dated-waivers.ts owns the expiry and scopes it to changes that
+  // touch the exception, so the clock alone never turns this guard red.
+  test("leaves an elapsed container quarantine exception to the dated waiver check", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig(
         '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
@@ -127,12 +129,10 @@ describe("quarantine exclude guard", () => {
         "docker-compose.yml":
           "# release-age-quarantine-exception: 2026-08-13T09:51:27.645Z",
       },
-      now: new Date("2026-08-13T09:51:27.645Z"),
+      now: new Date("2099-01-01T00:00:00.000Z"),
     });
 
-    expect(result.errors).toContain(
-      "docker-compose.yml:1 release-age quarantine exception expired at 2026-08-13T09:51:27.645Z",
-    );
+    expect(result.errors).toEqual([]);
   });
 
   test("rejects every undated first-party exclusion", () => {
@@ -221,13 +221,15 @@ minimumReleaseAgeExcludes = [
     expect(result.activeTemporaryCount).toBe(1);
   });
 
+  // The prune workflow removes the entry, the lockfile release-age guard
+  // stops exempting it, and scripts/dated-waivers.ts inventories it; none of
+  // them fails an unrelated change, and neither does this guard.
   test.each([
     "2026-08-06T21:35:30.036Z",
-    "2026-08-06T21:35:30.037Z",
-    "2026-08-07T21:35:30.035Z",
     "2026-08-07T21:35:30.036Z",
+    "2099-01-01T00:00:00.000Z",
   ])(
-    "fails exactly at expiry and throughout the former notice window: %s",
+    "leaves an elapsed temporary exclusion to its expiry owners: %s",
     (now) => {
       const result = checkQuarantineExcludes({
         bunfig: createBunfig(
@@ -236,25 +238,10 @@ minimumReleaseAgeExcludes = [
         lockfile,
         now: new Date(now),
       });
-      expect(result.errors.at(0)).toContain(
-        'temporary quarantine exclude "better-result" expired at 2026-08-06T21:35:30.036Z and is still here',
-      );
-      expect(result.errors.at(0)).toContain(
-        "bun scripts/check-stll-quarantine-excludes.ts --prune",
-      );
+      expect(result.errors).toEqual([]);
+      expect(result.activeTemporaryCount).toBe(1);
     },
   );
-
-  test("stays silent immediately before expiry", () => {
-    const result = checkQuarantineExcludes({
-      bunfig: createBunfig(
-        '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
-      ),
-      lockfile,
-      now: new Date("2026-08-06T21:35:30.035Z"),
-    });
-    expect(result.errors).toEqual([]);
-  });
 
   test("rejects malformed expiry annotations", () => {
     const result = checkQuarantineExcludes({

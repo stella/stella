@@ -4,11 +4,14 @@ import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
   type ActTitleSpec,
+  ANCHORED_SUBDIVISION_LEVELS,
   formatWorkIdentifier,
   type JurisdictionProfile,
+  SECTION_UNITS,
   type SectionUnit,
   type WorkIdentifier,
 } from "./provision-citation-profile";
+import { provisionCitationProfileFor } from "./provision-citation-profiles";
 
 /**
  * The provision a caller asks about, read from how a lawyer types it:
@@ -428,32 +431,35 @@ const readNamedAct = (
     : { kind: "works", works, units };
 };
 
+type ProvisionPath = Pick<
+  ResolvedProvisionCitation,
+  "unit" | "section" | "sectionSuffix" | "subsection" | "letter" | "point"
+>;
+
 const renderCitation = (
   profile: JurisdictionProfile,
-  resolved: Omit<ResolvedProvisionCitation, "status" | "anchor" | "citation">,
+  provision: ProvisionPath,
+  workIdentifier: string,
 ) => {
   const terms = profile.citationTerms;
   const parts = [
-    `${resolved.unit === "article" ? terms.article : terms.section} ${String(resolved.section)}${resolved.sectionSuffix ?? ""}`,
+    `${provision.unit === "article" ? terms.article : terms.section} ${String(provision.section)}${provision.sectionSuffix ?? ""}`,
   ];
-  if (resolved.subsection !== null) {
-    parts.push(`${terms.subsection} ${resolved.subsection}`);
+  if (provision.subsection !== null) {
+    parts.push(`${terms.subsection} ${provision.subsection}`);
   }
-  if (resolved.letter !== null) {
-    parts.push(`${terms.letter} ${resolved.letter})`);
+  if (provision.letter !== null) {
+    parts.push(`${terms.letter} ${provision.letter})`);
   }
-  if (resolved.point !== null) {
-    parts.push(`${terms.point} ${resolved.point}`);
+  if (provision.point !== null) {
+    parts.push(`${terms.point} ${provision.point}`);
   }
-  return `${parts.join(" ")} ${resolved.workIdentifier}`;
+  return `${parts.join(" ")} ${workIdentifier}`;
 };
 
 const renderAnchor = (
   profile: JurisdictionProfile,
-  resolved: Pick<
-    ResolvedProvisionCitation,
-    "unit" | "section" | "sectionSuffix" | "subsection" | "letter" | "point"
-  >,
+  resolved: ProvisionPath,
 ) => {
   const { render, join } = profile.anchor;
   const segments = [
@@ -471,6 +477,74 @@ const renderAnchor = (
     segments.push(render.point(resolved.point));
   }
   return segments.join(join);
+};
+
+const SECTION_DESIGNATOR = /^(?<number>\d+)(?<suffix>\p{Ll}*)$/u;
+
+/**
+ * The provision path a publisher anchor names, read through the same scheme
+ * that minted it. Only an anchor that renders back to itself is read, so
+ * anything else (a heading id, a reordered path) names no provision.
+ */
+const parseAnchor = (
+  profile: JurisdictionProfile,
+  anchor: string,
+): ProvisionPath | null => {
+  const { render, join } = profile.anchor;
+  const [head, ...rest] = anchor.split(join);
+  const unit = SECTION_UNITS.find((candidate) =>
+    head?.startsWith(render[candidate]("")),
+  );
+  if (head === undefined || unit === undefined) {
+    return null;
+  }
+  const designator = SECTION_DESIGNATOR.exec(
+    head.slice(render[unit]("").length),
+  )?.groups;
+  if (designator?.["number"] === undefined) {
+    return null;
+  }
+  const subdivisions = Object.fromEntries(
+    ANCHORED_SUBDIVISION_LEVELS.map((level) => {
+      const prefix = render[level]("");
+      const segment = rest.find((part) => part.startsWith(prefix));
+      return [level, segment?.slice(prefix.length) ?? null] as const;
+    }),
+  );
+  const path: ProvisionPath = {
+    unit,
+    section: Number(designator["number"]),
+    sectionSuffix:
+      designator["suffix"] === undefined || designator["suffix"] === ""
+        ? null
+        : designator["suffix"],
+    subsection: subdivisions["subsection"] ?? null,
+    letter: subdivisions["letter"] ?? null,
+    point: subdivisions["point"] ?? null,
+  };
+  return renderAnchor(profile, path) === anchor ? path : null;
+};
+
+/**
+ * How a publisher anchor reads printed (`par_106-odst_4` in `262/2006 Sb.` is
+ * `§ 106 odst. 4 262/2006 Sb.`), in the spelling a resolved citation echoes.
+ * Null where the jurisdiction has no profile, or the anchor names no
+ * provision under it.
+ */
+export const anchorProvisionCitation = ({
+  anchor,
+  jurisdiction,
+  workIdentifier,
+}: {
+  anchor: string;
+  jurisdiction: string;
+  workIdentifier: string;
+}): string | null => {
+  const profile = provisionCitationProfileFor(jurisdiction);
+  const path = profile === null ? null : parseAnchor(profile, anchor);
+  return profile === null || path === null
+    ? null
+    : renderCitation(profile, path, workIdentifier);
 };
 
 const DATE_PATTERN = /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/gu;
@@ -744,6 +818,6 @@ export const resolveProvisionCitation = ({
     status: "resolved",
     ...resolved,
     anchor: renderAnchor(profile, resolved),
-    citation: renderCitation(profile, resolved),
+    citation: renderCitation(profile, resolved, resolved.workIdentifier),
   };
 };

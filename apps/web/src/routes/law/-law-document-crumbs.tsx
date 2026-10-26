@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { CourtName } from "@stll/decision-reader/court-name";
-import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-identity";
+import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-title";
 import { BidiText } from "@stll/ui/bidi-text";
 import {
   BreadcrumbEllipsis,
@@ -21,6 +21,7 @@ import {
   resolveStatuteDisplayStatus,
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
+import { useFormatter } from "@/i18n/formatting-context";
 
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 

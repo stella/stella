@@ -4,12 +4,12 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
-  type AggregateLockBaselineRow,
-  type AggregateLockRekey,
-  aggregateLockSourceIncluded,
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
+  type AggregateLockBaselineRow,
+  type AggregateLockRekey,
   aggregateLockSites,
+  aggregateLockSourceIncluded,
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
 import { BASELINE_PATHS } from "./baseline-paths";
 

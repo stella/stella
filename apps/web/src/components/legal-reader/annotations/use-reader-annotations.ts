@@ -1,10 +1,9 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -13,6 +12,7 @@ import type {
   UpdateAnnotationInput,
 } from "@/components/legal-reader/annotations/annotation-types";
 import {
+  claimGuestAnnotations,
   createGuestAnnotation,
   deleteGuestAnnotation,
   EMPTY_GUEST_ANNOTATION_STORE,
@@ -20,10 +20,12 @@ import {
   guestAnnotationRows,
   guestAnnotationsOnTarget,
   readGuestAnnotationStore,
-  removeGuestAnnotation,
   updateGuestAnnotation,
+  uploadClaimedGuestAnnotations,
   writeGuestAnnotationStore,
 } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
+import type { GuestAnnotation } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
+import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
 import { readerAnnotationTargetKey } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import {
@@ -31,35 +33,73 @@ import {
   readerAnnotationsOptions,
 } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { useOptimisticAnnotationMutations } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
+import { useReaderAnnotationHistory } from "@/components/legal-reader/annotations/use-reader-annotation-history";
+import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotation-history";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useSessionStorage } from "@/hooks/use-session-storage";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
+import {
+  isCurrentStorageOwner,
+  storageOwner,
+} from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 
-/** A mark not yet acknowledged by the server, keyed so it can be told apart. */
-const PENDING_ID_PREFIX = "pending:";
-
-/** A mark the server has not stored yet cannot be changed or removed. */
-export const isPendingAnnotationId = (id: string): boolean =>
-  id.startsWith(PENDING_ID_PREFIX);
-
 /** Guest migration is bounded so signing in never opens a request flood. */
 const GUEST_ANNOTATION_MIGRATION_CONCURRENCY = 4;
 
-/** The three things a reader does to a mark, wherever the mark is kept. */
-export type ReaderAnnotationController = {
-  create: (input: CreateAnnotationInput) => unknown;
-  remove: (id: string) => unknown;
-  update: (input: UpdateAnnotationInput) => unknown;
+/** Posts one guest mark to the signed-in account under its own request id. */
+const uploadGuestAnnotation = async (
+  item: GuestAnnotation,
+): Promise<Result<void, Error>> =>
+  await Result.tryPromise(async () => {
+    const response = await api.reader.annotations.post({
+      ...item.input,
+      requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
+      targetId: item.targetId,
+      targetType: item.targetType,
+    });
+    unwrapApiResponse(response);
+  });
+
+/** One failure per mark, grouped by the kind of document it was made on. */
+const captureGuestMigrationFailure = (
+  item: GuestAnnotation,
+  error: Error,
+): void => {
+  getAnalytics().captureError(error, {
+    fingerprintKey: "useReaderAnnotations.operation:failure",
+    scope: {
+      type: "handler",
+      handlerId: `reader-annotations.guest.${item.targetType}.migrate`,
+    },
+    context: {
+      operation: "legal-reader.guest-annotation.migrate",
+      type: "detached",
+    },
+  });
+};
+
+/** The tab could not claim the guest marks for the signed-in account. */
+const captureGuestClaimFailure = (error: Error): void => {
+  getAnalytics().captureError(error, {
+    fingerprintKey: "useReaderAnnotations.claim:failure",
+    scope: { type: "handler", handlerId: "reader-annotations.guest.claim" },
+    context: {
+      operation: "legal-reader.guest-annotation.migrate",
+      type: "detached",
+    },
+  });
 };
 
 type ReaderAnnotations = {
@@ -68,83 +108,6 @@ type ReaderAnnotations = {
   /** Marks this tab holds that no account owns yet. */
   guestCount: number;
   mode: "authenticated" | "guest";
-};
-
-/**
- * The rows a new mark will have once stored, so the text shows it the moment
- * the reader picks a colour. One row per paragraph, under one group when
- * there are several, as the server lays them out.
- */
-const pendingRows = ({
-  author,
-  input,
-  stamp,
-}: {
-  author: { id: string; image: string | null; name: string | null };
-  input: CreateAnnotationInput;
-  stamp: number;
-}): ReaderAnnotation[] => {
-  const groupId =
-    input.spans.length > 1 ? `${PENDING_ID_PREFIX}${stamp}` : null;
-  const now = Temporal.Now.instant().toString();
-  return input.spans.map((span, index) => ({
-    authorId: author.id,
-    authorImage: author.image,
-    authorName: author.name ?? "",
-    blockAnchorId: span.blockAnchorId,
-    body: input.kind === "comment" && index === 0 ? input.body : null,
-    color: input.kind === "highlight" ? input.color : null,
-    createdAt: now,
-    endOffset: span.endOffset,
-    groupId,
-    id: toSafeId<"legalReaderAnnotation">(
-      `${PENDING_ID_PREFIX}${stamp}:${index}`,
-    ),
-    kind: input.kind,
-    mine: true,
-    quote: span.quote,
-    startOffset: span.startOffset,
-    style: input.kind === "highlight" ? input.style : null,
-    updatedAt: now,
-    visibility: input.visibility,
-  }));
-};
-
-/** The rows one change reaches: the whole group of the named row. */
-const rowsOfSame = (
-  rows: readonly ReaderAnnotation[],
-  id: string,
-): ((row: ReaderAnnotation) => boolean) => {
-  const target = rows.find((row) => row.id === id);
-  return (row) =>
-    row.id === id ||
-    (target?.groupId !== null &&
-      target !== undefined &&
-      row.groupId === target.groupId);
-};
-
-const applyChange = (
-  row: ReaderAnnotation,
-  change: UpdateAnnotationInput,
-): ReaderAnnotation => {
-  switch (change.change) {
-    case "body": {
-      return row.body === null ? row : { ...row, body: change.body };
-    }
-    case "color": {
-      return { ...row, color: change.color };
-    }
-    case "style": {
-      return { ...row, style: change.style };
-    }
-    case "visibility": {
-      return { ...row, visibility: change.visibility };
-    }
-    default: {
-      change satisfies never;
-      return panic(`Unhandled change: ${String(change)}`);
-    }
-  }
 };
 
 /**
@@ -163,7 +126,6 @@ export const useReaderAnnotations = (
   const user = useMaybeAuthenticatedUser();
   const storage = useSessionStorage();
   const [localStore, setStore] = useState(EMPTY_GUEST_ANNOTATION_STORE);
-  const pendingSequence = useRef(0);
   const targetKey = readerAnnotationTargetKey(target);
 
   const annotationsQuery = readerAnnotationsOptions({
@@ -174,94 +136,32 @@ export const useReaderAnnotations = (
   const queryKey = annotationsQuery.queryKey;
   const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, `useReaderAnnotations.${target.type}:query`);
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  const patchCache = async (
-    patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
-  ): Promise<{ previous: ReaderAnnotation[] | undefined }> => {
-    await queryClient.cancelQueries({ queryKey });
-    const previous = queryClient.getQueryData(queryKey);
-    queryClient.setQueryData(queryKey, (rows) => patch(optionalArray(rows)));
-    return { previous };
-  };
-
-  const settle = {
-    onError: (
-      error: unknown,
-      _input: unknown,
-      context: { previous: ReaderAnnotation[] | undefined } | undefined,
-    ) => {
-      if (context !== undefined) {
-        queryClient.setQueryData(queryKey, context.previous);
-      }
-      getAnalytics().captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey });
-    },
-  };
-
-  const create = useMutation({
-    mutationFn: async (input: CreateAnnotationInput) => {
+  const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: `reader-annotations.${target.type}`,
+    create: async (input: CreateAnnotationInput) => {
       const response = await api.reader.annotations.post({
         ...input,
         ...targetKey,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
-    onMutate: async (input) => {
-      // Tells pending marks apart within one reader; only ever advanced on a
-      // click, never while rendering.
-      pendingSequence.current += 1;
-      const stamp = pendingSequence.current;
-      return await patchCache((rows) => [
-        ...rows,
-        ...pendingRows({
-          author: {
-            id: user?.id ?? "",
-            image: user?.image ?? null,
-            name: user?.name ?? null,
-          },
-          input,
-          stamp,
-        }),
-      ]);
-    },
-    ...settle,
-  });
-
-  const update = useMutation({
-    mutationFn: async ({ id, ...change }: UpdateAnnotationInput) => {
-      const response = await api.reader
-        .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
-        .patch(change);
-      return unwrapEden(response);
-    },
-    onMutate: async (input) =>
-      await patchCache((rows) => {
-        const touched = rowsOfSame(rows, input.id);
-        return rows.map((row) =>
-          touched(row) ? applyChange(row, input) : row,
-        );
-      }),
-    ...settle,
-  });
-
-  const remove = useMutation({
-    mutationFn: async (id: string) => {
+    pendingInput: (input) => input,
+    queryKey,
+    remove: async (id: string) => {
       const response = await api.reader
         .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
         .delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
-    onMutate: async (id) =>
-      await patchCache((rows) => {
-        const touched = rowsOfSame(rows, id);
-        return rows.filter((row) => !touched(row));
-      }),
-    ...settle,
+    update: async ({ id, ...change }: UpdateAnnotationInput) => {
+      const response = await api.reader
+        .annotations({ annotationId: toSafeId<"legalReaderAnnotation">(id) })
+        .patch(change);
+      return unwrapApiResponse(response);
+    },
   });
 
   // Whatever this tab still holds from before the reader had an account.
@@ -275,43 +175,44 @@ export const useReaderAnnotations = (
     if (!signedIn || storage === null) {
       return;
     }
-    const store = readGuestAnnotationStore(storage);
-    if (store.items.length === 0) {
+    const migrationOwner = storageOwner();
+    if (migrationOwner.kind !== "user") {
+      return;
+    }
+    // Claimed under this account first: a sign-out mid-upload then leaves the
+    // rest waiting for its next sign-in in this tab.
+    const claimed = claimGuestAnnotations(storage, migrationOwner);
+    if (Result.isError(claimed)) {
+      captureGuestClaimFailure(claimed.error);
+      notifyUserError(
+        claimed.error,
+        t("legalReader.annotations.guestMigrationFailed"),
+      );
+      return;
+    }
+    const { items } = claimed.value;
+    if (items.length === 0) {
       return;
     }
     detached(
       (async () => {
-        const results = await mapWithConcurrency({
-          items: store.items,
+        const results = await uploadClaimedGuestAnnotations({
+          isCurrentOwner: () => isCurrentStorageOwner(migrationOwner),
+          items,
           limit: GUEST_ANNOTATION_MIGRATION_CONCURRENCY,
-          operation: async (item) => {
-            const migrated = await Result.tryPromise(async () => {
-              const response = await api.reader.annotations.post({
-                ...item.input,
-                requestId: toSafeId<"legalReaderAnnotation">(item.requestId),
-                targetId: item.targetId,
-                targetType: item.targetType,
-              });
-              unwrapEden(response);
-            });
-            if (Result.isError(migrated)) {
-              getAnalytics().captureError(migrated.error, {
-                operation: "legal-reader.guest-annotation.migrate",
-                type: "detached",
-              });
-              return migrated;
-            }
-            const removed = removeGuestAnnotation(storage, item.requestId);
-            if (Result.isError(removed)) {
-              getAnalytics().captureError(removed.error, {
-                operation: "legal-reader.guest-annotation.migrate",
-                type: "detached",
-              });
-              return removed;
-            }
-            return Result.ok(undefined);
-          },
+          owner: migrationOwner,
+          storage,
+          upload: uploadGuestAnnotation,
         });
+        for (const [index, result] of results.entries()) {
+          const item = items[index];
+          if (Result.isError(result) && item !== undefined) {
+            captureGuestMigrationFailure(item, result.error);
+          }
+        }
+        if (!isCurrentStorageOwner(migrationOwner)) {
+          return;
+        }
         setStore(readGuestAnnotationStore(storage));
         await queryClient.invalidateQueries({
           queryKey: readerAnnotationKeys.all,
@@ -333,44 +234,92 @@ export const useReaderAnnotations = (
     );
   }, [queryClient, signedIn, storage, t]);
 
+  // The tab's marks as they are now, not as this render saw them: a step
+  // taken right after another reads what that one left.
+  const currentGuestStore = () =>
+    storage === null ? guestStore : readGuestAnnotationStore(storage);
+
+  const commit = (
+    next: typeof guestStore,
+    action: GuestAnnotationAction,
+  ): Result<void, Error> => {
+    const persisted = persistGuestAnnotationStore({
+      action,
+      next,
+      storage,
+      unavailableMessage: t("legalReader.annotations.guestStorageUnavailable"),
+      targetType: target.type,
+    });
+    if (Result.isOk(persisted)) {
+      setStore(next);
+    }
+    return persisted;
+  };
+
+  const guestWrites: ReaderAnnotationWrites = {
+    create: async (input: CreateAnnotationInput) => {
+      const before = currentGuestStore();
+      if (before.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
+        notifyUserError(
+          undefined,
+          t("legalReader.annotations.guestLimitReached", {
+            count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
+          }),
+        );
+        return Result.err(
+          new ClientOperationError({
+            action: "create-guest-reader-annotation",
+            message: "Guest annotation limit reached",
+          }),
+        );
+      }
+      const next = createGuestAnnotation({
+        input,
+        newId: createUuid,
+        now: new Date(Temporal.Now.instant().epochMilliseconds),
+        store: before,
+        target: targetKey,
+      });
+      const created = optionalArray(next.items.at(-1)?.rowIds);
+      return await Promise.resolve(commit(next, "create").map(() => created));
+    },
+    remove: async (id: string) =>
+      await Promise.resolve(
+        commit(deleteGuestAnnotation(currentGuestStore(), id), "delete"),
+      ),
+    rows: () =>
+      guestAnnotationRows({
+        authorName: t("legalReader.annotations.guestAuthor"),
+        store: currentGuestStore(),
+        target: targetKey,
+      }),
+    update: async (input: UpdateAnnotationInput) =>
+      await Promise.resolve(
+        commit(updateGuestAnnotation(currentGuestStore(), input), "update"),
+      ),
+  };
+
+  const controller = useReaderAnnotationHistory({
+    scope: readerAnnotationHistoryScope(user, targetKey),
+    writes:
+      user === null
+        ? guestWrites
+        : accountAnnotationWrites({
+            mutations: { create, remove, update },
+            // The cache, not this render: it already holds what a write just
+            // stored.
+            rows: () => optionalArray(queryClient.getQueryData(queryKey)),
+          }),
+  });
+
   if (user !== null) {
     return {
       annotations: optionalArray(data),
-      controller: {
-        create: create.mutateAsync,
-        remove: remove.mutateAsync,
-        update: update.mutateAsync,
-      },
+      controller,
       guestCount: 0,
       mode: "authenticated",
     };
   }
-
-  const commit = (
-    next: typeof guestStore,
-    action: "create" | "delete" | "update",
-  ) => {
-    if (storage === null) {
-      notifyUserError(
-        undefined,
-        t("legalReader.annotations.guestStorageUnavailable"),
-      );
-      return;
-    }
-    const stored = writeGuestAnnotationStore(storage, next);
-    if (Result.isError(stored)) {
-      getAnalytics().captureError(stored.error, {
-        operation: `legal-reader.guest-annotation.${action}`,
-        type: "detached",
-      });
-      notifyUserError(
-        stored.error,
-        t("legalReader.annotations.guestStorageUnavailable"),
-      );
-      return;
-    }
-    setStore(next);
-  };
 
   return {
     annotations: guestAnnotationRows({
@@ -378,36 +327,103 @@ export const useReaderAnnotations = (
       store: guestStore,
       target: targetKey,
     }),
-    controller: {
-      create: (input: CreateAnnotationInput) => {
-        if (guestStore.items.length >= GUEST_ANNOTATIONS_MAX_ITEMS) {
-          notifyUserError(
-            undefined,
-            t("legalReader.annotations.guestLimitReached", {
-              count: String(GUEST_ANNOTATIONS_MAX_ITEMS),
-            }),
-          );
-          return;
-        }
-        commit(
-          createGuestAnnotation({
-            input,
-            newId: createUuid,
-            now: new Date(Temporal.Now.instant().epochMilliseconds),
-            store: guestStore,
-            target: targetKey,
-          }),
-          "create",
-        );
-      },
-      remove: (id: string) => {
-        commit(deleteGuestAnnotation(guestStore, id), "delete");
-      },
-      update: (input: UpdateAnnotationInput) => {
-        commit(updateGuestAnnotation(guestStore, input), "update");
-      },
-    },
+    controller,
     guestCount: guestAnnotationsOnTarget(guestStore, targetKey).length,
     mode: "guest",
   };
 };
+
+type HistoryScopeUser = {
+  id: string;
+  activeOrganizationId?: string | null | undefined;
+};
+
+/** Steps belong to one document under one account: signing in, switching
+ * organization or opening another document starts a fresh history. */
+function readerAnnotationHistoryScope(
+  user: HistoryScopeUser | null,
+  targetKey: { targetId: string; targetType: string },
+): string {
+  return [
+    user?.id ?? "guest",
+    user?.activeOrganizationId ?? "",
+    targetKey.targetType,
+    targetKey.targetId,
+  ].join(":");
+}
+
+type AccountAnnotationWritesOptions = {
+  mutations: {
+    create: (
+      input: CreateAnnotationInput,
+    ) => Promise<{ ids: readonly string[] }>;
+    remove: (id: string) => Promise<unknown>;
+    update: (input: UpdateAnnotationInput) => Promise<unknown>;
+  };
+  rows: () => readonly ReaderAnnotation[];
+};
+
+/** A failed write has already rolled the cache back and told the reader why
+ * (the mutations' error handler); the result only says whether it held. */
+function accountAnnotationWrites({
+  mutations: { create, remove, update },
+  rows,
+}: AccountAnnotationWritesOptions): ReaderAnnotationWrites {
+  return {
+    create: async (input) =>
+      (await Result.tryPromise(async () => create(input))).map(
+        (created) => created.ids,
+      ),
+    remove: async (id) =>
+      (await Result.tryPromise(async () => remove(id))).map(() => undefined),
+    rows,
+    update: async (input) =>
+      (await Result.tryPromise(async () => update(input))).map(() => undefined),
+  };
+}
+
+type GuestAnnotationAction = "create" | "delete" | "update";
+
+type PersistGuestAnnotationStoreOptions = {
+  action: GuestAnnotationAction;
+  targetType: ReaderAnnotationTarget["type"];
+  next: Parameters<typeof writeGuestAnnotationStore>[1];
+  storage: Parameters<typeof writeGuestAnnotationStore>[0] | null;
+  unavailableMessage: string;
+};
+
+/** Writes the tab's marks, telling the reader when the tab cannot keep them. */
+function persistGuestAnnotationStore({
+  action,
+  targetType,
+  next,
+  storage,
+  unavailableMessage,
+}: PersistGuestAnnotationStoreOptions): Result<void, Error> {
+  if (storage === null) {
+    notifyUserError(undefined, unavailableMessage);
+    return Result.err(
+      new ClientOperationError({
+        action: `${action}-guest-reader-annotation`,
+        message: "Guest annotation storage is unavailable",
+      }),
+    );
+  }
+  const stored = writeGuestAnnotationStore(storage, next);
+  if (Result.isError(stored)) {
+    getAnalytics().captureError(stored.error, {
+      fingerprintKey: "useReaderAnnotations.commit:failure",
+      scope: {
+        type: "handler",
+        handlerId: `reader-annotations.guest.${targetType}.${action}`,
+      },
+      context: {
+        operation: `legal-reader.guest-annotation.${action}`,
+        type: "detached",
+      },
+    });
+    notifyUserError(stored.error, unavailableMessage);
+    return Result.err(stored.error);
+  }
+  return Result.ok(undefined);
+}

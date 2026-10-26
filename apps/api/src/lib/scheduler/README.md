@@ -2,13 +2,31 @@
 
 Job definitions are refreshed at API boot. `enabled` follows the deployment's
 configuration feature gates on every boot. Operator control uses only
-`paused_by`, `paused_until`, and `pause_reason`, which survive that refresh.
+`paused_by`, `paused_since`, `paused_until`, and `pause_reason`, which survive that refresh.
 New jobs are enabled by default unless their configuration gate disables them.
 
+## Stopping a runaway job
+
+Run the guarded operator command from `apps/api`. Start without `--apply` to
+review the current row and resulting deadline, then repeat the same command
+with `--apply` using an authorized operator database connection:
+
+```sh
+bun run scheduler:job-pause -- pause --job documentProcessing.dispatchOcr.configuredInterval --for 24h --reason "Runaway queue growth" --actor operator-id
+bun run scheduler:job-pause -- pause --job documentProcessing.dispatchOcr.configuredInterval --for 24h --reason "Runaway queue growth" --actor operator-id --apply
+bun run scheduler:job-pause -- status --job documentProcessing.dispatchOcr.configuredInterval
+bun run scheduler:job-pause -- resume --job documentProcessing.dispatchOcr.configuredInterval --reason "Queue is stable" --actor operator-id --apply
+```
+
+The pause auto-resumes at its deadline. The hourly audit flags an active pause
+older than 24 hours. If the script is unavailable, use the SQL below as the
+fallback.
+
 A job can run when `enabled` is true and `paused_until` is either `NULL` or in
-the past. `NULL` means unpaused; `'infinity'::timestamptz` pauses indefinitely.
-An elapsed finite pause resumes automatically. The runner clears expired
-`paused_until` values while retaining attribution and reason.
+the past. `NULL` means unpaused. A pause may be at most 72 hours from the time
+it is written. An elapsed pause resumes automatically. The runner clears expired
+`paused_until` values while retaining attribution and reason. Renew a pause by
+updating `paused_until`; renewal keeps the original `paused_since` value.
 
 Use an authorized database operator connection; the application role cannot
 access scheduler tables. Record an operator identifier and a reason in the
@@ -18,15 +36,6 @@ requires a nonblank operator identifier and a reason of at least eight
 characters after trimming spaces; the database enforces this requirement.
 
 ```sql
--- Pause indefinitely. Replace the identifier, reason, and job ID.
-UPDATE scheduler_jobs
-SET paused_by = 'operator-id',
-    pause_reason = 'Scheduled maintenance',
-    paused_until = 'infinity'::timestamptz,
-    updated_at = now()
-WHERE id = 'job-id'
-RETURNING id, enabled, paused_by, paused_until, pause_reason;
-
 -- Pause for a bounded interval.
 UPDATE scheduler_jobs
 SET paused_by = 'operator-id',
@@ -54,6 +63,10 @@ or clearing an expired deadline emits a resume event. Repeating the same
 deadline produces no duplicate transition event. A runner that encounters an
 active pause during execution emits `scheduler.job.paused_job_ran` at error
 level and prevents execution.
+
+The hourly pause audit emits `scheduler.job.pause_overdue` at error level for
+each active pause that began more than 24 hours ago, including active legacy
+pauses without `paused_since`. An alarm can match this event.
 
 Pauses prevent subsequent executions. Existing executions stop cooperatively
 at cancellation checkpoints; pausing cannot undo side effects already performed.

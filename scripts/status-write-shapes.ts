@@ -644,11 +644,8 @@ export const statusWriteCalls = ({
 const visibleSqlText = (text: string): string => {
   const visible: string[] = [];
   let state:
-    | "code"
-    | "string"
-    | "identifier"
-    | "line-comment"
-    | "block-comment" = "code";
+    "code" | "string" | "identifier" | "line-comment" | "block-comment" =
+    "code";
   let blockDepth = 0;
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];

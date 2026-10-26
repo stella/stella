@@ -1,0 +1,11 @@
+---
+type Props = {
+  class?: string;
+};
+
+const { class: className } = Astro.props;
+---
+
+<ol class:list={["list-decimal ps-6 marker:font-medium", className]} data-steps>
+  <slot />
+</ol>

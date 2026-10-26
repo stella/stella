@@ -7,8 +7,8 @@ import { env } from "@/api/env";
 import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import {
   assertModelDispatchScope,
-  NO_ORGANIZATION_MODEL_DISPATCH,
   type ModelDispatchScope,
+  NO_ORGANIZATION_MODEL_DISPATCH,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   brandPersistedOrganizationId,

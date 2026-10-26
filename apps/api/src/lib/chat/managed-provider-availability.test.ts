@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, jest, test } from "bun:test";
 
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";

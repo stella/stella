@@ -1,4 +1,6 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 
@@ -75,7 +77,11 @@ class CaseLawBatchBoundsError extends TaggedError("CaseLawBatchBoundsError")<{
   reason: CaseLawBatchBoundsReason;
   /** The record that alone exceeds the byte bound, or null for the batch. */
   index: number | null;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Why an applied batch returned no receipt. */
 export const CASE_LAW_BATCH_FAILURE = {
@@ -132,7 +138,11 @@ export class CaseLawBatchApplyError extends TaggedError(
   unsettled: number;
   /** The first unsettled records the batch reached, in batch order. */
   records: readonly UnsettledBatchRecord[];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /**
  * Text as UTF-8, a number or boolean as its text, and a binary payload (any

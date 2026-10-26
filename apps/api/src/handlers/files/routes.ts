@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
 
@@ -21,13 +21,14 @@ import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { updateDocumentProperties } from "@/api/handlers/files/update-document-properties";
+import { routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 
 export const readFileEndpoint = createSafeHandler(
   {
@@ -37,10 +38,10 @@ export const readFileEndpoint = createSafeHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
-    query: t.Object({
-      purpose: t.UnionEnum(["download", "display", "native-display"]),
+    query: v.object({
+      purpose: v.picklist(["download", "display", "native-display"]),
     }),
-    params: workspaceParams({ fieldId: tSafeId("field") }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
@@ -60,7 +61,7 @@ export const readFileEndpoint = createSafeHandler(
           await readFileHandler({
             fieldId,
             userId: user.id,
-            source: { kind: "request", sessionId: session.id },
+            source: callerDownloadSource(session),
             organizationId: session.activeOrganizationId,
             workspaceId,
             purpose,
@@ -86,7 +87,7 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
-    params: workspaceParams({ fieldId: tSafeId("field") }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
@@ -120,7 +121,7 @@ export const printPdfEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
-    params: workspaceParams({ fieldId: tSafeId("field") }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
@@ -154,8 +155,8 @@ export const stampedDownloadEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
-    params: workspaceParams({ fieldId: tSafeId("field") }),
-    query: t.Object({ metadata: t.UnionEnum(STAMPED_DOWNLOAD_METADATA) }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
+    query: v.object({ metadata: v.picklist(STAMPED_DOWNLOAD_METADATA) }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
@@ -194,7 +195,7 @@ export const readDocumentPropertiesEndpoint = createSafeHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
-    params: workspaceParams({ fieldId: tSafeId("field") }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     memberRole,
@@ -227,13 +228,13 @@ export const readDocumentPropertiesEndpoint = createSafeHandler(
 /** These are labels, not document text. */
 const DOCUMENT_PROPERTY_MAX_LENGTH = 1000;
 
-const documentPropertyValue = t.Optional(
-  t.String({ maxLength: DOCUMENT_PROPERTY_MAX_LENGTH }),
+const documentPropertyValue = v.exactOptional(
+  v.pipe(v.string(), v.maxLength(DOCUMENT_PROPERTY_MAX_LENGTH)),
 );
 
 /**
- * Written out rather than derived from the key list, because Elysia infers the
- * handler's body type from this literal and a computed object erases it. The
+ * Written out rather than derived from the key list, because the route infers
+ * the handler's body type from this literal and a computed object erases it. The
  * `satisfies` binds it to the contract, so a new authored key fails to compile
  * here instead of silently becoming unwritable.
  */
@@ -263,12 +264,10 @@ export const updateDocumentPropertiesEndpoint = createSafeHandler(
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "upload_mechanics" },
-    params: workspaceParams({ fieldId: tSafeId("field") }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
     // A partial patch: only the named properties change, and an empty string
     // clears one. Omitting a key leaves whatever the document already carried.
-    body: t.Object({
-      ...AUTHORED_PROPERTY_BODY,
-    }),
+    body: v.object({ ...AUTHORED_PROPERTY_BODY }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     body,
@@ -308,7 +307,7 @@ export const scrubbedDownloadEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
-    params: workspaceParams({ fieldId: tSafeId("field") }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
@@ -342,9 +341,8 @@ export const ocrExportEndpoint = createSafeHandler(
     permissions: { workspace: ["read"] },
     mcp: { type: "internal", reason: "upload_mechanics" },
     access: "read",
-    query: t.Object({ format: t.UnionEnum(OCR_EXPORT_FORMATS) }),
-    params: workspaceParams({ fieldId: tSafeId("field") }),
-    response: t.Unknown(),
+    query: v.object({ format: v.picklist(OCR_EXPORT_FORMATS) }),
+    params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
@@ -363,7 +361,7 @@ export const ocrExportEndpoint = createSafeHandler(
             fieldId,
             format,
             userId: user.id,
-            source: { kind: "request", sessionId: session.id },
+            source: callerDownloadSource(session),
             organizationId: session.activeOrganizationId,
             recordAuditEvent,
             scopedDb,
@@ -375,94 +373,28 @@ export const ocrExportEndpoint = createSafeHandler(
   },
 );
 
-export const filesRoute = new Elysia({
-  prefix: "/files/:workspaceId",
-})
-  .use(workspaceAccessMacro)
-  .use(permissionMacro)
-  .guard({
-    validateWorkspaceAccess: true,
-  })
-  .get("/url/:fieldId", readFileEndpoint.handler, {
-    params: readFileEndpoint.config.params,
-    permissions: readFileEndpoint.config.permissions,
-    query: readFileEndpoint.config.query,
-  })
-  .get("/email-html/:fieldId", readEmailHtmlPreviewEndpoint.handler, {
-    params: readEmailHtmlPreviewEndpoint.config.params,
-    permissions: readEmailHtmlPreviewEndpoint.config.permissions,
-  })
-  .get(
-    "/office-citation/:entityId/:fieldId/:blockId",
-    officeCitationEndpoint.handler,
-    {
-      params: officeCitationEndpoint.config.params,
-      permissions: officeCitationEndpoint.config.permissions,
+export const filesRoute = routes(
+  {
+    "/url/:fieldId": { GET: readFileEndpoint },
+    "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
+    "/office-citation/:entityId/:fieldId/:blockId": {
+      GET: officeCitationEndpoint,
     },
-  )
-  .get("/print-pdf/:fieldId", printPdfEndpoint.handler, {
-    params: printPdfEndpoint.config.params,
-    permissions: printPdfEndpoint.config.permissions,
-  })
-  .get("/stamped/:fieldId", stampedDownloadEndpoint.handler, {
-    params: stampedDownloadEndpoint.config.params,
-    permissions: stampedDownloadEndpoint.config.permissions,
-    query: stampedDownloadEndpoint.config.query,
-  })
-  .get("/ocr-export/:fieldId", ocrExportEndpoint.handler, {
-    params: ocrExportEndpoint.config.params,
-    permissions: ocrExportEndpoint.config.permissions,
-    query: ocrExportEndpoint.config.query,
-    response: ocrExportEndpoint.config.response,
-  });
-
-// These UI-only endpoints intentionally stay outside the exported Eden
-// contract. Elysia still registers them with the same guards and macros above.
-filesRoute.get(
-  "/document-properties/:fieldId",
-  readDocumentPropertiesEndpoint.handler,
-  {
-    params: readDocumentPropertiesEndpoint.config.params,
-    permissions: readDocumentPropertiesEndpoint.config.permissions,
+    "/print-pdf/:fieldId": { GET: printPdfEndpoint },
+    "/stamped/:fieldId": { GET: stampedDownloadEndpoint },
+    "/ocr-export/:fieldId": { GET: ocrExportEndpoint },
+    "/document-properties/:fieldId": {
+      GET: readDocumentPropertiesEndpoint,
+      PATCH: updateDocumentPropertiesEndpoint,
+    },
+    "/scrubbed/:fieldId": { GET: scrubbedDownloadEndpoint },
+    "/thumbnail/:fieldId": { GET: readFileThumbnailEndpoint },
+    "/email-attachment/:fieldId/:attachmentId": {
+      GET: emailAttachmentEndpoint,
+    },
+    "/email-attachment/:fieldId/:attachmentId/save": {
+      POST: saveEmailAttachmentEndpoint,
+    },
   },
-);
-
-filesRoute.patch(
-  "/document-properties/:fieldId",
-  updateDocumentPropertiesEndpoint.handler,
-  {
-    body: updateDocumentPropertiesEndpoint.config.body,
-    params: updateDocumentPropertiesEndpoint.config.params,
-    permissions: updateDocumentPropertiesEndpoint.config.permissions,
-  },
-);
-
-filesRoute.get("/scrubbed/:fieldId", scrubbedDownloadEndpoint.handler, {
-  params: scrubbedDownloadEndpoint.config.params,
-  permissions: scrubbedDownloadEndpoint.config.permissions,
-});
-
-filesRoute.get("/thumbnail/:fieldId", readFileThumbnailEndpoint.handler, {
-  params: readFileThumbnailEndpoint.config.params,
-  permissions: readFileThumbnailEndpoint.config.permissions,
-});
-
-filesRoute.get(
-  "/email-attachment/:fieldId/:attachmentId",
-  emailAttachmentEndpoint.handler,
-  {
-    params: emailAttachmentEndpoint.config.params,
-    permissions: emailAttachmentEndpoint.config.permissions,
-    query: emailAttachmentEndpoint.config.query,
-  },
-);
-
-filesRoute.post(
-  "/email-attachment/:fieldId/:attachmentId/save",
-  saveEmailAttachmentEndpoint.handler,
-  {
-    body: saveEmailAttachmentEndpoint.config.body,
-    params: saveEmailAttachmentEndpoint.config.params,
-    permissions: saveEmailAttachmentEndpoint.config.permissions,
-  },
+  { prefix: "/files/:workspaceId" },
 );

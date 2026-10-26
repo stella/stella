@@ -309,6 +309,7 @@ const withFixture = (body: (fixture: Fixture) => void) => {
   }
 };
 
+// timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
 test(
   "a valid chain from a fully proven main ancestor is selected and accepted",
   () => {
@@ -326,6 +327,7 @@ test(
   FIXTURE_TIMEOUT,
 );
 
+// timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
 test(
   "the release gate accepts a chained main/heavy only through the verified chain",
   () => {
@@ -340,6 +342,7 @@ test(
   FIXTURE_TIMEOUT,
 );
 
+// timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
 test(
   "an anchor that is not an ancestor of the target is refused",
   () => {
@@ -392,6 +395,7 @@ const unprovenAnchors = [
   ],
 ] as const;
 for (const [name, prove] of unprovenAnchors) {
+  // timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
   test(
     `an ancestor with ${name} is refused and never selected`,
     () => {
@@ -428,6 +432,7 @@ const forcedFullFiles = [
 // Workflows, the planner, lockfiles, manifests, toolchains, images and
 // migrations.
 for (const file of forcedFullFiles) {
+  // timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
   test(
     `a change to ${file} forces a full run`,
     () => {
@@ -447,6 +452,7 @@ for (const file of forcedFullFiles) {
   );
 }
 
+// timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
 test(
   "ordinary source and documentation changes do not force a full run",
   () => {
@@ -510,6 +516,7 @@ const forgedEvidence: readonly [string, (fixture: Fixture) => void][] = [
   ],
 ];
 for (const [name, forge] of forgedEvidence) {
+  // timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
   test(
     `the release gate refuses chained heavy evidence from ${name}`,
     () => {
@@ -525,6 +532,7 @@ for (const [name, forge] of forgedEvidence) {
   );
 }
 
+// timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
 test(
   "the heavy status main-heavy.yml publishes for a chained run is the one the gate accepts",
   () => {
@@ -569,6 +577,7 @@ test(
   FIXTURE_TIMEOUT,
 );
 
+// timeout: Builds Git histories and runs proof-verifier subprocesses against fixture API responses.
 test(
   "ci-plan accepts a chain base only as a strict ancestor in a heavy-only run",
   () => {
@@ -615,141 +624,145 @@ test(
   FIXTURE_TIMEOUT,
 );
 
-test(
-  "a chained heavy run requires every affected job and carries the unaffected ones",
-  () => {
-    const workflow: unknown = Bun.YAML.parse(readWorkflow("ci.yml"));
-    const step = workflowStepByName(
-      workflowJobSteps(workflow, "ci-result"),
-      "Evaluate CI outcome",
+test("a chained heavy run requires every affected job and carries the unaffected ones", () => {
+  const workflow: unknown = Bun.YAML.parse(readWorkflow("ci.yml"));
+  const step = workflowStepByName(
+    workflowJobSteps(workflow, "ci-result"),
+    "Evaluate CI outcome",
+  );
+  const script = stringField(step, "run");
+  const runnerLossReporter = script
+    ?.match(/^report_required_runner_losses\(\) \{[\s\S]*?^\}/mu)
+    ?.at(0);
+  expect(runnerLossReporter).toBeDefined();
+  const evaluate = script
+    ?.split(/^ {2}full\)\n/mu)
+    .at(1)
+    ?.split(/^ {2}fast\)\n/mu)
+    .at(0);
+  expect(evaluate).toBeDefined();
+  const scopes = stringField(step["env"], "JOB_SCOPES");
+  const folded = stringField(step["env"], "FOLDED_SUITES");
+  expect(scopes).toBeDefined();
+  expect(folded).toBeDefined();
+  const directory = mkdtempSync(path.join(tmpdir(), "release-proof-chain-"));
+  try {
+    const summary = path.join(directory, "summary");
+    const planFile = path.join(directory, "plan.json");
+    // The diff affects Postgres suites only. ci-result reads the planner file.
+    writeFileSync(
+      planFile,
+      JSON.stringify({
+        postgres_service_suites_required: "true",
+        e2e_landing_required: "false",
+        web_image_smoke_required: "false",
+      }),
     );
-    const evaluate = stringField(step, "run")
-      ?.split(/^ {2}full\)\n/mu)
-      .at(1)
-      ?.split(/^ {2}fast\)\n/mu)
-      .at(0);
-    expect(evaluate).toBeDefined();
-    const scopes = stringField(step["env"], "JOB_SCOPES");
-    const folded = stringField(step["env"], "FOLDED_SUITES");
-    expect(scopes).toBeDefined();
-    expect(folded).toBeDefined();
-    const directory = mkdtempSync(path.join(tmpdir(), "release-proof-chain-"));
-    try {
-      const summary = path.join(directory, "summary");
-      const outcome = (results: Record<string, string>) => {
-        writeFileSync(summary, "");
-        const result = Bun.spawnSync(
-          [
-            "bash",
-            "-e",
-            "-o",
-            "pipefail",
-            "-c",
-            `case full in\nfull)\n${evaluate ?? ""}\nesac`,
-          ],
-          {
-            env: {
-              ...process.env,
-              HEAVY_ONLY: "true",
-              CHAIN_BASE: "a".repeat(40),
-              QUEUE_DEPTH: "full",
-              THIN_JOBS: "[]",
-              JOB_SCOPES: scopes ?? "",
-              FOLDED_SUITES: folded ?? "",
-              GITHUB_STEP_SUMMARY: summary,
-              // The diff affects Postgres suites only.
-              PLAN: JSON.stringify({
-                postgres_service_suites_required: "true",
-                e2e_landing_required: "false",
-                web_image_smoke_required: "false",
-              }),
-              NEEDS: JSON.stringify({
-                "ci-plan": { result: "success" },
-                ...Object.fromEntries(
-                  Object.entries(results).map(([job, conclusion]) => [
-                    job,
-                    { result: conclusion, outputs: {} },
-                  ]),
-                ),
-              }),
-            },
+    const outcome = (results: Record<string, string>) => {
+      writeFileSync(summary, "");
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-e",
+          "-o",
+          "pipefail",
+          "-c",
+          // Prerequisite evidence passed with no runner-loss or queue exemptions.
+          `${runnerLossReporter ?? ""}\nheavy_skippable='[]'\nrunner_lost_jobs='[]'\ncase full in\nfull)\n${evaluate ?? ""}\nesac`,
+        ],
+        {
+          env: {
+            ...process.env,
+            HEAVY_ONLY: "true",
+            CHAIN_BASE: "a".repeat(40),
+            QUEUE_DEPTH: "full",
+            THIN_JOBS: "[]",
+            JOB_SCOPES: scopes ?? "",
+            FOLDED_SUITES: folded ?? "",
+            GITHUB_STEP_SUMMARY: summary,
+            PLAN_FILE: planFile,
+            NEEDS: JSON.stringify({
+              "ci-plan": { result: "success" },
+              ...Object.fromEntries(
+                Object.entries(results).map(([job, conclusion]) => [
+                  job,
+                  { result: conclusion, outputs: {} },
+                ]),
+              ),
+            }),
           },
-        );
-        return {
-          exitCode: result.exitCode,
-          summary: readFileSync(summary, "utf-8"),
-        };
+        },
+      );
+      return {
+        exitCode: result.exitCode,
+        stderr: result.stderr.toString(),
+        summary: readFileSync(summary, "utf-8"),
       };
-      const carried = outcome({
-        "postgres-service-suites": "success",
-        "e2e-landing": "skipped",
-        "web-image-smoke": "skipped",
-      });
-      expect(carried.exitCode).toBe(0);
-      expect(carried.summary).toContain(`Proof chained from ${"a".repeat(40)}`);
-      expect(carried.summary).toContain(
-        "Ran on this commit: postgres-service-suites",
-      );
-      expect(carried.summary).toContain(
-        "Carried over from the ancestor: e2e-landing, web-image-smoke",
-      );
-      for (const result of ["failure", "skipped", "cancelled"]) {
-        expect(
-          outcome({
-            "postgres-service-suites": result,
-            "e2e-landing": "skipped",
-            "web-image-smoke": "skipped",
-          }).exitCode,
-          result,
-        ).not.toBe(0);
-      }
-      // An unaffected job that ran and failed still fails the run.
+    };
+    const carried = outcome({
+      "postgres-service-suites": "success",
+      "e2e-landing": "skipped",
+      "web-image-smoke": "skipped",
+    });
+    expect(carried.exitCode, carried.stderr).toBe(0);
+    expect(carried.summary).toContain(`Proof chained from ${"a".repeat(40)}`);
+    expect(carried.summary).toContain(
+      "Ran on this commit: postgres-service-suites",
+    );
+    expect(carried.summary).toContain(
+      "Carried over from the ancestor: e2e-landing, web-image-smoke",
+    );
+    for (const result of ["failure", "skipped", "cancelled"]) {
       expect(
         outcome({
-          "postgres-service-suites": "success",
-          "e2e-landing": "failure",
+          "postgres-service-suites": result,
+          "e2e-landing": "skipped",
           "web-image-smoke": "skipped",
         }).exitCode,
+        result,
       ).not.toBe(0);
-    } finally {
-      rmSync(directory, { recursive: true, force: true });
     }
-  },
-  FIXTURE_TIMEOUT,
-);
+    // An unaffected job that ran and failed still fails the run.
+    expect(
+      outcome({
+        "postgres-service-suites": "success",
+        "e2e-landing": "failure",
+        "web-image-smoke": "skipped",
+      }).exitCode,
+    ).not.toBe(0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
-test(
-  "a chained heavy run plans its changed-file scope as a merge group against the anchor",
-  () => {
-    const source = readWorkflow("ci.yml");
-    const step = (name: string) =>
-      source
-        .split(`      - name: ${name}\n`)
-        .at(1)
-        ?.split("      - name:")
-        .at(0) ?? "";
-    const scope = step("Check changed file scope");
-    expect(scope).toContain(
-      `BASE_SHA: \${{ steps.chain.outputs.base || steps.target-base.outputs.base_sha }}`,
-    );
-    expect(scope).toContain(
-      `EVENT_NAME: \${{ steps.chain.outputs.plan_event || github.event_name }}`,
-    );
-    expect(scope).toContain(
-      `HEAVY_ONLY: \${{ inputs.heavy_only == true && steps.chain.outputs.base == '' }}`,
-    );
-    // Only a pinned dispatch chains; schedules and pushes stay full anchors.
-    const main = readWorkflow("main-heavy.yml");
-    expect(main).toContain(
-      `CHAIN_ENABLED: \${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false }}`,
-    );
-    expect(main).toContain(
-      `chain_base: \${{ needs.validate.outputs.chain-base }}`,
-    );
-    // The tag job keeps the verifier beside the gate it copies.
-    expect(readWorkflow("release-tag.yml")).toContain(
-      'cp scripts/release-proof-chain.sh "$RUNNER_TEMP/release-proof-chain.sh"',
-    );
-  },
-  FIXTURE_TIMEOUT,
-);
+test("a chained heavy run plans its changed-file scope as a merge group against the anchor", () => {
+  const source = readWorkflow("ci.yml");
+  const step = (name: string) =>
+    source
+      .split(`      - name: ${name}\n`)
+      .at(1)
+      ?.split("      - name:")
+      .at(0) ?? "";
+  const scope = step("Check changed file scope");
+  expect(scope).toContain(
+    `BASE_SHA: \${{ steps.chain.outputs.base || steps.target-base.outputs.base_sha }}`,
+  );
+  expect(scope).toContain(
+    `EVENT_NAME: \${{ steps.chain.outputs.plan_event || github.event_name }}`,
+  );
+  expect(scope).toContain(
+    `HEAVY_ONLY: \${{ inputs.heavy_only == true && steps.chain.outputs.base == '' }}`,
+  );
+  // Only a pinned dispatch chains; schedules and pushes stay full anchors.
+  const main = readWorkflow("main-heavy.yml");
+  expect(main).toContain(
+    `CHAIN_ENABLED: \${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.proof_chain != false }}`,
+  );
+  expect(main).toContain(
+    `chain_base: \${{ needs.validate.outputs.chain-base }}`,
+  );
+  // The tag job keeps the verifier beside the gate it copies.
+  expect(readWorkflow("release-tag.yml")).toContain(
+    'cp scripts/release-proof-chain.sh "$RUNNER_TEMP/release-proof-chain.sh"',
+  );
+});

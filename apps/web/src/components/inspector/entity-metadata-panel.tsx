@@ -17,8 +17,8 @@ import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
-import { SparklesIcon as Sparkles } from "@stll/ui/icons";
-import { stellaToast } from "@stll/ui/toast";
+import { useCopyConfirmation } from "@stll/ui/copy-button";
+import { CheckIcon, SparklesIcon as Sparkles } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentPropertiesSection } from "@/components/inspector/document-properties-section";
@@ -192,7 +192,7 @@ const EntityMetadataContent = ({
     entityVersionsOptions({ workspaceId, entityId: entity.entityId }),
   );
   const versionsDataView = useQueryView(versionsDataQuery);
-  useQueryViewError(versionsDataView);
+  useQueryViewError(versionsDataView, "EntityMetadataContent:query");
   const versionsData =
     versionsDataView.type === "items" ? versionsDataView.items : undefined;
   // `useOptimistic` keeps any newly created property visible until the
@@ -657,6 +657,9 @@ const ReadOnlyRow = ({ label, value, title, trailing }: ReadOnlyRowProps) => {
   );
 };
 
+const CHIP_SWAP_CLASS =
+  "col-start-1 row-start-1 transition-opacity duration-200 ease-out motion-reduce:transition-none";
+
 /**
  * The document reference the current version was stamped with. Monospace
  * because it is quoted verbatim into filings and correspondence, and copyable
@@ -664,27 +667,34 @@ const ReadOnlyRow = ({ label, value, title, trailing }: ReadOnlyRowProps) => {
  */
 const DocumentReferenceChip = ({ reference }: { reference: string }) => {
   const t = useTranslations();
-
-  const copy = async () => {
-    const copied = await copyToClipboard(reference);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
+  const { copied, copy } = useCopyConfirmation(async () => {
+    const result = await copyToClipboard(reference);
+    if (Result.isError(result)) {
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "DocumentReferenceChip.copy:failure",
+        scope: {
+          type: "handler",
+          handlerId: "DocumentReferenceChip.copy:failure",
+        },
+      });
+      notifyUserError(result.error, t("errors.actionFailed"));
+      return false;
     }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
+    return true;
+  });
+  const label = copied ? t("common.copied") : t("common.copyDocumentReference");
 
   return (
     <Tooltip
-      content={t("common.copyDocumentReference")}
+      content={label}
       render={
         <button
-          aria-label={t("common.copyDocumentReference")}
+          aria-label={label}
           // The `before` box widens the hit area without growing the chip;
           // it stays narrower horizontally so it cannot swallow clicks meant
           // for the row's other content.
           className="bg-muted/60 text-foreground-strong-muted hover:bg-muted hover:text-foreground focus-visible:ring-ring text-2xs relative inline-flex items-center rounded-sm px-1.5 py-0.5 font-mono outline-none before:absolute before:-inset-x-2 before:-inset-y-3 before:content-[''] focus-visible:ring-2"
+          data-copied={copied ? "" : undefined}
           onClick={() => {
             detached(copy(), "entity-metadata-panel.copy-document-reference");
           }}
@@ -692,7 +702,30 @@ const DocumentReferenceChip = ({ reference }: { reference: string }) => {
         />
       }
     >
-      <BidiText direction="ltr">{reference}</BidiText>
+      {/* The reference and the confirmation share one cell, as in
+          CopyButton, so the chip keeps its width while it confirms. */}
+      <span className="grid">
+        <span
+          aria-hidden={copied}
+          className={cn(CHIP_SWAP_CLASS, copied ? "opacity-0" : "opacity-100")}
+        >
+          <BidiText direction="ltr">{reference}</BidiText>
+        </span>
+        <span
+          aria-hidden={!copied}
+          className={cn(
+            CHIP_SWAP_CLASS,
+            "inline-flex items-center justify-center gap-1 font-sans",
+            copied ? "opacity-100" : "opacity-0",
+          )}
+        >
+          <CheckIcon aria-hidden="true" className="size-3" />
+          {t("common.copied")}
+        </span>
+      </span>
+      <span aria-live="polite" className="sr-only">
+        {copied ? t("common.copied") : ""}
+      </span>
     </Tooltip>
   );
 };

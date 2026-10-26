@@ -24,8 +24,8 @@ import {
   registerOfficeEditIntentKeystroke,
 } from "@/components/office/office-edit-intent";
 import type {
-  OfficeViewerNavigationRequest,
   OfficeViewerFormat,
+  OfficeViewerNavigationRequest,
   OfficeViewerSpreadsheetSelection,
   OfficeViewerStatus,
 } from "@/components/office/silurus-office-viewer";
@@ -98,13 +98,19 @@ export const OfficeFileViewer = ({
   }, []);
   const handleViewerError = useCallback(
     (error: Error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OfficeFileViewer:failure",
+        scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
+      });
     },
     [analytics],
   );
   const handleNavigationError = useCallback(
     (error: Error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OfficeFileViewer:failure-2",
+        scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     [analytics, t],

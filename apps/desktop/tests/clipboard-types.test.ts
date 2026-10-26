@@ -7,17 +7,19 @@ import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
   CLIPBOARD_SCREEN_CAPTURES,
+  isClipboardCaptureRevision,
   isClipboardCopyError,
   isClipboardEditorContext,
   isClipboardEditorSession,
+  isClipboardGroup,
   isClipboardGroupColor,
   isClipboardImagePreviewDataUrl,
-  isClipboardGroup,
   isClipboardItem,
   isClipboardSnapshot,
 } from "../src/clipboard/clipboard-types";
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
+  revision: 0,
   captureStatus: "active",
   groupLimit: 24,
   groups: [],
@@ -29,6 +31,23 @@ const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
   sourceAppExclusions: [],
   sourceAppVisuals: [],
   welcomeStatus,
+});
+
+test("capture notifications contain only a bounded revision and no clip content", () => {
+  for (const revision of [0, 1, 0xff_ff_ff_ff]) {
+    expect(isClipboardCaptureRevision({ revision })).toBe(true);
+  }
+  for (const payload of [
+    null,
+    1,
+    {},
+    { revision: -1 },
+    { revision: 1.5 },
+    { revision: 0x1_00_00_00_00 },
+    { revision: 1, item: CLIPBOARD_HISTORY_CHANGED_EVENT },
+  ]) {
+    expect(isClipboardCaptureRevision(payload)).toBe(false);
+  }
 });
 
 describe("clipboard snapshot welcome state", () => {

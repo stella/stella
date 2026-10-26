@@ -8,9 +8,9 @@ import {
 
 import {
   createCommandSender,
-  openInNewControlledTab,
   elementNamed,
   launchExtensionHarness,
+  openInNewControlledTab,
   successful,
   targetOf,
 } from "./fixtures/harness";

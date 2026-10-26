@@ -6,8 +6,8 @@ import type { InvoiceTotals } from "@stll/invoicing";
 import { resultTx } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
-  INVOICE_ATTACHMENT,
   expenses,
+  INVOICE_ATTACHMENT,
   invoiceLines,
   timeEntries,
 } from "@/api/db/schema";
@@ -22,12 +22,12 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const lineParamsSchema = workspaceParams({
-  invoiceId: tSafeId("invoice"),
-  lineId: tSafeId("invoiceLine"),
+  invoiceId: resourceIdSchema("invoice"),
+  lineId: resourceIdSchema("invoiceLine"),
 });
 
 type DeletedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };

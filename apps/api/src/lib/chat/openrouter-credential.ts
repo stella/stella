@@ -2,6 +2,10 @@ import { GetWebIdentityTokenCommand, STSClient } from "@aws-sdk/client-sts";
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
@@ -96,7 +100,12 @@ const retryAfterMs = (
     return undefined;
   }
   if (/^\d+$/u.test(value)) {
-    const delay = Number(value) * 1000;
+    // Finite, oversized delta-seconds still saturate the existing cooldown bound.
+    const seconds = parseDecimalToken(value, { sign: "unsigned" });
+    if (seconds.isErr()) {
+      return undefined;
+    }
+    const delay = seconds.value * 1000;
     return Number.isFinite(delay)
       ? Math.min(delay, MAX_RETRY_COOLDOWN_MS)
       : undefined;
@@ -126,12 +135,22 @@ const retryAfterMs = (
     Temporal.ZonedDateTime.from(
       {
         timeZone: "UTC",
-        year: Number(match[3]),
+        year: parseIntegerToken(match[3], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a four-digit year",
+        ),
         month: months.indexOf(match[2] ?? "") + 1,
-        day: Number(match[1]),
-        hour: Number(match[4]),
-        minute: Number(match[5]),
-        second: Number(match[6]),
+        day: parseIntegerToken(match[1], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit day",
+        ),
+        hour: parseIntegerToken(match[4], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit hour",
+        ),
+        minute: parseIntegerToken(match[5], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit minute",
+        ),
+        second: parseIntegerToken(match[6], { sign: "unsigned" }).unwrap(
+          "The Retry-After date regex captures a two-digit second",
+        ),
       },
       { overflow: "reject" },
     ),
@@ -504,8 +523,7 @@ export const createManagedOpenRouterCredentialProvider = (
 ) => new ManagedOpenRouterCredentialProvider(options);
 
 let provider:
-  | ReturnType<typeof createManagedOpenRouterCredentialProvider>
-  | undefined;
+  ReturnType<typeof createManagedOpenRouterCredentialProvider> | undefined;
 export const getManagedOpenRouterCredentialProvider = () =>
   (provider ??= createManagedOpenRouterCredentialProvider({
     configuration: getManagedOpenRouterConfiguration,

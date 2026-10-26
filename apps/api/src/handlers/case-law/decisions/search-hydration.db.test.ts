@@ -5,27 +5,27 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
-  SEARCH_TOTAL_NOT_COUNTED,
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 
 import {
   caseLawDecisions,
   caseLawProvisionCitations,
-  caseLawSources,
   caseLawSearchDocuments,
+  caseLawSources,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  candidateDecisionRowsQuery,
+  candidateDecisionRowsStatement,
   caseLawSearchPlan,
   decisionHitsPage,
-  candidateDecisionRowsQuery,
   listCaseLawProvisionDecisions,
-  candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
   pageDecisionRowsStatement,
   readCaseLawPageDecisionRows,
@@ -1636,7 +1636,7 @@ test("the provision filter reads links through an index, never by scanning them"
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_anchor|work)_idx/u,
+        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_subtree|work)_idx/u,
       );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }

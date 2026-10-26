@@ -15,9 +15,11 @@
 import {
   appendFileSync,
   closeSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -26,16 +28,16 @@ import path from "node:path";
 
 import {
   CHECK_POOL_JOBS,
-  checkPoolResultsPath,
-  readCheckPool,
   type CheckPoolJob,
+  checkPoolResultsPath,
   type PoolCheck,
+  readCheckPool,
 } from "./ci-check-pool-registry";
 import {
+  type Context,
   evaluate,
   toValue,
   UNKNOWN,
-  type Context,
   type Value,
 } from "./github-expression";
 
@@ -351,7 +353,7 @@ export const runChecks = async ({
 };
 
 const POOL_ENV = [
-  "CI_CHECK_POOL_NEEDS",
+  "CI_CHECK_POOL_NEEDS_FILE",
   "CI_CHECK_POOL_STEPS",
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
@@ -417,22 +419,94 @@ export const processLauncher =
 const logPath = (directory: string, index: number) =>
   path.join(directory, `${String(index).padStart(3, "0")}.log`);
 
-// A nested group would end the check's own group in the job log.
-const NESTED_GROUP = /^(::(?:end)?group::|##\[(?:end)?group\])/gmu;
+const CANCELLATION_LOG_TAIL_BYTES = 8 * 1024;
+const CANCELLATION_LOG_TOTAL_BYTES = 64 * 1024;
+type UnreportedCheck = { name: string; status: "running" | "completed" };
+
+const readLogTail = (file: string, limit: number) => {
+  const fd = openSync(file, "r");
+  try {
+    const { size } = fstatSync(fd);
+    const buffer = Buffer.alloc(Math.min(size, limit));
+    const bytes = readSync(fd, buffer, 0, buffer.length, size - buffer.length);
+    return buffer.subarray(0, bytes).toString("utf-8");
+  } finally {
+    closeSync(fd);
+  }
+};
+
+const printUnreportedLogs = (
+  directory: string,
+  unreported: ReadonlyMap<number, UnreportedCheck>,
+) => {
+  const omitted = "Log tail omitted: cancellation output limit reached.\n";
+  let remaining = CANCELLATION_LOG_TOTAL_BYTES - Buffer.byteLength(omitted);
+  let flushStatus: "complete" | "truncated" = "complete";
+  for (const [index, { name, status }] of unreported) {
+    const heading = `::group::Interrupted check: ${name} (${status})\n`;
+    const closing = "\n::endgroup::\n";
+    const framingBytes = Buffer.byteLength(heading + closing);
+    if (remaining < framingBytes) {
+      flushStatus = "truncated";
+      break;
+    }
+    let tail: string;
+    try {
+      tail = readLogTail(
+        logPath(directory, index),
+        CANCELLATION_LOG_TAIL_BYTES,
+      );
+    } catch {
+      tail = "Log tail unavailable.";
+    }
+    // Partial logs are evidence, not check outcomes or workflow commands.
+    const bytes = Buffer.from(
+      tail
+        .replaceAll("\r", "\n")
+        .split("\n")
+        .map((line) => `| ${line}`)
+        .join("\n"),
+    );
+    const limit = remaining - framingBytes;
+    // Streaming decode drops an incomplete final code point instead of adding
+    // replacement bytes beyond the remaining output budget.
+    const text = new TextDecoder().decode(bytes.subarray(0, limit), {
+      stream: true,
+    });
+    const frame = heading + text + closing;
+    writeOut(frame);
+    remaining -= Buffer.byteLength(frame);
+    if (bytes.length > limit) {
+      flushStatus = "truncated";
+      break;
+    }
+  }
+  if (flushStatus === "truncated") {
+    writeOut(omitted);
+  }
+};
+
+// The runner reads a workflow command after leading whitespace, so a command
+// is neutralized by removing it or by a non-blank prefix, never by indenting.
+// A nested group would end the check's own group in the job log: its title
+// stays as a plain line (Bun's per-file header) and its end is dropped.
+const NESTED_GROUP_START = /^[ \t]*(?:::group::|##\[group\])/gmu;
+const NESTED_GROUP_END =
+  /^[ \t]*(?:::endgroup::|##\[endgroup\]).*(?:\r?\n|$)/gmu;
 // An error command printed by a check that passed comes from a fixture or a
 // refusal the check exercises, never from this run's failure; left active it
 // becomes a job annotation that failure digests then report as the cause.
-const ERROR_COMMAND = /^(::error\b)/gmu;
+const ERROR_COMMAND = /^([ \t]*(?:::error\b|##\[error\]))/gmu;
 
 /** A check's log as the job log shows it, so the check cannot drive the job's commands. */
 export const checkLogText = (
   output: string,
   outcome: CheckResult["outcome"],
 ): string => {
-  const grouped = output.replace(NESTED_GROUP, " $1");
-  return outcome === "failure"
-    ? grouped
-    : grouped.replace(ERROR_COMMAND, " $1");
+  const flat = output
+    .replace(NESTED_GROUP_END, "")
+    .replace(NESTED_GROUP_START, "");
+  return outcome === "failure" ? flat : flat.replace(ERROR_COMMAND, "| $1");
 };
 const escapeProperty = (value: string) =>
   value
@@ -568,9 +642,11 @@ const writeOut = (text: string) => {
       offset += writeSync(1, bytes, offset);
     } catch (error) {
       // A non-blocking pipe that is full: wait briefly and retry.
-      if (
-        !(error instanceof Error && "code" in error && error.code === "EAGAIN")
-      ) {
+      if (!(
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "EAGAIN"
+      )) {
         throw error;
       }
       Atomics.wait(pause, 0, 0, 5);
@@ -612,6 +688,31 @@ export const selectChecks = (
   return checks.filter(({ name }) => selected.has(name));
 };
 
+/** Split a manifest into stable, disjoint CI matrix partitions. */
+export const partitionChecks = (
+  checks: readonly PoolCheck[],
+  partition: string | undefined,
+): PoolCheck[] => {
+  if (partition === undefined) {
+    return [...checks];
+  }
+  const match = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(partition);
+  const index = Number(match?.groups?.["index"]);
+  const count = Number(match?.groups?.["count"]);
+  if (
+    !Number.isInteger(index) ||
+    !Number.isInteger(count) ||
+    index < 1 ||
+    count < 1 ||
+    index > count
+  ) {
+    throw new CheckPoolError(
+      "CI_CHECK_POOL_PARTITION must have the form <index>/<count>",
+    );
+  }
+  return checks.filter((_, checkIndex) => checkIndex % count === index - 1);
+};
+
 const main = async () => {
   const [mode, job = "", option, value, ...extra] = process.argv.slice(2);
   if (
@@ -642,13 +743,25 @@ const main = async () => {
     token: process.env["CI_CHECK_POOL_TOKEN"] ?? "",
     event: eventPath ? json(readFileSync(eventPath, "utf-8"), "event") : {},
   };
+  const needsFile = process.env["CI_CHECK_POOL_NEEDS_FILE"];
   const context = poolContext({
     github,
-    needs: json(process.env["CI_CHECK_POOL_NEEDS"], "needs context"),
+    // A file, never the environment: ci-plan's outputs can exceed the
+    // 128 KiB limit of one environment value.
+    needs: json(
+      needsFile ? readFileSync(needsFile, "utf-8") : undefined,
+      "needs context",
+    ),
     steps: json(process.env["CI_CHECK_POOL_STEPS"], "steps context"),
     inputs: json(process.env["CI_CHECK_POOL_INPUTS"], "inputs context"),
   });
-  const planned = planChecks(selectChecks(readCheckPool(job), value), context);
+  const planned = planChecks(
+    partitionChecks(
+      selectChecks(readCheckPool(job), value),
+      process.env["CI_CHECK_POOL_PARTITION"],
+    ),
+    context,
+  );
   const override = process.env["CI_CHECK_POOL_CONCURRENCY"];
   // One check per CPU but one: four concurrent checks on a four-CPU runner
   // pushed default 5 s Bun test budgets past their limit; three did not.
@@ -659,20 +772,35 @@ const main = async () => {
   print(
     `${job}: ${selected} of ${planned.length} checks selected; running ${Math.min(concurrency, selected)} at a time`,
   );
+  const unreported = new Map<number, UnreportedCheck>();
   const stop = () => {
     for (const pid of active) {
       killGroup(pid);
     }
-    process.exit(130);
+    try {
+      printUnreportedLogs(directory, unreported);
+    } finally {
+      process.exit(130);
+    }
   };
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   const started = performance.now();
+  const launch = processLauncher({ root, directory });
   const results = await runChecks({
     planned,
     concurrency,
-    launch: processLauncher({ root, directory }),
+    launch: async (index, check, env) => {
+      unreported.set(index, { name: check.name, status: "running" });
+      print(`Starting check: ${check.name}`);
+      try {
+        return await launch(index, check, env);
+      } finally {
+        unreported.set(index, { name: check.name, status: "completed" });
+      }
+    },
     report: (index, result) => {
+      unreported.delete(index);
       if (result.outcome === "skipped") {
         print(`Skipped: ${result.name} (${result.detail})`);
         return;

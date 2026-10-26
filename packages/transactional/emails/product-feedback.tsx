@@ -12,7 +12,7 @@ import {
 
 import type { FeedbackReportInput } from "@stll/api-contract/feedback";
 
-import { BRAND_FOOTER_TEXT, brand, sharedStyles } from "./_shared";
+import { brand, BRAND_FOOTER_TEXT, sharedStyles } from "./_shared";
 import { KIND_LABELS } from "./product-feedback-subject";
 
 /**

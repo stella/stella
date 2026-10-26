@@ -1,18 +1,20 @@
 import { Result } from "better-result";
 import { and, asc, eq, gt, gte, isNull, lte, ne, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { parsePlainDate } from "@stll/time";
 
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
-  tUserId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
+  userIdSchema,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -20,12 +22,12 @@ import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
-  isUuidPaginationCursorPart,
   isDateOnlyPaginationCursorPart,
+  isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import type {
-  UnprojectedColumns,
   UnbackedProjectionKeys,
+  UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
@@ -101,13 +103,15 @@ const listApprovalQueue = createSafeRootHandler(
       consumesServices: false,
     },
     access: "read",
-    query: t.Object({
-      from: t.Optional(t.String({ format: "date" })),
-      to: t.Optional(t.String({ format: "date" })),
-      member: t.Optional(tUserId),
-      matter: t.Optional(tSafeId("workspace")),
-      cursor: t.Optional(tPaginationCursor()),
-      limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
+    query: v.object({
+      from: v.optional(apiDateSchema),
+      to: v.optional(apiDateSchema),
+      member: v.optional(userIdSchema),
+      matter: v.optional(resourceIdSchema("workspace")),
+      cursor: v.optional(paginationCursorSchema()),
+      limit: v.optional(
+        numberFromString(paginationLimitSchema(LIMITS.timeEntriesPageSizeMax)),
+      ),
     }),
   },
   async function* ({ query, safeDb, user, memberRole, session }) {

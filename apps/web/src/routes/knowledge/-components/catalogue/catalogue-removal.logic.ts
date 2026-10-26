@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
 import {
-  isEffectivelyInstalled,
   type CatalogueDisplayEntry,
+  isEffectivelyInstalled,
 } from "@/lib/knowledge/catalogue-types";
 
 /**

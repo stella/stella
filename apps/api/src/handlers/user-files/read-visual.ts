@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -11,17 +10,17 @@ import {
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import { prepareGeneratedVisual } from "@/api/handlers/visual-sandbox/prepare";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { storedUserFileKey } from "@/api/lib/file-key";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { projectionPayload } from "@/api/lib/projection-totality";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 // JSON string escaping can expand the bounded page and data in storage.
 const STORED_VISUAL_BYTES = 4 * 1024 * 1024;
@@ -34,7 +33,7 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
       permissions: { chat: ["create"] },
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "upload_mechanics" },
-      params: t.Object({ fileId: tSafeId("userFile") }),
+      params: v.object({ fileId: resourceIdSchema("userFile") }),
     },
     async function* ({
       params: { fileId },
@@ -50,6 +49,7 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
             await tx
               .select({
                 s3Key: userFiles.s3Key,
+                userId: userFiles.userId,
                 workspaceId: chatThreads.workspaceId,
               })
               .from(userFiles)
@@ -87,10 +87,20 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
           new HandlerError({ status: 404, message: "User file not found" }),
         );
       }
+      const s3Key = storedUserFileKey({
+        key: file.s3Key,
+        organizationId: activeOrganizationId,
+        uploaderUserId: brandPersistedUserId(file.userId),
+      });
+      if (s3Key === null) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "User file not found" }),
+        );
+      }
       const read = await Result.tryPromise({
         try: async () =>
           await readObject({
-            key: file.s3Key,
+            key: s3Key,
             mimeType: TEXT_PLAIN_MIME_TYPE,
             maxBytes: STORED_VISUAL_BYTES,
             signal: request.signal,
@@ -98,7 +108,12 @@ export const createReadUserFileVisual = (readObject = readStoredFile) =>
         catch: (cause) => cause,
       });
       if (read.isErr()) {
-        captureError(read.error, { source: "read-user-file-visual" });
+        captureError(
+          read.error,
+          handlerErrorContext("userfiles.createReadUserFileVisual.read_error", {
+            source: "read-user-file-visual",
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 503,

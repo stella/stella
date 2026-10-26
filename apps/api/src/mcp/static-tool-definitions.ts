@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { McpDefaultResourceScope } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
@@ -31,10 +33,16 @@ import {
 import type {
   McpToolDefinition,
   McpToolHandler,
-  RuntimeMcpToolOutputContract,
   McpToolSet,
+  RuntimeMcpToolOutputContract,
   ToolScope,
 } from "@/api/mcp/tool-types";
+import {
+  isMcpToolVisibleTo,
+  type McpToolVisibleTo,
+} from "@/api/mcp/tool-visibility";
+import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
+import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
 
 export { MCP_STATIC_TOOL_NAMES };
 
@@ -53,6 +61,7 @@ type DefaultMcpToolSets = readonly [
   typeof RESEARCH_ADMIN_TOOL_SET,
   typeof FEEDBACK_TOOL_SET,
   typeof CAPABILITY_TOOL_SET,
+  typeof WEB_HANDOFF_TOOL_SET,
 ];
 
 export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
@@ -70,6 +79,7 @@ export const DEFAULT_MCP_TOOL_SETS: DefaultMcpToolSets = [
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
   CAPABILITY_TOOL_SET,
+  WEB_HANDOFF_TOOL_SET,
 ];
 
 // Keep this schema-sensitive projection as a literal tuple: flattening the
@@ -96,7 +106,20 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS: readonly RegisteredMcpToolDefinition[
     ...RESEARCH_ADMIN_TOOL_SET.definitions,
     ...FEEDBACK_TOOL_SET.definitions,
     ...CAPABILITY_TOOL_SET.definitions,
+    ...WEB_HANDOFF_TOOL_SET.definitions,
   ];
+
+type ModelVisibleMcpToolDefinition = McpToolVisibleTo<
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
+  "model"
+>;
+
+/** Static definitions visible to the model; app-only tools cannot enter chat registries. */
+export const MODEL_VISIBLE_MCP_TOOL_DEFINITIONS =
+  DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (tool): tool is ModelVisibleMcpToolDefinition =>
+      isMcpToolVisibleTo(tool, "model"),
+  );
 
 const PURPOSE_BUILT_MCP_TOOL_DEFINITIONS = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
   ({ name }) =>
@@ -416,11 +439,37 @@ const MCP_TOOL_DEFINITION_MAPS = {
   law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
+/**
+ * Each tool's runtime contract, with the schema it advertises: a write tool's
+ * also accepts the omitted result the transport answers when the action ran
+ * but its result exceeds the response byte limit. `outputSchemaSource` stays
+ * the handler's own contract, which the omission never passes through.
+ */
 const toOutputContractMap = (
   toolSets: readonly McpToolSet<readonly McpToolDefinition[]>[],
 ) =>
   new Map<string, RuntimeMcpToolOutputContract>(
-    toolSets.flatMap((toolSet) => Object.entries(toolSet.outputs)),
+    toolSets.flatMap((toolSet) =>
+      toolSet.definitions.map((definition) => {
+        const contract: RuntimeMcpToolOutputContract | undefined =
+          toolSet.outputs[definition.name];
+        if (contract === undefined) {
+          return panic(
+            `Static MCP tool is missing its output contract: ${definition.name}`,
+          );
+        }
+        return [
+          definition.name,
+          {
+            ...contract,
+            outputSchema: advertisedMcpOutputSchema({
+              contract,
+              access: definition.access,
+            }),
+          },
+        ] as const;
+      }),
+    ),
   );
 
 const toHandlerMap = (

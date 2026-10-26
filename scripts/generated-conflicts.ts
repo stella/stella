@@ -39,9 +39,9 @@ import path from "node:path";
 
 import { isAutofixProtectedPath } from "./autofix-protected-paths";
 import {
-  GENERATORS,
-  type Generator,
   allowedOutputs,
+  type Generator,
+  GENERATORS,
   generatorsForFiles,
   matchesGeneratedGlob,
   orderGenerators,
@@ -913,7 +913,7 @@ export const apply = ({
     writeFileSync(
       path.join(out, "blobs", `${sha}.json`),
       JSON.stringify({
-        content: Buffer.from(content.stdout).toString("base64"),
+        content: Buffer.from(content.stdout).toBase64(),
         encoding: "base64",
       }),
     );
@@ -945,6 +945,7 @@ export type PushOptions = {
   token: string;
   api?: string;
   fetch?: Fetch;
+  retryDelayMs?: number;
 };
 
 /**
@@ -960,26 +961,34 @@ export const push = async ({
   token,
   api = "https://api.github.com",
   fetch: send = fetch,
+  retryDelayMs = 2000,
 }: PushOptions) => {
   const [owner, name] = repository.split("/");
   if (!owner || !name || !/^[A-Za-z0-9._/-]+$/u.test(branch)) {
     return fail("Invalid repository or branch");
   }
-  const call = async (route: string, body: unknown) => {
-    const response = await send(`${api}${route}`, {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "application/vnd.github+json",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    const parsed: unknown = await response.json();
-    if (!response.ok) {
-      return fail(`${route} answered ${String(response.status)}`);
+  // Git object writes are content-addressed, so repeating one after a server
+  // error stores the same object; the ref update is never repeated.
+  const call = async (route: string, body: unknown, attempts = 1) => {
+    for (let attempt = 1; ; attempt += 1) {
+      const response = await send(`${api}${route}`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: "application/vnd.github+json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      if (response.ok) {
+        const parsed: unknown = await response.json();
+        return parsed;
+      }
+      if (response.status < 500 || attempt >= attempts) {
+        return fail(`${route} answered ${String(response.status)}`);
+      }
+      await Bun.sleep(retryDelayMs * attempt);
     }
-    return parsed;
   };
   const field = (value: unknown, ...keys: string[]): unknown => {
     let current = value;
@@ -1003,6 +1012,7 @@ export const push = async ({
     const created = await call(
       `/repos/${repository}/git/blobs`,
       JSON.parse(readFileSync(path.join(blobsDir, file), "utf-8")),
+      3,
     );
     if (field(created, "sha") !== sha) {
       return fail(
@@ -1013,6 +1023,7 @@ export const push = async ({
   const createdTree = await call(
     `/repos/${repository}/git/trees`,
     JSON.parse(readFileSync(path.join(requests, "tree.json"), "utf-8")),
+    3,
   );
   if (field(createdTree, "sha") !== tree) {
     return fail(
@@ -1022,6 +1033,7 @@ export const push = async ({
   const commit = await call(
     `/repos/${repository}/git/commits`,
     JSON.parse(readFileSync(path.join(requests, "commit.json"), "utf-8")),
+    3,
   );
   const commitSha = String(field(commit, "sha"));
   const parents = field(commit, "parents");

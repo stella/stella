@@ -36,7 +36,9 @@ const fixture = () => {
 
 describe("e2e spec shard selection", () => {
   test("full depth delegates distribution to both Playwright shards", () => {
-    expect(allE2eMatrix()).toEqual({ shard: [1, 2, "network-baseline"] });
+    expect(allE2eMatrix()).toEqual({
+      shard: [1, 2, 3, 4, "network-baseline"],
+    });
   });
 
   test.each(["a", "b"])("a changed spec %s runs in one PR leg", (name) => {

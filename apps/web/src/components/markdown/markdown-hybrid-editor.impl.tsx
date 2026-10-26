@@ -107,8 +107,7 @@ export type MarkdownHybridEditorProps = {
    * comment mode must remount the editor with a different `key`.
    */
   onAddComment?:
-    | ((input: { start: number; end: number; text: string }) => void)
-    | undefined;
+    ((input: { start: number; end: number; text: string }) => void) | undefined;
   /** Fired when the user removes a comment through its widget. */
   onDeleteComment?: ((id: string) => void) | undefined;
   className?: string;

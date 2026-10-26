@@ -3,8 +3,8 @@ import * as v from "valibot";
 
 import {
   ALWAYS_PLANNED_PREDICATE,
-  MISSING_JOB_PREDICATE,
   fastRequiredJobs,
+  MISSING_JOB_PREDICATE,
   unmodeledFastRequiredJobs,
 } from "./fast-required-predicates";
 
@@ -66,8 +66,8 @@ describe("fast-required predicates", () => {
     const outputs = new Map(
       fastRequiredJobs(CI_YML).map(({ job: id, output }) => [id, output]),
     );
-    expect(outputs.get("web-build")).toBe("browser_spec_selection_required");
-    expect(outputs.get("ci-quick-checks")).toBeNull();
+    expect(outputs.get("web-build")).toBe("web_build_pr_required");
+    expect(outputs.get("pr-heavy-gate")).toBeNull();
     expect(outputs.get("ci-tests")).toBe("ci_tests_required");
   });
 
@@ -111,25 +111,25 @@ describe("fast-required predicates", () => {
 
   test("an output atom fails on a job no output gates", () => {
     const source = editedCi((jobs) => {
-      job(jobs, "ci-quick-checks")["if"] =
+      job(jobs, "pr-heavy-gate")["if"] =
         "needs.ci-plan.outputs.package_checks_required == 'true'";
     });
-    expect(unmodeledIds(source)).toEqual(["ci-quick-checks"]);
+    expect(unmodeledIds(source)).toEqual(["pr-heavy-gate"]);
   });
 
   test("the always-planned predicate with an extra atom fails", () => {
     const source = editedCi((jobs) => {
-      job(jobs, "ci-quick-checks")["if"] = ALWAYS_PLANNED_PREDICATE.replace(
+      job(jobs, "pr-heavy-gate")["if"] = ALWAYS_PLANNED_PREDICATE.replace(
         " }}",
         " && needs.ci-plan.outputs.trusted == 'true' }}",
       );
     });
-    expect(unmodeledIds(source)).toEqual(["ci-quick-checks"]);
+    expect(unmodeledIds(source)).toEqual(["pr-heavy-gate"]);
   });
 
   test("the always-planned predicate tolerates reflowed whitespace", () => {
     const source = editedCi((jobs) => {
-      job(jobs, "ci-quick-checks")["if"] = ALWAYS_PLANNED_PREDICATE.replaceAll(
+      job(jobs, "pr-heavy-gate")["if"] = ALWAYS_PLANNED_PREDICATE.replaceAll(
         " && ",
         "\n  && ",
       );
@@ -139,14 +139,14 @@ describe("fast-required predicates", () => {
 
   test("a job without ci-plan must use the always-planned predicate", () => {
     const planless = editedCi((jobs) => {
-      const target = job(jobs, "ci-quick-checks");
+      const target = job(jobs, "pr-heavy-gate");
       delete target["needs"];
       target["if"] = "!cancelled() && inputs.heavy_only != true";
     });
-    expect(unmodeledIds(planless)).toEqual(["ci-quick-checks"]);
+    expect(unmodeledIds(planless)).toEqual(["pr-heavy-gate"]);
 
     const alwaysPlanned = editedCi((jobs) => {
-      delete job(jobs, "ci-quick-checks")["needs"];
+      delete job(jobs, "pr-heavy-gate")["needs"];
     });
     expect(unmodeledIds(alwaysPlanned)).toEqual([]);
   });
@@ -163,15 +163,11 @@ describe("fast-required predicates", () => {
       "a requoted draft check",
       ALWAYS_PLANNED_PREDICATE.replace("'pull_request'", '"pull_request"'),
     ],
-    [
-      "an unwrapped draft check",
-      ALWAYS_PLANNED_PREDICATE.slice(`\${{ `.length, -" }}".length),
-    ],
   ])("%s fails", (_name, predicate) => {
     const source = editedCi((jobs) => {
-      job(jobs, "ci-quick-checks")["if"] = predicate;
+      job(jobs, "pr-heavy-gate")["if"] = predicate;
     });
-    expect(unmodeledIds(source)).toEqual(["ci-quick-checks"]);
+    expect(unmodeledIds(source)).toEqual(["pr-heavy-gate"]);
   });
 
   test("the reusable-workflow exception holds only for a reusable workflow", () => {

@@ -6,11 +6,9 @@ import { useTranslations } from "use-intl";
 import { copyToClipboard } from "@stll/clipboard";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
 import type { ReaderPresentationAdapters } from "@stll/decision-reader/reader-adapters";
-import { stellaToast } from "@stll/ui/toast";
 
 import { useWebReaderMessages } from "@/components/legal-reader/web-reader-messages";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 export const useWebReaderPresentationAdapters =
@@ -19,22 +17,25 @@ export const useWebReaderPresentationAdapters =
     const analytics = useAnalytics();
     return {
       messages: useWebReaderMessages(),
-      copyPermalink: (anchorId) => {
+      copyPermalink: async (anchorId) => {
         window.history.replaceState(null, "", `#${anchorId}`);
-        detached(
-          (async () => {
-            const url = new URL(window.location.href);
-            url.hash = anchorId;
-            const copied = await copyToClipboard(url.href);
-            if (Result.isError(copied)) {
-              analytics.captureError(copied.error);
-              notifyUserError(copied.error, t("errors.actionFailed"));
-              return;
-            }
-            stellaToast.add({ title: t("common.copied"), type: "success" });
-          })(),
-          "legal-reader.permalink-copy",
-        );
+        const url = new URL(window.location.href);
+        url.hash = anchorId;
+        const copied = await copyToClipboard(url.href);
+        if (Result.isError(copied)) {
+          analytics.captureError(copied.error, {
+            fingerprintKey:
+              "useWebReaderPresentationAdapters.copyPermalink:failure",
+            scope: {
+              type: "handler",
+              handlerId:
+                "useWebReaderPresentationAdapters.copyPermalink:failure",
+            },
+          });
+          notifyUserError(copied.error, t("errors.actionFailed"));
+          return false;
+        }
+        return true;
       },
     };
   };
