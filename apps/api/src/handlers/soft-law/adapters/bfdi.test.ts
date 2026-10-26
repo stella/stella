@@ -293,6 +293,31 @@ test("admission validation and stale cursors fail before publisher requests", as
       })
     ).isErr(),
   ).toBe(true);
+  const hash = first.nextCursor?.split(":").at(0);
+  if (hash === undefined) {
+    panic("BfDI discovery did not return a cursor policy hash");
+  }
+  for (const token of [
+    "",
+    "01",
+    "-1",
+    "+1",
+    "1e0",
+    "0.5",
+    "9007199254740992",
+  ]) {
+    for (const cursor of [`${hash}:${token}:0`, `${hash}:0:${token}`]) {
+      expect(
+        (
+          await adapter.discover({
+            cursor,
+            signal: signal(),
+            fetch: denied.fetch,
+          })
+        ).isErr(),
+      ).toBe(true);
+    }
+  }
   expect(denied.calls).toEqual([]);
 });
 

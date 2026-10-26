@@ -28,6 +28,12 @@ const ORIGIN = "https://www.bfdi.bund.de";
 const HTML_TYPES = ["text/html", "application/xhtml+xml"] as const;
 const POLICY_BYTE_LIMIT = 1024 * 1024;
 const POLICY_ITEM_LIMIT = 100;
+const cursorPositionSchema = v.pipe(
+  v.string(),
+  v.regex(/^(?:0|[1-9]\d*)$/u),
+  v.toNumber(),
+  v.safeInteger(),
+);
 const nonempty = v.pipe(v.string(), v.trim(), v.minLength(1));
 const documentSchema = v.strictObject({
   url: v.pipe(v.string(), v.url()),
@@ -445,28 +451,25 @@ export const createBfdiAdapter = (input: unknown) =>
       }
     }
     const policyHash = sha256Hex(JSON.stringify(policy));
+    const cursorSchema = v.strictTuple([
+      v.literal(policyHash),
+      cursorPositionSchema,
+      cursorPositionSchema,
+    ]);
     const adapter = {
       ...BFDI_DEFINITION,
       discover: async ({ cursor, fetch: read }) =>
         Result.gen(async function* () {
-          const parts = cursor?.split(":");
-          const indexNumber = parts ? Number(parts.at(1)) : 0;
-          const item = parts ? Number(parts.at(2)) : 0;
-          if (
-            parts &&
-            (parts.length !== 3 ||
-              parts.at(0) !== policyHash ||
-              !/^(?:0|[1-9]\d*)$/u.test(parts.at(1) ?? "") ||
-              !/^(?:0|[1-9]\d*)$/u.test(parts.at(2) ?? "") ||
-              !Number.isSafeInteger(indexNumber) ||
-              !Number.isSafeInteger(item) ||
-              indexNumber < 0 ||
-              item < 0)
-          ) {
+          const position = v.safeParse(
+            cursorSchema,
+            cursor?.split(":") ?? [policyHash, "0", "0"],
+          );
+          if (!position.success) {
             return yield* invalid(
               "BfDI discovery cursor does not match its source admission",
             );
           }
+          const [, indexNumber, item] = position.output;
           const index = policy.indexes.at(indexNumber);
           if (!index || !index.documents.at(item)) {
             return yield* invalid(
