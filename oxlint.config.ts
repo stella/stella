@@ -769,6 +769,15 @@ const webDatePickerImport = {
     "Use '@/components/date-picker-popover' so locale labels are injected.",
 };
 
+// use-intl's formatter formats in the UI language; FormattingProvider's
+// formatter applies the reader's region, calendar, numbering and week start.
+const webUseIntlFormatterImport = {
+  name: "use-intl",
+  importNames: ["useFormatter"],
+  message:
+    "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
+};
+
 const apiSafeIdBrandingImport = {
   name: "@/api/lib/branded-types",
   importNames: ["toSafeId"],
@@ -1914,6 +1923,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
@@ -3994,6 +4004,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4030,6 +4041,7 @@ const config = defineConfig({
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4236,6 +4248,14 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-in-transaction.fixture.ts",
+      ],
+      rules: {
+        "no-network-in-transaction/no-network-in-transaction": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -4250,6 +4270,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4278,6 +4299,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -4314,6 +4336,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4361,6 +4384,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -4406,6 +4430,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -4980,6 +5005,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-network-await-in-loop/no-network-await-in-loop": "error",
+        "no-network-in-transaction/no-network-in-transaction": "error",
       },
     },
     {

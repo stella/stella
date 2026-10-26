@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { Button } from "@stll/ui/button";
@@ -38,6 +38,7 @@ import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {

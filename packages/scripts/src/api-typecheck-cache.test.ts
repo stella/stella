@@ -470,7 +470,7 @@ test("declaration consumers run after emission and invalidate with API source ch
   }
 }, 30_000);
 
-test("each API test owner invalidates cached checking and rejects a newly introduced type error", () => {
+test("each API test owner invalidates cached checking and rejects a newly introduced type error", async () => {
   // The cache fixture owns both classes itself; it does not require the
   // checkout's prepared compiler projects in an ordinary unit-test job.
   const safe = "src/value.test.ts";
@@ -622,10 +622,10 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     ]);
     write(`apps/api/${safe}`, valid);
     check(0);
-    const regenerateInputs = () => {
+    const regenerateInputs = async () => {
       for (const project of ["src", "tests"] as const) {
         fixtureTasks[`@stll/api#typecheck:${project}`].inputs =
-          apiResolvedTypecheckInputs(
+          await apiResolvedTypecheckInputs(
             path.join(directory, `apps/api/tsconfig.${project}.json`),
           );
       }
@@ -644,7 +644,7 @@ test("each API test owner invalidates cached checking and rejects a newly introd
         `import { value } from '${relative}';\nexport const checked: number = value;\n`,
       );
     }
-    regenerateInputs();
+    await regenerateInputs();
     check(0);
     const beforeScriptError = executions().length;
     write(`apps/api/${script}`, invalid);
@@ -680,7 +680,7 @@ test("each API test owner invalidates cached checking and rejects a newly introd
         exclude: ["src/handlers/visual-sandbox/browser"],
       }),
     );
-    regenerateInputs();
+    await regenerateInputs();
     expect(fixtureTasks["@stll/api#typecheck:src"].inputs).toContain("**");
     check(0);
     const beforeImported = executions().length;
@@ -707,7 +707,7 @@ test("each API test owner invalidates cached checking and rejects a newly introd
         }),
       );
     }
-    regenerateInputs();
+    await regenerateInputs();
     check(0);
     const beforeNewRoots = executions();
     check(0);
