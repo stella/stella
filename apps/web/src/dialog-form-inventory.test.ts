@@ -40,7 +40,7 @@ type Component = {
 
 const jsxTags = (node: Node, source: ParsedSource): Set<string> => {
   const tags = new Set<string>();
-  const visit = (current: Node) => {
+  const visit = (current: Node): undefined => {
     if (current.type === "JSXOpeningElement") {
       tags.add(source.sourceText.slice(current.name.start, current.name.end));
     }
@@ -119,7 +119,7 @@ const inventory = () => {
     const add = (name: string, node: Node) => {
       const dialogChildren = new Set<string>();
       let hasDirtySignal = false;
-      const visit = (current: Node) => {
+      const visit = (current: Node): undefined => {
         if (current.type === "JSXOpeningElement") {
           const primitive = imports.get(
             source.sourceText.slice(current.name.start, current.name.end),
@@ -232,7 +232,7 @@ const inventory = () => {
       if (component.hasDirtySignal) {
         continue;
       }
-      const visit = (node: Node) => {
+      const visit = (node: Node): undefined => {
         if (
           node.type === "JSXOpeningElement" &&
           node.attributes.some(
@@ -289,7 +289,7 @@ const inventory = () => {
   }
   // A reusable dialog shell receives its form as JSX children at its caller.
   for (const component of components.values()) {
-    const visit = (node: Node) => {
+    const visit = (node: Node): undefined => {
       if (node.type === "JSXElement" && !node.openingElement.selfClosing) {
         const target = resolve(
           component,

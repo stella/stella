@@ -11,12 +11,8 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import {
-  type IdentifierNode as Identifier,
-  type Node,
-  parseSource,
-  walk,
-} from "./syntax-tree";
+import type { IdentifierNode as Identifier } from "./syntax-estree-names";
+import { type Node, parseSource, walk } from "./syntax-tree";
 import {
   sourceWriteExceptionIssues,
   validateSourceWriteExceptions,
@@ -76,7 +72,7 @@ const inspectSourceWrites = (source: string, file: string) => {
     }
     return scope ?? tree.program;
   };
-  const collect = (node: Node, ancestors: readonly Node[]) => {
+  const collect = (node: Node, ancestors: readonly Node[]): undefined => {
     if (node.type === "ImportSpecifier") {
       aliases.set(
         node.local.name,
@@ -296,7 +292,7 @@ const inspectSourceWrites = (source: string, file: string) => {
     }
     return undefined;
   };
-  const visit = (node: Node) => {
+  const visit = (node: Node): undefined => {
     if (
       node.type === "AssignmentExpression" &&
       node.operator === "=" &&

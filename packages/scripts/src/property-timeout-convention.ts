@@ -1,5 +1,5 @@
+import type { IdentifierNode as Identifier } from "./syntax-estree-names";
 import {
-  type IdentifierNode as Identifier,
   type Node,
   type ObjectExpression,
   parseSource,

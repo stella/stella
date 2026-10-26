@@ -83,7 +83,7 @@ export const declaredAppFrameScope = (
     }
   }
   let scope: AppFrameScope | undefined;
-  const visit = (node: Node): void => {
+  const visit = (node: Node): undefined => {
     if (
       node.type === "Property" &&
       textOf(node.key, source) === "staticData" &&
@@ -240,7 +240,7 @@ const mountsDockedChatProvider = (file: string): boolean => {
     }
   }
   let found = false;
-  const visit = (node: Node): void => {
+  const visit = (node: Node): undefined => {
     if (
       node.type === "JSXOpeningElement" &&
       providerTags.has(textOf(node.name, source))
@@ -254,7 +254,7 @@ const mountsDockedChatProvider = (file: string): boolean => {
 
 const isServerEndpoint = (file: string): boolean => {
   let serverHandlers = false;
-  const visit = (node: Node): void => {
+  const visit = (node: Node): undefined => {
     if (
       node.type === "Property" &&
       textOf(node.key, source) === "server" &&

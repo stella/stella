@@ -731,7 +731,7 @@ export const checkRouteFallbacks = (sourceDirectory: string) => {
     panic("Route fallback census found no registered routes");
   }
   const collect = (file: string) => {
-    const visit = (node: Node) => {
+    const visit = (node: Node): undefined => {
       if (
         node.type === "Property" &&
         (node.key.type === "Identifier" || node.key.type === "Literal")

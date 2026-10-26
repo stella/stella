@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
-  "delta": 2,
-  "reason": "@stll/scripts and @stll/property-testing declare oxc-parser, the syntax reader that replaces the TypeScript 6 compiler API for syntax-only guards; property-testing cannot reach it through @stll/scripts without a workspace cycle. Removing typescript6 later drops more declarations than this adds."
+  "delta": 1,
+  "reason": "@stll/property-testing declares oxc-parser, the syntax reader that replaces the TypeScript 6 compiler API for syntax-only guards; it cannot reach it through @stll/scripts without a workspace cycle. Removing typescript6 later drops more declarations than this adds."
 }

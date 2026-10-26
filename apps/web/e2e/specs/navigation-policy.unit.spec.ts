@@ -3,9 +3,9 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import type { IdentifierNode as Identifier } from "@stll/scripts/src/syntax-estree-names";
 import {
   type CallExpression,
-  type IdentifierNode as Identifier,
   type MemberExpression,
   parseSource,
   walk,
