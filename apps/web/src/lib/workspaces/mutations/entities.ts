@@ -148,13 +148,11 @@ type CreateFolderFromSelectionVars = {
 export const useCreateFolderFromSelection = () => {
   const analytics = useAnalytics();
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      name,
-      parentId,
-      entityIds,
-    }: CreateFolderFromSelectionVars) =>
+  return useIdempotentMutation({
+    mutationFn: async (
+      { workspaceId, name, parentId, entityIds }: CreateFolderFromSelectionVars,
+      intentRequest,
+    ) =>
       await invokeCapability(
         "entities.folder-from-selection.create",
         async (request) => {
@@ -169,7 +167,10 @@ export const useCreateFolderFromSelection = () => {
                 toSafeId<"entity">(entityId),
               ),
             },
-            request,
+            {
+              ...request,
+              fetch: { headers: intentRequest.headers },
+            },
           );
           return unwrapApiResponse(response);
         },

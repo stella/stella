@@ -129,6 +129,12 @@ if (!databaseUrl || !runPostgresTests) {
           actorPrincipal,
           otherOrganizationPrincipal,
         ];
+        for (const id of [organizationId, otherOrganizationId]) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          });
+        }
         await db.insert(member).values(
           principals.map((principal) => ({
             ...principal,

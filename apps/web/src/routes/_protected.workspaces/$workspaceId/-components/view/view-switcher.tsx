@@ -65,6 +65,7 @@ import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/acces
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type { WorkspaceView } from "@/lib/types";
 import { useQueryView } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import {
   useConvertView,
   useCreateView,
@@ -240,6 +241,7 @@ export const ViewSwitcher = ({
               onSelect: () => {
                 createView.mutate(
                   {
+                    id: createUuid(),
                     // A layout a matter holds once comes back under its
                     // default name, which the API re-localizes per reader.
                     // Others get "New {layout}": `layoutType` lets each
@@ -530,6 +532,7 @@ const useViewActionsMenu = ({
   const handleDuplicate = (view: WorkspaceView) => {
     createView.mutate(
       {
+        id: createUuid(),
         name: t("workspaces.views.copySuffix", {
           name: view.name,
         }),

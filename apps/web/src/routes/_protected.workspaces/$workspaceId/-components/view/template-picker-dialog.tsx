@@ -52,6 +52,7 @@ import {
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
 import { useQueryView } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import { useCreateView } from "@/lib/workspaces/mutations/views";
 import type { WorkspaceViewTemplate } from "@/lib/workspaces/queries/view-templates";
 import { viewTemplatesOptions } from "@/lib/workspaces/queries/view-templates";
@@ -138,6 +139,7 @@ export const TemplatePickerDialog = ({
     );
     createView.mutate(
       {
+        id: createUuid(),
         name: template.name,
         layout: template.layout,
         templateProperties: template.templateProperties,
@@ -161,6 +163,7 @@ export const TemplatePickerDialog = ({
   const createAvt = (settled: () => void) => {
     createView.mutate(
       {
+        id: createUuid(),
         name: t("workspaces.views.layouts.avt"),
         layout: EMPTY_AVT_LAYOUT,
       },

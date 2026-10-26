@@ -6,10 +6,8 @@ import ts from "typescript6";
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
 import {
-  createReplayExceptions,
+  createRouteInventory,
   liveCreateRoutes,
-  mountedServerCreateRoutes,
-  serverCreateRoutes,
 } from "../../tests/helpers/idempotent-create-route-census";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
@@ -102,7 +100,7 @@ const clientPath = ({
   }
   if (
     ts.isIdentifier(node.expression) &&
-    node.expression.text === "createStellaEdenClient"
+    node.expression.text === "createApiClient"
   ) {
     return [];
   }
@@ -157,12 +155,11 @@ const declarationsIn = (tree: ts.SourceFile) => {
   return declarations;
 };
 
-// Client entry paths come from the same exports used by the UI, including
-// independently typed Eden projections such as memoriesApi.
+// Client entry paths come from the same native client exports used by the UI.
 const clientRoots = () => {
   const tree = parse({
-    file: "eden-client.ts",
-    text: readFileSync(path.join(sourceRoot, "lib/eden-client.ts"), "utf-8"),
+    file: "api.ts",
+    text: readFileSync(path.join(sourceRoot, "lib/api.ts"), "utf-8"),
   });
   const declarations = declarationsIn(tree);
   const roots = new Map<string, readonly string[]>();
@@ -287,11 +284,7 @@ const createMutationViolations = ({
         derivedRequests.add(binding.name.text);
       }
       const root = roots.get(name);
-      if (
-        (isModule({ module, owner: "lib/api" }) ||
-          isModule({ module, owner: "lib/eden-client" })) &&
-        root
-      ) {
+      if (isModule({ module, owner: "lib/api" }) && root) {
         environment.roots.set(binding.name.text, root);
       }
       if (
@@ -525,6 +518,14 @@ const createMutationViolations = ({
     }
     for (const entry of node.properties) {
       if (
+        ts.isPropertyAssignment(entry) &&
+        ts.isIdentifier(entry.name) &&
+        entry.name.text === "fetch" &&
+        requestOptions(entry.initializer, at)
+      ) {
+        return true;
+      }
+      if (
         ts.isSpreadAssignment(entry) &&
         ts.isIdentifier(entry.expression) &&
         requestIdentifier(entry.expression.text, at)
@@ -597,6 +598,7 @@ const createMutationViolations = ({
   return { createCalls, violations };
 };
 
+// timeout: Parsing the full server and browser source inventories is CPU-bound.
 test("every web call to a registered JSON create route carries submit-intent headers", () => {
   const { all, replay: creates, excluded } = liveCreateRoutes();
   expect(all.size).toBeGreaterThan(75);
@@ -621,39 +623,6 @@ test("every web call to a registered JSON create route carries submit-intent hea
   expect(createCalls).toBeGreaterThan(50);
   expect(violations).toEqual([]);
 }, 15_000);
-
-test("create census derives lifecycle exceptions from the server declaration and rejects a missing inventory", () => {
-  const source = parse({
-    file: "server-census.ts",
-    text: 'const IDEMPOTENCY_EXCEPTIONS = { "src/handlers/upload/create.ts": "Owns durable uploads" } as const satisfies Record<string, string>;',
-  });
-  expect([...createReplayExceptions(source)]).toEqual([
-    "src/handlers/upload/create.ts",
-  ]);
-  expect(() =>
-    createReplayExceptions(
-      parse({ file: "server-census.ts", text: "export {};" }),
-    ),
-  ).toThrow("Server create replay exception inventory is missing");
-});
-
-test("create census resolves nested groups and separate route prefixes", () => {
-  const routes = serverCreateRoutes({
-    file: "fixture.ts",
-    text: `
-    import create from "./create";
-    const one = new Elysia({ prefix: "/one" }).post("/", create.handler)
-      .group("/nested", (app) => app.group("/:id", (child) => child.put("/", create.handler)));
-    const two = new Elysia({ prefix: "/two" }).put("/", create.handler);
-  `,
-    isCreate: () => true,
-  });
-  expect([...routes].toSorted()).toEqual([
-    "post:one",
-    "put:one/nested/*",
-    "put:two",
-  ]);
-});
 
 test("create census rejects unrelated options and includes unnamed component actions", () => {
   const routes = new Set(["post:things/*/items", "put:things"]);
@@ -732,20 +701,22 @@ test("create census rejects bogus request names, static keys and unowned method 
   expect(result.violations).toHaveLength(4);
 });
 
-test("create census composes imported child route factories under their mount prefix", () => {
-  const files = new Map([
-    [
-      "/fixture/parent.ts",
-      `import { childRoutes } from "./child"; export const parent = new Elysia({ prefix: "/v1/lists/:workspaceId" }).use(childRoutes());`,
-    ],
-    [
-      "/fixture/child.ts",
-      `import create from "./create"; export const childRoutes = () => new Elysia().post("/verifications", create.handler);`,
-    ],
-  ]);
-  expect([...mountedServerCreateRoutes(files, () => true)]).toEqual([
-    "post:lists/*/verifications",
-  ]);
+test("create census recognizes owned fetch headers beside capability options", () => {
+  const source = `
+    import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
+    const create = (body: unknown, intent: IdempotentRequest) =>
+      api.things.put(body, { ...capability, fetch: { headers: intent.headers } });
+    const unowned = () =>
+      api.things.put(body, { ...capability, fetch: { headers: request.headers } });
+  `;
+  const result = createMutationViolations({
+    file: "fixture.ts",
+    text: source,
+    creates: new Set(["put:things"]),
+  });
+  expect(result.createCalls).toBe(2);
+  expect(result.violations).toHaveLength(1);
+  expect(result.violations.at(0)).toContain("fixture.ts:6:");
 });
 
 test("create census recognizes the plain submit-intent owner and aliased client imports", () => {
@@ -892,4 +863,27 @@ test("create census resolves lexically scoped parameter-object aliases", () => {
   });
   expect(result.createCalls).toBe(4);
   expect(result.violations).toHaveLength(3);
+});
+
+test("create census projects mounted native routes into browser paths and replay policies", () => {
+  const inventory = createRouteInventory([
+    {
+      method: "POST",
+      path: "/v1/things/:thingId/items",
+      file: "src/handlers/items/create.ts",
+      replay: true,
+    },
+    {
+      method: "PUT",
+      path: "/v1/upload/:workspaceId",
+      file: "src/handlers/upload/create.ts",
+      replay: false,
+    },
+  ]);
+  expect([...inventory.all].toSorted()).toEqual([
+    "post:things/*/items",
+    "put:upload/*",
+  ]);
+  expect([...inventory.replay]).toEqual(["post:things/*/items"]);
+  expect([...inventory.excluded]).toEqual(["put:upload/*"]);
 });

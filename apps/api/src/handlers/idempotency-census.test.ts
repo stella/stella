@@ -3,6 +3,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
+import { collectIdempotentCreateRoutes } from "@stll/scripts/src/idempotent-create-routes";
+
+import { apiRoutes } from "@/api/api-routes";
+
+import { mountedCreateRouteCensus } from "../../scripts/idempotent-create-routes";
+
 const apiRoot = path.resolve(import.meta.dir, "../..");
 
 // These lifecycle boundaries cannot retain a scoped JSON replay receipt.
@@ -85,56 +91,6 @@ const resolveImport = (file: string, specifier: string) => {
     );
   }
   return undefined;
-};
-
-const collectCreateRoutes = (file: string, source: string) => {
-  if (!/\b(?:post|put)\b/u.test(source)) {
-    return new Set<string>();
-  }
-  const tree = parse(source);
-  const imports = new Map<string, string>();
-  for (const statement of tree.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const name = statement.importClause?.name;
-    const target = resolveImport(file, statement.moduleSpecifier.text);
-    if (name && target) {
-      imports.set(name.text, target);
-    }
-  }
-  const handlers = new Set<string>();
-  walk(tree, (node) => {
-    if (
-      !ts.isCallExpression(node) ||
-      !ts.isPropertyAccessExpression(node.expression)
-    ) {
-      return;
-    }
-    if (
-      node.expression.name.text !== "put" &&
-      node.expression.name.text !== "post"
-    ) {
-      return;
-    }
-    const handler = node.arguments.at(1);
-    if (
-      !handler ||
-      !ts.isPropertyAccessExpression(handler) ||
-      handler.name.text !== "handler" ||
-      !ts.isIdentifier(handler.expression)
-    ) {
-      return;
-    }
-    const target = imports.get(handler.expression.text);
-    if (target?.endsWith("/create.ts")) {
-      handlers.add(target);
-    }
-  });
-  return handlers;
 };
 
 const collectCreateCapabilities = (source: string) => {
@@ -265,21 +221,22 @@ const hasReplayConfig = (source: string) => {
   );
 };
 
-test("every create route and capability declares JSON request replay or a reasoned exception", () => {
-  const creates = new Set<string>();
-  for (const file of new Bun.Glob("src/handlers/**/*.ts").scanSync({
-    cwd: apiRoot,
-  })) {
-    if (/\.(?:test|type-test)\.ts$/u.test(file)) {
-      continue;
-    }
-    for (const handler of collectCreateRoutes(
-      file,
-      readFileSync(path.join(apiRoot, file), "utf-8"),
-    )) {
-      creates.add(handler);
-    }
+test("every create route and capability declares JSON request replay or a reasoned exception", async () => {
+  const mounted = await mountedCreateRouteCensus();
+  expect(mounted.length).toBeGreaterThan(75);
+  const served = new Set(
+    apiRoutes.map(({ method, path: routePath }) => `${method} ${routePath}`),
+  );
+  for (const route of mounted) {
+    expect(served.has(`${route.method} ${route.path}`)).toBe(true);
   }
+  expect(mounted).toContainEqual({
+    method: "POST",
+    path: "/v1/api-keys",
+    file: "src/handlers/api-keys/create.ts",
+    replay: false,
+  });
+  const creates = new Set(mounted.map(({ file }) => file));
   for (const file of new Bun.Glob(
     "src/mcp/generated/capability-dispatch/*.ts",
   ).scanSync({ cwd: apiRoot })) {
@@ -302,17 +259,44 @@ test("every create route and capability declares JSON request replay or a reason
   }
 });
 
-test("the create census detects relative and aliased routes and capability owners", () => {
-  expect([
-    ...collectCreateRoutes(
-      "src/handlers/example/routes.ts",
-      `
-    import save from "./create";
-    import other from "./update";
-    app.put("/", save.handler).post("/", save.handler).post("/update", other.handler);
-  `,
-    ),
-  ]).toEqual(["src/handlers/example/create.ts"]);
+test("the create census follows mounted handler identities and capability owners", () => {
+  const create = { config: { idempotency: { type: "replay" } } };
+  const update = { config: {} };
+  expect(
+    collectIdempotentCreateRoutes({
+      routes: [
+        { method: "POST", path: "/v1/items", definition: create },
+        { method: "PUT", path: "/v1/items/new", definition: create },
+        { method: "GET", path: "/v1/items", definition: create },
+        { method: "POST", path: "/v1/items/update", definition: update },
+      ],
+      endpoints: [
+        {
+          file: "src/handlers/items/create.ts",
+          definition: create,
+          create: true,
+        },
+        {
+          file: "src/handlers/items/update.ts",
+          definition: update,
+          create: false,
+        },
+      ],
+    }),
+  ).toEqual([
+    {
+      method: "POST",
+      path: "/v1/items",
+      file: "src/handlers/items/create.ts",
+      replay: true,
+    },
+    {
+      method: "PUT",
+      path: "/v1/items/new",
+      file: "src/handlers/items/create.ts",
+      replay: true,
+    },
+  ]);
   expect([
     ...collectCreateCapabilities(`
     export const dispatch = {

@@ -53,7 +53,7 @@ export const sendVatRateCommand = async (
       unwrapApiResponse(
         await api["vat-rates"]["apply-preset"].post(
           { country: command.country },
-          request,
+          { ...request, fetch: { headers: intentRequest.headers } },
         ),
       ),
     );

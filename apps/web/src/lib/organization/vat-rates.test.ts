@@ -37,6 +37,7 @@ test.each(VAT_RATE_PRESET_COUNTRIES)(
     expect(request?.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
       "vat-rates.presets.create",
     );
+    expect(request?.headers.get("Idempotency-Key")).toBe("preset-intent");
     expect(
       request === undefined ? undefined : new URL(request.url).pathname,
     ).toBe("/v1/vat-rates/apply-preset");

@@ -17,6 +17,7 @@ import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime"
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   realtime: organizationResourceSetUpdates(RESOURCE_TYPE.VAT_RATE),
   description:
     "Add the statutory VAT rate preset for Slovakia or Czechia to the active organization. Existing overlapping periods with the same code are skipped.",

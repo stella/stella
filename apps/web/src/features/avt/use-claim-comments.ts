@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -54,6 +55,7 @@ export const useClaimComments = ({
   runId,
   workspaceId,
 }: ClaimCommentsScope): ClaimComments => {
+  const submit = useIdempotentSubmit();
   const user = useMaybeAuthenticatedUser();
   const options = claimCommentsOptions({
     claimId: claim.id,
@@ -85,11 +87,15 @@ export const useClaimComments = ({
       visibility: AnnotationVisibility;
     }) =>
       unwrapApiResponse(
-        await commentRoutes().post({
-          body,
-          claimId: toSafeId<"legalListClaim">(claim.id),
-          runId: toSafeId<"legalListVerificationRun">(runId),
-          visibility,
+        await submit.run({
+          operation: `claim-comments:${workspaceId}:${runId}:${claim.id}`,
+          body: {
+            body,
+            claimId: toSafeId<"legalListClaim">(claim.id),
+            runId: toSafeId<"legalListVerificationRun">(runId),
+            visibility,
+          },
+          send: commentRoutes().post,
         }),
       ),
     pendingInput: ({ body, visibility }) => ({

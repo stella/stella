@@ -7,7 +7,12 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
-type RecordedRequest = { method: string; path: string; body: unknown };
+type RecordedRequest = {
+  method: string;
+  path: string;
+  body: unknown;
+  headers: Headers;
+};
 // Every product request must be one a test seeded a response for, so the
 // assertions see exactly the comment traffic.
 const requests: RecordedRequest[] = [];
@@ -27,6 +32,7 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
         method: request.method,
         path: pathname,
         body: text === "" ? null : JSON.parse(text),
+        headers: request.headers,
       });
       const answer = answers.shift();
       if (answer === undefined) {
@@ -199,6 +205,7 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests.at(0)).toEqual({
     method: "POST",
+    headers: expect.anything(),
     path: commentsPath,
     body: {
       body: "Ask for the minutes.",
@@ -207,6 +214,7 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
       visibility: "private",
     },
   });
+  expect(requests.at(0)?.headers.get("Idempotency-Key")).toBeString();
   expect(requests.at(1)?.method).toBe("GET");
   await waitFor(() =>
     expect(screen.getByText("Ask for the minutes.")).toBeTruthy(),
@@ -224,6 +232,7 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   await waitFor(() => expect(requests).toHaveLength(2));
   expect(requests.at(0)).toEqual({
     method: "PATCH",
+    headers: expect.anything(),
     path: `${commentsPath}/${added.id}`,
     body: { change: "body", body: "Ask for the signed minutes." },
   });

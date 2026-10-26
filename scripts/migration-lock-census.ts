@@ -8,6 +8,7 @@ import {
   reviewedMigrationStatements,
   splitMigrationAlterActions,
 } from "./check-migration-safety";
+import { REQUEST_IDEMPOTENCY_LOCK_ALLOWANCES } from "./migration-lock-allowances/20261025180100_request_idempotency_receipts";
 
 type LockMode =
   | "ACCESS SHARE"
@@ -699,6 +700,7 @@ export type MigrationLockAllowance = {
 // New writer-blocking work without an existing safety acknowledgement needs a
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
+  ...REQUEST_IDEMPOTENCY_LOCK_ALLOWANCES,
   {
     migration: "20261025130000_reader_answer_continuation_spans",
     form: "add-column",

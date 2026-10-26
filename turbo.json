@@ -1498,6 +1498,7 @@
         "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/**",
         "$TURBO_ROOT$/apps/desktop/src/**",
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
