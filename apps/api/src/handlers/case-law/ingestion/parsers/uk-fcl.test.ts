@@ -36,7 +36,8 @@ describe("LegalDocML judgment", () => {
     ]);
     expect(
       result.metadata.inlineReferences.map(
-        ({ attributes }) => attributes["uk:origin"],
+        ({ attributes }) =>
+          attributes["{https://caselaw.nationalarchives.gov.uk/akn}origin"],
       ),
     ).toEqual(["parser", "TNA", "parser"]);
     expect(
@@ -56,7 +57,7 @@ describe("LegalDocML judgment", () => {
     expect(parse().unwrap()).toEqual(result);
   });
 
-  test("namespace prefixes do not change judgment text or structure", () => {
+  test("namespace prefixes do not change judgment structure or metadata", () => {
     const prefixed = xml
       .replaceAll("xmlns:uk=", "xmlns:fcl=")
       .replaceAll("uk:", "fcl:");
@@ -64,6 +65,12 @@ describe("LegalDocML judgment", () => {
     const expected = parse().unwrap();
     const actual = parse(prefixed).unwrap();
     expect(actual.documentAst).toEqual(expected.documentAst);
+    expect(actual.metadata.xmlFields).toEqual(expected.metadata.xmlFields);
+    expect(
+      actual.metadata.inlineReferences.map(({ attributes }) => attributes),
+    ).toEqual(
+      expected.metadata.inlineReferences.map(({ attributes }) => attributes),
+    );
   });
 
   test("unsafe rendered links retain their source attributes and text", () => {
@@ -75,7 +82,7 @@ describe("LegalDocML judgment", () => {
     const result = parse(unsafe).unwrap();
     expect(result.fulltext).toBe(parse().unwrap().fulltext);
     expect(JSON.stringify(result.documentAst)).not.toContain(unsafeHref);
-    expect(result.metadata.inlineReferences.at(1)?.attributes["href"]).toBe(
+    expect(result.metadata.inlineReferences.at(1)?.attributes["{}href"]).toBe(
       unsafeHref,
     );
   });
@@ -85,9 +92,11 @@ describe("LegalDocML judgment", () => {
       .replace("<header>", "<header>Unstructured header text")
       .replace("synthetic-parser-1", "<![CDATA[synthetic-parser-1]]>");
     const result = parse(source).unwrap();
-    expect(result.metadata.xmlFields["uk:parser"]).toEqual([
-      { text: "synthetic-parser-1", attributes: {} },
-    ]);
+    expect(
+      result.metadata.xmlFields[
+        "{https://caselaw.nationalarchives.gov.uk/akn}parser"
+      ],
+    ).toEqual([{ text: "synthetic-parser-1", attributes: {} }]);
     expect(
       result.documentAst.blocks.map(({ plainText }) => plainText.trim()),
     ).toContain("Unstructured header text");

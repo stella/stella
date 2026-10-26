@@ -22,7 +22,14 @@ const elements = (root: slimdom.Element | slimdom.Document, name: string) =>
   Array.from(root.getElementsByTagNameNS(AKN, name));
 const attributes = (element: slimdom.Element) =>
   Object.fromEntries(
-    Array.from(element.attributes, ({ name, value }) => [name, value]),
+    Array.from(element.attributes)
+      .filter(
+        ({ namespaceURI }) => namespaceURI !== "http://www.w3.org/2000/xmlns/",
+      )
+      .map(({ namespaceURI, localName, value }) => [
+        `{${namespaceURI ?? ""}}${localName}`,
+        value,
+      ]),
   );
 const matchesReference = (
   element: slimdom.Element,
@@ -52,9 +59,10 @@ const fieldsOf = (document: slimdom.Document) => {
         .trim(),
       attributes: attributes(element),
     };
-    const group = fields.get(element.tagName);
+    const label = `{${element.namespaceURI ?? ""}}${element.localName}`;
+    const group = fields.get(label);
     if (group === undefined) {
-      fields.set(element.tagName, [field]);
+      fields.set(label, [field]);
     } else {
       group.push(field);
     }

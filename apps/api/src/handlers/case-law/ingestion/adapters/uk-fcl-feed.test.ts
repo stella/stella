@@ -40,7 +40,7 @@ const stored = () => {
 };
 
 test("feed identity and repeated fields survive raw assembly and offline replay", () => {
-  const listed = readUkFclFeed(feed).unwrap().entries;
+  const listed = readUkFclFeed(feed, 50).unwrap().entries;
   expect(listed).toHaveLength(1);
   expect(listed.at(0)).toMatchObject({
     sourceDocumentId,
@@ -54,10 +54,12 @@ test("feed identity and repeated fields survive raw assembly and offline replay"
   expect(initial.metadata["feedFields"]).toMatchObject({
     "{http://www.w3.org/2005/Atom}link": [{}, {}, {}],
   });
-  expect(decodeSourceRawEnvelope(initial.sourceRaw ?? "")).toEqual({
-    listing: feed,
-    document,
-  });
+  const archived = decodeSourceRawEnvelope(initial.sourceRaw ?? "");
+  expect(archived?.["document"]).toBe(document);
+  expect(
+    readUkFclFeed(archived?.["listing"] ?? "", 50).unwrap().entries,
+  ).toEqual(listed);
+  expect(archived?.["listing"]).not.toContain("Synthetic judgment feed");
   expect(initial.textFields.headnote).toEqual({
     type: "absent",
     reason: "not_published",
@@ -102,9 +104,9 @@ test("only a same-origin next link controls pagination", () => {
   const addLink = (href: string, rel = "next") =>
     feed.replace("</feed>", () => `<link rel="${rel}" href="${href}"/></feed>`);
   expect(
-    readUkFclFeed(addLink("/atom.xml?page=999", "last")).unwrap().next,
+    readUkFclFeed(addLink("/atom.xml?page=999", "last"), 50).unwrap().next,
   ).toBeNull();
-  expect(readUkFclFeed(addLink("/atom.xml?page=2")).unwrap().next).toBe(
+  expect(readUkFclFeed(addLink("/atom.xml?page=2"), 50).unwrap().next).toBe(
     "https://caselaw.nationalarchives.gov.uk/atom.xml?page=2",
   );
   for (const href of [
@@ -113,7 +115,7 @@ test("only a same-origin next link controls pagination", () => {
     ["javascript", "alert(1)"].join(":"),
     "https://user:pass@caselaw.nationalarchives.gov.uk/atom.xml",
   ]) {
-    expect(readUkFclFeed(addLink(href)).isErr()).toBe(true);
+    expect(readUkFclFeed(addLink(href), 50).isErr()).toBe(true);
   }
 });
 
@@ -122,14 +124,16 @@ test("namespace aliases preserve discovery and malformed inputs are rejected", (
     .replaceAll("xmlns:tna=", "xmlns:source=")
     .replaceAll("tna:", "source:");
   expect(alias).not.toBe(feed);
-  expect(readUkFclFeed(alias).unwrap()).toEqual(readUkFclFeed(feed).unwrap());
+  expect(readUkFclFeed(alias, 50).unwrap()).toEqual(
+    readUkFclFeed(feed, 50).unwrap(),
+  );
   for (const raw of [
     feed.slice(0, -20),
     feed.replace("2026-01-03T12:00:00Z", "invalid"),
     feed.replace(/<tna:uri>[^<]+<\/tna:uri>/u, "<tna:uri>../escape</tna:uri>"),
     feed.replace('xmlns="http://www.w3.org/2005/Atom"', 'xmlns="urn:wrong"'),
   ]) {
-    expect(readUkFclFeed(raw).isErr()).toBe(true);
+    expect(readUkFclFeed(raw, 50).isErr()).toBe(true);
   }
   expect(
     buildUkFclDecision({ feed, document, sourceDocumentId: "missing" }).isErr(),
@@ -237,7 +241,7 @@ const refusalCases = [
 for (const { name, raw, message } of refusalCases) {
   test(`feed returns a typed refusal for ${name}`, () => {
     expect(raw).not.toBe(feed);
-    const result = readUkFclFeed(raw);
+    const result = readUkFclFeed(raw, 50);
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
       return;
@@ -265,7 +269,7 @@ for (const { name, raw } of [
 ]) {
   test(`${name} feed citation refuses discovery, assembly and replay`, () => {
     expect(raw).not.toBe(feed);
-    const listed = readUkFclFeed(raw);
+    const listed = readUkFclFeed(raw, 50);
     expect(listed.isErr()).toBe(true);
     if (listed.isOk()) {
       return;
@@ -319,4 +323,63 @@ test("a different judgment citation refuses assembly and stored-raw replay", () 
     rejection: "no-document",
     detail: result.error.message,
   });
+});
+
+test("feed end requires a short or empty page without a next link", () => {
+  expect(readUkFclFeed(feed, 2).unwrap().next).toBeNull();
+  const empty = feed.replace(syntheticEntry, "");
+  expect(empty).not.toBe(feed);
+  expect(readUkFclFeed(empty, 1).unwrap()).toEqual({ entries: [], next: null });
+  const full = readUkFclFeed(feed, 1);
+  expect(full.isErr()).toBe(true);
+  if (full.isErr()) {
+    expect(full.error).toBeInstanceOf(ParseXmlError);
+    expect(full.error.message).toContain("Feed end not proven");
+  }
+  const continuing = feed.replace(
+    "</feed>",
+    '<link rel="next" href="/atom.xml?page=2"/></feed>',
+  );
+  expect(readUkFclFeed(continuing, 1).unwrap().next).toBe(
+    "https://caselaw.nationalarchives.gov.uk/atom.xml?page=2",
+  );
+});
+
+test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+  "invalid requested page size %s produces a typed refusal",
+  (perPage) => {
+    const result = readUkFclFeed(feed, perPage);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(ParseXmlError);
+      expect(result.error.message).toContain("per_page");
+    }
+  },
+);
+
+test("sibling entries cannot change a decision's raw hash or offline replay", () => {
+  const sibling = syntheticEntry.replaceAll(
+    sourceDocumentId,
+    "d-00000000-0000-4000-8000-000000000002",
+  );
+  const combined = feed.replace("</feed>", () => `${sibling}</feed>`);
+  const changedSibling = sibling.replace(
+    "Invented Amber v Invented Birch",
+    "Invented Cedar v Invented Dune",
+  );
+  expect(changedSibling).not.toBe(sibling);
+  const changed = feed.replace("</feed>", () => `${changedSibling}</feed>`);
+  expect(readUkFclFeed(combined, 50).unwrap().entries).toHaveLength(2);
+  const initial = build(combined);
+  const revised = build(changed);
+  expect(revised.rawHash).toBe(initial.rawHash);
+  expect(initial.rawHash).toBe(build().rawHash);
+  const listing = decodeSourceRawEnvelope(initial.sourceRaw ?? "")?.["listing"];
+  expect(readUkFclFeed(listing ?? "", 50).unwrap().entries).toHaveLength(1);
+  expect(listing).not.toContain("d-00000000-0000-4000-8000-000000000002");
+  const replayed = reparseUkFclStoredRaw({
+    ...stored(),
+    raw: new TextEncoder().encode(initial.sourceRaw),
+  });
+  expect(replayed).toEqual({ type: "parsed", result: initial });
 });

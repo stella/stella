@@ -30,7 +30,7 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 const ATOM = "http://www.w3.org/2005/Atom";
 const TNA = "https://caselaw.nationalarchives.gov.uk";
 const ORIGIN = "https://caselaw.nationalarchives.gov.uk";
-const PARSER_VERSION = 1;
+const PARSER_VERSION = 2;
 const invalid = (message: string) =>
   new ParseXmlError({ message, cause: undefined });
 const children = (node: slimdom.Element) => Array.from(node.children);
@@ -94,11 +94,15 @@ const readEntry = (entry: slimdom.Element) => {
   for (const child of entry.getElementsByTagNameNS("*", "*")) {
     const value = {
       text: child.textContent ?? "",
+      // Namespace declarations are serialization, not data: an archived
+      // single entry repeats them on children, the published page does not.
       attributes: Object.fromEntries(
-        Array.from(child.attributes, ({ name, value: attribute }) => [
-          name,
-          attribute,
-        ]),
+        Array.from(child.attributes)
+          .filter(
+            ({ namespaceURI }) =>
+              namespaceURI !== "http://www.w3.org/2000/xmlns/",
+          )
+          .map(({ name, value: attribute }) => [name, attribute]),
       ),
     };
     const label = `{${child.namespaceURI ?? ""}}${child.localName}`;
@@ -120,7 +124,7 @@ const readEntry = (entry: slimdom.Element) => {
   });
 };
 
-export const readUkFclFeed = (raw: string) => {
+const parseUkFclFeed = (raw: string) => {
   const parsed = Result.try({
     try: () => slimdom.parseXmlDocument(raw),
     catch: (cause) =>
@@ -168,7 +172,7 @@ export const readUkFclFeed = (raw: string) => {
     return Result.err(invalid("Next page link requires an href attribute"));
   }
   if (href === undefined) {
-    return Result.ok({ entries, next: null });
+    return Result.ok({ entries, next: null, root });
   }
   const resolved = Result.try({
     try: () => new URL(href, ORIGIN),
@@ -191,7 +195,28 @@ export const readUkFclFeed = (raw: string) => {
       invalid("Next page href must target the publisher's /atom.xml feed"),
     );
   }
-  return Result.ok({ entries, next: next.toString() });
+  return Result.ok({ entries, next: next.toString(), root });
+};
+
+export const readUkFclFeed = (raw: string, perPage: number) => {
+  if (!Number.isSafeInteger(perPage) || perPage < 1) {
+    return Result.err(
+      invalid("Requested per_page must be a positive safe integer"),
+    );
+  }
+  const parsed = parseUkFclFeed(raw);
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  const { entries, next } = parsed.value;
+  if (next === null && entries.length >= perPage) {
+    return Result.err(
+      invalid(
+        "Feed end not proven: a full page has no next link; retry the page and inspect the publisher's pagination before advancing the cursor",
+      ),
+    );
+  }
+  return Result.ok({ entries, next });
 };
 
 type BuildUkFclDecisionOptions = {
@@ -204,7 +229,7 @@ export const buildUkFclDecision = ({
   document,
   sourceDocumentId,
 }: BuildUkFclDecisionOptions) => {
-  const listed = readUkFclFeed(feed);
+  const listed = parseUkFclFeed(feed);
   if (listed.isErr()) {
     return listed;
   }
@@ -237,7 +262,19 @@ export const buildUkFclDecision = ({
   if (entry.caseNumber !== caseNumber) {
     return Result.err(invalid("Feed and document citations differ"));
   }
-  const sourceRaw = encodeSourceRawEnvelope({ listing: feed, document });
+  const entryElement = named(listed.value.root, ATOM, "entry").find(
+    (item) => onlyText(item, TNA, "uri") === sourceDocumentId,
+  );
+  if (entryElement === undefined) {
+    return Result.err(invalid("Document identity absent from feed"));
+  }
+  const listingDocument = new slimdom.Document();
+  const listingFeed = listingDocument.createElementNS(ATOM, "feed");
+  listingDocument.append(listingFeed);
+  // Serializing the imported subtree materializes inherited namespace bindings.
+  listingFeed.append(listingDocument.importNode(entryElement, true));
+  const listing = slimdom.serializeToWellFormedString(listingDocument);
+  const sourceRaw = encodeSourceRawEnvelope({ listing, document });
   return Result.ok(
     plainTextIngestionResult({
       caseNumber,
