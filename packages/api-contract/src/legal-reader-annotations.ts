@@ -43,26 +43,15 @@ export const READER_ANNOTATION_STYLES = [
 ] as const;
 export type ReaderAnnotationStyle = (typeof READER_ANNOTATION_STYLES)[number];
 
-/**
- * The ways a cited passage is copied for a brief: the quotation with its
- * citation in either order, as a block, alone, or the citation alone.
- */
-export const READER_CITATION_COPY_MODES = [
-  "quoteWithCitation",
-  "citationWithQuote",
-  "blockQuoteWithCitation",
-  "textOnly",
-  "citationOnly",
-] as const;
-export type ReaderCitationCopyMode =
-  (typeof READER_CITATION_COPY_MODES)[number];
-
 /** Bounds shared by the API validator and the guest annotation store. */
 export const READER_ANNOTATION_MAX_SPANS = 40;
 export const READER_ANNOTATION_QUOTE_MAX_LENGTH = 2000;
 export const READER_ANNOTATION_BODY_MAX_LENGTH = 10_000;
 
-/** How a selected reader passage and its citation are copied. */
+/**
+ * The ways a cited passage is copied for a brief: the quotation with its
+ * citation in either order, as a block, alone, or the citation alone.
+ */
 export const READER_COPY_MODES = [
   "quoteWithCitation",
   "citationWithQuote",

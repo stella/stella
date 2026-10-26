@@ -43,7 +43,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const relativeTime = useRelativeTime();
   const statusQuery = useQuery(caseLawCorpusStatusOptions(country));
   const statusView = useQueryView(statusQuery);
-  useQueryViewError(statusView);
+  useQueryViewError(statusView, "LawDatabaseStatus:query");
   const status = statusView.type === "items" ? statusView.items : undefined;
 
   const updatedAt = status?.updatedAt ?? null;

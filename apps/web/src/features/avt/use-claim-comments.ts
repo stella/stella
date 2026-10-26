@@ -66,7 +66,7 @@ export const useClaimComments = ({
   });
   const queryKey = options.queryKey;
   const view = useQueryView(useQuery({ ...options, enabled: user !== null }));
-  useQueryViewError(view);
+  useQueryViewError(view, "useClaimComments:query");
   const comments = view.type === "items" ? view.items : [];
   const commentRoutes = () =>
     api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })[
@@ -76,6 +76,7 @@ export const useClaimComments = ({
     commentRoutes()({ annotationId: toSafeId<"legalReaderAnnotation">(id) });
 
   const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: "claim-comments",
     create: async ({
       body,
       visibility,

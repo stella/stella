@@ -12,16 +12,10 @@
 
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
+import { LOCAL_SEED_SCRIPTS } from "./seed-local-scripts";
 import { DEFAULT_ORG_ID, DEFAULT_USER_ID } from "./seed-utils";
 
-const SEED_SCRIPTS = [
-  "seed-test-user.ts",
-  "seed-dev.ts",
-  "seed-legal-lists.ts",
-  "seed-legislation.ts",
-] as const;
-
-for (const script of SEED_SCRIPTS) {
+for (const script of LOCAL_SEED_SCRIPTS) {
   const startedAt = performance.now();
   const child = Bun.spawn({
     cmd: [

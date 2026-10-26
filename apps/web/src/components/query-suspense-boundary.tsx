@@ -51,6 +51,13 @@ class QueryErrorBoundary extends Component<
         message: `[${this.props.area}] ${error.message}`,
         cause: error,
       }),
+      {
+        fingerprintKey: `QueryErrorBoundary:${this.props.area}`,
+        scope: {
+          type: "handler",
+          handlerId: `QueryErrorBoundary:${this.props.area}`,
+        },
+      },
     );
     this.props.onError?.(error);
   }

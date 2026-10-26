@@ -9,6 +9,7 @@ import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
@@ -22,8 +23,10 @@ import { replaceCachedFileName } from "@/lib/files/queries";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
-import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  invalidateDeletedEntityQueries,
+  invalidateRenamedEntityQueries,
+} from "@/lib/workspaces/mutations/entities.logic";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 
 type CreateEntitiesVars = {
@@ -53,7 +56,10 @@ export const useCreateEntities = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateEntities:failure",
+        scope: { type: "handler", handlerId: "useCreateEntities:failure" },
+      });
     },
   });
 };
@@ -82,10 +88,14 @@ export const useDeleteEntities = () => {
       await invalidateDeletedEntityQueries({
         queryClient,
         workspaceId,
+        entityIds,
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteEntities:failure",
+        scope: { type: "handler", handlerId: "useDeleteEntities:failure" },
+      });
     },
   });
 };
@@ -111,7 +121,10 @@ export const useMoveEntity = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMoveEntity:failure",
+        scope: { type: "handler", handlerId: "useMoveEntity:failure" },
+      });
     },
   });
 };
@@ -153,7 +166,13 @@ export const useCreateFolderFromSelection = () => {
         },
       ),
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateFolderFromSelection:failure",
+        scope: {
+          type: "handler",
+          handlerId: "entities.folder-from-selection.create",
+        },
+      });
     },
   });
 };
@@ -183,8 +202,14 @@ export const useRenameEntity = (
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const reportFailure = (error: unknown) => {
-    analytics.captureError(error);
+  const reportFailure = (
+    error: unknown,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
+    analytics.captureError(error, {
+      fingerprintKey,
+      scope: { type: "handler", handlerId: fingerprintKey },
+    });
     notifyUserError(error, t("errors.actionFailed"));
   };
 
@@ -271,7 +296,10 @@ export const useRenameEntity = (
         }
       });
       if (reconciled.isErr()) {
-        analytics.captureError(reconciled.error);
+        analytics.captureError(reconciled.error, {
+          fingerprintKey: "useRenameEntity:failure",
+          scope: { type: "handler", handlerId: "useRenameEntity:failure" },
+        });
       }
       if (data.file) {
         replaceCachedFileName(queryClient, {
@@ -285,8 +313,10 @@ export const useRenameEntity = (
       detached(
         (async () => {
           await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
+            invalidateRenamedEntityQueries({
+              queryClient,
+              workspaceId,
+              entityId,
             }),
             queryClient.invalidateQueries({
               queryKey: entityViewKeys.all(activeOrganizationId, userId),
@@ -329,9 +359,12 @@ export const useRenameEntity = (
         }
       });
       if (rolledBack.isErr()) {
-        analytics.captureError(rolledBack.error);
+        analytics.captureError(rolledBack.error, {
+          fingerprintKey: "useRenameEntity:failure-2",
+          scope: { type: "handler", handlerId: "useRenameEntity:failure-2" },
+        });
       }
-      reportFailure(error);
+      reportFailure(error, "useRenameEntity:rename");
     },
     onSettled: (_data, error, { completion }, context) => {
       context?.release();
@@ -343,7 +376,7 @@ export const useRenameEntity = (
         completion?.onSuccess?.();
       });
       if (completed.isErr()) {
-        reportFailure(completed.error);
+        reportFailure(completed.error, "useRenameEntity:completion");
       }
     },
   });
@@ -410,7 +443,13 @@ export const useUpdateKanbanPlacement = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateKanbanPlacement:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useUpdateKanbanPlacement:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -439,7 +478,10 @@ export const useUpsertField = () => {
     },
 
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpsertField:failure",
+        scope: { type: "handler", handlerId: "useUpsertField:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

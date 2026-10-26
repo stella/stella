@@ -64,6 +64,7 @@ import {
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { DOCUMENT_SCAN_ROW_BUDGET } from "@/api/lib/legal-search/sk-document-remaining-scan";
 import { LIMITS } from "@/api/lib/limits";
+import { caseLawFreshnessPendingStatesQuery } from "@/api/lib/observability/case-law-freshness-metrics";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
 import {
@@ -622,6 +623,20 @@ export const QUERY_PLAN_REGISTRY = [
       }),
     seed: "case-law",
     contract: planContracts["corpus-index.projection-erasure-claim"],
+  },
+  {
+    // Scheduler gauge: a bounded walk of one served generation's queue
+    // index, never a count over the table.
+    id: "case-law.freshness-pending-states",
+    class: "page",
+    role: "root",
+    build: () =>
+      caseLawFreshnessPendingStatesQuery({
+        family: "case_law",
+        generation: QUERY_PLAN_SAMPLE.caseLaw.generation,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.freshness-pending-states"],
   },
 ] as const satisfies readonly QueryPlanEntry[];
 

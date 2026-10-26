@@ -99,17 +99,17 @@ const useLiveActionCapabilities = (
   const desktop = useQueryView(desktopQuery);
   const settings = useQueryView(settingsQuery);
   const role = useQueryView(roleQuery);
-  useQueryViewError(ai);
-  useQueryViewError(deepl);
-  useQueryViewError(ocr);
-  useQueryViewError(desktop);
-  useQueryViewError(settings);
-  useQueryViewError(role);
+  useQueryViewError(ai, "useLiveActionCapabilities:query");
+  useQueryViewError(deepl, "useLiveActionCapabilities:query-2");
+  useQueryViewError(ocr, "useLiveActionCapabilities:query-3");
+  useQueryViewError(desktop, "useLiveActionCapabilities:query-4");
+  useQueryViewError(settings, "useLiveActionCapabilities:query-5");
+  useQueryViewError(role, "useLiveActionCapabilities:query-6");
   return resolveActionCapabilities({
     role: role.type === "items" ? role.items : undefined,
     ai: ai.type === "items" ? ai.items.available : undefined,
     deepl: deepl.type === "items" ? deepl.items.configured : undefined,
-    ocr: ocr.type === "items" ? ocr.items.available : undefined,
+    ocr: ocr.type === "items" ? ocr.items : undefined,
     desktop: desktop.type === "items" ? desktop.items.type : undefined,
     settings: settings.type === "items" ? settings.items : undefined,
   });

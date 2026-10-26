@@ -1,21 +1,38 @@
 /**
- * Hard-wrapped source text, recognised for display.
+ * Hard-wrapped source text: the one classifier, and a display fallback.
  *
  * Some publishers serve a decision as fixed-width lines: a newline every
- * 60-80 characters, mid-sentence, each one stored as its own paragraph. The
- * stored text stays exactly as published; this module only says which line
- * boundaries a reader may draw as a continuation of the same paragraph.
+ * 60-80 characters, mid-sentence, each one a paragraph of its own.
  *
- * Nothing here rewrites text. A plan names, per boundary, what a reader draws
- * between two lines: a paragraph break, a space, or nothing (after a line-end
- * hyphen). Every line keeps its own characters and offsets, so search ranges,
- * annotation offsets and block anchors are untouched by construction.
+ * Paragraphs are rebuilt at ingestion. A parser joins a wrapped source's
+ * lines into real paragraphs and stores those; the raw payload stays the
+ * verbatim published record. `classifyLineWrap` is the single decision of
+ * whether a text is fixed-width wrapped and at which column, and parsers
+ * call it (see `apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts`)
+ * rather than detecting wrapping themselves.
  *
- * A line-end hyphen is never dropped. Czech, Slovak and Polish print real
- * hyphens in compounds ("sociálně-právní", "česko-slovenský") and a hyphen
- * the wrapper added is indistinguishable from one without a lexicon, so the
- * hyphen stays and the two lines are drawn without a space between them:
- * exact for a compound, readable for a soft break.
+ * The planning below (`planLineWrap`, `planBlockLineWrap`) is a fallback for
+ * rows stored before their parser rebuilt paragraphs: a reader draws such a
+ * row's wrapped lines joined without changing what is stored. It is deleted
+ * once the corpus is re-parsed, that is when no stored decision of a source
+ * whose parser rebuilds paragraphs carries a parser version below the one
+ * that began to (for the Czech Constitutional Court, version 28). A row
+ * parsed since holds real paragraphs, which the classifier reads as
+ * unwrapped, so the fallback leaves it as stored.
+ *
+ * The fallback rewrites no text. A plan names, per boundary, what a reader
+ * draws between two lines: a paragraph break, a space, or nothing (after a
+ * line-end hyphen). Every line keeps its own characters and offsets, so
+ * search ranges, annotation offsets and block anchors are untouched by
+ * construction.
+ *
+ * The fallback never drops a line-end hyphen. Czech, Slovak and Polish print
+ * real hyphens in compounds ("sociálně-právní", "česko-slovenský") and a
+ * hyphen the wrapper added is indistinguishable from one without evidence,
+ * so the hyphen stays and the two lines are drawn without a space between
+ * them: exact for a compound, readable for a soft break. At ingestion the
+ * whole document is that evidence: a hyphen goes only where the source
+ * marks it soft or spells the joined word elsewhere.
  */
 
 import type { Block, ParagraphBlock, ParagraphRole } from "./document-ast.js";
@@ -188,7 +205,7 @@ const wrapEvidence = (lines: readonly WrapLine[]) => {
  * paragraphs are merely short fails the second; one with a few short lines
  * fails the first.
  */
-const classifyLineWrap = (
+export const classifyLineWrap = (
   lines: readonly WrapLine[],
 ): LineWrapClassification => {
   const evidence = wrapEvidence(lines);

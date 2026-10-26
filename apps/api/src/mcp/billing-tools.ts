@@ -1014,7 +1014,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveTimeEntryTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
@@ -1089,7 +1092,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveTimeEntryTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
@@ -1151,7 +1157,10 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTimeEntryTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETE_TIME_ENTRY_PROJECTION, {
@@ -1207,7 +1216,10 @@ const handleResolveRateTool: McpToolHandler<
       ),
   );
   if (Result.isError(validated)) {
-    return internalFailureResult(validated.error);
+    return internalFailureResult(
+      validated.error,
+      "mcp.handleResolveRateTool.validated_error",
+    );
   }
   if (!validated.value) {
     return errorResult("user_id is not a member of this organization");
@@ -1224,7 +1236,10 @@ const handleResolveRateTool: McpToolHandler<
     return Result.ok(rate);
   });
   if (Result.isError(resolved)) {
-    return internalFailureResult(resolved.error);
+    return internalFailureResult(
+      resolved.error,
+      "mcp.handleResolveRateTool.resolved_error",
+    );
   }
 
   // Passthrough: only a rate amount (minor units) and currency code, no
@@ -1330,7 +1345,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     }
     const totals = readInvoiceTotals(invoiceRow);
     if (totals.isErr()) {
-      return internalFailureResult(totals.error);
+      return internalFailureResult(
+        totals.error,
+        "mcp.handleListInvoicesTool.totals_error",
+      );
     }
 
     const invoice = {
@@ -1509,7 +1527,10 @@ const handleGetUsageTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(entitlement)) {
-    return internalFailureResult(entitlement.error);
+    return internalFailureResult(
+      entitlement.error,
+      "mcp.handleGetUsageTool.entitlement_error",
+    );
   }
 
   // Passthrough: plan/seat/period/remaining-units are organization billing
