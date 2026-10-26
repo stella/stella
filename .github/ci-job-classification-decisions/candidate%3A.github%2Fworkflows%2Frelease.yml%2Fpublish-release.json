@@ -1,5 +1,5 @@
 {
   "kind": "priority",
   "qualifier": "Publishes the draft GitHub release after production serves the release commit.",
-  "reviewedDigest": "b326b3e835d0518506b02e80de0b6c91e474068f9a33a976aa170d3138658cea"
+  "reviewedDigest": "8245e851e063c45529ba197e443d337ee74ff3b0cace96d96668556f1d99ad8c"
 }

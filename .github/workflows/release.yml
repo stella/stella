@@ -1378,8 +1378,7 @@ jobs:
     needs: [resolve, alias-manifest, release-health-gate]
     if: ${{ success() && !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
-      contents: write # publish the draft release
-      packages: write # advance the mutable image aliases
+      contents: read # the dispatch uses the release App token
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
@@ -1458,8 +1457,7 @@ jobs:
     timeout-minutes: 10
     needs: [resolve, alias-manifest, promote-production]
     permissions:
-      contents: write
-      packages: write
+      contents: write # publish the draft release
     steps:
       - name: Checkout trusted tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1496,8 +1494,8 @@ jobs:
     timeout-minutes: 10
     needs: [resolve, alias-manifest, promote-production]
     permissions:
-      contents: write
-      packages: write
+      contents: read
+      packages: write # advance the latest image aliases
     steps:
       - name: Checkout trusted tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
