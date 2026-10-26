@@ -382,7 +382,7 @@ describe("directory scan coverage", () => {
     });
   });
 
-  test("a glob scan applies its pattern before checking its covering glob", () => {
+  test("a scan pattern cannot narrow directory-level coverage", () => {
     withTrackedFixture(({ root, tracked }) => {
       const scanLog = `${JSON.stringify({ directory: "data", pattern: "*.txt" })}\n`;
       expect(
@@ -392,15 +392,53 @@ describe("directory scan coverage", () => {
           tracked,
           root,
         }),
-      ).toEqual([]);
+      ).toEqual([{ directory: "data", pattern: "*.txt" }]);
       expect(
         uncoveredScans({
           scanLog,
-          declared: ["data/*.json"],
+          declared: ["data/*"],
           tracked,
           root,
         }),
-      ).toEqual([{ directory: "data", pattern: "*.txt" }]);
+      ).toEqual([]);
+    });
+  });
+
+  test("empty directories use the same structural coverage rule", () => {
+    withTrackedFixture(({ root }) => {
+      mkdirSync(path.join(root, "empty"));
+      const scanLog = `${JSON.stringify({ directory: "empty" })}\n`;
+      expect(
+        uncoveredScans({
+          scanLog,
+          declared: ["empty/*.txt"],
+          tracked: new Set(),
+          root,
+        }),
+      ).toEqual([{ directory: "empty" }]);
+      expect(
+        uncoveredScans({
+          scanLog,
+          declared: ["empty/*"],
+          tracked: new Set(),
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("recursive scans need a recursive declaration", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const scanLog = `${JSON.stringify({ directory: "data", recursive: true })}\n`;
+      expect(
+        uncoveredScans({ scanLog, declared: ["data/*"], tracked, root }),
+      ).toEqual([{ directory: "data", recursive: true }]);
+      expect(
+        uncoveredScans({ scanLog, declared: ["data/**"], tracked, root }),
+      ).toEqual([]);
+      expect(
+        uncoveredScans({ scanLog, declared: ["data/**/*"], tracked, root }),
+      ).toEqual([]);
     });
   });
 
@@ -416,7 +454,7 @@ describe("directory scan coverage", () => {
           tracked,
           root,
         }),
-      ).toEqual([{ directory: "data" }]);
+      ).toEqual([{ directory: path.join(root, "data") }]);
       expect(
         uncoveredScans({
           scanLog: "",
@@ -429,17 +467,77 @@ describe("directory scan coverage", () => {
     });
   });
 
+  test("resolves subprocess scans against the process working directory", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh", "-c", "cd sub && ls data"], 0x0) = 0',
+        '1 chdir("sub") = 0',
+        '1 execve("/usr/bin/ls", ["ls", "data"], 0x0) = 0',
+      ].join("\n");
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["sub/*"],
+          tracked,
+          root,
+        }),
+      ).toEqual([{ directory: path.join(root, "sub/data") }]);
+    });
+  });
+
+  test("inherits working directories across traced process creation", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh", "-c", "ls data"], 0x0) = 0',
+        "1 clone(child_stack=NULL) = 2",
+        '2 execve("/usr/bin/ls", ["ls", "data"], 0x0) = 0',
+      ].join("\n");
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/*"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("fails closed when a traced process has no known working directory", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        '1 execve("/bin/sh", ["sh", "-c", "true"], 0x0) = 0',
+        '2 execve("/usr/bin/ls", ["ls", "data"], 0x0) = 0',
+      ].join("\n");
+      expect(() =>
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/*"],
+          tracked,
+          root,
+          testFile: "scripts/example.test.ts",
+        }),
+      ).toThrow(
+        "scripts/example.test.ts: cannot resolve the working directory of a scan by ls",
+      );
+    });
+  });
+
   test("the preload logs scans and returns the native results unchanged", () => {
     const root = mkdtempSync(path.join(tmpdir(), "scan-preload-"));
     const log = path.join(root, "scans.log");
-    mkdirSync(path.join(root, "data"));
-    writeFileSync(path.join(root, "data/a.txt"), "a");
+    mkdirSync(path.join(root, "fixtures/data"), { recursive: true });
+    writeFileSync(path.join(root, "fixtures/data/a.txt"), "a");
     writeFileSync(
       path.join(root, "subject.test.ts"),
       [
         'import { expect, test } from "bun:test";',
         'import { readdirSync } from "node:fs";',
         'test("calls through", () => {',
+        '  process.chdir("fixtures");',
         '  expect(readdirSync("data")).toEqual(["a.txt"]);',
         '  expect([...new Bun.Glob("*.txt").scanSync({ cwd: "data" })]).toEqual(["a.txt"]);',
         "});",
@@ -462,7 +560,9 @@ describe("directory scan coverage", () => {
       );
       expect(result.stderr.toString()).toContain("1 pass");
       expect(result.exitCode).toBe(0);
-      expect(readFileSync(log, "utf-8")).toContain('"directory":"data"');
+      expect(readFileSync(log, "utf-8")).toContain(
+        `"directory":"${path.join(root, "fixtures/data")}"`,
+      );
       expect(readFileSync(log, "utf-8")).toContain('"pattern":"*.txt"');
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -500,8 +600,14 @@ describe("repository script test census", () => {
       inputs: scriptTestInputs.inputs,
       exemptions: scriptTestInputs.noTrackedInputs,
     });
-    expect(selection.files).toEqual([]);
-    expect(selection.skipped).toBe(tests.length);
+    expect(selection.files).toEqual(
+      Object.entries(scriptTestInputs.inputs)
+        .filter(([, patterns]) => patterns.includes("**"))
+        .map(([testFile]) => testFile)
+        .filter((testFile) => tests.includes(testFile))
+        .toSorted(),
+    );
+    expect(selection.skipped).toBe(tests.length - selection.files.length);
   }, 30_000);
 
   test("runs everything when no comparison base is available", () => {

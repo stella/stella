@@ -1,10 +1,12 @@
 import fs from "node:fs";
+import path from "node:path";
 
 const logPath = process.env["SCRIPT_TEST_SCAN_LOG"];
 
 type ScanRecord = {
   readonly directory: string;
   readonly pattern?: string;
+  readonly recursive?: true;
 };
 
 const writeScan = (record: ScanRecord) => {
@@ -22,11 +24,23 @@ const directoryName = (value: unknown): string => {
     : ".";
 };
 
+const resolvedDirectoryName = (value: unknown): string =>
+  path.resolve(process.cwd(), directoryName(value));
+
 const wrapDirectoryFunction = <Arguments extends unknown[], Result>(
   original: (...args: Arguments) => Result,
 ) =>
   function (this: unknown, ...args: Arguments): Result {
-    writeScan({ directory: directoryName(args[0]) });
+    const options = args[1];
+    writeScan({
+      directory: resolvedDirectoryName(args[0]),
+      ...(typeof options === "object" &&
+      options !== null &&
+      "recursive" in options &&
+      options.recursive === true
+        ? { recursive: true as const }
+        : {}),
+    });
     return original.apply(this, args);
   };
 
@@ -61,12 +75,12 @@ installDirectoryWrapper(
 
 const globDirectory = (value: unknown): string => {
   if (typeof value === "string" || value instanceof URL) {
-    return directoryName(value);
+    return resolvedDirectoryName(value);
   }
   if (typeof value === "object" && value !== null && "cwd" in value) {
-    return directoryName(value.cwd);
+    return resolvedDirectoryName(value.cwd);
   }
-  return ".";
+  return process.cwd();
 };
 
 type ScanOptions = Parameters<Bun.Glob["scan"]>[0];
@@ -82,12 +96,24 @@ class ScanRecordingGlob extends Bun.Glob {
   }
 
   override scan(options?: ScanOptions) {
-    writeScan({ directory: globDirectory(options), pattern: this.#pattern });
+    writeScan({
+      directory: globDirectory(options),
+      pattern: this.#pattern,
+      ...(this.#pattern.split("/").includes("**")
+        ? { recursive: true as const }
+        : {}),
+    });
     return super.scan(options);
   }
 
   override scanSync(options?: ScanOptions) {
-    writeScan({ directory: globDirectory(options), pattern: this.#pattern });
+    writeScan({
+      directory: globDirectory(options),
+      pattern: this.#pattern,
+      ...(this.#pattern.split("/").includes("**")
+        ? { recursive: true as const }
+        : {}),
+    });
     return super.scanSync(options);
   }
 }
