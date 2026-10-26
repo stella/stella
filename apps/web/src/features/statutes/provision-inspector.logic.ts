@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";

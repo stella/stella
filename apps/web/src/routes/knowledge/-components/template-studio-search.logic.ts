@@ -2,7 +2,7 @@ import { isSafeFieldPath } from "@stll/template-conditions";
 import {
   createSearchQueryMatcher,
   filterBySearchQuery,
-} from "@stll/text-normalize";
+} from "@stll/text-normalize/search-query-matcher";
 
 import { sanitizeFieldPath } from "@/routes/knowledge/-components/template-studio-model";
 import type { StudioField } from "@/routes/knowledge/-components/template-studio-store";

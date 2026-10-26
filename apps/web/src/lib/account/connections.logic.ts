@@ -1,4 +1,4 @@
-import { createSearchQueryMatcher } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 import type { StatusTone } from "@stll/ui/list";
 
 import type { TranslationKey } from "@/i18n/types";

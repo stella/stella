@@ -1,5 +1,5 @@
 // "Does this text match what the user typed" has one client-side answer:
-// createSearchQueryMatcher and filterBySearchQuery from @stll/text-normalize,
+// createSearchQueryMatcher and filterBySearchQuery from @stll/text-normalize/search-query-matcher,
 // which fold case, accents, ß/ł/ø and ligatures the same way in every UI
 // locale. A hand-written `toLowerCase()` compare folds case only, so a Czech
 // user typing "dvorak" misses "Dvořák" in that one list.
@@ -177,7 +177,7 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
-          fold: 'Match user-typed text with createSearchQueryMatcher or filterBySearchQuery from @stll/text-normalize. A lowercase compare folds case only, so "dvorak" misses "Dvořák" and "strasse" misses "Straße".',
+          fold: 'Match user-typed text with createSearchQueryMatcher or filterBySearchQuery from @stll/text-normalize/search-query-matcher. A lowercase compare folds case only, so "dvorak" misses "Dvořák" and "strasse" misses "Straße".',
           collator:
             'Pass filter={matchesComboboxItem} from @/components/combobox-filter.logic (or filter={null} when the caller filters). Base UI\'s default collator filter never finds "strasse" in "Straße" and depends on the runtime locale.',
         },

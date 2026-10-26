@@ -1,5 +1,5 @@
 import { compareByLocale } from "@stll/collation";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 type CountryOption = { code: string; name: string };
 

@@ -1,4 +1,4 @@
-import { createSearchQueryMatcher } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 /**
  * The text Base UI reads for an item when it filters: the item-to-string

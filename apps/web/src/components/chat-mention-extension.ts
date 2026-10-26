@@ -7,7 +7,7 @@ import type {
   EntityKind,
   ResourceRef,
 } from "@stll/api-contract";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { ChatMentionNode } from "@/components/chat-mention-node";
 

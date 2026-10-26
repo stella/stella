@@ -1,9 +1,6 @@
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
-import {
-  ARABIC_DIGIT_FOLDS,
-  filterBySearchQuery,
-  normalizeUnicode,
-} from "@stll/text-normalize";
+import { ARABIC_DIGIT_FOLDS, normalizeUnicode } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import type { PersonDateOfBirth } from "@/lib/contacts/mutations";
 

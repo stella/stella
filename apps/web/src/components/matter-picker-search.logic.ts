@@ -1,4 +1,4 @@
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 type MatterSearchItem = { id: string; name: string };
 

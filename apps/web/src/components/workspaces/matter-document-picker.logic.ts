@@ -1,4 +1,4 @@
-import { createSearchQueryMatcher } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 

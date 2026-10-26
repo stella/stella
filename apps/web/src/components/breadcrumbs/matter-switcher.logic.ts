@@ -1,5 +1,5 @@
 import { compareCodeUnit } from "@stll/collation";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Temporal } from "@stll/time";
 
 type SiblingCandidate = {

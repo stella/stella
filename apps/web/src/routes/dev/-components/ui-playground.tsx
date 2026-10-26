@@ -4,7 +4,7 @@ import type * as React from "react";
 import { useTranslations } from "use-intl";
 
 import { sleep } from "@stll/concurrency/sleep";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import {
   Accordion,
   AccordionItem,

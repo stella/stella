@@ -1,4 +1,4 @@
-import { createSearchQueryMatcher } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 type ClauseLinkCandidate = {
   categoryId: string | null;

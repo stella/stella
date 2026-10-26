@@ -4,7 +4,7 @@ import { ReactRenderer } from "@tiptap/react";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";

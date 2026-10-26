@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,

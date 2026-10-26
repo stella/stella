@@ -8,7 +8,7 @@ import {
   DOCUMENT_TRANSLATION_TARGET_LANGUAGES,
   type DocumentTranslationTargetLanguageCode,
 } from "@stll/api-contract/document-translation";
-import { createSearchQueryMatcher } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 const DEFAULT_TARGET_LANG: DocumentTranslationTargetLanguageCode = "EN-GB";
 const FALLBACK_SOURCE_LANG: DocumentTranslationTargetLanguageCode = "CS";

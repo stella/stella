@@ -1,4 +1,4 @@
-import { createSearchQueryMatcher } from "@stll/text-normalize";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 import type { ToolsCatalogueKind } from "@/features/knowledge/views/tools/tools-catalogue-view";
 

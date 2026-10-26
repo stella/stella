@@ -11,7 +11,7 @@ import {
 } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";

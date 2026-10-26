@@ -3,11 +3,11 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { foldSearchMatchText } from "./search-match.js";
 import {
   createSearchQueryMatcher,
   filterBySearchQuery,
-  foldSearchMatchText,
-} from "./search-match.js";
+} from "./search-query-matcher.js";
 
 const SCRIPT_CHARACTERS = [
   ..."abzAZ áčěŘšůžłøđßæœﬁİıΣσςمحمدًٌَ٢0-😀",

@@ -61,7 +61,7 @@ generated with.
 
 ## Substring matching with highlight offsets
 
-`createSearchQueryMatcher(query)` is the client-side answer to "does this
+`createSearchQueryMatcher(query)` (from `@stll/text-normalize/search-query-matcher`) is the client-side answer to "does this
 text match what the user typed": it trims and folds the query once and returns
 a predicate over candidate texts (a blank query matches everything, a missing
 candidate nothing). `filterBySearchQuery({ items, query, fields })` applies it

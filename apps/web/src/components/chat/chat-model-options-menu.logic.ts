@@ -5,7 +5,7 @@ import {
 import type { ModelDisplayMetadata } from "@stll/ai-catalog";
 import { classifyBenchmarkModelOptions } from "@stll/ai-catalog/benchmark-frontier";
 import type { ModelBenchmarkTradeoff } from "@stll/ai-catalog/benchmark-frontier";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { decodeModelSelection } from "@/components/ai-config-role-models.logic";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";

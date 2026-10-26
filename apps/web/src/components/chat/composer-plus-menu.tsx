@@ -9,7 +9,7 @@ import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SKILL_CONTEXT_NEED } from "@stll/api-contract";
-import { filterBySearchQuery } from "@stll/text-normalize";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
