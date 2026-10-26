@@ -65,7 +65,11 @@ import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
-import { readCorpusAtAuthoritativePointer } from "@/api/lib/legal-search/corpus-storage";
+import {
+  persistedAstOrTextFallback,
+  readCorpusAtAuthoritativePointer,
+} from "@/api/lib/legal-search/corpus-storage";
+import type { PersistedCorpusAstRead } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
@@ -385,6 +389,21 @@ const rereadMaterial = async (
   return current.ready.at(0) ?? null;
 };
 
+/**
+ * The AST a projection indexes, read beside the document's text. An AST no
+ * reader can read is indexed as absent only when the text can stand in for
+ * it; otherwise the typed refusal fails the payload read, which the executor
+ * records as `payload_unavailable` instead of applying an empty document.
+ */
+export const projectionAstOf = (
+  astRead: PersistedCorpusAstRead,
+  text: string,
+) =>
+  persistedAstOrTextFallback(astRead, {
+    fallbackText: text,
+    step: "corpusIndex.projectionAst",
+  });
+
 const loadCorpusProjectionPayload = async (
   runInTransaction: ProjectionTransactionRunner,
   material: CorpusProjectionMaterial,
@@ -413,8 +432,8 @@ const loadCorpusProjectionPayload = async (
       },
     });
   if (material.family === "case_law") {
-    const [text, ast] = await settleBoth(textPromise, loadAst());
-    return { text, ast };
+    const [text, astRead] = await settleBoth(textPromise, loadAst());
+    return { text, ast: projectionAstOf(astRead, text) };
   }
   const text = await textPromise;
   if (
@@ -426,7 +445,7 @@ const loadCorpusProjectionPayload = async (
   ) {
     return { text, ast: null };
   }
-  return { text, ast: await loadAst() };
+  return { text, ast: projectionAstOf(await loadAst(), text) };
 };
 
 type PreparedProjectionEntry = {

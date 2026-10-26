@@ -37,6 +37,7 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   type CorpusByteSourceSeams,
+  persistedAstOrTextFallback,
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -964,7 +965,13 @@ const hydrateCompletionStatements = async ({
     yield* Result.await(ensure());
     const ast = await legacyOperation(async () =>
       row.astS3Key !== null
-        ? await readCorpusAst(row.astS3Key, readOptions)
+        ? // An AST no reader can read is absent only beside usable text,
+          // which the check below turns into a review; with no text it is a
+          // storage failure, as any payload this run cannot read.
+          persistedAstOrTextFallback(
+            await readCorpusAst(row.astS3Key, readOptions),
+            { fallbackText: text.value, step: "euCompletion.storedAst" },
+          )
         : row.documentAst,
     );
     if (ast.isErr() && signal.aborted) {

@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { PayloadBudgetError } from "@/api/lib/compression";
+import { StoredAstUnreadableError } from "@/api/lib/errors/tagged-errors";
 import { corpusIndexCommittedIngestTimeoutMs } from "@/api/lib/legal-search/corpus-index-client";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -15,8 +16,10 @@ import {
   classifyCorpusProjectionPayloadReadFailure,
   corpusProjectionAppendStartMarginMs,
   ingestCorpusProjectionRequest,
+  projectionAstOf,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
+import { readPersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
 const V5_APPEND_START_MARGIN_MS = corpusProjectionAppendStartMarginMs(
@@ -57,6 +60,39 @@ test("transient payload failures remain retryable", () => {
     kind: "payload_unavailable",
     message: "projection payload read failed before append",
   });
+});
+
+test("an unreadable AST with no usable text fails the payload read, never an empty document", () => {
+  for (const stored of [
+    { blocks: "broken" },
+    { version: 1, blocks: [{ type: "paragraph" }] },
+  ]) {
+    const astRead = readPersistedCorpusAst(stored);
+    for (const text of ["", "  \n"]) {
+      const failure = Result.try(() => projectionAstOf(astRead, text));
+      expect(failure.isErr()).toBe(true);
+      if (failure.isOk()) {
+        throw new Error("Expected the projection payload read to fail");
+      }
+      expect(failure.error.cause).toBeInstanceOf(StoredAstUnreadableError);
+      expect(
+        classifyCorpusProjectionPayloadReadFailure(failure.error.cause),
+      ).toEqual({
+        kind: "payload_unavailable",
+        message: "projection payload read failed before append",
+      });
+    }
+  }
+});
+
+test("an unreadable AST beside usable text projects the text", () => {
+  const astRead = readPersistedCorpusAst({ blocks: "broken" });
+  expect(projectionAstOf(astRead, "Decision text.")).toBeNull();
+});
+
+test("a readable AST projects as read, whatever the text", () => {
+  const ast = { version: 1, blocks: [] };
+  expect(projectionAstOf(readPersistedCorpusAst(ast), "")).toMatchObject(ast);
 });
 
 test("append tails coalesce serialized revisions across read windows", () => {

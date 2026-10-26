@@ -1,3 +1,4 @@
+// parser-output-unchanged: Repeated block identities are re-keyed before the guard instead of the AST being dropped. sk-courts and sk-us, whose parsers can repeat one, carry their own version bumps; every other enrolled fixture output repeats none (replay conformance asserts it).
 import { panic } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
@@ -11,6 +12,7 @@ import {
 import {
   isDocumentAst,
   withProjectedPlainText,
+  withUniqueBlockIdentities,
 } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
@@ -318,7 +320,19 @@ export const sanitizeResult = (
   // field entirely. It runs after `deepSanitize` because sanitization
   // rewrites inline text (no-break spaces become spaces), which can turn a
   // run into a collapsible one.
-  const sanitizedDocumentAst = deepSanitize(result.documentAst);
+  //
+  // Block identities are made unique first, by the rule the persisted reader
+  // applies to rows stored before the guard checked them: a parser that
+  // reads one title over two lines as two title headings still stores its
+  // document instead of losing it to the guard below.
+  const sanitizedDocumentAst = deepSanitize(
+    "blocks" in result.documentAst
+      ? {
+          ...result.documentAst,
+          blocks: withUniqueBlockIdentities(result.documentAst.blocks),
+        }
+      : result.documentAst,
+  );
   const documentAst = isDocumentAst(sanitizedDocumentAst)
     ? withProjectedPlainText(sanitizedDocumentAst)
     : EMPTY_AST;

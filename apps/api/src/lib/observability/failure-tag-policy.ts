@@ -411,6 +411,7 @@ export const TAGGED_FAILURE_REASON = {
   StatuteSlugPageError: "tagged_failure",
   StoreUnavailableError: "tagged_failure",
   StoredAstDegradedError: "tagged_failure",
+  StoredAstUnreadableError: "tagged_failure",
   StoredRawReadError: "tagged_failure",
   StragglerCatchUpError: "tagged_failure",
   StreamDeadlineError: "tagged_failure",

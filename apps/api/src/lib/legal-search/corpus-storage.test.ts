@@ -13,6 +13,7 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  StoredAstUnreadableError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -29,13 +30,15 @@ import {
   corpusPayloadDisposition,
   deleteCorpusDocument,
   EMPTY_CORPUS_CONTENT_HASHES,
-  parsePersistedCorpusAst,
   parsePersistedCorpusSections,
+  persistedAstOrAbsent,
   planCorpusDocumentWrite,
+  readCorpusAst,
   readCorpusAtAuthoritativePointer,
   readCorpusBytesAt,
   readCorpusPayloadOrFallback,
   readCorpusText,
+  readPersistedCorpusAst,
   storedCorpusWrite,
   TRIMMED_CORPUS_PAYLOAD_COLUMNS,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -52,6 +55,15 @@ import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 /** Nothing erased: the denial list a read consults when the case is not it. */
 const noTombstones = async (): Promise<ReadonlySet<string>> =>
   await Promise.resolve(new Set<string>());
+
+/** A stored AST value as read, for a test of one that must read. */
+const readAstOf = (value: unknown) => {
+  const read = readPersistedCorpusAst(value);
+  if (read.type === "unreadable") {
+    throw read.error;
+  }
+  return read.ast;
+};
 
 describe("corpus mirror state columns", () => {
   test("partition pending and settled pointer states", () => {
@@ -295,19 +307,51 @@ describe("persisted corpus JSON validation", () => {
         { index: "0", type: "header", title: null, text: "Rozsudok" },
       ]),
     ).toThrow('Invalid type: Expected number but received "0"');
-    expect(() =>
-      parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
-    ).toThrow("Invalid type: Expected (Object | unknown) but received Object");
-    expect(() => parsePersistedCorpusAst([])).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Array",
-    );
-    expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Object",
-    );
+    for (const claim of [
+      { version: 1, blocks: [{ type: "paragraph" }] },
+      [],
+      { unexpected: true },
+    ]) {
+      const read = readPersistedCorpusAst(claim);
+      expect(read.type).toBe("unreadable");
+      expect(read.type === "unreadable" ? read.error : null).toBeInstanceOf(
+        StoredAstUnreadableError,
+      );
+      expect(
+        read.type === "unreadable" ? read.error.issues.length : 0,
+      ).toBeGreaterThan(0);
+      expect(persistedAstOrAbsent(read, "test.unreadable")).toBeNull();
+    }
+  });
+
+  test("answers a stored object that is not an AST, or not JSON, as unreadable", async () => {
+    for (const body of [
+      JSON.stringify({ version: 1, blocks: [{ type: "paragraph" }] }),
+      "{",
+    ]) {
+      const read = await readCorpusAst("legal-corpus/bad/ast.zst", {
+        readObject: async () => await Promise.resolve(zstdCompress(body)),
+        readTombstones: noTombstones,
+      });
+      expect(read.type).toBe("unreadable");
+    }
+    const read = await readCorpusAst("legal-corpus/ok/ast.zst", {
+      readObject: async () =>
+        await Promise.resolve(
+          zstdCompress(JSON.stringify({ version: 1, blocks: [] })),
+        ),
+      readTombstones: noTombstones,
+    });
+    expect(read.type).toBe("read");
+  });
+
+  test("answers absent and empty stored ASTs as read, not unreadable", () => {
+    expect(readPersistedCorpusAst(null)).toEqual({ type: "read", ast: null });
+    expect(readPersistedCorpusAst({})).toEqual({ type: "read", ast: {} });
   });
 
   test("serves a stored AST whose block role this reader does not declare", () => {
-    const parsed = parsePersistedCorpusAst({
+    const parsed = readAstOf({
       version: 1,
       blocks: [
         {
@@ -325,7 +369,7 @@ describe("persisted corpus JSON validation", () => {
   });
 
   test("serves a stored AST around a block kind this reader cannot render", () => {
-    const parsed = parsePersistedCorpusAst({
+    const parsed = readAstOf({
       version: 1,
       blocks: [
         { id: "s1", anchorId: "s-1", type: "sidebar", body: "aside" },

@@ -39,6 +39,7 @@
 import { PDF, SecurityError } from "@libpdf/core";
 
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
+import { withUniqueBlockIdentities } from "@stll/legal-ast/document-ast";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
@@ -124,16 +125,16 @@ export const parseSkDecisionPdf = async (
   input: ParseSkDecisionInput,
 ): Promise<ParseSkDecisionOutput> => {
   const lines = await extractLines(input.pdfBytes);
-  const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
+  const built = buildSkDecisionPdfBlocks({ lines, metadata: input });
 
   // Synthesize decision title if none detected
-  const hasTitle = blocks.some(
+  const hasTitle = built.some(
     (b) => b.type === "heading" && b.role === "decision-title",
   );
   if (!hasTitle && input.decisionType) {
     const title =
       input.decisionType.charAt(0).toUpperCase() + input.decisionType.slice(1);
-    blocks.unshift({
+    built.unshift({
       id: "b0",
       anchorId: "h-title",
       type: "heading",
@@ -143,6 +144,11 @@ export const parseSkDecisionPdf = async (
       plainText: title,
     });
   }
+
+  // A title set over two lines reads as two title headings, and a section
+  // marker can recur; each takes its section's fixed anchor, so the repeat
+  // is re-keyed and every block keeps an identity of its own.
+  const blocks = withUniqueBlockIdentities(built);
 
   const validationHtml = buildValidationHtml(lines.map((l) => l.text));
   validateAndLog(

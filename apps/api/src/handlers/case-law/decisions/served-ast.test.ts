@@ -13,6 +13,7 @@ import {
   transientDecisionAstProjection,
 } from "@/api/handlers/case-law/decisions/served-ast";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readPersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 
 const ast = (text: string): DecisionDocumentAst => ({
@@ -55,7 +56,7 @@ describe("served decision AST projection", () => {
       pgAst: row,
       decisionId,
       corpusReadEnabled: true,
-      readStore: async () => stored,
+      readStore: async () => ({ type: "read", ast: stored }),
     });
 
     expect(served.source).toBe("store");
@@ -114,7 +115,7 @@ describe("served decision AST projection", () => {
       pgAst: row,
       decisionId,
       corpusReadEnabled: false,
-      readStore: async () => null,
+      readStore: async () => ({ type: "read", ast: null }),
     });
     if (served.payload === null || !("blocks" in served.payload)) {
       throw new Error("Expected a served document AST");
@@ -146,14 +147,134 @@ describe("served decision AST projection", () => {
       pgAst: null,
       decisionId,
       corpusReadEnabled: true,
-      readStore: async () => ast("not read"),
+      readStore: async () => ({ type: "read", ast: ast("not read") }),
     });
 
     expect(served).toEqual({
       payload: null,
       source: null,
       projectionDigest: null,
+      unreadable: false,
     });
+  });
+
+  test("a stored title set over two lines, both keyed as the title, is served re-keyed", async () => {
+    const titleLine = (id: string, text: string) => ({
+      id,
+      anchorId: "h-title",
+      type: "heading",
+      level: 1,
+      role: "decision-title",
+      inlines: [{ type: "text", text }],
+    });
+    const row = {
+      ...ast("Body."),
+      blocks: [
+        titleLine("b1", "ROZSUDOK V MENE"),
+        titleLine("b2", "SLOVENSKEJ REPUBLIKY"),
+        ...ast("Body.").blocks,
+      ],
+    };
+    for (const corpusReadEnabled of [false, true]) {
+      const served = await readServedDecisionAst({
+        astS3Key: "ast-key",
+        contentHash: "content-hash",
+        pgAst: row,
+        decisionId,
+        corpusReadEnabled,
+        readStore: async () => readPersistedCorpusAst(row),
+      });
+      if (served.payload === null || !("blocks" in served.payload)) {
+        throw new Error("Expected a served document AST");
+      }
+      expect(served.unreadable).toBe(false);
+      expect(served.payload.blocks.map(({ anchorId }) => anchorId)).toEqual([
+        "h-title",
+        "h-title-2",
+        "p-1",
+      ]);
+    }
+  });
+
+  test("a row AST no reader can read is served as unreadable, not thrown", async () => {
+    const malformed = {
+      version: 1,
+      blocks: [{ id: "p", anchorId: "p", type: "paragraph" }],
+    };
+    for (const corpusReadEnabled of [false, true]) {
+      const served = await readServedDecisionAst({
+        astS3Key: corpusReadEnabled ? "ast-key" : null,
+        contentHash: corpusReadEnabled ? "content-hash" : null,
+        pgAst: malformed,
+        decisionId,
+        corpusReadEnabled,
+        readStore: async () => readPersistedCorpusAst(malformed),
+      });
+      expect(served).toEqual({
+        payload: null,
+        source: null,
+        projectionDigest: null,
+        unreadable: true,
+      });
+    }
+  });
+
+  test("an unreadable store copy falls back to a readable row", async () => {
+    const row = ast("row text");
+    const served = await readServedDecisionAst({
+      astS3Key: "ast-key",
+      contentHash: "content-hash",
+      pgAst: row,
+      decisionId,
+      corpusReadEnabled: true,
+      readStore: async () => readPersistedCorpusAst({ version: 1 }),
+    });
+
+    expect(served.source).toBe("row");
+    expect(served.payload).toEqual(row);
+    expect(served.unreadable).toBe(false);
+  });
+
+  test("an unreadable store copy with no row copy is unreadable, not an outage", async () => {
+    const served = await readServedDecisionAst({
+      astS3Key: "ast-key",
+      contentHash: "content-hash",
+      pgAst: null,
+      decisionId,
+      corpusReadEnabled: true,
+      readStore: async () => readPersistedCorpusAst({ version: 1 }),
+    });
+
+    expect(served).toEqual({
+      payload: null,
+      source: null,
+      projectionDigest: null,
+      unreadable: true,
+    });
+  });
+
+  test("an empty or blockless row copy recovers nothing from an unreadable store copy", async () => {
+    const unreadableStore = {
+      version: 1,
+      blocks: [{ id: "p", anchorId: "p", type: "paragraph" }],
+    };
+    for (const pgAst of [{}, { ...ast("unused"), blocks: [] }]) {
+      const served = await readServedDecisionAst({
+        astS3Key: "ast-key",
+        contentHash: "content-hash",
+        pgAst,
+        decisionId,
+        corpusReadEnabled: true,
+        readStore: async () => readPersistedCorpusAst(unreadableStore),
+      });
+
+      expect(served).toEqual({
+        payload: null,
+        source: null,
+        projectionDigest: null,
+        unreadable: true,
+      });
+    }
   });
 
   test("changes outside projected pieces keep the digest stable", async () => {
@@ -174,7 +295,7 @@ describe("served decision AST projection", () => {
         pgAst,
         decisionId,
         corpusReadEnabled: false,
-        readStore: async () => null,
+        readStore: async () => ({ type: "read", ast: null }),
       });
 
     expect((await serve(changed)).projectionDigest).toBe(

@@ -239,3 +239,44 @@ test("bold Roman verdict items keep their holding role and reasoning titles beco
     documentAst.blocks.find((block) => block.plainText === "XII. Argumentacia"),
   ).toMatchObject({ type: "heading", level: 3 });
 });
+
+test("a title set over two lines, and a repeated section marker, keep identities of their own", async () => {
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  const lines = [
+    { text: "ROZSUDOK V MENE", font: StandardFonts.HelveticaBold, size: 16 },
+    {
+      text: "SLOVENSKEJ REPUBLIKY",
+      font: StandardFonts.HelveticaBold,
+      size: 16,
+    },
+    { text: "rozhodol:", font: StandardFonts.HelveticaBold, size: 10 },
+    { text: "Súd žalobu zamieta.", font: StandardFonts.Helvetica, size: 10 },
+    { text: "rozhodol:", font: StandardFonts.HelveticaBold, size: 10 },
+    { text: "Náhradu nepriznáva.", font: StandardFonts.Helvetica, size: 10 },
+  ];
+  for (const [index, line] of lines.entries()) {
+    page.drawText(line.text, {
+      x: 50,
+      y: 700 - index * 30,
+      size: line.size,
+      font: line.font,
+    });
+  }
+  const { documentAst } = await parseSkDecisionPdf({
+    pdfBytes: await pdf.save(),
+    caseNumber: "17Co/1/2023",
+    ecli: undefined,
+    court: "Krajský súd",
+    decisionDate: undefined,
+    decisionType: "rozsudok",
+  });
+  const anchors = documentAst.blocks.map(({ anchorId }) => anchorId);
+  const ids = documentAst.blocks.map(({ id }) => id);
+
+  expect(new Set(anchors).size).toBe(anchors.length);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(anchors).toContain("h-title");
+  expect(anchors).toContain("h-title-2");
+  expect(anchors).toContain("h-holding-2");
+});

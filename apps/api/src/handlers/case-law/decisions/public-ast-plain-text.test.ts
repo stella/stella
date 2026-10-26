@@ -43,7 +43,7 @@ import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
-import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
+import { readPersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -272,7 +272,8 @@ describe("public decision AST plain text", () => {
       const stored = storedAst(ast, name);
       // The stored object is JSON bytes; reading it back parses them.
       const object = JSON.stringify(stored);
-      const read = parsePersistedCorpusAst(JSON.parse(object));
+      const readBack = readPersistedCorpusAst(JSON.parse(object));
+      const read = readBack.type === "read" ? readBack.ast : null;
       if (!isDocumentAst(read)) {
         throw new Error(`stored AST did not read back: ${name}`);
       }

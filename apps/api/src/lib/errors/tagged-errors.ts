@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the typed refusal for a stored AST the persisted reader cannot read; no parser constructs it.
 // parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -423,6 +424,20 @@ export class StoredAstDegradedError extends TaggedError(
 )<{
   message: string;
   degradations: readonly PersistedAstDegradation[];
+}> {}
+
+/**
+ * A stored document AST that is not an AST the persisted reader can read,
+ * even degraded: a declared node missing a field it requires, or a value of
+ * the wrong kind. A reader serves the decision without it (its text from the
+ * stored fulltext, else a typed failed-read state), so one malformed row costs
+ * its structure, never the read. `issues` names the paths that failed.
+ */
+export class StoredAstUnreadableError extends TaggedError(
+  "StoredAstUnreadableError",
+)<{
+  message: string;
+  issues: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */

@@ -61,6 +61,7 @@ import {
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
+  persistedAstOrAbsent,
   planCorpusDocumentWrite,
   readCorpusAst,
   storedCorpusWrite,
@@ -121,16 +122,21 @@ const storedScopeState = async ({
   s3Policy,
 }: StoredScopeStateOptions) => {
   const row = await storedScopeRow(decisionId, scopedDb);
+  // A stored AST no reader can read is reported and answered as absent, so
+  // verifying the stored citation scopes against it is a typed rejection.
   const ast = row?.astS3Key
-    ? await readCorpusAst(row.astS3Key, {
-        ...corpus.readBytes,
-        ...(signal === undefined ? {} : { signal }),
-        ...(s3Policy === undefined ? {} : { s3Policy }),
-        readTombstones: async (locations) =>
-          await scopedDb(
-            async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
-          ),
-      })
+    ? persistedAstOrAbsent(
+        await readCorpusAst(row.astS3Key, {
+          ...corpus.readBytes,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+          readTombstones: async (locations) =>
+            await scopedDb(
+              async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
+            ),
+        }),
+        "decisionPlan.storedScopeAst",
+      )
     : row?.documentAst;
   return { row, ast };
 };

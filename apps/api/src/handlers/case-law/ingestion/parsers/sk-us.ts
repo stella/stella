@@ -35,6 +35,7 @@ import type {
   HeadingBlock,
   Inline,
 } from "@stll/legal-ast/document-ast";
+import { withUniqueBlockIdentities } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
 import {
   isSkDecisionTitle,
@@ -539,11 +540,16 @@ export const parseSkUsDocumentXhtml = ({
 }: ParseSkUsDocumentOptions): ParseSkUsDocumentResult => {
   const $ = cheerio.load(xhtml);
   markHiddenRuns($);
-  const blocks = courtParagraphNumbers(classifyLines(readMarkupLines($)), {
-    parser: "sk-us",
-    caseNumber,
-    url: documentUrl,
-  });
+  // A section marker can recur (a title set over two lines, a second
+  // holding), and each takes its section's fixed anchor; the repeat is
+  // re-keyed so every block keeps an identity of its own.
+  const blocks = withUniqueBlockIdentities(
+    courtParagraphNumbers(classifyLines(readMarkupLines($)), {
+      parser: "sk-us",
+      caseNumber,
+      url: documentUrl,
+    }),
+  );
 
   validateAndLog(
     {

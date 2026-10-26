@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAst, parseDocumentAst } from "@stll/legal-ast/document-ast";
+
 import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import {
   absentDecisionTextFields,
@@ -160,5 +163,58 @@ describe("decision storage normalization", () => {
         );
       }
     }
+  });
+});
+
+describe("document AST block identities at the write boundary", () => {
+  /** A decision title set over two lines, each read as the title heading. */
+  const titleLine = (id: string, text: string): Block => ({
+    id,
+    anchorId: "h-title",
+    type: "heading",
+    level: 1,
+    role: "decision-title",
+    inlines: [{ type: "text", text }],
+    plainText: text,
+  });
+  const splitTitle = {
+    version: 1,
+    source: { system: "test", documentId: "1", webUrl: "", printUrl: "" },
+    metadata: {
+      caseNumber: "reference",
+      ecli: null,
+      court: "court",
+      decisionDate: null,
+      decisionType: null,
+      keywords: [],
+      statutes: [],
+    },
+    blocks: [
+      titleLine("b1", "ROZSUDOK V MENE"),
+      titleLine("b2", "SLOVENSKEJ REPUBLIKY"),
+    ],
+  } satisfies DocumentAst;
+
+  test("a parsed document repeating an identity is stored re-keyed, not dropped", () => {
+    const stored = sanitizeResult({ ...decision, documentAst: splitTitle });
+    expect(isDocumentAst(stored.documentAst)).toBe(true);
+    expect(
+      "blocks" in stored.documentAst
+        ? stored.documentAst.blocks.map(({ anchorId, plainText }) => [
+            anchorId,
+            plainText,
+          ])
+        : null,
+    ).toEqual([
+      ["h-title", "ROZSUDOK V MENE"],
+      ["h-title-2", "SLOVENSKEJ REPUBLIKY"],
+    ]);
+  });
+
+  test("a row stored before reads as the write now stores it", () => {
+    const written = sanitizeResult({ ...decision, documentAst: splitTitle });
+    expect(parseDocumentAst(splitTitle)).toEqual(
+      parseDocumentAst(written.documentAst),
+    );
   });
 });

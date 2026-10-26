@@ -14,8 +14,9 @@ import {
   readSizedCorpusAst,
 } from "@/api/lib/legal-search/corpus-reads";
 import {
-  parsePersistedCorpusAst,
+  persistedAstOrAbsent,
   readCorpusPayloadOrFallback,
+  readPersistedCorpusAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import {
@@ -185,7 +186,13 @@ export const readVersionText = async ({
  */
 const versionAstCache = createCorpusAstCache({
   maxHeapBytes: LIMITS.legislationAstCacheMaxHeapBytes,
-  read: async (storedKey) => await readSizedCorpusAst(storedKey),
+  read: async (storedKey) => {
+    const sized = await readSizedCorpusAst(storedKey);
+    return {
+      ast: persistedAstOrAbsent(sized.read, "legislation.versionAstObject"),
+      decodedLength: sized.decodedLength,
+    };
+  },
 });
 
 export type ReadVersionAstOptions = {
@@ -202,6 +209,10 @@ export type ReadVersionAstOptions = {
  * there and from the Postgres copy otherwise. An object-storage value is
  * shared with other requests and frozen.
  *
+ * A stored AST no reader can read is reported and answered as absent, never
+ * thrown: a reader then serves the version from its text
+ * (`readVersionText`), and a block read finds no blocks.
+ *
  * Corpus payloads are whole zstd objects, so a block range cannot be read on
  * its own: a caller that needs one reads the version once and slices the
  * result. Never call this inside a database transaction, because object
@@ -217,7 +228,10 @@ export const readVersionAst = async ({
   const source = canonicalLegislationAstSource(row, corpusStorageMode);
   switch (source.type) {
     case "database":
-      return parsePersistedCorpusAst(row.documentAst);
+      return persistedAstOrAbsent(
+        readPersistedCorpusAst(row.documentAst),
+        `${step}.row`,
+      );
     case "object_storage":
       return await readCorpusPayloadOrFallback({
         documentId: row.id,
@@ -225,13 +239,16 @@ export const readVersionAst = async ({
         step,
         read: async () => await versionAstCache.read(source.key),
         fallback: async () =>
-          parsePersistedCorpusAst(
-            await readStoredVersionAst({
-              legislationDb,
-              id: row.id,
-              purpose,
-              surface,
-            }),
+          persistedAstOrAbsent(
+            readPersistedCorpusAst(
+              await readStoredVersionAst({
+                legislationDb,
+                id: row.id,
+                purpose,
+                surface,
+              }),
+            ),
+            `${step}.row`,
           ),
       });
     default: {

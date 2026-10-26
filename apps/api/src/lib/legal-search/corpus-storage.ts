@@ -1,3 +1,4 @@
+// parser-output-unchanged: a stored AST the persisted reader cannot read is answered as a typed refusal instead of a validation throw; parsed values are unchanged.
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { Column, SQL } from "drizzle-orm";
@@ -24,6 +25,7 @@ import {
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
   StoredAstDegradedError,
+  StoredAstUnreadableError,
 } from "@/api/lib/errors/tagged-errors";
 import {
   corpusContentHash,
@@ -105,17 +107,45 @@ export const parsePersistedCorpusSections = (
   value: unknown,
 ): DecisionSection[] | null => v.parse(persistedDecisionSectionsSchema, value);
 
+/** At most this many failing paths travel on an unreadable AST's error. */
+const UNREADABLE_AST_ISSUE_LIMIT = 5;
+
 /**
- * A malformed stored AST still throws: that is a defect in what was
- * written. Vocabulary this reader does not declare is not: the schema
- * keeps what carries text and degrades the rest, and each degradation is
- * reported here so the row stays visible without costing the reader the
- * document.
+ * What one stored AST value reads as: the AST (or its empty or absent
+ * forms), or a typed refusal naming why the value is not one.
  */
-export const parsePersistedCorpusAst = (
+export type PersistedCorpusAstRead =
+  | { type: "read"; ast: DocumentAst | EmptyAst | null }
+  | { type: "unreadable"; error: StoredAstUnreadableError };
+
+/**
+ * The one reader of a stored AST value, from a row column or an object.
+ *
+ * Vocabulary this reader does not declare, and identities an older writer
+ * repeated, are not failures: the schema keeps what carries text and
+ * degrades the rest, and each degradation is reported here so the row stays
+ * visible without costing the reader the document. A value that is not an
+ * AST even so is answered as `unreadable`, never thrown as a validation
+ * error: a caller decides what a decision without its structure serves.
+ */
+export const readPersistedCorpusAst = (
   value: unknown,
-): DocumentAst | EmptyAst | null => {
-  const parsed = v.parse(persistedCorpusAstSchema, value);
+): PersistedCorpusAstRead => {
+  const parsed = v.safeParse(persistedCorpusAstSchema, value);
+  if (!parsed.success) {
+    return {
+      type: "unreadable",
+      error: new StoredAstUnreadableError({
+        message: "Stored document AST is not one the persisted reader reads",
+        issues: parsed.issues
+          .slice(0, UNREADABLE_AST_ISSUE_LIMIT)
+          .map(
+            (issue) =>
+              `${v.getDotPath(issue) ?? "(root)"}: expected ${issue.expected ?? issue.type}`,
+          ),
+      }),
+    };
+  }
   const degradations = persistedAstDegradations(value);
   if (degradations.length > 0) {
     captureError(
@@ -123,12 +153,66 @@ export const parsePersistedCorpusAst = (
         message: "Stored document AST carries undeclared vocabulary",
         degradations,
       }),
-      handlerErrorContext("legalsearch.parsePersistedCorpusAst", {
-        step: "corpus-storage.parsePersistedCorpusAst",
+      handlerErrorContext("legalsearch.readPersistedCorpusAst", {
+        step: "corpus-storage.readPersistedCorpusAst",
       }),
     );
   }
-  return parsed;
+  return { type: "read", ast: parsed.output };
+};
+
+/**
+ * The AST a read yields, for a reader whose answer to a stored AST no reader
+ * can read is the same as to no AST: the document is served from its text,
+ * or shown as unreadable. The unreadable value is reported under `step`, so
+ * the row is visible for repair; it is never thrown.
+ *
+ * A write or index path uses {@link persistedAstOrTextFallback} instead:
+ * there an absent AST is a result that gets stored, so it may stand only
+ * where text stands in for it.
+ */
+export const persistedAstOrAbsent = (
+  read: PersistedCorpusAstRead,
+  step: string,
+): DocumentAst | EmptyAst | null => {
+  if (read.type === "read") {
+    return read.ast;
+  }
+  captureError(
+    read.error,
+    handlerErrorContext("legalsearch.persistedAstOrAbsent", { step }),
+  );
+  return null;
+};
+
+/** Text that can stand in for a document's structure: any non-blank text. */
+const isUsableFallbackText = (text: string | null): text is string =>
+  text !== null && text.trim().length > 0;
+
+/**
+ * The AST a read yields, for a write or index path. An unreadable AST reads
+ * as absent only when `fallbackText` is usable, so what gets written is the
+ * document's text; the unreadable value is reported under `step`. With no
+ * usable text there is nothing to write in its place, so the typed
+ * `StoredAstUnreadableError` is raised and the caller fails the write as it
+ * does for any payload it cannot read, rather than recording an empty
+ * document as done.
+ */
+export const persistedAstOrTextFallback = (
+  read: PersistedCorpusAstRead,
+  { fallbackText, step }: { fallbackText: string | null; step: string },
+): DocumentAst | EmptyAst | null => {
+  if (read.type === "read") {
+    return read.ast;
+  }
+  if (!isUsableFallbackText(fallbackText)) {
+    throw read.error;
+  }
+  captureError(
+    read.error,
+    handlerErrorContext("legalsearch.persistedAstOrTextFallback", { step }),
+  );
+  return null;
 };
 
 /**
@@ -859,10 +943,31 @@ export type SizedCorpusAst = {
   decodedLength: number;
 };
 
+/** A stored AST object as read, with the decoded length of its JSON. */
+export type SizedPersistedCorpusAstRead = {
+  read: PersistedCorpusAstRead;
+  decodedLength: number;
+};
+
+/** A decoded object that is not JSON reads as unreadable, like any value
+ * that is not an AST. */
+const parseStoredJson = (decoded: string): PersistedCorpusAstRead => {
+  const json = Result.try((): unknown => JSON.parse(decoded));
+  return Result.isOk(json)
+    ? readPersistedCorpusAst(json.value)
+    : {
+        type: "unreadable",
+        error: new StoredAstUnreadableError({
+          message: "Stored document AST is not JSON",
+          issues: ["(root): expected JSON"],
+        }),
+      };
+};
+
 export const readSizedCorpusAst = async (
   storedKey: string,
   { signal, ...seams }: CorpusByteSourceSeams,
-): Promise<SizedCorpusAst> => {
+): Promise<SizedPersistedCorpusAstRead> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
     async (requestSignal) =>
@@ -874,18 +979,19 @@ export const readSizedCorpusAst = async (
     { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
-  const parsed: unknown = JSON.parse(decoded);
-  return {
-    ast: parsePersistedCorpusAst(parsed),
-    decodedLength: decoded.length,
-  };
+  return { read: parseStoredJson(decoded), decodedLength: decoded.length };
 };
 
+/**
+ * A stored AST object, read through {@link readPersistedCorpusAst}: an object
+ * no reader can read is answered as `unreadable`, never thrown. Only an
+ * object-storage failure raises.
+ */
 export const readCorpusAst = async (
   storedKey: string,
   seams: CorpusByteSourceSeams,
-): Promise<DocumentAst | EmptyAst | null> =>
-  (await readSizedCorpusAst(storedKey, seams)).ast;
+): Promise<PersistedCorpusAstRead> =>
+  (await readSizedCorpusAst(storedKey, seams)).read;
 
 type ReadCorpusAtAuthoritativePointerOptions<T> = {
   storedKey: string;

@@ -3,7 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   hasUsableAst,
   omitDerivablePlainText,
@@ -61,7 +60,6 @@ import {
   prefetchCorpusTombstones,
 } from "@/api/lib/legal-search/corpus-tombstones";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
-import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -477,9 +475,13 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       ? omitDerivablePlainText(storedAst)
       : storedAst;
 
-    // Only fetch fulltext if no usable documentAst (fallback).
+    // Only fetch fulltext if no usable documentAst (fallback). A stored AST
+    // no reader can read counts as a payload that could not be read: the
+    // decision is served from its fulltext when it has one, and as a failed
+    // read when it has none, never as a document still to fetch, because a
+    // publisher fetch cannot repair a row whose payload is already stored.
     let fulltext: string | null = null;
-    let corpusPayloadUnavailable = astRead.unavailable;
+    let corpusPayloadUnavailable = astRead.unavailable || astRead.unreadable;
     if (!astIsUsable) {
       const textRead = await resolveFulltext({
         textS3Key: decision.textS3Key,
@@ -660,7 +662,8 @@ const containPayloadUnavailable = async <TPayload>(
 type ResolveAstInput = {
   astS3Key: string | null;
   contentHash: string | null;
-  pgAst: DocumentAst | EmptyAst | null;
+  /** The row's `document_ast` column as stored; see `readServedDecisionAst`. */
+  pgAst: unknown;
   decisionId: SafeId<"caseLawDecision">;
   readTombstones: CorpusTombstoneReader;
 };
@@ -682,7 +685,7 @@ const resolveAst = async ({
         corpusReadEnabled: corpusReadEnabled(),
         readStore: async () =>
           astS3Key === null
-            ? null
+            ? { type: "read", ast: null }
             : await readCorpusAst(astS3Key, { readTombstones }),
       }),
     decisionId,
@@ -692,6 +695,7 @@ const resolveAst = async ({
     source: read.payload?.source ?? null,
     projectionDigest: read.payload?.projectionDigest ?? null,
     unavailable: read.unavailable,
+    unreadable: read.payload?.unreadable ?? false,
   };
 };
 
@@ -699,7 +703,8 @@ export type ResolveDocumentStateInput = {
   /** Whether the read resolved something a reader can actually read. */
   hasReadableDocument: boolean;
   /**
-   * Whether object storage refused a payload this row is served from.
+   * Whether object storage refused a payload this row is served from, or
+   * the stored payload is one no reader can read.
    * A trimmed canonical row has no Postgres copy to fall back to, so
    * there is nothing readable and nothing that says the source had
    * nothing either.

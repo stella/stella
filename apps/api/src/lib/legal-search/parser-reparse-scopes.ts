@@ -141,19 +141,19 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "The parser re-keys a repeated block identity, which changes the AST of every document whose section markers repeat.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 12,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "The parser re-keys a repeated block identity, which changes the AST of every document whose section markers repeat.",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {

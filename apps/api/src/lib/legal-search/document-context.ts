@@ -11,7 +11,10 @@ import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-reads";
-import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
+import {
+  persistedAstOrAbsent,
+  readCorpusPayloadOrFallback,
+} from "@/api/lib/legal-search/corpus-storage";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 import {
   definePublicLawSharedQuery,
@@ -69,7 +72,11 @@ export const loadDocumentContext = async (
           documentId: decisionId,
           key: astS3Key,
           step: "documentContext.corpusAst",
-          read: async () => await readCorpusAst(astS3Key),
+          read: async () =>
+            persistedAstOrAbsent(
+              await readCorpusAst(astS3Key),
+              "documentContext.corpusAst",
+            ),
           fallback: () => decision.documentAst,
         })
       : decision.documentAst;

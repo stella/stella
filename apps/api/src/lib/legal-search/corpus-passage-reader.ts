@@ -21,6 +21,7 @@ import { caseLawDecisions } from "@/api/db/schema";
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
 import {
+  persistedAstOrAbsent,
   readCorpusAst,
   readCorpusText,
 } from "@/api/lib/legal-search/corpus-storage";
@@ -126,8 +127,13 @@ const hydratingPayloadSource = async (
   return {
     readText: async (storedKey) =>
       await readCorpusText(storedKey, { readTombstones }),
+    // An AST no reader can read is reported and chunked as absent, so the
+    // passages come from the text.
     readAst: async (storedKey) =>
-      await readCorpusAst(storedKey, { readTombstones }),
+      persistedAstOrAbsent(
+        await readCorpusAst(storedKey, { readTombstones }),
+        "corpusPassages.readAst",
+      ),
   };
 };
 
