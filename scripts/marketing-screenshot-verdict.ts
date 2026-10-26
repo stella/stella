@@ -69,13 +69,33 @@ export const verdictOf = (report: unknown, exitCode: number): Verdict => {
   }
   const differing: string[] = [];
   for (const spec of specsOf(parsed.output.suites)) {
-    const failed = spec.tests.flatMap((test) =>
+    // Playwright's own outcome per test: "unexpected" covers a failure and an
+    // expected failure that passed. Reports without it fall back to results.
+    const unexpected = spec.tests.filter((test) =>
+      test.status === undefined
+        ? test.results.some(
+            (result) =>
+              result.status !== "passed" && result.status !== "skipped",
+          )
+        : test.status === "unexpected",
+    );
+    if (unexpected.length === 0) {
+      continue;
+    }
+    const failed = unexpected.flatMap((test) =>
       test.results.filter(
         (result) => result.status !== "passed" && result.status !== "skipped",
       ),
     );
-    if (failed.length === 0) {
-      continue;
+    if (
+      unexpected.some((test) =>
+        test.results.every((result) => result.status === "passed"),
+      )
+    ) {
+      return {
+        kind: "fail",
+        reason: `${spec.title} passed although it was expected to fail`,
+      };
     }
     const messages = failed.flatMap((result) =>
       result.errors.map((error) => error.message ?? ""),

@@ -3,16 +3,22 @@ import { expect, test } from "bun:test";
 import { verdictOf } from "./marketing-screenshot-verdict";
 
 const report = (
-  ...specs: { title: string; status: string; messages: string[] }[]
+  ...specs: {
+    title: string;
+    status: string;
+    messages: string[];
+    testStatus?: string;
+  }[]
 ) => ({
   suites: [
     {
       suites: [
         {
-          specs: specs.map(({ title, status, messages }) => ({
+          specs: specs.map(({ title, status, messages, testStatus }) => ({
             title,
             tests: [
               {
+                ...(testStatus === undefined ? {} : { status: testStatus }),
                 results: [
                   { status, errors: messages.map((message) => ({ message })) },
                 ],
@@ -85,6 +91,27 @@ test("a screenshot that never stabilised is a failure, not a difference", () => 
           "Error: expect(page).toHaveScreenshot(expected) failed\n\n  Timeout 15000ms exceeded.\n  - 2 consecutive screenshots were not stable",
         ],
       }),
+      1,
+    ).kind,
+  ).toBe("fail");
+});
+
+test("an unexpected pass beside a screenshot difference still fails", () => {
+  expect(
+    verdictOf(
+      report(
+        {
+          title: "capture landing product screenshots",
+          status: "failed",
+          messages: [MISMATCH],
+        },
+        {
+          title: "expected to fail",
+          status: "passed",
+          messages: [],
+          testStatus: "unexpected",
+        },
+      ),
       1,
     ).kind,
   ).toBe("fail");
