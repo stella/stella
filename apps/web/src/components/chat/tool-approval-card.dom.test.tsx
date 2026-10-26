@@ -128,3 +128,57 @@ test("a denied approval restored as an SDK error shows only its denial status", 
   expect(view.queryByText("Tool execution denied by user")).toBeNull();
   queryClient.clear();
 });
+
+test("a document edit approval says what changes, never a block id", () => {
+  const blockId = "707C9911";
+  const input = {
+    operations: [
+      {
+        type: "replaceBlock",
+        blockId,
+        text: "Either party may terminate on 60 days' notice.",
+      },
+      {
+        type: "replaceRange",
+        range: {
+          type: "textRange",
+          story: "main",
+          blockId,
+          startOffset: 31,
+          endOffset: 40,
+          selectedTextHash: "h2ny5yc",
+        },
+        replace: "60 days'",
+      },
+    ],
+  };
+  const queryClient = new QueryClient();
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <ChatApprovalContext value={testChatApprovalContextValue}>
+          <ToolApprovalCard
+            isAwaitingUser
+            isTurnActive={false}
+            part={{
+              approval: { id: "pending-docx-edit", needsApproval: true },
+              arguments: JSON.stringify(input),
+              id: "pending-docx-edit-call",
+              input,
+              name: "suggest_changes",
+              state: "approval-requested",
+              type: "tool-call",
+            }}
+          />
+        </ChatApprovalContext>
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  const text = view.container.textContent;
+  expect(text).toContain("Rewrite a paragraph");
+  expect(text).toContain("Either party may terminate on 60 days' notice.");
+  expect(text).toContain("Replace the selected text with “60 days'”");
+  expect(text).not.toContain(blockId);
+  queryClient.clear();
+});
