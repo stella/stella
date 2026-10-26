@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, expect, expectTypeOf, test } from "bun:test";
+import { afterEach, expect, expectTypeOf, spyOn, test } from "bun:test";
 
 import {
   type LogRecord,
@@ -21,30 +21,36 @@ import {
 afterEach(resetLogSinkForTesting);
 
 test("the process pool resets only after admitted work settles", async () => {
-  let release: () => void = () => undefined;
-  const blocked = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let started: () => void = () => undefined;
-  const reached = new Promise<void>((resolve) => {
-    started = resolve;
-  });
+  resetWorkAdmissionForTesting();
+  const rss = spyOn(process.memoryUsage, "rss").mockReturnValue(0);
+  const blocked = Promise.withResolvers<undefined>();
+  const reached = Promise.withResolvers<undefined>();
   const running = admitWork({
     pool: "heavy-sidecar",
     kind: "test-reset",
     run: async () => {
-      started();
-      await blocked;
+      reached.resolve(undefined);
+      await blocked.promise;
     },
   });
-  await reached;
-
-  expect(resetWorkAdmissionForTesting).toThrow(
-    "Cannot reset work admission while work is active",
-  );
-  release();
-  await running;
-  expect(resetWorkAdmissionForTesting).not.toThrow();
+  try {
+    await reached.promise;
+    expect(rss).toHaveBeenCalled();
+    expect(resetWorkAdmissionForTesting).toThrow(
+      "Cannot reset work admission while work is active",
+    );
+    blocked.resolve(undefined);
+    expect((await running).isOk()).toBe(true);
+    expect(resetWorkAdmissionForTesting).not.toThrow();
+  } finally {
+    blocked.resolve(undefined);
+    try {
+      await running;
+      resetWorkAdmissionForTesting();
+    } finally {
+      rss.mockRestore();
+    }
+  }
 });
 
 test("memory pressure refuses new work", async () => {

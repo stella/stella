@@ -1,20 +1,5 @@
 [
   {
-    "id": "no-polling-loop::apps/api/scripts/test-lanes.test.ts::<module>::while",
-    "count": 1,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
-    "id": "no-polling-loop::apps/api/scripts/test-process-supervisor.test.ts::<module>::for",
-    "count": 2,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
-    "id": "no-polling-loop::apps/api/scripts/test-process-supervisor.test.ts::<module>::while",
-    "count": 1,
-    "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
-  },
-  {
     "id": "no-polling-loop::apps/api/src/db/backfill-runtime-load-reader.db.test.ts::<module>::while",
     "count": 2,
     "reason": "Predates the rule: polls a condition between clock waits; await the signal that sets it."
@@ -371,7 +356,7 @@
   },
   {
     "id": "no-real-time-wait::apps/api/scripts/test-lanes.test.ts::<module>::Bun.sleep",
-    "count": 4,
+    "count": 3,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -382,11 +367,6 @@
   {
     "id": "no-real-time-wait::apps/api/scripts/test-lanes.test.ts::settle::Bun.sleep",
     "count": 1,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
-    "id": "no-real-time-wait::apps/api/scripts/test-process-supervisor.test.ts::<module>::Bun.sleep",
-    "count": 5,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
@@ -1687,16 +1667,6 @@
   {
     "id": "no-unreasoned-timeout::apps/api/scripts/seed-template-chat-threads.test.ts::<module>::beforeAll timeout",
     "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/scripts/test-memory-batches.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/api/scripts/test-process-supervisor.test.ts::<module>::test timeout",
-    "count": 6,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
