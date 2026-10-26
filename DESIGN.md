@@ -41,14 +41,14 @@ hex values in components; use the semantic tokens below.
 | Token                  | Light                         | Dark                          | Role                      |
 | ---------------------- | ----------------------------- | ----------------------------- | ------------------------- |
 | `--background`         | white                         | neutral-950 / 95% white blend | Page canvas               |
-| `--foreground`         | neutral-800                   | neutral-100                   | Primary text              |
+| `--foreground`         | neutral-900                   | neutral-100                   | Primary text              |
 | `--card`               | white                         | background / 98% white blend  | Card surfaces             |
-| `--card-foreground`    | neutral-800                   | neutral-100                   | Text on cards             |
+| `--card-foreground`    | neutral-900                   | neutral-100                   | Text on cards             |
 | `--primary`            | neutral-800                   | neutral-100                   | Primary actions, headings |
 | `--primary-foreground` | neutral-50                    | neutral-800                   | Text on primary           |
 | `--secondary`          | black / 4%                    | white / 4%                    | Secondary surfaces        |
 | `--muted`              | black / 4%                    | white / 4%                    | Subdued backgrounds       |
-| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-500 / 90% white blend | Secondary text            |
+| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-400                   | Secondary text            |
 | `--accent`             | black / 4%                    | white / 4%                    | Hover/focus highlights    |
 | `--destructive`        | red-500                       | red-500 / 90% white blend     | Destructive actions       |
 | `--info`               | blue-500                      | blue-500                      | Informational status      |
