@@ -23,9 +23,14 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
+
+import {
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ICON_MODULE = "packages/ui/src/icons.ts";
@@ -204,42 +209,153 @@ type Edit = {
   readonly text: string;
 };
 
+// A key, not a reference: object, class and type members and enum members.
+const isMemberKey = (node: Node, parent: Node): boolean =>
+  ((parent.type === "Property" ||
+    parent.type === "PropertyDefinition" ||
+    parent.type === "MethodDefinition" ||
+    parent.type === "TSPropertySignature" ||
+    parent.type === "TSMethodSignature") &&
+    !parent.computed &&
+    parent.key === node) ||
+  (parent.type === "TSEnumMember" && parent.id === node) ||
+  (parent.type === "MemberExpression" &&
+    !parent.computed &&
+    parent.property === node) ||
+  (parent.type === "TSQualifiedName" && parent.right === node);
+
+const PATTERN_PARTS = new Set([
+  "ArrayPattern",
+  "AssignmentPattern",
+  "ObjectPattern",
+  "Property",
+  "RestElement",
+]);
+
+// Whether the pattern holding the node at `depth` (counted from the nearest
+// ancestor) declares bindings. A destructuring assignment reads existing ones
+// instead, as the object and array literals it is written with.
+const declares = (ancestors: readonly Node[], depth: number): boolean => {
+  let child = ancestors.at(-depth);
+  for (const ancestor of ancestors.slice(0, -depth).toReversed()) {
+    if (
+      (ancestor.type === "AssignmentExpression" ||
+        ancestor.type === "ForOfStatement" ||
+        ancestor.type === "ForInStatement") &&
+      ancestor.left === child
+    ) {
+      return false;
+    }
+    if (!PATTERN_PARTS.has(ancestor.type)) {
+      return true;
+    }
+    child = ancestor;
+  }
+  return true;
+};
+
+// A destructured name declares a binding, renamed or not.
+const isDestructuredName = (
+  node: Node,
+  ancestors: readonly Node[],
+): boolean => {
+  const [parent, grandparent] = [ancestors.at(-1), ancestors.at(-2)];
+  if (parent === undefined) {
+    return false;
+  }
+  const inPattern =
+    (parent.type === "Property" &&
+      parent.value === node &&
+      grandparent?.type === "ObjectPattern") ||
+    parent.type === "ArrayPattern" ||
+    (parent.type === "AssignmentPattern" &&
+      parent.left === node &&
+      grandparent !== undefined &&
+      PATTERN_PARTS.has(grandparent.type)) ||
+    (parent.type === "RestElement" &&
+      grandparent !== undefined &&
+      PATTERN_PARTS.has(grandparent.type));
+  return inPattern && declares(ancestors, 1);
+};
+
+// A shorthand entry `{ Name }` or `{ Name = value }`: the key and the value are
+// one name in the source, and the value carries the edit. An object literal or
+// a destructuring assignment reads the binding; a declaration does not.
+const shorthandEdit = (
+  node: Node & { name: string },
+  ancestors: readonly Node[],
+  edit: Edit,
+): Edit | null | undefined => {
+  const [parent, grandparent] = [ancestors.at(-1), ancestors.at(-2)];
+  if (parent?.type === "Property" && parent.shorthand) {
+    if (parent.key === node) {
+      return null;
+    }
+    return grandparent?.type === "ObjectPattern" && declares(ancestors, 2)
+      ? null
+      : edit;
+  }
+  if (
+    parent?.type === "AssignmentPattern" &&
+    parent.left === node &&
+    grandparent?.type === "Property" &&
+    grandparent.shorthand
+  ) {
+    return declares(ancestors, 3) ? null : edit;
+  }
+  return undefined;
+};
+
+// Names that are not references: imported names, JSX attribute names and
+// members, and `import.meta`.
+const isNonReference = (node: Node, parent: Node): boolean =>
+  parent.type === "ImportSpecifier" ||
+  parent.type === "JSXAttribute" ||
+  parent.type === "JSXNamespacedName" ||
+  (parent.type === "MetaProperty" && parent.meta === node) ||
+  (parent.type === "JSXMemberExpression" && parent.property === node) ||
+  isMemberKey(node, parent);
+
 // The edit that renames one identifier, or null when it is a name rather than
 // a reference to the binding: a member (`x.Name`), an object key, a class or
-// type member, a JSX attribute, or the exported side of an export specifier.
+// type member, a JSX attribute, a destructured name, or the exported side of
+// an export specifier.
 const identifierEdit = (
-  node: ts.Identifier,
-  sourceFile: ts.SourceFile,
+  node: Node & { name: string },
+  ancestors: readonly Node[],
   to: string,
+  source: string,
 ): Edit | null => {
-  const { parent } = node;
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  if (ts.isShorthandPropertyAssignment(parent)) {
-    return { start, end, text: `${node.text}: ${to}` };
+  const parent = ancestors.at(-1);
+  // A binding's node spans its type annotation too; the edit spans the name.
+  const { start } = node;
+  const end = source.startsWith(node.name, start)
+    ? start + node.name.length
+    : node.end;
+  const rename = { start, end, text: to };
+  if (parent === undefined) {
+    return rename;
   }
-  if (ts.isExportSpecifier(parent)) {
-    if (parent.propertyName === undefined) {
-      return { start, end, text: `${to} as ${node.text}` };
+  const shorthand = shorthandEdit(node, ancestors, {
+    start,
+    end,
+    text: `${node.name}: ${to}`,
+  });
+  if (shorthand !== undefined) {
+    return shorthand;
+  }
+  if (parent.type === "ExportSpecifier") {
+    const { exported, local: binding } = parent;
+    if (binding.start === exported.start) {
+      return binding === node
+        ? { start, end, text: `${to} as ${node.name}` }
+        : null;
     }
-    return parent.propertyName === node ? { start, end, text: to } : null;
+    return binding === node ? rename : null;
   }
-  const isName =
-    ((ts.isPropertyAccessExpression(parent) ||
-      ts.isQualifiedName(parent) ||
-      ts.isPropertyAssignment(parent) ||
-      ts.isPropertyDeclaration(parent) ||
-      ts.isPropertySignature(parent) ||
-      ts.isMethodDeclaration(parent) ||
-      ts.isMethodSignature(parent) ||
-      ts.isEnumMember(parent) ||
-      ts.isBindingElement(parent)) &&
-      "name" in parent &&
-      parent.name === node) ||
-    (ts.isBindingElement(parent) && parent.propertyName === node) ||
-    ts.isJsxAttribute(parent) ||
-    ts.isImportSpecifier(parent);
-  return isName ? null : { start, end, text: to };
+  return isNonReference(node, parent) || isDestructuredName(node, ancestors)
+    ? null
+    : rename;
 };
 
 /**
@@ -255,26 +371,20 @@ export const renameIdentifiers = (
   if (renames.size === 0) {
     return source;
   }
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const { program } = parseSource(file, source);
   const edits: Edit[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isIdentifier(node)) {
-      const to = renames.get(node.text);
-      const edit =
-        to === undefined ? null : identifierEdit(node, sourceFile, to);
-      if (edit !== null) {
-        edits.push(edit);
-      }
+  walk(program, (node, ancestors) => {
+    // JSX names a component with a JSX identifier.
+    if (node.type !== "Identifier" && node.type !== "JSXIdentifier") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    const to = renames.get(node.name);
+    const edit =
+      to === undefined ? null : identifierEdit(node, ancestors, to, source);
+    if (edit !== null) {
+      edits.push(edit);
+    }
+  });
   let output = source;
   for (const { start, end, text } of edits.toSorted(
     (a, b) => b.start - a.start,
