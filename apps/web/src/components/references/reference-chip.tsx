@@ -286,6 +286,9 @@ const ReferenceChipView = ({
         <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
       }
       onActivate={onActivate}
+      // The label truncates, so the full name stays one hover away and is
+      // the chip's accessible name. A rich label carries no plain string.
+      title={labelContent === undefined ? visual.label : undefined}
       truncate
     >
       {label}
