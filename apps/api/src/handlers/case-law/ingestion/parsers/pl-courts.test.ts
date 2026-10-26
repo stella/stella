@@ -1,4 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
@@ -302,8 +303,16 @@ describe("markup whitespace", () => {
     "%s: no line break, tab or run of spaces of the markup reaches the text",
     async (name) => {
       const html = await gunzipText(name);
-      // The capture reaches the fault: whitespace runs inside its elements.
-      expect(html).toMatch(/[^\s>][ \t]*\n\s*[^\s<]|[^\s>] {2,}[^\s<]/u);
+      // The capture reaches the fault: a paragraph whose markup puts a line
+      // break or a run of spaces between two of its words.
+      const $ = cheerio.load(html);
+      expect(
+        $("p")
+          .toArray()
+          .some((paragraph) =>
+            /\S(?:[ \t]*\n|[ \t]{2,})\s*\S/u.test($(paragraph).text()),
+          ),
+      ).toBe(true);
       const { documentAst } = parsePlDecisionContent(
         baseInput(html, { decisionType: undefined }),
       );
@@ -353,6 +362,16 @@ describe("ordered list items print the number a browser gives them", () => {
     ['<ol type="I" start="9"><li>a</li><li>b</li></ol>', ["IX. a", "X. b"]],
     ['<ol type="I" start="0"><li>a</li></ol>', ["0. a"]],
     ["<ol><li>a</li><li> </li><li>c</li></ol>", ["1. a", "3. c"]],
+    ['<ol style="list-style-type: none;"><li>a</li></ol>', ["a"]],
+    ['<ol type="a" style="list-style-type: decimal"><li>a</li></ol>', ["1. a"]],
+    [
+      '<ol><li style="list-style: upper-roman inside">a</li><li>b</li></ol>',
+      ["I. a", "2. b"],
+    ],
+    [
+      '<ol style="list-style-type: none"><li style="list-style-type: lower-alpha">a</li></ol>',
+      ["a. a"],
+    ],
     ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
   ])("%s", (html, expected) => {
     expect(itemsOf(html)).toEqual(expected);

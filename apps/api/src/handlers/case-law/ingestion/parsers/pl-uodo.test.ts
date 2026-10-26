@@ -272,12 +272,18 @@ const renditionBodyMarks = async (rendition: URL): Promise<string[]> => {
     ? Bun.gunzipSync(bytes)
     : bytes;
   const parsed: unknown = JSON.parse(new TextDecoder().decode(json));
-  const fts =
-    typeof parsed === "object" && parsed !== null && "fts" in parsed
-      ? parsed.fts
-      : undefined;
-  expect(typeof fts, "the rendition states its text as `fts`").toBe("string");
-  const body = String(fts).split("\n¤").at(0) ?? "";
+  // `{ fts: { content: { pl: "<text>" } } }`
+  let text: unknown = parsed;
+  for (const key of ["fts", "content", "pl"]) {
+    text =
+      typeof text === "object" && text !== null
+        ? Reflect.get(text, key)
+        : undefined;
+  }
+  expect(typeof text, "the rendition states its text as fts.content.pl").toBe(
+    "string",
+  );
+  const body = String(text).split("\n¤").at(0) ?? "";
   return [...body.matchAll(/╚(?<mark>[^╝]*)╝/gu)].map(
     (match) => match.groups?.["mark"] ?? "",
   );

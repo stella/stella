@@ -315,6 +315,53 @@ const ORDERED_LIST_STYLE = {
 
 const ORDERED_LIST_STYLE_KEYS = ["1", "a", "A", "i", "I"] as const;
 
+type OrderedListType = (typeof ORDERED_LIST_STYLE_KEYS)[number];
+
+/**
+ * CSS `list-style-type` keywords: the `type` each counts in, or null for a
+ * keyword that prints no number (`none`, and the bullets).
+ */
+const CSS_LIST_STYLE_TYPES: Readonly<Record<string, OrderedListType | null>> = {
+  none: null,
+  disc: null,
+  circle: null,
+  square: null,
+  decimal: "1",
+  "lower-alpha": "a",
+  "lower-latin": "a",
+  "upper-alpha": "A",
+  "upper-latin": "A",
+  "lower-roman": "i",
+  "upper-roman": "I",
+};
+
+const CSS_LIST_STYLE =
+  /(?:^|;)\s*list-style(?:-type)?\s*:\s*(?<value>[^;]+)/giu;
+
+/**
+ * The counting an element's inline style states: a type, null where it
+ * prints no number, undefined where the style states none this reader knows.
+ * The last declaration wins, as in CSS.
+ */
+const cssListStyleOf = (
+  element: Element,
+): OrderedListType | null | undefined => {
+  let stated: OrderedListType | null | undefined;
+  for (const match of (element.attribs["style"] ?? "").matchAll(
+    CSS_LIST_STYLE,
+  )) {
+    for (const token of (match.groups?.["value"] ?? "")
+      .toLowerCase()
+      .split(/\s+/u)) {
+      if (Object.hasOwn(CSS_LIST_STYLE_TYPES, token)) {
+        stated = CSS_LIST_STYLE_TYPES[token];
+        break;
+      }
+    }
+  }
+  return stated;
+};
+
 const integerAttribute = (value: string | undefined): number | undefined => {
   if (value === undefined || !/^\s*-?\d+\s*$/u.test(value)) {
     return undefined;
@@ -325,8 +372,9 @@ const integerAttribute = (value: string | undefined): number | undefined => {
 /**
  * The number a browser prints before an `<li>` of an `<ol>`: the list's
  * `start` (or its length, `reversed`), stepped once per item, reset by an
- * item's own `value`, set in the list's `type`. A list item outside an
- * ordered list prints no number.
+ * item's own `value`, set in the list's `type` unless an inline
+ * `list-style-type` says otherwise. A list item outside an ordered list, or
+ * styled to print no number, prints none.
  */
 const orderedListMarker = (item: Element): string | undefined => {
   const list = item.parent;
@@ -348,10 +396,22 @@ const orderedListMarker = (item: Element): string | undefined => {
     }
     ordinal += step;
   }
-  const type = list.attribs["type"] ?? "1";
-  const style = includes(ORDERED_LIST_STYLE_KEYS, type)
-    ? ORDERED_LIST_STYLE[type]
-    : ORDERED_LIST_STYLE["1"];
+  // An inline style outranks the `type` attribute, the item's its list's.
+  // (`null`, no number, is a statement and must not fall through.)
+  const typeAttribute = list.attribs["type"] ?? "1";
+  const attributeType: OrderedListType = includes(
+    ORDERED_LIST_STYLE_KEYS,
+    typeAttribute,
+  )
+    ? typeAttribute
+    : "1";
+  const itemStyle = cssListStyleOf(item);
+  const stated = itemStyle === undefined ? cssListStyleOf(list) : itemStyle;
+  const type = stated === undefined ? attributeType : stated;
+  if (type === null) {
+    return undefined;
+  }
+  const style = ORDERED_LIST_STYLE[type];
   // Alphabetic and Roman counting has no zero or negatives; a browser prints
   // those in decimal.
   return `${ordinal > 0 ? style(ordinal) : String(ordinal)}.`;

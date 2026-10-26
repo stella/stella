@@ -125,12 +125,32 @@ describe("source whitespace", () => {
       "W przedstawionej we wniosku planowanej czynności bierze udział 5 spółek",
     );
     expect(fulltext).toContain(
-      "1) darowizna udziałów oraz akcji posiadanych przez OF odpowiednio w Spółce B oraz Spółce C na rzecz FR;",
+      "darowizna udziałów oraz akcji posiadanych przez OF odpowiednio w Spółce B oraz Spółce C na rzecz FR;",
     );
   });
 });
 
 describe("ordered lists", () => {
+  test("a list styled to print no number gets none", async () => {
+    const html = await htmlOf(
+      new URL("pl-kis-detail-05-objas.json.gz", ADAPTER_FIXTURES),
+    );
+    const $ = cheerio.load(html);
+    const items = $("ol[style*='list-style-type: none'] > li")
+      .toArray()
+      .map((item) => $(item).text().replace(/\s+/gu, " ").trim())
+      .filter((text) => text !== "");
+    expect(items).not.toEqual([]);
+    // A no-break space before an item's title stays in its text; compare
+    // words, not the width of the gap.
+    const texts = parse(html).documentAst.blocks.map((block) =>
+      block.plainText.replace(/\s+/gu, " "),
+    );
+    for (const item of items) {
+      expect(texts, item).toContain(item);
+    }
+  });
+
   test("each question keeps the number its answer cites", async () => {
     const { fulltext } = parse(await htmlOf(NUMBERED_QUESTIONS));
     const questions = [
@@ -159,7 +179,9 @@ describe("ordered lists", () => {
     async (_name, detail) => {
       const html = await htmlOf(detail);
       const $ = cheerio.load(html);
-      const items = $("ol:not([type]):not([start]):not([reversed])")
+      const items = $(
+        "ol:not([type]):not([start]):not([reversed]):not([style*='list-style'])",
+      )
         .toArray()
         .flatMap((list) =>
           $(list)
@@ -172,7 +194,9 @@ describe("ordered lists", () => {
         )
         .filter(({ text }) => text !== "");
       const { documentAst } = parse(html);
-      const texts = documentAst.blocks.map((block) => block.plainText);
+      const texts = documentAst.blocks.map((block) =>
+        block.plainText.replace(/\s+/gu, " "),
+      );
       for (const { number, text } of items) {
         const opening = `${number}. ${text.slice(0, 40)}`;
         expect(
