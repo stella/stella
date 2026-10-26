@@ -4,6 +4,12 @@ import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { cn } from "@stll/ui/utils";
 
+/**
+ * What the editor shows to commit besides Enter and blur: the "Done" button,
+ * or nothing, for a row too narrow to give the field room beside one.
+ */
+type InlineEditCommitControl = "done-button" | "keys";
+
 type InlineEditProps = {
   value: string;
   onChange: (value: string) => void;
@@ -26,6 +32,7 @@ type InlineEditProps = {
   inputAriaLabel?: string | undefined;
   /** Longest value the field accepts; typing and pasting stop there. */
   maxLength?: number | undefined;
+  commitControl?: InlineEditCommitControl;
   className?: string | undefined;
   inputClassName?: string | undefined;
 };
@@ -39,6 +46,7 @@ export const InlineEdit = ({
   action,
   inputAriaLabel,
   maxLength,
+  commitControl = "done-button",
   className,
   inputClassName,
 }: InlineEditProps) => {
@@ -64,6 +72,7 @@ export const InlineEdit = ({
       <InlineRenameInput
         aria-label={inputAriaLabel ?? t("common.rename")}
         className={inputClassName}
+        enterKeyHint="done"
         maxLength={maxLength}
         onBlur={() => {
           // The group commits when focus leaves its action buttons too.
@@ -75,19 +84,21 @@ export const InlineEdit = ({
       />
       {suffix}
       {action}
-      <Button
-        className="h-lh shrink-0 gap-0.5 px-2"
-        onClick={onCommit}
-        onMouseDown={(e) => {
-          e.preventDefault();
-        }}
-        size="xs"
-        type="button"
-        variant="default"
-      >
-        {t("common.done")}
-        <kbd className="text-3xs opacity-70">{t("common.enterKey")}</kbd>
-      </Button>
+      {commitControl === "done-button" ? (
+        <Button
+          className="h-lh shrink-0 gap-0.5 px-2"
+          onClick={onCommit}
+          onMouseDown={(e) => {
+            e.preventDefault();
+          }}
+          size="xs"
+          type="button"
+          variant="default"
+        >
+          {t("common.done")}
+          <kbd className="text-3xs opacity-70">{t("common.enterKey")}</kbd>
+        </Button>
+      ) : null}
     </span>
   );
 };

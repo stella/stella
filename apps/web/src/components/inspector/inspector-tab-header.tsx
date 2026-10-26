@@ -41,8 +41,8 @@ type RenameState = {
   /** Optional element appended after the input — e.g. a file extension. */
   suffix?: ReactNode;
   /**
-   * Optional action rendered between the input and Done (e.g. the chat
-   * tab's title-suggest wand). See `InlineEdit`'s `action` slot for the
+   * Optional action rendered after the input (e.g. the chat tab's
+   * title-suggest wand). See `InlineEdit`'s `action` slot for the
    * required press/click trigger semantics.
    */
   action?: ReactNode;
@@ -83,6 +83,8 @@ type InspectorTabHeaderProps = {
   /**
    * Tab-type-specific buttons (zoom controls, edit/save, print,
    * "open in big view", …). Rendered before the universal close.
+   * Both are hidden while renaming: the inspector is narrow, and the
+   * name needs the whole row to stay readable.
    */
   actions?: ReactNode;
   onClose: () => void;
@@ -99,10 +101,17 @@ export const InspectorTabHeader = ({
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
+  const renaming = rename?.active === true;
 
   return (
     <div className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3">
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      {/* Only the label clips: the field's focus ring is drawn outside it. */}
+      <div
+        className={cn(
+          "flex min-w-0 items-center gap-2",
+          !renaming && "overflow-hidden",
+        )}
+      >
         <Button
           aria-label={tCommon("back")}
           className="-ms-1 md:hidden"
@@ -117,6 +126,7 @@ export const InspectorTabHeader = ({
           <InlineEdit
             className="text-xs font-medium"
             action={rename.action}
+            commitControl="keys"
             maxLength={rename.maxLength}
             onCancel={rename.onCancel}
             onChange={rename.onChange}
@@ -136,7 +146,7 @@ export const InspectorTabHeader = ({
             <UserText>{label}</UserText>
           </span>
         )}
-        {matter !== undefined && !rename?.active && (
+        {matter !== undefined && !renaming && (
           <>
             <span aria-hidden="true" className="text-foreground-subtle text-xs">
               ·
@@ -145,18 +155,20 @@ export const InspectorTabHeader = ({
           </>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 ps-4">
-        {actions}
-        <Button
-          aria-label={tCommon("close")}
-          onClick={onClose}
-          size="icon-xs"
-          title={tCommon("close")}
-          variant="ghost"
-        >
-          <XIcon className="size-3.5" />
-        </Button>
-      </div>
+      {renaming ? null : (
+        <div className="flex shrink-0 items-center gap-1 ps-4">
+          {actions}
+          <Button
+            aria-label={tCommon("close")}
+            onClick={onClose}
+            size="icon-xs"
+            title={tCommon("close")}
+            variant="ghost"
+          >
+            <XIcon className="size-3.5" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
