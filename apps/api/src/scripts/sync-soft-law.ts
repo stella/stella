@@ -2,7 +2,10 @@ import { parseArgs } from "node:util";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { SOFT_LAW_ADMISSIONS } from "@/api/handlers/soft-law/adapters/registry";
+import {
+  configureSoftLawAdapter,
+  SOFT_LAW_ADMISSIONS,
+} from "@/api/handlers/soft-law/adapters/registry";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 
@@ -13,6 +16,7 @@ if (import.meta.main) {
       args: process.argv.slice(2),
       options: {
         source: { type: "string" },
+        "admission-file": { type: "string" },
         apply: { type: "boolean", default: false },
       },
       strict: true,
@@ -31,6 +35,17 @@ if (import.meta.main) {
       });
     }
     const authority = source.adapter.authority;
+    const configuration =
+      values["admission-file"] === undefined
+        ? { type: "default" as const }
+        : { type: "admission-file" as const, path: values["admission-file"] };
+    const configured = await configureSoftLawAdapter(
+      source.adapter,
+      configuration,
+    );
+    if (configured.isErr()) {
+      throw configured.error;
+    }
     if (!values.apply) {
       console.log(
         JSON.stringify({
@@ -43,17 +58,18 @@ if (import.meta.main) {
       );
       return;
     }
-    const { syncEuSoftLaw } = await import("@/api/handlers/soft-law/sync");
+    const { syncSoftLaw } = await import("@/api/handlers/soft-law/sync");
     const session = await enterCaseLawMaintenanceLane();
     try {
-      const result = await syncEuSoftLaw({
+      const result = await syncSoftLaw({
         authority,
+        configuration,
         scopedDb: session.ingestionDb,
         signal: AbortSignal.timeout(15 * 60 * 1000),
       });
       if (result.status === "failed") {
         throw new SoftLawIngestionError({
-          message: "EU soft-law ingestion failed",
+          message: "Soft-law ingestion failed",
           cause: result.error,
         });
       }

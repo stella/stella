@@ -327,18 +327,14 @@ const lastInvocationArgs = async (page: Page, command: string) =>
  * conclusive after that window.
  */
 const waitForTooltip = async (page: Page) =>
-  page.evaluate(async () => {
-    const deadline = performance.now() + 800;
-    while (performance.now() < deadline) {
-      if (document.querySelector('[data-slot="tooltip-popup"]')) {
-        return true;
-      }
-      await new Promise((resolve) => {
-        setTimeout(resolve, 25);
-      });
-    }
-    return false;
-  });
+  await page
+    .locator('[data-slot="tooltip-popup"]')
+    .first()
+    .waitFor({ state: "attached", timeout: 800 })
+    .then(
+      () => true,
+      () => false,
+    );
 
 test("captures use a caller-scoped delta and recover a burst revision gap", async ({
   page,
@@ -1023,7 +1019,13 @@ test("hovering a plain-text paste option previews the clip without formatting", 
   await expectPastePreview(page, "original");
 });
 
-test("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
+// Quarantined: on WebKit the "Plain text" paste option is sometimes not yet in
+// the reopened menu when the arrow key moves focus, so the focus assertion
+// fails intermittently on unrelated changes (runs 40380441414 and 40353303055
+// attempt 1). The fix waits for the menu and its focus by state and removes
+// this skip.
+// test-quarantine-expires: 2026-11-02T00:00:00.000Z
+test.skip("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
   page,
 }) => {
   await openClipboard(page, { language: "en" });
