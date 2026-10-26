@@ -7,6 +7,9 @@
 
 import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
+
+import { documentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
@@ -238,4 +241,86 @@ test("bold Roman verdict items keep their holding role and reasoning titles beco
   expect(
     documentAst.blocks.find((block) => block.plainText === "XII. Argumentacia"),
   ).toMatchObject({ type: "heading", level: 3 });
+});
+
+describe("reader-compatible Slovak heading identities", () => {
+  const build = (texts: string[]) => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: texts.map((text) => ({
+        text,
+        segments: [{ text, bold: true }],
+        bold: true,
+        fontSize: text === text.toUpperCase() ? 20 : 10,
+        pageIndex: 0,
+      })),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    return {
+      version: 1,
+      source: {
+        system: "test",
+        documentId: "synthetic",
+        webUrl: "",
+        printUrl: "",
+      },
+      metadata: {
+        caseNumber: "1/2026",
+        ecli: null,
+        court: "Court",
+        decisionDate: null,
+        decisionType: null,
+        keywords: [],
+        statutes: [],
+      },
+      blocks,
+    };
+  };
+
+  test("consecutive bold title lines form one reader heading", () => {
+    const ast = build(["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY", "rozhodol:"]);
+    expect(
+      ast.blocks.filter((block) => block.role === "decision-title"),
+    ).toMatchObject([
+      {
+        type: "heading",
+        anchorId: "h-title",
+        plainText: "ROZSUDOK V MENE SLOVENSKEJ REPUBLIKY",
+      },
+    ]);
+    expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
+
+  test("repeated fixed section anchors remain unique for the reader", () => {
+    const ast = build([
+      "ROZSUDOK",
+      "Preamble",
+      "UZNESENIE",
+      "rozhodol:",
+      "Holding",
+      "rozhodol:",
+      "Odôvodnenie:",
+      "Reasoning",
+      "Odôvodnenie:",
+      "Poučenie:",
+      "Instruction",
+      "Poučenie:",
+    ]);
+    const anchors = ast.blocks.map((block) => block.anchorId);
+    expect(new Set(anchors).size).toBe(anchors.length);
+    expect(
+      ast.blocks
+        .filter((block) => block.type === "heading")
+        .map((block) => block.anchorId),
+    ).toEqual([
+      "h-title",
+      "h-title-3",
+      "h-holding",
+      "h-holding-6",
+      "h-reasoning",
+      "h-reasoning-9",
+      "h-instruction",
+      "h-instruction-12",
+    ]);
+    expect(v.safeParse(documentAstSchema, ast).success).toBe(true);
+  });
 });
