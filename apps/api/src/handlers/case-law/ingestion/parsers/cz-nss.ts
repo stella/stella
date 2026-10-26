@@ -927,7 +927,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
     const { plainText, inlines } = content;
-    const continuing = cutParagraph;
+    const continuing: ParagraphBlock | null = cutParagraph;
     cutParagraph = null;
 
     if (finishesCutParagraph(continuing, chunk, content)) {
