@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { API } from "tsrs/unstable/async";
+import * as v from "valibot";
 
 const API_ROOT = path.resolve(import.meta.dir, "..");
 const API_CONFIG = path.join(API_ROOT, "tsconfig.json");
@@ -12,7 +13,14 @@ const VISUAL_SANDBOX_CONFIG = path.join(
 const API_ALIAS_PROBE = "@/api/lib/constant-map";
 
 const readConfig = (filename: string) =>
-  Bun.JSONC.parse(readFileSync(filename, "utf-8"));
+  v.parse(
+    v.object({
+      compilerOptions: v.optional(
+        v.object({ paths: v.optional(v.record(v.string(), v.unknown())) }),
+      ),
+    }),
+    Bun.JSONC.parse(readFileSync(filename, "utf-8")),
+  );
 
 const apiAliases = (filename: string): Record<string, string[]> => {
   const paths = readConfig(filename).compilerOptions?.paths;

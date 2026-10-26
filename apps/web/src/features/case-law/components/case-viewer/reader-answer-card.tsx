@@ -144,7 +144,7 @@ export const ReaderAnswerCard = ({
     >
       <div className="flex items-center justify-between gap-1">
         <span className="text-foreground-muted line-clamp-1">
-          {answer.anchor.quote}
+          {answer.anchor.spans.map(({ quote }) => quote).join(" ")}
         </span>
         <Button
           className="min-h-11 shrink-0"

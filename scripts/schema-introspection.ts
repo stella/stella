@@ -340,23 +340,29 @@ const nonDatabaseMethodReceiver = (source: ts.SourceFile) => {
         ["@stll/sha256/bun", "@stll/sha256/node"].includes(specifier))
     );
   };
+  // A destructured binding is typed by the property it reads.
+  const typedDeclarationOf = async (
+    declaration: ts.Declaration,
+  ): Promise<ts.Declaration | undefined> => {
+    if (
+      !ts.isBindingElement(declaration) ||
+      !ts.isObjectBindingPattern(declaration.parent)
+    ) {
+      return declaration;
+    }
+    const boundName = declaration.propertyName ?? declaration.name;
+    if (boundName === undefined) {
+      return undefined;
+    }
+    const parentType = await checker.getTypeAtLocation(declaration.parent);
+    const property = await parentType.getProperty(boundName.getText(source));
+    return (await declarationsOf(property))?.at(0);
+  };
   const typedCollection = async (
     declaration: ts.Declaration,
     method: string,
   ): Promise<boolean> => {
-    const typedDeclaration =
-      ts.isBindingElement(declaration) &&
-      ts.isObjectBindingPattern(declaration.parent)
-        ? (
-            await declarationsOf(
-              await (
-                await checker.getTypeAtLocation(declaration.parent)
-              ).getProperty(
-                (declaration.propertyName ?? declaration.name).getText(source),
-              ),
-            )
-          )?.at(0)
-        : declaration;
+    const typedDeclaration = await typedDeclarationOf(declaration);
     return (
       method === "delete" &&
       typedDeclaration !== undefined &&

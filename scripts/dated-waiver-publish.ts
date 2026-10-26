@@ -459,7 +459,7 @@ export const publishRemoval = async ({
           fileChanges: {
             additions: Object.entries(files).map(([file, contents]) => ({
               path: file,
-              contents: Buffer.from(contents).toString("base64"),
+              contents: Buffer.from(contents).toBase64(),
             })),
           },
         },

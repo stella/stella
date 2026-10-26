@@ -26,6 +26,7 @@
         "fast-check": "catalog:",
         "knip": "^6.41.0",
         "lefthook": "2.2.2",
+        "oxc-parser": "catalog:",
         "oxc-transform-react": "catalog:",
         "oxlint": "catalog:",
         "oxlint-tailwindcss": "1.16.0",
@@ -360,6 +361,7 @@
       "dependencies": {
         "@stll/api": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/scripts": "workspace:*",
@@ -706,6 +708,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/errors": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -720,6 +723,7 @@
       "dependencies": {
         "@stll/aho-corasick": "catalog:",
         "@stll/anonymize-chat": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -857,7 +861,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.7.1",
+      "version": "5.8.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1043,9 +1047,11 @@
         "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/money": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "better-result": "catalog:",
         "lzma1": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
@@ -1076,8 +1082,10 @@
       "name": "@stll/legal-atlas",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -1227,13 +1235,13 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
-        "oxc-parser": "catalog:",
       },
     },
     "packages/redis-config": {
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/errors": "workspace:*",
         "@stll/time": "0.4.1",
         "better-result": "catalog:",
         "valibot": "catalog:",

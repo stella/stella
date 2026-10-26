@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Vienas klientas",
+      "availabilityClientBadgeHelp": "Prieinamas tik vieno kliento bylose.",
+      "availabilityClientHelp": "Naudojamas tik šio kliento bylose. Vėliau to pakeisti negalima.",
+      "availabilityFixedHelp": "Nustatyta kuriant įgūdį. To pakeisti negalima.",
+      "availabilityLabel": "Prieinama",
+      "availabilityMatter": "Viena byla",
+      "availabilityMatterBadgeHelp": "Prieinamas tik vienoje byloje.",
+      "availabilityMatterHelp": "Naudojamas tik šioje byloje. Vėliau to pakeisti negalima.",
+      "availabilityOrganization": "Visa organizacija",
+      "availabilityTeamNeedsMatter": "Norėdami bendrinti įgūdį su komanda, pasirinkite bylą, kuriai jis skirtas. Vėliau to pakeisti negalima.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
@@ -4760,7 +4770,6 @@
     "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
     "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
     "regenerate": "Generuoti atsakymą iš naujo",
-    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
     "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
