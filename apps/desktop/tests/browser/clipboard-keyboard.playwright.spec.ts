@@ -1009,13 +1009,7 @@ test("hovering a plain-text paste option previews the clip without formatting", 
   await expectPastePreview(page, "original");
 });
 
-// Quarantined: on WebKit the "Plain text" paste option is sometimes not yet in
-// the reopened menu when the arrow key moves focus, so the focus assertion
-// fails intermittently on unrelated changes (runs 40380441414 and 40353303055
-// attempt 1). The fix waits for the menu and its focus by state and removes
-// this skip.
-// test-quarantine-expires: 2026-11-02T00:00:00.000Z
-test.skip("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
+test("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
   page,
 }) => {
   await openClipboard(page, "en");
