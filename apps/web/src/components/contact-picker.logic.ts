@@ -1,3 +1,4 @@
+import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 
 import type { Workspace } from "@/lib/workspaces/types";
@@ -50,8 +51,7 @@ export const rankRecentClients = (
       (a, b) =>
         Temporal.Instant.compare(b.lastActivityAt, a.lastActivityAt) ||
         b.matterCount - a.matterCount ||
-        // Map keys are unique, so two tallies never share an id.
-        (a.id < b.id ? -1 : 1),
+        compareCodeUnit(a.id, b.id),
     )
     .slice(0, RECENT_CLIENT_SUGGESTIONS_MAX)
     .map(({ id, displayName, type, matterCount }) => ({
