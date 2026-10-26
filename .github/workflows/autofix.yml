@@ -552,11 +552,15 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         # This job runs the head's code, so the head may change nothing but
-        # the workflow and action pins an actions update bumps.
+        # the workflow and action pins an actions update bumps, and the
+        # snapshot outputs an earlier run of this job pushed. Compared from
+        # the merge base, so later base-branch changes do not count.
         run: |
           set -euo pipefail
-          unexpected="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- . \
-            ':(exclude).github/workflows/**' ':(exclude).github/actions/**')"
+          unexpected="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- . \
+            ':(exclude).github/workflows/**' ':(exclude).github/actions/**' \
+            ':(exclude).github/ci-job-classification-sources.json' \
+            ':(exclude).github/ci-job-classification-decisions/**')"
           if [[ -n "$unexpected" ]]; then
             echo "::error::A workflow snapshot autofix runs only on pin updates; this head also changes:"
             printf '%s\n' "$unexpected"

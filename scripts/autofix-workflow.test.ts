@@ -177,6 +177,14 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(actionsJob).toContain(
       `':(exclude).github/workflows/**' ':(exclude).github/actions/**'`,
     );
+    // Its own earlier outputs are allowed; the comparison starts at the
+    // merge base.
+    expect(actionsJob).toContain(
+      "':(exclude).github/ci-job-classification-decisions/**'",
+    );
+    expect(actionsJob).toContain(
+      'git diff --name-only "$BASE_SHA...$HEAD_SHA"',
+    );
     expect(actionsJob).toContain(
       'bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"',
     );
