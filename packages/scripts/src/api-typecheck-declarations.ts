@@ -1,8 +1,15 @@
 #!/usr/bin/env bun
 import { panic } from "better-result";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { API, formatDiagnosticsWithColorAndContext } from "tsrs/unstable/async";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -19,11 +26,12 @@ import {
   requireApiTypecheckGeneratedSources,
   uncoveredApiTypecheckFiles,
 } from "./api-typecheck-inputs";
-import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
+import { parseSource, walk } from "./syntax-tree";
 import {
   readTurboTypecheckInputs,
   writeTurboTypecheckInputs,
 } from "./turbo-typecheck-inputs";
+import { createProgram } from "./typescript-program";
 
 // Opt-in timings identify expensive serialization without changing task output.
 const declarationProfile = (
@@ -42,53 +50,59 @@ const declarationProfile = (
   );
 };
 
+// A JSON module (`resolveJsonModule`) is data: it references no other module.
+const JSON_MODULE = /\.json$/iu;
+
+// A tsconfig rewritten here keeps every field it already has.
+const TSCONFIG_OBJECT = v.record(v.string(), v.unknown());
+
 export const typescriptModuleReferences = (text: string, filename: string) => {
   const imports = new Set<string>();
   let dynamic = false;
-  const source = ts.createSourceFile(
-    filename,
-    text,
-    ts.ScriptTarget.Latest,
-    false,
-  );
-  const visit = (node: ts.Node): void => {
+  if (JSON_MODULE.test(filename)) {
+    return { imports, dynamic };
+  }
+  const parsed = parseSource(filename, text);
+  walk(parsed.program, (node) => {
     if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteralLike(node.moduleSpecifier)
+      (node.type === "ImportDeclaration" ||
+        node.type === "ExportNamedDeclaration" ||
+        node.type === "ExportAllDeclaration") &&
+      node.source
     ) {
-      imports.add(node.moduleSpecifier.text);
+      imports.add(node.source.value);
+    }
+    if (node.type === "TSImportType") {
+      imports.add(node.source.value);
+    }
+    if (node.type === "TSExternalModuleReference") {
+      imports.add(node.expression.value);
     }
     if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteralLike(node.argument.literal)
+      node.type !== "ImportExpression" &&
+      !(
+        node.type === "CallExpression" &&
+        node.callee.type === "Identifier" &&
+        node.callee.name === "require"
+      )
     ) {
-      imports.add(node.argument.literal.text);
+      return;
     }
-    if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference) &&
-      ts.isStringLiteralLike(node.moduleReference.expression)
+    const argument =
+      node.type === "ImportExpression" ? node.source : node.arguments.at(0);
+    if (argument?.type === "Literal" && typeof argument.value === "string") {
+      imports.add(argument.value);
+    } else if (
+      argument?.type === "TemplateLiteral" &&
+      argument.expressions.length === 0
     ) {
-      imports.add(node.moduleReference.expression.text);
+      imports.add(
+        argument.quasis.map(({ value }) => value.cooked ?? value.raw).join(""),
+      );
+    } else {
+      dynamic = true;
     }
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      const argument = node.arguments[0];
-      if (argument && ts.isStringLiteralLike(argument)) {
-        imports.add(argument.text);
-      } else {
-        dynamic = true;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return { imports, dynamic };
 };
 
@@ -102,12 +116,12 @@ const apiDeclarationSurfaceFiles = (
 ) => {
   const configPath = path.resolve(project);
   const directory = path.dirname(configPath);
-  const api = ts.sys.realpath?.(directory) ?? directory;
+  const api = existsSync(directory) ? realpathSync(directory) : directory;
   const source = `${path.join(api, "src")}${path.sep}`;
   const roots = [
     ...new Set(
       files
-        .map((file) => ts.sys.realpath?.(file) ?? file)
+        .map((file) => (existsSync(file) ? realpathSync(file) : file))
         .filter((file) => file.startsWith(source) && /\.[cm]?tsx?$/u.test(file))
         .map((file) => repoRelativePath(api, file)),
     ),
@@ -136,13 +150,13 @@ export const writeApiDeclarationSurface = (
     });
     return roots;
   }
-  const config = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
-  if (config.error) {
-    panic(ts.flattenDiagnosticMessageText(config.error.messageText, "\n"));
-  }
+  const config = v.parse(
+    TSCONFIG_OBJECT,
+    Bun.JSONC.parse(readFileSync(configPath, "utf-8")),
+  );
   writeFileSync(
     configPath,
-    `${JSON.stringify({ ...config.config, files: roots }, null, 2)}\n`,
+    `${JSON.stringify({ ...config, files: roots }, null, 2)}\n`,
   );
   return roots;
 };
@@ -152,7 +166,7 @@ export const missingDeclarationCacheInputs = (
   project: string,
 ) => {
   const directory = path.dirname(path.resolve(project));
-  const api = ts.sys.realpath?.(directory) ?? directory;
+  const api = existsSync(directory) ? realpathSync(directory) : directory;
   const root = path.resolve(api, "../..");
   const turbo = path.join(root, "turbo.json");
   if (!existsSync(turbo)) {
@@ -166,8 +180,8 @@ export const missingDeclarationCacheInputs = (
 
 // Route and server contracts belong to the source checker, never to the
 // declaration surface consumed by secondary compiler programs.
-const isApiRuntimeBoundary = (source: ts.SourceFile) => {
-  const relative = source.fileName
+const isApiRuntimeBoundary = (filename: string, text: string) => {
+  const relative = filename
     .replaceAll(path.sep, "/")
     .split("/apps/api/src/")[1];
   if (!relative) {
@@ -180,384 +194,377 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
   ) {
     return true;
   }
+  const parsed = parseSource(filename, text);
   const constructors = new Set<string>();
-  for (const statement of source.statements) {
+  for (const statement of parsed.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.type !== "ImportDeclaration" ||
       !["elysia", "@modelcontextprotocol/server"].includes(
-        statement.moduleSpecifier.text,
+        statement.source.value,
       )
     ) {
       continue;
     }
-    const clause = statement.importClause;
-    if (clause?.name && statement.moduleSpecifier.text === "elysia") {
-      constructors.add(clause.name.text);
-    }
-    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-      for (const binding of clause.namedBindings.elements) {
-        const imported = binding.propertyName?.text ?? binding.name.text;
+    for (const binding of statement.specifiers) {
+      if (
+        binding.type === "ImportDefaultSpecifier" &&
+        statement.source.value === "elysia"
+      ) {
+        constructors.add(binding.local.name);
+      }
+      if (binding.type === "ImportSpecifier") {
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
         if (imported === "Elysia" || imported === "Server") {
-          constructors.add(binding.name.text);
+          constructors.add(binding.local.name);
         }
       }
     }
   }
   let route = false;
-  const visit = (node: ts.Node): void => {
+  walk(parsed.program, (node) => {
     if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      constructors.has(node.expression.text)
+      node.type === "NewExpression" &&
+      node.callee.type === "Identifier" &&
+      constructors.has(node.callee.name)
     ) {
       route = true;
-      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return route;
 };
 
 // Emit the explicit public roots and their declaration dependencies. Runtime
 // imports erased from declarations do not require serializing their exports.
-export const emitApiTypecheckDeclarations = (project: string) => {
+export const emitApiTypecheckDeclarations = async (project: string) => {
   const configPath = path.resolve(project);
-  const config = ts.readConfigFile(configPath, (filename) =>
-    ts.sys.readFile(filename),
-  );
-  const parsed = ts.parseJsonConfigFileContent(
-    config.config,
-    ts.sys,
-    path.dirname(configPath),
-    undefined,
-    configPath,
-  );
-  const diagnostics = withoutTsgoOnlyOptionDiagnostics(
-    config.error ? [config.error, ...parsed.errors] : parsed.errors,
-  );
-  if (diagnostics.length > 0) {
-    return { diagnostics, files: [] };
-  }
-  const outDir = parsed.options.outDir;
-  if (
-    !outDir ||
-    !parsed.options.noCheck ||
-    !parsed.options.emitDeclarationOnly
-  ) {
-    panic(
-      "API declaration project must use noCheck, emitDeclarationOnly and outDir",
-    );
-  }
-  const programStarted = performance.now();
-  declarationProfile("program:start", { roots: parsed.fileNames.length });
-  const program = ts.createProgram({
-    rootNames: parsed.fileNames,
-    options: { ...parsed.options, declarationMap: false },
-  });
-  declarationProfile("program:end", {
-    elapsedMs: Math.round(performance.now() - programStarted),
-    sourceFiles: program.getSourceFiles().length,
-  });
-  const resolutionCache = ts.createModuleResolutionCache(
-    path.dirname(configPath),
-    (filename) => filename,
-    parsed.options,
-  );
-  const queue = [...parsed.fileNames];
-  const parents = new Map<string, string>();
-  const emitted = new Set<string>();
-  const outputs = new Map<string, string>();
-  for (const filename of queue) {
-    if (!filename || emitted.has(filename) || /\.d\.[cm]?ts$/u.test(filename)) {
-      continue;
+  const compiler = new API({ cwd: path.dirname(configPath) });
+  try {
+    const parsed = await compiler.parseConfigFile(configPath);
+    const diagnostics = [...parsed.errors];
+    if (diagnostics.length > 0) {
+      return { diagnostics, files: [] };
     }
-    const source = program.getSourceFile(filename);
-    if (!source) {
-      panic(`Missing declaration source: ${filename}`);
-    }
-    if (isApiRuntimeBoundary(source)) {
-      const chain = [filename];
-      let parent = parents.get(filename);
-      while (parent) {
-        chain.unshift(parent);
-        parent = parents.get(parent);
-      }
+    const outDir = parsed.options.outDir;
+    if (
+      !outDir ||
+      !parsed.options.noCheck ||
+      !parsed.options.emitDeclarationOnly
+    ) {
       panic(
-        `Forbidden API runtime declaration dependency: ${chain.join(" -> ")}`,
+        "API declaration project must use noCheck, emitDeclarationOnly and outDir",
       );
     }
-    emitted.add(filename);
-    const emitStarted = performance.now();
-    let outputCharacters = 0;
-    declarationProfile("file:start", { filename });
-    const result = program.emit(
-      source,
-      (output, text) => {
-        outputs.set(output, text);
-        outputCharacters += text.length;
-        for (const specifier of typescriptModuleReferences(text, output)
-          .imports) {
-          const resolved = ts.resolveModuleName(
-            specifier,
-            filename,
-            parsed.options,
-            ts.sys,
-            resolutionCache,
-          ).resolvedModule;
-          if (!resolved || /\.d\.[cm]?ts$/u.test(resolved.resolvedFileName)) {
-            continue;
-          }
-          const dependency = program.getSourceFile(resolved.resolvedFileName);
-          if (!dependency) {
-            panic(
-              `Missing declaration dependency: ${specifier} in ${filename}`,
-            );
-          }
-          if (
-            !parents.has(dependency.fileName) &&
-            !parsed.fileNames.includes(dependency.fileName)
-          ) {
-            parents.set(dependency.fileName, filename);
-          }
-          queue.push(dependency.fileName);
-        }
-      },
-      undefined,
-      true,
-    );
-    declarationProfile("file:end", {
-      filename,
-      elapsedMs: Math.round(performance.now() - emitStarted),
-      outputCharacters,
-      diagnostics: result.diagnostics.length,
+    const programStarted = performance.now();
+    declarationProfile("program:start", { roots: parsed.fileNames.length });
+    const opened = await createProgram({
+      configPath,
+      compilerOptions: { declarationMap: false },
     });
-    diagnostics.push(...result.diagnostics);
-  }
-  if (diagnostics.length > 0) {
-    return { diagnostics, files: [...emitted] };
-  }
-  const missing = missingDeclarationCacheInputs([...emitted], configPath);
-  if (missing.length > 0) {
-    panic(
-      `Emitted API sources missing from declaration cache inputs: ${missing.join(", ")}`,
-    );
-  }
-  // Replace the surface only after serialization succeeds, removing stale
-  // declarations for modules that no longer belong to the public surface.
-  if (usesGeneratedApiConfig(configPath)) {
-    for (const name of ["roots", "src", "tests"] as const) {
-      const artifact = apiTypecheckArtifact(path.dirname(configPath), name);
-      const contents = ts.sys.readFile(artifact);
-      if (contents !== undefined) {
-        outputs.set(artifact, contents);
+    try {
+      const { program } = opened;
+      declarationProfile("program:end", {
+        elapsedMs: Math.round(performance.now() - programStarted),
+        sourceFiles: (await program.getSourceFileNames()).length,
+      });
+      const resolver = await compiler.createModuleResolver(parsed.options);
+      const queue = [...parsed.fileNames];
+      const parents = new Map<string, string>();
+      const emitted = new Set<string>();
+      const outputs = new Map<string, string>();
+      for (const filename of queue) {
+        if (
+          !filename ||
+          emitted.has(filename) ||
+          /\.d\.[cm]?ts$/u.test(filename)
+        ) {
+          continue;
+        }
+        const source = await program.getSourceFile(filename);
+        if (!source) {
+          panic(`Missing declaration source: ${filename}`);
+        }
+        if (isApiRuntimeBoundary(filename, source.text)) {
+          const chain = [filename];
+          let parent = parents.get(filename);
+          while (parent) {
+            chain.unshift(parent);
+            parent = parents.get(parent);
+          }
+          panic(
+            `Forbidden API runtime declaration dependency: ${chain.join(" -> ")}`,
+          );
+        }
+        emitted.add(filename);
+        const emitStarted = performance.now();
+        let outputCharacters = 0;
+        declarationProfile("file:start", { filename });
+        const result = await program.getDeclarationEmit([filename]);
+        for (const [output, { text }] of result.outputFiles) {
+          outputs.set(output, text);
+          outputCharacters += text.length;
+          for (const specifier of typescriptModuleReferences(text, output)
+            .imports) {
+            const resolved = (
+              await resolver.resolveModuleName(
+                specifier,
+                path.dirname(filename),
+              )
+            ).resolvedModule;
+            if (!resolved || /\.d\.[cm]?ts$/u.test(resolved.resolvedFileName)) {
+              continue;
+            }
+            const dependency = await program.getSourceFile(
+              resolved.resolvedFileName,
+            );
+            if (!dependency) {
+              panic(
+                `Missing declaration dependency: ${specifier} in ${filename}`,
+              );
+            }
+            const dependencyName = resolved.resolvedFileName;
+            if (
+              !parents.has(dependencyName) &&
+              !parsed.fileNames.includes(dependencyName)
+            ) {
+              parents.set(dependencyName, filename);
+            }
+            queue.push(dependencyName);
+          }
+        }
+        declarationProfile("file:end", {
+          filename,
+          elapsedMs: Math.round(performance.now() - emitStarted),
+          outputCharacters,
+          diagnostics: result.diagnostics.length,
+        });
+        diagnostics.push(...result.diagnostics);
       }
+      if (diagnostics.length > 0) {
+        return { diagnostics, files: [...emitted] };
+      }
+      const missing = missingDeclarationCacheInputs([...emitted], configPath);
+      if (missing.length > 0) {
+        panic(
+          `Emitted API sources missing from declaration cache inputs: ${missing.join(", ")}`,
+        );
+      }
+      // Replace the surface only after serialization succeeds, removing stale
+      // declarations for modules that no longer belong to the public surface.
+      if (usesGeneratedApiConfig(configPath)) {
+        for (const name of ["roots", "src", "tests"] as const) {
+          const artifact = apiTypecheckArtifact(path.dirname(configPath), name);
+          const contents = existsSync(artifact)
+            ? readFileSync(artifact, "utf-8")
+            : undefined;
+          if (contents !== undefined) {
+            outputs.set(artifact, contents);
+          }
+        }
+      }
+      rmSync(outDir, { recursive: true, force: true });
+      for (const [filename, text] of outputs) {
+        if (
+          !path
+            .resolve(filename)
+            .startsWith(`${path.resolve(outDir)}${path.sep}`)
+        ) {
+          panic(`Declaration output escapes its directory: ${filename}`);
+        }
+        mkdirSync(path.dirname(filename), { recursive: true });
+        writeFileSync(filename, text);
+      }
+      return { diagnostics, files: [...emitted] };
+    } finally {
+      await opened.close();
     }
+  } finally {
+    await compiler.close();
   }
-  rmSync(outDir, { recursive: true, force: true });
-  for (const [filename, text] of outputs) {
-    if (
-      !path.resolve(filename).startsWith(`${path.resolve(outDir)}${path.sep}`)
-    ) {
-      panic(`Declaration output escapes its directory: ${filename}`);
-    }
-    mkdirSync(path.dirname(filename), { recursive: true });
-    writeFileSync(filename, text);
-  }
-  return { diagnostics, files: [...emitted] };
 };
 
 // References can require implementation modules that declaration serialization
 // erased. Discover those roots from the native consumer programs, rather than
 // maintaining a second surface allowlist.
-const nativeRequiredDeclarationRoots = (project: string) => {
+const nativeRequiredDeclarationRoots = async (project: string) => {
   const resolved = path.resolve(project);
-  const config = ts.sys.realpath?.(resolved) ?? resolved;
+  const config = existsSync(resolved) ? realpathSync(resolved) : resolved;
   const api = path.dirname(config);
   const root = path.resolve(api, "../..");
-  const required = new Set<string>();
-  for (const pattern of [
-    "tsconfig*.json",
-    "apps/*/tsconfig*.json",
-    "packages/*/tsconfig*.json",
-  ]) {
-    for (const filename of new Bun.Glob(pattern).scanSync({ cwd: root })) {
-      const consumer = path.join(root, filename);
-      const read = ts.readConfigFile(consumer, (file) => ts.sys.readFile(file));
-      const parsed = ts.parseJsonConfigFileContent(
-        read.config,
-        ts.sys,
-        path.dirname(consumer),
-        undefined,
-        consumer,
-      );
-      if (
-        !parsed.projectReferences?.some(
-          (reference) => ts.resolveProjectReferencePath(reference) === config,
-        )
-      ) {
-        continue;
-      }
-      const owned = new Set(
-        parsed.fileNames.map((file) => ts.sys.realpath?.(file) ?? file),
-      );
-      const consumerStarted = performance.now();
-      declarationProfile("consumer:start", { project: consumer });
-      const sources = nativeTypecheckProgramFiles(consumer);
-      declarationProfile("consumer:end", {
-        project: consumer,
-        elapsedMs: Math.round(performance.now() - consumerStarted),
-        sourceFiles: sources.length,
-      });
-      for (const source of sources) {
+  const compiler = new API({ cwd: api });
+  try {
+    const required = new Set<string>();
+    for (const pattern of [
+      "tsconfig*.json",
+      "apps/*/tsconfig*.json",
+      "packages/*/tsconfig*.json",
+    ]) {
+      for (const filename of new Bun.Glob(pattern).scanSync({ cwd: root })) {
+        const consumer = path.join(root, filename);
+        const parsed = await compiler.parseConfigFile(consumer);
         if (
-          source.startsWith(`${path.join(api, "src")}${path.sep}`) &&
-          /\.[cm]?tsx?$/u.test(source) &&
-          !/\.d\.[cm]?ts$/u.test(source) &&
-          !owned.has(source)
+          !parsed.projectReferences?.some(
+            (reference) =>
+              (reference.path.endsWith(".json")
+                ? reference.path
+                : path.join(reference.path, "tsconfig.json")) === config,
+          )
         ) {
-          required.add(source);
+          continue;
+        }
+        const owned = new Set(
+          parsed.fileNames.map((file) =>
+            existsSync(file) ? realpathSync(file) : file,
+          ),
+        );
+        const consumerStarted = performance.now();
+        declarationProfile("consumer:start", { project: consumer });
+        const sources = nativeTypecheckProgramFiles(consumer);
+        declarationProfile("consumer:end", {
+          project: consumer,
+          elapsedMs: Math.round(performance.now() - consumerStarted),
+          sourceFiles: sources.length,
+        });
+        for (const source of sources) {
+          if (
+            source.startsWith(`${path.join(api, "src")}${path.sep}`) &&
+            /\.[cm]?tsx?$/u.test(source) &&
+            !/\.d\.[cm]?ts$/u.test(source) &&
+            !owned.has(source)
+          ) {
+            required.add(source);
+          }
         }
       }
     }
+    return [...required];
+  } finally {
+    await compiler.close();
   }
-  return [...required];
 };
 
 // External consumers define the required surface. Test candidates are admitted
 // only when their import graph cannot reach a runtime declaration boundary.
-export const discoverApiDeclarationEntries = (project: string) => {
+export const discoverApiDeclarationEntries = async (project: string) => {
   const absolute = path.resolve(project);
-  const config = ts.sys.realpath?.(absolute) ?? absolute;
+  const config = existsSync(absolute) ? realpathSync(absolute) : absolute;
   const api = path.dirname(config);
   const root = path.resolve(api, "../..");
-  const prefix = `${path.join(api, "src")}${path.sep}`;
-  const base = readApiTypecheckConfig(path.join(api, "tsconfig.json"));
-  const cache = ts.createModuleResolutionCache(
-    api,
-    (file) => file,
-    base.options,
-  );
-  const isSource = (file: string) =>
-    file.startsWith(prefix) &&
-    /\.[cm]?tsx?$/u.test(file) &&
-    !/\.d\.[cm]?ts$/u.test(file);
-  const importsOf = (file: string, options = base.options) => {
-    const text = ts.sys.readFile(file);
-    if (text === undefined) {
-      panic(`Missing API declaration entry: ${file}`);
-    }
-    const references = typescriptModuleReferences(text, file);
-    const dependencies = new Set<string>();
-    for (const specifier of references.imports) {
-      const resolved = ts.resolveModuleName(
-        specifier,
-        file,
-        options,
-        ts.sys,
-        options === base.options ? cache : undefined,
-      ).resolvedModule;
-      if (!resolved) {
-        continue;
+  const compiler = new API({ cwd: api });
+  try {
+    const prefix = `${path.join(api, "src")}${path.sep}`;
+    const base = await readApiTypecheckConfig(path.join(api, "tsconfig.json"));
+    const isSource = (file: string) =>
+      file.startsWith(prefix) &&
+      /\.[cm]?tsx?$/u.test(file) &&
+      !/\.d\.[cm]?ts$/u.test(file);
+    const importsOf = async (file: string, options = base.options) => {
+      const text = existsSync(file) ? readFileSync(file, "utf-8") : undefined;
+      if (text === undefined) {
+        panic(`Missing API declaration entry: ${file}`);
       }
-      const filename =
-        ts.sys.realpath?.(resolved.resolvedFileName) ??
-        resolved.resolvedFileName;
-      if (isSource(filename)) {
-        dependencies.add(filename);
+      const references = typescriptModuleReferences(text, file);
+      const resolver = await compiler.createModuleResolver(options);
+      const dependencies = new Set<string>();
+      for (const specifier of references.imports) {
+        const resolved = (
+          await resolver.resolveModuleName(specifier, path.dirname(file))
+        ).resolvedModule;
+        if (!resolved) {
+          continue;
+        }
+        const filename = realpathSync(resolved.resolvedFileName);
+        if (isSource(filename)) {
+          dependencies.add(filename);
+        }
       }
-    }
-    return { dependencies, dynamic: references.dynamic, text };
-  };
-  const entries = new Set<string>();
-  for (const pattern of [
-    "tsconfig*.json",
-    "apps/*/tsconfig*.json",
-    "packages/*/tsconfig*.json",
-  ]) {
-    for (const filename of new Bun.Glob(pattern).scanSync({ cwd: root })) {
-      const consumer = path.join(root, filename);
-      if (
-        consumer === config ||
-        consumer === path.join(api, "tsconfig.tests.json")
-      ) {
-        continue;
-      }
-      const read = ts.readConfigFile(consumer, (file) => ts.sys.readFile(file));
-      const parsed = ts.parseJsonConfigFileContent(
-        read.config,
-        ts.sys,
-        path.dirname(consumer),
-        undefined,
-        consumer,
-      );
-      if (
-        !parsed.projectReferences?.some(
-          (reference) => ts.resolveProjectReferencePath(reference) === config,
-        )
-      ) {
-        continue;
-      }
-      for (const file of parsed.fileNames) {
-        for (const dependency of importsOf(file, parsed.options).dependencies) {
-          entries.add(dependency);
+      return { dependencies, dynamic: references.dynamic, text };
+    };
+    const entries = new Set<string>();
+    for (const pattern of [
+      "tsconfig*.json",
+      "apps/*/tsconfig*.json",
+      "packages/*/tsconfig*.json",
+    ]) {
+      for (const filename of new Bun.Glob(pattern).scanSync({ cwd: root })) {
+        const consumer = path.join(root, filename);
+        if (
+          consumer === config ||
+          consumer === path.join(api, "tsconfig.tests.json")
+        ) {
+          continue;
+        }
+        const parsed = await compiler.parseConfigFile(consumer);
+        if (
+          !parsed.projectReferences?.some(
+            (reference) =>
+              (reference.path.endsWith(".json")
+                ? reference.path
+                : path.join(reference.path, "tsconfig.json")) === config,
+          )
+        ) {
+          continue;
+        }
+        for (const file of parsed.fileNames) {
+          for (const dependency of (await importsOf(file, parsed.options))
+            .dependencies) {
+            entries.add(dependency);
+          }
         }
       }
     }
-  }
-  const candidates = new Set<string>();
-  for (const file of base.fileNames.filter((source) =>
-    /\.test\.tsx?$/u.test(source),
-  )) {
-    for (const dependency of importsOf(file).dependencies) {
-      if (!/\.test\.tsx?$/u.test(dependency)) {
-        candidates.add(dependency);
+    const candidates = new Set<string>();
+    for (const file of base.fileNames.filter((source) =>
+      /\.test\.tsx?$/u.test(source),
+    )) {
+      for (const dependency of (await importsOf(file)).dependencies) {
+        if (!/\.test\.tsx?$/u.test(dependency)) {
+          candidates.add(dependency);
+        }
       }
     }
-  }
-  const unsafe = new Set<string>();
-  const parents = new Map<string, Set<string>>();
-  const visited = new Set<string>();
-  const queue = [...candidates];
-  for (const file of queue) {
-    if (visited.has(file)) {
-      continue;
-    }
-    visited.add(file);
-    const info = importsOf(file);
-    if (
-      info.dynamic ||
-      isApiRuntimeBoundary(
-        ts.createSourceFile(file, info.text, ts.ScriptTarget.Latest),
-      )
-    ) {
-      unsafe.add(file);
-      continue;
-    }
-    for (const dependency of info.dependencies) {
-      const predecessors = parents.get(dependency) ?? new Set<string>();
-      predecessors.add(file);
-      parents.set(dependency, predecessors);
-      queue.push(dependency);
-    }
-  }
-  const unsafeQueue = [...unsafe];
-  for (const file of unsafeQueue) {
-    for (const parent of parents.get(file) ?? []) {
-      if (unsafe.has(parent)) {
+    const unsafe = new Set<string>();
+    const parents = new Map<string, Set<string>>();
+    const visited = new Set<string>();
+    const queue = [...candidates];
+    for (const file of queue) {
+      if (visited.has(file)) {
         continue;
       }
-      unsafe.add(parent);
-      unsafeQueue.push(parent);
+      visited.add(file);
+      const info = await importsOf(file);
+      if (info.dynamic || isApiRuntimeBoundary(file, info.text)) {
+        unsafe.add(file);
+        continue;
+      }
+      for (const dependency of info.dependencies) {
+        const predecessors = parents.get(dependency) ?? new Set<string>();
+        predecessors.add(file);
+        parents.set(dependency, predecessors);
+        queue.push(dependency);
+      }
     }
-  }
-  for (const file of candidates) {
-    if (!unsafe.has(file)) {
-      entries.add(file);
+    const unsafeQueue = [...unsafe];
+    for (const file of unsafeQueue) {
+      for (const parent of parents.get(file) ?? []) {
+        if (unsafe.has(parent)) {
+          continue;
+        }
+        unsafe.add(parent);
+        unsafeQueue.push(parent);
+      }
     }
+    for (const file of candidates) {
+      if (!unsafe.has(file)) {
+        entries.add(file);
+      }
+    }
+    return [...entries].toSorted();
+  } finally {
+    await compiler.close();
   }
-  return [...entries].toSorted();
 };
 
 export const regenerateApiDeclarationSurface = async (
@@ -566,7 +573,10 @@ export const regenerateApiDeclarationSurface = async (
 ) => {
   if (usesGeneratedApiConfig(project)) {
     const api = path.dirname(path.resolve(project));
-    writeApiDeclarationSurface(project, discoverApiDeclarationEntries(project));
+    writeApiDeclarationSurface(
+      project,
+      await discoverApiDeclarationEntries(project),
+    );
     for (const name of ["src", "tests"] as const) {
       const artifact = apiTypecheckArtifact(api, name);
       if (!existsSync(artifact)) {
@@ -587,10 +597,13 @@ export const regenerateApiDeclarationSurface = async (
     if (!existsSync(filename)) {
       continue;
     }
-    const config = ts.readConfigFile(filename, (file) => ts.sys.readFile(file));
+    const config = v.parse(
+      TSCONFIG_OBJECT,
+      Bun.JSONC.parse(readFileSync(filename, "utf-8")),
+    );
     const roots = v.parse(
       v.object({ files: v.optional(v.array(v.string())) }),
-      config.config,
+      config,
     ).files;
     if (!roots) {
       continue;
@@ -601,11 +614,11 @@ export const regenerateApiDeclarationSurface = async (
     if (files.length !== roots.length) {
       writeFileSync(
         filename,
-        `${JSON.stringify({ ...config.config, files }, null, 2)}\n`,
+        `${JSON.stringify({ ...config, files }, null, 2)}\n`,
       );
     }
   }
-  const refreshInputs = () => {
+  const refreshInputs = async () => {
     // Preparing ignored compiler artifacts must not mutate the tracked input
     // tree that identifies the shared generated-source artifact.
     if (mode !== "update-inputs") {
@@ -620,7 +633,7 @@ export const regenerateApiDeclarationSurface = async (
         new Map([
           [
             "@stll/api#generate:typecheck-declarations",
-            apiResolvedTypecheckInputs(project),
+            await apiResolvedTypecheckInputs(project),
           ],
         ]),
       );
@@ -630,21 +643,21 @@ export const regenerateApiDeclarationSurface = async (
       });
     }
   };
-  refreshInputs();
+  await refreshInputs();
   let iteration = 1;
   declarationProfile("iteration:start", { iteration });
-  let result = emitApiTypecheckDeclarations(project);
+  let result = await emitApiTypecheckDeclarations(project);
   while (result.diagnostics.length === 0) {
     const roots = writeApiDeclarationSurface(project, result.files);
     if (usesGeneratedApiConfig(project)) {
       const { writeApiTestPartition } =
         await import("./api-typecheck-partition");
-      writeApiTestPartition(path.resolve(path.dirname(project), "../.."));
+      await writeApiTestPartition(path.resolve(path.dirname(project), "../.."));
     }
-    refreshInputs();
-    const required = nativeRequiredDeclarationRoots(project);
+    await refreshInputs();
+    const required = await nativeRequiredDeclarationRoots(project);
     const directory = path.dirname(path.resolve(project));
-    const api = ts.sys.realpath?.(directory) ?? directory;
+    const api = existsSync(directory) ? realpathSync(directory) : directory;
     declarationProfile("iteration:resolved", {
       iteration,
       emittedModules: result.files.length,
@@ -658,10 +671,10 @@ export const regenerateApiDeclarationSurface = async (
       return result;
     }
     writeApiDeclarationSurface(project, [...result.files, ...missing]);
-    refreshInputs();
+    await refreshInputs();
     iteration += 1;
     declarationProfile("iteration:start", { iteration });
-    result = emitApiTypecheckDeclarations(project);
+    result = await emitApiTypecheckDeclarations(project);
   }
   return result;
 };
@@ -681,10 +694,10 @@ if (import.meta.main) {
         project,
         process.argv.includes("--write-surface") ? "update-inputs" : "prepare",
       )
-    : emitApiTypecheckDeclarations(project);
+    : await emitApiTypecheckDeclarations(project);
   if (diagnostics.length > 0) {
     process.stderr.write(
-      ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+      formatDiagnosticsWithColorAndContext(diagnostics, {
         getCurrentDirectory: () => process.cwd(),
         getCanonicalFileName: (filename) => filename,
         getNewLine: () => "\n",
@@ -693,11 +706,11 @@ if (import.meta.main) {
     process.exit(1);
   }
   if (!writeSurface) {
-    const config = ts.readConfigFile(project, (file) => ts.sys.readFile(file));
+    const config = Bun.JSONC.parse(readFileSync(project, "utf-8"));
     const roots = apiDeclarationSurfaceFiles(project, files);
     const configured = v.parse(
       v.object({ files: v.array(v.string()) }),
-      config.config,
+      config,
     ).files;
     if (JSON.stringify(configured) !== JSON.stringify(roots)) {
       const missing = roots.filter((root) => !configured.includes(root));

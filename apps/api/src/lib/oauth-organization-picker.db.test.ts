@@ -10,7 +10,10 @@ import { decodeJwt } from "jose";
 
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
-import { signInHuman } from "@/api/tests/helpers/human-session";
+import {
+  signInHuman,
+  signInHumanFromOAuthPage,
+} from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -20,6 +23,7 @@ import {
   authorizeOAuthClient,
   consentAndExchange,
   OAUTH_CONSENT_PAGE_PATH,
+  OAUTH_LOGIN_PAGE_PATH,
   OAUTH_ORGANIZATION_PAGE_PATH,
   readOAuthRedirect,
   readSignedQuery,
@@ -45,6 +49,12 @@ const createOrganization = async (owner: HumanBrowser, name: string) =>
     body: { name, slug: `${name.toLowerCase()}-${Bun.randomUUIDv7()}` },
     headers: owner.headers(),
   });
+
+/** The prompt values of the signed request a page received. */
+const signedPrompts = (page: URL): string[] =>
+  (new URLSearchParams(readSignedQuery(page)).get("prompt") ?? "")
+    .split(" ")
+    .filter(Boolean);
 
 type ContinueAfterPickingOptions = {
   browser: HumanBrowser;
@@ -126,6 +136,191 @@ describe("OAuth organization picker", () => {
       status: "created",
     });
     expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+  });
+
+  test("a client asking for account selection gets the organization step even for one organization", async () => {
+    const browser = await signInHuman(
+      `picker-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const only = await createOrganization(browser, "Only");
+    await browser.setActiveOrganization(only.id);
+    const client = await registerOAuthClient();
+
+    const { codeVerifier, redirect: picker } = await authorizeOAuthClient(
+      browser,
+      client,
+      undefined,
+      "select_account",
+    );
+    expect(picker.pathname).toBe(OAUTH_ORGANIZATION_PAGE_PATH);
+    expect(signedPrompts(picker)).toContain("select_account");
+
+    const consentPage = await continueAfterPicking({
+      browser,
+      picker,
+      status: "selected",
+    });
+    expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+    expect(signedPrompts(consentPage)).not.toContain("select_account");
+
+    const grant = await consentAndExchange({
+      browser,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    expect(decodeJwt(grant.accessToken)["org_id"]).toBe(only.id);
+  });
+
+  test("a fresh sign-in request issues no code to the session it asked to replace", async () => {
+    const browser = await signInHuman(
+      `picker-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const only = await createOrganization(browser, "Only");
+    await browser.setActiveOrganization(only.id);
+    const client = await registerOAuthClient();
+
+    const { redirect: signIn } = await authorizeOAuthClient(
+      browser,
+      client,
+      undefined,
+      "login",
+    );
+    expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+    expect(signedPrompts(signIn)).toContain("login");
+
+    // The user leaves the sign-in form without signing in. Every step the web
+    // pages can post with that request, under the session that was already
+    // there, sends the browser back to sign-in instead of to the client.
+    const continuations = [
+      await continueAfterPicking({
+        browser,
+        picker: signIn,
+        status: "selected",
+      }),
+      await continueAfterPicking({
+        browser,
+        picker: signIn,
+        status: "created",
+      }),
+      await readOAuthRedirect(
+        await getAuth().handler(
+          new Request(getAuthEndpointUrl("oauth2/consent"), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              cookie: browser.cookieHeader(),
+            },
+            body: JSON.stringify({
+              accept: true,
+              oauth_query: readSignedQuery(signIn),
+            }),
+          }),
+        ),
+      ),
+    ];
+    for (const redirect of continuations) {
+      expect(redirect.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+      expect(redirect.searchParams.has("code")).toBe(false);
+      expect(signedPrompts(redirect)).toContain("login");
+    }
+  });
+
+  test("signing in as another account on a fresh sign-in request grants to that account", async () => {
+    const first = await signInHuman(`picker-${Bun.randomUUIDv7()}@stella.dev`);
+    const firstOrganization = await createOrganization(first, "First");
+    await first.setActiveOrganization(firstOrganization.id);
+    const client = await registerOAuthClient();
+
+    const { codeVerifier, redirect: signIn } = await authorizeOAuthClient(
+      first,
+      client,
+      undefined,
+      "login",
+    );
+    expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+
+    // The browser still holds the first session when the other account
+    // signs in on that page.
+    const { browser: second, redirect: resumed } =
+      await signInHumanFromOAuthPage({
+        email: `picker-${Bun.randomUUIDv7()}@stella.dev`,
+        oauthQuery: readSignedQuery(signIn),
+        prior: first,
+      });
+    expect(second.userId).not.toBe(first.userId);
+    // The authorization resumes without a code or another sign-in prompt.
+    expect(resumed.pathname).not.toBe(OAUTH_LOGIN_PAGE_PATH);
+    expect(resumed.searchParams.has("code")).toBe(false);
+    expect(signedPrompts(resumed)).not.toContain("login");
+
+    // After sign-in the web page opens the organization step with the
+    // request it resumed, wherever the provider pointed; the new account
+    // creates its organization there.
+    const secondOrganization = await createOrganization(second, "Second");
+    await second.setActiveOrganization(secondOrganization.id);
+    const consentPage = await continueAfterPicking({
+      browser: second,
+      picker: resumed,
+      status: "created",
+    });
+    expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+
+    const grant = await consentAndExchange({
+      browser: second,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    const claims = decodeJwt(grant.accessToken);
+    expect(claims.sub).toBe(second.userId);
+    expect(claims["org_id"]).toBe(secondOrganization.id);
+  });
+
+  test("the organization step after a fresh sign-in continues instead of asking to sign in again", async () => {
+    const first = await signInHuman(`picker-${Bun.randomUUIDv7()}@stella.dev`);
+    const firstOrganization = await createOrganization(first, "First");
+    await first.setActiveOrganization(firstOrganization.id);
+    const client = await registerOAuthClient();
+
+    const { codeVerifier, redirect: signIn } = await authorizeOAuthClient(
+      first,
+      client,
+      undefined,
+      "login",
+    );
+    expect(signIn.pathname).toBe(OAUTH_LOGIN_PAGE_PATH);
+
+    // The email code page posts its sign-in without the request; the web
+    // then opens the organization step with the request it was sent, login
+    // prompt included, and continues from there with the new session.
+    const second = await signInHuman(`picker-${Bun.randomUUIDv7()}@stella.dev`);
+    const secondOrganization = await createOrganization(second, "Second");
+    await second.setActiveOrganization(secondOrganization.id);
+    for (const status of ["selected", "created"] as const) {
+      const consentPage = await continueAfterPicking({
+        browser: second,
+        picker: signIn,
+        status,
+      });
+      expect(consentPage.pathname).toBe(OAUTH_CONSENT_PAGE_PATH);
+      expect(signedPrompts(consentPage)).not.toContain("login");
+    }
+
+    const consentPage = await continueAfterPicking({
+      browser: second,
+      picker: signIn,
+      status: "selected",
+    });
+    const grant = await consentAndExchange({
+      browser: second,
+      client,
+      codeVerifier,
+      consentPage,
+    });
+    const claims = decodeJwt(grant.accessToken);
+    expect(claims.sub).toBe(second.userId);
+    expect(claims["org_id"]).toBe(secondOrganization.id);
   });
 
   test("authorizing again without the continue step still asks for the organization", async () => {

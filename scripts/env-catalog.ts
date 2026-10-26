@@ -1737,6 +1737,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
+  // Generator families whose inputs the CI plan proved unchanged in this run.
+  "GENERATED_CHECKS_UNCHANGED",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
   "ImageOS",

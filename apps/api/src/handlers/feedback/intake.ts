@@ -6,8 +6,8 @@
  * not the protection; abuse bounding is:
  *   - a coarse raw-string cap at the route plus a strict Valibot
  *     `strictObject` here, rejecting unknown keys and oversize fields;
- *   - a per-IP rate limit (`intake-guards.ts`), so a bot cannot flood the
- *     maintainer inbox;
+ *   - per-IP and deployment-wide rate limits (`intake-guards.ts`), so address
+ *     rotation cannot flood the maintainer inbox;
  *   - the shared submit service, which sanitizes every field again (the
  *     caller's own pass is never trusted) and deduplicates identical content
  *     against the stored reports.
@@ -57,6 +57,8 @@ export const MAX_RAW_FEEDBACK_BODY_CHARS = 96_000;
 const RATE_LIMIT_MAX_PER_IP = 5;
 const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 const UNKNOWN_IP_KEY = "unknown";
+const DEPLOYMENT_RATE_LIMIT_KEY = "all";
+export const PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR = 100;
 
 const optionalCapped = (max: number) =>
   v.optional(v.pipe(v.string(), v.maxLength(max)));
@@ -253,6 +255,20 @@ export const receivePublicFeedback = async ({
         "rate_limited",
         "Too many feedback submissions from this address",
         `Up to ${RATE_LIMIT_MAX_PER_IP} submissions per hour are accepted; try again later.`,
+      );
+    }
+    const withinDeploymentRate = await guards.consumeCounter({
+      bucket: "deployment",
+      key: DEPLOYMENT_RATE_LIMIT_KEY,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      max: PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR,
+    });
+    if (!withinDeploymentRate) {
+      return errorResponse(
+        429,
+        "rate_limited",
+        "The feedback intake is temporarily at capacity",
+        "Try again later.",
       );
     }
   }

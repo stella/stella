@@ -3,6 +3,8 @@ import { describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
@@ -14,6 +16,7 @@ import {
   persistManualOcrRun,
 } from "@/api/lib/document-processing-request";
 import type { PersistManualOcrRunOptions } from "@/api/lib/document-processing-request";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -189,6 +192,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
+        readAvailability: async () => DOCUMENT_OCR_AVAILABILITY.live,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -213,7 +217,13 @@ describe("requestManualOcrHandler", () => {
       }),
     );
 
-    expect(result).toEqual(Result.ok({ outcome: "queued", runId }));
+    expect(result).toEqual(
+      Result.ok({
+        outcome: "queued",
+        runId,
+        availability: DOCUMENT_OCR_AVAILABILITY.live,
+      }),
+    );
     expect(persistRun).toHaveBeenCalledWith({
       organizationId,
       recordAuditEvent,
@@ -240,6 +250,7 @@ describe("requestManualOcrHandler", () => {
         fieldId,
         organizationId,
         persistRun,
+        readAvailability: async () => DOCUMENT_OCR_AVAILABILITY.live,
         recordAuditEvent,
         safeDb: createSafeDb({
           content: {
@@ -265,6 +276,76 @@ describe("requestManualOcrHandler", () => {
     );
 
     expect(result).toEqual(Result.ok({ outcome: "already_processed", runId }));
+  });
+
+  const pdfFieldRow = {
+    content: sourceFileContent,
+    entityId,
+    entityVersionId,
+    fieldId,
+    readOnly: false,
+    versionDeletedAt: null,
+  };
+
+  test.each([
+    DOCUMENT_OCR_AVAILABILITY.live,
+    DOCUMENT_OCR_AVAILABILITY.batched,
+  ])("queues while OCR is $type and reports when it runs", async (status) => {
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        readAvailability: async () => status,
+        recordAuditEvent,
+        safeDb: createSafeDb(pdfFieldRow),
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(result).toEqual(
+      Result.ok({ outcome: "queued", runId, availability: status }),
+    );
+    expect(persistRun).toHaveBeenCalledTimes(1);
+  });
+
+  test("refuses before persisting anything while OCR is unconfigured", async () => {
+    const persistRun = mock(async () => ({
+      id: runId,
+      status: "queued" as const,
+    }));
+    let reads = 0;
+    const safeDb: SafeDb = async (callback) => {
+      reads += 1;
+      return await createSafeDb(pdfFieldRow)(callback);
+    };
+    const result = await Result.gen(() =>
+      requestManualOcrHandler({
+        entityId,
+        fieldId,
+        organizationId,
+        persistRun,
+        readAvailability: async () => DOCUMENT_OCR_AVAILABILITY.unconfigured,
+        recordAuditEvent,
+        safeDb,
+        userId,
+        workspaceId,
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(HandlerError);
+      expect(result.error).toMatchObject({ status: 503, retryable: true });
+    }
+    expect(persistRun).not.toHaveBeenCalled();
+    expect(reads).toBe(0);
   });
 
   test.each([
