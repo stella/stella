@@ -157,7 +157,12 @@ describe("readerSelectionMatches", () => {
       endOffset: 10,
       quote: "ůvodnění",
     };
-    const cell = { anchorId: "table:t:0:1", startOffset: 0, endOffset: 1, quote: "B" };
+    const cell = {
+      anchorId: "table:t:0:1",
+      startOffset: 0,
+      endOffset: 1,
+      quote: "B",
+    };
     expect(readerSelectionMatches(pieces, [heading, cell])).toBe(true);
     expect(readerSelectionMatches(pieces, [cell, heading])).toBe(false);
     expect(readerSelectionMatches(pieces, [heading, heading])).toBe(false);
@@ -165,7 +170,12 @@ describe("readerSelectionMatches", () => {
     expect(
       readerSelectionMatches(pieces, [
         heading,
-        { anchorId: "docket", startOffset: 0, endOffset: 16, quote: "23 Cdo 1192/2019" },
+        {
+          anchorId: "docket",
+          startOffset: 0,
+          endOffset: 16,
+          quote: "23 Cdo 1192/2019",
+        },
       ]),
     ).toBe(false);
   });

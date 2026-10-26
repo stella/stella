@@ -204,6 +204,7 @@ test.each([
 // composer: the reader floats none over the text rather than showing the same
 // draft a second time, and its own returns, draft included, once the tab
 // leaves the screen.
+// timeout: the overlay host is a lazy chunk whose first load outlasts the default budget
 test(
   "asking about a passage leaves the docked chat as the only composer",
   async () => {

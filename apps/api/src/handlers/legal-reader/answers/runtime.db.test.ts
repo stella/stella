@@ -396,7 +396,7 @@ describe("reader answer turn lifecycle", () => {
     }
   });
 
-    test("explains a selection in every block kind the reader anchors, from create through the stream", async () => {
+  test("explains a selection in every block kind the reader anchors, from create through the stream", async () => {
     const blocks: Block[] = [
       {
         type: "heading",

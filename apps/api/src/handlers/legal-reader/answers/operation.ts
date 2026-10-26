@@ -137,7 +137,10 @@ const selectionIn = (
   const [first, ...rest] = spans;
   return first !== undefined &&
     readerSelectionMatches(
-      paragraphs.map(({ paragraphId, text }) => ({ anchorId: paragraphId, text })),
+      paragraphs.map(({ paragraphId, text }) => ({
+        anchorId: paragraphId,
+        text,
+      })),
       spans.map((span) => ({ ...span, anchorId: span.paragraphId })),
     )
     ? [first, ...rest]
