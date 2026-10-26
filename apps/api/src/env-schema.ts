@@ -1,6 +1,7 @@
 import path from "node:path";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import {
   NODE_ENV,
   type NodeEnvLabel,
@@ -18,6 +19,7 @@ import {
   type InboundMailReceivingInput,
   resolveInboundMailReceiving,
 } from "@/api/lib/email/inbound/receiving-config";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
   DEFAULT_POLAR_API_VERSION,
@@ -250,7 +252,7 @@ export const envApiServerSchema = {
             v.regex(/^[A-Za-z0-9_-]+$/u),
           ),
           sha256: v.pipe(v.string(), v.regex(/^[a-fA-F0-9]{64}$/u)),
-          notAfter: v.pipe(v.string(), v.isoTimestamp()),
+          notAfter: apiDateTimeSchema,
         }),
       ),
       v.minLength(1),
@@ -394,9 +396,7 @@ export const envApiServerSchema = {
    * email delivery is skipped for this account (the code is shared
    * out-of-band).
    */
-  DEMO_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  DEMO_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
   DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
@@ -407,9 +407,7 @@ export const envApiServerSchema = {
    * inside its own organization. Set both or neither. Every other address is
    * refused password sign-in with the ordinary invalid-credentials answer.
    */
-  APP_REVIEW_ACCOUNT_EMAIL: v.optional(
-    v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
-  ),
+  APP_REVIEW_ACCOUNT_EMAIL: v.optional(emailAddressSchema),
   APP_REVIEW_ORGANIZATION_ID: v.optional(
     v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
   ),

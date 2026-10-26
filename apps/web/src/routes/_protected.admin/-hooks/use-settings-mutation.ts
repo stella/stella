@@ -2,6 +2,7 @@ import { hashKey, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import { Result, TaggedError } from "better-result";
 
+import type { HandlerExceptionScope } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -19,6 +20,8 @@ type SuccessToast = { title: string; description?: string };
 type ErrorToast = { title: string; description?: string };
 
 type UseSettingsMutationOptions<TVariables, TData> = {
+  exceptionScope:
+    HandlerExceptionScope | ((variables: TVariables) => HandlerExceptionScope);
   mutationFn: (variables: TVariables) => Promise<TData>;
   /** Key to invalidate once the mutation resolves. */
   invalidate: QueryKey;
@@ -105,8 +108,17 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
   // re-enabling of the triggering control. The `.catch` on the same line
   // keeps this out of the detached-promise ratchet and routes a failed
   // refetch to telemetry instead of an unhandled rejection.
-  const invalidateInBackground = (): void => {
-    invalidate().catch((error: unknown) => analytics.captureError(error));
+  const scopeFor = (variables: TVariables) =>
+    typeof options.exceptionScope === "function"
+      ? options.exceptionScope(variables)
+      : options.exceptionScope;
+  const invalidateInBackground = (variables: TVariables): void => {
+    invalidate().catch((error: unknown) =>
+      analytics.captureError(error, {
+        fingerprintKey: "useSettingsMutation.invalidateInBackground:failure",
+        scope: scopeFor(variables),
+      }),
+    );
   };
 
   const invalidatesOnSettle = options.invalidateOn === "settled";
@@ -120,7 +132,7 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
     },
     onSuccess: (data, variables) => {
       if (!invalidatesOnSettle) {
-        invalidateInBackground();
+        invalidateInBackground(variables);
       }
       if (options.successToast) {
         stellaToast.add({
@@ -133,15 +145,16 @@ export const useSettingsMutation = <TVariables = void, TData = unknown>(
       }
       options.onSuccess?.(data, variables);
     },
-    ...(invalidatesOnSettle
-      ? {
-          onSettled: () => {
-            invalidateInBackground();
-          },
-        }
-      : {}),
+    onSettled: (_data, _error, variables) => {
+      if (invalidatesOnSettle) {
+        invalidateInBackground(variables);
+      }
+    },
     onError: (error, variables) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useSettingsMutation:failure",
+        scope: scopeFor(variables),
+      });
       if (options.errorToast) {
         notifyUserError(error, options.errorToast.title, {
           ...(options.errorToast.description

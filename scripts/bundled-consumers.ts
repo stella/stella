@@ -214,7 +214,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --sourcemap=inline --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
+      "bun build --define __STELLA_RELEASE__=true --sourcemap=linked --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
@@ -226,17 +226,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming image-smoke.js apps/api/src/scripts/image-smoke.ts",
-    bootCheck: {
-      type: "docker-run",
-      dockerfile: "apps/api/Dockerfile",
-      run: "RUN bun --no-env-file /app/image-smoke.js && touch /tmp/image-smoke-ok",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming image-smoke-model-ingress.js apps/api/src/scripts/image-smoke-model-ingress.ts",
+      'bun build --define __STELLA_RELEASE__=true --target bun --splitting --outdir /app/bundles --public-path /app/ --entry-naming "[name].js" --chunk-naming "chunk-[hash].js" apps/api/src/scripts/backfill-case-law-slugs.ts apps/api/scripts/seed-usage-policies.ts apps/api/scripts/replay-provider-events.ts apps/api/src/scripts/better-auth-migration-audit.ts apps/api/src/scripts/better-auth-microsoft-identity-map.ts apps/api/src/scripts/better-auth-17-backfill.ts apps/api/src/scripts/database-census.ts apps/api/src/scripts/better-auth-sign-in-replay.ts apps/api/src/scripts/replay-case-law-source.ts apps/api/src/scripts/review-account.ts apps/api/src/scripts/partner-oauth-client.ts apps/api/src/scripts/replay-tick.ts apps/api/src/scripts/import-cz-us-roster.ts apps/api/src/scripts/eu-completion-tick.ts apps/api/src/scripts/eu-completion-control.ts apps/api/src/scripts/redact-case-law-decision.ts apps/api/src/scripts/case-law-raw-layout.ts apps/api/src/scripts/complete-sk-us-raw.ts apps/api/src/scripts/decision-analysis-candidates.ts apps/api/src/scripts/decision-analysis-input.ts apps/api/src/scripts/decision-analysis-save.ts apps/api/src/scripts/repair-publisher-absent-text.ts apps/api/src/scripts/repair-cz-ns-court.ts apps/api/scripts/classify-citations.ts apps/api/src/scripts/apply-reviewed-citation-labels.ts apps/api/src/scripts/corpus-generation.ts apps/api/src/scripts/corpus-snippet-compare.ts apps/api/src/scripts/image-smoke-model-ingress.ts apps/api/src/scripts/image-smoke.ts',
     bootCheck: {
       type: "docker-run",
       dockerfile: "apps/api/Dockerfile",
@@ -256,17 +246,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js apps/api/src/lib/search/extraction-worker.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming apply-reviewed-citation-labels.js apps/api/src/scripts/apply-reviewed-citation-labels.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/runtime/workers --public-path /app/runtime/workers/ --entry-naming extraction-worker.js --external @firecrawl/anydoc-linux-arm64-musl --external @firecrawl/anydoc-linux-x64-musl apps/api/src/lib/search/extraction-worker.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -277,210 +257,6 @@ export const BUNDLED_CONSUMERS = [
     file: "apps/api/Dockerfile",
     command:
       "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles/apps/api/src/db --public-path /app/apps/api/src/db/ --entry-naming migrate.js apps/api/src/db/migrate.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming backfill.js apps/api/src/scripts/backfill-case-law-slugs.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming better-auth-17-backfill.js apps/api/src/scripts/better-auth-17-backfill.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming better-auth-microsoft-identity-map.js apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming better-auth-migration-audit.js apps/api/src/scripts/better-auth-migration-audit.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming better-auth-sign-in-replay.js apps/api/src/scripts/better-auth-sign-in-replay.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming case-law-raw-layout.js apps/api/src/scripts/case-law-raw-layout.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming classify-citations.js apps/api/scripts/classify-citations.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming complete-sk-us-raw.js apps/api/src/scripts/complete-sk-us-raw.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming corpus-generation.js apps/api/src/scripts/corpus-generation.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming corpus-snippet-compare.js apps/api/src/scripts/corpus-snippet-compare.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming database-census.js apps/api/src/scripts/database-census.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming decision-analysis-candidates.js apps/api/src/scripts/decision-analysis-candidates.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming decision-analysis-input.js apps/api/src/scripts/decision-analysis-input.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming decision-analysis-save.js apps/api/src/scripts/decision-analysis-save.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming eu-completion-control.js apps/api/src/scripts/eu-completion-control.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming eu-completion-tick.js apps/api/src/scripts/eu-completion-tick.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming redact-case-law-decision.js apps/api/src/scripts/redact-case-law-decision.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming repair-cz-ns-court.js apps/api/src/scripts/repair-cz-ns-court.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming repair-publisher-absent-text.js apps/api/src/scripts/repair-publisher-absent-text.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming replay-case-law-source.js apps/api/src/scripts/replay-case-law-source.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming replay-provider-events.js apps/api/scripts/replay-provider-events.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming replay-tick.js apps/api/src/scripts/replay-tick.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming import-cz-us-roster.js apps/api/src/scripts/import-cz-us-roster.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming review-account.js apps/api/src/scripts/review-account.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
@@ -526,17 +302,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/api/Dockerfile",
     command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --outdir /app/bundles --public-path /app/ --entry-naming seed-usage-policies.js apps/api/scripts/seed-usage-policies.ts",
-    bootCheck: {
-      type: "none",
-      reason:
-        "This operator or worker entrypoint is packaged for runtime dispatch and is not booted by CI.",
-    },
-  },
-  {
-    file: "apps/api/Dockerfile",
-    command:
-      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=inline --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
+      "bun build --define __STELLA_RELEASE__=true --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
     bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
   },
   {
@@ -591,7 +357,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/legal-atlas-runner/package.json",
     command:
-      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=inline --outfile dist/eu-ecj-refetch.js ../api/src/scripts/eu-ecj-refetch.ts",
+      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=external --outdir dist --entry-naming eu-ecj-refetch.js ../api/src/scripts/eu-ecj-refetch.ts",
     bootCheck: {
       type: "none",
       reason:
@@ -601,7 +367,7 @@ export const BUNDLED_CONSUMERS = [
   {
     file: "apps/legal-atlas-runner/package.json",
     command:
-      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=inline --outfile dist/index.js src/index.ts",
+      "bun build --target=bun --define 'process.env.NODE_ENV=\"production\"' --define __STELLA_RELEASE__=true --sourcemap=external --outdir dist --entry-naming index.js src/index.ts",
     bootCheck: {
       type: "docker-run",
       dockerfile: "apps/legal-atlas-runner/Dockerfile",

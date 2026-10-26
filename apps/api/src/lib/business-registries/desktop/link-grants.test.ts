@@ -22,6 +22,7 @@ let db: TestDatabase;
 const now = new Date("2026-01-01T12:00:00.000Z");
 const verifier = "a".repeat(64);
 const deviceJkt = "A".repeat(43);
+const sessionId = "issuing-browser-session";
 const userId = mintAuthProviderId<"user">();
 const organizationId = mintAuthProviderId<"organization">();
 
@@ -39,6 +40,7 @@ const issue = async () => {
     deviceJkt,
     userId,
     organizationId,
+    sessionId,
     verifierHash: hashSha256Hex(verifier),
     db,
     now,
@@ -70,7 +72,13 @@ test("a matching account link can be claimed once", async () => {
   const first = await consumeDesktopLinkGrant(input);
   expect(first.isOk()).toBe(true);
   if (first.isOk()) {
-    expect(first.value).toEqual({ userId, organizationId, deviceJkt });
+    // The claim names the issuing session, which the desktop never sends.
+    expect(first.value).toEqual({
+      userId,
+      organizationId,
+      deviceJkt,
+      sessionId,
+    });
   }
   expectRejected(await consumeDesktopLinkGrant(input));
 });
@@ -129,6 +137,7 @@ test("issuing an account link does not replace an existing link", async () => {
     verifierHash: hashSha256Hex("b".repeat(64)),
     userId,
     organizationId,
+    sessionId,
     db,
     now,
   });

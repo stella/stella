@@ -15,7 +15,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -54,7 +54,13 @@ function ReportExportRecoveryPage() {
     setIsDownloading(false);
 
     if (Result.isError(result)) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "ReportExportRecoveryPage.handleDownload:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ReportExportRecoveryPage.handleDownload:failure",
+        },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
       return;
     }
@@ -71,7 +77,14 @@ function ReportExportRecoveryPage() {
   const handleDownloadClick = () => {
     detached(
       handleDownload().catch((error: unknown) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey:
+            "ReportExportRecoveryPage.handleDownloadClick:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ReportExportRecoveryPage.handleDownloadClick:failure",
+          },
+        });
         notifyUserError(error, t("common.unexpectedError"));
       }),
       "reports.download",
@@ -101,7 +114,13 @@ function ReportExportRecoveryPage() {
     });
     if (Result.isError(result) || result.value === null) {
       if (Result.isError(result)) {
-        analytics.captureError(result.error);
+        analytics.captureError(result.error, {
+          fingerprintKey: "ReportExportRecoveryPage.handleOpen:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ReportExportRecoveryPage.handleOpen:failure",
+          },
+        });
       }
       notifyUserError(
         Result.isError(result) ? result.error : undefined,
@@ -204,7 +223,7 @@ const reportExportRecoveryOptions = ({
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports({ exportId: toSafeId<"reportExport">(exportId) })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     refetchInterval: (query) => {
       const status = query.state.data?.status;

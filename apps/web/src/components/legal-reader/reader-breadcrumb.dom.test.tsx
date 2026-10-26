@@ -1,8 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterEach, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, expect, jest, mock, spyOn, test } from "bun:test";
 
-import { sleep } from "@stll/concurrency/sleep";
 import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register();
@@ -19,6 +18,7 @@ const { useAnalysisReaderBreadcrumb } =
 
 afterEach(() => {
   cleanup();
+  jest.useRealTimers();
 });
 
 const path = (
@@ -306,9 +306,11 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
   );
   try {
     const assertContentsAndJump = async () => {
-      await act(async () => {
-        await sleep(0);
-      });
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: "Contents: Outcome" }),
+        ).toBeTruthy(),
+      );
       const contents = screen.getByRole("button", {
         name: "Contents: Outcome",
       });
@@ -339,6 +341,7 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
 test("reader breadcrumb follows the visible heading on scroll with throttled announcements", async () => {
   const { observeReaderBreadcrumb } =
     await import("./reader-breadcrumb-scroll");
+  jest.useFakeTimers();
   const viewport = document.createElement("div");
   const content = document.createElement("article");
   viewport.append(content);
@@ -370,12 +373,12 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
   viewport.scrollTop = 350;
   viewport.dispatchEvent(new Event("scroll"));
   expect(changes).toEqual(["heading-0"]);
-  await sleep(220);
+  jest.advanceTimersByTime(220);
   expect(changes).toEqual(["heading-0", "heading-4"]);
   stop();
   viewport.scrollTop = 150;
   viewport.dispatchEvent(new Event("scroll"));
-  await sleep(220);
+  jest.advanceTimersByTime(220);
   expect(changes).toEqual(["heading-0", "heading-4"]);
   viewport.remove();
 });
@@ -383,6 +386,7 @@ test("reader breadcrumb follows the visible heading on scroll with throttled ann
 test("reader breadcrumb tracks headings in document order when anchors arrive in tree order", async () => {
   const { observeReaderBreadcrumb } =
     await import("./reader-breadcrumb-scroll");
+  jest.useFakeTimers();
   const viewport = document.createElement("div");
   const content = document.createElement("article");
   viewport.append(content);
@@ -415,7 +419,7 @@ test("reader breadcrumb tracks headings in document order when anchors arrive in
   try {
     viewport.scrollTop = 400;
     viewport.dispatchEvent(new Event("scroll"));
-    await sleep(220);
+    jest.advanceTimersByTime(220);
     expect(changes).toEqual([null, "paragraph-10"]);
   } finally {
     stop();
@@ -500,9 +504,10 @@ for (const jump of ["contents", "ancestor"]) {
               ),
             );
           }
+          jest.useFakeTimers();
           await act(async () => {
             fireEvent.click(screen.getByRole("button", { name: target.title }));
-            await sleep(220);
+            jest.advanceTimersByTime(220);
           });
           expect(
             screen.getByRole("button", {
@@ -521,6 +526,7 @@ for (const jump of ["contents", "ancestor"]) {
 test("plain scrolling selects the last visible heading at maximum scroll", async () => {
   const { observeReaderBreadcrumb } =
     await import("./reader-breadcrumb-scroll");
+  jest.useFakeTimers();
   const viewport = document.createElement("div");
   const content = document.createElement("article");
   viewport.getBoundingClientRect = () => new DOMRect(0, 17.375, 400, 300);
@@ -553,7 +559,7 @@ test("plain scrolling selects the last visible heading at maximum scroll", async
     expect(changes).toEqual(["heading-0"]);
     viewport.scrollTop = viewport.scrollHeight - viewport.clientHeight;
     viewport.dispatchEvent(new Event("scroll"));
-    await sleep(220);
+    jest.advanceTimersByTime(220);
     expect(changes).toEqual(["heading-0", "heading-4"]);
   } finally {
     stop();
@@ -563,6 +569,7 @@ test("plain scrolling selects the last visible heading at maximum scroll", async
 test("viewport-only resizing updates the breadcrumb when the document fits", async () => {
   const { observeReaderBreadcrumb } =
     await import("./reader-breadcrumb-scroll");
+  jest.useFakeTimers();
   const originalObserver = globalThis.ResizeObserver;
   const resizeCallbacks = new Map<Element, () => void>();
   globalThis.ResizeObserver = class {
@@ -609,7 +616,7 @@ test("viewport-only resizing updates the breadcrumb when the document fits", asy
       expect(changes).toEqual(["heading-0"]);
       height = 500;
       resizeCallbacks.get(viewport)?.();
-      await sleep(220);
+      jest.advanceTimersByTime(220);
       expect(changes).toEqual(["heading-0", "heading-4"]);
       expect(viewport.scrollTop).toBe(0);
     } finally {
@@ -623,6 +630,7 @@ test("viewport-only resizing updates the breadcrumb when the document fits", asy
 test("the breadcrumb rebinds when the reader DOM is replaced", async () => {
   const { useReaderElement } = await import("./use-reader-element");
   const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
+  jest.useFakeTimers();
   const blocks = [
     {
       type: "heading",
@@ -686,7 +694,7 @@ test("the breadcrumb rebinds when the reader DOM is replaced", async () => {
     await act(async () => {
       viewport.scrollTop = scrollTop;
       viewport.dispatchEvent(new Event("scroll"));
-      await sleep(220);
+      jest.advanceTimersByTime(220);
     });
     return viewport;
   };
@@ -700,7 +708,7 @@ test("the breadcrumb rebinds when the reader DOM is replaced", async () => {
   expect(screen.getByRole("button", { name: "Contents: Last" })).toBeTruthy();
   await act(async () => {
     oldViewport.dispatchEvent(new Event("scroll"));
-    await sleep(220);
+    jest.advanceTimersByTime(220);
   });
   expect(screen.getByRole("button", { name: "Contents: Last" })).toBeTruthy();
 });
@@ -721,8 +729,8 @@ test("Contents consumes Escape and restores focus to its trigger", async () => {
     await act(async () => {
       popup.focus();
       fireEvent.keyDown(popup, { key: "Escape" });
-      await sleep(20);
     });
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(trigger);
     expect(outerEscapes).toBe(0);

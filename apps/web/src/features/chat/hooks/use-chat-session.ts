@@ -17,6 +17,7 @@ import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type { ChatToolGrantScope } from "@stll/api-contract/chat-tool-grants";
 import { sleep } from "@stll/concurrency/sleep";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { sha256Hex } from "@stll/sha256/browser";
 import { stellaToast } from "@stll/ui/toast";
 import { useIsMobile } from "@stll/ui/use-mobile";
@@ -144,7 +145,7 @@ import {
   APIError,
   internalToolErrorMessage,
   toAPIError,
-  unwrapEden,
+  unwrapApiResponse,
 } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -175,6 +176,7 @@ type CreateDocumentMatterSuccess = Extract<
 >;
 
 type UseChatSessionOptions = {
+  exceptionScope: HandlerExceptionScope;
   chat: ChatRuntime;
   conversationId: string;
   getDocxEditRepresentation?:
@@ -242,7 +244,13 @@ const prepareCreateDocumentDraft = async (
   });
   switch (prepared.status) {
     case "failed":
-      getAnalytics().captureError(prepared.error);
+      getAnalytics().captureError(prepared.error, {
+        fingerprintKey: "prepareCreateDocumentDraft:failure",
+        scope: {
+          type: "handler",
+          handlerId: "prepareCreateDocumentDraft:failure",
+        },
+      });
       return null;
     case "ready":
       return { buffer: prepared.buffer, fileName };
@@ -294,6 +302,7 @@ const resetAskUserToolCall = (
 const ignoreQueuedDispatchError = (_error: unknown): void => undefined;
 
 export const useChatSession = ({
+  exceptionScope: { handlerId: exceptionHandlerId },
   chat,
   conversationId,
   getDocxEditRepresentation,
@@ -319,7 +328,7 @@ export const useChatSession = ({
     }),
   );
   const chatToolGrantsView = useQueryView(chatToolGrantsQuery);
-  useQueryViewError(chatToolGrantsView);
+  useQueryViewError(chatToolGrantsView, "useChatSession:query");
   const storedChatToolGrants =
     chatToolGrantsView.type === "items"
       ? chatToolGrantsView.items.grants
@@ -536,7 +545,10 @@ export const useChatSession = ({
           });
           if (settleResult.status === "failed") {
             settlingCreateDocumentDraftIdsRef.current.delete(draft.toolCallId);
-            getAnalytics().captureError(settleResult.error);
+            getAnalytics().captureError(settleResult.error, {
+              fingerprintKey: "useChatSession:failure",
+              scope: { type: "handler", handlerId: exceptionHandlerId },
+            });
             chat.setMessages(
               terminalizeUnsettledCreateDocumentDraft(
                 chat.getSnapshot().messages,
@@ -552,7 +564,7 @@ export const useChatSession = ({
         "use-chat-session.settle-create-document-draft-with-retry",
       );
     }
-  }, [addToolResult, chat, messages, status, t]);
+  }, [addToolResult, chat, messages, status, t, exceptionHandlerId]);
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       await sendThreadChatMessage(chat, message, {
@@ -662,7 +674,10 @@ export const useChatSession = ({
       // for telemetry and surface a toast so the user knows the older history
       // failed to load. Keep the cursor but flag the error so auto-loading
       // pauses (the manual button retries) instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useChatSession:failure-2",
+        scope: { type: "handler", handlerId: exceptionHandlerId },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("chat.loadEarlierMessagesError"));
       return;
@@ -689,7 +704,7 @@ export const useChatSession = ({
     }
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [chat, setMessages, t, threadRef]);
+  }, [chat, setMessages, t, threadRef, exceptionHandlerId]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
@@ -972,7 +987,7 @@ export const useChatSession = ({
       toolCallId: string,
       decision: RequestSecretDecision,
     ): Promise<RequestSecretOutput> =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId: toSafeId<"chatThread">(conversationId) })
           .secrets({ toolCallId })
@@ -1002,7 +1017,7 @@ export const useChatSession = ({
         query: { connectorSlug },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     [conversationId],
   );
@@ -1359,7 +1374,10 @@ export const useChatSession = ({
           downloadResult.value.status === "invalid-source"
         ) {
           if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error);
+            getAnalytics().captureError(downloadResult.error, {
+              fingerprintKey: "useChatSession:failure-3",
+              scope: { type: "handler", handlerId: exceptionHandlerId },
+            });
           }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
@@ -1489,7 +1507,10 @@ export const useChatSession = ({
           getInspector: useInspectorTabsStore.getState,
           toolCallId,
         });
-        getAnalytics().captureError(createResult.error);
+        getAnalytics().captureError(createResult.error, {
+          fingerprintKey: "useChatSession:failure-4",
+          scope: { type: "handler", handlerId: exceptionHandlerId },
+        });
         notifyUserError(
           createResult.error,
           APIError.is(createResult.error)
@@ -1549,7 +1570,7 @@ export const useChatSession = ({
         await openCreatedDocumentInInspector(output);
       }
     },
-    [chat, queryClient, setMessages, t, threadRef],
+    [chat, queryClient, setMessages, t, threadRef, exceptionHandlerId],
   );
 
   const handleOpenCreatedDocument = useCallback(
@@ -1642,9 +1663,12 @@ export const useChatSession = ({
       return;
     }
     lastStopFailureRef.current = stopState.error;
-    getAnalytics().captureError(stopState.error);
+    getAnalytics().captureError(stopState.error, {
+      fingerprintKey: "useChatSession:failure-5",
+      scope: { type: "handler", handlerId: exceptionHandlerId },
+    });
     notifyUserError(stopState.error, t("chat.stopFailed"));
-  }, [stopState, t]);
+  }, [stopState, t, exceptionHandlerId]);
 
   useExternalSyncEffect(() => {
     applySendQueueEvent({ type: "conversation-switched", conversationId });

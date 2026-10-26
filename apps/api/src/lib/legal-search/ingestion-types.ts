@@ -1,3 +1,4 @@
+// parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
 // parser-output-unchanged: document scheduling is checked against the source manifest; parsed output is unchanged.
@@ -22,6 +23,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
+import { withExceptionScope } from "@stll/errors/exception-scope-context";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
@@ -70,11 +72,34 @@ import { isRecord } from "@/api/lib/type-guards";
 export { EMPTY_AST };
 export type { EmptyAst };
 
-/** A judge as one decision names them, before the roster is consulted. */
-export type DecisionJudgeInput = {
+/**
+ * A judge the source names in the form a reader sees, titles removed.
+ *
+ * Each variant rules out the other's name field, so a reader of either
+ * spelling (`judge.czechDeclinedName !== undefined`) tells them apart, and a
+ * consumer that only reads printed names still compiles against both.
+ */
+export type PrintedDecisionJudge = {
   role: DecisionJudgeRole;
   nameAsPrinted: string;
+  czechDeclinedName?: never;
 };
+
+/**
+ * A judge a Czech text names inside a sentence, in the case its grammar asks
+ * for ("z předsedy Jana Svatoně"). The declined form is never shown: the row
+ * is written only when the court's roster names exactly one person it can be,
+ * and then under that person's own name.
+ */
+export type CzechDeclinedDecisionJudge = {
+  role: DecisionJudgeRole;
+  czechDeclinedName: string;
+  nameAsPrinted?: never;
+};
+
+/** A judge as one decision names them, before the roster is consulted. */
+export type DecisionJudgeInput =
+  PrintedDecisionJudge | CzechDeclinedDecisionJudge;
 
 /** Mirrors the publisher-identity columns in the case-law schema. */
 export const SOURCE_DOCUMENT_ID_MAX_LENGTH = 256;
@@ -276,9 +301,18 @@ type PlainTextResultFields = {
   decisionType?: PlainText | undefined;
   metadata: Record<string, PlainTextMetadataValue>;
   judges?:
-    | readonly (Omit<DecisionJudgeInput, "nameAsPrinted"> & {
-        nameAsPrinted: PlainText;
-      })[]
+    | readonly (
+        | {
+            role: DecisionJudgeRole;
+            nameAsPrinted: PlainText;
+            czechDeclinedName?: never;
+          }
+        | {
+            role: DecisionJudgeRole;
+            czechDeclinedName: PlainText;
+            nameAsPrinted?: never;
+          }
+      )[]
     | undefined;
   textFields: Readonly<
     Record<
@@ -421,11 +455,16 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
         raw.judges === undefined
           ? undefined
           : yield* Result.all(
-              raw.judges.map(({ role, nameAsPrinted }) =>
-                toPlainText(nameAsPrinted).map((plain) => ({
-                  role,
-                  nameAsPrinted: plain,
-                })),
+              raw.judges.map((judge) =>
+                judge.czechDeclinedName !== undefined
+                  ? toPlainText(judge.czechDeclinedName).map((plain) => ({
+                      role: judge.role,
+                      czechDeclinedName: plain,
+                    }))
+                  : toPlainText(judge.nameAsPrinted).map((plain) => ({
+                      role: judge.role,
+                      nameAsPrinted: plain,
+                    })),
               ),
             ),
       textFields: {
@@ -1615,6 +1654,17 @@ type SourceAdapterDefinition<TKey extends AdapterKey> = Omit<
   readonly documentStage: (typeof ADAPTER_MANIFESTS)[TKey]["documentStage"];
 };
 
+type ScopedCallbacks<TSource> = {
+  [
+    TKey in keyof TSource as Extract<
+      TSource[TKey],
+      (...args: never[]) => unknown
+    > extends never
+      ? never
+      : TKey
+  ]-?: TSource[TKey] | undefined;
+};
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1623,18 +1673,37 @@ export const defineSourceAdapter = <
   // `key` names TKey for inference; the constraint then binds documentStage to
   // that key's manifest instead of the union of every manifest's stage.
   adapter: TAdapter & { readonly key: TKey },
-): SourceAdapter & {
+): Omit<SourceAdapter, "key" | "documentStage" | "reconciliation"> & {
   readonly key: TAdapter["key"];
-  readonly reconciliation: TAdapter["reconciliation"];
+  readonly documentStage: TAdapter["documentStage"];
+  readonly reconciliation: TAdapter["reconciliation"] & SourceReconciliation;
 } => {
+  const scope = { type: "ingestion", adapterKey: adapter.key } as const;
+  const scoped = <TArgs extends unknown[], TResult>(
+    operation: (...args: TArgs) => TResult,
+  ) =>
+    function (this: unknown, ...args: TArgs) {
+      return withExceptionScope(scope, () => operation.apply(this, args));
+    };
+  const reconciliation = adapter.reconciliation;
+  const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
+  const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
+  const reparseStoredRaw = adapter.reparseStoredRaw;
+  const collectionEnrichment = adapter.collectionEnrichment;
   const observeDocumentStage = async (
     options: Omit<DocumentStagePageOptions, "source">,
-  ) => await withDocumentStageWindow({ ...options, source: adapter.key });
-  return {
-    ...adapter,
+  ) =>
+    await withExceptionScope(
+      scope,
+      async () =>
+        await withDocumentStageWindow({ ...options, source: adapter.key }),
+    );
+  // Total callback projections make a new callback require a scope decision.
+  const callbacks = {
     observeDocumentStage,
-    country: ADAPTER_MANIFESTS[adapter.key].country,
-    name: ADAPTER_MANIFESTS[adapter.key].name,
+    getTotalCount: scoped(adapter.getTotalCount),
+    reparseStoredRaw:
+      reparseStoredRaw === undefined ? undefined : scoped(reparseStoredRaw),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
         fetchPage: async () => {
@@ -1652,5 +1721,65 @@ export const defineSourceAdapter = <
         },
         observe: onDocumentObservation,
       }),
+  } satisfies ScopedCallbacks<SourceAdapter>;
+  const { reparseStoredRaw: scopedReparseStoredRaw, ...requiredCallbacks } =
+    callbacks;
+  const reconciliationCallbacks = {
+    revisionOf: scoped(reconciliation.revisionOf),
+    sliceOf: scoped(reconciliation.sliceOf),
+    nextSlice: scoped(reconciliation.nextSlice),
+    previousSlice: scoped(reconciliation.previousSlice),
+    listSlicePage: scoped(reconciliation.listSlicePage),
+    buildDecision: scoped(reconciliation.buildDecision),
+    heldWithoutDetail:
+      reconciliation.heldWithoutDetail === undefined
+        ? undefined
+        : scoped(reconciliation.heldWithoutDetail),
+    createSliceBuildDecision:
+      createSliceBuildDecision === undefined
+        ? undefined
+        : scoped(function (this: unknown) {
+            return scoped(createSliceBuildDecision.call(this));
+          }),
+  } satisfies ScopedCallbacks<SourceReconciliation>;
+  const sourceFieldCallbacks = {
+    listSourceFields: scoped(adapter.sourceFields.listSourceFields),
+  } satisfies ScopedCallbacks<SourceFieldInventory>;
+  const collection =
+    collectionEnrichment === undefined
+      ? undefined
+      : {
+          ...collectionEnrichment,
+          ...({
+            readIssue: scoped(collectionEnrichment.readIssue),
+            join: scoped(collectionEnrichment.join),
+          } satisfies ScopedCallbacks<SkCollectionConnector>),
+        };
+  const textless =
+    textlessHeldRecheck === undefined
+      ? undefined
+      : {
+          ...textlessHeldRecheck,
+          ...({
+            buildDecisionFromStored: scoped(
+              textlessHeldRecheck.buildDecisionFromStored,
+            ),
+          } satisfies ScopedCallbacks<TextlessHeldRecheck>),
+        };
+  return {
+    ...adapter,
+    ...requiredCallbacks,
+    ...(scopedReparseStoredRaw === undefined
+      ? {}
+      : { reparseStoredRaw: scopedReparseStoredRaw }),
+    country: ADAPTER_MANIFESTS[adapter.key].country,
+    name: ADAPTER_MANIFESTS[adapter.key].name,
+    sourceFields: { ...adapter.sourceFields, ...sourceFieldCallbacks },
+    collectionEnrichment: collection,
+    reconciliation: {
+      ...reconciliation,
+      ...reconciliationCallbacks,
+      textlessHeldRecheck: textless,
+    },
   };
 };

@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
@@ -44,6 +44,7 @@ import {
   LIST_ITEM_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import type { ListItemType } from "@/components/workspaces/tasks/task-detail-constants";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -69,10 +70,11 @@ import {
   legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import { routeSearchSchema } from "@/route-search-params";
 import { ListSourceAction } from "@/routes/_protected.workspaces/$workspaceId/-components/list-source-action";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   list: v.optional(v.string()),
 });
 
@@ -153,7 +155,13 @@ function LegalListsPage() {
     });
     setCreatingList(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListsPage.createList:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListsPage.createList:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -310,7 +318,13 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setCreating(false);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.createItem:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListDetail.createItem:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }
@@ -411,7 +425,13 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
     });
     setDecidingCandidateId(null);
     if (result.isErr()) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "LegalListDetail.decideCandidate:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LegalListDetail.decideCandidate:failure",
+        },
+      });
       notifyUserError(result.error, t("errors.actionFailed"));
       return;
     }

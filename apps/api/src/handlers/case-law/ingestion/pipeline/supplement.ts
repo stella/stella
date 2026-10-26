@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisionSupplements } from "@/api/db/schema";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { CASE_LAW_CORPUS_DEPENDENCIES } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -91,9 +91,11 @@ const leaveFormerHolder = async (
       },
     };
   }
-  const rewritten = await processDecision(
+  const rewritten = await processStoredDecision(
     {
       input: rebuiltFormer.result,
+      decisionId: formerId,
+      sourceRawS3Key: rebuiltFormer.sourceRawS3Key,
       sourceId,
       scopedDb,
       observedAt,
@@ -321,9 +323,11 @@ export const processSupplement = async (
       SUPPLEMENT_STANDALONE_REASON.JUDGMENT_UNREADABLE,
     );
   }
-  const written = await processDecision(
+  const written = await processStoredDecision(
     {
       input: rebuilt.result,
+      decisionId: judgment.id,
+      sourceRawS3Key: rebuilt.sourceRawS3Key,
       sourceId,
       scopedDb,
       observedAt,

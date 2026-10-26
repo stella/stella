@@ -1,23 +1,23 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { legalListItems } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  itemEntityId: tSafeId("entity"),
-  sectionId: t.Optional(t.Nullable(tSafeId("legalListSection"))),
-  position: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  itemEntityId: resourceIdSchema("entity"),
+  sectionId: v.optional(v.nullable(resourceIdSchema("legalListSection"))),
+  position: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
 });
 const config = {
   contract: "patch",

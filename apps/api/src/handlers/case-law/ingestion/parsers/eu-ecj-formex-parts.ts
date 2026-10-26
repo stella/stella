@@ -15,10 +15,8 @@ export const encodeEcjFormexArchive = (
   FORMEX_ARCHIVE_PREFIX +
   encodeSourceRawEnvelope(
     Object.fromEntries(
-      entries.map(([name, bytes]) => [
-        name,
-        Buffer.from(bytes).toString("base64"),
-      ]),
+      // parser-output-unchanged: [eu-ecj] toBase64() emits the same padded base64 as toString("base64").
+      entries.map(([name, bytes]) => [name, Buffer.from(bytes).toBase64()]),
     ),
   );
 

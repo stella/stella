@@ -149,10 +149,24 @@ gh api graphql -F owner=stella -F repo=stella -F pr=123 -f query='query($owner: 
   --jq '[.. | .annotations? | .nodes? // empty | .[] | select(.annotationLevel == "FAILURE")]'
 ```
 
-The same records are in the run's `ci-failures` artifact
-(`gh run download <run-id> -n ci-failures`) and its job summary. A failing
-test step also ends its log with the failing tests and their errors. CI logs
-carry no colour codes.
+The same records are in the run's `ci-failures` artifact and its job
+summary. One command prints them as Markdown for a run id or URL; for a run
+without the artifact (still running, or the gate passed) it builds them from
+the failed jobs' logs:
+
+```bash
+bun scripts/ci-failure-digest.ts show <run-id-or-url> --repo stella/stella
+```
+
+The `show` command requires GitHub CLI 2.97.0 or newer; job-log downloads use
+its `--allow-escape-sequences` option. Failed log downloads print the shared
+GitHub retry helper's status metadata and appear as unavailable in the digest.
+
+Each record keeps the failing check's own closing output (up to 15 lines),
+without passing tests or runner banners. Jobs that were cancelled without a
+failed step, such as test shards stopped by fail-fast, are listed apart as
+cancelled, not failed. A failing test step also ends its log with the
+failing tests and their errors. CI logs carry no colour codes.
 
 > In a fresh git worktree run `bun run setup:worktree` once to prepare dependencies.
 > `bun run lint:changed` lints only your

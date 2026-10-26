@@ -1,17 +1,16 @@
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateRecipes } from "@/api/db/schema";
 import { templateRecipeDefinitionSchema } from "@/api/handlers/template-recipes/definition";
+import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { defaultVarcharSchema } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 // ── Schemas ─────────────────────────────────────────
@@ -19,13 +18,13 @@ import { LIMITS } from "@/api/lib/limits";
 // `definition` is structurally validated with Valibot inside the handler
 // (the recipe shape — nested parts/format/loop invariants — is beyond what
 // the route contract can express).
-export const createTemplateRecipeBodySchema = t.Object({
-  name: tDefaultVarchar,
-  description: t.Optional(t.String({ maxLength: 2000 })),
-  definition: t.Unknown(),
+export const createTemplateRecipeBodySchema = v.object({
+  name: defaultVarcharSchema,
+  description: v.optional(v.pipe(v.string(), v.maxLength(2000))),
+  definition: v.unknown(),
 });
 
-type CreateBody = Static<typeof createTemplateRecipeBodySchema>;
+type CreateBody = v.InferOutput<typeof createTemplateRecipeBodySchema>;
 
 // ── List ────────────────────────────────────────────
 

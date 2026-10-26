@@ -65,6 +65,13 @@ export const RECHECK_INSTRUCTIONS = {
 
 export type ProbeKind = keyof typeof RECHECK_INSTRUCTIONS;
 
+/**
+ * The llms.txt URL a documentation waiver's recheck probes: the first one its
+ * explanation names, or "" when it names none and so cannot be rechecked.
+ */
+export const docProbeUrl = (explanation: string): string =>
+  /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(explanation)?.at(0) ?? "";
+
 export type DatedWaiver = {
   source: string;
   line: number;
@@ -132,7 +139,7 @@ export const collectWaivers = ({
         "bun",
         "scripts/dated-waiver-probes.ts",
         "--doc-url",
-        /https:\/\/[^\s()]+\/llms\.txt\b/u.exec(entry.explanation)?.at(0) ?? "",
+        docProbeUrl(entry.explanation),
       ],
       attempts: NETWORK_ATTEMPTS,
     },
@@ -369,6 +376,28 @@ export const expiredWaiverFailures = (
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
     );
+
+/**
+ * Due waivers this check neither fails nor already annotates: each warns on
+ * the file declaring it from WARNING_DAYS before its expiry, so the owner
+ * renews or removes it before the date, and keeps warning after the date on
+ * changes that do not touch that file.
+ */
+export const dueWaiverWarnings = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+  changedFiles?: ReadonlySet<string>,
+): string[] =>
+  waiverWarnings(
+    entries.filter(
+      (entry) =>
+        !isExpired(entry, now) ||
+        (EXPIRY_AT_CHANGE_GATE[entry.kind] === "fail" &&
+          changedFiles !== undefined &&
+          !changedFiles.has(entry.source)),
+    ),
+    now,
+  );
 
 // Runs one test through its owning package script, filtered by its title.
 type TestProbeOptions = { file: string; title: string };
@@ -638,6 +667,9 @@ if (import.meta.main) {
               .split("\0")
               .filter((file) => file !== ""),
           );
+    for (const warning of dueWaiverWarnings(entries, now, changedFiles)) {
+      console.log(warning);
+    }
     const failures = expiredWaiverFailures(entries, now, changedFiles);
     if (failures.length > 0) {
       console.error(failures.join("\n"));
