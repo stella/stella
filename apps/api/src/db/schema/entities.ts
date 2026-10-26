@@ -33,10 +33,9 @@ import {
   AGENDA_SENSITIVITIES,
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
-  LIST_ITEM_TYPES,
-  TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
+  LIST_ITEM_TYPES,
   organization,
   organizationCheck,
   p,
@@ -46,6 +45,7 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  TASK_ASSIGNEE_ROLES,
   timestamptz,
   user,
   workspaceCheck,
@@ -1286,7 +1286,7 @@ export const pendingUploads = p.pgTable(
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
-    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    /** Finalize deadline (`uploadTimeline`); later requests only replay terminal results. */
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     finalizedAt: timestamptz("finalized_at"),

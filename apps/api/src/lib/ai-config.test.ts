@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   BYOK_DEFAULT_MODELS,
+  isBYOKProviderRoleSupported,
   MODEL_TASKS,
   TANSTACK_AI_PROVIDERS,
-  isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 

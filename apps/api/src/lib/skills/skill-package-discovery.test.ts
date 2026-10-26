@@ -6,9 +6,9 @@ import { sleep } from "@stll/concurrency/sleep";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  type safeOutboundFetchBytes,
   SafeOutboundFetchError,
   type SafeOutboundFetchResponse,
-  type safeOutboundFetchBytes,
 } from "@/api/lib/safe-outbound-fetch";
 import {
   createSkillPackageFetchContext as createSkillPackageFetchContextWithDependencies,

@@ -1,5 +1,7 @@
+// parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
+// parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
 import { panic, Result } from "better-result";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
@@ -70,10 +72,10 @@ import {
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  DecisionJudgeInput,
   EmptyAst,
   IngestionResult,
   ListingIdentity,
+  PrintedDecisionJudge,
   ReconciliationBuildOutcome,
   ReconciliationSlicePage,
   ReconciliationSlicePageOptions,
@@ -118,9 +120,9 @@ import type {
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -465,11 +467,15 @@ const openSession = async (
   const sessionId = cookieValue(landing.setCookies, "JSESSIONID");
   if (landing.status !== 200 || sessionId === undefined) {
     return Result.err(
-      tkError(
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.PL_TK,
         cursor,
-        `the portal opened no session (${landing.status})`,
-        landing.status,
-      ),
+        message: `ipo.trybunal.gov.pl: the portal opened no session (${landing.status})`,
+        httpStatus: landing.status,
+        ...(landing.status === 200
+          ? { stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR }
+          : {}),
+      }),
     );
   }
   return Result.ok({ sessionId });
@@ -924,10 +930,10 @@ const RAPPORTEUR = /^sprawozdawc/iu;
  * The bench as the ruling's table prints it, and the dissenters its text
  * names. A judge is listed once per role.
  */
-export const plTkJudges = (ruling: PlTkRuling): DecisionJudgeInput[] => {
-  const judges: DecisionJudgeInput[] = [];
+export const plTkJudges = (ruling: PlTkRuling): PrintedDecisionJudge[] => {
+  const judges: PrintedDecisionJudge[] = [];
   const seen = new Set<string>();
-  const add = (judge: DecisionJudgeInput): void => {
+  const add = (judge: PrintedDecisionJudge): void => {
     const key = `${judge.role}\u0000${judge.nameAsPrinted}`;
     if (!seen.has(key)) {
       seen.add(key);

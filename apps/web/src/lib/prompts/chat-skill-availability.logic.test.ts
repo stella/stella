@@ -17,10 +17,10 @@ import {
   chatSkillAvailabilityQuery,
   chatSkillMenuAvailability,
   chatSkillRowState,
+  type ComposerSkillChatContext,
   fileOverlaySkillDocument,
   oneClickSkillNeeds,
   slashItemSkillId,
-  type ComposerSkillChatContext,
 } from "./chat-skill-availability.logic";
 
 const MATTER_ID = "019a0000-0000-7000-8000-0000000000aa";

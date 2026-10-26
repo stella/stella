@@ -4,8 +4,8 @@ import { expect, test } from "bun:test";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
-  isActionAdmissionCode,
   type ActionAdmissionRefusal,
+  isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 
 import {

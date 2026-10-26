@@ -10,10 +10,10 @@ import {
 } from "@stll/api-contract";
 import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
 import {
-  STATUTE_TIMELINE_APP,
   CASE_LAW_RESULTS_APP,
   CITATION_GRAPH_APP,
   DECISION_READER_APP,
+  STATUTE_TIMELINE_APP,
 } from "@stll/mcp-apps/manifest";
 
 import { envBase } from "@/api/env-base";

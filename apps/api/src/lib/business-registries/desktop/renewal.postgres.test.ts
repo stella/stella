@@ -4,7 +4,6 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
-import Elysia from "elysia";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -28,8 +27,11 @@ import { auditLogs } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import type { TransactionOf } from "@/api/db/scoped";
 import renewDesktopAccount from "@/api/handlers/desktop-registry/renew";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -37,6 +39,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
@@ -862,8 +865,8 @@ describe.skipIf(!enabled)(
           const fixture = await db.transaction(
             async (tx) => await seedFixture(tx, openClient().db),
           );
-          const currentKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
-          const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
+          const currentKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
+          const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
           const device = await createDesktopDeviceSigner();
           try {
             await db
@@ -883,10 +886,11 @@ describe.skipIf(!enabled)(
               })
               .where(eq(apikey.id, fixture.keyId));
             const before = await readKey(db, fixture.keyId);
-            const app = new Elysia().post(
-              "/renew",
-              renewDesktopAccount.handler,
-              renewDesktopAccount.config,
+            await using server = serveForTest(
+              createHttpApp({
+                middleware: [errorBoundary],
+                routes: routes({ "/renew": { POST: renewDesktopAccount } }),
+              }),
             );
             const unsigned = () =>
               new Request("http://localhost/renew", {
@@ -911,7 +915,7 @@ describe.skipIf(!enabled)(
                 signed.headers.get("DPoP") ?? panic("Proof header required"),
               );
             }
-            const response = await app.handle(request);
+            const response = await server.fetch(request);
             const payload: unknown = await response.json();
             expect(response.status).toBe(proofState === "valid" ? 200 : 401);
             const after = await readKey(db, fixture.keyId);

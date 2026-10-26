@@ -3,11 +3,11 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
-  REQUEST_SECRET_TOOL_NAME,
-  USE_CONNECTOR_SECRET_TOOL_NAME,
   chatSecretTargetSchema,
+  REQUEST_SECRET_TOOL_NAME,
   requestSecretInputSchema,
   requestSecretOutputSchema,
+  USE_CONNECTOR_SECRET_TOOL_NAME,
 } from "@stll/api-contract/chat-secret";
 
 import type { SafeDb } from "@/api/db/safe-db";

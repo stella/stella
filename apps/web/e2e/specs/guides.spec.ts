@@ -8,9 +8,9 @@ import { GUIDE_ANCHORS } from "../../src/features/guides/guide-anchors";
 import { apiGet } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
-  type TestWorkspace,
   createTestWorkspace,
   deleteTestWorkspace,
+  type TestWorkspace,
 } from "../helpers/workspace";
 
 const HELP_BUTTON_NAME = "Help and feedback";

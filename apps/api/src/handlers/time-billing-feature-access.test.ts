@@ -2,14 +2,13 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { panic } from "better-result";
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
-import { Elysia, t } from "elysia";
-import type { AnyElysia } from "elysia";
 import * as v from "valibot";
 
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { apiRoutes } from "@/api/api-routes";
 import { env } from "@/api/env";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
@@ -26,32 +25,42 @@ import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/rout
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteEntry } from "@/api/http/route";
 import { featureAccessSnapshotFromAuthorization } from "@/api/lib/auth";
 import type { ValidateAuthValue } from "@/api/lib/auth";
-import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
+import {
+  featureAccessGate,
+  featureAccessGateFeature,
+} from "@/api/lib/auth/feature-access/route";
 import { toSafeId } from "@/api/lib/branded-types";
+import { deploymentFeatureGateFlag } from "@/api/lib/deployment-feature-route";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   featureOmittedCapabilityIds,
   parseCatalog,
 } from "@/api/mcp/capability-tools";
 import { MCP_ALL_RESOURCE_SCOPES, MCP_MODES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { mcpOmittedToolNamesByReason } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { FEATURE_DISABLED_MESSAGE } from "@/api/mcp/tool-utils";
 import { getMcpToolDefinition, handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const capabilityCatalog = parseCatalog(readCapabilityCatalog());
@@ -92,7 +101,7 @@ const snapshotFor = (enabled: boolean, deploymentEnabled = true) =>
     ]),
   });
 const enrolledContext = () =>
-  asTestRaw<McpRequestContext>({
+  asTestRaw<AuthorizedMcpRequestContext>({
     userId: USER_ID,
     organizationId: ORGANIZATION_ID,
     featureAccessSnapshot: snapshotFor(true),
@@ -102,7 +111,7 @@ const enrolledContext = () =>
     memberRole: "owner",
   });
 
-const TIME_BILLING_ROUTES: Readonly<Record<string, AnyElysia>> = {
+const TIME_BILLING_ROUTES: Readonly<Record<string, readonly RouteEntry[]>> = {
   billingCodesRoute,
   expensesRoute,
   internalTimeEntriesRoute,
@@ -141,8 +150,31 @@ const withTimeBilling = async <T>(
   }
 };
 
-const requestsFor = (route: AnyElysia): Request[] =>
-  route.routes.map(
+/** A route group served on its own, with the production error answers. */
+const serveRoutes = (entries: readonly RouteEntry[]) =>
+  serveForTest(createHttpApp({ routes: entries, middleware: [errorBoundary] }));
+
+/**
+ * The flag decides only in a deployed process, and the deployment gate is the
+ * group's outermost stage, ahead of the feature-access gate: a disabled flag
+ * hides the routes before any member lookup.
+ */
+/**
+ * Whether a mounted route is hidden by the deployment flag first, then by the
+ * feature's enrolment: read from the gates the route actually runs.
+ */
+const hasTimeBillingGates = ({ middleware }: RouteEntry): boolean => {
+  const deployment = middleware.findIndex(
+    (stage) => deploymentFeatureGateFlag(stage) === FLAG,
+  );
+  const enrolment = middleware.findIndex(
+    (stage) => featureAccessGateFeature(stage) === FEATURE_ID,
+  );
+  return deployment !== -1 && enrolment > deployment;
+};
+
+const requestsFor = (route: readonly RouteEntry[]): Request[] =>
+  route.map(
     ({ method, path }) =>
       new Request(
         `http://localhost${path.replaceAll(/:[A-Za-z]+/gu, () => PATH_ID)}`,
@@ -163,8 +195,9 @@ const disabledFlagResponse = async () => {
     mode: RUNTIME_MODE.strict,
   });
   try {
+    await using server = serveRoutes(listsRoute);
     return await describeResponse(
-      await listsRoute.handle(new Request(`http://localhost/lists/${PATH_ID}`)),
+      await server.fetch(new Request(`http://localhost/lists/${PATH_ID}`)),
     );
   } finally {
     env.FEATURE_LEGAL_LISTS = previous;
@@ -191,22 +224,23 @@ const timeBillingToolNames = (mode: (typeof MCP_MODES)[number]) =>
 
 describe("time billing admission census", () => {
   test("every deployment-gated route group is exercised and every owned handler requires enrolment", async () => {
-    const routeNames: string[] = [];
-    for (const filename of new Glob("**/routes.ts").scanSync(import.meta.dir)) {
-      const source = await Bun.file(`${import.meta.dir}/${filename}`).text();
-      if (!source.includes('"FEATURE_TIME_BILLING"')) {
-        continue;
-      }
-      expect(source).toContain('.use(featureAccessGate("time-billing"))');
-      const name = /export const (\w+) =/u.exec(source)?.at(1);
-      expect(name).toBeDefined();
-      if (name !== undefined) {
-        routeNames.push(name);
-      }
-    }
-    expect(routeNames.toSorted()).toEqual(
-      Object.keys(TIME_BILLING_ROUTES).toSorted(),
+    // Every served route behind the flag is in the census, and every census
+    // route is behind both gates, the flag first.
+    const census = Object.values(TIME_BILLING_ROUTES).flat();
+    const flagged = apiRoutes.filter(({ middleware }) =>
+      middleware.some((stage) => deploymentFeatureGateFlag(stage) === FLAG),
     );
+    expect(flagged.length).toBeGreaterThan(0);
+    // A group's paths lack the mount prefix; its definitions are the same
+    // objects the served table carries.
+    const censusDefinitions = new Set(
+      census.map(({ definition }) => definition),
+    );
+    expect(
+      flagged.filter(({ definition }) => !censusDefinitions.has(definition)),
+    ).toEqual([]);
+    expect(flagged).toHaveLength(census.length);
+    expect(census.filter((entry) => !hasTimeBillingGates(entry))).toEqual([]);
 
     for (const directory of FEATURE_REGISTRY[FEATURE_ID].ownership
       .handlerDirectories) {
@@ -216,12 +250,6 @@ describe("time billing admission census", () => {
           continue;
         }
         const source = await Bun.file(`${absolute}/${filename}`).text();
-        if (filename === "routes.ts" || filename.endsWith("/routes.ts")) {
-          expect(source).toContain(
-            'isDeploymentFeatureEnabled("FEATURE_TIME_BILLING")',
-          );
-          expect(source).toContain('.use(featureAccessGate("time-billing"))');
-        }
         if (!/createSafe(?:Root)?Handler\(/u.test(source)) {
           continue;
         }
@@ -252,36 +280,41 @@ describe("time billing admission census", () => {
       for (const enrolled of [false, true]) {
         const snapshot = snapshotFor(enrolled, deploymentEnabled);
         let executions = 0;
-        const route = new Elysia()
-          .use(
-            featureAccessGate(FEATURE_ID, {
-              resolveAuth: async () => ({
-                ok: true,
-                value: createTestHandlerContext<ValidateAuthValue>({
-                  audit: NO_AUDIT,
-                  scopedDb: NO_DB,
-                  featureAccessSnapshot: snapshot,
-                  // The member lookup already decided feature access: the
-                  // gate itself must not open a transaction or query.
-                  safeDb: async () => {
-                    throw new Error("the feature-access gate queried");
-                  },
+        const route = routes(
+          {
+            "/": {
+              POST: defineEndpoint.public(
+                { body: v.object({ required: v.string() }) },
+                () => {
+                  executions += 1;
+                  return "served";
+                },
+              ),
+            },
+          },
+          {
+            middleware: [
+              featureAccessGate(FEATURE_ID, {
+                resolveAuth: async () => ({
+                  ok: true,
+                  value: createTestHandlerContext<ValidateAuthValue>({
+                    audit: NO_AUDIT,
+                    scopedDb: NO_DB,
+                    featureAccessSnapshot: snapshot,
+                    // The member lookup already decided feature access: the
+                    // gate itself must not open a transaction or query.
+                    safeDb: async () => {
+                      throw new Error("the feature-access gate queried");
+                    },
+                  }),
                 }),
               }),
-            }),
-          )
-          .post(
-            "/",
-            () => {
-              executions += 1;
-              return "served";
-            },
-            {
-              body: t.Object({ required: t.String() }),
-            },
-          );
+            ],
+          },
+        );
+        await using server = serveRoutes(route);
         const send = async (body: string) =>
-          await route.handle(
+          await server.fetch(
             new Request("http://localhost/", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -308,10 +341,11 @@ describe("time billing over REST", () => {
       const requests = requestsFor(route);
       expect(requests.length).toBeGreaterThan(0);
 
+      await using server = serveRoutes(route);
       const responses = await withTimeBilling(false, async () =>
         Promise.all(
           requests.map(async (request) =>
-            describeResponse(await route.handle(request)),
+            describeResponse(await server.fetch(request)),
           ),
         ),
       );
@@ -327,9 +361,10 @@ describe("time billing over REST", () => {
     async (_name, route) => {
       const requests = requestsFor(route);
 
+      await using server = serveRoutes(route);
       const statuses = await withTimeBilling(true, async () =>
         Promise.all(
-          requests.map(async (request) => (await route.handle(request)).status),
+          requests.map(async (request) => (await server.fetch(request)).status),
         ),
       );
 
@@ -357,14 +392,14 @@ describe("time billing on agent surfaces", () => {
             expect(
               await getMcpToolDefinition(
                 toolName,
-                asTestRaw<McpRequestContext>(context),
+                asTestRaw<AuthorizedMcpRequestContext>(context),
                 mode,
               ),
             ).toBeUndefined();
             const result = await handleMcpToolCall({
               toolName,
               args: {},
-              context: asTestRaw<McpRequestContext>(context),
+              context: asTestRaw<AuthorizedMcpRequestContext>(context),
               mode,
             });
             expect(errorOf(result).code).toBe("unknown_tool");
@@ -430,7 +465,7 @@ describe("time billing on agent surfaces", () => {
     });
   });
 
-  // The REST gate is a route hook capability executors do not pass through; the
+  // The REST gate is route middleware capability executors do not pass through; the
   // catalog's feature tag is what refuses a guessed id.
   test("capability executors refuse every time billing capability while the flag is off and passes it on once on", async () => {
     const capabilities = await featureOmittedCapabilityIds(

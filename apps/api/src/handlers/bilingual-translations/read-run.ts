@@ -8,7 +8,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { BILINGUAL_LIMITS } from "@/api/lib/bilingual/contract";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -19,7 +19,9 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "document_processing" },
-  params: workspaceParams({ runId: tSafeId("bilingualTranslationRun") }),
+  params: workspaceParams({
+    runId: resourceIdSchema("bilingualTranslationRun"),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 const readBilingualRun = createSafeHandler(

@@ -5,8 +5,8 @@ import {
   customType,
   integer,
   pgTable,
-  text,
   primaryKey,
+  text,
 } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
@@ -25,11 +25,11 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 import {
   defineScopedTransitions,
-  transitionUpsertBatch,
-  transitionScopedCount,
   defineTransitions,
   permitsTransition,
   transition,
+  transitionScopedCount,
+  transitionUpsertBatch,
 } from "@/api/lib/db/transitions";
 import { isPgConstraintError } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

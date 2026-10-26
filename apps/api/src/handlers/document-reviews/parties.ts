@@ -11,7 +11,7 @@
 
 import { panic, Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -34,8 +34,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewParty } from "@/api/lib/document-review/contract";
 import {
   detectReviewParties,
-  REVIEW_PARTIES_PROMPT_VERSION,
   type DetectReviewPartiesArgs,
+  REVIEW_PARTIES_PROMPT_VERSION,
 } from "@/api/lib/document-review/parties";
 import { fetchAndPrepareReviewFiles } from "@/api/lib/document-review/prepare-review-files";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -62,9 +62,9 @@ const notDetectedAnswer = (
   entityVersionId: SafeId<"entityVersion">,
 ): ReviewPartiesAnswer => ({ type: "not-detected", entityVersionId });
 
-const documentReviewPartiesBodySchema = t.Object({
+const documentReviewPartiesBodySchema = v.object({
   target: documentReviewTargetSchema,
-  mode: t.Union([t.Literal("cached"), t.Literal("detect")]),
+  mode: v.picklist(["cached", "detect"]),
 });
 
 const config = {

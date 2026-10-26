@@ -3,8 +3,8 @@
 // in-process; it takes keys, never a connection.
 
 import {
-  coordinationSetArguments,
   type CoordinationKey,
+  coordinationSetArguments,
 } from "@/api/lib/redis-keys";
 
 // Atomically verifies that a job still belongs to the active workflow, records
@@ -59,8 +59,7 @@ return {1, completed, total}
 `;
 
 export type EntityCompletionReply =
-  | { matched: false }
-  | { matched: true; completed: number; total: number };
+  { matched: false } | { matched: true; completed: number; total: number };
 
 const isUnknownArray = (value: unknown): value is readonly unknown[] =>
   Array.isArray(value);

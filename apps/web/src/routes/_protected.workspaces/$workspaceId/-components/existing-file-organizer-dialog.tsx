@@ -9,9 +9,9 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
-  DialogFormState,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -51,7 +51,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -518,7 +518,13 @@ export const ExistingFileOrganizerDialog = ({
         return;
       })
       .catch((error: unknown) => {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "ExistingFileOrganizerDialog.handleApply:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ExistingFileOrganizerDialog.handleApply:failure",
+          },
+        });
         notifyUserError(error, t("workspaces.importOrganizer.failed"), {
           toastId,
           timeout: undefined,
@@ -562,7 +568,7 @@ export const ExistingFileOrganizerDialog = ({
               { fetch: { signal } },
             );
 
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
       });
 
@@ -618,7 +624,14 @@ export const ExistingFileOrganizerDialog = ({
       ) {
         return;
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey:
+          "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ExistingFileOrganizerDialog.requestAiSuggestions:failure",
+        },
+      });
       setSuggestionStatus("failed");
     }
   };
@@ -1578,7 +1591,7 @@ const ensureFolders = async ({
           parentId: parentSafeId,
         });
 
-      const newEntityId: string = unwrapEden(response).entityId;
+      const newEntityId: string = unwrapApiResponse(response).entityId;
       currentParentId = newEntityId;
       knownFolders.set(key, newEntityId);
       folderIds.set(pathKey, newEntityId);

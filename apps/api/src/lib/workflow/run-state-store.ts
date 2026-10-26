@@ -1,14 +1,16 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import { USAGE_SERVICE_TIERS } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   coordinationExpireArguments,
+  type CoordinationKey,
   coordinationKey,
   coordinationSetArguments,
-  type CoordinationKey,
 } from "@/api/lib/redis-keys";
 import { brandPersistedPropertyId } from "@/api/lib/safe-id-boundaries";
 import {
@@ -130,7 +132,11 @@ export class WorkflowRunStateInvalidError extends TaggedError(
     | "missing"
     | Extract<WorkflowFinalizationState, { status: "corrupt" }>["reason"];
   workspaceId: SafeId<"workspace">;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type WorkflowRunStateRedis = {
   send: (command: string, args: string[]) => Promise<unknown>;

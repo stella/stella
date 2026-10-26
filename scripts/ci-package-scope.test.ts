@@ -13,8 +13,8 @@ import path from "node:path";
 import { dependencyScope } from "./ci-dependency-scope";
 import {
   markdownChecks,
-  markdownReaders,
   markdownReaderInputNames,
+  markdownReaders,
   requiresDesktopBrowser,
   requiresLandingBuild,
   requiresPackageChecks,
@@ -107,7 +107,7 @@ const dependencyRepository = (
     writeFileSync(target, JSON.stringify(value));
   };
   const commit = (message: string) => {
-    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["add", "."], { maxBuffer: 2 ** 30, cwd: root });
     execFileSync(
       "git",
       [
@@ -119,15 +119,16 @@ const dependencyRepository = (
         "-m",
         message,
       ],
-      { cwd: root },
+      { maxBuffer: 2 ** 30, cwd: root },
     );
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     }).trim();
   };
   try {
-    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["init", "-q"], { maxBuffer: 2 ** 30, cwd: root });
     write("package.json", {
       name: "root",
       devDependencies: { oxlint: "1.0.0" },
@@ -177,6 +178,7 @@ const dependencyRepository = (
 test("dependency metadata selects tooling, runtime consumers, shared base, and unknown changes", () => {
   dependencyRepository((root, commit) => {
     const base = execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     }).trim();
@@ -431,6 +433,7 @@ test("a planted markdown reader joins isolated checks, including deleted input f
   });
 });
 
+// Measured p95: 11.3 s; this must derive readers from the real repository graph.
 test("the exact README change derives its genuine readers without package jobs", () => {
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
@@ -459,7 +462,7 @@ test("the exact README change derives its genuine readers without package jobs",
     ".github/workflows/ci.yml:ci-checks-policy:Documentation source policy rule",
     ".github/workflows/ci.yml:ci-checks-policy:Instruction references",
   ]);
-}, 30_000);
+}, 25_000);
 
 test("an aliased filesystem reader with a typed path constant joins automatically", () => {
   repository((root, write) => {
@@ -1685,6 +1688,7 @@ test("named Markdown checks cannot hide a different owner or computed command", 
   }
 });
 
+// timeout: Reads all tracked sources and resolves the repository-wide Markdown reader graph.
 test("every tracked named Markdown input declaration enters the reader census", () => {
   const root = path.resolve(import.meta.dir, "..");
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {

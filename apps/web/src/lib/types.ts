@@ -16,9 +16,9 @@ import type {
   BoundingBox,
   ConditionNode,
   EntityKind,
+  SafeId,
   ViewLayout,
   ViewLayoutType,
-  SafeId,
   WorkspacePropertyWire,
 } from "@/lib/api-contract";
 import {

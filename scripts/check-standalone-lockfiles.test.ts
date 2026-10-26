@@ -15,8 +15,8 @@ import {
   AUTO_INSTALL_DISABLED,
   checkStandaloneLockfiles,
   isTrackedLockfile,
-  requiresMalwareScan,
   parseInstallCommands,
+  requiresMalwareScan,
 } from "./check-standalone-lockfiles";
 
 const ROOT_BUNFIG = `

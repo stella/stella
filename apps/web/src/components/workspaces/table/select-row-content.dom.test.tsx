@@ -5,16 +5,16 @@ import type { RowSelectionState } from "@tanstack/react-table";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import {
-  TEXT_FIELD_TYPE,
   TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { ROW_FIRST_LINE } from "@/components/workspaces/table/select-row-content";
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import type {
-  TableTreeNode,
   DecisionRowData,
+  TableTreeNode,
 } from "@/components/workspaces/table/types";
 import { TABLE_CONTENT_MODES } from "@/lib/workspaces/table-store.logic";
 import type { TableContentMode } from "@/lib/workspaces/table-store.logic";

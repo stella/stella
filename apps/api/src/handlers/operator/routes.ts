@@ -1,4 +1,4 @@
-import Elysia from "elysia";
+import { routes } from "@/api/http/route";
 
 import operatorActivity from "./activity";
 import operatorRegistrations, {
@@ -6,21 +6,18 @@ import operatorRegistrations, {
 } from "./registrations";
 import type { OperatorRegistrationsOptions } from "./registrations";
 
-export const createOperatorRoute = (options: OperatorRegistrationsOptions) => {
-  const registrations = createOperatorRegistrations(options);
-  return new Elysia({ prefix: "/operator" }).get(
-    "/registrations",
-    registrations.handler,
+export const createOperatorRoute = (options: OperatorRegistrationsOptions) =>
+  routes(
     {
-      query: registrations.config.query,
+      "/registrations": { GET: createOperatorRegistrations(options) },
     },
+    { prefix: "/operator" },
   );
-};
 
-export const operatorRoute = new Elysia({ prefix: "/operator" })
-  .get("/activity", operatorActivity.handler, {
-    query: operatorActivity.config.query,
-  })
-  .get("/registrations", operatorRegistrations.handler, {
-    query: operatorRegistrations.config.query,
-  });
+export const operatorRoute = routes(
+  {
+    "/activity": { GET: operatorActivity },
+    "/registrations": { GET: operatorRegistrations },
+  },
+  { prefix: "/operator" },
+);

@@ -4,8 +4,8 @@ import { panic } from "better-result";
 
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
-  BUSINESS_REGISTRY_SLUGS,
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
+  BUSINESS_REGISTRY_SLUGS,
   CHAT_EDIT_APPLY_MODE,
 } from "@stll/api-contract";
 import type { ChatEditApplyMode } from "@stll/api-contract";
@@ -20,6 +20,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
+import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -89,6 +90,7 @@ const activeSkillContext: ActiveChatSkillContext = {
   excludedChatTools: [],
   id: skillId,
   origin: "authored",
+  binding: UNBOUND,
   requiredTools: [],
   resources: [{ path: "references/canary.md" }],
   source: "installed",

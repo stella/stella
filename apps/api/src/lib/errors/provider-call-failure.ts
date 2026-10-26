@@ -1,7 +1,7 @@
-import { classifyAIError, providerStatusCode } from "@/api/lib/ai-error";
+import { classifyAIError, providerFailureFacts } from "@/api/lib/ai-error";
 import {
-  ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
+  ProviderCallError,
   providerCallErrorCode,
 } from "@/api/lib/errors/provider-call-error";
 import { providerRetryDelayMs } from "@/api/lib/errors/provider-retry-delay";
@@ -44,24 +44,6 @@ export const providerRequestIdFrom = (
   return undefined;
 };
 
-const providerFactsFrom = (evidence: unknown) => {
-  const seen = new Set<object>();
-  let current = evidence;
-  while (isRecord(current) && !seen.has(current)) {
-    seen.add(current);
-    const status = providerStatusCode(current);
-    if (status !== null) {
-      const isRetryable = current["isRetryable"];
-      return {
-        status,
-        ...(typeof isRetryable === "boolean" ? { isRetryable } : {}),
-      };
-    }
-    current = current["cause"];
-  }
-  return undefined;
-};
-
 type CreateProviderCallErrorOptions = {
   model: Pick<ResolvedTanStackTextModel, "provider" | "keySource">;
   evidence: unknown;
@@ -89,7 +71,7 @@ export const createProviderCallError = ({
     providerDiagnostic: createProviderDiagnostic({ model, evidence }),
     code: providerCallErrorCode(code),
     kind: classifyAIError(input),
-    facts: providerFactsFrom(input),
+    facts: providerFailureFacts(input),
     requestId: providerRequestIdFrom(evidence),
     retryAfterMs: providerRetryDelayMs(evidence),
   });

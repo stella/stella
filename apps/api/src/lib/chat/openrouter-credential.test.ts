@@ -5,13 +5,13 @@ import * as v from "valibot";
 
 import { env } from "@/api/env";
 import {
-  getManagedOpenRouterConfiguration,
   createManagedOpenRouterCredentialProvider,
+  getManagedOpenRouterConfiguration,
 } from "@/api/lib/chat/openrouter-credential";
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import {
-  setMetricLineSinkForTesting,
   resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 

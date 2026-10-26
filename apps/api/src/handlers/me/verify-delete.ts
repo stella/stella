@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ACCOUNT_ACCESS,
@@ -7,23 +7,23 @@ import {
 } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import {
   ACCOUNT_DELETION_ERROR_CODE,
   checkUserOrganizationOwnership,
-  ORGANIZATION_OWNERSHIP,
   getUserEmail,
+  ORGANIZATION_OWNERSHIP,
   verifyAndDeleteUser,
 } from "@/api/lib/delete-account";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const deleteAccountVerifyBody = t.Object({
-  code: t.String({ minLength: 6, maxLength: 6 }),
-  reassignments: t.Optional(
-    t.Array(
-      t.Object({
-        entityId: tSafeId("entity"),
-        reassignedUserId: tUserId,
+const deleteAccountVerifyBody = v.object({
+  code: v.pipe(v.string(), v.minLength(6), v.maxLength(6)),
+  reassignments: v.optional(
+    v.array(
+      v.object({
+        entityId: resourceIdSchema("entity"),
+        reassignedUserId: userIdSchema,
       }),
     ),
   ),

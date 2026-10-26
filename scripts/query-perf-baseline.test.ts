@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -79,6 +79,7 @@ test("the repository checker accepts documentation and makes inherited allowance
   );
   const runGit = (args: string[]) => {
     const result = spawnSync("git", args, {
+      maxBuffer: 2 ** 30,
       cwd: repositoryRoot,
       encoding: "utf-8",
     });

@@ -233,7 +233,7 @@ export default defineConfig({
     "require-await": "error",
     "require-unicode-regexp": "error",
     "require-yield": "error",
-    // Rely on oxfmt `experimentalSortImports` instead
+    // Rely on bun fmt import sorting instead
     "sort-imports": "off",
     "sort-keys": "error",
     "sort-vars": "error",
@@ -518,7 +518,7 @@ export default defineConfig({
     "unicorn/no-magic-array-flat-depth": "error",
     "unicorn/no-negated-condition": "error",
     "unicorn/no-negation-in-equality-check": "error",
-    // Its fixer wraps the inner ternary in parentheses that oxfmt strips, so
+    // Its fixer wraps the inner ternary in parentheses that bun fmt strips, so
     // every `fix` run ping-pongs. eslint-config-prettier disables it for the
     // same reason; the core `no-nested-ternary` still reports the construct.
     "unicorn/no-nested-ternary": "off",

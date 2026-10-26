@@ -1,0 +1,1 @@
+{"[&>p]:flex":{"valid":true,"declarations":[[">","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"grid-cols-[1rem_minmax(0,1fr)]":{"valid":true,"declarations":[["","grid-template-columns","1rem minmax(0,1fr)"]],"values":{"1rem minmax(0,1fr)":{"p":[],"f":[],"u":false}}},"group/bar":{"valid":false,"declarations":[],"values":{}}}

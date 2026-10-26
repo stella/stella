@@ -4,15 +4,15 @@
  * and when; this handler never rewrites an earlier event.
  */
 
-import { Result, panic } from "better-result";
-import { t } from "elysia";
+import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import { legalListClaimReviewEvents } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import {
@@ -31,56 +31,42 @@ import {
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
 
-// `t.UnionEnum` over the const tuples keeps the literal unions in the
+// `v.picklist` over the const tuples keeps the literal unions in the
 // inferred body type, which the web client reads its types from.
 
 /** Events are stored as sent and never rewritten, so a key the schema does
  *  not name is refused rather than kept. */
-const STRICT = { additionalProperties: false } as const;
-
-const eventSchema = t.Union([
-  t.Object(
-    {
-      kind: t.Literal("status"),
-      status: t.Nullable(t.UnionEnum(CLAIM_REVIEW_STATUSES)),
-    },
-    STRICT,
-  ),
-  t.Object(
-    {
-      kind: t.Literal("override"),
-      state: t.Nullable(t.UnionEnum(CLAIM_OVERRIDE_STATES)),
-    },
-    STRICT,
-  ),
-  t.Object(
-    {
-      kind: t.Literal("note"),
-      note: t.String({ maxLength: VERIFICATION_LIMITS.NOTE_MAX }),
-    },
-    STRICT,
-  ),
-  t.Object({ kind: t.Literal("reopen") }, STRICT),
-  t.Object(
-    {
-      kind: t.Literal("record-conflict"),
-      resolution: t.Nullable(
-        t.Union([
-          t.Object(
-            { kind: t.Literal("governed"), factEntityId: tSafeId("entity") },
-            STRICT,
-          ),
-          t.Object({ kind: t.Literal("escalated") }, STRICT),
-        ]),
-      ),
-    },
-    STRICT,
-  ),
+const eventSchema = v.union([
+  v.strictObject({
+    kind: v.literal("status"),
+    status: v.nullable(v.picklist(CLAIM_REVIEW_STATUSES)),
+  }),
+  v.strictObject({
+    kind: v.literal("override"),
+    state: v.nullable(v.picklist(CLAIM_OVERRIDE_STATES)),
+  }),
+  v.strictObject({
+    kind: v.literal("note"),
+    note: v.pipe(v.string(), v.maxLength(VERIFICATION_LIMITS.NOTE_MAX)),
+  }),
+  v.strictObject({ kind: v.literal("reopen") }),
+  v.strictObject({
+    kind: v.literal("record-conflict"),
+    resolution: v.nullable(
+      v.union([
+        v.strictObject({
+          kind: v.literal("governed"),
+          factEntityId: resourceIdSchema("entity"),
+        }),
+        v.strictObject({ kind: v.literal("escalated") }),
+      ]),
+    ),
+  }),
 ]);
 
-const bodySchema = t.Object({
-  runId: tSafeId("legalListVerificationRun"),
-  claimId: tSafeId("legalListClaim"),
+const bodySchema = v.object({
+  runId: resourceIdSchema("legalListVerificationRun"),
+  claimId: resourceIdSchema("legalListClaim"),
   event: eventSchema,
 });
 

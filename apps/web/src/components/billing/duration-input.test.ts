@@ -26,6 +26,11 @@ describe("duration parts", () => {
     ["1.1", null],
     ["-1", null],
     ["time", null],
+    ["2hours", null],
+    [" 2", null],
+    ["+2", null],
+    ["0x2", null],
+    ["2e1", null],
   ])("parses only whole non-negative unit values for %s", (value, expected) => {
     expect(parseDurationPart(value)).toBe(expected);
   });

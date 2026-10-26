@@ -1,11 +1,11 @@
 import {
   assertNever,
-  legacyLoopAlias,
-  scanMarkers,
   type FilterArgument,
   type FilterCall,
+  legacyLoopAlias,
   type MarkerLiteral,
   type MarkerMeta,
+  scanMarkers,
 } from "@stll/template-conditions";
 
 /**

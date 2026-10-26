@@ -78,8 +78,8 @@ import {
 import { HexColorPicker } from "@stll/ui/hex-color-picker";
 import {
   AlignJustifyIcon,
-  ArrowRightIcon,
   ArchiveIcon,
+  ArrowRightIcon,
   BellIcon,
   ChevronDownIcon,
   ChevronRightIcon,

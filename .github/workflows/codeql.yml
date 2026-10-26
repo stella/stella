@@ -98,6 +98,7 @@ jobs:
       && needs.scope.result != 'skipped'
       && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false')
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read

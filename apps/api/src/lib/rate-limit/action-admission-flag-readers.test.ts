@@ -20,9 +20,10 @@ const ALLOWED_FLAG_READS = {
   "lib/rate-limit/action-admission.ts": 2,
   // Request and response size bounds, not action counting.
   "lib/rate-limit/action-size-limits.ts": 1,
+  // The size-bound middleware.
   "lib/rate-limit/tenant-action-boundary.ts": 1,
-  // The size-bound wrapper and the admission store warmup.
-  "server.ts": 2,
+  // The admission store warmup.
+  "server.ts": 1,
   // A run without an actor has no caller to admit or count.
   "lib/flows/start-flow-run.ts": 1,
   // Cost-record storage and its retention, not admission.

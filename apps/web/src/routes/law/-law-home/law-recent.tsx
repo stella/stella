@@ -6,12 +6,12 @@ import { useTranslations } from "use-intl";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import {
   AlertDialog,
-  AlertDialogPopup,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogClose,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogClose,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
@@ -26,7 +26,10 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import {
+  type LawHistoryCountry,
+  useLawHistory,
+} from "@/features/law-search-history/law-search-history-query";
 import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
@@ -62,9 +65,13 @@ type LawRecentProps = {
   onSearch: (query: string) => void;
 };
 
-export const LawRecent = ({ onSearch }: LawRecentProps) => {
+/** The selected jurisdiction's history: what was searched and opened there. */
+export const LawRecent = ({
+  country,
+  onSearch,
+}: LawRecentProps & { country: LawHistoryCountry }) => {
   const [filter, setFilter] = useState<LawRecentFilter>("all");
-  const history = useLawHistory(filter);
+  const history = useLawHistory({ filter, country });
   return (
     <LawRecentList
       onSearch={onSearch}

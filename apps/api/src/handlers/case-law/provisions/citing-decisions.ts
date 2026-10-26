@@ -1,12 +1,12 @@
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { numberFromString } from "@stll/api-contract/http-input";
 import {
   PROVISION_CITING_DECISION_SORTS,
   PROVISION_CITING_FILTER_LIMITS,
@@ -15,19 +15,24 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  publishedCaseLawDecisions,
   caseLawProvisionCitations,
   caseLawSources,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type {
-  CaseLawPublicReadTransaction,
   CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
 import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import type { CourtRegistry } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
+import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
   tPublicLawCountry,
@@ -44,8 +49,8 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 
 import { snippetCitation } from "./snippet-citation";
 import {
-  PROVISION_VERSION_COLUMNS,
   projectProvisionVersion,
+  PROVISION_VERSION_COLUMNS,
 } from "./version-response";
 
 /**
@@ -58,48 +63,56 @@ import {
  * at another producer's formatting. Both are indexed keys on the citation
  * table, so either answers from the same access path.
  */
-export const listCitingDecisionsQuerySchema = t.Object({
+export const listCitingDecisionsQuerySchema = v.object({
   jurisdiction: tPublicLawCountry,
-  work: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  eli: t.Optional(t.String({ minLength: 1, maxLength: 512 })),
-  anchor: t.Optional(t.String({ minLength: 1, maxLength: 256 })),
-  limit: t.Optional(
-    tPaginationLimit(
-      Math.max(
-        LIMITS.caseLawSearchPageSizeMax,
-        PROVISION_CITING_SNAPSHOT_LIMIT,
-      ),
-    ),
-  ),
-  cursor: t.Optional(tPaginationCursor()),
-  // A spread of mapped literals widens the union's static type to `never`;
-  // the derived enum keeps the contract's sorts and stays undefined when absent.
-  sort: t.Optional(
-    t.Enum(
-      Object.fromEntries(
-        [...PROVISION_CITING_DECISION_SORTS, "authority" as const].map(
-          (sort) => [sort, sort] as const,
+  work: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  eli: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+  anchor: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(
+        Math.max(
+          LIMITS.caseLawSearchPageSizeMax,
+          PROVISION_CITING_SNAPSHOT_LIMIT,
         ),
       ),
     ),
   ),
-  court: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: PROVISION_CITING_FILTER_LIMITS.courtChars,
-    }),
+  cursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(
+        (cursor) => decodeCitingDecisionsCursor(cursor) !== null,
+        "Invalid cursor",
+      ),
+    ),
   ),
-  year: t.Optional(
-    t.Integer({
-      minimum: PROVISION_CITING_FILTER_LIMITS.yearMin,
-      maximum: PROVISION_CITING_FILTER_LIMITS.yearMax,
-    }),
+  sort: v.optional(
+    v.picklist([...PROVISION_CITING_DECISION_SORTS, "authority"]),
   ),
-  /** Require a readable excerpt rather than relationship metadata alone. */
-  excerpt: t.Optional(t.Literal("required")),
+  court: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(PROVISION_CITING_FILTER_LIMITS.courtChars),
+    ),
+  ),
+  year: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(PROVISION_CITING_FILTER_LIMITS.yearMin),
+        v.maxValue(PROVISION_CITING_FILTER_LIMITS.yearMax),
+      ),
+    ),
+  ),
+  excerpt: v.optional(v.literal("required")),
 });
 
-type ListCitingDecisionsQuery = Static<typeof listCitingDecisionsQuerySchema>;
+type ListCitingDecisionsQuery = v.InferOutput<
+  typeof listCitingDecisionsQuerySchema
+>;
 
 /**
  * Which column the work filter reads, refused when the request names neither
@@ -163,23 +176,27 @@ export const encodeCitingDecisionsCursor = (
     cursor.decisionId,
   ]);
 
-type CitingDecisionRowsOptions = {
+type CitingDecisionsPageOptions = {
   tx: CaseLawPublicReadTransaction;
   conditions: SQL[];
   cursor: CitingDecisionsCursor | null;
   sort: ListCitingDecisionsQuery["sort"];
   limit: number;
-  courtRegistry: CourtRegistry;
 };
 
-const readCitingDecisionRows = async ({
+/**
+ * One row per citing decision, its earliest mention, with the count of all
+ * its mentions the conditions admit. The mention window reads every link
+ * row the conditions admit, so their access path is the cost of the page:
+ * `query-plans/registry.ts` holds it to the work and anchor indexes.
+ */
+export const citingDecisionsPageQuery = ({
   tx,
   conditions,
   cursor,
   sort,
   limit,
-  courtRegistry,
-}: CitingDecisionRowsOptions) => {
+}: CitingDecisionsPageOptions) => {
   const mentions = tx
     .select({
       ...PROVISION_VERSION_COLUMNS,
@@ -231,7 +248,7 @@ const readCitingDecisionRows = async ({
   if (cursor !== null) {
     continuation = sql`(${mentions.decisionDateCursor}, ${mentions.decisionId}) < (${cursor.decisionDate}::text, ${cursor.decisionId}::uuid)`;
   }
-  const citing = await tx
+  return tx
     .select({
       appliedVersionBasis: mentions.appliedVersionBasis,
       appliedVersionDate: mentions.appliedVersionDate,
@@ -277,6 +294,18 @@ const readCitingDecisionRows = async ({
       desc(mentions.anchor),
     )
     .limit(limit + 1);
+};
+
+type CitingDecisionRowsOptions = CitingDecisionsPageOptions & {
+  courtRegistry: CourtRegistry;
+};
+
+const readCitingDecisionRows = async ({
+  courtRegistry,
+  ...page
+}: CitingDecisionRowsOptions) => {
+  const { tx } = page;
+  const citing = await citingDecisionsPageQuery(page);
   // The versions decide whether a citing decision's route names its
   // language; one read for the page.
   const alternates = await readPublicDecisionLanguageAlternatesInTx(
@@ -299,7 +328,7 @@ const readCitingDecisionRows = async ({
 };
 
 /** Target jurisdiction and citing-country admission are one scope decision. */
-const citingJurisdictionScope = (country: string) => {
+export const citingJurisdictionScope = (country: string) => {
   if (country === "EU") {
     return {
       jurisdiction: "EU",
@@ -320,6 +349,54 @@ const citingJurisdictionScope = (country: string) => {
       jurisdiction,
     ),
   };
+};
+
+type CitingJurisdictionScope = NonNullable<
+  ReturnType<typeof citingJurisdictionScope>
+>;
+
+/**
+ * The link rows a request admits, or null when it names neither work key or
+ * both.
+ */
+export const citingDecisionConditions = (
+  query: ListCitingDecisionsQuery,
+  { jurisdiction, decisionCountryCondition }: CitingJurisdictionScope,
+): SQL[] | null => {
+  const work = workCondition(query);
+  if (work === null) {
+    return null;
+  }
+  const conditions: SQL[] = [
+    eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
+    decisionCountryCondition,
+    work,
+    redistributableCaseLawSource,
+  ];
+
+  // A provision is cited by every citation of a subdivision under it, so a
+  // section lists the decisions citing only `odst. 1` of it, and each
+  // decision's mention count covers the whole subtree.
+  if (query.anchor !== undefined) {
+    conditions.push(
+      provisionAnchorSubtreeSql(caseLawProvisionCitations.anchor, {
+        jurisdiction,
+        anchor: query.anchor,
+      }),
+    );
+  }
+  if (query.court !== undefined) {
+    conditions.push(eq(publishedCaseLawDecisions.court, query.court));
+  }
+  if (query.year !== undefined) {
+    const from = `${String(query.year).padStart(4, "0")}-01-01`;
+    const until = `${String(query.year + 1).padStart(4, "0")}-01-01`;
+    conditions.push(
+      gte(caseLawProvisionCitations.decisionDate, from),
+      lt(caseLawProvisionCitations.decisionDate, until),
+    );
+  }
+  return conditions;
 };
 
 type CitingDecisionsReadOptions = {
@@ -348,10 +425,8 @@ export const listCitingDecisionsHandler = async (
   if (scope === null) {
     return status(404, { message: "Not Found" });
   }
-  const { jurisdiction, decisionCountryCondition } = scope;
-  const work = workCondition(query);
-
-  if (work === null) {
+  const conditions = citingDecisionConditions(query, scope);
+  if (conditions === null) {
     return status(400, { message: "Name exactly one of work or eli" });
   }
 
@@ -373,7 +448,7 @@ export const listCitingDecisionsHandler = async (
   }
   const context = sha256Hex(
     JSON.stringify([
-      jurisdiction,
+      scope.jurisdiction,
       query.work ?? null,
       query.eli ?? null,
       query.anchor ?? null,
@@ -389,28 +464,6 @@ export const listCitingDecisionsHandler = async (
   if (query.cursor && (cursor === null || cursor.context !== context)) {
     return status(400, { message: "Invalid cursor" });
   }
-  const conditions: SQL[] = [
-    eq(caseLawProvisionCitations.jurisdiction, jurisdiction),
-    decisionCountryCondition,
-    work,
-    redistributableCaseLawSource,
-  ];
-
-  if (query.anchor !== undefined) {
-    conditions.push(eq(caseLawProvisionCitations.anchor, query.anchor));
-  }
-  if (query.court !== undefined) {
-    conditions.push(eq(publishedCaseLawDecisions.court, query.court));
-  }
-  if (query.year !== undefined) {
-    const from = `${String(query.year).padStart(4, "0")}-01-01`;
-    const until = `${String(query.year + 1).padStart(4, "0")}-01-01`;
-    conditions.push(
-      gte(caseLawProvisionCitations.decisionDate, from),
-      lt(caseLawProvisionCitations.decisionDate, until),
-    );
-  }
-
   const rows = await caseLawDb(
     async (tx) =>
       await readCitingDecisionRows({

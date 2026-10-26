@@ -16,7 +16,7 @@ import { eq } from "drizzle-orm";
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import {
   listDecisionCitationsHandler,
   listTopCitingDecisionsHandler,

@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import { isCountryCode, type CountryCode } from "@stll/country-codes";
+import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";

@@ -134,7 +134,7 @@ jobs:
 
       - name: Upload typecheck parity report
         if: ${{ !cancelled() && inputs.check == 'typecheck-parity' && steps.run-check.outcome == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: typecheck-parity-report
           path: ${{ runner.temp }}/CLOUD_REPORT.md
@@ -154,7 +154,7 @@ jobs:
 
       - name: Upload result
         if: always() && steps.validate.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: manual-check-result
           path: manual-check-result.json
@@ -216,7 +216,7 @@ jobs:
           '
       - name: Upload measurement
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: install-measurement-install-cache-windows-${{ matrix.global-store }}
           path: ${{ runner.temp }}/install-measurement.json
@@ -271,7 +271,7 @@ jobs:
           '
       - name: Upload measurement
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: install-measurement-install-cache-linux-1
           path: ${{ runner.temp }}/install-measurement.json

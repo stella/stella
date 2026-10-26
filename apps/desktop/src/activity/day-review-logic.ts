@@ -3,12 +3,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import {
+  type AppTotal,
   appTotals,
   documentName,
   roundedTenthsOfHour,
-  totalDurationMs,
-  type AppTotal,
   type TimedSegment,
+  totalDurationMs,
 } from "./activity-logic";
 import type { ActivityManualAssignment } from "./activity-types";
 

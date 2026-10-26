@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { getTableName, getColumns } from "drizzle-orm";
+import { getColumns, getTableName } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
 import type { TransitionSpec } from "@/api/lib/db/transitions";

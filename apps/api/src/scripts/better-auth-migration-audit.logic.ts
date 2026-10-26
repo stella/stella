@@ -271,6 +271,11 @@ export const AUTH_TABLE_AUDIT_POLICY = {
   },
   session: {
     foreignKeys: [
+      {
+        column: "origin_consent_id",
+        referencedColumn: "id",
+        referencedModel: "oauthConsent",
+      },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
     preservedColumns: columnNames(authSchema.session),

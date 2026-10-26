@@ -9,13 +9,14 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import {
+  isTableChartable,
   isTableChartPlanUsable,
   TABLE_CHART_KINDS,
   TABLE_CHART_LIMITS,
-  tableChartResponseSchema,
   type TableChartPlan,
   type TableChartRequest,
   type TableChartResponse,
+  tableChartResponseSchema,
 } from "@stll/api-contract/table-chart";
 import { sha256Hex } from "@stll/sha256/browser";
 import { Button } from "@stll/ui/button";
@@ -29,7 +30,7 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 
 export type ChatTableChartProps = ComponentProps<"table"> & {
   node?: Element | undefined;
@@ -40,7 +41,7 @@ export type ChatTableChartProps = ComponentProps<"table"> & {
 const requestTableChart = async (table: TableChartRequest) =>
   v.parse(
     tableChartResponseSchema,
-    unwrapEden(await api.chat["table-chart"].post(table)),
+    unwrapApiResponse(await api.chat["table-chart"].post(table)),
   );
 
 export const ChatTableChart = ({
@@ -51,6 +52,10 @@ export const ChatTableChart = ({
 }: ChatTableChartProps) => {
   const table = chartTableFromNode(node);
   const SourceTable = defaultComponents.table;
+  // A table without a numeric column has no chart, so it offers none.
+  if (table === null || !isTableChartable(table)) {
+    return <SourceTable {...props} />;
+  }
   // A streaming content change starts a new presentation instead of applying an old plan.
   return (
     <ChartableTable
@@ -64,7 +69,7 @@ export const ChatTableChart = ({
 };
 
 type ChartableTableProps = {
-  table: TableChartRequest | null;
+  table: TableChartRequest;
   source: ReactNode;
   cacheScope: ChatTableChartProps["cacheScope"];
   requestPlan: NonNullable<ChatTableChartProps["requestPlan"]>;
@@ -89,10 +94,6 @@ const ChartableTable = ({
     status: "table",
   });
   const showChart = async () => {
-    if (table === null) {
-      setPresentation({ status: "unavailable" });
-      return;
-    }
     setPresentation({ status: "loading" });
     const result = await Result.tryPromise(async () => {
       const hash = await sha256Hex(JSON.stringify(table));
@@ -107,7 +108,10 @@ const ChartableTable = ({
       });
     });
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ChartableTable:showChart",
+        scope: { type: "handler", handlerId: "chat.table-chart.show-chart" },
+      });
       setPresentation({ status: "unavailable" });
       return;
     }
@@ -130,12 +134,8 @@ const ChartableTable = ({
     pie: t("chat.tableChart.pie"),
     scatter: t("chat.tableChart.scatter"),
   };
-  const chart =
-    presentation.status === "chart" && table !== null
-      ? presentation.plan
-      : null;
-  const points =
-    chart && table ? tableChartPoints({ table, plan: chart, locale }) : [];
+  const chart = presentation.status === "chart" ? presentation.plan : null;
+  const points = chart ? tableChartPoints({ table, plan: chart, locale }) : [];
   let toggleLabel = t("chat.tableChart.showChart");
   if (presentation.status === "loading") {
     toggleLabel = t("chat.tableChart.loading");
@@ -179,7 +179,7 @@ const ChartableTable = ({
         >
           {toggleLabel}
         </Button>
-        {chart && table && (
+        {chart && (
           <div
             className="flex flex-wrap gap-1"
             role="group"
@@ -216,7 +216,7 @@ const ChartableTable = ({
           {t("chat.tableChart.unavailable")}
         </p>
       )}
-      {chart && table && (
+      {chart && (
         <TableChart
           kind={chart.kind}
           points={points}

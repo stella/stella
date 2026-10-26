@@ -6,12 +6,15 @@ import path from "node:path";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
 import { waiverKey } from "./dated-waiver-fix-task";
 import {
   collectWaivers,
   DAY_MS,
   DOC_SOURCE_FILE,
+  docProbeUrl,
   dueWaivers,
+  dueWaiverWarnings,
   expiredWaiverAnnotations,
   expiredWaiverFailures,
   expiryInstant,
@@ -22,9 +25,9 @@ import {
 } from "./dated-waivers";
 import { EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH } from "./external-contract-pin-allowances";
 import {
+  type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
   serializeRegistry,
-  type QuarantineEntry,
 } from "./flaky-test-quarantine";
 
 const doc = {
@@ -159,6 +162,40 @@ test("an elapsed waiver annotates the change instead of failing it", () => {
   expect(
     expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
   ).toEqual([]);
+});
+test("a due waiver warns on its file ahead of its date and fails only the change touching that file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "no-llms-txt");
+  const unrelated = new Set(["apps/web/src/unrelated.ts"]);
+  const owner = new Set([DOC_SOURCE_FILE]);
+  expect(
+    dueWaiverWarnings(entries, new Date("2026-09-30T23:59:59.999Z"), unrelated),
+  ).toEqual([]);
+  const ahead = dueWaiverWarnings(
+    entries,
+    new Date("2026-10-01T00:00:00.000Z"),
+    owner,
+  );
+  expect(ahead).toHaveLength(1);
+  expect(ahead[0]).toStartWith(`::warning file=${DOC_SOURCE_FILE},line=`);
+  expect(ahead[0]).toContain("doc-package (no-llms-txt) expires at");
+
+  const elapsed = new Date("2026-10-06T00:00:00.000Z");
+  expect(dueWaiverWarnings(entries, elapsed, unrelated)).toHaveLength(1);
+  expect(expiredWaiverFailures(entries, elapsed, unrelated)).toEqual([]);
+  expect(dueWaiverWarnings(entries, elapsed, owner)).toEqual([]);
+  expect(expiredWaiverFailures(entries, elapsed, owner)).toEqual([
+    `${DOC_SOURCE_FILE}:${String(entries[0]?.line)} dated waiver expired: doc-package`,
+  ]);
+});
+// The recheck reads the first llms.txt URL an explanation names; without one
+// the waiver could only ever expire, never be rechecked.
+test("every documentation waiver names the llms.txt its recheck probes", () => {
+  for (const { dependency, explanation } of DOC_SOURCE_EXCLUSIONS) {
+    expect({ dependency, url: docProbeUrl(explanation) }).toEqual({
+      dependency,
+      url: expect.stringMatching(/^https:\/\/\S+\/llms\.txt$/u),
+    });
+  }
 });
 test("an elapsed flaky-test quarantine annotates the change gate instead of failing it", () => {
   const entries = collectWaivers({

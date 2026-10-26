@@ -19,6 +19,7 @@ import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const FETCH_TIMEOUT_MS = 20_000;
@@ -110,10 +111,13 @@ export const reparseForDev = async (
     return await pending;
   }
   const attempt = reparseNss(decision).catch((error: unknown) => {
-    captureError(error, {
-      source: "case-law-dev-reparse",
-      decisionId: decision.id,
-    });
+    captureError(
+      error,
+      handlerErrorContext("decisions.attempt", {
+        source: "case-law-dev-reparse",
+        decisionId: decision.id,
+      }),
+    );
     parsed.delete(decision.id);
     return null;
   });

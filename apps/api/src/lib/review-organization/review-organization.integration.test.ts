@@ -22,13 +22,13 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
+  chatThreads,
   clauses,
   contacts,
   CORRESPONDENCE_ERASURE_SETTING,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
   correspondenceAllowedSenders,
   entities,
-  chatThreads,
   entityDeletionCleanupRequests,
   featureEnrolments,
   fileComparisonUploads,
@@ -55,8 +55,8 @@ import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { reviewOrganizationConfigFrom } from "@/api/lib/review-organization/config";
 import {
-  REVIEW_RESET_REFUSAL,
   resetReviewOrganization,
+  REVIEW_RESET_REFUSAL,
 } from "@/api/lib/review-organization/reset";
 import type {
   ReviewResetDependencies,
@@ -80,6 +80,8 @@ import type {
   SchedulerDb,
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -98,6 +100,8 @@ const documentDependencies: CreateEntityFromBufferDependencies = {
   enqueueImageThumbnailOrMarkFailed: async () => {},
   enqueuePdfDerivativeOrMarkFailed: async () => {},
   processExtraction: async () => {},
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs: async () => ({ failed: 0, repaired: 0 }),
   requestNativeExtractionRun: async () => null,
 };
 
@@ -148,6 +152,10 @@ const insertOrganization = async (
     name,
     slug: `review-test-${id}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId: id,
+    now: new Date(),
   });
   if (members.length > 0) {
     await testDb.insert(member).values(

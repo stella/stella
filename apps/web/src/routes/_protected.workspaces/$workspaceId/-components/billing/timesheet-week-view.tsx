@@ -1,11 +1,12 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyCompact } from "@/components/billing/format-currency";
+import { useFormatter } from "@/i18n/formatting-context";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import {
   formatDecimalHours,
@@ -14,8 +15,8 @@ import {
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
-  summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
+  summarizeBillableAmountByMatterAndCurrency,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
 
 import {

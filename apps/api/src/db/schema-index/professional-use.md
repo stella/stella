@@ -4,26 +4,26 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## user_professional_use_acceptances · `userProfessionalUseAcceptances` · professional-use.ts:34 · rls
+## user_professional_use_acceptances · `userProfessionalUseAcceptances` · professional-use.ts:37 · rls
 
 A person's acceptance of the professional-use statement: by creating the account where the statement is shown, or on the prompt at the first interactive sign-i…
 
 ```text
-user_professional_use_acceptances.user_id            text         pk,fk,not null    professional-use.ts:37
-user_professional_use_acceptances.statement_version  text         not null          professional-use.ts:41
-user_professional_use_acceptances.terms_version      text         not null          professional-use.ts:42
-user_professional_use_acceptances.accepted_at        timestamptz  default,not null  professional-use.ts:43
-user_professional_use_acceptances.source             text         default,not null  professional-use.ts:50  How this acceptance was given or, for legacy rows, why that is unknown.
+user_professional_use_acceptances.user_id            text         pk,fk,not null    professional-use.ts:40
+user_professional_use_acceptances.statement_version  text         not null          professional-use.ts:44
+user_professional_use_acceptances.terms_version      text         not null          professional-use.ts:45
+user_professional_use_acceptances.accepted_at        timestamptz  default,not null  professional-use.ts:46
+user_professional_use_acceptances.source             text         default,not null  professional-use.ts:53  How this acceptance was given or, for legacy rows, why that is unknown.
 ```
 
-## organization_professional_use_acceptances · `organizationProfessionalUseAcceptances` · professional-use.ts:80 · rls
+## organization_professional_use_acceptances · `organizationProfessionalUseAcceptances` · professional-use.ts:83 · rls
 
 The professional-use acceptance an organization carries, with the account whose acceptance it is: its creator's at creation, or, for an organization created be…
 
 ```text
-organization_professional_use_acceptances.organization_id      safeOrganizationId  pk,not null       professional-use.ts:83
-organization_professional_use_acceptances.accepted_by_user_id  text                null              professional-use.ts:84
-organization_professional_use_acceptances.statement_version    text                not null          professional-use.ts:85
-organization_professional_use_acceptances.terms_version        text                not null          professional-use.ts:86
-organization_professional_use_acceptances.accepted_at          timestamptz         default,not null  professional-use.ts:87
+organization_professional_use_acceptances.organization_id      safeOrganizationId  pk,not null       professional-use.ts:86
+organization_professional_use_acceptances.accepted_by_user_id  text                null              professional-use.ts:87
+organization_professional_use_acceptances.statement_version    text                not null          professional-use.ts:88
+organization_professional_use_acceptances.terms_version        text                not null          professional-use.ts:89
+organization_professional_use_acceptances.accepted_at          timestamptz         default,not null  professional-use.ts:90
 ```

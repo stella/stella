@@ -1,15 +1,15 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
   mcpOAuthClients,
   mcpOAuthState,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { mcpConnectorRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -27,7 +27,7 @@ import {
 import { refreshCachedMcpToolsForConnection } from "@/api/lib/mcp-upstream/connections";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
+  bindDiscoveredMetadata,
   buildAuthorizeUrl,
   buildMcpClientMetadataDocument,
   clientRegistrationMode,
@@ -35,10 +35,10 @@ import {
   createOAuthState,
   createPkce,
   discoverOAuthMetadataForApproval,
-  bindDiscoveredMetadata,
-  getOAuthEndpointOrigins,
   getMcpClientMetadataDocumentUrl,
   getMcpOAuthRedirectUri,
+  getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
   mcpAuthorizationApprovalRequiredError,
   pickRequestedScopes,
   registerOAuthClient,
@@ -50,8 +50,8 @@ import type {
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 
-const routeParams = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 80 }),
+const routeParams = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
 });
 
 const config = {
@@ -263,8 +263,7 @@ type LoadedConnector = {
   orgApprovedEndpointOrigins: string[] | null;
   oauthConfirmedEndpointOrigins: string[] | null;
   authorizationReviewStatus:
-    | typeof mcpConnectorAuthorizationReviews.$inferSelect.status
-    | null;
+    typeof mcpConnectorAuthorizationReviews.$inferSelect.status | null;
   url: string;
 };
 

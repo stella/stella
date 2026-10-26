@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
@@ -29,8 +30,10 @@ const readFileThumbnail = async ({
       memberRole: sessionMemberRole("owner"),
       params: { fieldId, workspaceId },
       recordAuditEvent,
-      request: new Request("https://example.test/files/thumbnail"),
-      route: "/v1/workspaces/:workspaceId/files/thumbnail/:fieldId",
+      request: new Request(
+        `https://example.test/v1/files/${workspaceId}/thumbnail/${fieldId}`,
+      ),
+      route: "/v1/files/:workspaceId/thumbnail/:fieldId" satisfies ApiRoutePath,
       scopedDb,
       safeDb: toSafeDbMock(scopedDb),
       session: { activeOrganizationId: organizationId },
@@ -82,8 +85,8 @@ const recordingAudit = () => {
 };
 
 const expectStatus = (response: unknown, code: number) => {
-  expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-  if (response instanceof ElysiaCustomStatusResponse) {
+  expect(response).toBeInstanceOf(HttpStatusResponse);
+  if (response instanceof HttpStatusResponse) {
     expect(response.code).toBe(code);
   }
 };

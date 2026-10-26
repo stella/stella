@@ -1,6 +1,6 @@
 ---
 name: conventions-use-effect
-description: 'Apply when writing or reviewing React effects in apps/web. Direct useEffect is banned; use the sanctioned wrappers or a better primitive.'
+description: "Apply when writing or reviewing React effects in apps/web. Direct useEffect is banned; use the sanctioned wrappers or a better primitive."
 ---
 
 # useEffect Conventions
@@ -48,7 +48,9 @@ other state/props.
 
 ```tsx
 // ❌ race conditions, hand-rolled caching
-useEffect(() => { fetchProduct(id).then(setProduct); }, [id]);
+useEffect(() => {
+  fetchProduct(id).then(setProduct);
+}, [id]);
 
 // ✅ cancellation/caching/staleness handled for you
 const { data: product } = useQuery(productOptions(id));
@@ -61,10 +63,15 @@ retries/cancellation/staleness.
 
 ```tsx
 // ❌ effect as an action relay
-useEffect(() => { if (liked) { postLike(); setLiked(false); } }, [liked]);
+useEffect(() => {
+  if (liked) {
+    postLike();
+    setLiked(false);
+  }
+}, [liked]);
 
 // ✅ do the work where the event happens
-<button onClick={() => postLike()}>Like</button>
+<button onClick={() => postLike()}>Like</button>;
 ```
 
 Smell: state used as a flag so an effect can run the real action
@@ -222,14 +229,17 @@ if (data !== undefined && seededData !== data) {
   /* oxlint-enable react/refs */
 }
 
-const loadOlder = useCallback(async () => {
-  const requestedData = seededDataRef.current;
-  const older = await fetchOlderVersions(/* ... */);
-  if (seededDataRef.current !== requestedData) {
-    return; // superseded — a refetch or entity switch reseeded the page
-  }
-  setAccumulated((current) => [...current, ...older.versions]);
-}, [/* ... */]);
+const loadOlder = useCallback(
+  async () => {
+    const requestedData = seededDataRef.current;
+    const older = await fetchOlderVersions(/* ... */);
+    if (seededDataRef.current !== requestedData) {
+      return; // superseded — a refetch or entity switch reseeded the page
+    }
+    setAccumulated((current) => [...current, ...older.versions]);
+  },
+  [/* ... */],
+);
 ```
 
 In-repo exemplars: `apps/web/src/components/inspector/versions-facet.tsx`

@@ -251,7 +251,7 @@
       "docs/module-ownership/**",
       "docs/module-ownership.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "External service contracts": ["**"],
     "Outbound transport ownership": [
@@ -273,11 +273,11 @@
       "docs/module-ownership/**",
       "scripts/**",
       ".oxlint-plugins/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Generated artifact formatting invariants": [
       "@stll/scripts",
-      ".oxfmtrc.json",
+      "bunfig.toml",
       "scripts/**"
     ],
     "Schema introspection invariants": [
@@ -290,7 +290,7 @@
       "packages/ui/src/styles/theme.css",
       "DESIGN.md",
       "scripts/**",
-      ".oxfmtrc.json"
+      "bunfig.toml"
     ],
     "Suppression waiver ledger": [
       "apps/*/src/**",
@@ -333,7 +333,6 @@
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
-    "exactMirror route guard": ["@stll/api"],
     "MCP coverage guard": ["@stll/api", "@stll/cli"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],
@@ -625,6 +624,7 @@
     "Deployment feature guard": ["**"],
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
+    "Tracked file sizes": ["**"],
     "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",
@@ -649,5 +649,23 @@
       "packages/*/package.json",
       "bun.lock"
     ]
+  },
+  "code-quality-web-rest": {
+    "Restore generated sources": ["**"],
+    "Prepare environment": ["**"],
+    "Install the docs MCP server": ["**"],
+    "Typecheck coverage": ["**"],
+    "Run independent code-quality checks": ["**"],
+    "Code quality (web)": ["**"],
+    "Result consumption (web)": ["**"],
+    "Code quality (rest)": ["**"],
+    "Query cache types": ["**"],
+    "Dead columns": ["**"],
+    "Projection totality": ["**"],
+    "Aggregate ownership": ["**"],
+    "Split-button census": ["**"],
+    "Database awaits in loops": ["**"],
+    "API timeout mutation guard": ["**"],
+    "Result consumption (rest)": ["**"]
   }
 }

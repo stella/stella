@@ -7,8 +7,7 @@ import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
  * can read a row from different copies.
  */
 type CanonicalLegislationPayloadSource =
-  | { type: "object_storage"; key: string }
-  | { type: "database" };
+  { type: "object_storage"; key: string } | { type: "database" };
 
 const canonicalPayloadSource = (
   storedKey: string | null,

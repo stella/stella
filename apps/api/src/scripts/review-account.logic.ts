@@ -2,6 +2,8 @@ import type { AuthContext } from "better-auth";
 import { Result, TaggedError } from "better-result";
 
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -42,7 +44,7 @@ type ReviewAccountConfig = {
 };
 
 export type ReviewAccountStore = {
-  findUserIdByEmail: (email: string) => Promise<string | null>;
+  findUserIdByEmail: (email: NormalizedEmail) => Promise<string | null>;
   hasTwoFactorEnabled: (userId: string) => Promise<boolean>;
   createUser: (email: string) => Promise<string>;
   organizationExists: (organizationId: string) => Promise<boolean>;
@@ -78,6 +80,11 @@ export type ReviewAccountStore = {
     userId: string;
     email: string;
   }) => Promise<number>;
+  /**
+   * Records professional-use acceptance through the owning operation, with
+   * the operator command's provenance rather than the account's.
+   */
+  acceptProfessionalUse: (userId: string) => Promise<void>;
 };
 
 /** The email-otp code types that name the account by its address alone. */
@@ -224,8 +231,6 @@ export const bindReviewAccountOrganizationStore = (
   },
 });
 
-const normalize = (email: string) => email.trim().toLowerCase();
-
 const refuse = (code: ReviewAccountCommandError["code"], message: string) =>
   Result.err(new ReviewAccountCommandError({ code, message }));
 
@@ -262,9 +267,9 @@ export const checkReviewAccountPreconditions = async ({
       "Set APP_REVIEW_ACCOUNT_EMAIL and APP_REVIEW_ORGANIZATION_ID first.",
     );
   }
-  const email = normalize(config.email);
+  const email = normalizeEmail(config.email);
   const { organizationId } = config;
-  if (demoEmail !== undefined && normalize(demoEmail) === email) {
+  if (demoEmail !== undefined && normalizeEmail(demoEmail) === email) {
     return refuse(
       "demo-account",
       "The review account must not be the demo account.",
@@ -358,6 +363,7 @@ export const provisionReviewAccount = async ({
       : await store.revokeVerifications({ userId, email });
   if (members === null) {
     await store.createOrganization({ organizationId, ownerUserId: userId });
+    await store.acceptProfessionalUse(userId);
     return Result.ok({
       outcome: "provisioned",
       user: existingUserId === null ? "created" : "existing",
@@ -381,6 +387,7 @@ export const provisionReviewAccount = async ({
   } else if (membership.role !== "owner") {
     await store.promoteToOwner({ organizationId, userId });
   }
+  await store.acceptProfessionalUse(userId);
   return Result.ok({
     outcome: "provisioned",
     user: existingUserId === null ? "created" : "existing",

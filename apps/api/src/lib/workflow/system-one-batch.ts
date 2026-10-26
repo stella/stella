@@ -60,8 +60,7 @@ export const batesStamp = (simplifiedName: string, pageIndex: number): string =>
  * locator, rather than leaving it to the caller's discipline.
  */
 type SourceLocator =
-  | { type: "cited"; file: string; citation: string }
-  | { type: "uncited" };
+  { type: "cited"; file: string; citation: string } | { type: "uncited" };
 
 export type BatchSources = {
   sources: AnswerSource[];

@@ -1,13 +1,14 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import {
-  LIST_ITEM_TYPES,
   legalListGenerationCandidates,
   legalListGenerationCandidateSources,
   legalListGenerationRuns,
+  LIST_ITEM_TYPES,
 } from "@/api/db/schema";
 import { legalListRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -15,7 +16,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -24,44 +25,49 @@ import { parseLegalListSourceLocator } from "@/api/lib/lists/source-locator";
 import type { LegalListSourceLocator } from "@/api/lib/lists/types";
 import { includes } from "@/api/lib/type-guards";
 
-const sourceSchema = t.Object({
-  entityId: tSafeId("entity"),
-  entityVersionId: tSafeId("entityVersion"),
-  locator: t.Union([
-    t.Object({ type: t.Literal("document") }),
-    t.Object({
-      type: t.Literal("docx-block"),
-      blockId: t.String({ minLength: 1, maxLength: 512 }),
+const sourceSchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  entityVersionId: resourceIdSchema("entityVersion"),
+  locator: v.union([
+    v.object({ type: v.literal("document") }),
+    v.object({
+      type: v.literal("docx-block"),
+      blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
     }),
-    t.Object({
-      type: t.Literal("pdf-page"),
-      pageNumber: t.Integer({ minimum: 1 }),
+    v.object({
+      type: v.literal("pdf-page"),
+      pageNumber: v.pipe(v.number(), v.integer(), v.minValue(1)),
     }),
   ]),
-  quote: t.Optional(t.Nullable(t.String({ maxLength: 5000 }))),
+  quote: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(5000)))),
 });
-const candidateSchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 2000 }),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  itemType: t.String({ minLength: 1, maxLength: 32 }),
-  status: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  priority: t.Optional(t.Nullable(t.String({ maxLength: 16 }))),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  suggestedAssigneeUserIds: t.Optional(
-    t.Array(tSafeId("user"), { maxItems: LIMITS.workspaceMembersCount }),
+const candidateSchema = v.object({
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(2000)),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
+  itemType: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+  status: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  priority: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(16)))),
+  dueDate: v.optional(v.nullable(apiDateSchema)),
+  suggestedAssigneeUserIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("user")),
+      v.maxLength(LIMITS.workspaceMembersCount),
+    ),
   ),
-  sources: t.Array(sourceSchema, {
-    minItems: 1,
-    maxItems: LIMITS.legalListGenerationCandidateSourcesMax,
-  }),
+  sources: v.pipe(
+    v.array(sourceSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.legalListGenerationCandidateSourcesMax),
+  ),
 });
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
-  candidates: t.Array(candidateSchema, {
-    minItems: 1,
-    maxItems: LIMITS.legalListGenerationCandidatesMax,
-  }),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
+  candidates: v.pipe(
+    v.array(candidateSchema),
+    v.minLength(1),
+    v.maxLength(LIMITS.legalListGenerationCandidatesMax),
+  ),
 });
 const config = {
   contract: "patch",
@@ -102,7 +108,7 @@ type ValidCandidate = {
 };
 
 const validateCandidates = (
-  candidates: Static<typeof bodySchema>["candidates"],
+  candidates: v.InferOutput<typeof bodySchema>["candidates"],
 ): ValidCandidate[] | null => {
   const validated: ValidCandidate[] = [];
   for (const candidate of candidates) {

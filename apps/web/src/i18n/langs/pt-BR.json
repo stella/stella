@@ -9,6 +9,7 @@
       "noOtherSessions": "Nenhuma outra sessão ativa",
       "revokeOtherSessions": "Desconectar outros dispositivos",
       "revokeOtherSessionsConfirm": "Isso encerrará todas as sessões, exceto a atual.",
+      "signedInFrom": "Sessão iniciada por {clientName}",
       "unknownDevice": "Dispositivo desconhecido"
     }
   },
@@ -61,8 +62,12 @@
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
     "keyRequired": {
+      "accountRestricted": "As configurações do provedor de IA não estão disponíveis para esta conta.",
+      "configUnreadable": "Não foi possível ler a configuração do provedor de IA. Peça a um administrador da organização para reconectá-lo.",
       "cta": "Abrir configurações de IA",
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
+      "permissionRequired": "Somente um administrador da organização pode conectar um provedor de IA.",
+      "seatRequired": "Peça a um administrador da organização para atribuir uma vaga a você.",
       "title": "Conectar provedor de IA"
     },
     "refinePlaceholder": "Como a IA deve ajustar a redação?",
@@ -137,6 +142,8 @@
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
       "title": "Não foi possível fazer seu login"
     },
+    "handoffAccount": "Continuar como <account>{email}</account> em <organization>{organizationName}</organization>?",
+    "handoffTitle": "Continuar para a stella",
     "headline": "Clareza para cada caso.",
     "invitation": {
       "declined": "Convite recusado",
@@ -152,11 +159,11 @@
     "organizationNamePlaceholder": "Minha organização",
     "password": "Senha",
     "professionalUse": {
-      "description": "Sua conta foi criada sem que esta declaração fosse exibida para você. Aceite-a para continuar.",
       "title": "Confirme o uso profissional"
     },
     "professionalUseStatement": "Ao criar uma conta, você confirma que usa o stella para fins profissionais e reconhece que o stella é uma ferramenta para profissionais do direito e não substitui a assessoria jurídica.",
     "rateLimitExceeded": "Muitas tentativas. Por favor, tente novamente mais tarde.",
+    "reauthenticationRequired": "Entre novamente para continuar com esta ação.",
     "resendCode": "Enviar código novamente para <email>{emailAddress}</email>",
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",
@@ -381,6 +388,7 @@
         "reading": "Modo de leitura"
       },
       "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
+      "pdfTextFailed": "Não foi possível ler o texto do PDF, por isso as alegações não estão marcadas nas páginas.",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -637,6 +645,7 @@
         "eso9": "Planilha de importação ESO9 (XLSX)",
         "exporting": "Preparando exportação…",
         "isdoc": "Fatura eletrônica ISDOC (ABRA Gen e outros)",
+        "ksefFa3": "Fatura eletrônica KSeF FA(3) (XML)",
         "spreadsheets": "Planilhas",
         "xlsx": "Faturas (XLSX)",
         "xlsxLines": "Itens de fatura (XLSX)"
@@ -750,6 +759,7 @@
     "sellerProfiles": {
       "add": "Adicionar perfil de vendedor",
       "archiveConfirm": "Arquivar este perfil de vendedor? Ele não estará mais disponível para novas faturas.",
+      "barRegistration": "Inscrição na Ordem dos Advogados",
       "bic": "Código BIC / SWIFT",
       "default": "Vendedor padrão",
       "defaultCurrency": "Moeda padrão",
@@ -761,11 +771,10 @@
       "invalidCurrency": "Insira um código de moeda de três letras.",
       "invalidIban": "Insira um IBAN válido.",
       "legalName": "Nome legal",
+      "registerEntry": "Registro empresarial",
       "registrationId": "Número de registro",
       "setDefault": "Definir como padrão",
       "title": "Perfis de vendedor",
-      "vatId": "Número de IVA",
-      "vatPayer": "Contribuinte de IVA",
       "vatPayerHelp": "As faturas deste vendedor cobram IVA. Desative para uma pessoa registrada que tem número de IVA, mas não é contribuinte.",
       "vatPayerRequiresVatId": "Informe o número de IVA para emitir faturas como contribuinte de IVA."
     },
@@ -800,6 +809,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Adicionar alíquota de IVA",
+      "addCzechia": "Adicionar alíquotas da Tchéquia",
+      "addSlovakia": "Adicionar alíquotas da Eslováquia",
       "archiveConfirm": "Arquivar esta alíquota de IVA? Ela não estará mais disponível para novos documentos.",
       "code": "Código da alíquota",
       "current": "Alíquota vigente",
@@ -814,6 +825,7 @@
       "overlap": "Os períodos de validade do mesmo código de alíquota não podem se sobrepor.",
       "past": "Alíquota anterior",
       "periodHelp": "A data inicial está incluída; a data final está excluída. Deixe a data final em branco para um período aberto.",
+      "presetResult": "Adicionadas: {added}; ignoradas: {skipped}.",
       "rate": "Percentual de IVA",
       "title": "Alíquotas de IVA",
       "validFrom": "Válida desde",
@@ -950,7 +962,8 @@
       "searchable": "Pesquisáveis",
       "title": "Cobertura da jurisprudência",
       "totalFrom": "Total em {date}",
-      "unavailable": "Os dados de cobertura estão indisponíveis no momento."
+      "unavailable": "Os dados de cobertura estão indisponíveis no momento.",
+      "unreadListingPeriods": "Períodos da listagem não lidos"
     },
     "decisionNotFound": "Decisão não encontrada",
     "decisionTypes": {
@@ -1019,7 +1032,10 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
+      "pageWithEstimatedMatchCounts": "Página {page} · cerca de {exactCount, plural, one {# correspondência exata} many {# correspondências exatas} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# correspondência exata} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Refine a pesquisa para ver mais resultados"
@@ -1470,7 +1486,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos os modelos ({count, number})",
+      "allModels": "Todos os modelos",
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
       "belowFrontier": "Abaixo dos melhores equilíbrios",
@@ -1588,6 +1604,7 @@
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorConnectionFailed": "A conexão com o chat falhou. Verifique sua conexão e tente novamente.",
+    "sendErrorContinuationRejected": "Não foi possível continuar o chat. Envie uma nova mensagem para começar de novo.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
     "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
@@ -2112,6 +2129,7 @@
       "ZH-HANT": "Chinês (tradicional)"
     },
     "lastUpdated": "Última atualização",
+    "layoutResetAfterProblem": "O layout foi redefinido após um problema.",
     "legalDatabase": "Base de dados jurídica",
     "loadMore": "Carregar mais",
     "loading": "Carregando",
@@ -2210,6 +2228,7 @@
     "suggested": "Sugestão",
     "summarizeChanges": "Resumir alterações",
     "target": "Destino",
+    "taxId": "Identificação fiscal",
     "timeBilling": "Tempo e faturamento",
     "today": "Hoje",
     "translate": "Traduzir",
@@ -2233,6 +2252,8 @@
     "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
     "value": "Valor",
+    "vatId": "Número de IVA",
+    "vatPayer": "Contribuinte de IVA",
     "verified": "Verificado",
     "verify": "Verificar",
     "version": "Versão",
@@ -2274,6 +2295,7 @@
     "scopeKnowledgeWrite": "Criar, editar e excluir suas cláusulas e executar playbooks",
     "scopeLawRead": "Ler legislação pública e jurisprudência",
     "scopeMattersWrite": "Criar e editar seus casos e tarefas",
+    "scopeMemoryWrite": "Criar e atualizar as memórias do assistente",
     "scopeOfflineAccess": "Manter você conectado sem exigir aprovação repetida",
     "scopeOnboarding": "Configure as jurisdições de atuação da sua organização",
     "scopeProfile": "Acesse as informações do seu perfil",
@@ -2301,6 +2323,7 @@
     "summaryLineRead": "<group>Ler:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "casos e tarefas",
+    "summaryMemoryWrite": "memórias do assistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, casos e contatos",
     "summaryReadAnonymized": "documentos e casos anonimizados",
@@ -2421,7 +2444,9 @@
       "prefix": "Prefixo",
       "registrationNumber": "Número de registro",
       "suffix": "Sufixo",
-      "taxId": "CPF/CNPJ",
+      "vatPayer": "Situação perante o IVA",
+      "vatPayerNo": "Não contribuinte de IVA",
+      "vatPayerUnknown": "Desconhecido",
       "year": "Ano"
     },
     "filterOrganizations": "Organizações",
@@ -2461,7 +2486,6 @@
         "primary_phone": "Telefone principal",
         "state": "Estado ou região",
         "suffix": "Sufixo",
-        "tax_id": "Identificação fiscal",
         "type": "Tipo de contato"
       },
       "fileInvalid": "Escolha um único arquivo CSV, TSV ou TXT.",
@@ -2666,6 +2690,7 @@
       "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
       "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
       "contact": "Entre em contato",
+      "featureDisabled": "Este recurso está temporariamente desativado.",
       "notEnabled": "Esta ação não está habilitada para sua organização.",
       "periodExhausted": "Esta ação está pausada para sua organização."
     },
@@ -3521,6 +3546,12 @@
       "unsupportedVisualContent": "Este arquivo contém imagens ou gráficos vetoriais que não podem ser verificados quanto a texto sensível. A exportação não está disponível.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
+      "unsupportedEncoding": "Este documento usa a codificação {encoding}, que não é compatível, portanto não pode ser convertido.",
+      "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido.",
+      "unsupportedReference": "Este documento faz referência a um recurso externo em {element} {attribute}, portanto não pode ser convertido."
+    },
     "external": {
       "confirmDescription": "Você está prestes a acessar um site externo.",
       "confirmTitle": "Abrir link externo?",
@@ -3799,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Um cliente",
+      "availabilityClientBadgeHelp": "Disponível apenas nos casos de um cliente.",
+      "availabilityClientHelp": "Só pode ser usada nos casos deste cliente. Isso não poderá ser alterado depois.",
+      "availabilityFixedHelp": "Definido quando a habilidade foi criada. Não pode ser alterado.",
+      "availabilityLabel": "Disponível em",
+      "availabilityMatter": "Um caso",
+      "availabilityMatterBadgeHelp": "Disponível apenas em um caso.",
+      "availabilityMatterHelp": "Só pode ser usada neste caso. Isso não poderá ser alterado depois.",
+      "availabilityOrganization": "Toda a organização",
+      "availabilityTeamNeedsMatter": "Para compartilhar uma habilidade com a equipe, escolha o caso a que ela se destina. Isso não poderá ser alterado depois.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Crie um playbook de revisão de contratos posição por posição, com base nos seus contratos já assinados, em uma breve entrevista e nos padrões usuais de mercado.",
@@ -4220,6 +4261,22 @@
       "guestStorageUnavailable": "Não foi possível salvar destaques e notas nesta aba.",
       "highlight": "Destacar",
       "highlightedPassage": "Passagem destacada",
+      "history": {
+        "colorRestored": "Cor restaurada",
+        "commentRemoved": "Comentário removido",
+        "commentRestored": "Comentário restaurado",
+        "highlightRemoved": "Destaque removido",
+        "highlightRestored": "Destaque restaurado",
+        "markChanged": "Este destaque ou comentário foi alterado em outro lugar e, por isso, foi mantido como está.",
+        "markGone": "Este destaque ou comentário não existe mais.",
+        "nothingToRedo": "Nada para refazer",
+        "nothingToUndo": "Nada para desfazer",
+        "redoShortcut": "Refazer alteração de destaque ou comentário",
+        "styleRestored": "Estilo restaurado",
+        "textRestored": "Texto do comentário restaurado",
+        "undoShortcut": "Desfazer alteração de destaque ou comentário",
+        "visibilityRestored": "Compartilhamento restaurado"
+      },
       "removeHighlight": "Remover destaque",
       "sharedBadge": "Compartilhado",
       "styleHighlight": "Destaque",
@@ -4713,7 +4770,7 @@
     "modelError": "O modelo não conseguiu concluir esta resposta.",
     "networkError": "A conexão foi interrompida. Tente novamente.",
     "regenerate": "Gerar resposta novamente",
-    "selectionError": "Selecione texto dentro de um único parágrafo (até 2.000 caracteres).",
+    "selectionError": "Selecione um trecho da própria decisão.",
     "send": "Enviar pergunta de acompanhamento",
     "share": "Compartilhar com a equipe",
     "timeoutError": "O tempo limite para a resposta foi excedido. Tente novamente.",
@@ -4731,6 +4788,7 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
+    "caseLawEmptyState": "Comece a digitar para pesquisar decisões judiciais.",
     "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
     "continueInChat": "Continuar no chat",
@@ -4765,6 +4823,8 @@
     "recentDocuments": "Documentos recentes",
     "recentSearches": "Pesquisas recentes",
     "recentlyOpenedFiles": "Arquivos abertos recentemente",
+    "registryCandidateNameMismatch": "O nome oficial é “{officialName}” e não corresponde",
+    "registryCandidateNoOfficialRecord": "O registro oficial não contém uma empresa com este número",
     "registryChoose": "Escolher um registro empresarial",
     "registryCredentialAskAdmin": "Peça a um administrador da organização para configurar o acesso a este registro.",
     "registryCredentialSaved": "Acesso ao registro salvo",
@@ -4775,6 +4835,7 @@
       "enrichmentUnavailable": "Os dados do registro comercial estão temporariamente indisponíveis"
     },
     "registryKrsHint": "O KRS busca pelo número de registro, não pelo nome da empresa. Digite um número KRS de 10 dígitos, incluindo os zeros iniciais (por exemplo, 0000006865).",
+    "registryNameSearchNotFound": "Nenhuma empresa verificada corresponde a esse nome. Os seguintes candidatos foram descartados:",
     "registryVatHint": "O VIES verifica números de IVA, não nomes de empresas. Insira o número de IVA com o prefixo do país (por exemplo, CZ27082440); o formato depende do país.",
     "renameSearchTitle": "Renomear pesquisa salva",
     "requestCountry": "Solicitar um novo país",
@@ -4788,6 +4849,7 @@
     "savedSearchesEmpty": "Salve uma pesquisa para usá-la novamente.",
     "scopeFilter": "Escopo da pesquisa",
     "scopePlaceholderAll": "Pesquisar em todas as <scope>fontes</scope>…",
+    "scopePlaceholderCaseLaw": "Pesquisar na <scope>jurisprudência</scope>…",
     "scopePlaceholderMatters": "Pesquisar em todos os <scope>casos</scope>…",
     "scopePlaceholderRegistries": "Pesquisar em <scope>registros</scope>…",
     "scopeRegistries": "Registros",
@@ -4937,7 +4999,7 @@
       "description": "Use o stella pelo seu assistente de IA e veja o que tem acesso à sua conta.",
       "developerDescription": "Endereços do servidor e a ferramenta de linha de comando, para configurações técnicas.",
       "developerTitle": "Acesso para desenvolvedores",
-      "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento.",
+      "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento. As sessões do navegador criadas por esta conexão também serão encerradas.",
       "disconnectConfirmTitle": "Desconectar {clientName}?",
       "disconnectSuccess": "{clientName} foi desconectado",
       "integrationsDescription": "Serviços externos que a IA pode usar por você, como seu repositório de documentos.",
@@ -5298,7 +5360,7 @@
     "importDescription": "Os estilos são extraídos para um novo DOCX sem conteúdo.",
     "importTitle": "Importar conjunto de estilos",
     "loadFailed": "Não foi possível carregar os conjuntos de estilos",
-    "newDocument": "Novo documento",
+    "newDocument": "Novo documento DOCX",
     "pickerDescription": "Escolha o sistema de formatação do novo arquivo.",
     "renameTitle": "Renomear conjunto de estilos",
     "replace": "Substituir origem",
@@ -5582,7 +5644,7 @@
     "moveToMatter": "Salvar no caso",
     "moveToMatterAnyway": "Salvar mesmo assim",
     "myDefaultLookupFormat": "Meu padrão",
-    "newFromTemplate": "Novo documento a partir de modelo",
+    "newFromTemplate": "Novo documento DOCX a partir de modelo",
     "newFromTemplateFillHint": "Preencha os campos; o documento será criado neste caso.",
     "newTemplate": "Novo modelo",
     "noTemplates": "Ainda não há modelos",
@@ -5953,6 +6015,7 @@
         "action": "Editar no desktop",
         "authRequiredDescription": "Atualize stella e faça login novamente antes de usar a edição na área de trabalho.",
         "authRequiredTitle": "Sua sessão expirou",
+        "editInApplication": "Editar no <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edite este arquivo localmente e sincronize as alterações com o stella.",
         "forceRelease": "Forçar liberação",
         "notOpenedDescription": "O stella desktop não confirmou que o <bdi>{application}</bdi> abriu. Abra o stella desktop e tente novamente.",
@@ -5976,13 +6039,15 @@
         "alreadyInstalled": "Já está instalado? Conectar",
         "connect": "Conectar o stella desktop",
         "connected": "O stella desktop está conectado",
+        "download": "Baixar o stella desktop",
         "editNone": "Baixe o stella desktop para editar este arquivo",
         "editOutdated": "Atualize o stella desktop para editar",
         "editReason": "A edição no computador abre o arquivo em um app do seu computador pelo stella desktop.",
         "signCurrent": "Assinar com o stella desktop",
         "signNone": "Baixe o stella desktop para assinar este PDF",
         "signOutdated": "Atualize o stella desktop para assinar",
-        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop."
+        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop.",
+        "update": "Atualizar o stella desktop"
       },
       "downloadAs": "Baixar como…",
       "downloadAsZip": "Baixe como ZIP",
@@ -5990,12 +6055,15 @@
       "downloadFailed": "Falha ao baixar",
       "downloadPdf": "Baixar como PDF",
       "downloadSearchablePdf": "PDF pesquisável",
+      "emptyFile": "O arquivo está vazio.",
       "includeReferenceNumber": "Incluir número de referência",
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
+      "ocrBatchHelp": "Os documentos na fila são processados no próximo lote de OCR.",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
-      "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
+      "ocrQueued": "Reconhecimento de texto adicionado à fila",
+      "ocrQueuedForBatch": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Já há uma assinatura em andamento no stella desktop",
         "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
@@ -6052,6 +6120,7 @@
         "waitingDescription": "Escolha um certificado de assinatura no stella desktop para assinar este PDF.",
         "waitingTitle": "Aguardando o stella desktop"
       },
+      "queueForOcr": "Colocar na fila de OCR",
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "O que fazer com {fileName}",
@@ -6063,7 +6132,6 @@
       "removeMetadata": "Remover metadados do documento",
       "renamedToAvoidConflicts": "{count, plural, one {# arquivo renomeado para evitar conflitos} many {# arquivos renomeados para evitar conflitos} other {# arquivos renomeados para evitar conflitos}}",
       "retryFailed": "Tentar novamente {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}}",
-      "runOcr": "Colocar OCR na fila",
       "scrubFailed": "Não foi possível remover os metadados deste arquivo, portanto nada foi baixado",
       "uploadedPartially": "{failed, plural, one {# arquivo falhou} many {# arquivos falharam} other {# arquivos falharam}} de {total, number}",
       "uploadedSuccessfully": "Arquivos enviados com sucesso",
@@ -6351,6 +6419,7 @@
       "addParty": "Adicionar parte",
       "changeClient": "Alterar cliente",
       "client": "Cliente",
+      "movedToClient": "Caso <bdi>{matterName}</bdi> movido para <bdi>{clientName}</bdi>",
       "noClient": "Nenhum cliente atribuído",
       "noClientOptional": "Sem cliente (opcional)",
       "noParties": "Nenhuma parte adicionada a este caso.",
@@ -6369,7 +6438,9 @@
       "personalLabel": "Pessoal",
       "promoteCta": "Promover para cliente",
       "promoteDescription": "Associe um cliente para compartilhar este caso com a equipe. Esta ação é unidirecional; casos promovidos não podem voltar a ser pessoais.",
+      "promoteToClientConfirm": "O caso <bdi>{matterName}</bdi> será associado a <bdi>{clientName}</bdi> e compartilhado com a equipe. Ele não poderá voltar a ser pessoal.",
       "promotedSuccess": "Caso promovido",
+      "recentClients": "Clientes recentes",
       "removeClient": "Remover cliente",
       "removeParty": "Remover parte",
       "removePartyConfirm": "Tem certeza de que deseja remover esta parte do caso?",
@@ -6581,6 +6652,12 @@
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
       "parties": "Partes"
+    },
+    "switcher": {
+      "searchPlaceholder": "Encontrar um caso…",
+      "trigger": "Trocar de caso",
+      "viewAll": "Ver todos os casos",
+      "viewAllForClient": "Ver todos os casos do cliente {clientName}"
     },
     "table": {
       "clearFlags": "Limpar sinalizadores",

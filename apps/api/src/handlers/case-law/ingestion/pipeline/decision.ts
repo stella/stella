@@ -1,9 +1,9 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  SUPPLEMENT_ABSORB_FAILED,
   absorbComposedSupplementRows,
+  SUPPLEMENT_ABSORB_FAILED,
 } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
 import { enqueueCorpusMirror } from "@/api/handlers/case-law/ingestion/pipeline/decision-corpus";
 import {
@@ -37,6 +37,7 @@ import {
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import type { SourceContractResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
+import { sourceFingerprintFromStoredRaw as readSourceFingerprintFromStoredRaw } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -127,6 +128,15 @@ const settleRowWriteStatus = async ({
   }
 };
 
+const storedInputMatchesDecision = (
+  input: ProcessDecisionAttemptOptions["inputProvenance"],
+  existing: DecisionRowWrite["existing"],
+) =>
+  input.type !== "stored" ||
+  (existing !== undefined &&
+    existing.id === input.decisionId &&
+    existing.sourceRawS3Key === input.sourceRawS3Key);
+
 /**
  * One pass over a decision: resolve its identity, settle what an existing
  * row makes of it, store its raw payload, plan and write its row, then queue
@@ -137,12 +147,15 @@ const runDecisionAttempt = async ({
   metadataUrlSchema,
   statedEcliIdentity,
   input,
+  inputProvenance,
   judges,
   sourceId,
   scopedDb,
   observedAt,
   observationOrder,
   refresh,
+  sourceFingerprintVersion,
+  sourceFingerprintFromStoredRaw,
   corpus,
   corpusBatch,
   polarityRules,
@@ -188,6 +201,9 @@ const runDecisionAttempt = async ({
     metadataUrlSchema,
   });
   const shape = classifyObservation({ result, existing });
+  if (!storedInputMatchesDecision(inputProvenance, existing)) {
+    return RECONCILE_CONTENTION;
+  }
 
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
     scopedDb,
@@ -197,6 +213,8 @@ const runDecisionAttempt = async ({
     observedAt,
     observationOrder,
     refresh,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw,
   });
   if (existingPolicyOutcome !== null) {
     return existingPolicyOutcome;
@@ -224,6 +242,14 @@ const runDecisionAttempt = async ({
     return sourceRawArtifact.outcome;
   }
   const rawArtifact = sourceRawArtifact.artifact;
+  if (rawArtifact.s3UploadFailed) {
+    // Do not pair newly derived output with a retained older raw object.
+    return {
+      status: PROCESS_DECISION_STATUS.RETRYABLE,
+      inserted: false,
+      reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,
+    };
+  }
 
   const attempted = await Result.tryPromise({
     try: async () => {
@@ -259,6 +285,8 @@ const runDecisionAttempt = async ({
         composedSupplements,
         observedAt,
         observationOrder,
+        sourceFingerprintVersion,
+        inputProvenance,
         shape,
         plan,
         rawArtifact,
@@ -363,23 +391,28 @@ const processDecisionAttempt = async (
   });
 };
 
-export const processDecision = async (
+const processDecisionFromInput = async (
   {
     refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
     corpus = CASE_LAW_CORPUS_DEPENDENCIES,
     judges = CASE_LAW_JUDGE_DEPENDENCIES,
+    sourceFingerprintFromStoredRaw:
+      readStoredFingerprint = readSourceFingerprintFromStoredRaw,
     ...options
-  }: ProcessDecisionOptions,
+  }: ProcessDecisionOptions & {
+    inputProvenance: ProcessDecisionAttemptOptions["inputProvenance"];
+  },
   resolveSourceContract: SourceContractResolver = createSourceContractResolver(
     options.scopedDb,
   ),
 ): Promise<ProcessResult> => {
-  const { metadataUrlSchema, statedEcliIdentity } = await resolveSourceContract(
-    options.sourceId,
-  );
+  const { metadataUrlSchema, sourceFingerprintVersion, statedEcliIdentity } =
+    await resolveSourceContract(options.sourceId);
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,
+    sourceFingerprintVersion,
+    sourceFingerprintFromStoredRaw: readStoredFingerprint,
     statedEcliIdentity,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
@@ -387,3 +420,34 @@ export const processDecision = async (
     judges,
   });
 };
+
+export const processDecision = async (
+  options: ProcessDecisionOptions,
+  resolveSourceContract?: SourceContractResolver,
+): Promise<ProcessResult> =>
+  await processDecisionFromInput(
+    {
+      ...options,
+      inputProvenance: { type: "observation" },
+    },
+    resolveSourceContract,
+  );
+
+type ProcessStoredDecisionOptions = Omit<ProcessDecisionOptions, "refresh"> & {
+  /** The immutable raw object actually read, not a later decision pointer. */
+  sourceRawS3Key: string;
+  decisionId: SafeId<"caseLawDecision">;
+};
+
+export const processStoredDecision = async (
+  { sourceRawS3Key, decisionId, ...options }: ProcessStoredDecisionOptions,
+  resolveSourceContract?: SourceContractResolver,
+): Promise<ProcessResult> =>
+  await processDecisionFromInput(
+    {
+      ...options,
+      refresh: DECISION_REFRESH.ALWAYS,
+      inputProvenance: { type: "stored", sourceRawS3Key, decisionId },
+    },
+    resolveSourceContract,
+  );

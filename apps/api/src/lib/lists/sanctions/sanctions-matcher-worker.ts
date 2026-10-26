@@ -10,8 +10,8 @@ import type {
 } from "@stll/sanctions";
 
 import type {
-  SanctionsMatcherReply,
   SanctionsMatcherMessage,
+  SanctionsMatcherReply,
 } from "./matcher-protocol";
 
 const port = parentPort;

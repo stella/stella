@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import {
   type DecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -15,6 +16,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -49,12 +51,13 @@ const { WebReaderPresentationProvider } =
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { MarginNotes } =
-  await import("@/features/case-law/components/case-viewer/analysis/margin-notes");
+const { MarginNotes } = await import("@/components/legal-reader/margin-notes");
 const { decisionAnalysisOptions } =
   await import("@/features/case-law/queries/decision-analysis");
 const { clickOpensVisitorOffer, READER_ASIDE_RESIZE_SLOT } =
   await import("@/features/case-law/components/case-viewer/decision-workspace.logic");
+const { getCategoryVar } =
+  await import("@/features/case-law/components/case-viewer/analysis/types");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { ActionCapabilitiesProvider } =
@@ -90,7 +93,7 @@ const renderVisitorColumn = () =>
         <MarginNotes
           items={[
             {
-              category: "facts",
+              accentVar: getCategoryVar("facts"),
               depth: 0,
               heading: EXAMPLE_HEADING,
               id: "example:facts",
@@ -249,17 +252,21 @@ const rangeDecision = {
   updatedAt: "2026-10-18T12:00:00Z",
 } satisfies ComponentProps<typeof DecisionWorkspace>["decision"];
 const rangeAnalysis = {
-  version: 3,
+  version: 4,
   generatedAt: rangeDecision.updatedAt,
   model: "test",
   inputFingerprint: "a".repeat(64),
   tree: [],
   holding: {
-    text: "The cited paragraphs establish the holding.",
+    spans: [
+      {
+        text: "The cited paragraphs establish the holding.",
+        anchors: [{ startAnchorId: "p-2", endAnchorId: "p-4" }],
+      },
+    ],
     language: "en",
-    anchors: [{ startAnchorId: "p-2", endAnchorId: "p-4" }],
   },
-  abstract: { text: "A summary.", language: "en" },
+  abstract: { spans: [{ text: "A summary.", anchors: [] }], language: "en" },
   topics: [],
 } satisfies DecisionAnalysis;
 
@@ -285,7 +292,7 @@ const installWorkspaceServer = () => {
         return Response.json({ items: [], nextCursor: null });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json(aiAvailableResponse());
       }
       if (path.endsWith("/workspaces/navigation")) {
         return Response.json({ items: [], nextCursor: null, workspaces: [] });
@@ -347,7 +354,7 @@ test("an inline holding reference highlights its full range and scrolls to its s
                 role: "member",
                 ai: true,
                 deepl: false,
-                ocr: false,
+                ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                 desktop: "none",
                 settings: undefined,
               })}

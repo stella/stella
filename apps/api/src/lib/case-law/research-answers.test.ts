@@ -8,13 +8,13 @@ import { propertyConfig } from "@stll/property-testing";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
-  type CaseLawResearchColumnContent,
-  type ResearchQuestion,
   buildAnswerJustification,
   buildResearchAnswersSchema,
   buildResearchUserMessage,
+  type CaseLawResearchColumnContent,
   parseResearchAnswers,
   parseStoredAnswerContent,
+  type ResearchQuestion,
   selectPassagesWithinBudget,
 } from "@/api/lib/case-law/research-answers";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";

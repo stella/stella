@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type {
   CaptionLineKind,
   DecisionCaption,
@@ -28,7 +29,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { useDisplayElisionPolicy } from "./display-elision-policy";
-import { useReaderPresentation, useReaderMessages } from "./reader-adapters";
+import { useReaderMessages, useReaderPresentation } from "./reader-adapters";
 import type { ReaderMessageKey } from "./reader-adapters";
 import type { ReaderMark, ReaderMarkRange, SearchPiece } from "./reader-search";
 import { readerHref, useSourceLinkPolicy } from "./source-link-policy";
@@ -795,6 +796,7 @@ export const InlineContent = ({
 export const HighlightedText = ({
   activeMatchIndex,
   className,
+  "data-reader-chrome": readerChrome,
   pieceId,
   ranges,
   segmentStart = 0,
@@ -802,13 +804,14 @@ export const HighlightedText = ({
 }: {
   activeMatchIndex: number;
   className?: string | undefined;
+  "data-reader-chrome"?: "" | undefined;
   pieceId: string;
   ranges: ReaderMarkRange[];
   /** Offset of this slice within the complete search piece. */
   segmentStart?: number | undefined;
   text: string;
 }) => (
-  <span className={className}>
+  <span className={className} data-reader-chrome={readerChrome}>
     {renderHighlightedSlice({
       activeMatchIndex,
       elisions: shiftedElisions(text, segmentStart),
@@ -1664,15 +1667,6 @@ const renderTableBlock = ({
     </div>
   );
 };
-
-export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
-  text.split(/\n{2,}/u).map((paragraph, index) => ({
-    id: `fulltext:${index}`,
-    anchorId: `fulltext:${index}`,
-    type: "paragraph",
-    plainText: paragraph,
-    inlines: [{ text: paragraph, type: "text" }],
-  }));
 
 export const FulltextFallback = ({
   activeMatchIndex,

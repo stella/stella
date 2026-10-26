@@ -17,8 +17,8 @@ import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter"
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";

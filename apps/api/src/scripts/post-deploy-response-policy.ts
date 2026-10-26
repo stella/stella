@@ -41,7 +41,7 @@ import {
   NO_STORE_DIRECTIVE,
   PRIVATE_CACHE_CONTROL,
   publicCacheControl,
-} from "../lib/security-headers";
+} from "../http/cache";
 
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -370,8 +370,7 @@ export const classifyPublicKnowledgeHead = (
 };
 
 type PublicKnowledgeProbe =
-  | { state: PublicKnowledgeState }
-  | { state: "inconsistent"; detail: string };
+  { state: PublicKnowledgeState } | { state: "inconsistent"; detail: string };
 
 /** API and web must agree on whether public Knowledge is enabled. */
 export const resolvePublicKnowledgeState = ({

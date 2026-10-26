@@ -42,14 +42,14 @@ import {
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 
 import {
+  manifestationStem,
   PORTAL_CORPUS,
   PORTAL_DOCUMENT_CONTAINER,
   PORTAL_STEM_SUFFIX,
   type PortalPair,
+  portalStem,
   SHELL_STEM,
   SHELL_STEM_SUFFIX,
-  manifestationStem,
-  portalStem,
 } from "./__fixtures__/eu-ecj/corpus";
 
 /**

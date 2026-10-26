@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import {
   afterAll,
   beforeAll,
@@ -9,10 +8,12 @@ import {
 } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+import * as v from "valibot";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { rootDb } from "@/api/db/root";
 import { createUpdateGuideProgressHandler } from "@/api/handlers/me/update-guide-progress";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { writeUserGuideProgress } from "@/api/lib/guide-progress";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -76,7 +77,7 @@ const updateProgress = async (
       request: new Request("https://example.test/v1/me/guide-progress", {
         method: "PATCH",
       }),
-      route: "/v1/me/guide-progress",
+      route: "/v1/me/guide-progress" satisfies ApiRoutePath,
       user: { id: currentUserId },
     }),
   );
@@ -95,17 +96,13 @@ describe("guide progress request schema", () => {
   test("accepts only known tour and status pairs", () => {
     const schema = updateGuideProgress.config.body;
 
-    expect(Value.Check(schema, { tourId: "chat", status: "completed" })).toBe(
-      true,
-    );
-    expect(
-      Value.Check(schema, { tourId: "unknown", status: "completed" }),
-    ).toBe(false);
-    expect(Value.Check(schema, { tourId: "chat", status: "unknown" })).toBe(
+    expect(v.is(schema, { tourId: "chat", status: "completed" })).toBe(true);
+    expect(v.is(schema, { tourId: "unknown", status: "completed" })).toBe(
       false,
     );
+    expect(v.is(schema, { tourId: "chat", status: "unknown" })).toBe(false);
     expect(
-      Value.Check(schema, {
+      v.is(schema, {
         tourId: "chat",
         status: "completed",
         replacementMap: {},

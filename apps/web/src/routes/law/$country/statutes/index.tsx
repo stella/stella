@@ -73,8 +73,8 @@ import {
   changeStatutesIndexQuery,
   readStatuteIntent,
   STATUTE_MAX_QUERY_LENGTH,
-  statutesIndexSearchSchema,
   type StatutesIndexSearch,
+  statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
 import {
   useStatuteColumnPreferences,
@@ -315,7 +315,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
   const data = dataView.type === "items" ? dataView.items : undefined;
   const facetsQuery = useQuery(statuteFacetsOptions(country.toUpperCase()));
   const facetsView = useQueryView(facetsQuery);
-  useQueryViewError(facetsView);
+  useQueryViewError(facetsView, "PublicStatuteFullText:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const selectType = (documentType: string | undefined) => {
     const pending = writeQuery.isPending() ? input.trim() : query;
@@ -544,7 +544,7 @@ function PublicStatuteList({
     placeholderData: keepPreviousData,
   });
   const facetsView = useQueryView(facetsQuery);
-  useQueryViewError(facetsView);
+  useQueryViewError(facetsView, "PublicStatuteList:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });
 

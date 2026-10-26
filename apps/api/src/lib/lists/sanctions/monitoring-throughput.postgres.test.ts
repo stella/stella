@@ -6,21 +6,21 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 import type { ScreeningIndex } from "@stll/sanctions";
 import {
-  syntheticMonitoringEntry,
-  syntheticMonitoringName,
   MONITORING_CONTACT_COUNT,
   MONITORING_ENTRY_COUNT,
+  syntheticMonitoringEntry,
+  syntheticMonitoringName,
 } from "@stll/sanctions/test-fixtures/monitoring-corpus";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import {
   contacts,
-  sanctionsSources,
-  sanctionsEditions,
-  sanctionsEntryPayloads,
   sanctionsEditionEntries,
   sanctionsEditionFanouts,
+  sanctionsEditions,
+  sanctionsEntryPayloads,
+  sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";

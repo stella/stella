@@ -22,8 +22,8 @@ import {
 } from "@/api/lib/db/rls-role-posture";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { createTestState } from "@/api/tests/helpers/test-state";
 

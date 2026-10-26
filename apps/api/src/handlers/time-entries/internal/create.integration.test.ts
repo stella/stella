@@ -16,11 +16,12 @@ import { Temporal } from "@stll/time";
 import { user as authUser } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  featureEnrolments,
   organizationSettings,
   timeEntries,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
@@ -106,7 +107,7 @@ const createFor = async (body: CreateCtx["body"]) => {
     asTestRaw<CreateCtx>({
       body,
       request,
-      route: "/time-entries/internal",
+      route: "/v1/time-entries/internal" satisfies ApiRoutePath,
       safeDb: createSafeDb(db, [], ids.orgA, ids.userA1),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

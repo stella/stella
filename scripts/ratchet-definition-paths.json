@@ -1,4 +1,5 @@
 [
+  ".oxlint-plugins/api-client-chain.ts",
   ".oxlint-plugins/database-access.ts",
   ".oxlint-plugins/module-id.ts",
   "apps/api/src/lib/db/status-tables.gen.ts",
@@ -6,7 +7,7 @@
   "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "packages/api-contract/src/mcp.ts",
   "packages/scripts/src/generated-artifact-format.ts",
-  "packages/scripts/src/tsgo-compiler-options.ts",
+  "packages/scripts/src/syntax-tree.ts",
   "packages/scripts/src/typescript-program.ts",
   "scripts/db-await-in-loop.ts",
   "scripts/generated-artifacts.ts",
@@ -25,6 +26,6 @@
   "scripts/sha256-owners.ts",
   "scripts/source-globs.ts",
   "scripts/status-write-shapes.ts",
-  "scripts/undeclared-eden-writes.ts",
+  "scripts/undeclared-api-client-writes.ts",
   "scripts/unsignalled-skip.ts"
 ]

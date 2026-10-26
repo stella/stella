@@ -54,6 +54,9 @@ export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
 export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
 export const SETTING_USER_ID = "app.user_id";
+export const SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID =
+  "app.account_export_organization_id";
+export const SETTING_ACCOUNT_EXPORT_USER_ID = "app.account_export_user_id";
 
 export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
@@ -593,6 +596,48 @@ export const authoredNotePolicies = () => [
     using: sql`${organizationCheck} AND ${userCheck}`,
   }),
 ];
+
+/**
+ * A reader's own notes, some of which belong to a matter. A note without a
+ * workspace is an organization note exactly as in `authoredNotePolicies`; one
+ * with a workspace is reachable only while the caller may open that matter
+ * and `matterRowCheck` (the row the note sits on) admits it, so the matter's
+ * walls bind every author, a shared note included. A new note checks
+ * `matterRowHold` instead: the same test, holding the row until the insert's
+ * transaction ends so the row cannot be deleted under a note being written.
+ */
+export const authoredOptionalMatterNotePolicies = ({
+  matterRowCheck,
+  matterRowHold,
+}: {
+  matterRowCheck: SQL;
+  matterRowHold: SQL;
+}) => {
+  const scope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowCheck}))`;
+  const insertScope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowHold}))`;
+  return [
+    p.pgPolicy("organization_select", {
+      for: "select",
+      to: stella,
+      using: sql`${scope} AND (visibility = 'shared' OR ${userCheck})`,
+    }),
+    p.pgPolicy("author_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${insertScope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_update", {
+      for: "update",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_delete", {
+      for: "delete",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+  ];
+};
 
 const organizationOptionalWorkspaceCheck = sql`(
   ${organizationCheck} AND
@@ -1252,8 +1297,29 @@ export const entityViewPolicies = () => [
   }),
 ];
 
+/**
+ * A bound skill is reachable only through its binding: a matter-bound one
+ * where the caller reaches that matter, a client-bound one where the caller
+ * reaches at least one matter of that client (`workspaces.client_id`). An
+ * unbound skill has both columns null. `table` qualifies the skill's columns
+ * (`agent_skills` in its own policies, `s` in a child's subquery).
+ */
+// sql-perf-allow: bounded by one skill row; the client probe uses workspaces_org_client_id_idx and runs only for client-bound skills
+const agentSkillBindingReachCheck = (table: string) => sql`(
+  (${sql.raw(table)}.bound_workspace_id IS NULL
+    OR ${workspaceAccessCheck(sql.raw(`${table}.bound_workspace_id`))})
+  AND (${sql.raw(table)}.bound_client_id IS NULL OR EXISTS (
+    SELECT 1
+    FROM workspaces bound_matter
+    WHERE bound_matter.organization_id = ${sql.raw(table)}.organization_id
+      AND bound_matter.client_id = ${sql.raw(table)}.bound_client_id
+      AND ${workspaceAccessCheck(sql`bound_matter.id`)}
+  ))
+)`;
+
 const agentSkillVisibleCheck = sql`(
   ${organizationCheck} AND (scope = 'team' OR ${userCheck})
+  AND ${agentSkillBindingReachCheck("agent_skills")}
 )`;
 
 const organizationManagementRoleValues = sql.raw(
@@ -1319,15 +1385,35 @@ export const timeEntryPolicies = () => [
 ];
 
 /**
- * Who may write a skill row: owners and admins for team skills, the author for
- * private ones. Members who can see a team skill propose and comment on it
+ * Who may write a skill (`table` qualifies its columns):
+ * - a team skill: owners and admins, or its author when it is bound to a
+ *   matter (a matter member keeps a skill for their own matter);
+ * - a private skill: its author, and only a manager may bind one to a client.
+ * Every write also needs the binding's reach, so nobody writes a skill they
+ * could not read. Members who can see a team skill propose and comment on it
  * through the child tables instead. Mirrors `canManageSkill`.
  */
+const agentSkillWriteRule = (table: string) => {
+  const column = (name: string) => sql.raw(`${table}.${name}`);
+  const isAuthor = sql`${column("user_id")} = (SELECT current_setting(
+    '${sql.raw(SETTING_USER_ID)}', true
+  ))`;
+  return sql`(
+    (
+      (${column("scope")} = 'team' AND (
+        ${organizationManagerCheck}
+        OR (${column("bound_workspace_id")} IS NOT NULL AND ${isAuthor})
+      ))
+      OR (${column("scope")} = 'private' AND ${isAuthor} AND (
+        ${column("bound_client_id")} IS NULL OR ${organizationManagerCheck}
+      ))
+    )
+    AND ${agentSkillBindingReachCheck(table)}
+  )`;
+};
+
 const agentSkillWriteCheck = sql`(
-  ${organizationCheck} AND (
-    (scope = 'team' AND ${organizationManagerCheck})
-    OR (scope = 'private' AND ${userCheck})
-  )
+  ${organizationCheck} AND ${agentSkillWriteRule("agent_skills")}
 )`;
 
 const agentSkillInsertCheck = sql`(
@@ -1352,12 +1438,7 @@ const agentSkillResourceWriteCheck = sql`(
     FROM agent_skills s
     WHERE s.id = skill_id
       AND s.organization_id = agent_skill_resources.organization_id
-      AND (
-        (s.scope = 'team' AND ${organizationManagerCheck})
-        OR (s.scope = 'private' AND s.user_id = (SELECT current_setting(
-          '${sql.raw(SETTING_USER_ID)}', true
-        )))
-      )
+      AND ${agentSkillWriteRule("s")}
   )
 )`;
 

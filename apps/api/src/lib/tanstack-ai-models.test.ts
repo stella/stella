@@ -9,8 +9,8 @@ import {
   CHAT_PDF_ATTACHMENT_MODEL_OPTIONS,
   getModelReasoningEfforts,
   isBYOKProviderRoleSupported,
-  MODEL_TASKS,
   MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
   shouldEmitTemperature,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
@@ -757,7 +757,7 @@ describe("TanStack text model resolution", () => {
                     bytes:
                       size === "oversized"
                         ? expect.any(String)
-                        : Buffer.from(png).toString("base64"),
+                        : Buffer.from(png).toBase64(),
                   },
                 },
               },

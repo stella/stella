@@ -6,10 +6,10 @@ import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  featureEnrolments,
   rateTables,
   workspaceMembers,
   workspaces,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import {
@@ -24,8 +24,8 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
 import createRateTable from "./create";

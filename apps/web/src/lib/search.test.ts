@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE, toResourceName } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
@@ -9,8 +9,8 @@ import {
   getFirstSearchHighlightText,
   getNativeSearchDocumentPreviewTarget,
   getSearchHighlightText,
-  getSearchPreviewRenderContent,
   getSearchPreviewDate,
+  getSearchPreviewRenderContent,
   getSearchPreviewTarget,
   normalizeSearchQuery,
   selectAuthorizedSearchPreviewData,

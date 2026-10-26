@@ -3,7 +3,6 @@ import { lazy, Suspense } from "react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -22,9 +21,9 @@ import {
   overviewOptions,
 } from "@/lib/workspaces/queries";
 import {
+  CORRESPONDENCE_PAGE_SIZE,
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
-  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   filesystemEntitiesOptions,
@@ -36,6 +35,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
+import { routeSearchSchema } from "@/route-search-params";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
 import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
@@ -65,7 +65,7 @@ const isCalendarView = (view: WorkspaceView): view is CalendarWorkspaceView =>
   view.layout.type === "calendar";
 
 // `run` opens one verification in an AVT view.
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   run: optionalSearchStringSchema(),
 });
 
@@ -185,7 +185,14 @@ export const Route = createFileRoute(
             queryClient,
             correspondenceAddressOptions(workspaceId),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "loader.correspondence:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId/",
+                },
+              });
             },
           ),
         ]);

@@ -5,8 +5,8 @@ import type { RlsDatabase } from "@/api/db/scoped";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import {
-  REVIEW_RESET_REFUSAL,
   resetReviewOrganization,
+  REVIEW_RESET_REFUSAL,
 } from "@/api/lib/review-organization/reset";
 import type {
   ReviewResetDependencies,
