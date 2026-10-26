@@ -132,7 +132,11 @@ export const unlistedTestCommands = ({
       "bun",
       "test",
       ...(timeout === undefined ? [] : ["--timeout", String(timeout)]),
-      ...group,
+      // A path without `./` is a name filter: Bun would walk the whole tree
+      // for matching files instead of loading the one named.
+      ...group.map((file) =>
+        path.isAbsolute(file) || file.startsWith("./") ? file : `./${file}`,
+      ),
     ]),
     ...shellTests.map((file) => ["bash", file]),
   ];

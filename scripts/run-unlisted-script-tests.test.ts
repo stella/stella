@@ -71,8 +71,8 @@ describe("balanceTestFiles", () => {
         weightOf,
       }),
     ).toEqual([
-      ["bun", "test", "--timeout", "35000", "scripts/a.test.ts"],
-      ["bun", "test", "--timeout", "35000", "scripts/b.test.ts"],
+      ["bun", "test", "--timeout", "35000", "./scripts/a.test.ts"],
+      ["bun", "test", "--timeout", "35000", "./scripts/b.test.ts"],
       ["bash", "scripts/check.sh"],
     ]);
   });
@@ -171,8 +171,8 @@ describe("unlistedTestCommands", () => {
         "test",
         "--timeout",
         "35000",
-        "scripts/first.test.ts",
-        "scripts/second.test.ts",
+        "./scripts/first.test.ts",
+        "./scripts/second.test.ts",
       ],
       ["bash", "scripts/check.sh"],
     ]);
@@ -185,7 +185,7 @@ describe("unlistedTestCommands", () => {
         timeout: undefined,
       }),
     ).toEqual([
-      ["bun", "test", "scripts/first.test.ts"],
+      ["bun", "test", "./scripts/first.test.ts"],
       ["bash", "scripts/check.sh"],
     ]);
   });
