@@ -480,6 +480,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       aiHandlerError(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new AIGenerationCancelledError({ message: SENTINEL }),
@@ -494,6 +495,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     name: "a cancellation deeper than the immediate wrapper stays visible",
     error: () =>
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new WorkflowIntegrationError({
@@ -509,6 +511,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       classifyFailure(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new ChatEmptyCompletionError({ message: SENTINEL }),
@@ -831,6 +834,7 @@ describe("wrapper properties", () => {
 
   test("a brand deep in the chain does not rescue an outer defect", () => {
     const deep = new HandlerError({
+      code: "internal_error",
       status: 502,
       message: "wrapped",
       cause: new ChatEmptyCompletionError({ message: "x" }),
@@ -1010,6 +1014,7 @@ describe("the observation reads the boundary's decision, not the classifier", ()
   test("a cancelled generation keeps the caller's fallback", () => {
     const answered = aiHandlerError(
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new AIGenerationCancelledError({ message: SENTINEL }),
