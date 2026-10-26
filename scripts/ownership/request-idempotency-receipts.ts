@@ -57,6 +57,11 @@ export default {
     names: ["requestIdempotencyReceipts"],
     allowed: [
       {
+        path: "apps/api/src/db/entity-feature-gate-repair.ts",
+        reason:
+          "Schema metadata enumeration only; no receipt rows read or written.",
+      },
+      {
         path: "apps/api/src/lib/idempotency/request-receipt-transition-spec.ts",
         reason:
           "Declares the receipt lifecycle graph for the transition owner.",
