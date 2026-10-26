@@ -4770,6 +4770,7 @@
     "modelError": "Modelis nevarēja pabeigt šo atbildi.",
     "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
     "regenerate": "Ģenerēt atbildi atkārtoti",
+    "selectionError": "Atlasiet tekstu no paša nolēmuma.",
     "send": "Nosūtīt papildjautājumu",
     "share": "Kopīgot ar komandu",
     "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",

@@ -4770,6 +4770,7 @@
     "modelError": "The model could not finish this answer.",
     "networkError": "The connection was interrupted. Try again.",
     "regenerate": "Regenerate answer",
+    "selectionError": "Select text from the decision itself.",
     "send": "Send follow-up",
     "share": "Share with team",
     "timeoutError": "The answer timed out. Try again.",
