@@ -110,14 +110,14 @@ function NewInvoicePage() {
       enabled: canApprove,
     }),
   );
-  useQueryViewError(pendingTime);
+  useQueryViewError(pendingTime, "NewInvoicePage:pending-time");
   const pendingExpenses = useQueryView(
     useQuery({
       ...expensesOptions(workspaceId, { status: "draft" }),
       enabled: canApprove && canApproveExpenses,
     }),
   );
-  useQueryViewError(pendingExpenses);
+  useQueryViewError(pendingExpenses, "NewInvoicePage:pending-expenses");
   const pendingCount =
     (pendingTime.type === "items" ? pendingTime.items.length : 0) +
     (pendingExpenses.type === "items" ? pendingExpenses.items.length : 0);

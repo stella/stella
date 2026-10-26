@@ -33,7 +33,10 @@ export const prefetchPendingApprovals = async ({
     return;
   }
   const captureError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "prefetchPendingApprovals:failure",
+      scope: { type: "handler", handlerId: "prefetchPendingApprovals:failure" },
+    });
   };
   await Promise.all([
     prefetchRouteQuery(

@@ -35,7 +35,12 @@ export const useApproveTimeEntries = () => {
         }),
       ]);
     },
-    onError: (error) => analytics.captureError(error),
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useApproveTimeEntries:failure",
+        scope: { type: "handler", handlerId: "useApproveTimeEntries:failure" },
+      });
+    },
   });
 };
 
@@ -61,7 +66,12 @@ export const useReturnTimeEntry = () => {
         }),
       ]);
     },
-    onError: (error) => analytics.captureError(error),
+    onError: (error) => {
+      analytics.captureError(error, {
+        fingerprintKey: "useReturnTimeEntry:failure",
+        scope: { type: "handler", handlerId: "useReturnTimeEntry:failure" },
+      });
+    },
   });
 };
 
