@@ -1051,6 +1051,8 @@ test.skip("arrow-highlighting a plain-text paste option previews the clip withou
   await expect(pasteTextAs).toBeFocused();
   await expectPastePreview(page, "original");
 
+  // Reopening the submenu moves focus in asynchronously; ArrowDown before it
+  // lands stays on the closed trigger.
   await page.keyboard.press("ArrowRight");
   await expect(original).toBeFocused();
   await page.keyboard.press("ArrowDown");
