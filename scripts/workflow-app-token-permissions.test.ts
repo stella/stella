@@ -257,6 +257,24 @@ test("the census refuses an ungranted, unused or implicit permission", () => {
   ]);
   expect(
     appTokenProblems(
+      request(
+        { contents: "write", "pull-requests": "write", issues: "write" },
+        publish,
+      ),
+    ),
+  ).toEqual([
+    "w.yml#heal: permission-issues is requested but nothing in the job uses it; drop it",
+  ]);
+  expect(
+    appTokenProblems(
+      request(
+        { contents: "write", "pull-requests": "write", issues: "write" },
+        `${publish}\ngh api "repos/stella/tasks/issues/1/labels"`,
+      ),
+    ),
+  ).toEqual([]);
+  expect(
+    appTokenProblems(
       request({ contents: "write", "pull-requests": "wrtie" }, publish),
     ),
   ).toEqual([
