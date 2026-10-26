@@ -43,6 +43,7 @@ import {
   WorkflowIntegrationError,
 } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint, errorSystemFields } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type {
   ExpectedReason,
   FailureExpectation,
@@ -91,6 +92,8 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+
+import { exceptionFingerprint } from "./exception-fingerprint";
 
 const SENTINEL = "PRIVILEGED-SENTINEL";
 
@@ -1310,7 +1313,11 @@ describe("observeFailure channels", () => {
 
       const failure = runWithRequestIdScope(() => {
         openRequestContext();
-        observeFailure(materialize(row), { sink: SINK, request });
+        observeFailure(materialize(row), {
+          sink: SINK,
+          request,
+          scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        });
         return getRequestFailure();
       });
 
@@ -1376,6 +1383,7 @@ describe("observeFailure channels", () => {
     observeFailure(codedError("ECONNRESET"), {
       sink: SINK,
       request: scopedRequest(),
+      scope: { type: "request", method: "GET", routeTemplate: "/contract" },
     });
 
     const [line] = metricLines;
@@ -1424,7 +1432,10 @@ describe("observeFailure channels", () => {
     });
     const [exception] = analytics.exceptions();
     expect(exception?.properties["$exception_fingerprint"]).toBe(
-      legacy.legacyErrorIdentity(legacy.errorFingerprint(error)),
+      exceptionFingerprint(readEvidence(error), {
+        fingerprintKey: "observe.contract.sink",
+        scope: { type: "handler", handlerId: "contract.sink" },
+      }),
     );
     // Suppression keys on that same identity: the second capture is throttled.
     expect(analytics.exceptions()).toHaveLength(1);
@@ -1536,8 +1547,13 @@ describe("privileged content never leaves the process", () => {
       const error = make();
       const request = scopedRequest();
       const defect = failureSink({ event: "sentinel.defect", expected: [] });
-      observeFailure(error, { sink: defect, request, ctx: hostileContext });
-      captureError(error);
+      observeFailure(error, {
+        sink: defect,
+        request,
+        scope: { type: "request", method: "GET", routeTemplate: "/contract" },
+        ctx: hostileContext,
+      });
+      captureError(error, handlerErrorContext("observability.capture"));
       logger.warn("helper.record", {
         ...errorSystemFields(error),
         ...pgErrorFields(error),

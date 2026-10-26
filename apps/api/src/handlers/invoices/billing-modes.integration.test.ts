@@ -21,6 +21,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -115,7 +116,7 @@ const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
   return panic("Invoice test context received an unregistered handler");
 };
 
-const context = <TContext>(
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   body: unknown,
   params: Record<string, unknown> = {},

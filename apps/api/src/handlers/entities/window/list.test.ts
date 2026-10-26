@@ -107,10 +107,10 @@ const createSafeDb = (): Parameters<
     new Map(),
   ];
 
-  return async <T>() => {
+  return asTestRaw<ReadWindowCtx["safeDb"]>(async () => {
     const result = results.shift() ?? [];
-    return Result.ok(asTestRaw<T>(result));
-  };
+    return Result.ok(result);
+  });
 };
 
 describe("entity read handlers", () => {

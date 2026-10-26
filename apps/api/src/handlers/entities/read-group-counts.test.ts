@@ -37,12 +37,11 @@ const createContext = ({
 // type lookup (must be a select type), the grouped value counts (LATERAL
 // unnest/scalar union), then the uncategorized NOT EXISTS count. Queue the
 // results in that order so the test fails loudly if the call order changes.
-const createSafeDb =
-  (results: unknown[]): GroupCountsCtx["safeDb"] =>
-  async <T>() => {
+const createSafeDb = (results: unknown[]): GroupCountsCtx["safeDb"] =>
+  asTestRaw<GroupCountsCtx["safeDb"]>(async () => {
     const result = results.shift() ?? [];
-    return Result.ok(asTestRaw<T>(result));
-  };
+    return Result.ok(result);
+  });
 
 describe("readGroupCounts", () => {
   test("single-select property: two values plus a non-zero uncategorized bucket", async () => {

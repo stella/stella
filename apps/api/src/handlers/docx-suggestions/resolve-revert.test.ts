@@ -15,6 +15,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -269,14 +270,23 @@ const createWorkspaceContext = ({
   };
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: { handler: (context: TContext) => Promise<unknown> },
   context: WorkspaceTestContext,
   requestShape: Partial<TContext> & Record<string, unknown>,
 ): Promise<unknown> => {
+  // Spread the context without its route: spreading both typed routes makes
+  // TypeScript intersect two route-path unions, which exceeds its union limit.
+  const { route: contextRoute, ...contextFields } = context;
   try {
     return await endpoint.handler(
-      asTestRaw<TContext>({ ...context, ...requestShape }),
+      asTestRaw<TContext>({
+        ...contextFields,
+        ...requestShape,
+        request: requestShape.request ?? context.request,
+        route: requestShape.route ?? contextRoute,
+        set: requestShape.set ?? { headers: {}, status: 200 },
+      }),
     );
   } catch (error) {
     return error;

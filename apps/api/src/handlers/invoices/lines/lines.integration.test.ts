@@ -39,6 +39,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -1004,7 +1005,7 @@ const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
   return panic("Invoice test context received an unregistered handler");
 };
 
-const contextFor = <TContext>(
+const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (handlerContext: TContext) => unknown,
   {
     body,

@@ -70,6 +70,7 @@ import {
   writeRawSourcePayload,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 export { legislationSourceHash } from "@/api/handlers/legislation/revision";
@@ -389,10 +390,13 @@ const storeSourceRaw = async ({
       sourceId: input.sourceId,
       eli: input.eli,
     });
-    captureError(written.error, {
-      sourceId: input.sourceId,
-      step: "processLegislationDocument.sourceRawWrite",
-    });
+    captureError(
+      written.error,
+      handlerErrorContext("legislation.storeSourceRaw.written_error", {
+        sourceId: input.sourceId,
+        step: "processLegislationDocument.sourceRawWrite",
+      }),
+    );
     return null;
   }
   return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
@@ -916,11 +920,17 @@ export const processLegislationDocument = async (
   const revisionInput = revision.input;
   const amendmentObservation = revision.amendmentObservation;
   if (amendmentObservation.type === "rejected") {
-    captureError(amendmentObservation.error, {
-      reason: amendmentObservation.error.reason,
-      sourceId: revisionInput.sourceId,
-      step: "processLegislationDocument.amendmentObservation",
-    });
+    captureError(
+      amendmentObservation.error,
+      handlerErrorContext(
+        "legislation.processLegislationDocument.amendmentObservation",
+        {
+          reason: amendmentObservation.error.reason,
+          sourceId: revisionInput.sourceId,
+          step: "processLegislationDocument.amendmentObservation",
+        },
+      ),
+    );
   }
   const window = revision.window;
   const stated = statedClassification(revisionInput);
@@ -1040,11 +1050,14 @@ export const processLegislationDocument = async (
       });
     } catch (error) {
       corpusWriteFailed = true;
-      captureError(error, {
-        documentId: id,
-        sourceId: revisionInput.sourceId,
-        step: "processLegislationDocument.corpusWrite",
-      });
+      captureError(
+        error,
+        handlerErrorContext("legislation.processLegislationDocument", {
+          documentId: id,
+          sourceId: revisionInput.sourceId,
+          step: "processLegislationDocument.corpusWrite",
+        }),
+      );
       await preserveLegislationCorpusWriteRetry({
         documentId: id,
         previousSourceHash: existing?.sourceHash ?? null,

@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import createAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   assertUserIsNotSoleOrgOwner,
   reassignActiveTaskAssignmentsAndDropMemberships,
@@ -100,6 +101,8 @@ if (!databaseUrl || !runPostgresTests) {
               const result = await createAllowedSender.handler(
                 asTestRaw<Parameters<typeof createAllowedSender.handler>[0]>({
                   safeDb: database,
+                  route:
+                    "/v1/organization-settings/correspondence/allowed-senders" satisfies ApiRoutePath,
                   memberRole: sessionMemberRole("owner"),
                   session: { activeOrganizationId: organizationId },
                   user: { id: userId },

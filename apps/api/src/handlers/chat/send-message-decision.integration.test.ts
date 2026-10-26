@@ -200,6 +200,7 @@ test("the first send binds the reader decision to the listed thread badge", asyn
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100 },
       request: new Request("http://localhost/v1/chat/threads"),
+      route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

@@ -16,6 +16,7 @@ import listDocumentTypes from "@/api/handlers/document-types/list";
 import reorderDocumentTypes from "@/api/handlers/document-types/reorder";
 import updateDocumentType from "@/api/handlers/document-types/update";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -67,11 +68,11 @@ const createOrgContext = (
 // `HttpStatusResponse` (`{ code, response }`) on error — not a raw Result. So
 // we mirror the cross-tenant harness: read the numeric status for errors and
 // inspect the returned object fields for successes.
-type TestEndpoint<TContext> = {
+type TestEndpoint<TContext extends SafeHandlerLogContext> = {
   handler: (context: TContext) => Promise<unknown>;
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: TestEndpoint<TContext>,
   context: OrgContext,
   requestShape: Record<string, unknown>,
