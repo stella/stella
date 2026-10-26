@@ -5,7 +5,6 @@ use core_foundation::{
   boolean::CFBoolean,
   dictionary::{CFDictionary, CFDictionaryRef},
   string::{CFString, CFStringRef},
-  url::{CFURL, CFURLCopyFileSystemPath, CFURLCreateWithString, kCFURLPOSIXPathStyle},
 };
 use std::ptr;
 
@@ -113,36 +112,21 @@ fn local_document_path(value: &str) -> Option<String> {
   if !authority.is_empty() && !authority.eq_ignore_ascii_case("localhost") {
     return None;
   }
-  if remainder[slash..].contains(['?', '#']) || value.chars().any(char::is_control) {
+  if remainder[slash..].starts_with("//")
+    || remainder[slash..].contains(['?', '#'])
+    || value.chars().any(char::is_control)
+  {
     return None;
   }
-  let string = CFString::new(value);
-  // SAFETY: CFURL reads a live CFString, with no base URL. Its nullable Create
-  // result is checked before ownership is wrapped and released by CFURL.
-  let reference = unsafe {
-    CFURLCreateWithString(ptr::null_mut(), string.as_concrete_TypeRef(), ptr::null())
-  };
-  if reference.is_null() {
-    return None;
-  }
-  // SAFETY: The non-null reference was returned by CFURLCreateWithString.
-  let url = unsafe { CFURL::wrap_under_create_rule(reference) };
-  // A CFString preserves embedded NULs for validation; converting through a
-  // C filesystem buffer would truncate an encoded NUL before we can reject it.
-  // SAFETY: The live file URL is owned above; this nullable Copy result is
-  // checked and owned before inspecting its type or contents.
-  let path = owned_type(unsafe {
-    CFURLCopyFileSystemPath(url.as_concrete_TypeRef(), kCFURLPOSIXPathStyle).cast()
-  })?
-  .downcast::<CFString>()?
-  .to_string();
-  if !std::path::Path::new(&path).is_absolute()
+  let path = tauri::Url::parse(value).ok()?.to_file_path().ok()?;
+  let path = path.to_str()?;
+  if !std::path::Path::new(path).is_absolute()
     || path.starts_with("//")
     || path.chars().any(char::is_control)
   {
     return None;
   }
-  Some(path)
+  Some(path.to_string())
 }
 
 /// Reads one focused window without prompting or logging captured values.
@@ -176,6 +160,22 @@ mod tests {
   use super::local_document_path;
 
   #[test]
+  fn documents_reject_every_percent_encoded_ascii_control() {
+    for byte in (0..=31).chain(std::iter::once(127)) {
+      for encoded in [format!("%{byte:02X}"), format!("%{byte:02x}")] {
+        assert_eq!(
+          local_document_path(&format!("file:///Matter{encoded}.docx")),
+          None,
+        );
+      }
+    }
+    assert_eq!(
+      local_document_path("file:///Matter%2500.docx").as_deref(),
+      Some("/Matter%00.docx"),
+    );
+  }
+
+  #[test]
   fn documents_accept_only_local_file_urls() {
     assert_eq!(
       local_document_path("file:///Volumes/Matters/Matter%20notes.docx").as_deref(),
@@ -194,6 +194,7 @@ mod tests {
       "file:///Matter%00.docx",
       "file:///Matter%0A.docx",
       "file:////server/share/Matter.docx",
+      "file:///%2Fserver/share/Matter.docx",
       "file:relative.docx",
     ] {
       assert_eq!(local_document_path(value), None);
