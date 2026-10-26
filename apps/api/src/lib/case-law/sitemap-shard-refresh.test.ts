@@ -518,7 +518,7 @@ test(
   async () => {
     await refreshUntilDone(refreshDb);
     const ids = await Promise.all(
-      Array.from({ length: 5 }, () =>
+      Array.from({ length: 5 }, async () =>
         insertOne({ decisionDate: "2023-02-02" }),
       ),
     );
