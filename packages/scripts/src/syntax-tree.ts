@@ -14,13 +14,6 @@ export { Visitor } from "oxc-parser";
 // ESTree node types (`Node`, `CallExpression`, `TSTypeReference`, …).
 export type * from "oxc-parser";
 
-/**
- * ESTree's own names. oxc types identifiers and properties by role (binding,
- * reference, object literal entry, pattern entry, …); these are every node
- * that carries the ESTree tag.
- */
-export type IdentifierNode = Extract<Node, { type: "Identifier" }>;
-export type PropertyNode = Extract<Node, { type: "Property" }>;
 type SourceLocation = {
   /** 1-based line. */
   readonly line: number;
@@ -56,8 +49,7 @@ export const walk = (
   visit: (
     node: Node,
     ancestors: readonly Node[],
-    // Any other return value, including none, visits the children.
-  ) => unknown,
+  ) => "skip-children" | undefined,
 ): void => {
   const ancestors: Node[] = [];
   const enter = (node: Node): void => {
@@ -138,7 +130,11 @@ export const parseSource = (
     comments: result.comments,
     locate: locator(sourceText),
     module: result.module,
-    program: result.program,
+    // Deserializing the tree costs more than parsing; readers of the module
+    // record alone never build it.
+    get program() {
+      return result.program;
+    },
     sourceText,
   };
 };

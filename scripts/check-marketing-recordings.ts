@@ -110,7 +110,11 @@ export const readManifestEntries =
   };
 
 const git = (args: readonly string[]): string =>
-  execFileSync("git", [...args], { cwd: ROOT_DIR, encoding: "utf-8" }).trim();
+  execFileSync("git", [...args], {
+    maxBuffer: 2 ** 30,
+    cwd: ROOT_DIR,
+    encoding: "utf-8",
+  }).trim();
 
 export const watchedPathsHashAtHead = (
   watchedPaths: readonly string[],

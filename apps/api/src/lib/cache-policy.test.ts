@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 
 import { createHttpApp } from "@/api/http/app";
 import { cacheControlFor, responseCachePolicy } from "@/api/http/cache";
-import type { CachePolicy } from "@/api/http/cache";
+import type { CachePolicy, RouteCachePolicy } from "@/api/http/cache";
 import { routes } from "@/api/http/route";
 import type {
   Middleware,
@@ -24,7 +24,7 @@ const SSE_DIRECTIVES = "private, no-cache, no-store, no-transform";
 
 const definition = (
   answer: (request: RouteRequest) => unknown,
-  cache?: CachePolicy,
+  cache?: RouteCachePolicy,
 ): RouteDefinition => ({
   access: "public",
   config: {},
@@ -250,4 +250,11 @@ describe("response cache policy", () => {
       expect(response.headers.get("cache-control")).toBe(expected);
     }
   });
+});
+
+test("only an answer, never a route, declares a private lifetime", () => {
+  const perAnswer: CachePolicy = { kind: "private", maxAge: 60 };
+  // @ts-expect-error -- a route's answers include failures, which are never kept.
+  const perRoute: RouteCachePolicy = { kind: "private", maxAge: 60 };
+  expect([perAnswer.kind, perRoute.kind]).toEqual(["private", "private"]);
 });

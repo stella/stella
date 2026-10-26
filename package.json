@@ -161,6 +161,7 @@
     "fast-check": "catalog:",
     "knip": "^6.41.0",
     "lefthook": "2.2.2",
+    "oxc-parser": "catalog:",
     "oxc-transform-react": "catalog:",
     "oxlint": "catalog:",
     "oxlint-tailwindcss": "1.16.0",

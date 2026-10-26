@@ -175,8 +175,26 @@ index 6d9820c..193fe51 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index a330176..52e9de6 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -3993,5 +3993,10 @@ interface CreateOnceRule {
+ //#endregion
+ //#region src/index.d.ts
+ declare const plugin: Plugin;
++/** The cache paths of a stylesheet's design-system snapshot, named by the hash of the inputs that compile it. */
++declare function cacheArtifactPaths(cssPath: string): {
++  json: string;
++  lock: string;
++};
+ //#endregion
+-export { plugin as default };
+\ No newline at end of file
++export { cacheArtifactPaths, plugin as default };
+\ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c6242..d95d7ed 100644
+index 61c6242..d83f163 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -352,3 +370,9 @@ index 61c6242..d95d7ed 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
+@@ -10787,4 +10879,4 @@ const plugin = definePlugin({
+ 	}
+ });
+ //#endregion
+-export { plugin as default };
++export { cacheArtifactPaths, plugin as default };

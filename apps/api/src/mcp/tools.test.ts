@@ -25,6 +25,7 @@ import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-r
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { PUBLIC_COUNTRY_CAPABILITIES } from "@stll/api-contract/public-country-capability";
 import {
   countedSearchTotal,
   FACET_COUNT_TYPE,
@@ -6230,6 +6231,32 @@ describe("OpenAI-compatible MCP tools", () => {
         message: "Case-law country not found",
         hint: "Pass one of the coverage country codes: CZE, SVK, EU, or omit country for all jurisdictions.",
       });
+    });
+
+    // The input advertises every public country, including those not yet
+    // open; each one the corpus records nothing for must still be answerable.
+    test("answers an advertised country without coverage with its admission state", async () => {
+      const covered = new Set<string>(
+        CASE_LAW_COVERAGE_FIXTURE.countries.map(({ country }) => country),
+      );
+      const uncovered = CASE_LAW_JURISDICTIONS.filter(
+        (country) =>
+          !covered.has(country) &&
+          PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw !== "admitted",
+      );
+      expect(uncovered).toContain("AUT");
+      for (const country of uncovered) {
+        const result = await call({ country });
+        expect(result.isError).not.toBe(true);
+        expect(result.structuredContent).toMatchObject({
+          code: "public_country_unavailable",
+          status: "unavailable",
+          domain: "caseLaw",
+          country,
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country].caseLaw,
+          hint: "Pass one of the coverage country codes: CZE, SVK, EU, or omit country for all jurisdictions.",
+        });
+      }
     });
 
     test("asks for clarification when no country matches the spelling", async () => {

@@ -29,6 +29,7 @@ import { compactMessagesForContext } from "@/api/handlers/chat/send-message-comp
 import * as chatSideEffectsModule from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -255,7 +256,7 @@ const createContext = ({
     role: "user",
     parts: [{ type: "text", content: "Summarize the selected matters" }],
   },
-  request = new Request("http://localhost/v1/chat/send"),
+  request = new Request("http://localhost/v1/chat"),
   onSafeDbTransaction,
   runMode,
   truncateAfterMessageId,
@@ -327,7 +328,7 @@ const createContext = ({
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
     request,
-    route: "/v1/chat/send",
+    route: "/v1/chat" satisfies ApiRoutePath,
     safeDb: observedSafeDb,
     scopedDb,
     session: { activeOrganizationId: organizationId },
@@ -526,7 +527,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: { insert },
@@ -557,7 +558,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -594,7 +595,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -631,7 +632,7 @@ describe("send message disconnect handling", () => {
           role: "assistant",
           parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -662,7 +663,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -697,7 +698,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -736,7 +737,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -798,7 +799,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [activeWorkspaceId],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -885,7 +886,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -1009,7 +1010,7 @@ describe("send message disconnect handling", () => {
         onSafeDbTransaction: () => {
           safeDbTransaction += 1;
         },
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
@@ -1167,7 +1168,7 @@ describe("send message disconnect handling", () => {
       {
         "error.cause.class": "Error",
         "error.class": "HandlerError",
-        route: "/v1/chat/send",
+        route: "/v1/chat" satisfies ApiRoutePath,
       },
     ]);
   });
@@ -1515,7 +1516,7 @@ describe("send message disconnect handling", () => {
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
-        request: new Request("http://localhost/v1/chat/send", {
+        request: new Request("http://localhost/v1/chat", {
           signal: abortController.signal,
         }),
         transaction: {
