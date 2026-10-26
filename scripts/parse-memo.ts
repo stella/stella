@@ -1,3 +1,4 @@
+import path from "node:path";
 // One TypeScript parse per (dialect, text), shared by the ratchet's counters.
 //
 // The ratchet runs dozens of counters over each file in turn, and most of them
@@ -65,25 +66,9 @@ export const parseSource = ({
     : RECENT_PARSES[dialect](text, parse);
 };
 
-// oxc picks the grammar from the file extension.
-type SyntaxDialect = "js" | "jsx" | "ts" | "tsx";
-
-const syntaxDialect = (fileName: string): SyntaxDialect => {
-  if (fileName.endsWith(".tsx")) {
-    return "tsx";
-  }
-  if (fileName.endsWith(".jsx")) {
-    return "jsx";
-  }
-  return /\.[cm]?js$/u.test(fileName) ? "js" : "ts";
-};
-
-const RECENT_SYNTAX_TREES = {
-  js: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  jsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  ts: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  tsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-} as const satisfies Record<SyntaxDialect, RecentMemo<ParsedSource>>;
+// The extension selects grammar and module mode. Keep that parser input
+// intact rather than maintaining a second table of equivalent extensions.
+const RECENT_SYNTAX_TREES = new Map<string, RecentMemo<ParsedSource>>();
 
 /** The oxc syntax tree of `text`, shared by every reader of the same text. */
 export const parseSyntax = ({
@@ -91,7 +76,14 @@ export const parseSyntax = ({
   text,
 }: ParseSourceOptions): ParsedSource => {
   const parse = () => parseSyntaxTree(fileName, text);
-  return DECLARATION_FILE_NAME.test(fileName)
-    ? parse()
-    : RECENT_SYNTAX_TREES[syntaxDialect(fileName)](text, parse);
+  if (DECLARATION_FILE_NAME.test(fileName)) {
+    return parse();
+  }
+  const extension = path.extname(fileName);
+  let memo = RECENT_SYNTAX_TREES.get(extension);
+  if (memo === undefined) {
+    memo = memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT);
+    RECENT_SYNTAX_TREES.set(extension, memo);
+  }
+  return memo(text, parse);
 };
