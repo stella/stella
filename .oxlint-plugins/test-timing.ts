@@ -70,8 +70,9 @@
 //     Testing Library `waitFor`, `waitForElementToBeRemoved`, and `findBy*` /
 //       `findAllBy*` calls with any `timeout` option, unless
 //       `// real-time: <reason>` says why the subject outlasts the hang guard
-//     Playwright `expect.poll`, `toPass`, and locator assertions with a
-//       bare numeric `timeout` option (including numeric expressions)
+//     Playwright `expect.poll`, `toPass`, and retrying (web-first)
+//       assertions with a bare numeric `timeout` option (including numeric
+//       expressions); generic matchers such as `toEqual` compare values
 //
 // Existing sites are budgeted per file, enclosing function and spelling in
 // scripts/test-timing-ledger.json (no line numbers, a reason per row). A hit
@@ -983,6 +984,42 @@ const literalTimeoutOption = (
   return isBareNumber(node) ? { node, pattern, reasonable: false } : null;
 };
 
+// Playwright's retrying assertions, whose last argument is their options.
+// Generic matchers such as `toEqual` take an expected value there instead.
+const RETRYING_MATCHERS: ReadonlySet<string> = new Set([
+  "toBeAttached",
+  "toBeChecked",
+  "toBeDisabled",
+  "toBeEditable",
+  "toBeEmpty",
+  "toBeEnabled",
+  "toBeFocused",
+  "toBeHidden",
+  "toBeInViewport",
+  "toBeOK",
+  "toBeVisible",
+  "toContainClass",
+  "toContainText",
+  "toHaveAccessibleDescription",
+  "toHaveAccessibleErrorMessage",
+  "toHaveAccessibleName",
+  "toHaveAttribute",
+  "toHaveCSS",
+  "toHaveClass",
+  "toHaveCount",
+  "toHaveId",
+  "toHaveJSProperty",
+  "toHaveRole",
+  "toHaveScreenshot",
+  "toHaveText",
+  "toHaveTitle",
+  "toHaveURL",
+  "toHaveValue",
+  "toHaveValues",
+  "toMatchAriaSnapshot",
+  "toPass",
+]);
+
 const literalWaitTimeout = (
   context: ScopeContext,
   call: AstNode,
@@ -1011,7 +1048,7 @@ const literalWaitTimeout = (
   if (playwrightExpect && method === "poll" && names.length === 2) {
     return literalTimeoutOption(args.at(1), "expect.poll", "bare-number");
   }
-  if (playwrightExpect && (method === "toPass" || /^to\p{Lu}/u.test(method))) {
+  if (playwrightExpect && RETRYING_MATCHERS.has(method)) {
     return literalTimeoutOption(args.at(-1), method, "bare-number");
   }
   return null;

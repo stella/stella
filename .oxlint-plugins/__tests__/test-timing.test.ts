@@ -447,6 +447,20 @@ describe("no-literal-wait-timeout", () => {
     ).toEqual([2, 5]);
   });
 
+  test("ignores timeout data compared by generic Playwright matchers", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect } from "@playwright/test";',
+          "expect(config).toEqual({ timeout: 1000 });",
+          "expect(config).toMatchObject({ timeout: 1000 });",
+          "expect(options).toStrictEqual({ timeout: 2000 });",
+          "await expect(locator).toHaveText('done', { timeout: 4000 });",
+        ].join("\n"),
+      ),
+    ).toEqual([5]);
+  });
+
   test("follows an aliased Playwright expect import", async () => {
     expect(
       await lintLiteralWaitTimeouts(
