@@ -1,0 +1,8 @@
+{
+  "sourceUrl": "https://publications.europa.eu/resource/celex/32021D0914",
+  "retrievedAt": "2026-10-16",
+  "sourceSha256": "85d76f03ea30e1cc739311df8f362b03c35cf9c3350f6d7f6e012c65c042872d",
+  "sha256": "432015d5aff7d7fbc068372e566ed773437ac494eac0093ef55bcb4bc7b21b3e",
+  "transformation": "Extracted publisher elements by id; removed XML namespace prefixes and wrapped as XHTML. Annex excerpt retains first six children.",
+  "originalCapture": "32021D0914-eng.raw"
+}

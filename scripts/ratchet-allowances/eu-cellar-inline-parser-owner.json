@@ -1,0 +1,6 @@
+{
+  "metric": "cross-handler-imports",
+  "file": "apps/api/src/handlers/legislation/ingestion/eu-xhtml.ts",
+  "delta": 1,
+  "reason": "The EU XHTML parser reuses the established shared inline-tree walker and table-row owner from case-law ingestion so both legal document parsers preserve the same AST semantics. Move those generic helpers to the shared legal-search parser owner with all existing consumers in one follow-up migration."
+}
