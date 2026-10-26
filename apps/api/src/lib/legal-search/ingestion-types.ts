@@ -638,7 +638,16 @@ export type SyncPage = {
    * adapter that names nothing.
    */
   sourceUrl?: string | undefined;
+  /**
+   * `none` when the adapter answered without asking the publisher anything,
+   * as a fixed snapshot read to its end parks. Such a page is no sync: the
+   * source's `last_sync_at` stays where its last request left it. Absent, the
+   * page came from a request.
+   */
+  publisherRequest?: typeof PUBLISHER_REQUEST.NONE | undefined;
 };
+
+export const PUBLISHER_REQUEST = { NONE: "none" } as const;
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
 export type UnreadOutcome = Extract<

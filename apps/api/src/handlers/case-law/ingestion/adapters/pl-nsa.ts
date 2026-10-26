@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: a parked page states it made no publisher request; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 /**
@@ -39,6 +40,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
@@ -1566,6 +1568,7 @@ export const createPlNsaCrawler = ({
       return Result.ok({
         decisions: [],
         nextCursor: encodePlNsaCursor(at, snapshot),
+        publisherRequest: PUBLISHER_REQUEST.NONE,
       });
     }
 

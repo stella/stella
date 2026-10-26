@@ -34,6 +34,7 @@ import {
   caseLawCourtStatusRows,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readProvisionPendingCounts } from "@/api/lib/case-law/provision-pending";
@@ -1222,3 +1223,44 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("a fixed-snapshot source reports its release date, not a recent run, as its currency", async () => {
+  const db = drizzle({ client });
+  const snapshotSourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(
+    caseLawSourceRow({
+      id: snapshotSourceId,
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      name: "pl snapshot",
+      enabled: true,
+      // A run an hour ago would read as current for a live publisher.
+      lastSyncAt: new Date(NOW.getTime() - HOUR_IN_MS),
+    }),
+  );
+  try {
+    const coverage = await loadCoverage();
+    if (Result.isError(coverage)) {
+      throw coverage.error;
+    }
+    const poland = coverage.value.countries.find(
+      ({ country }) => country === "POL",
+    );
+    const source = poland?.sources.find(
+      ({ adapterKey }) => adapterKey === ADAPTER_KEYS.PL_NSA,
+    );
+    expect(source?.health).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    expect(source?.edition).toEqual({
+      type: "snapshot",
+      snapshotDate: PL_NSA_SNAPSHOT.snapshotDate,
+    });
+    expect(poland?.health).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    const czech = coverage.value.countries
+      .find(({ country }) => country === "CZE")
+      ?.sources.find(({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS);
+    expect(czech?.edition).toEqual({ type: "live" });
+  } finally {
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, snapshotSourceId));
+  }
+});

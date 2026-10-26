@@ -947,6 +947,7 @@
       "healthCurrent": "À jour",
       "healthDelayed": "En retard",
       "healthDisabled": "Désactivé",
+      "healthSnapshot": "Instantané figé",
       "healthStalled": "À l’arrêt",
       "healthUnknown": "Jamais exécuté",
       "inPreparation": "En préparation",

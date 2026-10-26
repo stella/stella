@@ -947,6 +947,7 @@
       "healthCurrent": "Atnaujinta",
       "healthDelayed": "Vėluoja",
       "healthDisabled": "Išjungta",
+      "healthSnapshot": "Fiksuota momentinė kopija",
       "healthStalled": "Sustojęs",
       "healthUnknown": "Niekada nevykdyta",
       "inPreparation": "Rengiama",

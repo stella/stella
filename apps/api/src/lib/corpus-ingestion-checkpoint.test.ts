@@ -19,7 +19,10 @@ import {
   relations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -31,7 +34,9 @@ import {
   advanceCorpusIngestionCheckpoint,
   CORPUS_SOURCE_TYPE,
   INGESTION_CHECKPOINT_STATUS,
+  PUBLISHER_CHECK,
 } from "@/api/lib/corpus-ingestion-checkpoint";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -124,6 +129,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -167,6 +173,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     };
@@ -190,6 +197,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
           id: caseLawSourceId,
           leaseToken: ingestionLeaseToken,
           observationOrder: 1n,
+          publisherCheck: PUBLISHER_CHECK.ANSWERED,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
       }),
@@ -201,6 +209,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
           id: caseLawSourceId,
           leaseToken: ingestionLeaseToken,
           observationOrder: 1n,
+          publisherCheck: PUBLISHER_CHECK.ANSWERED,
           type: CORPUS_SOURCE_TYPE.CASE_LAW,
         },
       }),
@@ -235,6 +244,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -247,6 +257,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -275,6 +286,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -286,6 +298,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 2n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -297,6 +310,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: caseLawSourceId,
         leaseToken: ingestionLeaseToken,
         observationOrder: 3n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -329,6 +343,7 @@ describe("advanceCorpusIngestionCheckpoint", () => {
         id: createSafeId<"caseLawSource">(),
         leaseToken: ingestionLeaseToken,
         observationOrder: 1n,
+        publisherCheck: PUBLISHER_CHECK.ANSWERED,
         type: CORPUS_SOURCE_TYPE.CASE_LAW,
       },
     });
@@ -458,5 +473,84 @@ describe("case-law source ingestion lease", () => {
         sourceObservationOrder: 1n,
       },
     ]);
+  });
+});
+
+describe("case-law last sync", () => {
+  const previousSync = new Date("2026-01-01T00:00:00.000Z");
+
+  const runOnePage = async (
+    fetchPage: typeof czNsAdapter.fetchPage,
+  ): Promise<Date | null> => {
+    await db
+      .update(caseLawSources)
+      .set({ lastSyncAt: previousSync })
+      .where(eq(caseLawSources.id, lifecycleSourceId));
+    const originalFetchPage = czNsAdapter.fetchPage;
+    czNsAdapter.fetchPage = fetchPage;
+    const lease = await acquireCaseLawSourceIngestionLease({
+      scopedDb,
+      sourceId: lifecycleSourceId,
+    });
+    if (!lease) {
+      throw new Error("last-sync source lease was not acquired");
+    }
+    try {
+      await runIngestionPipeline({
+        acquireStoredTotalAdmission: async () => "held",
+        maxPages: 1,
+        scopedDb,
+        source: lease.source,
+        sourceLease: lease,
+      });
+    } finally {
+      czNsAdapter.fetchPage = originalFetchPage;
+      await lease.release();
+    }
+    const stored = (
+      await db
+        .select({ lastSyncAt: caseLawSources.lastSyncAt })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, lifecycleSourceId))
+        .limit(1)
+    ).at(0);
+    if (stored === undefined) {
+      throw new Error("last-sync source unexpectedly missing");
+    }
+    return stored.lastSyncAt;
+  };
+
+  // A quiet court that answered with nothing new is current: the answer is
+  // the check, not what it held.
+  test("moves when the publisher answered, even with nothing new", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.ok({ decisions: [], nextCursor: "quiet-page" }),
+    );
+    expect(lastSyncAt?.getTime()).toBeGreaterThan(previousSync.getTime());
+  });
+
+  test("stays when the adapter answered without asking the publisher", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.ok({
+        decisions: [],
+        nextCursor: "parked-at-end",
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      }),
+    );
+    expect(lastSyncAt).toEqual(previousSync);
+  });
+
+  test("stays when every request failed", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.err(
+        new AdapterFetchError({
+          message: "publisher unavailable",
+          adapterKey: ADAPTER_KEYS.CZ_NS,
+          cursor: null,
+          httpStatus: 503,
+        }),
+      ),
+    );
+    expect(lastSyncAt).toEqual(previousSync);
   });
 });

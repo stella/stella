@@ -947,6 +947,7 @@
       "healthCurrent": "Aktuální",
       "healthDelayed": "Se zpožděním",
       "healthDisabled": "Vypnuto",
+      "healthSnapshot": "Pevný snímek",
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatím nespuštěno",
       "inPreparation": "Připravuje se",

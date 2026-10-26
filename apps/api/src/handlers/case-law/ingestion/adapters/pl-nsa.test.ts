@@ -16,7 +16,10 @@ import nodePath from "node:path";
 
 import { createSha256 } from "@stll/sha256/node";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlNsaDecision,
@@ -633,7 +636,12 @@ describe("the cursor", () => {
     const crawler = createPlNsaCrawler({ snapshot, source: counted });
     const parked = `${snapshot.revision}:2:0`;
     const page = (await crawler.fetchPage(parked)).unwrap();
-    expect(page).toEqual({ decisions: [], nextCursor: parked });
+    // Nothing was asked, so the page says so and the run is no sync.
+    expect(page).toEqual({
+      decisions: [],
+      nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+    });
     expect(local).not.toHaveBeenCalled();
   });
 

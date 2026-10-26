@@ -35,19 +35,22 @@ export const CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS = {
   current: "caseLaw.coverage.healthCurrent",
   delayed: "caseLaw.coverage.healthDelayed",
   disabled: "caseLaw.coverage.healthDisabled",
+  snapshot: "caseLaw.coverage.healthSnapshot",
   stalled: "caseLaw.coverage.healthStalled",
   unknown: "caseLaw.coverage.healthUnknown",
 } as const satisfies Record<CaseLawCoverageHealth, TranslationKey>;
 
 /**
- * `disabled` and `unknown` are neutral on purpose: a source switched off on
- * purpose, and one that has never run, are not faults and must not read as
- * one beside a court that genuinely stopped answering.
+ * `disabled`, `snapshot` and `unknown` are neutral on purpose: a source
+ * switched off on purpose, a fixed release, and one that has never run, are
+ * not faults and must not read as one beside a court that genuinely stopped
+ * answering.
  */
 export const CASE_LAW_COVERAGE_HEALTH_TONES = {
   current: "success",
   delayed: "warning",
   disabled: "neutral",
+  snapshot: "neutral",
   stalled: "destructive",
   unknown: "neutral",
 } as const satisfies Record<CaseLawCoverageHealth, ReviewStatusTone>;

@@ -947,6 +947,7 @@
       "healthCurrent": "محدّثة",
       "healthDelayed": "متأخّر",
       "healthDisabled": "مُعطَّل",
+      "healthSnapshot": "لقطة ثابتة",
       "healthStalled": "متعثّر",
       "healthUnknown": "لم يُشغَّل قط",
       "inPreparation": "قيد الإعداد",

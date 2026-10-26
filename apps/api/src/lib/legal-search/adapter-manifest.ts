@@ -46,6 +46,20 @@ type AdapterDateRange =
       readonly through: DateRangeEnd;
     };
 
+/**
+ * Whether the publisher can still add to what this adapter reads.
+ *
+ * `live` follows a publisher that keeps publishing, so how recently it was
+ * checked says how current the corpus is. `snapshot` reads one fixed release
+ * dated `snapshotDate`: nothing newer can arrive however often it runs, so
+ * its currency is that date and never the last run.
+ */
+export type AdapterEdition =
+  | { readonly type: "live" }
+  | { readonly type: "snapshot"; readonly snapshotDate: string };
+
+const LIVE_EDITION = { type: "live" } as const satisfies AdapterEdition;
+
 type AdapterJurisdictionDeclaration = {
   readonly [TJurisdiction in CaseLawJurisdiction]: {
     readonly country: TJurisdiction;
@@ -113,6 +127,8 @@ type AdapterManifest<TKey extends string> = {
   readonly statedEcliIdentity: StatedEcliIdentity;
   readonly placeholderPatterns: readonly SourcePlaceholderPattern[];
   readonly dateRange: AdapterDateRange;
+  /** Required, so a new adapter states whether its publisher can still add. */
+  readonly edition: AdapterEdition;
 } & AdapterJurisdictionDeclaration;
 
 type AdapterManifestMap = {
@@ -183,6 +199,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: CZ_ECLI_COURTS,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "publication-date",
       fromInclusive: "2020-10-01",
@@ -199,6 +216,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: CZ_ECLI_COURTS,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "publication-date",
       fromInclusive: "2010-01-01",
@@ -220,6 +238,7 @@ export const ADAPTER_MANIFESTS = {
       { type: "exact", text: "—" },
       { type: "exact", text: "−" },
     ],
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2003-02-04",
@@ -239,6 +258,7 @@ export const ADAPTER_MANIFESTS = {
       { type: "exact", text: "Abstrakt není k dispozici." },
       { type: "exact", text: "Právní věta není k dispozici." },
     ],
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1993-01-01",
@@ -257,6 +277,7 @@ export const ADAPTER_MANIFESTS = {
     // withdraw the old one; the ECLI it states stays with the decision.
     statedEcliIdentity: STATED_ECLI_IDENTITY.DECISION,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1965-07-11",
@@ -273,6 +294,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: SK_ECLI_COURTS,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1993-01-01",
@@ -289,6 +311,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1986-05-28",
@@ -306,6 +329,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       // The oldest decision date the search answers with: a query bounded at
@@ -328,6 +352,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       // The oldest issue date the search answers with. Rulings the database
@@ -347,6 +372,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       // The Tribunal's first ruling, U 1/86; the portal lists nothing older.
@@ -368,6 +394,9 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    // The pinned dataset revision's own date (`PL_NSA_SNAPSHOT` reads it
+    // from here); no run can add a decision the revision does not hold.
+    edition: { type: "snapshot", snapshotDate: "2025-03-06" },
     dateRange: {
       // The oldest and newest decision dates the pinned revision holds.
       type: "decision-date",
@@ -385,6 +414,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       // The oldest judgment date the listing answers with, sorted by date.
@@ -402,6 +432,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1925-04-01",
@@ -418,6 +449,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1919-03-01",
@@ -434,6 +466,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1876-10-01",
@@ -450,6 +483,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2014-01-01",
@@ -466,6 +500,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2002-03-01",
@@ -482,6 +517,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2008-07-01",
@@ -498,6 +534,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1998-01-01",
@@ -514,6 +551,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1991-02-01",
@@ -530,6 +568,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1994-04-01",
@@ -546,6 +585,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1995-10-01",
@@ -562,6 +602,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2001-10-01",
@@ -578,6 +619,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "2003-01-01",
@@ -597,6 +639,7 @@ export const ADAPTER_MANIFESTS = {
     // The collection prints no "not available" stand-in: a decision without a
     // résumé states `Rezume: null`.
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       // `MeghozatalIdejeTol`/`Ig` take a year, and the search form's own list
       // opens at 1988. 1990 to 1995 answer nothing; they are inside the range
@@ -616,6 +659,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       // One general interpretation of 2004 predates the individual ones, which
       // open in July 2007.
@@ -635,6 +679,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       // The authority's own decisions start in 2018; the court rulings the
       // portal files beside them reach back to a 1981 judgment, and the
@@ -655,6 +700,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       // The register's oldest decision is dated 4 January 2000.
       type: "decision-date",
@@ -673,6 +719,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1991-01-01",
@@ -689,6 +736,7 @@ export const ADAPTER_MANIFESTS = {
     ecliCourtCodes: EU_ECLI_COURTS,
     statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    edition: LIVE_EDITION,
     dateRange: {
       type: "decision-date",
       fromInclusive: "1952-01-01",
@@ -711,7 +759,10 @@ export const IMPORT_SOURCE_MANIFESTS = {
     placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
   },
 } as const satisfies {
-  readonly [TKey in ImportSourceKey]: Omit<AdapterManifest<TKey>, "dateRange">;
+  readonly [TKey in ImportSourceKey]: Omit<
+    AdapterManifest<TKey>,
+    "dateRange" | "edition"
+  >;
 };
 
 /**

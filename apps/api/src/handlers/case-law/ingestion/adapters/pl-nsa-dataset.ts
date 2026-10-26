@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import type { AsyncBuffer, FileMetaData } from "hyparquet";
 // parser-output-unchanged: Transport failures retain their typed cause; successfully read dataset records parse unchanged.
+// parser-output-unchanged: the snapshot date is read from the adapter manifest, which states the same day; parsed records are unchanged.
 /**
  * The Hugging Face dataset `JuDDGES/pl-nsa`, pinned to one revision, and the
  * reader that walks it.
@@ -37,6 +38,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 // ── The pinned snapshot ──────────────────────────────────
@@ -82,7 +84,7 @@ const shard = (
 export const PL_NSA_SNAPSHOT: PlNsaSnapshot = {
   repository: "JuDDGES/pl-nsa",
   revision: "595f2301210eb513c392b437153aa2c5f6683240",
-  snapshotDate: "2025-03-06",
+  snapshotDate: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_NSA].edition.snapshotDate,
   shards: [
     shard(
       0,

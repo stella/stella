@@ -60,7 +60,10 @@ import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-confi
 import { readPendingTextCountsBySource } from "@/api/lib/case-law/public-subject";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  ADAPTER_MANIFESTS,
+  type AdapterEdition,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
   createUnrecognizedSourceReporter,
@@ -117,7 +120,15 @@ type CaseLawCoverageSource = {
   /** Where the publisher offers it, for attribution. */
   publicHomeUrl: string;
   health: CaseLawCoverageHealth;
-  /** ISO 8601; null before the first run. */
+  /**
+   * What the publisher can still add: `live`, or one fixed `snapshot` and the
+   * day it was taken, which is how current such a source can ever be.
+   */
+  edition: AdapterEdition;
+  /**
+   * When the publisher last answered a sync, ISO 8601; null before the first
+   * answer. A run that asked nothing, or whose requests all failed, leaves it.
+   */
   lastSyncAt: string | null;
   /** Exact decision-year bounds for decisions held from this source. */
   decisionYearFrom: number | null;
@@ -485,10 +496,12 @@ export const loadCaseLawCoverage = async ({
       name: manifest.publisher,
       publicHomeUrl: manifest.publicHomeUrl,
       health: caseLawSourceHealth({
+        edition: manifest.edition,
         enabled: source.enabled,
         lastSyncAt: source.lastSyncAt,
         now,
       }),
+      edition: manifest.edition,
       lastSyncAt: source.lastSyncAt?.toISOString() ?? null,
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,

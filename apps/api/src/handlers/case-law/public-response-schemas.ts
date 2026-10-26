@@ -320,6 +320,13 @@ const countryCoverage = {
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
         health: v.enum(CASE_LAW_COVERAGE_HEALTH),
+        edition: v.variant("type", [
+          v.object({ type: v.literal("live") }),
+          v.object({
+            type: v.literal("snapshot"),
+            snapshotDate: boundedString(10),
+          }),
+        ]),
         lastSyncAt: date,
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,

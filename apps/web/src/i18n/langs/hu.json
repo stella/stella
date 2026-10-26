@@ -947,6 +947,7 @@
       "healthCurrent": "Naprakész",
       "healthDelayed": "Késik",
       "healthDisabled": "Kikapcsolva",
+      "healthSnapshot": "Rögzített pillanatkép",
       "healthStalled": "Elakadt",
       "healthUnknown": "Még nem futott",
       "inPreparation": "Előkészületben",

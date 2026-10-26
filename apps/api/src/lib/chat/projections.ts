@@ -1434,6 +1434,17 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
           v.strictObject({
             adapterKey: v.string(),
             name: v.string(),
+            // `snapshot` sources hold one fixed release: nothing after
+            // `snapshotDate` can arrive, whatever `lastSyncAt` says.
+            edition: v.variant("type", [
+              projectionBranch(v.strictObject({ type: v.literal("live") })),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("snapshot"),
+                  snapshotDate: v.string(),
+                }),
+              ),
+            ]),
             lastSyncAt: v.nullable(v.string()),
             decisionYearFrom: v.nullable(v.number()),
             decisionYearTo: v.nullable(v.number()),

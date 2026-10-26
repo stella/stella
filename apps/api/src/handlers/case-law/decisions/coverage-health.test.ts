@@ -15,17 +15,25 @@ import {
 
 const NOW = new Date("2026-09-19T12:00:00.000Z");
 const ago = (ms: number): Date => new Date(NOW.getTime() - ms);
+const LIVE = { type: "live" } as const;
+const SNAPSHOT = { type: "snapshot", snapshotDate: "2025-03-06" } as const;
 
 describe("source health", () => {
   test("a source that synced on time is current however little it found", () => {
     expect(
-      caseLawSourceHealth({ enabled: true, lastSyncAt: ago(0), now: NOW }),
+      caseLawSourceHealth({
+        edition: LIVE,
+        enabled: true,
+        lastSyncAt: ago(0),
+        now: NOW,
+      }),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.CURRENT);
   });
 
   test("the current window includes its own boundary and excludes the next millisecond", () => {
     expect(
       caseLawSourceHealth({
+        edition: LIVE,
         enabled: true,
         lastSyncAt: ago(COVERAGE_CURRENT_WITHIN_MS),
         now: NOW,
@@ -33,6 +41,7 @@ describe("source health", () => {
     ).toBe(CASE_LAW_COVERAGE_HEALTH.CURRENT);
     expect(
       caseLawSourceHealth({
+        edition: LIVE,
         enabled: true,
         lastSyncAt: ago(COVERAGE_CURRENT_WITHIN_MS + 1),
         now: NOW,
@@ -43,6 +52,7 @@ describe("source health", () => {
   test("the delayed window includes its own boundary and stalls past it", () => {
     expect(
       caseLawSourceHealth({
+        edition: LIVE,
         enabled: true,
         lastSyncAt: ago(COVERAGE_DELAYED_WITHIN_MS),
         now: NOW,
@@ -50,6 +60,7 @@ describe("source health", () => {
     ).toBe(CASE_LAW_COVERAGE_HEALTH.DELAYED);
     expect(
       caseLawSourceHealth({
+        edition: LIVE,
         enabled: true,
         lastSyncAt: ago(COVERAGE_DELAYED_WITHIN_MS + 1),
         now: NOW,
@@ -60,25 +71,64 @@ describe("source health", () => {
   test("a disabled source reads as disabled whatever its last sync says", () => {
     expect(
       caseLawSourceHealth({
+        edition: LIVE,
         enabled: false,
         lastSyncAt: ago(COVERAGE_DELAYED_WITHIN_MS * 10),
         now: NOW,
       }),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
     expect(
-      caseLawSourceHealth({ enabled: false, lastSyncAt: NOW, now: NOW }),
+      caseLawSourceHealth({
+        edition: LIVE,
+        enabled: false,
+        lastSyncAt: NOW,
+        now: NOW,
+      }),
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
+  });
+
+  // A fixed release cannot fall behind a publisher that adds nothing to it,
+  // and cannot be current either: its date is the answer, whatever the runs.
+  test("a snapshot source reads as a snapshot however recently it ran", () => {
+    for (const lastSyncAt of [
+      null,
+      ago(0),
+      ago(COVERAGE_DELAYED_WITHIN_MS * 10),
+    ]) {
+      expect(
+        caseLawSourceHealth({
+          edition: SNAPSHOT,
+          enabled: true,
+          lastSyncAt,
+          now: NOW,
+        }),
+      ).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
+    }
+    expect(
+      caseLawSourceHealth({
+        edition: SNAPSHOT,
+        enabled: false,
+        lastSyncAt: ago(0),
+        now: NOW,
+      }),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
   });
 
   test("a source that has never synced is unknown, not stalled", () => {
     expect(
-      caseLawSourceHealth({ enabled: true, lastSyncAt: null, now: NOW }),
+      caseLawSourceHealth({
+        edition: LIVE,
+        enabled: true,
+        lastSyncAt: null,
+        now: NOW,
+      }),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.UNKNOWN);
   });
 
   test("a sync stamped ahead of now reads as current rather than as a negative age", () => {
     expect(
       caseLawSourceHealth({
+        edition: LIVE,
         enabled: true,
         lastSyncAt: new Date(NOW.getTime() + COVERAGE_DELAYED_WITHIN_MS),
         now: NOW,
@@ -114,6 +164,27 @@ describe("country health", () => {
         CASE_LAW_COVERAGE_HEALTH.DISABLED,
       ]),
     ).toBe(CASE_LAW_COVERAGE_HEALTH.DISABLED);
+  });
+
+  test("a snapshot yields to a live sibling and speaks only for itself", () => {
+    expect(
+      caseLawCountryHealth([
+        CASE_LAW_COVERAGE_HEALTH.SNAPSHOT,
+        CASE_LAW_COVERAGE_HEALTH.CURRENT,
+      ]),
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.CURRENT);
+    expect(
+      caseLawCountryHealth([
+        CASE_LAW_COVERAGE_HEALTH.STALLED,
+        CASE_LAW_COVERAGE_HEALTH.SNAPSHOT,
+      ]),
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
+    expect(
+      caseLawCountryHealth([
+        CASE_LAW_COVERAGE_HEALTH.DISABLED,
+        CASE_LAW_COVERAGE_HEALTH.SNAPSHOT,
+      ]),
+    ).toBe(CASE_LAW_COVERAGE_HEALTH.SNAPSHOT);
   });
 
   test("a country with no sources is unknown", () => {

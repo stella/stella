@@ -21,7 +21,8 @@ const base = {
       name: "Synthetic publisher",
       publicHomeUrl:
         "https://example.test/00000000-0000-4000-8000-000000000002",
-      health: "current",
+      health: "snapshot",
+      edition: { type: "snapshot", snapshotDate: "2025-03-06" },
       lastSyncAt: storedAsOf,
       decisionYearFrom: 1993,
       decisionYearTo: 2026,
@@ -90,6 +91,7 @@ const expectedSources = [
   {
     adapterKey: "synthetic-source",
     name: "Synthetic publisher",
+    edition: { type: "snapshot", snapshotDate: "2025-03-06" },
     lastSyncAt: storedAsOf,
     decisionYearFrom: 1993,
     decisionYearTo: 2026,

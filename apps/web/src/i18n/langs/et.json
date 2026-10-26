@@ -947,6 +947,7 @@
       "healthCurrent": "Ajakohane",
       "healthDelayed": "Hilineb",
       "healthDisabled": "Välja lülitatud",
+      "healthSnapshot": "Fikseeritud hetktõmmis",
       "healthStalled": "Takerdunud",
       "healthUnknown": "Pole kunagi käivitunud",
       "inPreparation": "Ettevalmistamisel",

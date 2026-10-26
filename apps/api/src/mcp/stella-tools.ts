@@ -3976,6 +3976,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             sources: entry.sources.map((source) => ({
               adapterKey: source.adapterKey,
               name: source.name,
+              edition: source.edition,
               lastSyncAt: source.lastSyncAt,
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
@@ -3997,6 +3998,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             sources: entry.sources.map((source) => ({
               adapterKey: source.adapterKey,
               name: source.name,
+              edition: source.edition,
               lastSyncAt: source.lastSyncAt,
               decisionYearFrom: source.decisionYearFrom,
               decisionYearTo: source.decisionYearTo,
