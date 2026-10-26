@@ -3,6 +3,7 @@ import {
   type Comment,
   type EcmaScriptModule,
   type Node,
+  type ObjectProperty,
   parseSync,
   type Program,
   visitorKeys,
@@ -13,14 +14,6 @@ import {
 export { Visitor } from "oxc-parser";
 // ESTree node types (`Node`, `CallExpression`, `TSTypeReference`, …).
 export type * from "oxc-parser";
-
-/**
- * ESTree's own names. oxc types identifiers and properties by role (binding,
- * reference, object literal entry, pattern entry, …); these are every node
- * that carries the ESTree tag.
- */
-export type Identifier = Extract<Node, { type: "Identifier" }>;
-export type Property = Extract<Node, { type: "Property" }>;
 
 type SourceLocation = {
   /** 1-based line. */
@@ -39,6 +32,19 @@ export type ParsedSource = {
   /** Location of a node's `start` or `end` (UTF-16 offsets). */
   readonly locate: (offset: number) => SourceLocation;
 };
+
+/**
+ * oxc tags object literal entries and destructuring entries alike as
+ * `Property`; only an entry of an object literal is an `ObjectProperty`, whose
+ * value is an expression rather than a binding pattern.
+ */
+export const isObjectLiteralProperty = (
+  node: Node,
+  parent: Node | undefined,
+): node is ObjectProperty =>
+  node.type === "Property" &&
+  parent?.type === "ObjectExpression" &&
+  parent.properties.some((property) => property === node);
 
 const isNode = (value: unknown): value is Node =>
   typeof value === "object" &&
