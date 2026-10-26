@@ -163,6 +163,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
 // SidebarContent); a thin track over the narrow icon strip reads as a bright
@@ -1674,7 +1675,7 @@ const MatterActivityList = ({
 
     await navigate({
       to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
+      params: { workspaceId, viewId: DEFAULT_WORKSPACE_VIEW_ID },
     });
   };
 
