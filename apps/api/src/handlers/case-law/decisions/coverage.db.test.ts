@@ -61,9 +61,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const NOW = new Date("2026-09-19T12:00:00.000Z");
 const HOUR_IN_MS = 60 * 60 * 1000;
 
-/** CZE is the admitted country; SVK is ingested and not admitted. */
+/** CZE is the admitted country; AUT is ingested and not admitted. */
 const czSourceId = createSafeId<"caseLawSource">();
-const skSourceId = createSafeId<"caseLawSource">();
+const atSourceId = createSafeId<"caseLawSource">();
 const disabledSourceId = createSafeId<"caseLawSource">();
 const withheldSourceId = createSafeId<"caseLawSource">();
 
@@ -132,9 +132,9 @@ beforeAll(
         storedTotalAsOf: new Date(NOW.getTime() - 2 * HOUR_IN_MS),
       }),
       caseLawSourceRow({
-        id: skSourceId,
-        adapterKey: ADAPTER_KEYS.SK_COURTS,
-        name: "sk",
+        id: atSourceId,
+        adapterKey: ADAPTER_KEYS.AT_COURTS,
+        name: "at",
         enabled: true,
         // Older than the delayed window: this source reads as stalled.
         lastSyncAt: new Date(NOW.getTime() - 30 * 24 * HOUR_IN_MS),
@@ -199,12 +199,12 @@ beforeAll(
         createdAt: new Date(NOW.getTime() - HOUR_IN_MS),
         metadata: LISTING_ONLY,
       }),
-      // One Slovak row, and one withheld Czech row that must reach nothing.
+      // One Austrian row, and one withheld Czech row that must reach nothing.
       decisionRow({
-        caseNumber: "sk one",
-        country: "SVK",
-        court: "Najvyšší súd",
-        sourceId: skSourceId,
+        caseNumber: "at one",
+        country: "AUT",
+        court: "Oberster Gerichtshof",
+        sourceId: atSourceId,
         createdAt: new Date(NOW.getTime() - HOUR_IN_MS),
       }),
       decisionRow({
@@ -352,6 +352,7 @@ const loadCoverage = async (
 ) =>
   await loadCaseLawCoverage({
     excludedSourceIds: [],
+    onPartialFailure: () => undefined,
     now: NOW,
     readSources: async () =>
       await readAsReader(readCaseLawCoverageSourcesQuery),
@@ -694,7 +695,7 @@ test(
         decisionYearTo: 2020,
         pendingTextCount: 0,
       });
-      expect(sources.find(({ id }) => id === skSourceId)).toMatchObject({
+      expect(sources.find(({ id }) => id === atSourceId)).toMatchObject({
         decisionYearFrom: null,
         decisionYearTo: null,
       });
@@ -772,9 +773,9 @@ test(
     const sources = await readAsReader(readCaseLawCoverageSourcesQuery);
     // The withheld source is filtered in SQL, so it never reaches the loader.
     expect(sources.map(({ adapterKey }) => adapterKey).toSorted()).toEqual([
+      ADAPTER_KEYS.AT_COURTS,
       ADAPTER_KEYS.CZ_NS,
       ADAPTER_KEYS.CZ_NSS,
-      ADAPTER_KEYS.SK_COURTS,
     ]);
     const czech = sources.find(
       ({ adapterKey }) => adapterKey === ADAPTER_KEYS.CZ_NS,
@@ -864,7 +865,7 @@ test(
         // and the registry is deployment state, so the two legitimately
         // disagree. Without a manifest there is no country to file it under.
         for (const source of sources) {
-          if (source.adapterKey === ADAPTER_KEYS.SK_COURTS) {
+          if (source.adapterKey === ADAPTER_KEYS.AT_COURTS) {
             source.adapterKey = "retired-adapter";
           }
         }
@@ -876,11 +877,11 @@ test(
       return;
     }
 
-    // Slovakia had exactly that one source, so the country disappears rather
+    // Austria had exactly that one source, so the country disappears rather
     // than reporting an empty corpus, and nothing of it lands on a neighbour.
     expect(
       coverage.value.countries.map(({ country }) => country),
-    ).not.toContain("SVK");
+    ).not.toContain("AUT");
     expect(coverage.value.totals.stored.decisions).toBe(4);
     for (const entry of coverage.value.countries) {
       expect(entry.sources.map(({ adapterKey }) => adapterKey)).not.toContain(
@@ -913,12 +914,12 @@ test(
     );
     expect(cze).toMatchObject({ decisionYearFrom: 1981, decisionYearTo: 2026 });
 
-    const svk = byCountry.get("SVK");
-    expect(svk?.availability).toBe(
+    const aut = byCountry.get("AUT");
+    expect(aut?.availability).toBe(
       CASE_LAW_COVERAGE_AVAILABILITY.IN_PREPARATION,
     );
-    expect(svk).toMatchObject({ stored: { decisions: 1 } });
-    expect(svk && "searchable" in svk).toBe(false);
+    expect(aut).toMatchObject({ stored: { decisions: 1 } });
+    expect(aut && "searchable" in aut).toBe(false);
 
     // The two populations are reported apart and never summed, and the total
     // count states the oldest of the counts behind it.
@@ -971,9 +972,9 @@ test(
       notCountedSources: 0,
     });
 
-    const svk = byCountry.get("SVK");
-    expect(svk?.health).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
-    expect(svk?.sources.at(0)?.completeness).toMatchObject({
+    const aut = byCountry.get("AUT");
+    expect(aut?.health).toBe(CASE_LAW_COVERAGE_HEALTH.STALLED);
+    expect(aut?.sources.at(0)?.completeness).toMatchObject({
       state: "measured",
       reportedBy: "operator",
       reported: 4,

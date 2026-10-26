@@ -16,9 +16,10 @@ import type {
   ScanVerdict,
 } from "@/api/lib/file-scan/types";
 import { ENCRYPTED_CONTENT_MESSAGE } from "@/api/lib/files/detect-file-encryption";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { S3ObjectMissingError, S3PresignError } from "@/api/lib/s3-presign";
 import { runFileComparison } from "@/api/mcp/file-comparison-run";
 import type { FileComparisonRunDependencies } from "@/api/mcp/file-comparison-run";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { createEncryptedPdf } from "@/api/tests/helpers/signed-pdf";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -34,8 +35,7 @@ const TARGET_BYTES = new Uint8Array([5, 6, 7, 8, 9]);
 const sha256Of = (bytes: Uint8Array): string =>
   createSha256().update(bytes).digest("hex");
 
-const hexToBase64 = (hex: string): string =>
-  Buffer.from(hex, "hex").toString("base64");
+const hexToBase64 = (hex: string): string => Buffer.from(hex, "hex").toBase64();
 
 type Row = {
   declaredName: string;
@@ -83,6 +83,8 @@ type HarnessOptions = {
   deleteFails?: boolean;
   putFails?: boolean;
   headChecksum?: "match" | "absent" | "mismatch";
+  /** The store fails to answer a HEAD instead of describing the object. */
+  headUnavailable?: boolean;
   headSizes?: Record<string, number>;
   rows?: Row[];
   scanVerdict?: ScanVerdict;
@@ -95,6 +97,7 @@ const createHarness = ({
   deleteFails = false,
   putFails = false,
   headChecksum = "match",
+  headUnavailable = false,
   headSizes,
   rows = [
     inputRow(BASE_UPLOAD_ID, BASE_BYTES, "Draft.docx"),
@@ -146,7 +149,7 @@ const createHarness = ({
     }),
   });
 
-  const context = asTestRaw<McpRequestContext>({
+  const context = asTestRaw<AuthorizedMcpRequestContext>({
     organizationId: toSafeId<"organization">(ORGANIZATION_ID),
     recordAuditEvent: async (
       _tx: unknown,
@@ -171,10 +174,20 @@ const createHarness = ({
       return undefined;
     },
     headObject: async (key) => {
+      if (headUnavailable) {
+        return await Promise.resolve(
+          Result.err(new S3PresignError({ message: "Failed to head object" })),
+        );
+      }
       const stored = bytes[key];
       if (stored === undefined) {
         return await Promise.resolve(
-          Result.err(asTestRaw<never>({ message: "missing" })),
+          Result.err(
+            new S3ObjectMissingError({
+              message: "Object not found",
+              cause: null,
+            }),
+          ),
         );
       }
       const declared = sha256Of(stored);
@@ -344,6 +357,32 @@ describe("compare_documents uploads source", () => {
     expect(harness.updates).toHaveLength(0);
     expect(harness.deletedRows.count).toBe(0);
     expect(harness.audited).toHaveLength(1);
+  });
+
+  test("reports an input the store confirms absent as never uploaded", async () => {
+    const harness = createHarness({
+      bytesByKey: {
+        [`${ORGANIZATION_ID}/tmp/comparisons/${BASE_UPLOAD_ID}`]: BASE_BYTES,
+      },
+    });
+
+    const error = errorOf(await harness.run());
+
+    expect(error.code).toBe("not_found");
+    expect(error.message).toBe(
+      "One of the files to compare was never uploaded",
+    );
+  });
+
+  test("keeps both inputs staged when the store cannot describe one", async () => {
+    const harness = createHarness({ headUnavailable: true });
+
+    const error = errorOf(await harness.run());
+
+    expect(error.code).toBe("internal_error");
+    expect(error.retryable).toBe(true);
+    expect(harness.deletedKeys).toHaveLength(0);
+    expect(harness.deletedRows.count).toBe(0);
   });
 
   test("refuses an upload id that is not the caller's live input", async () => {

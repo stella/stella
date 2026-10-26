@@ -266,6 +266,7 @@ const FileTabViewerComponent = ({
     }
     return (
       <PeekPdfViewer
+        pdfPageSource="portfolio"
         activePropertyId={entity.filePropertyId ?? ""}
         entityId={tab.entityId}
         errorFallback={viewerErrorFallback}

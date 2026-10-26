@@ -10,7 +10,6 @@
     "apps/api/scripts/chat-mutation-matrix.ts",
     "apps/api/scripts/content-delivery-guard.ts",
     "apps/api/scripts/deployment-feature-guard.ts",
-    "apps/api/scripts/exact-mirror-guard.ts",
     "apps/api/scripts/export-capability-catalog.ts",
     "apps/api/scripts/mcp-coverage-guard.ts",
     "apps/api/scripts/mcp-surface-baseline.ts",
@@ -124,6 +123,8 @@
     "scripts/check-test-input-coverage.ts",
     "scripts/check-test-retries.test.ts",
     "scripts/check-test-retries.ts",
+    "scripts/check-tracked-file-sizes.test.ts",
+    "scripts/check-tracked-file-sizes.ts",
     "scripts/check-web-docker-platform.test.ts",
     "scripts/check-workflow-shells.test.ts",
     "scripts/check-workflow-shells.ts",
@@ -217,6 +218,7 @@
     "scripts/oxlint-override-union.test.ts",
     "scripts/oxlint-plugin-test-coverage.test.ts",
     "scripts/pre-push-policy.test.ts",
+    "scripts/prepare-maintenance-release-gates.test.ts",
     "scripts/prepare-maintenance-release.property.test.ts",
     "scripts/prepare-release-tag.test.sh",
     "scripts/prepare-typecheck-base.sh",
@@ -255,6 +257,7 @@
     "scripts/sql-perf-detector.test.ts",
     "scripts/sql-perf-suppressions.ts",
     "scripts/stage-web-runtime.test.ts",
+    "scripts/staging-wake.test.ts",
     "scripts/stll-registry-resolutions.test.ts",
     "scripts/suppression-waivers.ts",
     "scripts/task-result-cache.test.ts",
@@ -278,7 +281,8 @@
     "scripts/workflow-cache-policy.test.ts",
     "scripts/workflow-call-permissions.test.ts",
     "scripts/workflow-concurrency.test.ts",
-    "scripts/workflow-run-trust.test.ts"
+    "scripts/workflow-run-trust.test.ts",
+    "scripts/workflow-skipped-needs.test.ts"
   ],
   "changeScoped": []
 }

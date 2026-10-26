@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "KSeF FA(3) export tests validate generated XML against the official Polish Ministry of Finance schema with libxml2 compiled to WebAssembly, so validation needs no system tool."
+}

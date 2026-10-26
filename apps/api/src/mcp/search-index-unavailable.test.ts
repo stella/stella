@@ -1,11 +1,11 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { env } from "@/api/env";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import { HttpStatusResponse } from "@/api/http/status";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -27,7 +27,6 @@ import {
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
@@ -37,6 +36,8 @@ import {
   serializeToolResult,
 } from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -114,7 +115,7 @@ const scanUnreachableIndex = async (): Promise<never> => {
   throw new Error("the scan succeeded against an unreachable index");
 };
 
-const createContext = (): McpRequestContext => {
+const createContext = (): AuthorizedMcpRequestContext => {
   const { safeDb, scopedDb } = createScopedDbMock({
     query: {
       organizationSettings: {
@@ -122,7 +123,7 @@ const createContext = (): McpRequestContext => {
       },
     },
   });
-  return {
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: [toSafeId<"workspace">(WORKSPACE_ID)],
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
@@ -147,7 +148,7 @@ const createContext = (): McpRequestContext => {
     },
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const payloadOf = (result: { content: readonly unknown[] }): unknown => {
@@ -258,7 +259,7 @@ describe("search_index_unavailable", () => {
       );
     /** The generation read refuses before any engine request is made. */
     const requested: string[] = [];
-    const contextWithoutServingGeneration = (): McpRequestContext => {
+    const contextWithoutServingGeneration = (): AuthorizedMcpRequestContext => {
       requested.length = 0;
       globalThis.fetch = Object.assign(
         async (input: string | URL | Request) => {
@@ -329,7 +330,7 @@ describe("search_index_unavailable", () => {
 
       expect(requested).toEqual([]);
       for (const outcome of outcomes) {
-        expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
+        expect(outcome).toBeInstanceOf(HttpStatusResponse);
         expect(outcome).toMatchObject({
           code: thrown.status,
           response: {
@@ -383,7 +384,7 @@ describe("search_index_unavailable", () => {
     const refusal = searchIndexUnavailableError(new Error("refused"));
     const response = mapHandlerResult({
       id: "legislation.search",
-      result: new ElysiaCustomStatusResponse(503, {
+      result: new HttpStatusResponse(503, {
         code: refusal.code,
         message: refusal.message,
         hint: refusal.hint,
@@ -399,6 +400,7 @@ describe("search_index_unavailable", () => {
       new UnhandledException({
         cause: searchIndexUnavailableError(new Error("refused")),
       }),
+      "mcp.response.failure",
     );
 
     expect(payloadOf(serialized(response))).toEqual(EXPECTED_ENVELOPE);
@@ -412,7 +414,9 @@ describe("search_index_unavailable", () => {
         message: "Search is temporarily unavailable",
       }),
     ]) {
-      const payload = payloadOf(serialized(internalFailureResult(error)));
+      const payload = payloadOf(
+        serialized(internalFailureResult(error, "mcp.payload.error")),
+      );
       expect(payload).toEqual({
         error: {
           code: "internal_error",

@@ -11,8 +11,10 @@ import { ClientOperationError } from "@/lib/errors/client";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 import {
   assertSitemapXmlWithinProtocolLimits,
+  createSitemapUpstreamBusyError,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
+  type SitemapUpstreamBusyError,
 } from "@/lib/public-sitemap";
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 
@@ -79,7 +81,9 @@ type ReadSitemapPageOptions<TSchema extends v.GenericSchema> = {
   url: URL | string;
 };
 
-type SitemapPageResult<TItem> = Promise<Result<TItem[], ClientOperationError>>;
+type SitemapReadError = ClientOperationError | SitemapUpstreamBusyError;
+
+type SitemapPageResult<TItem> = Promise<Result<TItem[], SitemapReadError>>;
 
 export { SITEMAP_XML_RESPONSE_HEADERS };
 
@@ -99,7 +103,7 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
   subject,
   url,
 }: ReadSitemapPageOptions<TSchema>): Promise<
-  Result<v.InferOutput<TSchema>, ClientOperationError>
+  Result<v.InferOutput<TSchema>, SitemapReadError>
 > => {
   const response = await Result.tryPromise(
     async () => await fetchImpl(url, { signal }),
@@ -111,6 +115,12 @@ const readSitemapPage = async <TSchema extends v.GenericSchema>({
         cause: response.error,
         message: `Failed to reach the public ${subject} endpoint.`,
       }),
+    );
+  }
+
+  if (response.value.status === 429) {
+    return Result.err(
+      createSitemapUpstreamBusyError({ action, response: response.value }),
     );
   }
 

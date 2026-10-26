@@ -6,6 +6,7 @@ import {
   SITEMAP_XML_RESPONSE_HEADERS,
 } from "@/features/statutes/statute-sitemap";
 import { isPublicLawSitemapEnabled } from "@/lib/public-law-launch";
+import { createSitemapReadFailureResponse } from "@/lib/public-sitemap";
 import { isPublicStatutePageCountry } from "@/lib/statutes/statute-route";
 
 export const Route = createFileRoute("/sitemaps/law-statutes/{$country}.xml")({
@@ -23,10 +24,8 @@ export const Route = createFileRoute("/sitemaps/law-statutes/{$country}.xml")({
           shard: { ...params, bucket: "all" },
         });
 
-        // An unreadable shard answers 503 rather than an empty urlset: a
-        // crawler retries the former and caches the latter as the truth.
         return works.isErr()
-          ? new Response("Service Unavailable", { status: 503 })
+          ? createSitemapReadFailureResponse(works.error)
           : new Response(createPublicStatuteSitemapXml(works.value), {
               headers: SITEMAP_XML_RESPONSE_HEADERS,
             });

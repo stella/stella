@@ -53,7 +53,9 @@ ENV NODE_ENV=production
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js.map /app/legal-atlas.js.map
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js.map /app/eu-ecj-refetch.js.map
 WORKDIR /app
 USER stella
 ENTRYPOINT ["bun", "/app/legal-atlas.js"]

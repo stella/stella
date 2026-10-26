@@ -14,7 +14,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useNavigate, useRouter } from "@tanstack/react-router";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { observeElementRect, useVirtualizer } from "@tanstack/react-virtual";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
@@ -152,7 +152,7 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -215,6 +215,23 @@ const SEARCH_PREVIEW_MAX_WIDTH = 800;
  * separator's reported value until a drag pins an explicit width. */
 const SEARCH_PREVIEW_DEFAULT_WIDTH = 512;
 const SEARCH_RESULTS_MIN_WIDTH = 320;
+
+const observeSearchResultsRect: typeof observeElementRect = (
+  instance,
+  callback,
+) => {
+  const element = instance.scrollElement;
+  return observeElementRect(instance, (rect) => {
+    const offsetHeight =
+      element instanceof HTMLElement ? element.offsetHeight : 0;
+    const offsetWidth =
+      element instanceof HTMLElement ? element.offsetWidth : 0;
+    callback({
+      height: rect.height === 0 ? offsetHeight : rect.height,
+      width: rect.width === 0 ? offsetWidth : rect.width,
+    });
+  });
+};
 
 type SearchColumnsStyle = CSSProperties & {
   "--search-facets-w"?: string;
@@ -857,6 +874,7 @@ export const SearchDialog = ({
     estimateSize: () => VIRTUAL_HIT_ESTIMATE_PX,
     getItemKey: getHitVirtualKey,
     getScrollElement: () => resultsElement,
+    observeElementRect: observeSearchResultsRect,
     overscan: VIRTUAL_HIT_OVERSCAN,
     scrollMargin: hitsScrollMargin,
   });
@@ -906,7 +924,10 @@ export const SearchDialog = ({
   const analytics = useAnalytics();
   useExternalSyncEffect(() => {
     if (searchError) {
-      analytics.captureError(searchError);
+      analytics.captureError(searchError, {
+        fingerprintKey: "SearchDialog:searchError",
+        scope: { type: "handler", handlerId: "SearchDialog:searchError" },
+      });
     }
   }, [analytics, searchError]);
 
@@ -952,10 +973,13 @@ export const SearchDialog = ({
         ...(params.limit !== undefined ? { limit: params.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure",
+        scope: { type: "handler", handlerId: "SearchDialog:failure" },
+      });
     },
   });
 
@@ -966,10 +990,13 @@ export const SearchDialog = ({
         locale: vars.locale,
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-2",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-2" },
+      });
     },
   });
 
@@ -994,10 +1021,13 @@ export const SearchDialog = ({
         ...(vars.limit !== undefined ? { limit: vars.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-3",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-3" },
+      });
     },
   });
 
@@ -1026,7 +1056,10 @@ export const SearchDialog = ({
       return threadRef.threadId;
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-4",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-4" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
@@ -1086,7 +1119,13 @@ export const SearchDialog = ({
       }
       detached(
         navigateToTarget().catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "SearchDialog.navigateAfterClose:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SearchDialog.navigateAfterClose:failure",
+            },
+          });
           notifyUserError(error, t("common.somethingWentWrong"));
         }),
         "search-dialog.navigate-to-target",

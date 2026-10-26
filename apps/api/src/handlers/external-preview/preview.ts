@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -55,8 +55,8 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "url_preview" },
   access: "read",
-  query: t.Object({
-    url: t.String({ minLength: 1, maxLength: MAX_URL_LENGTH }),
+  query: v.object({
+    url: v.pipe(v.string(), v.minLength(1), v.maxLength(MAX_URL_LENGTH)),
   }),
 } satisfies HandlerConfig;
 

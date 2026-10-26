@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
@@ -86,6 +86,9 @@ type AnnotationToolbarProps = {
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
+  /** Why Explain cannot take these spans, or `undefined` when it can. */
+  explainRefusal?:
+    ((spans: SelectionAnchor[]) => string | undefined) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
@@ -139,10 +142,12 @@ export const AnnotationToolbar = ({
   onClearActive,
   onCompose,
   onExplain,
+  explainRefusal,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
+  const explainReasonId = useId();
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
@@ -707,6 +712,7 @@ export const AnnotationToolbar = ({
     }
   } else if (selected !== null) {
     const spans = selected.spans;
+    const explainRefusalReason = explainRefusal?.(spans);
     content = (
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
@@ -715,6 +721,8 @@ export const AnnotationToolbar = ({
             data-copy-trigger=""
             onClick={(event) => {
               const MENU_ESTIMATED_HEIGHT_PX = 200;
+              // Room for the options and a readable preview beside them.
+              const MENU_MIN_WIDTH_PX = 416;
               const barRect = barRef.current?.getBoundingClientRect();
               const view = event.currentTarget.ownerDocument.defaultView;
               if (barRect !== undefined && view !== null) {
@@ -722,6 +730,7 @@ export const AnnotationToolbar = ({
                   readerCopyMenuBox({
                     bar: barRect,
                     menuHeight: MENU_ESTIMATED_HEIGHT_PX,
+                    menuWidth: MENU_MIN_WIDTH_PX,
                     viewport: {
                       height: view.innerHeight,
                       width: view.innerWidth,
@@ -757,9 +766,9 @@ export const AnnotationToolbar = ({
               >
                 <MenuPreviewLayout
                   preview={
-                    // The submenu paints over the pane rather than in it, so its
-                    // floor is the viewport's, not the pane's.
-                    <PreviewPane className="min-w-0 flex-1">
+                    // The menu's width is set from the toolbar, so the pane
+                    // gets what the options leave.
+                    <PreviewPane className="w-full">
                       {copyPreviewMode !== null && (
                         <p className="text-foreground text-2xs leading-snug whitespace-pre-wrap">
                           {copyTextFor({
@@ -787,6 +796,7 @@ export const AnnotationToolbar = ({
                       )}
                     </PreviewPane>
                   }
+                  previewWidth="remaining"
                 >
                   {READER_COPY_MODES.map((copyMode) => (
                     <button
@@ -835,7 +845,11 @@ export const AnnotationToolbar = ({
               doc.body,
             )}
         </div>
-        {mode === "authenticated" && (
+        {/* AI actions take the document's own words only: a selection with no
+            anchored text (AI notes, reader chrome) is not offered to them,
+            and the passage sent is the anchored words, never the chrome or
+            generated text a drag also crossed. */}
+        {mode === "authenticated" && spans.length > 0 && (
           <>
             <CapabilityActionChrome action={{ capability: "ai" }}>
               <span className="bg-border mx-1 h-4 w-px" />
@@ -844,7 +858,10 @@ export const AnnotationToolbar = ({
               {(capabilityProps) => (
                 <Button
                   onClick={() => {
-                    askAboutPassage(selected.text, selected.locator);
+                    askAboutPassage(
+                      spans.map(({ quote }) => quote).join(" "),
+                      selected.locator,
+                    );
                     clearSelection();
                   }}
                   size="sm"
@@ -856,24 +873,46 @@ export const AnnotationToolbar = ({
                 </Button>
               )}
             </CapabilityAction>
-            {onExplain !== undefined && (
-              <CapabilityAction action={{ capability: "ai" }} surface="control">
-                {(capabilityProps) => (
+            {onExplain !== undefined &&
+              (explainRefusalReason === undefined ? (
+                <CapabilityAction
+                  action={{ capability: "ai" }}
+                  surface="control"
+                >
+                  {(capabilityProps) => (
+                    <Button
+                      onClick={() => {
+                        onExplain(spans);
+                        clearSelection();
+                      }}
+                      size="sm"
+                      variant="ghost"
+                      {...capabilityProps}
+                    >
+                      <SparklesIcon className="size-3.5" />
+                      {t("readerAnswers.explain")}
+                    </Button>
+                  )}
+                </CapabilityAction>
+              ) : (
+                <>
                   <Button
-                    onClick={() => {
-                      onExplain(spans);
-                      clearSelection();
-                    }}
+                    aria-describedby={explainReasonId}
+                    disabled
                     size="sm"
                     variant="ghost"
-                    {...capabilityProps}
                   >
                     <SparklesIcon className="size-3.5" />
                     {t("readerAnswers.explain")}
                   </Button>
-                )}
-              </CapabilityAction>
-            )}
+                  <span
+                    className="text-muted-foreground px-2 text-xs"
+                    id={explainReasonId}
+                  >
+                    {explainRefusalReason}
+                  </span>
+                </>
+              ))}
           </>
         )}
         {spans.length > 0 && (

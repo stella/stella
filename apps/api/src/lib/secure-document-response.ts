@@ -1,19 +1,18 @@
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
 import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 
-const CONTENT_LENGTH_RE = /^\d+$/u;
-
 export const parseContentLengthHeader = (
   value: string | null,
 ): number | undefined => {
-  if (value === null || !CONTENT_LENGTH_RE.test(value)) {
+  if (value === null) {
     return undefined;
   }
 
-  const contentLength = Number(value);
-  return Number.isSafeInteger(contentLength) ? contentLength : undefined;
+  return parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(undefined);
 };
 
 export type SecureDocumentResponseOptions = {

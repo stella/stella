@@ -49,7 +49,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { PropertyOptionColor } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -166,7 +166,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
       if (Result.isError(createResult)) {
         inspector.closeTab(pendingTaskId);
-        analytics.captureError(createResult.error);
+        analytics.captureError(createResult.error, {
+          fingerprintKey: "KanbanView.handleCreate:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleCreate:failure",
+          },
+        });
         notifyUserError(createResult.error, t("errors.actionFailed"));
         return null;
       }
@@ -182,6 +188,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
                 action: "create-task",
                 message: "Task creation returned no entity ID",
               }),
+          {
+            fingerprintKey: "KanbanView.handleCreate:failure-2",
+            scope: {
+              type: "handler",
+              handlerId: "KanbanView.handleCreate:failure-2",
+            },
+          },
         );
         inspector.closeTab(pendingTaskId);
         notifyUserError(
@@ -424,11 +437,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      unwrapEden(response);
+      unwrapApiResponse(response);
       return { taskId };
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "KanbanView:failure",
+        scope: { type: "handler", handlerId: "KanbanView:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSuccess: async ({ taskId }) => {
@@ -534,7 +550,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       propertyId: filePropertyId,
       parentId: null,
       labels,
-      onError: (error) => analytics.captureError(error),
+      onError: (error) =>
+        analytics.captureError(error, {
+          fingerprintKey: "KanbanView.handleFileUpload:failure",
+          scope: {
+            type: "handler",
+            handlerId: "KanbanView.handleFileUpload:failure",
+          },
+        }),
     });
 
     if (columnValue === null) {

@@ -388,6 +388,7 @@
         "reading": "Vista de lectura"
       },
       "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
+      "pdfTextFailed": "No se ha podido leer el texto del PDF, por lo que las afirmaciones no están marcadas en sus páginas.",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {
@@ -644,6 +645,7 @@
         "eso9": "Hoja de importación ESO9 (XLSX)",
         "exporting": "Preparando la exportación…",
         "isdoc": "Factura electrónica ISDOC (ABRA Gen y otros)",
+        "ksefFa3": "Factura electrónica KSeF FA(3) (XML)",
         "spreadsheets": "Hojas de cálculo",
         "xlsx": "Facturas (XLSX)",
         "xlsxLines": "Líneas de factura (XLSX)"
@@ -757,6 +759,7 @@
     "sellerProfiles": {
       "add": "Añadir perfil de vendedor",
       "archiveConfirm": "¿Archivar este perfil de vendedor? Ya no estará disponible para nuevas facturas.",
+      "barRegistration": "Inscripción en el colegio de abogados",
       "bic": "Código BIC / SWIFT",
       "default": "Vendedor predeterminado",
       "defaultCurrency": "Moneda predeterminada",
@@ -768,11 +771,10 @@
       "invalidCurrency": "Introduce un código de moneda de tres letras.",
       "invalidIban": "Introduce un IBAN válido.",
       "legalName": "Nombre legal",
+      "registerEntry": "Inscripción registral",
       "registrationId": "Número de registro",
       "setDefault": "Establecer como predeterminado",
       "title": "Perfiles de vendedor",
-      "vatId": "Número de IVA",
-      "vatPayer": "Sujeto pasivo de IVA",
       "vatPayerHelp": "Las facturas de este vendedor cobran IVA. Desactívelo para una persona registrada que tiene número de IVA pero no es sujeto pasivo.",
       "vatPayerRequiresVatId": "Indique el número de IVA para emitir facturas como sujeto pasivo de IVA."
     },
@@ -807,6 +809,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Añadir tipo de IVA",
+      "addCzechia": "Añadir tipos de Chequia",
+      "addSlovakia": "Añadir tipos de Eslovaquia",
       "archiveConfirm": "¿Archivar este tipo de IVA? Ya no estará disponible para nuevos documentos.",
       "code": "Código del tipo",
       "current": "Tipo vigente",
@@ -821,6 +825,7 @@
       "overlap": "Los períodos de validez del mismo código de tipo no pueden solaparse.",
       "past": "Tipo anterior",
       "periodHelp": "La fecha inicial se incluye; la fecha final se excluye. Deja la fecha final vacía para un período abierto.",
+      "presetResult": "Añadidos: {added}; omitidos: {skipped}.",
       "rate": "Porcentaje de IVA",
       "title": "Tipos de IVA",
       "validFrom": "Válido desde",
@@ -1027,7 +1032,10 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de aproximadamente {pageCount}",
+      "pageWithEstimatedMatchCounts": "Página {page} · aproximadamente {exactCount, plural, one {# coincidencia exacta} other {# coincidencias exactas}} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
       "pageWithEstimatedResultCount": "Página {page} · aproximadamente {count, plural, one {# resultado} other {# resultados}}",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# coincidencia exacta} other {# coincidencias exactas}} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# coincidencia parcial} other {# coincidencias parciales}} en esta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Acote la búsqueda para ver más resultados"
@@ -1478,7 +1486,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos los modelos ({count, number})",
+      "allModels": "Todos los modelos",
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
       "belowFrontier": "Por debajo de los mejores equilibrios",
@@ -2121,6 +2129,7 @@
       "ZH-HANT": "Chino (tradicional)"
     },
     "lastUpdated": "Última actualización",
+    "layoutResetAfterProblem": "Se ha restablecido la disposición tras un problema.",
     "legalDatabase": "Base de datos jurídica",
     "loadMore": "Cargar más",
     "loading": "Cargando",
@@ -2219,6 +2228,7 @@
     "suggested": "Sugerencia",
     "summarizeChanges": "Resumir cambios",
     "target": "Destino",
+    "taxId": "Identificación fiscal",
     "timeBilling": "Tiempo y facturación",
     "today": "Hoy",
     "translate": "Traducir",
@@ -2242,6 +2252,8 @@
     "urlIdentifierPlaceholder": "mi-organizacion",
     "user": "Usuario",
     "value": "Valor",
+    "vatId": "Número de IVA",
+    "vatPayer": "Sujeto pasivo de IVA",
     "verified": "Verificado",
     "verify": "Verificar",
     "version": "Versión",
@@ -2283,6 +2295,7 @@
     "scopeKnowledgeWrite": "Crear, editar y eliminar sus cláusulas y ejecutar playbooks",
     "scopeLawRead": "Leer legislación pública y jurisprudencia",
     "scopeMattersWrite": "Crear y editar sus asuntos y tareas",
+    "scopeMemoryWrite": "Crear y actualizar los recuerdos del asistente",
     "scopeOfflineAccess": "Mantenerlo con la sesión iniciada sin necesidad de aprobación repetida",
     "scopeOnboarding": "Configurar las jurisdicciones de práctica de su organización",
     "scopeProfile": "Acceder a la información de su perfil",
@@ -2310,6 +2323,7 @@
     "summaryLineRead": "<group>Leer:</group> {items}",
     "summaryLineUse": "<group>Usar:</group> {items}",
     "summaryMattersWrite": "asuntos y tareas",
+    "summaryMemoryWrite": "recuerdos del asistente",
     "summaryProfile": "perfil",
     "summaryRead": "documentos, asuntos y contactos",
     "summaryReadAnonymized": "documentos y asuntos anonimizados",
@@ -2430,7 +2444,9 @@
       "prefix": "Prefijo",
       "registrationNumber": "Número de registro",
       "suffix": "Sufijo",
-      "taxId": "NIF/CIF",
+      "vatPayer": "Situación a efectos del IVA",
+      "vatPayerNo": "No sujeto al IVA",
+      "vatPayerUnknown": "Desconocido",
       "year": "Año"
     },
     "filterOrganizations": "Organizaciones",
@@ -2470,7 +2486,6 @@
         "primary_phone": "Teléfono principal",
         "state": "Estado o región",
         "suffix": "Sufijo",
-        "tax_id": "Identificación fiscal",
         "type": "Tipo de contacto"
       },
       "fileInvalid": "Elige un único archivo CSV, TSV o TXT.",
@@ -2675,6 +2690,7 @@
       "admissionUnavailable": "Esta acción está pausada temporalmente. Inténtelo de nuevo en unos momentos.",
       "concurrencyBusy": "Hay otras tareas en curso. Inténtelo de nuevo en unos momentos.",
       "contact": "Contáctenos",
+      "featureDisabled": "Esta función está desactivada temporalmente.",
       "notEnabled": "Esta acción no está habilitada para su organización.",
       "periodExhausted": "Esta acción está pausada para su organización."
     },
@@ -3814,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Un cliente",
+      "availabilityClientBadgeHelp": "Disponible solo en los asuntos de un cliente.",
+      "availabilityClientHelp": "Solo se puede usar en los asuntos de este cliente. No se puede cambiar después.",
+      "availabilityFixedHelp": "Se fijó al crear la habilidad. No se puede cambiar.",
+      "availabilityLabel": "Disponible en",
+      "availabilityMatter": "Un asunto",
+      "availabilityMatterBadgeHelp": "Disponible solo en un asunto.",
+      "availabilityMatterHelp": "Solo se puede usar en este asunto. No se puede cambiar después.",
+      "availabilityOrganization": "Toda la organización",
+      "availabilityTeamNeedsMatter": "Para compartir una habilidad con el equipo, elija el asunto al que está destinada. No se puede cambiar después.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Crea un playbook de revisión de contratos posición por posición, a partir de tus contratos firmados anteriormente, una breve entrevista y los estándares habituales del mercado.",
@@ -4744,7 +4770,7 @@
     "modelError": "El modelo no pudo completar esta respuesta.",
     "networkError": "La conexión se ha interrumpido. Inténtalo de nuevo.",
     "regenerate": "Regenerar respuesta",
-    "selectionError": "Selecciona texto dentro de un solo párrafo (hasta 2000 caracteres).",
+    "selectionError": "Seleccione texto de la propia resolución.",
     "send": "Enviar pregunta de seguimiento",
     "share": "Compartir con el equipo",
     "timeoutError": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo.",
@@ -4797,6 +4823,8 @@
     "recentDocuments": "Documentos recientes",
     "recentSearches": "Búsquedas recientes",
     "recentlyOpenedFiles": "Archivos abiertos recientemente",
+    "registryCandidateNameMismatch": "El nombre oficial es «{officialName}» y no coincide",
+    "registryCandidateNoOfficialRecord": "El registro oficial no contiene ninguna inscripción para este número",
     "registryChoose": "Elegir un registro mercantil",
     "registryCredentialAskAdmin": "Pida a un administrador de su organización que configure el acceso a este registro.",
     "registryCredentialSaved": "Acceso al registro guardado",
@@ -4807,6 +4835,7 @@
       "enrichmentUnavailable": "Los datos del registro mercantil no están disponibles temporalmente"
     },
     "registryKrsHint": "KRS busca por número de registro, no por nombre de empresa. Introduzca un número KRS de 10 dígitos, incluidos los ceros iniciales (p. ej., 0000006865).",
+    "registryNameSearchNotFound": "Ninguna empresa verificada coincide con ese nombre. Se descartaron los siguientes candidatos:",
     "registryVatHint": "VIES verifica números de IVA, no nombres de empresas. Introduzca un número de IVA con el prefijo del país (p. ej., CZ27082440); el formato depende del país.",
     "renameSearchTitle": "Cambiar nombre de la búsqueda guardada",
     "requestCountry": "Solicitar un nuevo país",
@@ -5331,7 +5360,7 @@
     "importDescription": "Los estilos se extraen a un DOCX nuevo y sin contenido.",
     "importTitle": "Importar conjunto de estilos",
     "loadFailed": "No se pudieron cargar los conjuntos de estilos",
-    "newDocument": "Nuevo documento",
+    "newDocument": "Nuevo documento DOCX",
     "pickerDescription": "Elige el sistema de formato para el archivo nuevo.",
     "renameTitle": "Cambiar nombre del conjunto de estilos",
     "replace": "Reemplazar origen",
@@ -5615,7 +5644,7 @@
     "moveToMatter": "Guardar en asunto",
     "moveToMatterAnyway": "Guardar de todos modos",
     "myDefaultLookupFormat": "Mi predeterminado",
-    "newFromTemplate": "Nuevo documento desde plantilla",
+    "newFromTemplate": "Nuevo documento DOCX desde plantilla",
     "newFromTemplateFillHint": "Rellene los campos; el documento se creará en este asunto.",
     "newTemplate": "Nueva plantilla",
     "noTemplates": "Aún no hay plantillas",
@@ -5986,6 +6015,7 @@
         "action": "Editar en la app de escritorio",
         "authRequiredDescription": "Recarga stella y vuelve a iniciar sesión antes de usar la edición de escritorio.",
         "authRequiredTitle": "La sesión caducó",
+        "editInApplication": "Editar en <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edita este archivo localmente y sincroniza los cambios con stella.",
         "forceRelease": "Forzar liberación",
         "notOpenedDescription": "stella desktop no confirmó que <bdi>{application}</bdi> se abriera. Inicia stella desktop e inténtalo de nuevo.",
@@ -6009,13 +6039,15 @@
         "alreadyInstalled": "¿Ya está instalado? Conéctalo",
         "connect": "Conectar stella desktop",
         "connected": "stella desktop está conectado",
+        "download": "Descargar stella desktop",
         "editNone": "Descarga stella desktop para editar este archivo",
         "editOutdated": "Actualiza stella desktop para editar",
         "editReason": "La edición en el escritorio abre el archivo en una aplicación de tu ordenador a través de stella desktop.",
         "signCurrent": "Firmar con stella desktop",
         "signNone": "Descarga stella desktop para firmar este PDF",
         "signOutdated": "Actualiza stella desktop para firmar",
-        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop."
+        "signReason": "La firma usa el certificado de tu ordenador, por eso se realiza en stella desktop.",
+        "update": "Actualizar stella desktop"
       },
       "downloadAs": "Descargar como…",
       "downloadAsZip": "Descargar archivo .zip",
@@ -6028,8 +6060,10 @@
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",
       "ocrAlreadyProcessed": "El reconocimiento de texto ya se completó",
+      "ocrBatchHelp": "Los documentos en cola se procesan en el próximo lote de OCR.",
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
-      "ocrQueued": "Reconocimiento de texto añadido al próximo lote de OCR",
+      "ocrQueued": "Reconocimiento de texto puesto en cola",
+      "ocrQueuedForBatch": "Reconocimiento de texto añadido al próximo lote de OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Ya hay una firma en curso en stella desktop",
         "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
@@ -6086,6 +6120,7 @@
         "waitingDescription": "Elige un certificado de firma en stella desktop para firmar este PDF.",
         "waitingTitle": "Esperando a stella desktop"
       },
+      "queueForOcr": "Poner en cola para OCR",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Qué hacer con {fileName}",
@@ -6097,7 +6132,6 @@
       "removeMetadata": "Eliminar metadatos del documento",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
-      "runOcr": "Poner OCR en cola",
       "scrubFailed": "No se pudieron eliminar los metadatos de este archivo, por lo que no se descargó nada",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",
@@ -6385,6 +6419,7 @@
       "addParty": "Añadir parte",
       "changeClient": "Cambiar cliente",
       "client": "Cliente",
+      "movedToClient": "Asunto <bdi>{matterName}</bdi> movido a <bdi>{clientName}</bdi>",
       "noClient": "Sin cliente asignado",
       "noClientOptional": "Sin cliente (opcional)",
       "noParties": "No se han añadido partes a este asunto.",
@@ -6403,7 +6438,9 @@
       "personalLabel": "Personal",
       "promoteCta": "Promocionar a cliente",
       "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible — los asuntos promocionados no pueden volver a ser personales.",
+      "promoteToClientConfirm": "El asunto <bdi>{matterName}</bdi> se asignará a <bdi>{clientName}</bdi> y se compartirá con el equipo. No podrá volver a ser personal.",
       "promotedSuccess": "Asunto promocionado",
+      "recentClients": "Clientes recientes",
       "removeClient": "Eliminar cliente",
       "removeParty": "Eliminar parte",
       "removePartyConfirm": "¿Está seguro de que desea eliminar esta parte del asunto?",
@@ -6615,6 +6652,12 @@
     "referenceTaken": "Este número de referencia ya está en uso",
     "sections": {
       "parties": "Partes"
+    },
+    "switcher": {
+      "searchPlaceholder": "Buscar un asunto…",
+      "trigger": "Cambiar de asunto",
+      "viewAll": "Ver todos los asuntos",
+      "viewAllForClient": "Ver todos los asuntos del cliente {clientName}"
     },
     "table": {
       "clearFlags": "Borrar marcas",

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { lintSingleRule } from "./lint-single-rule";
 
 // The rule resolves `@/lib/api` against the importing file, so each case is
-// linted at a web source path, where the alias names the Eden client.
+// linted at a web source path, where the alias names the API client.
 const lintWebSource = async (source: string) =>
   await lintSingleRule("capability-request", source, {
     sourcePath: "apps/web/src/capability-request-case.ts",

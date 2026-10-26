@@ -138,6 +138,7 @@ const COURT_DOMAIN_BOUND = {
   AUT: 200,
   CZE: 200,
   EU: 10,
+  GBR: 200,
   HUN: 200,
   POL: 400,
   SVK: 200,

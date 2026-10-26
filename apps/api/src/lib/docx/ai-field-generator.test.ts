@@ -300,7 +300,7 @@ describe("buildAiFieldGenerator admitted action", () => {
     expect(providerSignal.aborted).toBe(false);
     lease.abort();
 
-    expect(await generation).toMatchObject({ type: "failed" });
+    expect((await generation).unwrap()).toMatchObject({ type: "failed" });
     expect(providerSignal.aborted).toBe(true);
   });
 });

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block } from "./document-ast.js";
 import {
+  blocksNestedUnder,
+  enclosingHeadingAnchor,
   provisionBlocks,
   provisionHeadingAnchor,
   provisionHeadingChain,
@@ -121,11 +123,67 @@ describe("provisionBlocks", () => {
 
 describe("provisionHeadingAnchor", () => {
   test("files a cited subdivision under its provision", () => {
-    expect(provisionHeadingAnchor("par_90-odst_5")).toBe("par_90");
+    expect(provisionHeadingAnchor("par_90-odst_5", "-")).toBe("par_90");
+    expect(provisionHeadingAnchor("paragraf-5.odsek-1", ".")).toBe(
+      "paragraf-5",
+    );
+    expect(provisionHeadingAnchor("s1983/a/1", "/")).toBe("s1983");
   });
 
-  test("leaves a provision-level anchor alone", () => {
-    expect(provisionHeadingAnchor("par_90")).toBe("par_90");
+  test("keeps a separator the section number itself carries", () => {
+    expect(provisionHeadingAnchor("s2000e-2/a", "/")).toBe("s2000e-2");
+  });
+
+  test("leaves a provision-level anchor, and one with no separator, alone", () => {
+    expect(provisionHeadingAnchor("par_90", "-")).toBe("par_90");
+    expect(provisionHeadingAnchor("par_90-odst_5", null)).toBe("par_90-odst_5");
+  });
+});
+
+describe("enclosingHeadingAnchor", () => {
+  const statute: Block[] = [
+    heading("h1", "s2000e-2", 1),
+    paragraph("p1", "s2000e-2/a", "s2000e-2/a"),
+    paragraph("p2", "s2000e-2/a/1", "s2000e-2/a/1"),
+  ];
+
+  test("reads the heading off the document, whatever the separator", () => {
+    expect(enclosingHeadingAnchor(statute, "s2000e-2/a/1")).toBe("s2000e-2");
+    expect(
+      enclosingHeadingAnchor(
+        [
+          heading("h", "par_90", 1),
+          paragraph("p", "par_90-odst_5", "par_90-odst_5"),
+        ],
+        "par_90-odst_5",
+      ),
+    ).toBe("par_90");
+  });
+
+  test("a prefix that is not a path step is no heading", () => {
+    expect(
+      enclosingHeadingAnchor([heading("h", "par_9", 1)], "par_90-odst_5"),
+    ).toBeNull();
+  });
+});
+
+describe("blocksNestedUnder with a US path", () => {
+  test("a subsection owns its paragraphs and stops at the next subsection", () => {
+    const usPath: Block[] = [
+      paragraph("a", "s1983/a", "s1983/a"),
+      paragraph("a1", "s1983/a/1", "s1983/a/1"),
+      paragraph("a1A", "s1983/a/1/A", "s1983/a/1/A"),
+      paragraph("b", "s1983/b", "s1983/b"),
+    ];
+    const cited = usPath[0];
+    if (cited === undefined) {
+      throw new Error("fixture has no blocks");
+    }
+    expect(blocksNestedUnder(usPath, cited).map(({ id }) => id)).toEqual([
+      "a",
+      "a1",
+      "a1A",
+    ]);
   });
 });
 

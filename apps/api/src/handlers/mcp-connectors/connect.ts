@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -50,8 +50,8 @@ import type {
 } from "@/api/lib/mcp-upstream/oauth";
 import { redactMcpOAuthRegistrationResponse } from "@/api/lib/mcp-upstream/oauth-registration-response";
 
-const routeParams = t.Object({
-  slug: t.String({ minLength: 1, maxLength: 80 }),
+const routeParams = v.object({
+  slug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
 });
 
 const config = {

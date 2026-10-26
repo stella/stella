@@ -1,9 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 
+import { installBrowserClock } from "../testing/browser-clock";
+
 const fixturePath = "/src/components/fixtures/date-picker.fixture.html";
 
 const openFixture = async (page: Page) => {
-  await page.goto(fixturePath);
+  await page.goto(fixturePath, { waitUntil: "domcontentloaded" });
   await expect
     .poll(
       async () =>
@@ -141,4 +143,45 @@ test("date triggers and their labels keep their geometry when opened", async ({
     await expect(page.locator('[data-slot="date-picker-popup"]')).toBeHidden();
     expect(await trigger.boundingBox()).toEqual(triggerBox);
   }
+});
+
+test.describe("an open picker across local midnight", () => {
+  test.use({ timezoneId: "Europe/Prague" });
+
+  test("follows today until navigation and keeps the chosen month after rollover and focus", async ({
+    page,
+  }) => {
+    await installBrowserClock(page, new Date("2026-08-31T21:59:50Z"));
+    await openFixture(page);
+    await page.locator("#empty-field").click();
+    const popup = page.locator('[data-slot="date-picker-popup"]');
+    const heading = popup.locator('[data-slot="date-picker-heading"]');
+    await expect(heading).toHaveText("August 2026");
+
+    await page.clock.fastForward(10_000);
+    await expect(popup).toBeVisible();
+    await expect(heading).toHaveText("September 2026");
+    await expect(popup.locator('[aria-current="date"]')).toHaveAttribute(
+      "data-date",
+      "2026-09-01",
+    );
+
+    await popup
+      .getByRole("button", { name: "Previous month", exact: true })
+      .click();
+    await expect(heading).toHaveText("August 2026");
+    await page.clock.fastForward(86_400_000);
+    await expect(popup).toBeVisible();
+    await expect(heading).toHaveText("August 2026");
+
+    await page.clock.setSystemTime(new Date("2026-09-30T22:00:00Z"));
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(heading).toHaveText("August 2026");
+    await popup.getByRole("button", { name: "Today", exact: true }).click();
+    await expect(heading).toHaveText("October 2026");
+    await expect(popup.locator('[aria-current="date"]')).toHaveAttribute(
+      "data-date",
+      "2026-10-01",
+    );
+  });
 });

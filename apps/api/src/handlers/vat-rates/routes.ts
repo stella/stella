@@ -1,42 +1,24 @@
-import Elysia from "elysia";
-
 import archiveVatRate from "@/api/handlers/vat-rates/archive";
 import createVatRate from "@/api/handlers/vat-rates/create";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 import { featureAccessGate } from "@/api/lib/auth/feature-access/route";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
 
-export const vatRateRoute = new Elysia({ prefix: "/vat-rates" })
-  .use(
-    deploymentFeatureGate(() =>
-      isDeploymentFeatureEnabled("FEATURE_TIME_BILLING"),
-    ),
-  )
-  .use(featureAccessGate("time-billing"))
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/", listVatRates.handler, {
-    permissions: listVatRates.config.permissions,
-    accountAccess: listVatRates.config.accountAccess,
-    query: listVatRates.config.query,
-  })
-  .post("/", createVatRate.handler, {
-    permissions: createVatRate.config.permissions,
-    accountAccess: createVatRate.config.accountAccess,
-    body: createVatRate.config.body,
-  })
-  .patch("/:vatRateId", updateVatRate.handler, {
-    permissions: updateVatRate.config.permissions,
-    accountAccess: updateVatRate.config.accountAccess,
-    params: updateVatRate.config.params,
-    body: updateVatRate.config.body,
-  })
-  .post("/:vatRateId/archive", archiveVatRate.handler, {
-    permissions: archiveVatRate.config.permissions,
-    accountAccess: archiveVatRate.config.accountAccess,
-    params: archiveVatRate.config.params,
-  });
+export const vatRateRoute = routes(
+  {
+    "/": { GET: listVatRates, POST: createVatRate },
+    "/apply-preset": { POST: applyVatRatePreset },
+    "/:vatRateId": { PATCH: updateVatRate },
+    "/:vatRateId/archive": { POST: archiveVatRate },
+  },
+  {
+    prefix: "/vat-rates",
+    middleware: [
+      deploymentFeatureGate("FEATURE_TIME_BILLING"),
+      featureAccessGate("time-billing"),
+    ],
+  },
+);

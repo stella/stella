@@ -74,13 +74,13 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
       for: async () => await Promise.resolve(rows),
       orderBy: () => ({ limit, offset }),
     });
-  return {
-    from: () => ({
-      where,
-      innerJoin: () => ({ where }),
-      leftJoin: () => ({ where }),
-    }),
+  type JoinedQuery = {
+    where: typeof where;
+    innerJoin: () => JoinedQuery;
+    leftJoin: () => JoinedQuery;
   };
+  const from = (): JoinedQuery => ({ where, innerJoin: from, leftJoin: from });
+  return { from };
 };
 
 const fixtureSelect =

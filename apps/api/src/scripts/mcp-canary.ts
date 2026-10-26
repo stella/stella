@@ -1114,7 +1114,10 @@ export const runOAuthJourneys = async (
           }
           const url = new URL(authorizationEndpoint);
           const challenge = canaryPkceChallenge(
-            randomBytes(32).toString("base64url"),
+            randomBytes(32).toBase64({
+              alphabet: "base64url",
+              omitPadding: true,
+            }),
           );
           url.search = new URLSearchParams({
             client_id: clientId,
@@ -1304,7 +1307,7 @@ export const runDesktopProbe = async (
         };
         const redeemHandoff = async (key?: string) => {
           const correlationId = Bun.randomUUIDv7();
-          const verifier = randomBytes(32).toString("hex");
+          const verifier = randomBytes(32).toHex();
           const grant = await fetcher(
             new URL("/v1/desktop-registry/grant", baseUrl),
             {
@@ -1480,7 +1483,7 @@ export const runStagingCredentialJourneys = async (
         }
         sessionCookie = `${smoke.body.cookieName}=${smoke.body.cookieValue}`;
         const minted = await readProbeResponse(
-          await fetcher(new URL("/v1/api-keys/", baseUrl), {
+          await fetcher(new URL("/v1/api-keys", baseUrl), {
             method: "POST",
             headers: {
               cookie: sessionCookie,
@@ -1981,8 +1984,14 @@ const authorizeReviewOAuth = async (
   const { baseUrl, state, complete, request } = context;
   const reject: (assertion: string) => never = context.reject;
   state.step = "authorize";
-  const verifier = randomBytes(32).toString("base64url");
-  const stateValue = randomBytes(32).toString("base64url");
+  const verifier = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
+  const stateValue = randomBytes(32).toBase64({
+    alphabet: "base64url",
+    omitPadding: true,
+  });
   state.callback = createReviewCallback(stateValue);
   const clientId = new URL(CLI_CLIENT_METADATA_PATH, baseUrl).toString();
   const authorize = new URL(metadata.authorization_endpoint);
