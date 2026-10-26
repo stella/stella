@@ -133,11 +133,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 27,
+    version: 28,
     scope: {
       type: "all",
       reason:
-        "the bench read from the opening sentence is part of the judges every re-parse replaces, which have no feature storage of their own",
+        "paragraph text, ruling roles, separate-opinion headings and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {

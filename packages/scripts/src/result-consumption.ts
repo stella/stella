@@ -997,6 +997,7 @@ const gitLines = (
   args: readonly string[],
 ): string[] => {
   const output = execFileSync("git", args, {
+    maxBuffer: 2 ** 30,
     cwd: repositoryRoot,
     encoding: "utf-8",
   });

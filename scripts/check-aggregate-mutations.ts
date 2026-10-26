@@ -1704,7 +1704,7 @@ const aggregateMutationComparisonCommit = () => {
   const resolved = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (resolved.status !== 0) {
     panic(`Aggregate mutation comparison ref is unavailable: ${requested}`);
@@ -1715,7 +1715,7 @@ const aggregateMutationComparisonCommit = () => {
   const base = spawnSync(
     "git",
     ["merge-base", "HEAD", resolved.stdout.trim()],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (base.status !== 0) {
     panic(
@@ -1758,6 +1758,7 @@ if (import.meta.main) {
   const undeclared = await undeclaredServedMutations();
   const baseExists =
     spawnSync("git", ["cat-file", "-e", `${comparisonCommit}:${BASELINE}`], {
+      maxBuffer: 2 ** 30,
       cwd: ROOT,
       encoding: "utf-8",
     }).status === 0;
@@ -1783,6 +1784,7 @@ if (import.meta.main) {
           baselineSchema,
           JSON.parse(
             spawnSync("git", ["show", `${comparisonCommit}:${BASELINE}`], {
+              maxBuffer: 2 ** 30,
               cwd: ROOT,
               encoding: "utf-8",
             }).stdout,

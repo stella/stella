@@ -79,7 +79,7 @@ const readImports = (nodes: readonly Node[]): ReaderImports => {
   const modules = [
     { suffix: "/web-decision-reader", symbols: imports.reader },
     { suffix: "/use-decision-provision-anchors", symbols: imports.hook },
-    { suffix: "/decision-text.logic", symbols: imports.blocks },
+    { suffix: "/case-law-reader", symbols: imports.blocks },
   ];
   for (const node of nodes) {
     if (node.type !== "ImportDeclaration") {
@@ -410,7 +410,7 @@ const fixturePath = "apps/web/src/features/case-law/reader.tsx";
 const fixtureRegistry = { "full-reader": [fixturePath] };
 const defaultImports = `import { WebDecisionReader as Reader } from "./web-decision-reader";
 import { useDecisionProvisionAnchors as load } from "./case-viewer/use-decision-provision-anchors";
-import { visibleDecisionBlocks as visible } from "./case-viewer/decision-text.logic";`;
+import { visibleDecisionBlocks as visible } from "@stll/legal-ast/case-law-reader";`;
 const fixture = (body: string, imports = defaultImports) => [
   { file: fixturePath, text: `${imports}\nconst View = () => { ${body} };` },
 ];
@@ -432,7 +432,7 @@ test("decision reader census accepts aliases with matching decision text inputs"
     inspectReaderSurfaces(
       fixture(
         `const anchors = Hooks.useDecisionProvisionAnchors({ surface: "full-reader", decisionId, blocks: Text.visibleDecisionBlocks(ast, kind, decision?.fulltext) }); return <Readers.WebDecisionReader ${readerProps} />;`,
-        'import * as Readers from "./web-decision-reader"; import * as Hooks from "./case-viewer/use-decision-provision-anchors"; import * as Text from "./case-viewer/decision-text.logic";',
+        'import * as Readers from "./web-decision-reader"; import * as Hooks from "./case-viewer/use-decision-provision-anchors"; import * as Text from "@stll/legal-ast/case-law-reader";',
       ),
       fixtureRegistry,
     ),

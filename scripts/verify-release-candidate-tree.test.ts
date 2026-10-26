@@ -93,6 +93,9 @@ const withCandidate = (
   try {
     mkdirSync(path.join(directory, "packages/widget"), { recursive: true });
     mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
+    mkdirSync(path.join(directory, "apps/landing/src/data"), {
+      recursive: true,
+    });
     mkdirSync(path.join(directory, "scripts"), { recursive: true });
     mkdirSync(path.join(directory, "packages/cli/src/generated"), {
       recursive: true,
@@ -149,6 +152,48 @@ test("accepts the regenerated CLI version that matches its package bump", () =>
     },
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
   ));
+
+test("accepts release-date notes and nullable publication timestamps", () =>
+  withCandidate(
+    (directory) =>
+      writeFileSync(
+        path.join(
+          directory,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        '{"_note":"Published timestamp source","v1.2.4":null}\n',
+      ),
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("rejects changeset README edits and malformed release-date records", () => {
+  withCandidate(
+    (directory) => {
+      mkdirSync(path.join(directory, ".changeset"), { recursive: true });
+      writeFileSync(path.join(directory, ".changeset/README.md"), "changed\n");
+    },
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(".changeset/README.md");
+    },
+  );
+  withCandidate(
+    (directory) =>
+      writeFileSync(
+        path.join(
+          directory,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        '{"v1.2.4": false}\n',
+      ),
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "must map release names to timestamps or null",
+      );
+    },
+  );
+});
 
 test.each([
   [

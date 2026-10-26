@@ -85,7 +85,7 @@ const dependencyRepository = (
     writeFileSync(target, JSON.stringify(value));
   };
   const commit = (message: string) => {
-    execFileSync("git", ["add", "."], { cwd: root });
+    execFileSync("git", ["add", "."], { maxBuffer: 2 ** 30, cwd: root });
     execFileSync(
       "git",
       [
@@ -97,15 +97,16 @@ const dependencyRepository = (
         "-m",
         message,
       ],
-      { cwd: root },
+      { maxBuffer: 2 ** 30, cwd: root },
     );
     return execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     }).trim();
   };
   try {
-    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["init", "-q"], { maxBuffer: 2 ** 30, cwd: root });
     write("package.json", {
       name: "root",
       devDependencies: { oxlint: "1.0.0" },
@@ -155,6 +156,7 @@ const dependencyRepository = (
 test("dependency metadata selects tooling, runtime consumers, shared base, and unknown changes", () => {
   dependencyRepository((root, commit) => {
     const base = execFileSync("git", ["rev-parse", "HEAD"], {
+      maxBuffer: 2 ** 30,
       cwd: root,
       encoding: "utf-8",
     }).trim();
