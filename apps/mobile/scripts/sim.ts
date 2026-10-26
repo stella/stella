@@ -289,14 +289,16 @@ const main = async (): Promise<number> => {
     simulator.udid,
     developmentClientUrl(port),
   ]);
-  if (opened.exitCode !== 0) {
+  if (opened.exitCode === 0) {
+    process.stdout.write(
+      "The app is open on the simulator. Sign in as test@stella.dev; the sign-in page fills in the emailed code. Press Ctrl-C to stop.\n",
+    );
+  } else {
+    // Metro keeps serving, so the app can still be opened by hand.
     process.stderr.write(
-      `Could not open ${DEVELOPMENT_IDENTIFIER}: ${opened.stderr}\n`,
+      `Could not open ${DEVELOPMENT_IDENTIFIER}: ${opened.stderr}\nOpen stella Dev on the simulator and enter http://localhost:${String(port)}, or press Ctrl-C to stop.\n`,
     );
   }
-  process.stdout.write(
-    "The app is open on the simulator. Sign in as test@stella.dev; the sign-in page fills in the emailed code. Press Ctrl-C to stop.\n",
-  );
 
   await metro.exited;
   await stop();
