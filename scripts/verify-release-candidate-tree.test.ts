@@ -346,10 +346,17 @@ const commitSideMerge = (
   commitAs(directory, commit, "commit", "--quiet", "--message", "merge");
 };
 
+/**
+ * Squash-merges the release branch into main as a person, as the protected
+ * main branch does, and verifies that version commit against the branch head.
+ */
+type SquashMerge = { mutate?: (directory: string) => void };
+
 /** A release range shaped like the bots' own release branches. */
 const withReleaseRange = (
   commits: readonly ReleaseCommit[],
   verify: (result: ReturnType<typeof Bun.spawnSync>) => void,
+  squash?: SquashMerge,
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-range-"));
   try {
@@ -403,8 +410,32 @@ const withReleaseRange = (
       mode: 0o755,
     });
     const { GH_RETRY_SCRIPT: _retry, ...environment } = process.env;
+    const args = [main, candidate, "stella/stella"];
+    if (squash !== undefined) {
+      git(directory, "checkout", "--quiet", "main");
+      git(directory, "merge", "--quiet", "--squash", "release");
+      squash.mutate?.(directory);
+      git(directory, "add", "-A");
+      commitAs(
+        directory,
+        { author: PERSON, committer: GITHUB },
+        "commit",
+        "--quiet",
+        "--message",
+        "chore: release v1.2.4",
+      );
+      args.splice(
+        0,
+        3,
+        main,
+        git(directory, "rev-parse", "HEAD"),
+        "stella/stella",
+        "--release-pr-head",
+        candidate,
+      );
+    }
     verify(
-      Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
+      Bun.spawnSync(["node", verifier, ...args], {
         cwd: directory,
         env: {
           ...environment,
@@ -451,6 +482,51 @@ test("accepts the bots' own generated release files, as a v0.9.65 range carries 
       { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
     ],
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("accepts the bots' generated files in a version commit squash-merged by a person", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+      { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
+    ],
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+    {},
+  ));
+
+test("refuses a person's Tailwind cache change in a squash-merged version commit", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: PERSON, committer: PERSON, mutate: renameTailwindCache },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "Tailwind class cache changed by a commit not made by its bot",
+      );
+    },
+    {},
+  ));
+
+test("refuses a squash-merged version commit whose tree differs from its pull request head", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "does not hold the tree of its release pull request head",
+      );
+    },
+    {
+      mutate: (directory) => {
+        writeFileSync(path.join(directory, "VERSION"), "1.2.5\n");
+      },
+    },
   ));
 
 test.each([
@@ -548,7 +624,8 @@ test("every caller passes the full contract and a workflow token", async () => {
   const record = (value: unknown): value is Record<string, unknown> =>
     typeof value === "object" && value !== null && !Array.isArray(value);
   const invocation =
-    /\bnode\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)/iu;
+    /\bnode\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)(\s+--release-pr-head\s+"[^"]*")?/iu;
+  const squashCallers: string[] = [];
   const files = git(root, "ls-files", ".github", "scripts")
     .split("\n")
     .filter((file) => /\.(?:ya?ml|sh)$/u.test(file));
@@ -563,6 +640,9 @@ test("every caller passes the full contract and a workflow token", async () => {
       const label = `${file}:${index + 1}`;
       callers.push(file);
       expect(match[2]?.trim().split(/\s+/u), label).toHaveLength(3);
+      if (match[3] !== undefined) {
+        squashCallers.push(file);
+      }
     }
     if (!file.startsWith(".github/workflows/")) {
       continue;
@@ -593,4 +673,7 @@ test("every caller passes the full contract and a workflow token", async () => {
   }
   expect(callers).toContain(".github/workflows/release.yml");
   expect(callers).toContain("scripts/verify-release-tree-proof.sh");
+  // Main is squash-only, so the merged version commit is verified as the
+  // release pull request head it reproduces.
+  expect(squashCallers).toEqual([".github/workflows/release.yml"]);
 });
