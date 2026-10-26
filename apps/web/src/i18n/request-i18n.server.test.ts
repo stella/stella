@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 
 import {
   loadLocaleMessages,
+  RenderedI18nStoreProvider,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
@@ -77,18 +78,24 @@ test("suspended concurrent response streams retain their request locale when res
         });
         return await renderToReadableStream(
           createElement(
-            "html",
+            RenderedI18nStoreProvider,
             null,
-            createElement("head"),
             createElement(
-              "body",
+              "html",
               null,
+              createElement("head"),
               createElement(
-                Suspense,
-                {
-                  fallback: createElement(LocaleSnapshot, { suspended: false }),
-                },
-                createElement(LocaleSnapshot, { suspended: true }),
+                "body",
+                null,
+                createElement(
+                  Suspense,
+                  {
+                    fallback: createElement(LocaleSnapshot, {
+                      suspended: false,
+                    }),
+                  },
+                  createElement(LocaleSnapshot, { suspended: true }),
+                ),
               ),
             ),
           ),

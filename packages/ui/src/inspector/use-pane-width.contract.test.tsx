@@ -48,7 +48,7 @@ test.each([
   (saved, expected) => {
     const WidthProbe = () => {
       const { resizeHandleProps, width } = useInspectorPaneWidth({
-        persistence: { read: () => saved, write: () => undefined },
+        initialWidth: saved,
         sidebarWidth: 240,
         viewportWidth: 2560,
       });

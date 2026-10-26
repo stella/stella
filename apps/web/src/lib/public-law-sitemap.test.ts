@@ -970,7 +970,9 @@ describe("public law sitemap", () => {
     expect(isPublicSsrPath("/auth")).toBe(false);
     expect(isPublicSsrPath("/workspaces/workspace-id")).toBe(false);
     expect(isPublicSsrPath("/")).toBe(false);
-    expect(source).toContain("ssr: true");
+    expect(source).toContain(
+      "ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname)",
+    );
     expect(source).toContain("loadDocumentPresentation(context.queryClient)");
     expect(source).toContain("shellComponent: RootDocument");
   });

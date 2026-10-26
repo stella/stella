@@ -28,7 +28,7 @@ import {
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 
 const storage = deviceStorage("local");
-const key = "stella:inspector-pane-width:registry-test";
+const key = "stella-dev:persisted-state-registry-test";
 const entry = definePersistedState({
   key,
   area: "local",
@@ -40,7 +40,7 @@ const entry = definePersistedState({
   restoredUi: true,
 });
 
-const ownedKey = "stella:inspector-pane-width:registry-test-owned";
+const ownedKey = "stella-dev:persisted-state-registry-test-owned";
 const ownedEntry = definePersistedState({
   key: ownedKey,
   area: "local",

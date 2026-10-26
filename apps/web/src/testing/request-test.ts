@@ -1,4 +1,4 @@
-import { requestHandler } from "@tanstack/react-start/server";
+import { createServerEntry } from "@tanstack/react-start/server";
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
@@ -9,16 +9,18 @@ export const runInRequest = async (
   request = new Request("http://localhost:3000/"),
 ): Promise<void> => {
   let outcome: Result<void, unknown> | undefined;
-  const handle = requestHandler(async () => {
-    outcome = await Result.tryPromise({
-      try: async () => {
-        await scenario();
-      },
-      catch: (error) => error,
-    });
-    return new Response(null);
+  const entry = createServerEntry({
+    fetch: async () => {
+      outcome = await Result.tryPromise({
+        try: async () => {
+          await scenario();
+        },
+        catch: (error) => error,
+      });
+      return new Response(null);
+    },
   });
-  const response = await handle(request, {});
+  const response = await entry.fetch(request, {});
   if (outcome?.isErr()) {
     throw outcome.error;
   }

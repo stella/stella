@@ -1,3 +1,6 @@
+import { createContext, createElement, use } from "react";
+import type { PropsWithChildren } from "react";
+
 import { createIsomorphicFn } from "@tanstack/react-start";
 import { createFormatter, createTranslator } from "use-intl/core";
 import { create, useStore } from "zustand";
@@ -268,7 +271,7 @@ export const buildFormattingLocale = ({
   if (weekStart !== "auto") {
     keywords.push(`fw-${WEEK_START_KEYWORD[weekStart]}`);
   }
-  if (numbers !== "latn") {
+  if (numbers !== "latn" || formattingLanguage === "ar") {
     keywords.push(`nu-${numbers}`);
   }
   return keywords.length > 0 ? `${base}-u-${keywords.join("-")}` : base;
@@ -525,9 +528,23 @@ const currentI18nStore = createIsomorphicFn()
   .server(() => getRequestI18nStore() ?? browserI18nStore)
   .client(() => browserHydrationStore);
 
+const RenderedI18nStoreContext = createContext<
+  ReturnType<typeof currentI18nStore> | undefined
+>(undefined);
+
+/** Bind the initialized request store to streamed React descendants. */
+export const RenderedI18nStoreProvider = ({ children }: PropsWithChildren) =>
+  createElement(
+    RenderedI18nStoreContext,
+    { value: currentI18nStore() },
+    children,
+  );
+
 export const useI18nStore = Object.assign(
-  <T>(selector: (state: I18nState) => T): T =>
-    useStore(currentI18nStore(), selector),
+  <T>(selector: (state: I18nState) => T): T => {
+    const renderedStore = use(RenderedI18nStoreContext);
+    return useStore(renderedStore ?? currentI18nStore(), selector);
+  },
   {
     getState: () => currentI18nStore().getState(),
     setState: browserI18nStore.setState,

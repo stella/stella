@@ -27,7 +27,11 @@ import {
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { loadDocumentPresentation } from "@/i18n/document-presentation";
-import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import {
+  getLangDir,
+  RenderedI18nStoreProvider,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import "@/fonts.css";
 import {
   applyDocumentLanguage,
@@ -206,36 +210,38 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     applyDocumentLanguage({ dir, lang });
   }, [dir, hasLoadedOnce, lang]);
 
+  // The system colour scheme alone depends on browser media queries.
   return (
-    // The system colour scheme alone depends on browser media queries.
-    <html
-      className={cn(
-        prefs.theme === "dark" && "dark",
-        prefs.palette !== "neutral" && `palette-${prefs.palette}`,
-      )}
-      data-theme={prefs.theme}
-      lang={lang}
-      dir={dir}
-      data-lang-source={langSource}
-      suppressHydrationWarning
-    >
-      <head>
-        <HeadContent />
+    <RenderedI18nStoreProvider>
+      <html
+        className={cn(
+          prefs.theme === "dark" && "dark",
+          prefs.palette !== "neutral" && `palette-${prefs.palette}`,
+        )}
+        data-theme={prefs.theme}
+        lang={lang}
+        dir={dir}
+        data-lang-source={langSource}
+        suppressHydrationWarning
+      >
+        <head>
+          <HeadContent />
 
-        <script src="/handoff-init.js" />
-        <script src="/prepaint-init.js" />
-      </head>
-      <body>
-        <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          <RouteProviderScopeBoundary>
-            <PresentationPrefsProvider initialPrefs={prefs}>
-              {children}
-            </PresentationPrefsProvider>
-          </RouteProviderScopeBoundary>
-        </RouteErrorLifecycleProvider>
-        <Scripts />
-      </body>
-    </html>
+          <script src="/handoff-init.js" />
+          <script src="/prepaint-init.js" />
+        </head>
+        <body>
+          <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
+            <RouteProviderScopeBoundary>
+              <PresentationPrefsProvider initialPrefs={prefs}>
+                {children}
+              </PresentationPrefsProvider>
+            </RouteProviderScopeBoundary>
+          </RouteErrorLifecycleProvider>
+          <Scripts />
+        </body>
+      </html>
+    </RenderedI18nStoreProvider>
   );
 }
 
