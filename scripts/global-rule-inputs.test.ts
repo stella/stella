@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import {
@@ -12,6 +12,7 @@ import {
   loadGlobalRuleInputs,
   matchesGlobalRuleInput,
 } from "./global-rule-inputs";
+import { listTrackedFiles } from "./tracked-files";
 
 const REPOSITORY_ROOT = new URL("../", import.meta.url);
 const STATIC_CHECK_JOB_ROOTS = [
@@ -22,12 +23,7 @@ const STATIC_CHECK_JOB_ROOTS = [
 ] as const;
 const STATIC_CHECK_JOB_PREFIXES = ["code-quality-"] as const;
 
-const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
-  cwd: REPOSITORY_ROOT,
-  encoding: "utf-8",
-})
-  .split("\0")
-  .filter(Boolean);
+const trackedFiles = listTrackedFiles(fileURLToPath(REPOSITORY_ROOT));
 
 const getRunCommands = (readPool?: ReadCheckPool) => {
   const workflow: unknown = Bun.YAML.parse(
