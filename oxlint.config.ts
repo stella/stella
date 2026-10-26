@@ -3592,6 +3592,7 @@ const config = defineConfig({
       // says so with `reader-chrome`, quoted text outside the root with
       // `reader-body`.
       files: [
+        "packages/decision-reader/src/**/*.tsx",
         "apps/web/src/components/legal-reader/**/*.tsx",
         "apps/web/src/features/case-law/components/case-viewer/**/*.tsx",
         "apps/web/src/features/statutes/components/**/*.tsx",
