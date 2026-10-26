@@ -1027,6 +1027,12 @@
       "matchedIn": "Zhoda v jazyku {language}"
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "marginFilter": {
+      "label": "Filter citovaných ustanovení",
+      "paragraph": "{count, plural, =0 {V ¶{paragraph} nie je citované žiadne ustanovenie} one {# ustanovenie citované v ¶{paragraph}} few {# ustanovenia citované v ¶{paragraph}} many {# ustanovenia citovaného v ¶{paragraph}} other {# ustanovení citovaných v ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Vo výbere nie je citované žiadne ustanovenie} one {# ustanovenie citované vo výbere} few {# ustanovenia citované vo výbere} many {# ustanovenia citovaného vo výbere} other {# ustanovení citovaných vo výbere}}",
+      "unnumberedParagraph": "{count, plural, =0 {V tomto odseku nie je citované žiadne ustanovenie} one {# ustanovenie citované v tomto odseku} few {# ustanovenia citované v tomto odseku} many {# ustanovenia citovaného v tomto odseku} other {# ustanovení citovaných v tomto odseku}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# rozhodnutie tu už bolo uložené} few {# rozhodnutia tu už boli uložené} other {# rozhodnutí tu už bolo uložených}}",
       "empty": "V tomto spise zatiaľ nie je uložená žiadna judikatúra.",

@@ -1027,6 +1027,12 @@
       "matchedIn": "Shoda v jazyce {language}"
     },
     "loadingMore": "Načítání dalších...",
+    "marginFilter": {
+      "label": "Filtr citovaných ustanovení",
+      "paragraph": "{count, plural, =0 {V ¶{paragraph} není citováno žádné ustanovení} one {# ustanovení citované v ¶{paragraph}} few {# ustanovení citovaná v ¶{paragraph}} many {# ustanovení citovaného v ¶{paragraph}} other {# ustanovení citovaných v ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Ve výběru není citováno žádné ustanovení} one {# ustanovení citované ve výběru} few {# ustanovení citovaná ve výběru} many {# ustanovení citovaného ve výběru} other {# ustanovení citovaných ve výběru}}",
+      "unnumberedParagraph": "{count, plural, =0 {V tomto odstavci není citováno žádné ustanovení} one {# ustanovení citované v tomto odstavci} few {# ustanovení citovaná v tomto odstavci} many {# ustanovení citovaného v tomto odstavci} other {# ustanovení citovaných v tomto odstavci}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# rozhodnutí zde už bylo uloženo} few {# rozhodnutí zde už byla uložena} other {# rozhodnutí zde už bylo uloženo}}",
       "empty": "V tomto spisu zatím není uložena žádná judikatura.",
