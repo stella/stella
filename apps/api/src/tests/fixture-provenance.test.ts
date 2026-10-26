@@ -104,7 +104,7 @@ describe("captured fixture provenance", () => {
       capture: "synthetic",
       sha256: "a".repeat(64),
       note: "Invented input",
-    };
+    } satisfies FixtureProvenance;
     expect(parseProvenance(JSON.stringify(payload))).toEqual(payload);
     expect(
       parseProvenance(JSON.stringify({ ...payload, note: undefined })),
