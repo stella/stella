@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 
 import {
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
   statuteLandingAnchorId,
 } from "@/features/statutes/statute-reader-blocks";
+
+/** A Czech statute's blocks, read in e-Sbírka's anchor grammar. */
+const czech = (blocks: readonly Block[]) => ({
+  blocks,
+  scheme: E_SBIRKA_ANCHORS,
+});
 
 const inlineText = (text: string) => [{ type: "text" as const, text }];
 
@@ -160,7 +167,7 @@ describe("statute reader blocks", () => {
     const blocks = [heading("prilohy-cl_7", 2, "Čl. 7")];
 
     expect(
-      provisionCitationCountByBlockAnchor(blocks, [
+      provisionCitationCountByBlockAnchor(czech(blocks), [
         { anchor: "cl_7", decisionCount: 12 },
       ]).get("prilohy-cl_7"),
     ).toBe(12);
@@ -174,13 +181,13 @@ describe("statute reader blocks", () => {
       heading("hlava_2-par_9", 2, "§ 9"),
     ];
 
-    expect(statuteLandingAnchorId(blocks, "cl_7")).toBe("cl_7");
+    expect(statuteLandingAnchorId(czech(blocks), "cl_7")).toBe("cl_7");
     // The local provision id a citation states finds the namespaced block
     // the publisher rendered.
-    expect(statuteLandingAnchorId(blocks, "cl_8")).toBe("prilohy-cl_8");
+    expect(statuteLandingAnchorId(czech(blocks), "cl_8")).toBe("prilohy-cl_8");
     // Two blocks answer to it: guessing would land on the wrong provision.
-    expect(statuteLandingAnchorId(blocks, "par_9")).toBeUndefined();
-    expect(statuteLandingAnchorId(blocks, "cl_99")).toBeUndefined();
-    expect(statuteLandingAnchorId(blocks, undefined)).toBeUndefined();
+    expect(statuteLandingAnchorId(czech(blocks), "par_9")).toBeUndefined();
+    expect(statuteLandingAnchorId(czech(blocks), "cl_99")).toBeUndefined();
+    expect(statuteLandingAnchorId(czech(blocks), undefined)).toBeUndefined();
   });
 });

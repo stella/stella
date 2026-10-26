@@ -18,11 +18,11 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 import {
   statuteListMarkerEnd,
   withStatuteListDepth,
 } from "@stll/legal-ast/statute-list";
-import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import {
@@ -858,8 +858,8 @@ export type ReaderVariant = "case-law" | "statute";
  * because the same anchor shape means different things to two publishers.
  */
 type BlockRendererCorpus =
-  | { statuteLists?: never; variant: "case-law" }
-  | { statuteLists: StatuteListScheme; variant: "statute" };
+  | { statuteAnchors?: never; variant: "case-law" }
+  | { statuteAnchors: StatuteAnchorScheme; variant: "statute" };
 
 /**
  * Class per variant and heading depth. Total over both, so neither a new
@@ -1110,7 +1110,7 @@ export const BlockRenderer = ({
   noteBackJumpTo,
   noteHead = true,
   rangesByPieceId,
-  statuteLists,
+  statuteAnchors,
   variant,
 }: {
   activeMatchIndex: number;
@@ -1270,7 +1270,7 @@ export const BlockRenderer = ({
       // where every statute surface draws its paragraphs.
       block:
         variant === "statute"
-          ? withStatuteListDepth(block, statuteLists)
+          ? withStatuteListDepth(block, statuteAnchors)
           : block,
       documentAnchorProps,
       isAddressable,
@@ -1278,7 +1278,7 @@ export const BlockRenderer = ({
       noteHead,
       permalink,
       rangesByPieceId,
-      statuteLists: variant === "statute" ? statuteLists : null,
+      statuteAnchors: variant === "statute" ? statuteAnchors : null,
     });
   }
 
@@ -1339,7 +1339,7 @@ type RenderTextBlockOptions = {
 type RenderParagraphOptions = RenderTextBlockOptions & {
   block: ParagraphBlock;
   /** The statute's list scheme; null for a decision, whose items never hang. */
-  statuteLists: StatuteListScheme | null;
+  statuteAnchors: StatuteAnchorScheme | null;
 };
 
 /** The case number a decision prints at its head, set to the end edge. */
@@ -1362,16 +1362,18 @@ type HangingListMarker = { end: number; marker: string; rest: Inline[] };
 type HangingListMarkerOptions = {
   anchors: readonly TextAnchor[];
   block: ParagraphBlock;
-  statuteLists: StatuteListScheme | null;
+  statuteAnchors: StatuteAnchorScheme | null;
 };
 
 const hangingListMarker = ({
   anchors,
   block,
-  statuteLists,
+  statuteAnchors,
 }: HangingListMarkerOptions): HangingListMarker | null => {
   const end =
-    statuteLists === null ? null : statuteListMarkerEnd(block, statuteLists);
+    statuteAnchors === null
+      ? null
+      : statuteListMarkerEnd(block, statuteAnchors);
   if (end === null || anchors.some((anchor) => anchor.start < end)) {
     return null;
   }
@@ -1459,7 +1461,7 @@ const renderParagraphBlock = ({
   noteHead,
   permalink,
   rangesByPieceId,
-  statuteLists,
+  statuteAnchors,
 }: RenderParagraphOptions) => {
   const noteLabel = block.note?.type === "footnote" ? block.note.label : null;
   const showNoteLabel =
@@ -1468,7 +1470,7 @@ const renderParagraphBlock = ({
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
   const anchors = anchorsForPiece(anchorsByPieceId, block.id);
   const ranges = rangesForPiece(rangesByPieceId, block.id);
-  const listMarker = hangingListMarker({ anchors, block, statuteLists });
+  const listMarker = hangingListMarker({ anchors, block, statuteAnchors });
   return (
     <p
       className={cn(

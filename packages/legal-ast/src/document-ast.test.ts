@@ -22,6 +22,13 @@ import type {
   ParagraphNote,
   ParagraphRole,
 } from "./document-ast";
+import { E_SBIRKA_ANCHORS, SLOV_LEX_ANCHORS } from "./statute-anchor-scheme";
+
+/** A Czech statute's blocks, read in e-Sbírka's anchor grammar. */
+const czech = (blocks: readonly Block[]) => ({
+  blocks,
+  scheme: E_SBIRKA_ANCHORS,
+});
 
 /** The role of a block that carries one, for assertions over mixed lists. */
 const roleOf = (block: Block | undefined): string | undefined =>
@@ -93,14 +100,18 @@ describe("document anchor resolution", () => {
   ] satisfies Block[];
 
   test("an exact anchor wins over a structurally qualified suffix", () => {
-    expect(resolveDocumentHeadingAnchor(blocks, "cl_7")?.id).toBe("h-main");
+    expect(resolveDocumentHeadingAnchor(czech(blocks), "cl_7")?.id).toBe(
+      "h-main",
+    );
   });
 
   test("a unique structural suffix resolves for headings and subdivisions", () => {
-    expect(resolveDocumentHeadingAnchor(blocks.slice(1), "cl_7")?.id).toBe(
-      "h-annex",
+    expect(
+      resolveDocumentHeadingAnchor(czech(blocks.slice(1)), "cl_7")?.id,
+    ).toBe("h-annex");
+    expect(resolveDocumentAnchor(czech(blocks), "cl_7-odst_1")?.id).toBe(
+      "p-annex",
     );
-    expect(resolveDocumentAnchor(blocks, "cl_7-odst_1")?.id).toBe("p-annex");
   });
 
   test("an ambiguous structural suffix resolves nowhere", () => {
@@ -116,7 +127,18 @@ describe("document anchor resolution", () => {
       },
     ] satisfies Block[];
 
-    expect(resolveDocumentHeadingAnchor(repeated, "cl_7")).toBeNull();
+    expect(resolveDocumentHeadingAnchor(czech(repeated), "cl_7")).toBeNull();
+  });
+
+  test("a suffix is a tail of whole segments in the publisher's grammar", () => {
+    // In Slov-Lex `-` joins a kind to its value, so `cl_7` read there is no
+    // path step of `prilohy-cl_7`.
+    expect(
+      resolveDocumentHeadingAnchor(
+        { blocks: blocks.slice(1), scheme: SLOV_LEX_ANCHORS },
+        "cl_7",
+      ),
+    ).toBeNull();
   });
 });
 

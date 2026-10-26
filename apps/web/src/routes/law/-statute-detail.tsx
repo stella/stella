@@ -4,6 +4,7 @@ import type { ReactElement, RefObject } from "react";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import {
   createStatuteRouteParams,
   normalizeStatuteStoredSlug,
@@ -358,6 +359,7 @@ export const PublicStatuteViewer = ({
 
   useStatuteRouteLanding({
     blocks,
+    country: header.country,
     exactJumpId: outlineMatches.exactId,
     readerRef,
     requestedJump,
@@ -551,6 +553,8 @@ export const PublicStatuteViewer = ({
 
 type StatuteRouteLandingOptions = {
   blocks: readonly Block[];
+  /** The statute's country, whose publisher's grammar its anchors are in. */
+  country: string;
   exactJumpId: string | null;
   readerRef: RefObject<HTMLElement | null>;
   requestedJump: string | undefined;
@@ -559,6 +563,7 @@ type StatuteRouteLandingOptions = {
 
 function useStatuteRouteLanding({
   blocks,
+  country,
   exactJumpId,
   readerRef,
   requestedJump,
@@ -591,7 +596,10 @@ function useStatuteRouteLanding({
     if (container === null || requestedAnchorId === "") {
       return;
     }
-    const resolved = resolveDocumentAnchor(blocks, requestedAnchorId);
+    const resolved = resolveDocumentAnchor(
+      { blocks, scheme: statuteAnchorSchemeFor(country) },
+      requestedAnchorId,
+    );
     if (resolved === null || resolved.anchorId === requestedAnchorId) {
       return;
     }

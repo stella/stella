@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import {
@@ -344,9 +345,13 @@ describe("a consolidation without a usable AST", () => {
     expect(actCompareSide({ blocks: [], statuteTitle: "Act" })).toEqual(
       unstructured,
     );
-    expect(provisionCompareSide({ blocks: null, provision: "par_1" })).toEqual(
-      unstructured,
-    );
+    expect(
+      provisionCompareSide({
+        blocks: null,
+        provision: "par_1",
+        scheme: E_SBIRKA_ANCHORS,
+      }),
+    ).toEqual(unstructured);
   });
 
   test("settles the comparison whatever the other side answers", () => {
@@ -411,7 +416,11 @@ describe("one provision compared", () => {
   // side built from the blocks alone misses an amended caption.
   test("an amendment to the caption alone is a change", () => {
     const rows = rowsBetween(
-      provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+      provisionCompareSide({
+        blocks: onScreen,
+        provision: "par_5",
+        scheme: E_SBIRKA_ANCHORS,
+      }),
       readSide("Delivery and acceptance"),
     );
 
@@ -424,7 +433,11 @@ describe("one provision compared", () => {
   test("the side on screen reads as the provision read does", () => {
     expect(
       rowsBetween(
-        provisionCompareSide({ blocks: onScreen, provision: "par_5" }),
+        provisionCompareSide({
+          blocks: onScreen,
+          provision: "par_5",
+          scheme: E_SBIRKA_ANCHORS,
+        }),
         readSide("Delivery"),
       ).every((row) => row.status === "unchanged"),
     ).toBe(true);

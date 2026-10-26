@@ -10,7 +10,7 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import {
   euProvisionSourceUrl,
   locateEuProvisionCitations,
@@ -285,7 +285,7 @@ test("a decision renders numbered anchored text and resolved marks without readi
 
 const PERMALINK_CORPORA = {
   "case-law": { variant: "case-law" },
-  statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+  statute: { statuteAnchors: E_SBIRKA_ANCHORS, variant: "statute" },
 } as const;
 
 const permalinkFixture = (variant: keyof typeof PERMALINK_CORPORA) =>

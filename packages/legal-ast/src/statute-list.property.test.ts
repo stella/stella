@@ -1,16 +1,22 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import type { Block } from "./document-ast.js";
+import { blocksNestedUnder } from "./provision-preview.js";
 import {
-  E_SBIRKA_LIST_SCHEME,
+  anchorWithin,
+  E_SBIRKA_ANCHORS,
+  SLOV_LEX_ANCHORS,
+} from "./statute-anchor-scheme.js";
+import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
+import {
   paragraphFromPreview,
-  SLOV_LEX_LIST_SCHEME,
   statuteListMarkerEnd,
   withStatuteListDepth,
 } from "./statute-list.js";
-import type { StatuteListScheme } from "./statute-list.js";
 
 /**
  * One publisher's anchor grammar, as a generator of the paths it mints and
@@ -19,12 +25,16 @@ import type { StatuteListScheme } from "./statute-list.js";
  */
 type GrammarCase = {
   name: string;
-  scheme: StatuteListScheme;
+  scheme: StatuteAnchorScheme;
   section: string;
   subsection: string;
   /** A trailing segment an item owns that is no item itself. */
   owned: readonly string[];
-  /** List kinds, outermost first, with the designator value each prints. */
+  /**
+   * List kinds, outermost first, with the designator value each prints. A
+   * path runs through any of them in this order, so an item may skip a
+   * level (a section's own point) or repeat a kind (a letter in a letter).
+   */
   kinds: readonly { kind: string; value: fc.Arbitrary<string> }[];
   segment: (kind: string, value: string) => string;
   separator: string;
@@ -40,22 +50,25 @@ const subPoint = fc
 const GRAMMARS = [
   {
     name: "e-Sbírka",
-    scheme: E_SBIRKA_LIST_SCHEME,
+    scheme: E_SBIRKA_ANCHORS,
     section: "par",
     subsection: "odst",
     owned: ["table_1", "frag_2"],
     kinds: [
       { kind: "pism", value: letter },
+      { kind: "pism", value: fc.constantFrom("aa", "bb") },
       { kind: "bod", value: number },
     ],
     segment: (kind, value) => `${kind}_${value}`,
     separator: "-",
-    // A letter is one level in, a point two, whichever the path nests.
-    expectedDepth: (kinds) => (kinds.includes("bod") ? 2 : 1),
+    // Each item opens one more level, and a point sits two levels in even
+    // where no letter holds it.
+    expectedDepth: (kinds) =>
+      Math.min(kinds.length + (kinds.at(0) === "bod" ? 1 : 0), 4),
   },
   {
     name: "Slov-Lex",
-    scheme: SLOV_LEX_LIST_SCHEME,
+    scheme: SLOV_LEX_ANCHORS,
     section: "paragraf",
     subsection: "odsek",
     owned: ["text2", "text"],
@@ -88,14 +101,12 @@ const pathIn = (grammar: GrammarCase): fc.Arbitrary<GeneratedPath> =>
         .map(([value, suffix]) => `${String(value)}${suffix}`),
       subsection: fc.option(fc.integer({ min: 1, max: 12 }), { nil: null }),
       items: fc
-        .integer({ min: 0, max: grammar.kinds.length })
-        .chain((count) =>
+        .subarray([...grammar.kinds])
+        .chain((kinds) =>
           fc.tuple(
-            ...grammar.kinds
-              .slice(0, count)
-              .map(({ kind, value }) =>
-                value.map((designator) => ({ designator, kind })),
-              ),
+            ...kinds.map(({ kind, value }) =>
+              value.map((designator) => ({ designator, kind })),
+            ),
           ),
         ),
       owned: fc.option(fc.constantFrom(...grammar.owned), { nil: null }),
@@ -121,6 +132,26 @@ const pathIn = (grammar: GrammarCase): fc.Arbitrary<GeneratedPath> =>
             : null,
       };
     });
+
+type SegmentsExtendOptions = {
+  ancestor: string;
+  anchor: string;
+  separator: string;
+};
+
+/** Whether `ancestor`'s segments open `anchor`'s, compared whole, with more after. */
+const segmentsExtend = ({
+  ancestor,
+  anchor,
+  separator,
+}: SegmentsExtendOptions): boolean => {
+  const outer = ancestor.split(separator);
+  const inner = anchor.split(separator);
+  return (
+    outer.length < inner.length &&
+    outer.every((segment, index) => segment === inner.at(index))
+  );
+};
 
 const words = fc.constantFrom(
   "jeden rok, je-li vedeno trestní stíhání pro přečin,",
@@ -164,6 +195,76 @@ describe("anchor paths a publisher mints", () => {
       { numRuns: 300 * GRAMMARS.length },
     );
   });
+
+  for (const grammar of GRAMMARS) {
+    test(`${grammar.name}: a path sits under each of its proper prefixes and under no other path`, () => {
+      assertProperty(
+        `statute-anchor-scheme.${grammar.name}.within`,
+        fc.property(pathIn(grammar), pathIn(grammar), (path, other) => {
+          const segments = path.anchorId.split(grammar.separator);
+          for (let length = 1; length <= segments.length; length += 1) {
+            expect(
+              anchorWithin(grammar.scheme, {
+                ancestor: segments.slice(0, length).join(grammar.separator),
+                anchor: path.anchorId,
+              }),
+            ).toBe(length < segments.length);
+          }
+          expect(
+            anchorWithin(grammar.scheme, {
+              ancestor: other.anchorId,
+              anchor: path.anchorId,
+            }),
+          ).toBe(
+            segmentsExtend({
+              ancestor: other.anchorId,
+              anchor: path.anchorId,
+              separator: grammar.separator,
+            }),
+          );
+        }),
+        { numRuns: 300 },
+      );
+    });
+
+    test(`${grammar.name}: a cited block's preview is itself and the run of blocks its path owns`, () => {
+      assertProperty(
+        `statute-anchor-scheme.${grammar.name}.nested-under`,
+        fc.property(
+          fc.uniqueArray(pathIn(grammar), {
+            minLength: 1,
+            maxLength: 8,
+            selector: ({ anchorId }) => anchorId,
+          }),
+          fc.nat(),
+          (paths, pick) => {
+            const blocks: Block[] = paths
+              .map(({ anchorId }) => anchorId)
+              .toSorted()
+              .map((anchorId) =>
+                paragraphFromPreview({ anchorId, id: anchorId, text: "x" }),
+              );
+            const start = pick % blocks.length;
+            const cited =
+              blocks.at(start) ?? panic("The pick is inside the list");
+            const cut = blocks.findIndex(
+              (block, index) =>
+                index > start &&
+                !segmentsExtend({
+                  ancestor: cited.anchorId,
+                  anchor: block.anchorId,
+                  separator: grammar.separator,
+                }),
+            );
+            expect(
+              blocksNestedUnder({ blocks, scheme: grammar.scheme }, cited),
+            ).toEqual(blocks.slice(start, cut === -1 ? blocks.length : cut));
+          },
+        ),
+        { numRuns: 300 },
+      );
+    });
+  }
 
   test("no publisher's paths state a list in another publisher's grammar", () => {
     const minted = fc

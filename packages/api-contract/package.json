@@ -130,7 +130,7 @@
     "./statute-acts": "./src/statute-acts.ts",
     "./statute-aliases": "./src/statute-aliases.ts",
     "./statute-query-capability": "./src/statute-query-capability.ts",
-    "./statute-list-schemes": "./src/statute-list-schemes.ts",
+    "./statute-anchor-schemes": "./src/statute-anchor-schemes.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
     "./desktop-presence": "./src/desktop-presence.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",

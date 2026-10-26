@@ -4,6 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
 import { HighlightedText } from "@stll/decision-reader/document-ast-text";
 import { diffWordSegments } from "@stll/folio-core/ai-edits";
 import {
@@ -63,9 +64,15 @@ export const ProvisionHistory = ({
   const ast =
     statute === undefined ? null : parseDocumentAst(statute.documentAst);
   const resolvedAnchor =
-    ast === null
+    statute === undefined || ast === null
       ? null
-      : (resolveDocumentHeadingAnchor(ast.blocks, anchorId)?.anchorId ?? null);
+      : (resolveDocumentHeadingAnchor(
+          {
+            blocks: ast.blocks,
+            scheme: statuteAnchorSchemeFor(statute.country),
+          },
+          anchorId,
+        )?.anchorId ?? null);
   const { data, fetchNextPage, hasNextPage, isError, isFetchingNextPage } =
     useInfiniteQuery({
       ...provisionHistoryOptions({
