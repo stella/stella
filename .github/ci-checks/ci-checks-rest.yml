@@ -686,7 +686,7 @@ checks:
     # Rewrite: `bun scripts/codemod-icons.ts`.
     run: |
       bun test scripts/codemod-icons.test.ts
-      bun scripts/codemod-icons.ts --check
+      bun --preload ./scripts/offline-network-preload.ts scripts/codemod-icons.ts --check
 
   - name: Suppression waiver ledger
     env:
