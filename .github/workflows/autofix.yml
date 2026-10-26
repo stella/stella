@@ -545,10 +545,10 @@ jobs:
 
       # The install below restores CI's complete package store.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
+          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
-          no-cache: true
 
       - name: Align Tauri counterparts
         id: tauri
@@ -578,9 +578,7 @@ jobs:
       # re-downloading the global package cache.
       - name: Install dependencies
         timeout-minutes: 5
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
+        run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN; pull request installs get none.
           NPM_TOKEN: ""

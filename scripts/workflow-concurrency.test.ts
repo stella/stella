@@ -257,6 +257,9 @@ describe("pull request workflow concurrency", () => {
     if (file === "ci.yml") {
       return ["workflow_dispatch", "push"];
     }
+    if (file === "autofix.yml") {
+      return ["workflow_dispatch"];
+    }
     return [];
   };
 
@@ -335,9 +338,20 @@ describe("pull request workflow concurrency", () => {
         }
         const concurrency = owner["concurrency"];
         const group = concurrency["group"];
+        const cancel = concurrency["cancel-in-progress"];
         if (owner === workflow && hasMainBranchConcurrency(workflow)) {
           return [];
         }
+        const samePullRequestAutofixDispatch =
+          file === "autofix.yml" &&
+          owner === workflow &&
+          typeof group === "string" &&
+          group.includes("inputs.generator == 'changed-files'") &&
+          group.includes("format('pr-{0}', inputs.pr)") &&
+          group.includes("inputs.pr, github.run_id") &&
+          typeof cancel === "string" &&
+          cancel.includes("github.event_name == 'workflow_dispatch'") &&
+          cancel.includes("inputs.generator == 'changed-files'");
         // These workflows deliberately supersede builds/deploys or manual
         // CI on one branch. Staging builds supersede only a build of the
         // same commit. Promotion itself still must finish.
@@ -353,10 +367,10 @@ describe("pull request workflow concurrency", () => {
             group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`) ||
           (file === "queue-admission.yml" &&
             group === `queue-admission-\${{ inputs.pr }}`);
-        if (deliberate) {
+        const allowed = deliberate || samePullRequestAutofixDispatch;
+        if (allowed) {
           return [];
         }
-        const cancel = concurrency["cancel-in-progress"];
         return cancel === true ||
           (typeof cancel === "string" &&
             protectedEvents.some(

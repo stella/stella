@@ -537,11 +537,13 @@ test("push, dispatch and queue events always run without querying evidence", asy
 test("reused depth prevents every nonstructural CI job and expensive planner step", () => {
   const reused = contextWithPlanOutputs({
     context: {
-      status: { cancelled: false },
+      status: { always: true, cancelled: false },
       values: {
         "github.event_name": "pull_request",
         "github.event.action": "reopened",
         "github.event.pull_request.draft": false,
+        "github.repository": "stella/stella",
+        "github.event.pull_request.head.repo.full_name": "fork/repo",
         "inputs.heavy_only": false,
         "inputs.pr_depth_only": false,
         "needs.ci-plan.result": "success",
@@ -1168,10 +1170,12 @@ test("enqueue events leave every PR suite to unchanged merge-group validation", 
   expect(requests).toHaveLength(0);
   const enqueued = contextWithPlanOutputs({
     context: {
-      status: { cancelled: false },
+      status: { always: true, cancelled: false },
       values: {
         "github.event_name": "pull_request",
         "github.event.pull_request.draft": false,
+        "github.repository": "stella/stella",
+        "github.event.pull_request.head.repo.full_name": "fork/repo",
         "inputs.heavy_only": false,
         "needs.ci-plan.result": "success",
         "needs.ci-plan.outputs.run_required": "false",

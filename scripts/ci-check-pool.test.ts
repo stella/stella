@@ -497,6 +497,7 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
     "ci-check-pool.ts",
     "ci-check-pool-registry.ts",
     "github-expression.ts",
+    "autofix-drift-checks.ts",
   ]) {
     copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
   }

@@ -2025,6 +2025,7 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
     "result-boundary-globs.ts",
     "root-script-lint.ts",
     "rust-test-determinism-scan.ts",
+    "autofix-drift-checks.ts",
   ]) {
     symlinkSync(
       path.join(import.meta.dir, helper),

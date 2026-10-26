@@ -2362,6 +2362,25 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
     if (step.name === "Checkout") {
       continue;
     }
+    if (step.name === "Record autofix drift partition receipt") {
+      expect(step["if"]).toBe("always()");
+      expect(step["id"]).toBe("autofix_drift_receipt");
+      expect(step["env"]).toMatchObject({
+        CI_CHECK_KIND: "CONTEXTUAL",
+        CI_CHECK_CONTEXT:
+          "Records the repairable-drift result for this repository-check partition.",
+        FIXABLE: expect.any(String),
+        PARTITION: expect.any(String),
+      });
+      continue;
+    }
+    if (step.name === "Upload autofix drift partition receipt") {
+      expect(step["if"]).toBe(
+        "always() && steps.autofix_drift_receipt.outcome == 'success'",
+      );
+      expect(step["uses"]).toContain("actions/upload-artifact@");
+      continue;
+    }
     if (leg === "ci-checks-rest" && preInstallGuards.has(step.name)) {
       expect(index, preInstallGuards.get(step.name)).toBeLessThan(installIndex);
       expect(step["id"]).toBe(stepIds[step.name]);
@@ -2605,6 +2624,7 @@ const conditionEvaluator = ({
   cancelled,
 }: ConditionContextOptions) => {
   const context = createContext({
+    always: () => true,
     cancelled: () => cancelled,
     github: { event_name: event },
     steps: outcomes,

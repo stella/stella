@@ -2831,6 +2831,8 @@ jobs:
         id: autofix_drift_receipt
         if: always()
         env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Records the repairable-drift result for this repository-check partition."
           FIXABLE: ${{ steps.check_pool.outputs.fixable == 'true' || steps.tauri_alignment.outcome == 'failure' }}
           PARTITION: ${{ matrix.partition }}
         run: printf '%s\n' "$FIXABLE" > "$RUNNER_TEMP/autofix-fixable-$PARTITION"

@@ -8696,6 +8696,7 @@ const GATED_HEAVY_ROOTS = [
 test("the planner derives the PR heavy jobs from everything waiting on the gate", () => {
   expect(PR_HEAVY_JOBS).toEqual([
     "api-test-durations",
+    "autofix-dispatch",
     "ci-browser",
     "ci-tests",
     "e2e-landing",
@@ -8755,6 +8756,12 @@ const heavyJobsThatRun = ({ event, gate }: HeavyRunOptions) => {
         "vars.CI_POSTGRES_PR_SELECTION": "on",
         "vars.QUEUE_BROWSER_SUITES": "",
         "github.ref": "refs/heads/main",
+        "github.repository": "stella/stella",
+        "github.actor": "contributor",
+        "github.event.pull_request.head.repo.full_name": "stella/stella",
+        "github.event.pull_request.user.login": "contributor",
+        "needs.ci-checks-rest.result": "success",
+        "needs.*.outputs.fixable": [],
         // Only a heavy-only dispatch builds through heavy-web-build.
         "needs.heavy-web-build.result": "skipped",
         ...Object.fromEntries(

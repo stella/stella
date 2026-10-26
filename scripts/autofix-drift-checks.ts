@@ -15,7 +15,7 @@
 //   identifies a failure that changed-file autofix can repair.
 // - `outcome`: a workflow step; the job output tests its failed outcome.
 // - `code-check`: a `code-check` step, which writes `fixable` itself when a
-//   failed task is not a typecheck (`fixableCodeCheckTasks`).
+//   failed task belongs to a changed-file autofix repairable family.
 //
 // scripts/autofix-drift-checks.test.ts derives the required entries from the
 // generator manifest, the baseline writers and the workflow, so a drift guard
@@ -133,10 +133,17 @@ export const poolDriftFailed = (
       failedChecks.includes(check.name),
   );
 
-// A failed typecheck is never repaired by autofix; any other failed
-// code-check task (lint, root lint, env examples) may be.
-const TYPECHECK_TASK = /(?:^|#)typecheck(?::|$)/u;
+// Match only task families emitted by scopedCommands and repaired by the
+// changed-file autofix. Unknown root checks fail closed.
+const REPAIRABLE_CODE_CHECK_TASKS = [
+  /^@stll\/[^#]+#lint$/u,
+  /^bash scripts\/lint-root-scripts\.sh$/u,
+  /^bun --bun oxlint -c oxlint\.config\.ts --report-unused-disable-directives-severity=error --type-aware --type-check .+$/u,
+  /^bun run env:check$/u,
+] as const;
 
 /** Whether any failed code-check task can be autofix-repairable drift. */
 export const fixableCodeCheckTasks = (tasks: readonly string[]): boolean =>
-  tasks.some((task) => !TYPECHECK_TASK.test(task));
+  tasks.some((task) =>
+    REPAIRABLE_CODE_CHECK_TASKS.some((pattern) => pattern.test(task)),
+  );

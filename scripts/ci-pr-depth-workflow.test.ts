@@ -111,6 +111,7 @@ test("the hourly workflow calls the derived PR-depth set and publishes its statu
   ]);
   expect(prHeavyJobs(ci)).toEqual([
     "api-test-durations",
+    "autofix-dispatch",
     "ci-browser",
     "ci-tests",
     "e2e-landing",

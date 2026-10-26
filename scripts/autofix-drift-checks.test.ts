@@ -10,8 +10,16 @@ import {
   poolDriftFailed,
 } from "./autofix-drift-checks";
 import { CHECK_POOL_JOBS, readCheckPool } from "./ci-check-pool-registry";
-import { recordFixableFailure } from "./code-check-affected";
+import {
+  planCheck,
+  recordFixableFailure,
+  scopedCommands,
+} from "./code-check-affected";
 import { GENERATORS } from "./generated-files";
+import {
+  type Context,
+  evaluate as evaluateWorkflowExpression,
+} from "./github-expression";
 import { PR_GENERATORS } from "./pr-regeneration";
 import { workflowJobSteps } from "./workflow-steps";
 
@@ -233,6 +241,38 @@ describe("CI drift checks that request autofix", () => {
     expect(condition).toContain("github.actor != 'autofix-ci[bot]'");
     expect(condition).toContain("contains(needs.*.outputs.fixable, 'true')");
     expect(condition).toContain("needs.ci-checks-rest.result == 'failure'");
+    const dispatches = (values: Context["values"]) =>
+      evaluateWorkflowExpression(condition, {
+        values: {
+          "github.event_name": "pull_request",
+          "github.event.pull_request.head.repo.full_name": "stella/stella",
+          "github.event.pull_request.user.login": "contributor",
+          "github.repository": "stella/stella",
+          "github.actor": "contributor",
+          "needs.*.outputs.fixable": ["true"],
+          "needs.ci-checks-rest.result": "success",
+          ...values,
+        },
+        status: {
+          always: true,
+          success: true,
+          failure: false,
+          cancelled: false,
+        },
+      });
+    expect(dispatches({})).toBe(true);
+    for (const values of [
+      { "github.event_name": "push" },
+      { "github.event.pull_request.head.repo.full_name": "fork/repo" },
+      { "github.event.pull_request.user.login": "dependabot[bot]" },
+      { "github.actor": "autofix-ci[bot]" },
+      {
+        "needs.*.outputs.fixable": [],
+        "needs.ci-checks-rest.result": "success",
+      },
+    ]) {
+      expect(dispatches(values)).toBe(false);
+    }
     expect(dispatch?.["permissions"]).toEqual({
       actions: "write",
       contents: "read",
@@ -450,17 +490,73 @@ describe("drift signals", () => {
     expect(poolDriftFailed("ci-checks-rest", [])).toBe(false);
   });
 
-  test("a failed typecheck alone is not fixable; lint and root lint are", () => {
+  test("only changed-file autofix repairable task families signal drift", () => {
     expect(fixableCodeCheckTasks(["@stll/web#typecheck"])).toBe(false);
     expect(fixableCodeCheckTasks(["//#typecheck:repo"])).toBe(false);
+    expect(fixableCodeCheckTasks(["@stll/web#test"])).toBe(false);
+    expect(fixableCodeCheckTasks(["bun run env:check"])).toBe(true);
     expect(fixableCodeCheckTasks(["@stll/api#lint"])).toBe(true);
+    expect(
+      fixableCodeCheckTasks([
+        "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check scripts/example.ts",
+      ]),
+    ).toBe(true);
     expect(
       fixableCodeCheckTasks(["@stll/web#typecheck", "@stll/web#lint"]),
     ).toBe(true);
     expect(fixableCodeCheckTasks(["bash scripts/lint-root-scripts.sh"])).toBe(
       true,
     );
+    expect(fixableCodeCheckTasks(["bun run assets:check"])).toBe(false);
+    expect(fixableCodeCheckTasks(["bun run lint:css"])).toBe(false);
+    expect(
+      fixableCodeCheckTasks(["bash scripts/lint-oxlint-fixtures.sh"]),
+    ).toBe(false);
+    expect(fixableCodeCheckTasks(["bun scripts/unknown-check.ts"])).toBe(false);
+    expect(
+      fixableCodeCheckTasks(["bun scripts/check-oxlint-rule-decisions.ts"]),
+    ).toBe(false);
     expect(fixableCodeCheckTasks([])).toBe(false);
+  });
+
+  test("the produced rule-decision check does not request changed-file autofix", () => {
+    const plan = planCheck({
+      changedPaths: ["scripts/check-oxlint-rule-decisions.ts"],
+      presentChangedPaths: ["scripts/check-oxlint-rule-decisions.ts"],
+      repositoryPaths: ["scripts/check-oxlint-rule-decisions.ts"],
+      affectedWorkspacePaths: [],
+      workspacePaths: new Set(),
+    });
+    expect(plan.type).toBe("scoped");
+    if (plan.type === "fallback") {
+      return;
+    }
+    const task = scopedCommands(plan).find(
+      (command) => command.at(1) === "scripts/check-oxlint-rule-decisions.ts",
+    );
+    expect(task).toEqual(["bun", "scripts/check-oxlint-rule-decisions.ts"]);
+    if (task === undefined) {
+      return;
+    }
+    const directory = mkdtempSync(
+      path.join(tmpdir(), "code-check-rule-output-"),
+    );
+    try {
+      const output = path.join(directory, "output");
+      writeFileSync(output, "");
+      const command = task.join(" ");
+      recordFixableFailure(
+        {
+          command,
+          exitCode: 1,
+          tasks: [{ task: command, errors: [] }],
+        },
+        output,
+      );
+      expect(readFileSync(output, "utf-8")).toBe("");
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   test("code-check records only a fixable failure, never a false", () => {
