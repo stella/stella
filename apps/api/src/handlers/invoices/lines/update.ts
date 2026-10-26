@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 import type { InvoiceTotals } from "@stll/invoicing";
@@ -13,6 +13,7 @@ import {
   manualLineDraft,
   priceLines,
   recalculateInvoiceTotals,
+  tExemptionReason,
   tInvoiceLineQuantity,
   tLineDescription,
   tLineUnit,
@@ -25,26 +26,27 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tMinorUnitAmount,
-  tSafeId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { pickDefined } from "@/api/lib/pick-defined";
 
-const updateLineBodySchema = t.Object({
-  description: t.Optional(tLineDescription),
-  quantity: t.Optional(tInvoiceLineQuantity),
-  unit: t.Optional(t.Nullable(tLineUnit)),
-  unitPriceMinor: t.Optional(tMinorUnitAmount(0)),
-  vatRateBps: t.Optional(tVatRateBps),
-  vatTreatment: t.Optional(tVatTreatment),
+const updateLineBodySchema = v.object({
+  description: v.optional(tLineDescription),
+  quantity: v.optional(tInvoiceLineQuantity),
+  unit: v.optional(v.nullable(tLineUnit)),
+  unitPriceMinor: v.optional(minorUnitAmountSchema(0)),
+  vatRateBps: v.optional(tVatRateBps),
+  vatTreatment: v.optional(tVatTreatment),
+  exemptionReason: v.optional(tExemptionReason),
 });
 
 const lineParamsSchema = workspaceParams({
-  invoiceId: tSafeId("invoice"),
-  lineId: tSafeId("invoiceLine"),
+  invoiceId: resourceIdSchema("invoice"),
+  lineId: resourceIdSchema("invoiceLine"),
 });
 
 type UpdatedLine = { id: SafeId<"invoiceLine">; totals: InvoiceTotals };
@@ -56,6 +58,7 @@ const UPDATED_FIELDS = [
   "unitPriceMinor",
   "vatRateBps",
   "vatTreatment",
+  "exemptionReason",
 ] as const;
 
 const updateInvoiceLine = createSafeHandler(
@@ -154,6 +157,10 @@ const updateInvoiceLine = createSafeHandler(
           const vat = {
             vatRateBps: changed.vatRateBps ?? line.vatRateBps,
             vatTreatment: changed.vatTreatment ?? line.vatTreatment,
+            exemptionReason:
+              changed.exemptionReason === undefined
+                ? line.exemptionReason
+                : changed.exemptionReason,
           };
           let draft: InvoiceLineDraft = {
             description: changed.description ?? line.description,
@@ -200,6 +207,7 @@ const updateInvoiceLine = createSafeHandler(
               netAmount: pricedLine.netAmount,
               vatRateBps: pricedLine.vatRateBps,
               vatTreatment: pricedLine.vatTreatment,
+              exemptionReason: pricedLine.exemptionReason,
               vatAmount: pricedLine.vatAmount,
               grossAmount: pricedLine.grossAmount,
               updatedAt: now,

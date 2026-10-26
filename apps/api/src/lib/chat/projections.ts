@@ -468,10 +468,10 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("clip"),
       url: v.string(),
-      snippet: v.optional(v.string()),
-      citation: v.optional(v.string()),
-      jurisdiction: v.optional(v.string()),
-      sourceType: v.optional(v.string()),
+      snippet: v.exactOptional(v.string()),
+      citation: v.exactOptional(v.string()),
+      jurisdiction: v.exactOptional(v.string()),
+      sourceType: v.exactOptional(v.string()),
     }),
   ),
 ]);
@@ -1342,6 +1342,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         unitPrice: v.number(),
         vatRateBps: v.number(),
         vatTreatment: v.string(),
+        exemptionReason: v.nullable(contentText()),
         netAmount: v.number(),
         vatAmount: v.number(),
         grossAmount: v.number(),
@@ -1419,7 +1420,7 @@ const decisionIdentifiersProjection = v.optional(
 );
 
 /** Coverage keeps grouped court rows explicit when the public data has no names. */
-export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
+const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
     asOf: v.string(),
     countries: v.array(
@@ -1516,6 +1517,16 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
     ),
   }),
 );
+
+/**
+ * case_law_coverage. A requested public country the corpus records nothing
+ * for answers with its admission state, the same refusal search_case_law
+ * returns, so every country the input advertises has a typed answer.
+ */
+export const CASE_LAW_COVERAGE_PROJECTION = v.union([
+  projectionBranch(publicCountryUnavailableSchema),
+  CASE_LAW_COVERAGE_COUNTRIES_PROJECTION,
+]);
 
 // Publisher-authored summaries, only those the publisher published: an
 // absent field is left out rather than spelled as an absence block.
@@ -2054,6 +2065,12 @@ const businessRegistryHitProjection = v.strictObject({
   // unchanged.
   registryUrl: publicUrl(),
   details: v.optional(unenumeratedJson()),
+  provenance: v.optional(
+    v.strictObject({
+      identifierSource: v.literal("web-search"),
+      recordSource: v.literal("official-registry"),
+    }),
+  ),
 });
 
 /**
@@ -2074,6 +2091,26 @@ export const LOOKUP_BUSINESS_REGISTRY_PROJECTION = v.variant("type", [
       type: v.literal("search"),
       registry: v.string(),
       hits: v.array(businessRegistryHitProjection),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-not-found"),
+      registry: v.string(),
+      candidates: v.array(
+        v.strictObject({
+          id: v.string(),
+          reason: v.picklist(["no-official-record", "name-mismatch"]),
+          officialName: v.optional(v.string()),
+        }),
+      ),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      type: v.literal("name-search-unavailable"),
+      registry: v.string(),
+      reason: v.literal("web-search-unavailable"),
     }),
   ),
 ]);

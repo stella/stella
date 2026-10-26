@@ -46,6 +46,8 @@ on:
       - packages/text-normalize/CHANGELOG.md
       - packages/agent-input/CHANGELOG.md
       - packages/mcp-kit/CHANGELOG.md
+      - packages/fetch/CHANGELOG.md
+      - packages/scan-engine/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -77,6 +79,8 @@ on:
           - text-normalize
           - agent-input
           - mcp-kit
+          - fetch
+          - scan-engine
           - cli
         default: all
       publish:
@@ -407,7 +411,7 @@ jobs:
 
       - name: Set up Node for the CLI smoke test
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
 
@@ -452,7 +456,7 @@ jobs:
 
       - name: Upload conditions tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'conditions')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-conditions
           path: release-artifacts/conditions/
@@ -461,14 +465,14 @@ jobs:
 
       - name: Upload auth-model tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'auth-model')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-auth-model
           path: release-artifacts/auth-model/
 
       - name: Upload ai-catalog tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ai-catalog')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ai-catalog
           path: release-artifacts/ai-catalog/
@@ -477,7 +481,7 @@ jobs:
 
       - name: Upload anonymize-chat tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'anonymize-chat')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-anonymize-chat
           path: release-artifacts/anonymize-chat/
@@ -486,7 +490,7 @@ jobs:
 
       - name: Upload business-registries tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'business-registries')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-business-registries
           path: release-artifacts/business-registries/
@@ -495,7 +499,7 @@ jobs:
 
       - name: Upload country-codes tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'country-codes')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-country-codes
           path: release-artifacts/country-codes/
@@ -504,7 +508,7 @@ jobs:
 
       - name: Upload stable-stringify tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'stable-stringify')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-stable-stringify
           path: release-artifacts/stable-stringify/
@@ -513,7 +517,7 @@ jobs:
 
       - name: Upload time tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'time')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-time
           path: release-artifacts/time/
@@ -522,7 +526,7 @@ jobs:
 
       - name: Upload text-normalize tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'text-normalize')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-text-normalize
           path: release-artifacts/text-normalize/
@@ -531,7 +535,7 @@ jobs:
 
       - name: Upload agent-input tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'agent-input')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-agent-input
           path: release-artifacts/agent-input/
@@ -540,16 +544,34 @@ jobs:
 
       - name: Upload mcp-kit tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'mcp-kit')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-mcp-kit
           path: release-artifacts/mcp-kit/
           retention-days: 1
           if-no-files-found: error
 
+      - name: Upload fetch tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'fetch')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-fetch
+          path: release-artifacts/fetch/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload scan-engine tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'scan-engine')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-scan-engine
+          path: release-artifacts/scan-engine/
+          retention-days: 1
+          if-no-files-found: error
+
       - name: Upload template-conditions tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'template-conditions')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-template-conditions
           path: release-artifacts/template-conditions/
@@ -558,7 +580,7 @@ jobs:
 
       - name: Upload docx-utils tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'docx-utils')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-docx-utils
           path: release-artifacts/docx-utils/
@@ -567,7 +589,7 @@ jobs:
 
       - name: Upload ssr-kit tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ssr-kit')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ssr-kit
           path: release-artifacts/ssr-kit/
@@ -576,7 +598,7 @@ jobs:
 
       - name: Upload ssr-testkit tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ssr-testkit')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ssr-testkit
           path: release-artifacts/ssr-testkit/
@@ -585,7 +607,7 @@ jobs:
 
       - name: Upload start-runtime tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'start-runtime')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-start-runtime
           path: release-artifacts/start-runtime/
@@ -594,7 +616,7 @@ jobs:
 
       - name: Upload chat tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'chat')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-chat
           path: release-artifacts/chat/
@@ -603,7 +625,7 @@ jobs:
 
       - name: Upload ui tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'ui')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-ui
           path: release-artifacts/ui/
@@ -612,7 +634,7 @@ jobs:
 
       - name: Upload money tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'money')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-money
           path: release-artifacts/money/
@@ -621,7 +643,7 @@ jobs:
 
       - name: Upload calculations tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'calculations')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-calculations
           path: release-artifacts/calculations/
@@ -630,7 +652,7 @@ jobs:
 
       - name: Upload workspace-ui tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'workspace-ui')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-workspace-ui
           path: release-artifacts/workspace-ui/
@@ -639,7 +661,7 @@ jobs:
 
       - name: Upload workspace-model tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'workspace-model')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-workspace-model
           path: release-artifacts/workspace-model/
@@ -648,7 +670,7 @@ jobs:
 
       - name: Upload cli tarball
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: npm-tarball-cli
           path: release-artifacts/cli/

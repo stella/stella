@@ -2,6 +2,8 @@ import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
 
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
 import { OTP_DELIVERY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
@@ -19,11 +21,8 @@ const getSharedRateLimitContext = (): RedisRateLimitContext => {
   return sharedRateLimitContext;
 };
 
-const normalizeAuthEmail = (email: string): string =>
-  email.trim().toLowerCase();
-
 const domainFromEmail = (email: string): string | null => {
-  const normalizedEmail = normalizeAuthEmail(email);
+  const normalizedEmail = normalizeEmail(email);
   const separatorIndex = normalizedEmail.lastIndexOf("@");
   if (separatorIndex <= 0 || separatorIndex === normalizedEmail.length - 1) {
     return null;
@@ -105,12 +104,12 @@ export const evaluateNewAccountOtpPolicy = async ({
   context,
   email,
 }: {
-  accountExists: (normalizedEmail: string) => Promise<boolean>;
+  accountExists: (normalizedEmail: NormalizedEmail) => Promise<boolean>;
   clientIp: string | null;
   context?: Pick<RateLimitContext, "increment">;
   email: string;
 }): Promise<NewAccountOtpPolicyResult> => {
-  const normalizedEmail = normalizeAuthEmail(email);
+  const normalizedEmail = normalizeEmail(email);
 
   // Both counters are consumed before the account-existence branch, so a
   // request for a registered address and one for an unregistered address

@@ -3,11 +3,12 @@ import type { ComponentType, LazyExoticComponent } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, expect, mock, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { parseTimeZoneId } from "@stll/time";
 
+import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
 import {
   authFixtureBeforeLoadData,
   authFixtureLoaderData,
@@ -34,7 +35,9 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts" | "professional-use";
+  suite?: "leaf-shells" | "law-hosts" | "professional-use" | "route-search";
+  /** The router's reading of a URL, which the route-search suite checks with. */
+  parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
 
 const FIXTURE_AUDIENCE = { anonymous: "anonymous", member: "member" } as const;
@@ -53,6 +56,7 @@ const fixtureRouteSchema = v.object({
       ),
     ),
     loader: v.optional(v.unknown()),
+    validateSearch: v.optional(v.unknown()),
     staticData: v.optional(
       v.looseObject({
         appFrame: v.optional(v.picklist(["none", "member", "knowledge"])),
@@ -490,32 +494,17 @@ const installFixtureNetwork = () => {
   };
 };
 const loadFixtureRuntime = async (
-  { mode, suite = "leaf-shells" }: RouteShellProviderFixtureOptions,
+  {
+    mode,
+    suite = "leaf-shells",
+    parseSearch,
+  }: RouteShellProviderFixtureOptions,
   network: ReturnType<typeof installFixtureNetwork>,
 ) => {
-  // Bun does not run Start's client/server build transform. Keep its client
-  // implementation, as the browser bundle does, while retaining the real router.
-  const start = await import("@tanstack/react-start");
-  type ClientHalf = (...args: never[]) => unknown;
-  await mock.module("@tanstack/react-start", () => ({
-    ...start,
-    createIsomorphicFn: () => {
-      let clientHalf: ClientHalf = () => undefined;
-      const isomorphic = Object.assign(
-        (...args: never[]) => clientHalf(...args),
-        {
-          server: () => isomorphic,
-          client: (half: ClientHalf) => {
-            clientHalf = half;
-            return isomorphic;
-          },
-        },
-      );
-      return isomorphic;
-    },
-  }));
-
+  // Isomorphic functions run their browser half here, as the test preload
+  // (src/test-setup.ts) arranges for every test.
   const { routeTree } = await import("@/router");
+  const { Route: otpRoute } = await import("@/routes/auth/otp");
   const { createAppQueryClient } = await import("@/lib/react-query");
   const { professionalUseOptions } = await import("@/lib/auth-queries");
   const { createMemoryHistory, createRouter, RouterProvider, useMatches } =
@@ -551,6 +540,8 @@ const loadFixtureRuntime = async (
   const { noopAnalytics } = await import("@/lib/analytics/noop");
   const { createRouteErrorLifecycleController } =
     await import("@/lib/analytics/route-error-lifecycle");
+  const { parseRouteSearch, stringifyRouteSearch } =
+    await import("@/route-search-params");
 
   const createFixtureRouter = (initialEntry: string) => {
     const queryClient = createAppQueryClient();
@@ -560,6 +551,8 @@ const loadFixtureRuntime = async (
     const caughtErrors: Error[] = [];
     const router = createRouter({
       routeTree,
+      parseSearch: parseRouteSearch,
+      stringifySearch: stringifyRouteSearch,
       defaultOnCatch: (error) => {
         caughtErrors.push(
           error instanceof Error ? error : new Error(String(error)),
@@ -642,10 +635,12 @@ const loadFixtureRuntime = async (
   return {
     mode,
     suite,
+    parseSearch,
     createFixtureRouter,
     professionalUseOptions,
     census,
     registeredRoutes,
+    otpRoute,
     ancestors,
     isLegacyTool,
     uiLeaves,
@@ -719,12 +714,64 @@ const declareCensus = (fixture: FixtureRuntime) => {
   const {
     mode,
     suite,
+    parseSearch,
     registeredRoutes,
     isLegacyTool,
     uiLeaves,
     selectedLeaves,
     hasUi,
   } = fixture;
+  if (suite === "route-search") {
+    const readSearch =
+      parseSearch ??
+      panic("The route-search suite needs the router's search parser.");
+    test("every route opens whatever its URL's search carries", () => {
+      expect(
+        routeSearchRefusals(
+          registeredRoutes,
+          (routeId) => fixtureSearch(routeId, "reader@example.com"),
+          readSearch,
+        ),
+      ).toEqual([]);
+    });
+    test("changing the OTP email reloads its actual loader for that address", async () => {
+      const { otpRoute } = fixture;
+      const loader = otpRoute.options.loader;
+      if (typeof loader !== "function") {
+        panic("The actual OTP route must declare its loader");
+      }
+      const loadedEmails: string[] = [];
+      otpRoute.options.loader = (args): unknown => {
+        loadedEmails.push(args.context.otpEmail);
+        return loader(args);
+      };
+      fixture.state.audience = "anonymous";
+      const { router, queryClient, caughtErrors } = fixture.createFixtureRouter(
+        "/auth/otp?email=first%40example.test",
+      );
+      try {
+        await router.load();
+        expect(loadedEmails).toEqual(["first@example.test"]);
+        await router.navigate({
+          to: "/auth/otp",
+          search: { email: "second@example.test" },
+        });
+        expect(loadedEmails).toEqual([
+          "first@example.test",
+          "second@example.test",
+        ]);
+        expect(
+          router.state.matches.find((match) => match.routeId === "/auth/otp")
+            ?.status,
+        ).toBe("success");
+        expect(caughtErrors).toEqual([]);
+      } finally {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+        otpRoute.options.loader = loader;
+      }
+    });
+  }
   if (suite === "leaf-shells") {
     test(`${mode}: every top-level UI section declares its runtime frame scope`, () => {
       expect(
@@ -899,7 +946,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
           component: protectedLeaf ? Probe : Page,
           beforeLoad: protectedLeaf
             ? undefined
-            : () => authFixtureBeforeLoadData(route.id),
+            : () => authFixtureBeforeLoadData(route.id, user.email),
           loader,
         });
         await initializeI18n();
@@ -1206,7 +1253,7 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
     fixture.unexpectedRequests.length = 0;
     caseRoute.update({
       component: CasePage,
-      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id),
+      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id, fixture.user.email),
       loader: () => publicFixtureLoaderData(caseRoute.id),
     });
     await fixture.initializeI18n();

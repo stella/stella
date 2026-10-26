@@ -128,7 +128,9 @@ test("header measurements wait for a moving button inside a fixed section", asyn
           { transform: "translateX(0px)" },
           { transform: `translateX(${distance}px)` },
         ],
-        { duration: 1000, easing: "linear", fill: "forwards" },
+        // The delay holds the button still while the animation already runs,
+        // as a pending start does on a slow frame.
+        { delay: 500, duration: 1000, easing: "linear", fill: "forwards" },
       );
       motion.id = id;
     },

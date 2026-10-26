@@ -73,6 +73,11 @@ const VIEWER_DATA_READERS: Record<string, ViewerCoverage> = {
     type: "pending",
     reason: "signing placement preview reports its own failure",
   },
+  "features/avt/original-pdf-view.tsx": {
+    type: "not-a-viewer",
+    reason:
+      "reads the PDF for claim boxes; the PeekPdfViewer it mounts shows the file and its load failure",
+  },
   "hooks/use-verified-email-citation-target.ts": {
     type: "not-a-viewer",
     reason: "resolves a citation target; renders no file",

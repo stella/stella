@@ -12,9 +12,9 @@ import {
 } from "@/api/lib/email/inbound/ses";
 import {
   drainInboundMailQueue,
-  MAX_QUEUE_MESSAGE_CHARS,
   parseInboundQueueMessage,
 } from "@/api/lib/email/inbound/sqs";
+import { MAX_QUEUE_MESSAGE_CHARS } from "@/api/lib/email/sns-queue-drain";
 import {
   logger,
   type LogRecord,

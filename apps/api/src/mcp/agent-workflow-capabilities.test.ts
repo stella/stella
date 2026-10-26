@@ -15,7 +15,7 @@ import {
   AI_MEMORY_FEATURE_ID,
   FEATURE_REGISTRY,
 } from "@/api/lib/feature-access/registry";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -215,8 +215,8 @@ const createContext = ({
   memberRole = "owner",
 }: {
   grantedScopes?: readonly string[];
-  memberRole?: McpRequestContext["memberRole"];
-} = {}): McpRequestContext => {
+  memberRole?: McpRequestResources["memberRole"];
+} = {}): McpRequestResources => {
   const workspaces = [
     { id: toSafeId<"workspace">(MATTER), status: "active" as const },
     { id: toSafeId<"workspace">(ARCHIVED_MATTER), status: "archived" as const },
@@ -321,7 +321,7 @@ const invoke = async ({
 }: {
   capability: ExposedId;
   input: Record<string, unknown>;
-  context?: McpRequestContext;
+  context?: McpRequestResources;
   validateOnly?: boolean;
   confirm?: boolean;
 }) =>

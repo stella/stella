@@ -40,6 +40,12 @@ export const brandValidatedWorkspaceId = (
 ): SafeId<"workspace"> | null =>
   isUuid(value) ? toSafeId<"workspace">(value) : null;
 
+// parser-output-unchanged: Agent-skill ID validation is unused by legal parsers and cannot alter their output.
+export const parsePersistedAgentSkillId = (
+  id: string,
+): SafeId<"agentSkill"> | null =>
+  isUuid(id) ? toSafeId<"agentSkill">(id) : null;
+
 export const brandPersistedSavedTimeNarrativeId = (
   id: string,
 ): SafeId<"savedTimeNarrative"> => toSafeId<"savedTimeNarrative">(id);
@@ -361,6 +367,12 @@ export const parseAuthProviderId = <T extends AuthProviderIdType>(
   value: string,
 ): SafeId<T> | null =>
   AUTH_PROVIDER_ID_PATTERN.test(value) ? toSafeId<T>(value) : null;
+
+/** Validate and brand an operator-supplied usage policy UUID. */
+export const parseUsagePolicyId = (
+  value: string,
+): SafeId<"usagePolicy"> | null =>
+  isUuid(value) ? toSafeId<"usagePolicy">(value) : null;
 
 export const brandValidatedWorkflowActorKey = ({
   organizationId,

@@ -18,7 +18,16 @@ export class ReaderAnswerFailure extends TaggedError("ReaderAnswerFailure")<{
   message: string;
   kind: "protocol" | "model" | "request";
   code?: ReaderAnswerErrorCode;
+  cause?: unknown;
 }> {}
+
+export type ReaderAnswerFailureNotice =
+  | { type: "operation"; error: Error }
+  | {
+      type: "message";
+      messageId: string;
+      error: APIError | ReaderAnswerFailure;
+    };
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- Nonnegative token and citation quantities validate the wire contract; zero is a mathematical boundary, not a product limit.
 const count = v.pipe(v.number(), v.integer(), v.minValue(0));
@@ -291,8 +300,17 @@ export const readerAnswerFailureKind = (
   ) {
     return "budget";
   }
-  if (!ReaderAnswerFailure.is(error)) {
+  if (APIError.is(error)) {
+    return "model";
+  }
+  if (error instanceof Error && error.name === "TimeoutError") {
+    return "timeout";
+  }
+  if (error instanceof Error && error.name === "AbortError") {
     return "network";
+  }
+  if (!ReaderAnswerFailure.is(error)) {
+    return "model";
   }
   if (error.code !== undefined) {
     return readerAnswerErrorCodeKind(error.code);

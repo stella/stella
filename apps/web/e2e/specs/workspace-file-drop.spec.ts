@@ -23,9 +23,36 @@ const dropNativeFiles = async (
   data: DragData,
 ) => {
   const cdp = await page.context().newCDPSession(page);
-  for (const type of ["dragEnter", "dragOver", "drop"] as const) {
-    await cdp.send("Input.dispatchDragEvent", { type, ...point, data });
-  }
+  await cdp.send("Input.dispatchDragEvent", {
+    type: "dragEnter",
+    ...point,
+    data,
+  });
+  await cdp.send("Input.dispatchDragEvent", {
+    type: "dragOver",
+    ...point,
+    data,
+  });
+  // Drop targets are resolved on dragenter and dragover. A drop zone that
+  // re-registers mid-drag (the Files view re-renders when its listing
+  // arrives) is found only by a later dragover; a real drag sends dragover
+  // continuously, so let two frames pass and hover again before dropping.
+  await page.evaluate(
+    async () =>
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      }),
+  );
+  await cdp.send("Input.dispatchDragEvent", {
+    type: "dragOver",
+    ...point,
+    data,
+  });
+  await cdp.send("Input.dispatchDragEvent", { type: "drop", ...point, data });
 };
 
 const openFilesView = async (

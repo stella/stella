@@ -1,9 +1,10 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import {
+  DESKTOP_BILLING_DRAFT_LIMITS,
+  desktopBillingDraftModelResponseSchema,
   desktopBillingDraftRequestSchema,
   desktopBillingDraftResponseSchema,
   desktopBillingDraftReviewSchema,
@@ -11,7 +12,6 @@ import {
 import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
-  DesktopBillingDraftReview,
 } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
@@ -26,9 +26,8 @@ import {
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
@@ -47,11 +46,8 @@ Use the matter narrativeLanguage when set unless current steering explicitly req
 Every flag must cite an exact supplied fileId, fileName and section applicable to that matter. matchedEarlierEntryIds may reference only supplied earlier entries on the same matter.
 Steering is the user's requested adjustment to selected proposals. Personal preference is subordinate to current steering and billing rules.
 Operations are reviewable suggestions only: rewrite, change_classification, set_billable, split, merge, move. Split minutes must sum to the source duration; merge only selected entries on the same matter and date, with one owner and no conflicting operations. Move only to supplied candidate matters, never increase time. No structural operations may overlap.
-Preserve all opaque references exactly. Previous results are suggestions, not established facts.`;
-
-const billingDraftReviewSchema = Type.Unsafe<DesktopBillingDraftReview>(
-  jsonSchemaToTypeBox(toJsonSchema(desktopBillingDraftReviewSchema)),
-);
+Preserve all opaque references exactly. Previous results are suggestions, not established facts.
+Limits: return 1-${DESKTOP_BILLING_DRAFT_LIMITS.entries} drafts and at most ${DESKTOP_BILLING_DRAFT_LIMITS.guidelines} checked guidelines. All strings must be nonempty, except targetMatterName may be empty. Identifiers have at most ${DESKTOP_BILLING_DRAFT_LIMITS.identifierLength} characters; matter identifiers are UUIDs. Narratives have at most ${DESKTOP_BILLING_DRAFT_LIMITS.narrativeLength} characters, names and sections ${DESKTOP_BILLING_DRAFT_LIMITS.nameLength}, and classification codes ${DESKTOP_BILLING_DRAFT_LIMITS.codeLength}. Durations are integer minutes from 1 to ${DESKTOP_BILLING_DRAFT_LIMITS.durationMinutes}. Each draft has at most ${DESKTOP_BILLING_DRAFT_LIMITS.flags} flags, ${DESKTOP_BILLING_DRAFT_LIMITS.operations} operations and ${DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries} earlier-entry references. A split has 2-${DESKTOP_BILLING_DRAFT_LIMITS.splitParts} parts and a merge references 2-${DESKTOP_BILLING_DRAFT_LIMITS.entries} entries. The caller validates every bound before accepting a proposal.`;
 
 type BillingDraftEndpointOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
@@ -268,7 +264,7 @@ const canonicalBillingDraftReview = ({
     earlierEntries: earlierEntries
       .filter(({ id }) => cited.has(id))
       .map(({ id, dateWorked, durationMinutes, narrative }) => ({
-        id,
+        id: String(id),
         dateWorked,
         durationMinutes,
         narrative,
@@ -276,196 +272,213 @@ const canonicalBillingDraftReview = ({
   };
 };
 
+const validateEntryDates = (entries: DesktopBillingDraftRequest["entries"]) =>
+  Result.try({
+    try: () => {
+      for (const entry of entries) {
+        Temporal.PlainDate.from(entry.date).toZonedDateTime(entry.timezone);
+      }
+    },
+    catch: () =>
+      new HandlerError({
+        status: 400,
+        message: "Entry date or timezone is invalid",
+      }),
+  });
+
 export const createDesktopBillingDraftEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadContext = loadBillingDraftContext,
   generateObjectForTask = generateTanStackObjectForTask,
   admit,
 }: BillingDraftEndpointOptions = {}) =>
-  createSafeBoundedPublicHandler(
-    {
-      contract: "patch",
-      accountAccess: ACCOUNT_ACCESS.sandbox,
-      mcp: { type: "internal", reason: "auth_plumbing" },
-      cache: { kind: "none" },
-      body: desktopBillingDraftRequestSchema,
-      response: safePublicHandlerResponseSchemasWithStatusText(
-        billingDraftReviewSchema,
-      ),
-    },
-    async function* (ctx) {
-      const { request, body } = ctx;
-      const account = yield* Result.await(
-        authorizeDesktopTimeEntries(request, authorizeAccount),
-      );
-      if (!hasMemberPermission(account.memberRole, { timeEntry: ["create"] })) {
-        return Result.err(
-          new HandlerError({
-            status: 403,
-            message: "Time entry creation is not permitted",
-          }),
+  declareAggregateMutation(
+    createSafeBoundedPublicHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "auth_plumbing" },
+        cache: { kind: "none" },
+        body: desktopBillingDraftRequestSchema,
+        response: safePublicHandlerResponseSchemasWithStatusText(
+          desktopBillingDraftReviewSchema,
+        ),
+      },
+      async function* (ctx) {
+        const { request, body } = ctx;
+        const account = yield* Result.await(
+          authorizeDesktopTimeEntries(request, authorizeAccount),
         );
-      }
-      const selectedEntries = body.entries.map((entry, index) => ({
-        ...entry,
-        entryId: `entry_${index + 1}`,
-      }));
-      yield* Result.try({
-        try: () => {
-          for (const entry of body.entries) {
-            Temporal.PlainDate.from(entry.date).toZonedDateTime(entry.timezone);
-          }
-        },
-        catch: () =>
-          new HandlerError({
-            status: 400,
-            message: "Entry date or timezone is invalid",
-          }),
-      });
-      const context = yield* Result.await(loadContext({ ...account, body }));
-      const validationContext = {
-        entries: selectedEntries,
-        matters: context.matters,
-        earlierEntries: context.earlierEntries,
-        guidelines: context.guidelines,
-      };
-      if (body.previousResult) {
-        // Refining a subset of entries may narrow which guideline files apply,
-        // and the client cannot know which. A previous result is therefore held
-        // to the authorized files it cites: an unknown or duplicated file still
-        // fails coverage, and every flag must still cite a checked file.
-        const cited = new Set(
-          body.previousResult.checkedGuidelines.map(({ fileId }) => fileId),
-        );
-        const previous = validateBillingDraftResult(body.previousResult, {
-          ...validationContext,
-          guidelines: context.guidelines.filter(({ fileId }) =>
-            cited.has(fileId),
-          ),
-        });
-        if (previous.isErr()) {
+        if (
+          !hasMemberPermission(account.memberRole, { timeEntry: ["create"] })
+        ) {
           return Result.err(
-            new HandlerError({ status: 400, message: previous.error.message }),
+            new HandlerError({
+              status: 403,
+              message: "Time entry creation is not permitted",
+            }),
           );
         }
-      }
-      const { refs, prompt } = prepareBillingDraftPrompt({
-        body,
-        selectedEntries,
-        context,
-      });
-      if (prompt.length > BILLING_DRAFT_CONTEXT_LIMITS.promptCharacters) {
-        return Result.err(
-          new HandlerError({
-            status: 413,
-            message: "Selected draft context is too large",
+        const selectedEntries = body.entries.map((entry, index) => ({
+          ...entry,
+          entryId: `entry_${index + 1}`,
+        }));
+        yield* validateEntryDates(body.entries);
+        const context = yield* Result.await(loadContext({ ...account, body }));
+        const validationContext = {
+          entries: selectedEntries,
+          matters: context.matters,
+          earlierEntries: context.earlierEntries,
+          guidelines: context.guidelines,
+        };
+        if (body.previousResult) {
+          // Refining a subset of entries may narrow which guideline files apply,
+          // and the client cannot know which. A previous result is therefore held
+          // to the authorized files it cites: an unknown or duplicated file still
+          // fails coverage, and every flag must still cite a checked file.
+          const cited = new Set(
+            body.previousResult.checkedGuidelines.map(({ fileId }) => fileId),
+          );
+          const previous = validateBillingDraftResult(body.previousResult, {
+            ...validationContext,
+            guidelines: context.guidelines.filter(({ fileId }) =>
+              cited.has(fileId),
+            ),
+          });
+          if (previous.isErr()) {
+            return Result.err(
+              new HandlerError({
+                status: 400,
+                message: previous.error.message,
+              }),
+            );
+          }
+        }
+        const { refs, prompt } = prepareBillingDraftPrompt({
+          body,
+          selectedEntries,
+          context,
+        });
+        if (prompt.length > BILLING_DRAFT_CONTEXT_LIMITS.promptCharacters) {
+          return Result.err(
+            new HandlerError({
+              status: 413,
+              message: "Selected draft context is too large",
+            }),
+          );
+        }
+        const authorization = yield* Result.await(
+          authorizeHandlerUsage({
+            metering: { actionType: "chat", modelTask: "analysis" },
+            ...account,
+            orgAIConfig: context.orgAIConfig,
+            workspaceId: null,
           }),
         );
-      }
-      const authorization = yield* Result.await(
-        authorizeHandlerUsage({
-          metering: { actionType: "chat", modelTask: "analysis" },
-          ...account,
-          orgAIConfig: context.orgAIConfig,
-          workspaceId: null,
-        }),
-      );
-      return await authorization.execute(
-        async () =>
-          await Result.gen(async function* () {
-            return yield* admitFiniteAction({
-              actionKind: "billing.activity-drafts",
-              ctx: {
-                ...ctx,
-                user: { id: account.userId },
-                session: { activeOrganizationId: account.organizationId },
-                scopedDb: account.scopedDb,
-                actionSignal: request.signal,
-              },
-              ...(admit ? { admit } : {}),
-              async *handler({ actionSignal, modelAdmission }) {
-                const analytics = createTanStackAIAnalyticsCallbacks({
-                  dataClass: "customer",
-                  feature: "billing.activity_drafts",
-                  modelTask: "analysis",
-                  modelTier: modelAdmission.modelTier,
-                  orgAIConfig: context.orgAIConfig,
-                  properties: {},
-                  traceId: Bun.randomUUIDv7(),
-                  usageMetering: {
-                    ...account,
-                    actionType: "chat",
-                    serviceTier: "standard",
-                    workspaceId: null,
-                  },
-                });
-                const result = yield* Result.await(
-                  Result.tryPromise({
-                    try: async () =>
-                      await generateObjectForTask({
-                        dataClass: "customer",
-                        admission: modelAdmission,
-                        userId: account.userId,
-                        organizationId: account.organizationId,
-                        orgAIConfig: context.orgAIConfig,
-                        managedAIResidency: context.managedAIResidency,
-                        task: "analysis",
-                        serviceTier: "standard",
-                        analytics,
-                        caching: resolveCaching({
-                          promptCachingEnabled: context.promptCachingEnabled,
-                          task: "analysis",
-                          scopeKey: null,
-                        }),
-                        tenantWorkspaceIds: context.matters.map(
-                          ({ matterId }) => matterId,
-                        ),
-                        abortSignal: actionSignal,
-                        deadlineMs: BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
-                        system: SYSTEM_PROMPT,
-                        systemPromptOrigin: "server-built",
-                        prompt,
-                        outputSchema: desktopBillingDraftResponseSchema,
-                        outputTokenBudget: 16_000,
-                      }),
-                    catch: (error) => {
-                      analytics.captureError(error);
-                      return aiHandlerError(error, {
-                        status: 502,
-                        message: "Billing draft generation failed",
-                      });
+        return await authorization.execute(
+          async () =>
+            await Result.gen(async function* () {
+              return yield* admitFiniteAction({
+                actionKind: "billing.activity-drafts",
+                ctx: {
+                  ...ctx,
+                  user: { id: account.userId },
+                  session: { activeOrganizationId: account.organizationId },
+                  scopedDb: account.scopedDb,
+                  actionSignal: request.signal,
+                },
+                ...(admit ? { admit } : {}),
+                async *handler({ actionSignal, modelAdmission }) {
+                  const analytics = createTanStackAIAnalyticsCallbacks({
+                    dataClass: "customer",
+                    feature: "billing.activity_drafts",
+                    modelTask: "analysis",
+                    modelTier: modelAdmission.modelTier,
+                    orgAIConfig: context.orgAIConfig,
+                    properties: {},
+                    traceId: Bun.randomUUIDv7(),
+                    usageMetering: {
+                      ...account,
+                      actionType: "chat",
+                      serviceTier: "standard",
+                      workspaceId: null,
                     },
-                  }),
-                );
-                const validation = refs.restore(result).andThen((restored) => {
-                  const checked = validateBillingDraftResult(
-                    restored,
-                    validationContext,
-                  );
-                  if (checked.isErr()) {
-                    return Result.err(checked.error);
-                  }
-                  return Result.ok(restored);
-                });
-                if (validation.isErr()) {
-                  analytics.captureError(validation.error);
-                  return Result.err(
-                    new HandlerError({
-                      status: 502,
-                      message: "Billing draft proposals failed validation",
+                  });
+                  const result = yield* Result.await(
+                    Result.tryPromise({
+                      try: async () =>
+                        await generateObjectForTask({
+                          dataClass: "customer",
+                          admission: modelAdmission,
+                          userId: account.userId,
+                          organizationId: account.organizationId,
+                          orgAIConfig: context.orgAIConfig,
+                          managedAIResidency: context.managedAIResidency,
+                          task: "analysis",
+                          serviceTier: "standard",
+                          analytics,
+                          caching: resolveCaching({
+                            promptCachingEnabled: context.promptCachingEnabled,
+                            task: "analysis",
+                            scopeKey: null,
+                          }),
+                          tenantWorkspaceIds: context.matters.map(
+                            ({ matterId }) => matterId,
+                          ),
+                          abortSignal: actionSignal,
+                          deadlineMs: BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
+                          system: SYSTEM_PROMPT,
+                          systemPromptOrigin: "server-built",
+                          prompt,
+                          outputSchema: desktopBillingDraftModelResponseSchema,
+                          outputTokenBudget: 16_000,
+                        }),
+                      catch: (error) => {
+                        analytics.captureError(error);
+                        return aiHandlerError(error, {
+                          status: 502,
+                          message: "Billing draft generation failed",
+                        });
+                      },
                     }),
                   );
-                }
-                return Result.ok(
-                  canonicalBillingDraftReview({
-                    restored: validation.value,
-                    context,
-                  }),
-                );
-              },
-            });
-          }),
-      );
+                  const validation = refs
+                    .restore(result)
+                    .andThen((restored) => {
+                      const checked = validateBillingDraftResult(
+                        restored,
+                        validationContext,
+                      );
+                      if (checked.isErr()) {
+                        return Result.err(checked.error);
+                      }
+                      return Result.ok(restored);
+                    });
+                  if (validation.isErr()) {
+                    analytics.captureError(validation.error);
+                    return Result.err(
+                      new HandlerError({
+                        status: 502,
+                        message: "Billing draft proposals failed validation",
+                      }),
+                    );
+                  }
+                  return Result.ok(
+                    canonicalBillingDraftReview({
+                      restored: validation.value,
+                      context,
+                    }),
+                  );
+                },
+              });
+            }),
+        );
+      },
+    ),
+    {
+      type: "independent",
+      reason:
+        "Returns validated review-only proposals without recording time; the existing action-admission lifecycle owns model usage accounting.",
     },
   );
 

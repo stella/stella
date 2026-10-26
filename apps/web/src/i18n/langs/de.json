@@ -388,6 +388,7 @@
         "reading": "Leseansicht"
       },
       "notLocated": "{count, plural, one {# Behauptung wurde im Original nicht gefunden} other {# Behauptungen wurden im Original nicht gefunden}}",
+      "pdfTextFailed": "Der Text der PDF konnte nicht gelesen werden, daher sind die Behauptungen auf den Seiten nicht markiert.",
       "selectClaim": "Wählen Sie eine Behauptung aus, um den Bestand zu prüfen.",
       "showQueue": "Warteschlange anzeigen",
       "stats": {
@@ -506,6 +507,24 @@
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "approval": {
+      "approveSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} freigeben",
+      "empty": "In dieser Akte wartet nichts auf Freigabe.",
+      "failed": "Die Änderung wurde nicht gespeichert. Versuchen Sie es erneut.",
+      "myTime": "Meine Zeit",
+      "refusals": {
+        "invalidEntry": "Ergänzen Sie eine Beschreibung, prüfen Sie das Arbeitsdatum und geben Sie den Eintrag dann frei.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag freigeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr. Aktualisieren Sie die Liste.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag freigeben.",
+        "unpriced": "Für diesen Eintrag ist kein Tarif hinterlegt. Legen Sie einen Tarif für diese Akte fest und geben Sie den Eintrag dann frei.",
+        "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
+      },
+      "returnComment": "Grund für Rückgabe",
+      "selectEntry": "Eintrag auswählen",
+      "timeEntries": "Zeiteinträge",
+      "title": "Freigaben"
+    },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",
@@ -593,6 +612,7 @@
       "openInvoice": "Rechnung öffnen",
       "otherCurrency": "{count, plural, one {# Position ist} other {# Positionen sind}} in einer anderen Währung als {currency} erfasst und bleiben für eine eigene Rechnung offen.",
       "outsideScope": "Im Inland nicht steuerbar, 0 %",
+      "pendingApprovals": "{count, plural, one {# Position wartet} other {# Positionen warten}} auf Freigabe. Freigaben prüfen.",
       "rate": "Satz",
       "readyDescription": "Beim Ausstellen erhält die Rechnung die nächste Nummer aus Ihrem Nummernkreis und wird gesperrt. Ein Entwurf bleibt bearbeitbar.",
       "readyTitle": "Bereit zum Ausstellen",
@@ -644,6 +664,7 @@
         "eso9": "ESO9-Importtabelle (XLSX)",
         "exporting": "Export wird vorbereitet…",
         "isdoc": "ISDOC-E-Rechnung (ABRA Gen u. a.)",
+        "ksefFa3": "KSeF-E-Rechnung FA(3) (XML)",
         "spreadsheets": "Tabellen",
         "xlsx": "Rechnungen (XLSX)",
         "xlsxLines": "Rechnungspositionen (XLSX)"
@@ -757,6 +778,7 @@
     "sellerProfiles": {
       "add": "Verkäuferprofil hinzufügen",
       "archiveConfirm": "Dieses Verkäuferprofil archivieren? Es steht dann für neue Rechnungen nicht mehr zur Verfügung.",
+      "barRegistration": "Zulassung bei der Rechtsanwaltskammer",
       "bic": "BIC / SWIFT-Code",
       "default": "Standardverkäufer",
       "defaultCurrency": "Standardwährung",
@@ -768,11 +790,10 @@
       "invalidCurrency": "Geben Sie einen Währungscode mit drei Buchstaben ein.",
       "invalidIban": "Geben Sie eine gültige IBAN ein.",
       "legalName": "Offizieller Name",
+      "registerEntry": "Registereintrag",
       "registrationId": "Registrierungsnummer",
       "setDefault": "Als Standard festlegen",
       "title": "Verkäuferprofile",
-      "vatId": "Umsatzsteuer-ID",
-      "vatPayer": "Umsatzsteuerpflichtig",
       "vatPayerHelp": "Rechnungen dieses Verkäufers weisen Umsatzsteuer aus. Ausschalten für eine registrierte Person, die eine Umsatzsteuer-ID hat, aber nicht umsatzsteuerpflichtig ist.",
       "vatPayerRequiresVatId": "Geben Sie die Umsatzsteuer-ID an, um als umsatzsteuerpflichtiger Verkäufer Rechnungen auszustellen."
     },
@@ -807,6 +828,8 @@
     "total": "Gesamt",
     "vatRates": {
       "add": "Umsatzsteuersatz hinzufügen",
+      "addCzechia": "Sätze für Tschechien hinzufügen",
+      "addSlovakia": "Sätze für die Slowakei hinzufügen",
       "archiveConfirm": "Diesen Umsatzsteuersatz archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
       "code": "Steuersatzcode",
       "current": "Aktueller Steuersatz",
@@ -821,6 +844,7 @@
       "overlap": "Gültigkeitszeiträume mit demselben Steuersatzcode dürfen sich nicht überschneiden.",
       "past": "Früherer Steuersatz",
       "periodHelp": "Das Anfangsdatum ist eingeschlossen; das Enddatum ist ausgeschlossen. Lassen Sie das Enddatum für einen offenen Zeitraum leer.",
+      "presetResult": "Hinzugefügt: {added}; übersprungen: {skipped}.",
       "rate": "Umsatzsteuer in Prozent",
       "title": "Umsatzsteuersätze",
       "validFrom": "Gültig ab",
@@ -1027,7 +1051,10 @@
       "pageOfCount": "Seite {page} von {pageCount}",
       "pageOfEstimatedCount": "Seite {page} von ~{pageCount}",
       "pageOfEstimatedCountLabel": "Seite {page} von etwa {pageCount}",
+      "pageWithEstimatedMatchCounts": "Seite {page} · etwa {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithEstimatedResultCount": "Seite {page} · etwa {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+      "pageWithMatchCounts": "Seite {page} · {exactCount, plural, one {# genaue Übereinstimmung} other {# genaue Übereinstimmungen}} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
+      "pageWithPartialMatchCount": "Seite {page} · {relaxedCount, plural, one {# teilweise Übereinstimmung} other {# teilweise Übereinstimmungen}} auf dieser Seite",
       "pageWithResultCount": "Seite {page} · {count, plural, one {# Ergebnis} other {# Ergebnisse}}",
       "perPage": "Pro Seite",
       "refineForMore": "Grenzen Sie die Suche ein, um weitere Ergebnisse zu sehen"
@@ -1478,7 +1505,7 @@
       "label": "Simulierte KI"
     },
     "modelSelector": {
-      "allModels": "Alle Modelle ({count, number})",
+      "allModels": "Alle Modelle",
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
       "belowFrontier": "Unter den besten Kompromissen",
@@ -2048,7 +2075,6 @@
       "orLetUsKnowAt": "oder schreiben Sie uns an",
       "viewDocumentation": "Dokumentation ansehen"
     },
-    "enterKey": "↵",
     "error": "Fehler",
     "expenses": "Ausgaben",
     "export": {
@@ -2121,6 +2147,7 @@
       "ZH-HANT": "Chinesisch (traditionell)"
     },
     "lastUpdated": "Zuletzt aktualisiert",
+    "layoutResetAfterProblem": "Das Layout wurde nach einem Problem zurückgesetzt.",
     "legalDatabase": "Rechtsdatenbank",
     "loadMore": "Mehr laden",
     "loading": "Wird geladen …",
@@ -2196,6 +2223,7 @@
     "scrollToTop": "Nach oben scrollen",
     "search": "Suchen...",
     "searchIn": "Suchen in",
+    "searchMembers": "Mitglieder suchen…",
     "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
     "selectAll": "Alle auswählen",
@@ -2219,6 +2247,7 @@
     "suggested": "Vorschlag",
     "summarizeChanges": "Änderungen zusammenfassen",
     "target": "Ziel",
+    "taxId": "Steuernummer",
     "timeBilling": "Zeit & Abrechnung",
     "today": "Heute",
     "translate": "Übersetzen",
@@ -2242,6 +2271,8 @@
     "urlIdentifierPlaceholder": "meine-organisation",
     "user": "Benutzer",
     "value": "Wert",
+    "vatId": "Umsatzsteuer-ID",
+    "vatPayer": "Umsatzsteuerpflichtig",
     "verified": "Verifiziert",
     "verify": "Bestätigen",
     "version": "Version",
@@ -2432,7 +2463,9 @@
       "prefix": "Titel (vorangestellt)",
       "registrationNumber": "Registernummer",
       "suffix": "Titel (nachgestellt)",
-      "taxId": "Steuer-ID",
+      "vatPayer": "Umsatzsteuerstatus",
+      "vatPayerNo": "Kein Umsatzsteuerzahler",
+      "vatPayerUnknown": "Unbekannt",
       "year": "Jahr"
     },
     "filterOrganizations": "Organisationen",
@@ -2472,7 +2505,6 @@
         "primary_phone": "Primäre Telefonnummer",
         "state": "Bundesland oder Region",
         "suffix": "Namenssuffix",
-        "tax_id": "Steuernummer",
         "type": "Kontakttyp"
       },
       "fileInvalid": "Wählen Sie eine CSV-, TSV- oder TXT-Datei aus.",
@@ -3817,6 +3849,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Ein Klient",
+      "availabilityClientBadgeHelp": "Nur in den Akten eines Klienten verfügbar.",
+      "availabilityClientHelp": "Nur in den Akten dieses Klienten nutzbar. Das lässt sich später nicht ändern.",
+      "availabilityFixedHelp": "Beim Erstellen des Skills festgelegt. Das lässt sich nicht ändern.",
+      "availabilityLabel": "Verfügbar in",
+      "availabilityMatter": "Eine Akte",
+      "availabilityMatterBadgeHelp": "Nur in einer Akte verfügbar.",
+      "availabilityMatterHelp": "Nur in dieser Akte nutzbar. Das lässt sich später nicht ändern.",
+      "availabilityOrganization": "Gesamte Organisation",
+      "availabilityTeamNeedsMatter": "Um einen Skill mit dem Team zu teilen, wählen Sie die Akte, für die er gedacht ist. Das lässt sich später nicht ändern.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Erstellen Sie Standpunkt für Standpunkt ein Playbook für die Vertragsprüfung, gestützt auf Ihre bereits unterzeichneten Verträge, ein kurzes Gespräch und marktübliche Standards.",
@@ -4747,7 +4789,7 @@
     "modelError": "Das Modell konnte diese Antwort nicht fertigstellen.",
     "networkError": "Die Verbindung wurde unterbrochen. Versuchen Sie es erneut.",
     "regenerate": "Antwort neu generieren",
-    "selectionError": "Wählen Sie Text innerhalb eines einzelnen Absatzes aus (bis zu 2.000 Zeichen).",
+    "selectionError": "Wählen Sie Text aus der Entscheidung selbst aus.",
     "send": "Rückfrage senden",
     "share": "Mit dem Team teilen",
     "timeoutError": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut.",
@@ -4800,6 +4842,8 @@
     "recentDocuments": "Zuletzt verwendete Dokumente",
     "recentSearches": "Letzte Suchen",
     "recentlyOpenedFiles": "Zuletzt geöffnete Dateien",
+    "registryCandidateNameMismatch": "Der amtliche Name „{officialName}“ stimmt nicht überein",
+    "registryCandidateNoOfficialRecord": "Das amtliche Register enthält keinen Eintrag für diese Nummer",
     "registryChoose": "Unternehmensregister auswählen",
     "registryCredentialAskAdmin": "Bitten Sie einen Organisationsadministrator, den Zugang zu diesem Register einzurichten.",
     "registryCredentialSaved": "Registerzugang gespeichert",
@@ -4810,6 +4854,7 @@
       "enrichmentUnavailable": "Details aus dem Unternehmensregister sind vorübergehend nicht verfügbar"
     },
     "registryKrsHint": "KRS sucht nach der Registernummer, nicht nach dem Firmennamen. Geben Sie eine zehnstellige KRS-Nummer einschließlich führender Nullen ein (z. B. 0000006865).",
+    "registryNameSearchNotFound": "Kein verifiziertes Unternehmen stimmt mit diesem Namen überein. Folgende Kandidaten wurden verworfen:",
     "registryVatHint": "VIES prüft Umsatzsteuer-Identifikationsnummern, keine Unternehmensnamen. Geben Sie die Nummer mit Länderpräfix ein (z. B. CZ27082440); das Format hängt vom Land ab.",
     "renameSearchTitle": "Gespeicherte Suche umbenennen",
     "requestCountry": "Neues Land anfragen",
@@ -5340,7 +5385,7 @@
     "importDescription": "Stile werden in eine neue, inhaltsfreie DOCX-Datei extrahiert.",
     "importTitle": "Stilset importieren",
     "loadFailed": "Stilsets konnten nicht geladen werden",
-    "newDocument": "Neues Dokument",
+    "newDocument": "Neues DOCX-Dokument",
     "pickerDescription": "Wählen Sie das Formatierungssystem für die neue Datei.",
     "renameTitle": "Stilset umbenennen",
     "replace": "Quelle ersetzen",
@@ -5624,7 +5669,7 @@
     "moveToMatter": "In Akte speichern",
     "moveToMatterAnyway": "Trotzdem speichern",
     "myDefaultLookupFormat": "Mein Standard",
-    "newFromTemplate": "Neues Dokument aus Vorlage",
+    "newFromTemplate": "Neues DOCX-Dokument aus Vorlage",
     "newFromTemplateFillHint": "Füllen Sie die Felder aus; das Dokument wird in dieser Akte erstellt.",
     "newTemplate": "Neue Vorlage",
     "noTemplates": "Noch keine Vorlagen",
@@ -5995,6 +6040,7 @@
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
+        "editInApplication": "In <bdi>{application}</bdi> bearbeiten",
         "editLocallyPrompt": "Bearbeiten Sie diese Datei lokal und synchronisieren Sie die Änderungen mit stella.",
         "forceRelease": "Freigabe erzwingen",
         "notOpenedDescription": "stella desktop hat nicht bestätigt, dass <bdi>{application}</bdi> geöffnet wurde. Starten Sie stella desktop und versuchen Sie es erneut.",
@@ -6018,13 +6064,15 @@
         "alreadyInstalled": "Bereits installiert? Verbinden",
         "connect": "stella desktop verbinden",
         "connected": "stella desktop ist verbunden",
+        "download": "stella desktop herunterladen",
         "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
         "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
         "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
         "signCurrent": "Mit stella desktop signieren",
         "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
         "signOutdated": "stella desktop aktualisieren, um zu signieren",
-        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop."
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
+        "update": "stella desktop aktualisieren"
       },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
@@ -6037,8 +6085,10 @@
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
+      "ocrBatchHelp": "Eingereihte Dokumente werden im nächsten OCR-Lauf verarbeitet.",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
-      "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
+      "ocrQueued": "Texterkennung eingereiht",
+      "ocrQueuedForBatch": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
         "alreadySigningTitle": "Das Signieren läuft bereits in stella desktop",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
@@ -6095,6 +6145,7 @@
         "waitingDescription": "Wählen Sie in stella desktop ein Signaturzertifikat, um dieses PDF zu signieren.",
         "waitingTitle": "Warten auf stella desktop"
       },
+      "queueForOcr": "Für OCR einreihen",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Was mit {fileName} geschehen soll",
@@ -6106,7 +6157,6 @@
       "removeMetadata": "Dokumentmetadaten entfernen",
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
-      "runOcr": "OCR einreihen",
       "scrubFailed": "Die Metadaten dieser Datei konnten nicht entfernt werden, daher wurde nichts heruntergeladen",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",
@@ -6185,8 +6235,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Lead festlegen",
-        "noLead": "Kein Lead",
-        "searchMembers": "Mitglieder suchen…"
+        "noLead": "Kein Lead"
       },
       "to": "Bis"
     },
@@ -6266,10 +6315,10 @@
       "addMember": "Mitglied hinzufügen",
       "addMemberDescription": "Ein Teammitglied zu dieser Akte hinzufügen",
       "alreadyMember": "Benutzer ist bereits Mitglied",
+      "alreadyOnMatter": "Bereits in dieser Akte",
       "cannotRemoveLast": "Das letzte Mitglied kann nicht entfernt werden",
       "noMembersFound": "Keine Mitglieder gefunden",
-      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?",
-      "selectMember": "Mitglied auswählen"
+      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?"
     },
     "newDocument": "Neues Dokument",
     "newFolder": "Neuer Ordner",
@@ -6394,6 +6443,7 @@
       "addParty": "Partei hinzufügen",
       "changeClient": "Klient ändern",
       "client": "Klient",
+      "movedToClient": "Akte <bdi>{matterName}</bdi> zu <bdi>{clientName}</bdi> verschoben",
       "noClient": "Kein Klient zugeordnet",
       "noClientOptional": "Kein Klient (optional)",
       "noParties": "Dieser Akte sind keine Parteien zugeordnet.",
@@ -6412,7 +6462,9 @@
       "personalLabel": "Persönlich",
       "promoteCta": "Zu Klient hochstufen",
       "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig — hochgestufte Akten können nicht wieder persönlich werden.",
+      "promoteToClientConfirm": "Die Akte <bdi>{matterName}</bdi> wird <bdi>{clientName}</bdi> zugeordnet und mit dem Team geteilt. Sie kann danach nicht wieder persönlich werden.",
       "promotedSuccess": "Akte hochgestuft",
+      "recentClients": "Zuletzt verwendete Klienten",
       "removeClient": "Klient entfernen",
       "removeParty": "Partei entfernen",
       "removePartyConfirm": "Möchten Sie diese Partei wirklich aus der Akte entfernen?",
@@ -6624,6 +6676,12 @@
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {
       "parties": "Parteien"
+    },
+    "switcher": {
+      "searchPlaceholder": "Akte suchen…",
+      "trigger": "Akte wechseln",
+      "viewAll": "Alle Akten anzeigen",
+      "viewAllForClient": "Alle Akten des Klienten {clientName} anzeigen"
     },
     "table": {
       "clearFlags": "Markierungen löschen",

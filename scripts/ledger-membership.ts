@@ -12,6 +12,25 @@ export const ledgerGitEnv = (): Record<string, string> =>
     ),
   );
 
+type LedgerMergeBaseOptions = { repoRoot: string; baseRef: string };
+
+export const ledgerMergeBase = ({
+  repoRoot,
+  baseRef,
+}: LedgerMergeBaseOptions): string => {
+  const result = Bun.spawnSync(["git", "merge-base", "HEAD", baseRef], {
+    cwd: repoRoot,
+    env: ledgerGitEnv(),
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    return panic(
+      `Ledger comparison requires a fetched ${baseRef} with shared history: ${result.stderr.toString().trim()}`,
+    );
+  }
+  return result.stdout.toString().trim();
+};
+
 type ReadBaseLedgerOptions = {
   baseRef: string;
   ledgerRel: string;

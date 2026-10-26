@@ -5,6 +5,11 @@ import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "./desktop-time-entries"
 
 export const DESKTOP_BILLING_DRAFT_LIMITS = {
   entries: 20,
+  identifierLength: 128,
+  durationMinutes: 1440,
+  flags: 20,
+  operations: 20,
+  splitParts: 20,
   steerLength: 2000,
   narrativeLength: 4000,
   evidenceItems: 20,
@@ -14,7 +19,11 @@ export const DESKTOP_BILLING_DRAFT_LIMITS = {
   matchedEarlierEntries: 20,
 } as const;
 
-const identifierSchema = v.pipe(v.string(), v.minLength(1), v.maxLength(128));
+const identifierSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.identifierLength),
+);
 const matterIdSchema = v.pipe(v.string(), v.uuid());
 const steeringTextSchema = v.pipe(
   v.string(),
@@ -36,7 +45,7 @@ const durationSchema = v.pipe(
   v.number(),
   v.integer(),
   v.minValue(1),
-  v.maxValue(1440),
+  v.maxValue(DESKTOP_BILLING_DRAFT_LIMITS.durationMinutes),
 );
 
 export const desktopBillingDraftEvidenceSchema = v.strictObject({
@@ -59,109 +68,150 @@ export const desktopBillingDraftEntrySchema = v.strictObject({
   evidence: v.optional(desktopBillingDraftEvidenceSchema),
 });
 
-export const desktopBillingDraftClassificationSchema = v.union([
-  v.strictObject({
-    type: v.literal("ledes"),
-    taskCode: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-    ),
-    activityCode: v.pipe(
-      v.string(),
-      v.minLength(1),
-      v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
-    ),
-  }),
-  v.strictObject({
-    type: v.literal("activity_group"),
-    activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
-  }),
-]);
+const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
+  const identifier = profile === "canonical" ? identifierSchema : v.string();
+  const matterId = profile === "canonical" ? matterIdSchema : v.string();
+  const name = profile === "canonical" ? nameSchema : v.string();
+  const narrative = profile === "canonical" ? narrativeSchema : v.string();
+  const duration = profile === "canonical" ? durationSchema : v.number();
+  const codeSchema =
+    profile === "canonical"
+      ? v.pipe(
+          v.string(),
+          v.minLength(1),
+          v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
+        )
+      : v.string();
+  const targetMatterNameSchema =
+    profile === "canonical"
+      ? v.pipe(v.string(), v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.nameLength))
+      : v.string();
+  const array = <Schema extends v.GenericSchema>(
+    schema: Schema,
+    { min, max }: { min?: number; max: number },
+  ) => {
+    if (profile === "model") {
+      return v.array(schema);
+    }
+    if (min === undefined) {
+      return v.pipe(v.array(schema), v.maxLength(max));
+    }
+    return v.pipe(v.array(schema), v.minLength(min), v.maxLength(max));
+  };
+  const desktopBillingDraftClassificationSchema = v.union([
+    v.strictObject({
+      type: v.literal("ledes"),
+      taskCode: codeSchema,
+      activityCode: codeSchema,
+    }),
+    v.strictObject({
+      type: v.literal("activity_group"),
+      activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
+    }),
+  ]);
 
-export const desktopBillingDraftRuleRefSchema = v.strictObject({
-  fileId: identifierSchema,
-  fileName: nameSchema,
-  section: nameSchema,
-});
+  const desktopBillingDraftRuleRefSchema = v.strictObject({
+    fileId: identifier,
+    fileName: name,
+    section: name,
+  });
 
-export const desktopBillingDraftFlagSchema = v.strictObject({
-  text: narrativeSchema,
-  ruleRef: desktopBillingDraftRuleRefSchema,
-  fix: v.optional(v.literal("split")),
-});
+  const desktopBillingDraftFlagSchema = v.strictObject({
+    text: narrative,
+    ruleRef: desktopBillingDraftRuleRefSchema,
+    fix: v.optional(v.literal("split")),
+  });
 
-const splitPartSchema = v.strictObject({
-  durationMinutes: durationSchema,
-  narrative: narrativeSchema,
-  classification: desktopBillingDraftClassificationSchema,
-  billable: v.boolean(),
-});
-
-export const desktopBillingDraftOperationSchema = v.union([
-  v.strictObject({ type: v.literal("rewrite"), narrative: narrativeSchema }),
-  v.strictObject({
-    type: v.literal("change_classification"),
-    classification: desktopBillingDraftClassificationSchema,
-  }),
-  v.strictObject({ type: v.literal("set_billable"), billable: v.boolean() }),
-  v.strictObject({
-    type: v.literal("split"),
-    parts: v.pipe(v.array(splitPartSchema), v.minLength(2), v.maxLength(20)),
-  }),
-  v.strictObject({
-    type: v.literal("merge"),
-    entryIds: v.pipe(
-      v.array(identifierSchema),
-      v.minLength(2),
-      v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.entries),
-    ),
-    narrative: narrativeSchema,
-    classification: desktopBillingDraftClassificationSchema,
-    billable: v.boolean(),
-  }),
-  v.strictObject({
-    type: v.literal("move"),
-    targetMatterId: matterIdSchema,
-    targetMatterName: v.pipe(v.string(), v.maxLength(512)),
-    durationMinutes: durationSchema,
-    narrative: narrativeSchema,
+  const splitPartSchema = v.strictObject({
+    durationMinutes: duration,
+    narrative,
     classification: desktopBillingDraftClassificationSchema,
     billable: v.boolean(),
-  }),
-]);
+  });
 
-export const desktopBillingDraftSchema = v.strictObject({
-  entryId: identifierSchema,
-  narrative: narrativeSchema,
-  classification: desktopBillingDraftClassificationSchema,
-  flags: v.pipe(v.array(desktopBillingDraftFlagSchema), v.maxLength(20)),
-  matchedEarlierEntryIds: v.pipe(
-    v.array(identifierSchema),
-    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries),
-  ),
-  operations: v.pipe(
-    v.array(desktopBillingDraftOperationSchema),
-    v.maxLength(20),
-  ),
-});
-
-export const desktopBillingDraftResponseSchema = v.strictObject({
-  drafts: v.pipe(
-    v.array(desktopBillingDraftSchema),
-    v.minLength(1),
-    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.entries),
-  ),
-  checkedGuidelines: v.pipe(
-    v.array(
-      v.strictObject({
-        fileId: identifierSchema,
-        fileName: nameSchema,
+  const desktopBillingDraftOperationSchema = v.union([
+    v.strictObject({ type: v.literal("rewrite"), narrative }),
+    v.strictObject({
+      type: v.literal("change_classification"),
+      classification: desktopBillingDraftClassificationSchema,
+    }),
+    v.strictObject({ type: v.literal("set_billable"), billable: v.boolean() }),
+    v.strictObject({
+      type: v.literal("split"),
+      parts: array(splitPartSchema, {
+        min: 2,
+        max: DESKTOP_BILLING_DRAFT_LIMITS.splitParts,
       }),
+    }),
+    v.strictObject({
+      type: v.literal("merge"),
+      entryIds: array(identifier, {
+        min: 2,
+        max: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+      }),
+      narrative,
+      classification: desktopBillingDraftClassificationSchema,
+      billable: v.boolean(),
+    }),
+    v.strictObject({
+      type: v.literal("move"),
+      targetMatterId: matterId,
+      targetMatterName: targetMatterNameSchema,
+      durationMinutes: duration,
+      narrative,
+      classification: desktopBillingDraftClassificationSchema,
+      billable: v.boolean(),
+    }),
+  ]);
+
+  const desktopBillingDraftSchema = v.strictObject({
+    entryId: identifier,
+    narrative,
+    classification: desktopBillingDraftClassificationSchema,
+    flags: array(desktopBillingDraftFlagSchema, {
+      max: DESKTOP_BILLING_DRAFT_LIMITS.flags,
+    }),
+    matchedEarlierEntryIds: array(identifier, {
+      max: DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries,
+    }),
+    operations: array(desktopBillingDraftOperationSchema, {
+      max: DESKTOP_BILLING_DRAFT_LIMITS.operations,
+    }),
+  });
+
+  const desktopBillingDraftResponseSchema = v.strictObject({
+    drafts: array(desktopBillingDraftSchema, {
+      min: 1,
+      max: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+    }),
+    checkedGuidelines: array(
+      v.strictObject({ fileId: identifier, fileName: name }),
+      { max: DESKTOP_BILLING_DRAFT_LIMITS.guidelines },
     ),
-    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.guidelines),
-  ),
-});
+  });
+
+  return {
+    desktopBillingDraftClassificationSchema,
+    desktopBillingDraftRuleRefSchema,
+    desktopBillingDraftFlagSchema,
+    desktopBillingDraftOperationSchema,
+    desktopBillingDraftSchema,
+    desktopBillingDraftResponseSchema,
+  };
+};
+
+export const {
+  desktopBillingDraftClassificationSchema,
+  desktopBillingDraftRuleRefSchema,
+  desktopBillingDraftFlagSchema,
+  desktopBillingDraftOperationSchema,
+  desktopBillingDraftSchema,
+  desktopBillingDraftResponseSchema,
+} = createBillingDraftResponseSchemas("canonical");
+
+/** Compact model grammar; every generated result must pass the canonical schema. */
+export const desktopBillingDraftModelResponseSchema =
+  createBillingDraftResponseSchemas("model").desktopBillingDraftResponseSchema;
 
 /** The caller's own earlier entries a draft cites, so the review can show
  * what "consistent with" refers to without a second request. */

@@ -43,7 +43,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { INBOX_VIEWS, inboxKeys } from "@/lib/inbox/queries";
@@ -89,7 +89,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const latestSave = useRef(0);
   useExternalSyncEffect(() => {
     if (saved.error) {
-      analytics.captureError(saved.error);
+      analytics.captureError(saved.error, {
+        fingerprintKey: "EntityViews:failure",
+        scope: { type: "handler", handlerId: "EntityViews:failure" },
+      });
     }
   }, [analytics, saved.error]);
   const defaults = useMemo(
@@ -126,7 +129,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       ? draft
       : (views.find((view) => view.id === selectedId) ?? views.at(0));
   const reportError = (error: unknown) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "EntityViews.reportError:failure",
+      scope: { type: "handler", handlerId: "EntityViews.reportError:failure" },
+    });
     notifyUserError(error, t("common.unexpectedError"));
   };
   const save = useMutation({
@@ -134,13 +140,13 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
     mutationFn: async (view: WorkspaceView) => {
       const id = savedIds.current.get(view.id) ?? view.id;
       const result = isUnsavedViewId(id)
-        ? unwrapEden(
+        ? unwrapApiResponse(
             await api["entity-views"].put({
               name: view.name,
               layout: view.layout,
             }),
           )
-        : unwrapEden(
+        : unwrapApiResponse(
             await api["entity-views"]({
               viewId: toSafeId<"workspaceView">(id),
             }).patch({ name: view.name, layout: view.layout }),
@@ -175,7 +181,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const remove = useMutation({
     scope: { id: `entity-views:${organizationId}` },
     mutationFn: async (viewId: string) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["entity-views"]({
           viewId: toSafeId<"workspaceView">(viewId),
         }).delete(),
@@ -195,7 +201,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   });
   const reorder = useMutation({
     mutationFn: async (viewIds: string[]) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["entity-views"].reorder.post({
           viewIds: viewIds.map((id) => toSafeId<"workspaceView">(id)),
         }),
@@ -527,7 +533,10 @@ const EntityViewContent = ({
   };
   useExternalSyncEffect(() => {
     if (records.error) {
-      analytics.captureError(records.error);
+      analytics.captureError(records.error, {
+        fingerprintKey: "EntityViewContent:failure",
+        scope: { type: "handler", handlerId: "EntityViewContent:failure" },
+      });
     }
   }, [analytics, records.error]);
   const loading = records.isPending;

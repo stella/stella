@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
+
 import type { AiExtractablePropertyContent } from "@/api/db/schema-validators";
 
 /**
@@ -132,7 +134,7 @@ export const answerSchemaForContent = (
           );
     case "date":
       return v.pipe(
-        v.nullable(v.pipe(v.string(), v.isoDate())),
+        v.nullable(apiDateSchema),
         v.description(ANSWER_CONTEXT.date.description),
         v.examples([...ANSWER_CONTEXT.date.examples]),
       );

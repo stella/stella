@@ -1,11 +1,14 @@
 import { panic } from "better-result";
 
+import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { withActiveUpload } from "@/lib/files/active-uploads";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import {
+  hashActiveUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -13,10 +16,6 @@ import {
   preflightAttachedTemplateUpload,
 } from "./attached-template-upload-preflight";
 import { completeEntityVersionUpload } from "./upload-entity-version.logic";
-
-// Stall ceiling, not a target duration: a healthy slow upload of a large file
-// can legitimately take several minutes.
-const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 type UploadEntityVersionOptions = {
   workspaceId: string;
@@ -46,7 +45,7 @@ const abortUpload = async (
         uploadId,
       })
       .abort.post({});
-    unwrapEden(response);
+    unwrapApiResponse(response);
   } catch {
     // Preserve the original upload failure. Cleanup is intentionally best effort.
   }
@@ -78,7 +77,7 @@ export const uploadEntityVersion = async ({
   // The page holds the bytes until this settles, so a reload must prompt.
   return await withActiveUpload(async () => {
     signal?.throwIfAborted();
-    const sha256Hex = await hashSha256Hex(fileToUpload);
+    const sha256Hex = await hashActiveUploadFile(fileToUpload);
     signal?.throwIfAborted();
 
     const wsClient = api.uploads({
@@ -95,7 +94,7 @@ export const uploadEntityVersion = async ({
       },
       signal ? { fetch: { signal } } : undefined,
     );
-    const { uploadId, url, headers } = unwrapEden(presign);
+    const { uploadId, url, headers } = unwrapApiResponse(presign);
 
     await completeEntityVersionUpload({
       abort: async () => await abortUpload(workspaceId, uploadId),
@@ -114,7 +113,7 @@ export const uploadEntityVersion = async ({
           headers,
           body: fileToUpload,
           signal,
-          timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+          timeoutMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
         }),
     });
     return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };

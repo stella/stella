@@ -8,6 +8,7 @@
  * worker's database), with key material decrypted in process.
  */
 
+import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { organizationSettings } from "@/api/db/schema";
@@ -46,22 +47,25 @@ export type OrgWebSearchKeyRow = {
 const resolveWebSearchKeysFromRow = async (
   organizationId: SafeId<"organization">,
   row: OrgWebSearchKeyRow | null | undefined,
-): Promise<WebSearchKeys> => {
-  const [searchApiKey, fetchApiKey] = await Promise.all([
-    decryptOptional(
-      organizationId,
-      row?.webSearchApiKeyEncrypted,
-      row?.webSearchApiKeyIv,
-    ),
-    decryptOptional(
-      organizationId,
-      row?.urlFetchApiKeyEncrypted,
-      row?.urlFetchApiKeyIv,
-    ),
-  ]);
-
-  return { searchApiKey, fetchApiKey };
-};
+): Promise<Result<WebSearchKeys, unknown>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const [searchApiKey, fetchApiKey] = await Promise.all([
+        decryptOptional(
+          organizationId,
+          row?.webSearchApiKeyEncrypted,
+          row?.webSearchApiKeyIv,
+        ),
+        decryptOptional(
+          organizationId,
+          row?.urlFetchApiKeyEncrypted,
+          row?.urlFetchApiKeyIv,
+        ),
+      ]);
+      return { searchApiKey, fetchApiKey };
+    },
+    catch: (error) => error,
+  });
 
 export const loadWebSearchKeys = async (
   db: OrgSettingsReader,
@@ -78,7 +82,9 @@ export const loadWebSearchKeys = async (
     .where(eq(organizationSettings.organizationId, organizationId))
     .limit(1);
 
-  return await resolveWebSearchKeysFromRow(organizationId, rows.at(0));
+  return (await resolveWebSearchKeysFromRow(organizationId, rows.at(0))).unwrap(
+    "Could not resolve organization web-search credentials",
+  );
 };
 
 export const loadWebSearchProvidersForOrg = async (
@@ -98,5 +104,15 @@ export const resolveWebSearchProvidersFromOrgSettingsRow = async (
   row: OrgWebSearchKeyRow | null | undefined,
 ): Promise<ResolvedWebSearchProviders> =>
   resolveWebSearchProvidersFromEnv(
-    await resolveWebSearchKeysFromRow(organizationId, row),
+    (await resolveWebSearchKeysFromRow(organizationId, row)).unwrap(
+      "Could not resolve organization web-search credentials",
+    ),
   );
+
+export const resolveWebSearchProvidersResultFromOrgSettingsRow = async (
+  organizationId: SafeId<"organization">,
+  row: OrgWebSearchKeyRow | null | undefined,
+): Promise<Result<ResolvedWebSearchProviders, unknown>> => {
+  const keys = await resolveWebSearchKeysFromRow(organizationId, row);
+  return keys.map(resolveWebSearchProvidersFromEnv);
+};

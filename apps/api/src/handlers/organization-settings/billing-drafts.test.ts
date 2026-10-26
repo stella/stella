@@ -1,7 +1,7 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
+import * as v from "valibot";
 
 import {
   billingDraftUserSettings,
@@ -43,7 +43,12 @@ describe("billing draft configuration authorization", () => {
       }
       expect(
         requireSkillManager({
-          skill: { scope: "team", userId },
+          skill: {
+            scope: "team",
+            userId,
+            boundClientId: null,
+            boundWorkspaceId: null,
+          },
           userId,
           memberRole,
           action: "edit",
@@ -92,19 +97,19 @@ describe("billing draft configuration authorization", () => {
       },
       { timeBillingFormat: "other" },
     ]) {
-      expect(
-        Value.Check(updateBillingDraftConfiguration.config.body, body),
-      ).toBe(false);
+      expect(v.is(updateBillingDraftConfiguration.config.body, body)).toBe(
+        false,
+      );
     }
     expect(
-      Value.Check(updateBillingDraftConfiguration.config.body, {
+      v.is(updateBillingDraftConfiguration.config.body, {
         mode: "enabled",
         resourceIds: [resourceId],
         expectedUpdatedAt: new Date(0).toISOString(),
       }),
     ).toBe(true);
     expect(
-      Value.Check(updateBillingDraftConfiguration.config.body, {
+      v.is(updateBillingDraftConfiguration.config.body, {
         mode: "enabled",
         resourceIds: [resourceId],
       }),

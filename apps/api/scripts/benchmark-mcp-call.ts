@@ -24,7 +24,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { recordMcpSessionInitialized } from "@/api/mcp/client-identity";
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
@@ -62,7 +62,7 @@ const unusedDb = () => panic("The MCP benchmark context has no database");
 
 // No feature enrolments: invitation-only features stay hidden, as they are for
 // most organizations, so the descriptor-scoping path runs.
-const context: McpRequestContext = {
+const context: McpRequestResources = {
   accessibleWorkspaceIds: [],
   accessibleWorkspaceIdSet: new Set(),
   accessibleWorkspaceStatusById: new Map(),

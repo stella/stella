@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
@@ -231,18 +232,16 @@ const appliedResult = (result: Awaited<ReturnType<typeof runMigrations>>) => {
 };
 
 const waitUntilBlocked = async (observer: SQL, pid: number) => {
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline) {
-    const [row] = await observer.unsafe<{ blocked: boolean }[]>(
-      "SELECT cardinality(pg_blocking_pids($1::int)) > 0 AS blocked",
-      [pid],
-    );
-    if (row?.blocked === true) {
-      return;
-    }
-    await Bun.sleep(10);
-  }
-  throw new Error(`Migration backend ${String(pid)} never waited on the lane`);
+  await waitForExternalState({
+    description: `migration backend ${String(pid)} waits on the lane`,
+    read: async () => {
+      const [row] = await observer.unsafe<{ blocked: boolean }[]>(
+        "SELECT cardinality(pg_blocking_pids($1::int)) > 0 AS blocked",
+        [pid],
+      );
+      return row?.blocked === true;
+    },
+  });
 };
 
 type LockProbeHolder = {
@@ -348,25 +347,20 @@ if (!runPostgresTests || databaseUrl === undefined) {
               releases.push(
                 rejectionOf(async () => {
                   try {
-                    const deadline = Date.now() + 5000;
-                    while (Date.now() < deadline) {
-                      const executing = (
-                        await monitor.unsafe<{ executing: boolean }[]>(
-                          `SELECT EXISTS (
-                           SELECT 1 FROM pg_stat_activity
-                           WHERE pid = $1 AND state = 'active' AND query = $2
-                         ) AS executing`,
-                          [pid, `DROP DATABASE "${name}"`],
-                        )
-                      ).at(0)?.executing;
-                      if (executing === true) {
-                        return;
-                      }
-                      await Bun.sleep(10);
-                    }
-                    throw new Error(
-                      "Scratch teardown never waited for the backend to exit",
-                    );
+                    await waitForExternalState({
+                      description:
+                        "scratch teardown waits for the backend to exit",
+                      read: async () =>
+                        (
+                          await monitor.unsafe<{ executing: boolean }[]>(
+                            `SELECT EXISTS (
+                             SELECT 1 FROM pg_stat_activity
+                             WHERE pid = $1 AND state = 'active' AND query = $2
+                           ) AS executing`,
+                            [pid, `DROP DATABASE "${name}"`],
+                          )
+                        ).at(0)?.executing === true,
+                    });
                   } finally {
                     await foreign.close();
                   }
@@ -852,12 +846,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
             expect(await rejectionOf(async () => await run)).toBe(onlineError);
             // The server drops the advisory lock when the closed backend exits,
             // which can trail the client-side close by a moment.
-            let laneOpen = await laneOpenToWriters();
-            for (let attempt = 0; !laneOpen && attempt < 50; attempt += 1) {
-              await Bun.sleep(100);
-              laneOpen = await laneOpenToWriters();
-            }
-            expect(laneOpen).toBe(true);
+            await waitForExternalState({
+              description: "the migration lane is open to writers",
+              intervalMs: 100,
+              read: laneOpenToWriters,
+            });
             expect(
               (await ledgerRows(observer)).map(({ name }) => name),
             ).toEqual([A]);
@@ -1138,13 +1131,13 @@ if (!runPostgresTests || databaseUrl === undefined) {
       );
     });
 
-    test("a pending set that loses a lock wait reruns under the lane and records each migration once", async () => {
+    test("a split migration retries after committing this run's earlier receipt", async () => {
       await withBundle(
         [
           { name: A, sql: CREATE_PROBE },
           {
             name: B,
-            sql: `${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
+            sql: `COMMIT;--> statement-breakpoint\n${ALTER_LOCK_PROBE}--> statement-breakpoint\nINSERT INTO migration_probe (event) VALUES (current_setting('lock_timeout'));`,
           },
         ],
         async (folder) => {
@@ -1187,7 +1180,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 },
               });
               expect(sleeps).toEqual([10]);
-              expect(appliedResult(result).insertedNames).toEqual([A, B]);
+              expect(result).toMatchObject({
+                status: "applied",
+                predictedNames: [A, B],
+                insertedNames: [A, B],
+              });
               expect(onlineLockTimeout).toEqual([{ lock_timeout: "0" }]);
             } finally {
               stdout.mockRestore();

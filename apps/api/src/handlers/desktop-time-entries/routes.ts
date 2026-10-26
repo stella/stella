@@ -1,5 +1,4 @@
-import Elysia from "elysia";
-
+import { routes } from "@/api/http/route";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
@@ -14,38 +13,21 @@ import candidates from "./candidates";
 import create from "./create";
 import matters from "./matters";
 
-export const desktopTimeEntriesRoute = new Elysia({
-  prefix: "/v1/desktop",
-})
-  .use(rateLimit(createStandardApiRateLimitOptions()))
-  .get("/billing-drafts/settings", readBillingDraftSettings.handler, {
-    response: readBillingDraftSettings.config.response,
-  })
-  .put("/billing-drafts/settings", updateBillingDraftSettings.handler, {
-    body: updateBillingDraftSettings.config.body,
-    response: updateBillingDraftSettings.config.response,
-  })
-  .post("/billing-drafts", billingDrafts.handler, {
-    body: billingDrafts.config.body,
-    response: billingDrafts.config.response,
-  })
-  .get("/matter-candidates", candidates.handler, {
-    response: candidates.config.response,
-  })
-  .put("/time-entries/batch", batch.handler, {
-    body: batch.config.body,
-    response: batch.config.response,
-  })
-  .put("/time-entries/batch/status", batchStatus.handler, {
-    body: batchStatus.config.body,
-    response: batchStatus.config.response,
-  })
-  .get("/matters", matters.handler, {
-    query: matters.config.query,
-    response: matters.config.response,
-  })
-  .put("/time-entries/:workspaceId", create.handler, {
-    params: create.config.params,
-    body: create.config.body,
-    response: create.config.response,
-  });
+export const desktopTimeEntriesRoute = routes(
+  {
+    "/billing-drafts/settings": {
+      GET: readBillingDraftSettings,
+      PUT: updateBillingDraftSettings,
+    },
+    "/billing-drafts": { POST: billingDrafts },
+    "/matter-candidates": { GET: candidates },
+    "/time-entries/batch": { PUT: batch },
+    "/time-entries/batch/status": { PUT: batchStatus },
+    "/matters": { GET: matters },
+    "/time-entries/:workspaceId": { PUT: create },
+  },
+  {
+    prefix: "/v1/desktop",
+    middleware: [rateLimit(createStandardApiRateLimitOptions())],
+  },
+);

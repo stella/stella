@@ -1,16 +1,20 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswer,
+  ReaderAnswerAnchor,
   ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { Temporal } from "@stll/time";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -66,12 +70,13 @@ const user = {
   timezoneId: "UTC",
   wordEditShortcut: null,
 };
-const anchor = {
+const span = {
   paragraphId: "paragraph-1",
   quote: "Selected text",
   startOffset: 0,
   endOffset: 13,
 };
+const anchor: ReaderAnswerAnchor = { spans: [span] };
 const now = "2026-10-10T12:00:00.000Z";
 
 const setup = () => {
@@ -238,6 +243,12 @@ test("a response with the wrong stream content type cancels its body and release
     kind: "protocol",
     message: "Missing reader answer stream",
   });
+  const creationError =
+    hook.result.current.errors.get("create") ??
+    panic("Expected creation failure");
+  expect(hook.result.current.failureNotices).toEqual([
+    { type: "operation", error: creationError },
+  ]);
   expect(hook.result.current.isCreating).toBe(false);
   expect(hook.result.current.busyAnswerIds.size).toBe(0);
 });
@@ -324,6 +335,13 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
     status: "failed",
   });
   expect(hook.result.current.errors.get("answer-1")).toBeUndefined();
+  expect(hook.result.current.failureNotices).toMatchObject([
+    {
+      type: "message",
+      messageId: "assistant-2",
+      error: { code: "provider-error" },
+    },
+  ]);
   expect(
     hook.result.current.answers.at(0)?.messages.at(-1)?.invalidCitationCount,
   ).toBe(1);
@@ -346,6 +364,14 @@ test("failed regeneration keeps one fresh assistant and sanitized partials survi
     errorCode: "provider-error",
     invalidCitationCount: 1,
   });
+  expect(reloaded.result.current.errors.size).toBe(0);
+  expect(reloaded.result.current.failureNotices).toMatchObject([
+    {
+      type: "message",
+      messageId: "assistant-2",
+      error: { code: "provider-error" },
+    },
+  ]);
 });
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are tested reader actions, not API domain values.
@@ -429,9 +455,6 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           active={false}
           openRevision={0}
           busy={false}
-          error={readerAnswerFailureKind(
-            hook.result.current.errors.get(answer.id),
-          )}
           onOpen={() => undefined}
           onFollowUp={() => undefined}
           onRegenerate={() => undefined}
@@ -443,12 +466,7 @@ test.each(["create", "follow-up", "regenerate"] as const)(
       </IntlProvider>,
     );
     expect(view.getByText(content)).toBeTruthy();
-    expect(view.queryByText(messages.readerAnswers.networkError)).toBeNull();
-    expect(view.queryByText(messages.readerAnswers.modelError)).toBe(
-      action === "regenerate"
-        ? view.getByText(messages.readerAnswers.modelError)
-        : null,
-    );
+    expect(view.queryByRole("alert")).toBeNull();
     expect(hook.result.current.errors.size).toBe(0);
     expect(hook.result.current.error).toBeNull();
   },
@@ -507,7 +525,7 @@ test.each(["follow-up", "regenerate", "share", "delete"] as const)(
     );
     expect(
       readerAnswerFailureKind(hook.result.current.errors.get("answer-1")),
-    ).toBe("network");
+    ).toBe("model");
   },
 );
 
@@ -572,7 +590,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
     return (
       <>
         <article ref={root} style={{ overflow: "visible" }}>
-          <p data-anchor={anchor.paragraphId}>{anchor.quote}</p>
+          <p data-anchor={span.paragraphId}>{span.quote}</p>
         </article>
         <AnnotationToolbar
           activeAnnotation={null}
@@ -601,13 +619,17 @@ test("selecting decision text and clicking Explain opens the persisted margin an
             name: null,
           }}
           onExplain={(spans) => {
-            const span = spans.at(0);
-            if (span) {
+            const selected = spans.at(0);
+            if (selected) {
               void answers.createExplain({
-                paragraphId: span.blockAnchorId,
-                quote: span.quote,
-                startOffset: span.startOffset,
-                endOffset: span.endOffset,
+                spans: [
+                  {
+                    paragraphId: selected.blockAnchorId,
+                    quote: selected.quote,
+                    startOffset: selected.startOffset,
+                    endOffset: selected.endOffset,
+                  },
+                ],
               });
             }
           }}
@@ -674,7 +696,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               role: "member",
               ai: true,
               deepl: false,
-              ocr: false,
+              ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
               desktop: "none",
               settings: undefined,
             })}
@@ -1070,6 +1092,13 @@ test.each(["never", "hanging"] as const)(
         hook.result.current.answers.at(0)?.messages.at(-1)?.errorCode ?? null,
       ),
     ).toBe("timeout");
+    expect(hook.result.current.failureNotices).toContainEqual(
+      expect.objectContaining({
+        type: "message",
+        messageId: hook.result.current.answers.at(0)?.messages.at(-1)?.id,
+        error: expect.objectContaining({ code: "timeout" }),
+      }),
+    );
     await act(async () => {
       await hook.result.current.remove("answer-1");
     });
@@ -1195,3 +1224,72 @@ test.each([
     expect(reads).toBe(settledReads);
   },
 );
+
+test("a dropped reader GET is a request failure and keeps its cause", async () => {
+  const dropped = new TypeError("Dropped connection");
+  globalThis.fetch = Object.assign(
+    async () => {
+      throw dropped;
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { client } = setup();
+  expect(
+    await rejectionOf(
+      client.query(
+        readerAnswersOptions({
+          decisionId: "decision-1",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        }),
+      ),
+    ),
+  ).toMatchObject({ kind: "request", cause: dropped });
+});
+
+test("a non-network reader GET rejection retains the original error", async () => {
+  const misuse = new RangeError("Programmer invariant");
+  globalThis.fetch = Object.assign(
+    async () => {
+      throw misuse;
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const { client } = setup();
+  expect(
+    await rejectionOf(
+      client.query(
+        readerAnswersOptions({
+          decisionId: "decision-1",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        }),
+      ),
+    ),
+  ).toBe(misuse);
+});
+
+test("a reader GET API response is unwrapped outside the network conversion", async () => {
+  globalThis.fetch = Object.assign(
+    async () =>
+      Response.json(
+        {
+          message: "Unavailable",
+        },
+        { status: 503 },
+      ),
+    { preconnect: originalFetch.preconnect },
+  );
+  const { client } = setup();
+  expect(
+    await rejectionOf(
+      client.query(
+        readerAnswersOptions({
+          decisionId: "decision-1",
+          organizationId: user.activeOrganizationId,
+          userId: user.id,
+        }),
+      ),
+    ),
+  ).toMatchObject({ status: 503 });
+});

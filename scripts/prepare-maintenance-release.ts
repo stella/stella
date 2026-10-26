@@ -600,6 +600,92 @@ export const prepareMaintenanceReleaseFiles = ({
   });
 };
 
+export type RefreshedMaintenanceRelease = {
+  changelogPath: string;
+  /** Names of the `.changeset` entries this refresh consumed, in read order. */
+  changesets: readonly string[];
+  version: string;
+};
+
+/**
+ * Consumes changesets that reached main after this release was cut, on the
+ * release branch once main is merged into it. The version stays; the new
+ * entries are versioned as the cut versioned its own, and their bullets join
+ * this release's note. Without it a `@stll/cli` entry that lands after the cut
+ * stays pending, and the tag refuses the release. Returns null when nothing is
+ * pending beyond the cut's own marker entry.
+ */
+export const refreshMaintenanceReleaseFiles = ({
+  rootDir,
+  versionPackages = runChangesetVersion,
+  writeFile = atomicWriteFile,
+}: {
+  rootDir: string;
+  versionPackages?: (rootDir: string) => void;
+  writeFile?: ReleaseFileWriter;
+}): RefreshedMaintenanceRelease | null => {
+  const version = parseStableVersion(
+    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
+  ).value;
+  const markerFile = `release-v${version}.md`;
+  const markerPath = nodePath.join(rootDir, CHANGESET_DIRECTORY, markerFile);
+  if (!existsSync(markerPath)) {
+    throw new MaintenanceReleaseError(
+      `No cut release v${version} to refresh: ${CHANGESET_DIRECTORY}/${markerFile} is missing`,
+    );
+  }
+  const changelogPath = `docs/changelog/v${version}.md`;
+  const absoluteChangelogPath = nodePath.join(rootDir, changelogPath);
+  if (!existsSync(absoluteChangelogPath)) {
+    throw new MaintenanceReleaseError(
+      `Release changelog is missing: ${changelogPath}`,
+    );
+  }
+  const changesets = readPendingChangesets(rootDir).filter(
+    ({ file }) => file !== markerFile,
+  );
+  if (changesets.length === 0) {
+    return null;
+  }
+  return withFileRollback({
+    operation: () => {
+      // The version script consumes every pending entry, the cut's marker
+      // included; the marker is the release policy's added entry, so it is
+      // written back.
+      versionPackages(rootDir);
+      writeFile(markerPath, EMPTY_CHANGESET);
+      const current = splitChangelog(
+        readFileSync(absoluteChangelogPath, "utf-8"),
+        `v${version}`,
+      );
+      const added = splitChangelog(
+        maintenanceChangelog(changesets, version),
+        `v${version}`,
+      );
+      const entries = [...new Set([...current.entries, ...added.entries])];
+      writeFile(
+        absoluteChangelogPath,
+        entries.length === 0
+          ? current.body
+          : `${current.body}\n${PACKAGES_HEADING}\n\n${entries.map((entry) => `${entry}\n`).join("")}`,
+      );
+      return {
+        changelogPath,
+        changesets: changesets.map(({ file }) => file),
+        version,
+      };
+    },
+    paths: [
+      markerPath,
+      absoluteChangelogPath,
+      ...versionRollbackPaths(rootDir, changesets),
+    ],
+    writeFile,
+  });
+};
+
+const REFRESH_FLAG = "--refresh";
+
 const run = (command: readonly string[]) => {
   const result = Bun.spawnSync([...command], {
     cwd: ROOT_DIR,
@@ -1429,10 +1515,21 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
 });
 
 const main = async () => {
-  await cutMaintenanceRelease(
-    process.argv.slice(2),
-    productionCutEffects(ROOT_DIR),
-  );
+  const args = process.argv.slice(2);
+  // The release pull request refresh runs in CI on the release branch: it
+  // versions files only, so the cut's gates, recordings and prompts stay out.
+  if (args.length === 1 && args.at(0) === REFRESH_FLAG) {
+    assertCleanWorktree(ROOT_DIR);
+    const refreshed = refreshMaintenanceReleaseFiles({ rootDir: ROOT_DIR });
+    process.stdout.write(`${JSON.stringify({ refreshed })}\n`);
+    return;
+  }
+  if (args.includes(REFRESH_FLAG)) {
+    throw new MaintenanceReleaseError(
+      `${REFRESH_FLAG} takes no other argument`,
+    );
+  }
+  await cutMaintenanceRelease(args, productionCutEffects(ROOT_DIR));
 };
 
 if (import.meta.main) {

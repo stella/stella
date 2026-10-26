@@ -29,7 +29,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
@@ -164,7 +164,7 @@ export const EntityViewKanban = ({
         workspaceId: toSafeId<"workspace">(entry.workspaceId),
       });
       if (entry.entity.status !== status) {
-        unwrapEden(
+        unwrapApiResponse(
           await taskApi.patch({ taskId: toSafeId<"entity">(entityId), status }),
         );
       }
@@ -173,7 +173,7 @@ export const EntityViewKanban = ({
         sourceLane !== undefined &&
         sourceLane !== targetLane
       ) {
-        unwrapEden(
+        unwrapApiResponse(
           await taskApi.assignees.move.post({
             taskId: toSafeId<"entity">(entityId),
             fromUserId:
@@ -184,7 +184,10 @@ export const EntityViewKanban = ({
       }
     });
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "EntityViewKanban.move:failure",
+        scope: { type: "handler", handlerId: "EntityViewKanban.move:failure" },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     }
     await invalidateTaskQueries({

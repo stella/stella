@@ -1,0 +1,319 @@
+{
+  "provider": "bedrock",
+  "source": "synthetic",
+  "basis": "SDK error envelopes and Stella model-run boundary outcomes; no live provider requests.",
+  "cases": [
+    {
+      "name": "provider_credentials_rejected",
+      "origin": "sdk",
+      "evidence": {
+        "$metadata": {
+          "httpStatusCode": 401
+        },
+        "$fault": "client",
+        "name": "UnrecognizedClientException"
+      },
+      "expected": {
+        "kind": "provider_credentials_rejected",
+        "status": 401,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "provider_billing",
+      "origin": "sdk",
+      "evidence": {
+        "$metadata": {
+          "httpStatusCode": 402
+        },
+        "$fault": "client",
+        "name": "BillingException"
+      },
+      "expected": {
+        "kind": "provider_billing",
+        "status": 402,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "model_unavailable",
+      "origin": "sdk",
+      "evidence": {
+        "$metadata": {
+          "httpStatusCode": 404
+        },
+        "$fault": "client",
+        "name": "ResourceNotFoundException"
+      },
+      "expected": {
+        "kind": "model_unavailable",
+        "status": 404,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "quota_exhausted",
+      "origin": "sdk",
+      "evidence": {
+        "$metadata": {
+          "httpStatusCode": 429
+        },
+        "$fault": "client",
+        "name": "ThrottlingException"
+      },
+      "expected": {
+        "kind": "quota_exhausted",
+        "status": 429,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "provider_unavailable",
+      "origin": "sdk",
+      "evidence": {
+        "$metadata": {
+          "httpStatusCode": 503
+        },
+        "$fault": "server",
+        "name": "ServiceUnavailableException"
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": 503,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "unknown",
+      "origin": "sdk",
+      "evidence": {
+        "$metadata": {
+          "httpStatusCode": 403
+        },
+        "$fault": "client",
+        "name": "AccessDeniedException"
+      },
+      "expected": {
+        "kind": "unknown",
+        "status": 403,
+        "grade": "defect"
+      }
+    },
+    {
+      "name": "provider_stream_incomplete",
+      "origin": "unfinished",
+      "expected": {
+        "kind": "provider_stream_incomplete",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "output_incomplete",
+      "origin": "parse",
+      "expected": {
+        "kind": "output_incomplete",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "output_invalid",
+      "origin": "schema",
+      "expected": {
+        "kind": "output_invalid",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "output_moderated",
+      "origin": "moderation",
+      "expected": {
+        "kind": "output_moderated",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "deadline_exceeded",
+      "origin": "deadline",
+      "expected": {
+        "kind": "deadline_exceeded",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "loop_detected",
+      "origin": "loop",
+      "expected": {
+        "kind": "loop_detected",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "empty_completion",
+      "origin": "empty",
+      "expected": {
+        "kind": "empty_completion",
+        "status": null,
+        "grade": "anticipated"
+      }
+    },
+    {
+      "name": "transport-ECONNRESET",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ECONNRESET",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-EPIPE",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "EPIPE",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-ConnectionClosed",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ConnectionClosed",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-UND_ERR_SOCKET",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "UND_ERR_SOCKET",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-ETIMEDOUT",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ETIMEDOUT",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-UND_ERR_CONNECT_TIMEOUT",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "UND_ERR_CONNECT_TIMEOUT",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-EAI_AGAIN",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "EAI_AGAIN",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "provider_unavailable",
+        "status": null,
+        "grade": "transient"
+      }
+    },
+    {
+      "name": "transport-ECONNREFUSED",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "ECONNREFUSED",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "unknown",
+        "status": null,
+        "grade": "defect"
+      }
+    },
+    {
+      "name": "transport-FailedToOpenSocket",
+      "origin": "transport",
+      "evidence": {
+        "name": "Error",
+        "message": "Connection error.",
+        "cause": {
+          "code": "FailedToOpenSocket",
+          "message": "Connection failed."
+        }
+      },
+      "expected": {
+        "kind": "unknown",
+        "status": null,
+        "grade": "defect"
+      }
+    }
+  ]
+}

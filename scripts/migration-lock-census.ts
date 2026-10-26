@@ -700,34 +700,142 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
-    migration: "20261024170000_activity_billing_drafts",
+    migration: "20261026100100_activity_billing_drafts",
     form: "add-column",
     reason:
       "Two constant text defaults take PostgreSQL's fast-default catalog path and the narrative language column is nullable without a default, so no table is rewritten; lock acquisition is bounded by 1s and each statement by 5s.",
   },
   {
-    migration: "20261024170000_activity_billing_drafts",
+    migration: "20261026100100_activity_billing_drafts",
     form: "add-constraint",
     reason:
       "Both value CHECKs are added NOT VALID without scanning existing rows; validation runs after COMMIT releases the schema locks.",
   },
   {
-    migration: "20261024170000_activity_billing_drafts",
+    migration: "20261026100100_activity_billing_drafts",
     form: "create-table-references",
     reason:
       "The two new tables reference organization, user, agent_skill_resources and contacts; the referenced tables are locked only to attach the foreign keys, under the 1s lock_timeout and 5s statement_timeout.",
   },
   {
-    migration: "20261024170000_activity_billing_drafts",
+    migration: "20261026100100_activity_billing_drafts",
     form: "row-level-security",
     reason:
       "ENABLE and FORCE RLS apply only to the two tables this migration creates empty.",
   },
   {
-    migration: "20261024170000_activity_billing_drafts",
+    migration: "20261026100100_activity_billing_drafts",
     form: "create-policy",
     reason:
       "Policies install the user-organization and organization-admin boundaries on the two tables this migration creates empty, without reading application rows.",
+  },
+  {
+    migration: "20261025130000_reader_answer_continuation_spans",
+    form: "add-column",
+    reason:
+      "The NOT NULL jsonb column uses a constant '[]'::jsonb default on PostgreSQL's fast-default catalog path without scanning or rewriting answer rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "add-column",
+    reason:
+      "The three parsed-input fields and two captured raw-object keys are nullable and default-free catalog additions, without a corpus row scan or table rewrite; lock acquisition is bounded by 1s and the statement by 30s.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "add-constraint",
+    reason:
+      "The complete parsed-input CHECK is added NOT VALID without scanning existing corpus rows, under transaction-local 1s lock_timeout and 30s statement_timeout; the canonical online phase validates it after releasing the schema lock.",
+  },
+  {
+    migration: "20261022120000_case_law_batch_slots",
+    form: "create-trigger",
+    reason:
+      "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
+  },
+  {
+    migration: "20261023160000_organization_access_state_origin",
+    form: "add-column",
+    reason:
+      "The constant text default uses PostgreSQL's fast-default catalog path without rewriting the one-row-per-organization access states; lock acquisition is bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261023160000_organization_access_state_origin",
+    form: "alter-column",
+    reason:
+      "Changing the column default is catalog-only and leaves the stored fast default of existing rows in place, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261023160000_organization_access_state_origin",
+    form: "add-constraint",
+    reason:
+      "The origin CHECK is added NOT VALID without scanning rows, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-column",
+    reason:
+      "The two nullable, default-free UUID binding columns are catalog-only additions without a table rewrite; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-constraint",
+    reason:
+      "The single-binding CHECK is added NOT VALID, enforcing new writes without scanning existing rows; the gated online phase validates it after deploy, with this catalog addition bounded by 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "add-foreign-key",
+    reason:
+      "The two composite binding foreign keys retain organization identity and are added NOT VALID without scanning existing rows; validation runs through the online table gate, while pre-deploy lock acquisition is bounded by 1s and each catalog statement by 5s.",
+  },
+  {
+    migration: "20261016100500_agent_skill_binding",
+    form: "create-policy",
+    reason:
+      "The seven replacement policies retain organization and visibility checks, add binding reach, and allow a matter-bound skill's author to write it; each catalog-only replacement stays in the migration transaction under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261024193000_owner_erasure_paths",
+    form: "create-policy",
+    reason:
+      "The eighteen policies add only table-owner SELECT/DELETE access fenced to the reset organization; catalog-only policy creation performs no row scan, with transaction-local 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261024190300_invoice_line_exemption_reason",
+    form: "add-column",
+    reason:
+      "The nullable, default-free exemption basis is a catalog-only addition to invoice lines without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
+    migration: "20261019010000_invoice_party_tax_vat_ids",
+    form: "add-column",
+    reason:
+      "The seller, contact and invoice party identifier columns are nullable and default-free, a catalog-only addition without a table rewrite, under 5s lock_timeout and 30s statement_timeout.",
+  },
+  {
+    migration: "20261019020000_invoice_language",
+    form: "add-column",
+    reason:
+      "The nullable language preferences are catalog-only; invoices.language takes a constant literal default on PostgreSQL's fast-default path without rewriting invoice rows; lock acquisition is bounded by 5s and the statement by 30s.",
+  },
+  {
+    migration: "20261019020000_invoice_language",
+    form: "add-constraint",
+    reason:
+      "The three language CHECKs are added NOT VALID without scanning existing rows, under 5s lock_timeout and 30s statement_timeout; they are validated in the online phase after the schema lock is released.",
+  },
+  {
+    migration: "20261024214500_invoice_vat_exchange_rate",
+    form: "add-column",
+    reason:
+      "The five VAT exchange-rate columns are nullable and default-free, a catalog-only addition without a table rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261024190200_case_law_decision_date_floor_gbr",
+    form: "add-constraint",
+    reason:
+      "The widened decision-date CHECK is added NOT VALID without scanning corpus rows; metadata-only lock acquisition retries at 2s, 10s and 30s within a 10-minute statement budget, then validation runs in the online phase.",
   },
   {
     migration: "20261020013635_case_law_source_hash_version",
@@ -944,6 +1052,66 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     form: "create-trigger",
     reason:
       "Creating the trigger is a metadata-only change with lock acquisition bounded by the 1s lock_timeout.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "add-column",
+    reason:
+      "The three claim columns are nullable and default-free, a catalog-only addition to reader notes without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "add-constraint",
+    reason:
+      "The widened target-type and claim-shape CHECKs are added NOT VALID without scanning existing notes, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "add-foreign-key",
+    reason:
+      "The matter key is added NOT VALID, so existing notes (all with a null matter) are not scanned, under 1s lock_timeout and 5s statement_timeout; the online phase validates it.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "create-policy",
+    reason:
+      "Replacing the reader-note policies installs catalog metadata without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261025180000_search_history_entry_country",
+    form: "add-column",
+    reason:
+      "The nullable, default-free country and country_used_at columns are catalog-only changes under a 1s lock_timeout; the index is built online.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "row-level-security",
+    reason:
+      "FORCE ROW LEVEL SECURITY on reader notes changes only catalog flags; the owner paths it affects get their own policies in the same migration, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261021080000_reader_annotation_verification_claims",
+    form: "create-trigger",
+    reason:
+      "The statement-level claim cleanup trigger installs metadata on the claims table without scanning rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261022130000_account_export_annotation_authorship",
+    form: "create-policy",
+    reason:
+      "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261026100000_account_email_undeliverable",
+    form: "add-column",
+    reason:
+      "The three refusal columns are nullable and default-free, a catalog-only addition to user without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026100000_account_email_undeliverable",
+    form: "add-constraint",
+    reason:
+      "The refusal-shape CHECK is added NOT VALID without scanning existing users, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
   },
 ];
 export type LockBaselineEntry = {

@@ -132,7 +132,7 @@ describe("two-phase PDF signing", () => {
 
     // The desktop's exact bytes are what the document carries.
     const document = Buffer.from(signed).toString("latin1");
-    const signatureHex = Buffer.from(signature).toString("hex");
+    const signatureHex = Buffer.from(signature).toHex();
     expect(
       document.includes(signatureHex) ||
         document.includes(signatureHex.toUpperCase()),
@@ -160,11 +160,11 @@ describe("two-phase PDF signing", () => {
       Buffer.from(signature),
     );
 
-    expect(recovered.toString("hex")).toBe(
+    expect(recovered.toHex()).toBe(
       Buffer.concat([
         SHA256_DIGEST_INFO_PREFIX,
         Buffer.from(digestHex, "hex"),
-      ]).toString("hex"),
+      ]).toHex(),
     );
   });
 

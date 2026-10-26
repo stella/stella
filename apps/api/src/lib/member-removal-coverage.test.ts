@@ -136,6 +136,7 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_lists.sample_case",
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
+  "legal_reader_answers.continuation_spans",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
@@ -484,6 +485,8 @@ const RETAINED_MEMBER_COLUMNS = {
  * the person stays a member of the organization.
  */
 const MATTER_REMOVAL_RETAINED_COLUMNS = {
+  "billing_draft_user_settings.user_id":
+    "Organization-wide consent and preferences remain for the person's other matters; organization removal deletes them.",
   "mcp_web_handoff.user_id":
     "Organization credential; opening a matter uses current matter access.",
   "desktop_presence.user_id":

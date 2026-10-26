@@ -10,6 +10,7 @@ import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   auditLogs,
+  billingDraftUserSettings,
   contacts,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -58,6 +59,7 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -118,6 +120,12 @@ if (!databaseUrl || !runPostgresTests) {
             createdAt: new Date(),
           })),
         );
+        for (const id of [organizationId, otherOrganizationId]) {
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          });
+        }
         await db.insert(member).values([
           {
             id: memberId,
@@ -171,6 +179,26 @@ if (!databaseUrl || !runPostgresTests) {
           userId,
           report: { ...report, desktopId: Bun.randomUUIDv7() },
         });
+        await db.insert(billingDraftUserSettings).values([
+          {
+            organizationId,
+            userId,
+            preference: "Concise",
+            consentAt: new Date(),
+          },
+          {
+            organizationId,
+            userId: actorUserId,
+            preference: "Detailed",
+            consentAt: new Date(),
+          },
+          {
+            organizationId: otherOrganizationId,
+            userId,
+            preference: "Other firm",
+            consentAt: new Date(),
+          },
+        ]);
         const historyLookupKey = Bun.randomUUIDv7();
         await db.insert(searchHistoryEntries).values(
           [
@@ -237,6 +265,25 @@ if (!databaseUrl || !runPostgresTests) {
                 desktopPresence,
                 eq(desktopPresence.organizationId, otherOrganizationId),
               ),
+          ),
+        ).toBe(1);
+        const remainingDraftSettings = await db
+          .select({
+            organizationId: billingDraftUserSettings.organizationId,
+            userId: billingDraftUserSettings.userId,
+          })
+          .from(billingDraftUserSettings)
+          .where(eq(billingDraftUserSettings.userId, userId));
+        expect(remainingDraftSettings).toEqual([
+          { organizationId: otherOrganizationId, userId },
+        ]);
+        expect(
+          await db.$count(
+            billingDraftUserSettings,
+            and(
+              eq(billingDraftUserSettings.organizationId, organizationId),
+              eq(billingDraftUserSettings.userId, actorUserId),
+            ),
           ),
         ).toBe(1);
         const remainingHistory = await db
@@ -340,6 +387,10 @@ if (!databaseUrl || !runPostgresTests) {
             name: "Assignment organization",
             slug: organizationId,
             createdAt: new Date(),
+          });
+          await recordNewOrganizationAccessState(checkDb, {
+            organizationId,
+            now: new Date(),
           });
           try {
             await checkDb.insert(member).values([
@@ -632,6 +683,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Contact organization",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
         });
         try {
           await db.insert(member).values([
@@ -1182,6 +1237,10 @@ if (!databaseUrl || !runPostgresTests) {
           slug: organizationId,
           createdAt: new Date(),
         });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
+        });
         try {
           await db.insert(member).values(
             [actorUserId, userId].map((id) => ({
@@ -1406,6 +1465,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Busy fixture",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(holdingDb, {
+          organizationId,
+          now: new Date(),
         });
         let writer: Promise<void> | undefined;
         try {

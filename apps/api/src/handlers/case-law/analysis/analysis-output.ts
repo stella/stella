@@ -138,6 +138,15 @@ const createAnalysisHeading = ({
     language,
   });
 
+export const buildPartialAnalysisTree = ({
+  headings,
+  language,
+}: {
+  headings: AnalysisOutput["headings"];
+  language: string;
+}): DecisionAnalysisV4["tree"] =>
+  headings.map((heading) => createAnalysisHeading({ heading, language }));
+
 /**
  * The persisted analysis for one parsed output. Provenance (`model`,
  * `generatedAt`, `inputFingerprint` — which digests the system prompt, so
@@ -158,9 +167,7 @@ export const buildDecisionAnalysis = ({
     generatedAt: generatedAt.toISOString(),
     model,
     inputFingerprint,
-    tree: output.headings.map((heading) =>
-      createAnalysisHeading({ heading, language }),
-    ),
+    tree: buildPartialAnalysisTree({ headings: output.headings, language }),
     holding: { spans: usableSpans(output.holding, positions), language },
     abstract: { spans: usableSpans(output.abstract, positions), language },
     topics: output.topics,

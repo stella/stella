@@ -10,21 +10,15 @@ import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import {
-  type DecisionQueryIntent,
-  namedDecisionsOf,
-} from "@stll/api-contract/decision-query-intent";
+import { namedDecisionsOf } from "@stll/api-contract/decision-query-intent";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   SEARCH_TOTAL_NOT_COUNTED,
-  SEARCH_TOTAL_TYPE,
   type SearchSort,
-  type SearchTotal,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import { publicLawNumberedPagerModel } from "@/components/public-law-table/public-law-pagination.logic";
@@ -78,6 +72,7 @@ import {
   CaseLawNoResults,
   RewrittenSearchLine,
 } from "@/features/case-law/components/case-law-no-results";
+import { CaseLawResultsSummary } from "@/features/case-law/components/case-law-results-summary";
 import {
   CaseLawSearch,
   useCaseLawAskScope,
@@ -302,9 +297,10 @@ export function PublicCaseLawIndex({
       locale: getMessageLocale(),
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
+  const scopedSearch = { ...search, country: countryParam };
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
-  const typedFilters = createDecisionFiltersFromSearch(search, {
+  const typedFilters = createDecisionFiltersFromSearch(scopedSearch, {
     excerpt: layout.excerpt,
   });
   const filters = useExpandedDecisionFilters(typedFilters, intent);
@@ -655,7 +651,7 @@ export function PublicCaseLawIndex({
         excerpt: layout.excerpt,
         navigate: routerNavigate,
         queryClient,
-        search: { ...search, q: entry },
+        search: { ...scopedSearch, q: entry },
         uiLocale,
       }),
       "cases.open-match",
@@ -784,11 +780,12 @@ export function PublicCaseLawIndex({
             // line of its own: it qualifies the count, and a row between the
             // toolbar and the table pushed every result down for one clause.
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
-              <ListHeading
+              <CaseLawResultsSummary
                 exactCount={exact.length}
                 intent={intent}
                 isRefreshing={isRefreshing}
                 page={pager.currentPage}
+                relaxedHitCount={pageData?.relaxedHitCount}
                 total={searchTotal}
               />
               {rewriteState.rewrittenFrom === undefined ||
@@ -1016,92 +1013,4 @@ function SearchUnavailable({ onRetry }: SearchUnavailableProps) {
       </Button>
     </div>
   );
-}
-
-type ListHeadingProps = {
-  exactCount: number;
-  intent: DecisionQueryIntent;
-  /** The count still answers the previous search; say so without hiding it. */
-  isRefreshing: boolean;
-  page: number;
-  total: SearchTotal;
-};
-
-/**
- * What the list under the box is: newest first while a filter alone narrows
- * it, a choice between courts when a docket names several decisions, a count
- * for a search that could be counted.
- *
- * While a new search is in flight the line fades rather than blanking: a
- * number that disappears and comes back reads as a page reload, which is
- * exactly what is not happening.
- */
-function ListHeading({ isRefreshing, ...heading }: ListHeadingProps) {
-  return (
-    <div
-      aria-busy={isRefreshing}
-      className={cn(
-        "transition-opacity duration-200",
-        isRefreshing && "opacity-56",
-      )}
-    >
-      <ListHeadingText {...heading} />
-    </div>
-  );
-}
-
-function ListHeadingText({
-  exactCount,
-  intent,
-  page,
-  total,
-}: Omit<ListHeadingProps, "isRefreshing">) {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  if (intent.type === "empty") {
-    return (
-      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-        {page > 1
-          ? t("common.page", { page: format.number(page) })
-          : t("caseLaw.newestDecisions")}
-      </h2>
-    );
-  }
-  if (intent.type === "identifier" && exactCount > 1) {
-    return (
-      <p className="text-xs">
-        {t("caseLaw.sameCaseNumber", { count: exactCount })}
-      </p>
-    );
-  }
-  switch (total.type) {
-    case SEARCH_TOTAL_TYPE.EXACT:
-      return (
-        <p className="text-xs tabular-nums">
-          {t("caseLaw.pagination.pageWithResultCount", {
-            count: total.count,
-            page: format.number(page),
-          })}
-        </p>
-      );
-    case SEARCH_TOTAL_TYPE.ESTIMATE:
-      return (
-        <p className="text-xs tabular-nums">
-          {t("caseLaw.pagination.pageWithEstimatedResultCount", {
-            count: total.count,
-            page: format.number(page),
-          })}
-        </p>
-      );
-    case SEARCH_TOTAL_TYPE.NOT_COUNTED:
-      return (
-        <p className="text-xs tabular-nums">
-          {t("common.page", { page: format.number(page) })}
-        </p>
-      );
-    default:
-      total satisfies never;
-      return panic("Unhandled search total");
-  }
 }

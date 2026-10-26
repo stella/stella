@@ -984,8 +984,8 @@ test("EU cited-by lists and counts share decision admission and publication gate
       decisionDate: "2025-01-01",
       sourceId: openSourceId,
     }),
-    country: "SVK",
-    language: "sk",
+    country: "AUT",
+    language: "de",
   });
   const ids = [highAuthorityId, lowAuthorityId, closedDecisionId, pendingId];
   await db.insert(caseLawProvisionCitations).values(

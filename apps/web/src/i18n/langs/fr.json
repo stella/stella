@@ -388,6 +388,7 @@
         "reading": "Mode lecture"
       },
       "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
+      "pdfTextFailed": "Le texte du PDF n’a pas pu être lu : les affirmations ne sont donc pas signalées sur ses pages.",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {
@@ -506,6 +507,24 @@
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "approval": {
+      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "empty": "Rien n’attend d’approbation dans ce dossier.",
+      "failed": "La modification n’a pas été enregistrée. Réessayez.",
+      "myTime": "Mon temps",
+      "refusals": {
+        "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
+        "notFound": "Cette saisie n’existe plus. Actualisez la liste.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant d’approuver cette saisie.",
+        "unpriced": "Cette saisie n’a pas de tarif. Définissez un tarif pour ce dossier, puis approuvez-la.",
+        "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
+      },
+      "returnComment": "Motif du renvoi",
+      "selectEntry": "Sélectionner la saisie",
+      "timeEntries": "Saisies de temps",
+      "title": "Approbations"
+    },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",
@@ -593,6 +612,7 @@
       "openInvoice": "Ouvrir la facture",
       "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
       "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent}} une approbation. Vérifier les approbations.",
       "rate": "Taux",
       "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
       "readyTitle": "Prête à émettre",
@@ -644,6 +664,7 @@
         "eso9": "Feuille d'import ESO9 (XLSX)",
         "exporting": "Préparation de l'export…",
         "isdoc": "Facture électronique ISDOC (ABRA Gen et autres)",
+        "ksefFa3": "Facture électronique KSeF FA(3) (XML)",
         "spreadsheets": "Feuilles de calcul",
         "xlsx": "Factures (XLSX)",
         "xlsxLines": "Lignes de facture (XLSX)"
@@ -757,6 +778,7 @@
     "sellerProfiles": {
       "add": "Ajouter un profil de vendeur",
       "archiveConfirm": "Archiver ce profil de vendeur ? Il ne sera plus disponible pour les nouvelles factures.",
+      "barRegistration": "Inscription au barreau",
       "bic": "Code BIC / SWIFT",
       "default": "Vendeur par défaut",
       "defaultCurrency": "Devise par défaut",
@@ -768,11 +790,10 @@
       "invalidCurrency": "Saisissez un code de devise à trois lettres.",
       "invalidIban": "Saisissez un IBAN valide.",
       "legalName": "Dénomination légale",
+      "registerEntry": "Inscription au registre",
       "registrationId": "Numéro d’immatriculation",
       "setDefault": "Définir par défaut",
       "title": "Profils de vendeur",
-      "vatId": "Numéro de TVA",
-      "vatPayer": "Assujetti à la TVA",
       "vatPayerHelp": "Les factures de ce vendeur facturent la TVA. Désactivez pour une personne identifiée qui a un numéro de TVA sans être assujettie.",
       "vatPayerRequiresVatId": "Saisissez le numéro de TVA pour facturer en tant qu’assujetti à la TVA."
     },
@@ -807,6 +828,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Ajouter un taux de TVA",
+      "addCzechia": "Ajouter les taux de Tchéquie",
+      "addSlovakia": "Ajouter les taux de Slovaquie",
       "archiveConfirm": "Archiver ce taux de TVA ? Il ne sera plus disponible pour les nouveaux documents.",
       "code": "Code du taux",
       "current": "Taux actuel",
@@ -821,6 +844,7 @@
       "overlap": "Les périodes de validité d’un même code de taux ne peuvent pas se chevaucher.",
       "past": "Ancien taux",
       "periodHelp": "La date de début est incluse ; la date de fin est exclue. Laissez la date de fin vide pour une période ouverte.",
+      "presetResult": "Ajoutés : {added} ; ignorés : {skipped}.",
       "rate": "Pourcentage de TVA",
       "title": "Taux de TVA",
       "validFrom": "Valide depuis",
@@ -1027,7 +1051,10 @@
       "pageOfCount": "Page {page} sur {pageCount}",
       "pageOfEstimatedCount": "Page {page} sur ~{pageCount}",
       "pageOfEstimatedCountLabel": "Page {page} sur environ {pageCount}",
+      "pageWithEstimatedMatchCounts": "Page n° {page} · environ {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithEstimatedResultCount": "Page n° {page} · environ {count, plural, one {# résultat} other {# résultats}}",
+      "pageWithMatchCounts": "Page n° {page} · {exactCount, plural, one {# correspondance exacte} other {# correspondances exactes}} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
+      "pageWithPartialMatchCount": "Page n° {page} · {relaxedCount, plural, one {# correspondance partielle} other {# correspondances partielles}} sur cette page",
       "pageWithResultCount": "Page n° {page} · {count, plural, one {# résultat} other {# résultats}}",
       "perPage": "Par page",
       "refineForMore": "Affinez votre recherche pour voir d’autres résultats"
@@ -1478,7 +1505,7 @@
       "label": "IA simulée"
     },
     "modelSelector": {
-      "allModels": "Tous les modèles ({count, number})",
+      "allModels": "Tous les modèles",
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
       "belowFrontier": "En deçà des meilleurs compromis",
@@ -2048,7 +2075,6 @@
       "orLetUsKnowAt": "ou écrivez-nous à",
       "viewDocumentation": "Voir la documentation"
     },
-    "enterKey": "↵",
     "error": "Erreur",
     "expenses": "Dépenses",
     "export": {
@@ -2121,6 +2147,7 @@
       "ZH-HANT": "Chinois (traditionnel)"
     },
     "lastUpdated": "Dernière mise à jour",
+    "layoutResetAfterProblem": "La disposition a été réinitialisée à la suite d’un problème.",
     "legalDatabase": "Base de données juridique",
     "loadMore": "Charger plus",
     "loading": "Chargement",
@@ -2196,6 +2223,7 @@
     "scrollToTop": "Retour en haut",
     "search": "Rechercher...",
     "searchIn": "Rechercher dans",
+    "searchMembers": "Rechercher des membres…",
     "selectAMatter": "Sélectionnez un dossier",
     "selectARole": "Sélectionner un rôle",
     "selectAll": "Tout sélectionner",
@@ -2219,6 +2247,7 @@
     "suggested": "Suggestion",
     "summarizeChanges": "Résumer les modifications",
     "target": "Cible",
+    "taxId": "Identifiant fiscal",
     "timeBilling": "Temps et facturation",
     "today": "Aujourd'hui",
     "translate": "Traduire",
@@ -2242,6 +2271,8 @@
     "urlIdentifierPlaceholder": "mon-organisation",
     "user": "Utilisateur",
     "value": "Valeur",
+    "vatId": "Numéro de TVA",
+    "vatPayer": "Assujetti à la TVA",
     "verified": "Vérifié",
     "verify": "Vérifier",
     "version": "Version",
@@ -2432,7 +2463,9 @@
       "prefix": "Préfixe",
       "registrationNumber": "Numéro d'enregistrement",
       "suffix": "Suffixe",
-      "taxId": "Numéro fiscal",
+      "vatPayer": "Statut d’assujettissement à la TVA",
+      "vatPayerNo": "Non assujetti à la TVA",
+      "vatPayerUnknown": "Inconnu",
       "year": "Année"
     },
     "filterOrganizations": "Organisations",
@@ -2472,7 +2505,6 @@
         "primary_phone": "Téléphone principal",
         "state": "État ou région",
         "suffix": "Suffixe",
-        "tax_id": "Numéro fiscal",
         "type": "Type de contact"
       },
       "fileInvalid": "Choisissez un seul fichier CSV, TSV ou TXT.",
@@ -3817,6 +3849,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Un client",
+      "availabilityClientBadgeHelp": "Disponible uniquement dans les dossiers d’un client.",
+      "availabilityClientHelp": "Utilisable uniquement dans les dossiers de ce client. Ce choix ne pourra plus être modifié.",
+      "availabilityFixedHelp": "Défini à la création de la compétence. Ce choix ne peut pas être modifié.",
+      "availabilityLabel": "Disponible dans",
+      "availabilityMatter": "Un dossier",
+      "availabilityMatterBadgeHelp": "Disponible uniquement dans un dossier.",
+      "availabilityMatterHelp": "Utilisable uniquement dans ce dossier. Ce choix ne pourra plus être modifié.",
+      "availabilityOrganization": "Toute l’organisation",
+      "availabilityTeamNeedsMatter": "Pour partager une compétence avec l’équipe, choisissez le dossier auquel elle est destinée. Ce choix ne pourra plus être modifié.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
@@ -4747,7 +4789,7 @@
     "modelError": "Le modèle n’a pas pu terminer cette réponse.",
     "networkError": "La connexion a été interrompue. Réessayez.",
     "regenerate": "Régénérer la réponse",
-    "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
+    "selectionError": "Sélectionnez du texte dans la décision elle-même.",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
     "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
@@ -4800,6 +4842,8 @@
     "recentDocuments": "Documents récents",
     "recentSearches": "Recherches récentes",
     "recentlyOpenedFiles": "Fichiers ouverts récemment",
+    "registryCandidateNameMismatch": "Le nom officiel « {officialName} » ne correspond pas",
+    "registryCandidateNoOfficialRecord": "Le registre officiel ne contient aucune inscription pour ce numéro",
     "registryChoose": "Choisir un registre du commerce",
     "registryCredentialAskAdmin": "Demandez à un administrateur de votre organisation de configurer l’accès à ce registre.",
     "registryCredentialSaved": "Accès au registre enregistré",
@@ -4810,6 +4854,7 @@
       "enrichmentUnavailable": "Les informations du registre du commerce sont temporairement indisponibles"
     },
     "registryKrsHint": "KRS recherche par numéro d’immatriculation, et non par nom de société. Saisissez un numéro KRS à 10 chiffres, avec les zéros initiaux (par ex. 0000006865).",
+    "registryNameSearchNotFound": "Aucune entreprise vérifiée ne correspond à ce nom. Les candidats suivants ont été écartés :",
     "registryVatHint": "VIES vérifie les numéros de TVA, pas les noms de sociétés. Saisissez un numéro de TVA avec son préfixe pays (p. ex. CZ27082440) ; le format dépend du pays.",
     "renameSearchTitle": "Renommer la recherche enregistrée",
     "requestCountry": "Demander l’ajout d’un pays",
@@ -5340,7 +5385,7 @@
     "importDescription": "Les styles sont extraits dans un nouveau DOCX sans contenu.",
     "importTitle": "Importer un jeu de styles",
     "loadFailed": "Impossible de charger les jeux de styles",
-    "newDocument": "Nouveau document",
+    "newDocument": "Nouveau document DOCX",
     "pickerDescription": "Choisissez le système de mise en forme du nouveau fichier.",
     "renameTitle": "Renommer le jeu de styles",
     "replace": "Remplacer la source",
@@ -5624,7 +5669,7 @@
     "moveToMatter": "Enregistrer dans un dossier",
     "moveToMatterAnyway": "Enregistrer quand même",
     "myDefaultLookupFormat": "Mon format par défaut",
-    "newFromTemplate": "Nouveau document à partir d'un modèle",
+    "newFromTemplate": "Nouveau document DOCX à partir d'un modèle",
     "newFromTemplateFillHint": "Remplissez les champs ; le document sera créé dans ce dossier.",
     "newTemplate": "Nouveau modèle",
     "noTemplates": "Aucun modèle pour le moment",
@@ -5995,6 +6040,7 @@
         "action": "Modifier dans l’app de bureau",
         "authRequiredDescription": "Actualisez stella et reconnectez-vous avant d’utiliser l’édition sur le bureau.",
         "authRequiredTitle": "Votre session a expiré",
+        "editInApplication": "Modifier dans <bdi>{application}</bdi>",
         "editLocallyPrompt": "Modifiez ce fichier localement et synchronisez les changements avec stella.",
         "forceRelease": "Forcer la libération",
         "notOpenedDescription": "stella desktop n’a pas confirmé l’ouverture de <bdi>{application}</bdi>. Lancez stella desktop puis réessayez.",
@@ -6018,13 +6064,15 @@
         "alreadyInstalled": "Déjà installé ? Le connecter",
         "connect": "Connecter stella desktop",
         "connected": "stella desktop est connecté",
+        "download": "Télécharger stella desktop",
         "editNone": "Téléchargez stella desktop pour modifier ce fichier",
         "editOutdated": "Mettez à jour stella desktop pour modifier",
         "editReason": "La modification sur ordinateur ouvre le fichier dans une application de votre ordinateur via stella desktop.",
         "signCurrent": "Signer avec stella desktop",
         "signNone": "Téléchargez stella desktop pour signer ce PDF",
         "signOutdated": "Mettez à jour stella desktop pour signer",
-        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop."
+        "signReason": "La signature utilise le certificat de votre ordinateur ; elle s’effectue donc dans stella desktop.",
+        "update": "Mettre à jour stella desktop"
       },
       "downloadAs": "Télécharger sous…",
       "downloadAsZip": "Télécharger en .zip",
@@ -6037,8 +6085,10 @@
       "itemLimitReached": "Ce dossier a atteint sa limite d’éléments.",
       "maxEntitiesReached": "Nombre maximal d’éléments atteint",
       "ocrAlreadyProcessed": "La reconnaissance de texte est déjà terminée",
+      "ocrBatchHelp": "Les documents en file d’attente sont traités lors du prochain lot OCR.",
       "ocrQueueFailed": "Impossible de mettre la reconnaissance de texte en file d’attente",
-      "ocrQueued": "Reconnaissance de texte ajoutée au prochain lot OCR",
+      "ocrQueued": "Reconnaissance de texte mise en file d’attente",
+      "ocrQueuedForBatch": "Reconnaissance de texte ajoutée au prochain lot OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Une signature est déjà en cours dans stella desktop",
         "cancelledBaseVersionDescription": "Le document a changé pendant la signature. Ouvrez la version la plus récente et signez à nouveau.",
@@ -6095,6 +6145,7 @@
         "waitingDescription": "Choisissez un certificat de signature dans stella desktop pour signer ce PDF.",
         "waitingTitle": "En attente de stella desktop"
       },
+      "queueForOcr": "Mettre en file d’attente pour l’OCR",
       "rateLimited": "Débit limité; reprise dans {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Que faire de {fileName}",
@@ -6106,7 +6157,6 @@
       "removeMetadata": "Supprimer les métadonnées du document",
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
       "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers}}",
-      "runOcr": "Mettre l’OCR en file d’attente",
       "scrubFailed": "Les métadonnées de ce fichier n’ont pas pu être supprimées, rien n’a donc été téléchargé",
       "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués}} sur {total, number}",
       "uploadedSuccessfully": "Fichiers importés avec succès",
@@ -6185,8 +6235,7 @@
         "lead": "Responsable",
         "leadActive": "Responsable",
         "leadInactive": "Définir le responsable",
-        "noLead": "Aucun responsable",
-        "searchMembers": "Rechercher des membres…"
+        "noLead": "Aucun responsable"
       },
       "to": "Jusqu'à"
     },
@@ -6266,10 +6315,10 @@
       "addMember": "Ajouter un membre",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
+      "alreadyOnMatter": "Déjà dans ce dossier",
       "cannotRemoveLast": "Impossible de retirer le dernier membre",
       "noMembersFound": "Aucun membre trouvé",
-      "removeMemberConfirm": "Retirer ce membre du dossier ?",
-      "selectMember": "Sélectionner un membre"
+      "removeMemberConfirm": "Retirer ce membre du dossier ?"
     },
     "newDocument": "Nouveau document",
     "newFolder": "Nouveau dossier",
@@ -6394,6 +6443,7 @@
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
+      "movedToClient": "Dossier <bdi>{matterName}</bdi> déplacé vers <bdi>{clientName}</bdi>",
       "noClient": "Aucun client attribué",
       "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
@@ -6412,7 +6462,9 @@
       "personalLabel": "Personnel",
       "promoteCta": "Promouvoir au client",
       "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
+      "promoteToClientConfirm": "Le dossier <bdi>{matterName}</bdi> sera associé à <bdi>{clientName}</bdi> et partagé avec l'équipe. Il ne pourra plus redevenir personnel.",
       "promotedSuccess": "Dossier promu",
+      "recentClients": "Clients récents",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",
@@ -6624,6 +6676,12 @@
     "referenceTaken": "Ce numéro de référence est déjà utilisé",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rechercher un dossier…",
+      "trigger": "Changer de dossier",
+      "viewAll": "Voir tous les dossiers",
+      "viewAllForClient": "Voir tous les dossiers du client {clientName}"
     },
     "table": {
       "clearFlags": "Effacer les marqueurs",

@@ -13,6 +13,13 @@ on:
 permissions: {}
 
 env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
@@ -45,7 +52,7 @@ jobs:
           bun packages/sanctions/scripts/prove-real-editions.ts --generated --require-coverage 2>&1 | tee sanctions-real-editions.log
       - name: Upload edition measurements
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sanctions-real-editions
           path: sanctions-real-editions.log
@@ -156,7 +163,7 @@ jobs:
 
       - name: Upload replay diagnostics
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-workspace-replay-${{ github.run_id }}
           path: apps/web/e2e/test-results/workspace-soak/
@@ -165,7 +172,7 @@ jobs:
 
       - name: Upload server logs
         if: failure() && steps.e2e-stack.outcome != 'skipped'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-workspace-replay-server-logs-${{ github.run_id }}
           path: |
@@ -344,7 +351,7 @@ jobs:
 
       - name: Upload build profile
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: nightly-web-build-profile
           path: web-build-profile/

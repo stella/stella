@@ -70,6 +70,7 @@ export const SearchDocumentPreview = ({
   }, []);
   const viewer = (
     <PeekPdfViewer
+      pdfPageSource="portfolio"
       activeSearchMatchIndex={activeSearchMatchIndex}
       activePropertyId=""
       docxFitMode="page"

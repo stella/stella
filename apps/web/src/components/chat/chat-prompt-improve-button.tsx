@@ -21,7 +21,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 type ChatPromptImproveButtonProps = {
@@ -98,12 +98,18 @@ export const ChatPromptImproveButton = ({
           ? CHAT_SEND_MODE.anonymized
           : CHAT_SEND_MODE.rawOverride,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
     setIsPending(false);
 
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ChatPromptImproveButton.improvePrompt:failure",
+        scope: {
+          type: "handler",
+          handlerId: "ChatPromptImproveButton.improvePrompt:failure",
+        },
+      });
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
     }

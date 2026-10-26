@@ -1,6 +1,6 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, gt, ilike, inArray, isNull, like, sql } from "drizzle-orm";
-import { type Static, t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
@@ -22,8 +22,14 @@ import {
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+  uniqueItems,
+} from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -37,13 +43,15 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
-import { enforceWritePrecondition } from "@/api/lib/write-contract";
+import { enforceWritePrecondition } from "@/api/lib/write-contract/write-contract";
+
+const BILLING_KNOWLEDGE_FILES_PAGE_SIZE = 20;
 
 const permissions = {
   organizationSettings: ["update"],
 } satisfies HandlerConfig["permissions"];
-const clientQuerySchema = t.Object({
-  clientId: t.Optional(tSafeId("contact")),
+const clientQuerySchema = v.object({
+  clientId: v.optional(resourceIdSchema("contact")),
 });
 
 export const readBillingDraftConfiguration = createSafeRootHandler(
@@ -125,22 +133,27 @@ const validateBillingResources = async ({
   if (resourceIds.length === 0) {
     return true;
   }
-  const resources = await tx
-    .select({ id: agentSkillResources.id })
-    .from(agentSkillResources)
-    .innerJoin(agentSkills, eq(agentSkills.id, agentSkillResources.skillId))
-    .where(
-      and(
-        eq(agentSkillResources.organizationId, organizationId),
-        eq(agentSkills.organizationId, organizationId),
-        eq(agentSkills.scope, "team"),
-        inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
-        like(agentSkillResources.path, "references/%"),
-        inArray(agentSkillResources.id, resourceIds),
+  const resources = await readBounded(
+    tx
+      .select({ id: agentSkillResources.id })
+      .from(agentSkillResources)
+      .innerJoin(agentSkills, eq(agentSkills.id, agentSkillResources.skillId))
+      .where(
+        and(
+          eq(agentSkillResources.organizationId, organizationId),
+          eq(agentSkills.organizationId, organizationId),
+          eq(agentSkills.scope, "team"),
+          inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
+          like(agentSkillResources.path, "references/%"),
+          inArray(agentSkillResources.id, resourceIds),
+        ),
       ),
-    )
-    .limit(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT);
-  return resources.length === resourceIds.length;
+    BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  );
+  return (
+    resources.type === "complete" &&
+    resources.rows.length === resourceIds.length
+  );
 };
 
 type BillingFileBindingOptions = {
@@ -154,18 +167,27 @@ const loadBillingFileBindings = async ({
   organizationId,
   clientId,
 }: BillingFileBindingOptions) => {
-  const oldFiles = await tx
-    .select({ resourceId: billingGuidelineFiles.resourceId })
-    .from(billingGuidelineFiles)
-    .where(
-      and(
-        eq(billingGuidelineFiles.organizationId, organizationId),
-        clientId
-          ? eq(billingGuidelineFiles.clientId, clientId)
-          : isNull(billingGuidelineFiles.clientId),
+  const bindings = await readBounded(
+    tx
+      .select({ resourceId: billingGuidelineFiles.resourceId })
+      .from(billingGuidelineFiles)
+      .where(
+        and(
+          eq(billingGuidelineFiles.organizationId, organizationId),
+          clientId
+            ? eq(billingGuidelineFiles.clientId, clientId)
+            : isNull(billingGuidelineFiles.clientId),
+        ),
       ),
-    )
-    .limit(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT);
+    BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  );
+  const oldFiles =
+    bindings.type === "complete"
+      ? bindings.rows
+      : panic("Billing guideline bindings exceed their configured cap", {
+          organizationId,
+          clientId,
+        });
   const firmFiles = clientId
     ? await tx
         .select({ resourceId: billingGuidelineFiles.resourceId })
@@ -181,27 +203,27 @@ const loadBillingFileBindings = async ({
   return { oldFiles, firmFiles };
 };
 
-const billingDraftConfigurationBodySchema = t.Object(
-  {
-    expectedUpdatedAt: expectedUpdatedAtSchema,
-    mode: t.Optional(t.Enum(AI_BILLING_DRAFTS_MODE)),
-    clientId: t.Optional(tSafeId("contact")),
-    resourceIds: t.Optional(
-      t.Array(tSafeId("agentSkillResource"), {
-        maxItems: BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
-        uniqueItems: true,
-      }),
+const billingDraftConfigurationBodySchema = v.strictObject({
+  expectedUpdatedAt: expectedUpdatedAtSchema,
+  mode: v.optional(v.enum(AI_BILLING_DRAFTS_MODE)),
+  clientId: v.optional(resourceIdSchema("contact")),
+  resourceIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("agentSkillResource")),
+      v.maxLength(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT),
+      uniqueItems(),
     ),
-    timeBillingFormat: t.Optional(
-      t.Union([t.Literal("categories"), t.Literal("ledes")]),
-    ),
-  },
-  { additionalProperties: false },
-);
+  ),
+  timeBillingFormat: v.optional(
+    v.union([v.literal("categories"), v.literal("ledes")]),
+  ),
+});
 
 type BillingDraftAuditChangesOptions = {
-  body: Static<typeof billingDraftConfigurationBodySchema>;
-  previousMode: Static<typeof billingDraftConfigurationBodySchema>["mode"];
+  body: v.InferOutput<typeof billingDraftConfigurationBodySchema>;
+  previousMode: v.InferOutput<
+    typeof billingDraftConfigurationBodySchema
+  >["mode"];
   previousResourceIds: SafeId<"agentSkillResource">[];
   previousClientFormat: string | null;
 };
@@ -293,22 +315,25 @@ export const updateBillingDraftConfiguration = createSafeRootHandler(
             .where(eq(organizationSettings.organizationId, organizationId))
             .limit(1)
         ).at(0);
-        let previousClientFormat: string | null = null;
+        let previousClientFormat:
+          (typeof contacts.$inferSelect)["timeBillingFormat"] | null = null;
         if (body.clientId) {
-          const client = await tx
-            .select({ id: contacts.id, format: contacts.timeBillingFormat })
-            .from(contacts)
-            .where(
-              and(
-                eq(contacts.organizationId, organizationId),
-                eq(contacts.id, body.clientId),
-              ),
-            )
-            .limit(1);
-          if (client.length === 0) {
+          const client = (
+            await tx
+              .select({ id: contacts.id, format: contacts.timeBillingFormat })
+              .from(contacts)
+              .where(
+                and(
+                  eq(contacts.organizationId, organizationId),
+                  eq(contacts.id, body.clientId),
+                ),
+              )
+              .limit(1)
+          ).at(0);
+          if (client === undefined) {
             return { type: "invalid_client" } as const;
           }
-          previousClientFormat = client.at(0)?.format ?? null;
+          previousClientFormat = client.format;
         }
         const { oldFiles, firmFiles } = await loadBillingFileBindings({
           tx,
@@ -446,31 +471,38 @@ export const updateBillingDraftConfiguration = createSafeRootHandler(
   },
 );
 
+declareAggregateMutation(updateBillingDraftConfiguration, {
+  type: "aggregate",
+  aggregates: ["organization"],
+});
+
 export const listBillingKnowledgeFiles = createSafeRootHandler(
   {
     contract: "patch",
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },
-    query: t.Object({
-      query: t.Optional(t.String({ maxLength: 200 })),
-      cursor: t.Optional(tPaginationCursor()),
+    query: v.object({
+      query: v.optional(v.pipe(v.string(), v.maxLength(200))),
+      cursor: v.optional(paginationCursorSchema()),
     }),
   },
   async function* ({ safeDb, session, query }) {
-    let afterResourceId: string | null = null;
-    if (query.cursor) {
-      const parts = decodePaginationCursor(query.cursor);
-      const id = parts?.at(0);
-      if (parts?.length !== 1 || !isUuidPaginationCursorPart(id)) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Invalid knowledge-file cursor",
-          }),
-        );
-      }
-      afterResourceId = id;
+    const cursorParts = query.cursor
+      ? decodePaginationCursor(query.cursor)
+      : null;
+    const afterResourceId = cursorParts?.at(0);
+    if (
+      query.cursor &&
+      (cursorParts?.length !== 1 ||
+        !isUuidPaginationCursorPart(afterResourceId))
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Invalid knowledge-file cursor",
+        }),
+      );
     }
 
     const rows = yield* Result.await(
@@ -497,7 +529,7 @@ export const listBillingKnowledgeFiles = createSafeRootHandler(
               eq(agentSkills.scope, "team"),
               inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
               like(agentSkillResources.path, "references/%"),
-              afterResourceId
+              afterResourceId !== undefined
                 ? gt(agentSkillResources.id, sql`${afterResourceId}`)
                 : undefined,
               query.query
@@ -510,13 +542,13 @@ export const listBillingKnowledgeFiles = createSafeRootHandler(
             ),
           )
           .orderBy(agentSkillResources.id)
-          .limit(21),
+          .limit(BILLING_KNOWLEDGE_FILES_PAGE_SIZE + 1),
       ),
     );
     return Result.ok(
       createCursorPage({
         rows,
-        limit: 20,
+        limit: BILLING_KNOWLEDGE_FILES_PAGE_SIZE,
         cursorForItem: (file) => encodePaginationCursor([file.id]),
       }),
     );
@@ -529,7 +561,7 @@ export const readBillingKnowledgeFile = createSafeRootHandler(
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },
-    params: t.Object({ resourceId: tSafeId("agentSkillResource") }),
+    params: v.object({ resourceId: resourceIdSchema("agentSkillResource") }),
   },
   async function* ({ safeDb, session, params }) {
     const rows = yield* Result.await(
