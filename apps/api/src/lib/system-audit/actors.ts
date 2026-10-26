@@ -36,7 +36,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "held",
     "failed",
   ],
-  "system:case-law-sitemap-refresh": ["shards", "pages"],
+  "system:case-law-sitemap-refresh": ["months", "shards"],
   "system:statute-sitemap-refresh": ["shards"],
   "system:case-law-browse-facet-refresh": ["buckets"],
   "system:legislation-facet-refresh": ["buckets"],

@@ -8,7 +8,7 @@ import { groupableSql } from "@/api/lib/groupable-sql";
  * undated decisions, and a split month's hashed buckets. Shared by the refresh
  * that lists the shards and the shard read that serves one.
  */
-const SITEMAP_SHARD_BUCKET_COUNT = 64;
+export const SITEMAP_SHARD_BUCKET_COUNT = 64;
 const SITEMAP_SHARD_BUCKET_WIDTH = 2;
 export const SITEMAP_UNDATED_YEAR = "undated";
 export const SITEMAP_UNDATED_MONTH = "00";

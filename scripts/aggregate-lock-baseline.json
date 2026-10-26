@@ -2358,12 +2358,6 @@
     "reason": "for no key update in apps/api/src/lib/case-law/provision-state-backfill/backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/case-law/sitemap-shard-refresh.ts",
-    "fingerprint": "9cd561de2d5bc69f52ae21a7ff7b29673e412ece73f584b19a09bbcd9688e923",
-    "count": 1,
-    "reason": "lock table in apps/api/src/lib/case-law/sitemap-shard-refresh.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/lib/cell-lock.ts",
     "fingerprint": "ef5f147815c4fde1e38522e3818afebd4ccfe2e7028416d88eee182c13af26b7",
     "count": 1,

@@ -892,6 +892,18 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "ENABLE and FORCE RLS apply to the new empty sitemap count table before publication, under 1s lock_timeout and 5s statement_timeout.",
   },
   {
+    migration: "20261026090000_case_law_sitemap_changes",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS apply to the sitemap change log created empty in the same migration, before publication, under 1s lock_timeout and 30s statement_timeout.",
+  },
+  {
+    migration: "20261026090000_case_law_sitemap_changes",
+    form: "create-trigger",
+    reason:
+      "Installing the row-level sitemap change triggers on case_law_decisions and case_law_sources is a catalog-only change without a row scan; each SHARE ROW EXCLUSIVE acquisition is bounded by 1s lock_timeout, and a lost lock wait rolls the migration back for the runner's lock-retry ladder to apply again.",
+  },
+  {
     migration: "20261024090000_professional_use_acceptance_operator_source",
     form: "add-constraint",
     reason:

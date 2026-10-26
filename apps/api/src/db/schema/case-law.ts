@@ -123,6 +123,7 @@ import {
   tsvector,
   user,
   wsPolicies,
+  xid8,
 } from "./common";
 import type {
   CorpusSourceDescriptor,
@@ -2462,9 +2463,9 @@ export const caseLawStatuteCitationCountState = p.pgTable(
 );
 
 /**
- * The public case-law sitemap index, one row per shard it lists. Replaced
- * whole by a background refresh, so a public read lists the shards without
- * counting the corpus. `year`/`month` are the shard's path segments
+ * The public case-law sitemap index, one row per shard it lists. A background
+ * refresh recounts the months `case_law_sitemap_changes` logs, so a public
+ * read lists the shards without counting the corpus. `year`/`month` are the shard's path segments
  * (`undated`/`00` for decisions without a date) and `bucket` is `all` for an
  * unsplit month or the two-digit bucket of a split one.
  *
@@ -2498,23 +2499,34 @@ export const caseLawSitemapShards = p.pgTable(
 );
 
 /**
- * One country's month counts, staged by the sitemap refresh until every
- * public country is counted and `case_law_sitemap_shards` is replaced whole.
+ * The sitemap months a write touched, appended by triggers (migration
+ * `20261026090000_case_law_sitemap_changes`): the month a decision left and
+ * the month it entered. A month of `*` asks for a whole country, and a
+ * country of `*` for every country (a source's redistribution changed). The
+ * refresh recounts each logged month and deletes the rows it consumed,
+ * consuming only rows whose writing transaction had finished when the run
+ * began. One row per month per transaction, so a bulk write logs each month
+ * once. A queue, not a watermark: ids order nothing.
  */
-export const caseLawSitemapShardCounts = p.pgTable(
-  "case_law_sitemap_shard_counts",
+export const caseLawSitemapChanges = p.pgTable(
+  "case_law_sitemap_changes",
   {
-    country: p.varchar({ length: 3 }).primaryKey(),
-    months: p.jsonb().notNull(),
-    pages: p.integer().notNull(),
-    countedAt: timestamptz("counted_at").notNull(),
+    id: p
+      .bigint({ mode: "number" })
+      .primaryKey()
+      .generatedAlwaysAsIdentity({ name: "case_law_sitemap_changes_id_seq" }),
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    xact: xid8()
+      .notNull()
+      .default(sql`pg_current_xact_id()`),
   },
   (t) => [
-    p.check(
-      "case_law_sitemap_shard_counts_pages_positive",
-      sql`${t.pages} > 0`,
-    ),
-    p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
+    p
+      .unique("case_law_sitemap_changes_xact_month_key")
+      .on(t.xact, t.country, t.year, t.month),
+    p.pgPolicy("case_law_sitemap_change_owner_access", {
       for: "all",
       to: "public",
       using: sql`true`,

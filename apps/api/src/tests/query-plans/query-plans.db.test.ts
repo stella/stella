@@ -421,24 +421,29 @@ test(
 );
 
 test(
-  "the current sitemap refresh bounds its covering scan to a page",
+  "the sitemap month count reads one country-month range of the sitemap index",
   async () => {
     const entry =
-      QUERY_PLAN_REGISTRY.find(({ id }) => id === "case-law.sitemap-refresh") ??
-      panic("Sitemap refresh is absent from the plan registry");
+      QUERY_PLAN_REGISTRY.find(
+        ({ id }) => id === "case-law.sitemap-month-count",
+      ) ?? panic("Sitemap month count is absent from the plan registry");
     const scans = await explainPhysical(
       entry.role,
       entry.build,
       "planMode" in entry ? entry.planMode : undefined,
     );
-    expect(
-      scans.some(
-        ({ relation, nodeType, limitAbove }) =>
-          relation === "case_law_decisions" &&
-          nodeType === "Index Only Scan" &&
-          limitAbove,
-      ),
-    ).toBe(true);
+    const decisions = scans.filter(
+      ({ relation }) => relation === "case_law_decisions",
+    );
+    expect(decisions).toHaveLength(1);
+    expect(decisions[0]?.nodeType).not.toBe("Seq Scan");
+    expect(decisions[0]?.index).toBe(
+      "case_law_decisions_sitemap_shard_published_idx",
+    );
+    // The country and both ends of the month bound the range the scan reads.
+    expect(decisions[0]?.indexCond).toMatch(/\bcountry = /u);
+    expect(decisions[0]?.indexCond).toMatch(/\bdecision_date >= /u);
+    expect(decisions[0]?.indexCond).toMatch(/\bdecision_date < /u);
     expect(
       heapFetchRiskViolations(
         scans,

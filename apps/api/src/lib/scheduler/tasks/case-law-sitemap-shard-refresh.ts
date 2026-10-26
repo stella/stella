@@ -8,9 +8,8 @@ export const REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK =
   "caseLaw.refreshSitemapShards" as const;
 
 /**
- * Recount the public case-law sitemap shards the index is served from. A run
- * that stops between countries continues at once; the snapshot is replaced
- * only by the run that counts the last country.
+ * Recount the public case-law sitemap months the change log names. A run that
+ * stops between months continues at once from the rows still logged.
  */
 export const refreshCaseLawSitemapShardsTask: SchedulerTask = async ({
   db,
@@ -25,22 +24,20 @@ export const refreshCaseLawSitemapShardsTask: SchedulerTask = async ({
   }
   const outcome = await refreshCaseLawSitemapShards(db, { signal });
   switch (outcome.type) {
-    case "counting":
-      logger.info("scheduler.case_law_sitemap_shards_counting", {
-        "caseLawSitemap.counted": outcome.counted,
-        "caseLawSitemap.pages": outcome.pages,
-        "caseLawSitemap.remaining": outcome.remaining,
+    case "pending":
+      logger.info("scheduler.case_law_sitemap_shards_pending", {
+        "caseLawSitemap.months": outcome.months,
       });
       scheduleContinuation(dueAt.claimedAtDate());
       return;
-    case "swapped":
+    case "refreshed":
       await recordSystemAudit(db, "system:case-law-sitemap-refresh", {
         subject: runId,
-        counts: { shards: outcome.shards, pages: outcome.pages },
+        counts: { months: outcome.months, shards: outcome.shards },
       });
       logger.info("scheduler.case_law_sitemap_shards_refreshed", {
         "caseLawSitemap.largestShard": outcome.largestShard,
-        "caseLawSitemap.pages": outcome.pages,
+        "caseLawSitemap.months": outcome.months,
         "caseLawSitemap.shards": outcome.shards,
       });
       return;
