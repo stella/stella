@@ -1,5 +1,7 @@
 import {
+  type CheckBudgets,
   checkPoolJob,
+  readCheckBudgets,
   type ReadCheckPool,
   readCheckPool,
   readWorkingTreeCheckPool,
@@ -45,6 +47,26 @@ export const workflowCiInstallFlags = (
 const isStepRecord = (step: unknown): step is Record<string, unknown> =>
   typeof step === "object" && step !== null && !Array.isArray(step);
 
+let budgets: CheckBudgets | undefined;
+/**
+ * The pool bounds every check by its budget, so an expanded check carries
+ * that bound as its `timeout-minutes` for guards that require one. Budgets
+ * come from the working tree, the file the pool itself enforces.
+ */
+const withBudget = (
+  pool: NonNullable<ReturnType<typeof checkPoolJob>>,
+  step: Readonly<Record<string, unknown>>,
+) => {
+  budgets ??= readCheckBudgets();
+  const name = String(step["name"]);
+  const budget = Object.hasOwn(budgets[pool], name)
+    ? budgets[pool][name]
+    : undefined;
+  return budget === undefined
+    ? { ...step }
+    : { ...step, "timeout-minutes": budget.minutes };
+};
+
 /**
  * Follow each check pool step with the checks it runs, read through
  * `readPool` (the working tree unless a caller audits another tree). Steps
@@ -69,7 +91,7 @@ export const withPooledChecks = (
     });
     return expanded
       ? [step]
-      : [step, ...checks.map((check) => ({ ...check.step }))];
+      : [step, ...checks.map((check) => withBudget(pool, check.step))];
   });
 
 /**

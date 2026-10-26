@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,17 +23,23 @@ import {
   cpuSeconds,
   failedCheckAnnotation,
   failedCheckCause,
+  finishedCheckLine,
+  jobStartedAt,
+  jobTimeout,
   type Launched,
   partitionChecks,
   planChecks,
   type PlannedCheck,
   POOL_CONTEXT_ROOTS,
+  POOL_DEADLINE_MARGIN_MINUTES,
   poolContext,
+  poolDeadline,
   processLauncher,
   processTree,
   resolveEnv,
   runChecks,
   selectChecks,
+  stillRunningLines,
   stopDetail,
   summaryTable,
 } from "./ci-check-pool";
@@ -724,7 +731,16 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
     expect(await child.exited).toBe(130);
     expect(output).toContain("::group::Processes of running checks");
     expect(output).toContain("sleep 600");
-    expect(output).toContain("Interrupted check: Blocked first (running)");
+    expect(output).toContain("Received SIGTERM: stopping the check pool.");
+    expect(output).toMatch(/^Still running: Blocked first \(\d+\.\d s\)$/mu);
+    expect(output).toMatch(
+      /Interrupted check: Blocked first \(running for \d+\.\d s\)/u,
+    );
+    // A check that ended prints its live line before registry order allows
+    // its log.
+    expect(output).toMatch(
+      /^Finished check: Buffered failure \(failure: exit code 1, \d+\.\ds\)$/mu,
+    );
     expect(output).toContain("| Checking fixture-generator");
     expect(output).toContain("Interrupted check: Buffered failure (completed)");
     expect(output).toContain("| ::error::buffered fixture failure");
@@ -755,6 +771,230 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
     rmSync(directory, { recursive: true, force: true });
   }
 }, 20_000);
+
+test("the live line names each check's outcome and time as it ends", () => {
+  const base = {
+    id: undefined,
+    continuedOnError: false,
+    seconds: 12.345,
+    maxRssBytes: undefined,
+  };
+  expect(
+    finishedCheckLine({
+      ...base,
+      name: "Lint",
+      outcome: "success",
+      detail: "passed",
+    }),
+  ).toBe("Finished check: Lint (success, 12.3s)");
+  expect(
+    finishedCheckLine({
+      ...base,
+      name: "Lint",
+      outcome: "failure",
+      continuedOnError: true,
+      detail: "exit code 2",
+    }),
+  ).toBe(
+    "Finished check: Lint (failure (continue-on-error): exit code 2, 12.3s)",
+  );
+  expect(
+    stillRunningLines(
+      new Map([
+        [0, { name: "Done", status: "completed" as const, started: 0 }],
+        [1, { name: "Hung", status: "running" as const, started: 1000 }],
+      ]),
+      62_500,
+    ),
+  ).toEqual(["Still running: Hung (61.5 s)"]);
+});
+
+test("every job that runs the pool declares a timeout the pool's deadline fits under", () => {
+  for (const job of CHECK_POOL_JOBS) {
+    const timeout = jobTimeout({
+      root,
+      poolJob: job,
+      // A caller of ci.yml names itself in GITHUB_WORKFLOW_REF; the pooled
+      // job is still read from ci.yml.
+      env: {
+        GITHUB_JOB: job,
+        GITHUB_WORKFLOW_REF:
+          "stella/stella/.github/workflows/main-pr-depth.yml@refs/heads/main",
+      },
+    });
+    expect(timeout?.workflow).toBe(".github/workflows/ci.yml");
+    expect(timeout?.minutes).toBeGreaterThan(POOL_DEADLINE_MARGIN_MINUTES);
+  }
+  // Another workflow's job that runs a pool reads its own workflow.
+  expect(
+    jobTimeout({
+      root,
+      poolJob: "ci-checks-rest",
+      env: {
+        GITHUB_JOB: "admission",
+        GITHUB_WORKFLOW_REF:
+          "stella/stella/.github/workflows/queue-admission.yml@refs/heads/main",
+      },
+    }),
+  ).toMatchObject({ workflow: ".github/workflows/queue-admission.yml" });
+  expect(
+    jobTimeout({ root, poolJob: "ci-checks-rest", env: {} }),
+  ).toBeUndefined();
+  expect(() =>
+    jobTimeout({
+      root,
+      poolJob: "ci-checks-rest",
+      env: {
+        GITHUB_JOB: "missing-job",
+        GITHUB_WORKFLOW_REF:
+          "stella/stella/.github/workflows/ci.yml@refs/heads/main",
+      },
+    }),
+  ).toThrow(
+    ".github/workflows/ci.yml: job missing-job must declare a literal timeout-minutes above 3",
+  );
+});
+
+test("the deadline counts from the job's start and falls back to the pool's start only later", () => {
+  const minute = 60_000;
+  const pool = 100 * minute;
+  // The event file, written as the job is set up, marks the job's start.
+  expect(
+    jobStartedAt({
+      eventWrittenAt: pool - 2 * minute,
+      poolStartedAt: pool,
+      timeoutMinutes: 40,
+    }),
+  ).toBe(pool - 2 * minute);
+  // A time the job cannot have started at never moves the deadline earlier.
+  for (const eventWrittenAt of [undefined, pool + minute, pool - 41 * minute]) {
+    expect(
+      jobStartedAt({ eventWrittenAt, poolStartedAt: pool, timeoutMinutes: 40 }),
+    ).toBe(pool);
+  }
+  expect(poolDeadline(pool, 40)).toBe(
+    pool + (40 - POOL_DEADLINE_MARGIN_MINUTES) * minute,
+  );
+});
+
+// timeout: The pool fixture has a 15 s watchdog; its deadline falls about
+// 3 s after it starts.
+test("the pool stops before its job's timeout and names the check still running", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-deadline-"));
+  const scripts = path.join(directory, "scripts");
+  mkdirSync(scripts);
+  mkdirSync(path.join(directory, ".github/ci-checks"), { recursive: true });
+  mkdirSync(path.join(directory, ".github/workflows"), { recursive: true });
+  for (const file of [
+    "ci-check-pool.ts",
+    "ci-check-pool-registry.ts",
+    "github-expression.ts",
+  ]) {
+    copyFileSync(path.join(root, "scripts", file), path.join(scripts, file));
+  }
+  // The deadline is read from the job's own timeout-minutes.
+  writeFileSync(
+    path.join(directory, ".github/workflows/ci.yml"),
+    Bun.YAML.stringify({
+      jobs: {
+        "ci-checks-rest": {
+          "timeout-minutes": POOL_DEADLINE_MARGIN_MINUTES + 1,
+          steps: [],
+        },
+      },
+    }),
+  );
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/ci-checks-rest.yml"),
+    Bun.YAML.stringify({
+      checks: [
+        {
+          name: "Hung check",
+          run: 'for i in $(seq 1 50); do echo "hung line $i"; done\nsleep 600',
+        },
+        { name: "Quick check", run: "echo quick" },
+      ].map((entry) => ({ ...entry, if: "true" })),
+    }),
+  );
+  writeFileSync(
+    path.join(directory, ".github/ci-checks/budgets.json"),
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": {
+        "Hung check": { minutes: 10, samples: 0 },
+        "Quick check": { minutes: 10, samples: 0 },
+      },
+      "code-quality-web-rest": {},
+    }),
+  );
+  writeFileSync(path.join(directory, "needs.json"), "{}");
+  // The runner writes the event file as it sets up the job: this job started
+  // 57 s ago, so one minute of its budget before the margin remains 3 s.
+  const event = path.join(directory, "event.json");
+  writeFileSync(event, "{}");
+  const jobStart = (Date.now() - 57_000) / 1000;
+  utimesSync(event, jobStart, jobStart);
+  const child = Bun.spawn(
+    [
+      process.execPath,
+      path.join(scripts, "ci-check-pool.ts"),
+      "run",
+      "ci-checks-rest",
+    ],
+    {
+      cwd: directory,
+      env: {
+        PATH: process.env["PATH"] ?? "",
+        RUNNER_TEMP: directory,
+        GITHUB_JOB: "ci-checks-rest",
+        GITHUB_EVENT_PATH: event,
+        CI_CHECK_POOL_CONCURRENCY: "2",
+        CI_CHECK_POOL_NEEDS_FILE: path.join(directory, "needs.json"),
+        CI_CHECK_POOL_STEPS: "{}",
+        CI_CHECK_POOL_INPUTS: "{}",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 15_000,
+      killSignal: "SIGKILL",
+    },
+  );
+  try {
+    const [output, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(1);
+    expect(output).toMatch(
+      /^Check pool deadline: \S+ \(job timeout-minutes 4 less 3\)$/mu,
+    );
+    expect(output).toMatch(/^Finished check: Quick check \(success, /mu);
+    expect(output).toContain(
+      "::error title=Check pool deadline::The check pool stopped 3 min before the timeout-minutes (4) of job ci-checks-rest in .github/workflows/ci.yml.",
+    );
+    expect(output).toMatch(
+      /^FAILED check: Hung check -- still running after \d+\.\d s at the check pool deadline$/mu,
+    );
+    expect(output).toMatch(/^Still running: Hung check \(\d+\.\d s\)$/mu);
+    expect(output).not.toContain("Still running: Quick check");
+    expect(output).toMatch(
+      /Interrupted check: Hung check \(running for \d+\.\d s\)/u,
+    );
+    // The last 40 lines of the hung check's output.
+    expect(output).toMatch(/^\| hung line 50$/mu);
+    expect(output).toMatch(/^\| hung line 11$/mu);
+    expect(output).not.toMatch(/^\| hung line 10$/mu);
+    expect(output).not.toContain("| Check | Result |");
+  } finally {
+    if (child.exitCode === null) {
+      child.kill("SIGKILL");
+    }
+    await child.exited;
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 25_000);
 
 test("flattening steps that already carry their pooled checks adds none", () => {
   for (const job of CHECK_POOL_JOBS) {

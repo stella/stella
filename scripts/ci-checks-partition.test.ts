@@ -14,6 +14,7 @@ import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
+  type CheckPoolJob,
   checkPoolRegistryPath,
   checkPoolStepRun,
   type ReadCheckPool,
@@ -367,8 +368,25 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toBase64()}`
   ),
 ).CANONICAL_CANCEL_STEP;
+// Pooled checks once set their own `timeout-minutes`; budgets now live in the
+// generated budgets file, so a merge base from before that reads without the
+// field. Inert once no base entry declares it.
+const withoutStepTimeouts = (source: string) => {
+  const { checks } = v.parse(
+    v.object({ checks: v.array(v.record(v.string(), v.unknown())) }),
+    Bun.YAML.parse(source),
+  );
+  if (!checks.some((entry) => "timeout-minutes" in entry)) {
+    return source;
+  }
+  return Bun.YAML.stringify({
+    checks: checks.map(({ "timeout-minutes": _timeout, ...entry }) => entry),
+  });
+};
 const readBaseCheckPool: ReadCheckPool = (pool) =>
-  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]);
+  withoutStepTimeouts(
+    git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]),
+  );
 const baseCancellationSchema = cancellationJobSchema(
   baseCancellation,
   readBaseCheckPool,
@@ -385,6 +403,9 @@ const jobs = v.parse(
 // today's form, so its pooled checks still expand and compare. Matches only
 // the old form, so it is inert once the merge base carries the new one.
 const LEGACY_POOL_RUN = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// Pool steps then ran the pool without `exec`; that form reads as today's too.
+const preExecPoolRun = (job: CheckPoolJob) =>
+  checkPoolStepRun(job).replace(" exec bun ", " bun ");
 const withCurrentPoolSteps = (workflow: unknown): unknown => {
   const parsed = v.parse(
     v.looseObject({ jobs: v.record(v.string(), v.unknown()) }),
@@ -404,7 +425,8 @@ const withCurrentPoolSteps = (workflow: unknown): unknown => {
           }),
           step,
         ) ||
-        LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job
+        (LEGACY_POOL_RUN.exec(step.run.trim())?.at(1) !== job &&
+          step.run !== preExecPoolRun(job))
       ) {
         return step;
       }
