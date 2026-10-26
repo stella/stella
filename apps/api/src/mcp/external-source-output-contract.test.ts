@@ -122,9 +122,9 @@ describe("external-source output contracts", () => {
     )) {
       if (disposition === "upstream_connector") {
         expect(
-          externalReads,
+          externalReads.some((read) => read === name),
           `Declare ${name} with withThirdPartyOutbound`,
-        ).toContain(name);
+        ).toBe(true);
       }
     }
   });
