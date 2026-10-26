@@ -20,7 +20,7 @@ import {
   type Statement,
   type StaticImportEntry,
   walk,
-} from "@stll/scripts/src/syntax-tree";
+} from "@stll/scripts/src/syntax-tree.ts";
 
 // These boundaries install the first frame; their descendants already have one.
 export const FIRST_FRAME_OWNERS = [
@@ -333,13 +333,13 @@ class FallbackSymbols {
     ) {
       return;
     }
-    for (const exported of node.specifiers) {
-      if (exported.exportKind === "type") {
+    for (const { exportKind, exported, local } of node.specifiers) {
+      if (exportKind === "type") {
         continue;
       }
-      module.exports.set(exportName(exported.exported), {
+      module.exports.set(exportName(exported), {
         module: node.source?.value ?? "",
-        name: exportName(exported.local),
+        name: exportName(local),
       });
     }
   }
