@@ -35,47 +35,6 @@ type ModelledStep = {
   outcome?: string;
 };
 
-export type ModelledRunContext = {
-  github: {
-    event_name: Event;
-    ref: string;
-    sha: string;
-    workflow_sha: string;
-    repository: string;
-    event: {
-      action: string;
-      head_commit: { message: string };
-      pull_request: {
-        draft: boolean;
-        labels: { name: string }[];
-        user: { login: string };
-        head: { repo: { full_name: string } };
-      };
-    };
-  };
-  inputs: Record<string, string | boolean> & {
-    heavy_only: boolean;
-    pr_depth_only: boolean;
-    query_perf_mode: string;
-    sha: string;
-  };
-  vars: Record<string, string> & {
-    CI_POSTGRES_PR_SELECTION: string;
-    CI_PR_DEPTH_PILOT: string;
-    CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: string;
-    MERGE_QUEUE_DEPTH: string;
-    QUEUE_BROWSER_SUITES: string;
-  };
-  steps: Record<string, ModelledStep>;
-  needs: Record<string, { result: string; outputs: Record<string, string> }>;
-  always: () => boolean;
-  cancelled: () => boolean;
-  failure: () => boolean;
-  success: () => boolean;
-  startsWith: (value: string, prefix: string) => boolean;
-  format: (template: string, value: string) => string;
-};
-
 let variableDefaults: Record<string, string> | undefined;
 const defaultVariables = () => {
   if (variableDefaults) {
@@ -295,7 +254,7 @@ export const ciExpressionContext = ({
   vars = {},
   needsResults = {},
   stepOutputs = {},
-}: RunContextOptions = {}): ModelledRunContext => {
+}: RunContextOptions = {}) => {
   const plan = { ...defaultPlan(), ...planOverrides };
   const steps = Object.fromEntries(
     Object.entries(DEFAULT_STEP_OUTPUTS).map(([id, outputs]) => [
@@ -409,3 +368,5 @@ export const ciExpressionContext = ({
       template.replace("{0}", () => value),
   };
 };
+
+export type ModelledRunContext = ReturnType<typeof ciExpressionContext>;
