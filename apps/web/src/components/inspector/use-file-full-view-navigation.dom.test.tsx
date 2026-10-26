@@ -31,8 +31,10 @@ const folderId = "019a0000-0000-7000-8000-000000000205";
 const inspectedFile = () =>
   useInspectorTabsStore
     .getState()
-    .tabs.find((tab) => tab.type === "pdf" && tab.id === fieldId) ??
-  panic("the file is no longer open in the inspector");
+    .tabs.flatMap((tab) =>
+      tab.type === "pdf" && tab.id === fieldId ? [tab] : [],
+    )
+    .at(0) ?? panic("the file is no longer open in the inspector");
 
 /** The inspector's header controls for the active file: expand into the full
  * document view (marking the lane as the panel does once navigation lands)
