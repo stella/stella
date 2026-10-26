@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
+import { readCiCheckCommandText } from "./ci-check-pool-registry";
 import {
   balanceTestFiles,
+  comparisonBase,
   parseScriptTestArguments,
+  selectScriptTests,
   unlistedTestCommands,
   unlistedTests,
 } from "./run-unlisted-script-tests";
+import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
 
 describe("balanceTestFiles", () => {
   const weights: Record<string, number> = {
@@ -166,5 +173,131 @@ describe("unlistedTestCommands", () => {
       ["bun", "test", "scripts/first.test.ts"],
       ["bash", "scripts/check.sh"],
     ]);
+  });
+});
+
+describe("script test impact selection", () => {
+  const makeFixture = () => {
+    const root = mkdtempSync(path.join(tmpdir(), "script-test-impact-"));
+    mkdirSync(path.join(root, "scripts"), { recursive: true });
+    writeFileSync(
+      path.join(root, "scripts/run-unlisted-script-tests.ts"),
+      "export const runner = true;\n",
+    );
+    writeFileSync(
+      path.join(root, "scripts/subject.ts"),
+      'import { value } from "./transitive"; export { value };\n',
+    );
+    writeFileSync(
+      path.join(root, "scripts/transitive.ts"),
+      "export const value = 1;\n",
+    );
+    writeFileSync(
+      path.join(root, "scripts/subject.test.ts"),
+      'import { value } from "./subject"; void value;\n',
+    );
+    writeFileSync(
+      path.join(root, "scripts/reader.test.ts"),
+      'import { readFileSync } from "node:fs"; readFileSync("data/value.txt");\n',
+    );
+    return root;
+  };
+
+  test("selects changed subjects, transitive imports, declared data, and new tests", () => {
+    const root = makeFixture();
+    const tests = ["scripts/subject.test.ts", "scripts/reader.test.ts"];
+    const inputs = { "scripts/reader.test.ts": ["data/**"] };
+    try {
+      expect(
+        selectScriptTests({
+          tests,
+          changed: ["scripts/subject.ts"],
+          root,
+          inputs,
+        }).files,
+      ).toEqual(["scripts/subject.test.ts"]);
+      expect(
+        selectScriptTests({
+          tests,
+          changed: ["scripts/transitive.ts"],
+          root,
+          inputs,
+        }).files,
+      ).toEqual(["scripts/subject.test.ts"]);
+      expect(
+        selectScriptTests({ tests, changed: ["data/value.txt"], root, inputs })
+          .files,
+      ).toEqual(["scripts/reader.test.ts"]);
+      expect(
+        selectScriptTests({
+          tests,
+          changed: ["scripts/reader.test.ts"],
+          root,
+          inputs,
+        }).files,
+      ).toEqual(["scripts/reader.test.ts"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("configuration and runner changes select every test", () => {
+    const root = makeFixture();
+    const tests = ["scripts/subject.test.ts", "scripts/reader.test.ts"];
+    const inputs = { "scripts/reader.test.ts": ["data/**"] };
+    try {
+      for (const changed of [
+        "package.json",
+        "bun.lock",
+        "tsconfig.build.json",
+        "bunfig.toml",
+        "scripts/run-unlisted-script-tests.ts",
+      ]) {
+        expect(
+          selectScriptTests({ tests, changed: [changed], root, inputs }).files,
+        ).toEqual(tests);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("fails the census for a reader without declared data inputs", () => {
+    const root = makeFixture();
+    try {
+      expect(() =>
+        selectScriptTests({
+          tests: ["scripts/reader.test.ts"],
+          changed: [],
+          root,
+          inputs: {},
+        }),
+      ).toThrow("undeclared data inputs");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("repository script test census", () => {
+  // timeout: the census parses every unlisted test's full repository import closure.
+  test("every discoverable test has a resolvable closure and declared readers", () => {
+    const root = path.resolve(import.meta.dir, "..");
+    const tests = unlistedTests(
+      [...new Bun.Glob("scripts/**/*.test.{ts,sh}").scanSync({ cwd: root })],
+      readCiCheckCommandText(root),
+    );
+    const selection = selectScriptTests({
+      tests,
+      changed: ["docs/changelog/selection-proof.md"],
+      root,
+      inputs: scriptTestInputs,
+    });
+    expect(selection.files).toEqual([]);
+    expect(selection.skipped).toBe(tests.length);
+  }, 30_000);
+
+  test("runs everything when no comparison base is available", () => {
+    expect(comparisonBase({})).toBeUndefined();
   });
 });

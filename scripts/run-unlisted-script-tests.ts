@@ -13,11 +13,19 @@
 //   bun scripts/run-unlisted-script-tests.ts
 
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { buildImportGraph } from "./api-test-impact";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
 
 type ScriptTestArguments =
   | { readonly type: "valid"; readonly timeout: number | undefined }
@@ -126,6 +134,137 @@ export const unlistedTestCommands = ({
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
+const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
+
+const SCRIPT_TEST_ALL_RULES = {
+  manifest: /(?:^|\/)package\.json$/u,
+  lockfile: /(?:^|\/)bun\.lockb?$/u,
+  typescript: /(?:^|\/)tsconfig[^/]*\.json$/u,
+  bun: /(?:^|\/)bunfig\.toml$/u,
+} as const;
+
+type ScriptTestSelection = {
+  readonly files: string[];
+  readonly skipped: number;
+  readonly reason?: string;
+};
+
+type SelectScriptTestsOptions = {
+  readonly tests: readonly string[];
+  readonly changed: readonly string[];
+  readonly root?: string;
+  readonly inputs?: Readonly<Record<string, readonly string[]>>;
+};
+
+/** Select tests only when HEAD proves their code or declared data changed. */
+export const selectScriptTests = ({
+  tests,
+  changed,
+  root = REPO_ROOT,
+  inputs = scriptTestInputs,
+}: SelectScriptTestsOptions): ScriptTestSelection => {
+  const realRoot = realpathSync(root);
+  const graph = buildImportGraph(realRoot, [
+    ...tests.filter((test) => test.endsWith(".ts")),
+    RUNNER_PATH,
+  ]);
+  const runnerClosure = graph.closure(RUNNER_PATH);
+  if (
+    changed.some(
+      (file) =>
+        runnerClosure.has(file) ||
+        Object.values(SCRIPT_TEST_ALL_RULES).some((rule) => rule.test(file)),
+    )
+  ) {
+    return {
+      files: [...tests],
+      skipped: 0,
+      reason: "shared test configuration or runner changed",
+    };
+  }
+  const undeclared = tests.filter((test) => {
+    const closure = graph.closure(test);
+    return (
+      [...closure].some(
+        (file) => graph.readers.has(file) || graph.scanners.has(file),
+      ) && !Object.hasOwn(inputs, test)
+    );
+  });
+  const unresolved = tests.filter((test) =>
+    [...graph.closure(test)].some((file) => graph.failed.has(file)),
+  );
+  if (undeclared.length > 0 || unresolved.length > 0) {
+    panic(
+      [
+        undeclared.length > 0
+          ? `Script tests with undeclared data inputs: ${undeclared.join(", ")}`
+          : "",
+        unresolved.length > 0
+          ? `Script tests with unresolved repository imports: ${unresolved.join(", ")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+  const changedSet = new Set(changed);
+  const files = tests.filter((test) => {
+    if (changedSet.has(test)) {
+      return true;
+    }
+    if ([...graph.closure(test)].some((file) => changedSet.has(file))) {
+      return true;
+    }
+    return (inputs[test] ?? []).some((pattern) => {
+      const glob = new Bun.Glob(pattern);
+      return changed.some((file) => glob.match(file));
+    });
+  });
+  return { files, skipped: tests.length - files.length };
+};
+
+const gitOutput = (args: readonly string[]): string | undefined => {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  return result.exitCode === 0 ? result.stdout.toString().trim() : undefined;
+};
+
+const gitSucceeds = (args: readonly string[]): boolean =>
+  Bun.spawnSync(["git", ...args], {
+    cwd: REPO_ROOT,
+    stdout: "ignore",
+    stderr: "ignore",
+  }).exitCode === 0;
+
+export const comparisonBase = (
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined => {
+  const planned = environment["BASE_SHA"]?.trim();
+  if (planned && gitSucceeds(["cat-file", "-e", `${planned}^{commit}`])) {
+    return planned;
+  }
+  const baseRef = environment["GITHUB_BASE_REF"]?.trim();
+  if (!baseRef) {
+    return undefined;
+  }
+  return gitOutput(["merge-base", "HEAD", `origin/${baseRef}`]);
+};
+
+export const changedSince = (base: string): string[] => {
+  const output = gitOutput([
+    "diff",
+    "--name-only",
+    "--diff-filter=ACMRD",
+    `${base}...HEAD`,
+  ]);
+  if (output === undefined) {
+    panic(`Cannot compare HEAD with ${base}`);
+  }
+  return output === "" ? [] : output.split("\n");
+};
 
 /** Workflow text minus comment lines: a mention in a comment runs nothing. */
 const withoutComments = (workflowText: string): string =>
@@ -190,8 +329,26 @@ if (import.meta.main) {
       scan(TEST_GLOB).filter((file) => !file.includes("/node_modules/")),
       workflowText,
     );
+    const base = comparisonBase();
+    const selection =
+      base === undefined
+        ? {
+            files: unlisted,
+            skipped: 0,
+            reason: "no comparison base is available",
+          }
+        : selectScriptTests({
+            tests: unlisted,
+            changed: changedSince(base),
+          });
+    console.log(
+      `Selected ${selection.files.length} and skipped ${selection.skipped} unlisted script test file(s).`,
+    );
+    if (selection.reason !== undefined) {
+      console.log(`Full run: ${selection.reason}.`);
+    }
     const commands = unlistedTestCommands({
-      files: unlisted,
+      files: selection.files,
       timeout: options.timeout,
       groups: UNLISTED_TEST_GROUPS,
       weightOf: (file) => statSync(path.join(REPO_ROOT, file)).size,
@@ -202,6 +359,6 @@ if (import.meta.main) {
     if (results.includes(false)) {
       panic("Unlisted script tests failed");
     }
-    console.log(`Ran ${unlisted.length} unlisted script test file(s).`);
+    console.log(`Ran ${selection.files.length} unlisted script test file(s).`);
   }
 }
