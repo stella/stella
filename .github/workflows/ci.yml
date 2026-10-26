@@ -144,6 +144,7 @@ jobs:
       playwright_image: ${{ steps.images.outputs.playwright }}
       postgres: ${{ steps.images.outputs.postgres }}
       redis: ${{ steps.images.outputs.redis }}
+      rustfs: ${{ steps.images.outputs.rustfs }}
       valkey: ${{ steps.images.outputs.valkey }}
       quickwit: ${{ steps.images.outputs.quickwit }}
       # Pull requests run lightweight guards, lint and type checks.
@@ -243,6 +244,7 @@ jobs:
       docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
       docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      dev_seed_required: ${{ steps.changed-files.outputs.dev_seed_required }}
       query_perf_required: ${{ steps.query-perf-scope.outputs.query_perf_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
@@ -3771,6 +3773,37 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # The dev seed's own cluster and object store, on the first shard only
+      # (an empty image starts no container). Migrations create cluster-wide
+      # roles, so a second database beside the suites' cannot be migrated.
+      dev_seed_postgres:
+        image: ${{ matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.postgres || '' }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      dev_seed_rustfs:
+        image: ${{ matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.rustfs || '' }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.rustfs, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        env:
+          # The credentials apps/api/.env.example and docker-compose.yml share.
+          RUSTFS_ACCESS_KEY: stella-rustfs-dev
+          RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - *checkout_input_sha
@@ -3813,6 +3846,10 @@ jobs:
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
+      - name: Configure dev seed Postgres parity
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        run: bash scripts/configure-test-postgres.sh "${{ job.services.dev_seed_postgres.id }}" stella_owner
+
       - name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -3828,6 +3865,32 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
+
+      - name: Prepare the dev seed database
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          RUSTFS_ACCESS_KEY: stella-rustfs-dev
+          RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
+        # The restricted owner and the bucket a local stack has, then the
+        # committed migrations; `db:push` would skip the policies they create.
+        run: |
+          curl --fail --silent --show-error --aws-sigv4 "aws:amz:us-east-1:s3" \
+            --user "$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY" \
+            --request PUT http://127.0.0.1:9000/stella
+          (cd apps/api && bun run src/db/migrate.ts)
+
+      - name: Apply the local dev seed
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        timeout-minutes: 5
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          NODE_ENV: development
+          STELLA_LOCAL_DEV: "1"
+        # What `bun run agent:up` seeds, with the environment a new checkout
+        # copies, so a change that rejects one of its writes cannot reach main.
+        run: bun --env-file=.env.example run db:seed-local
 
       - name: Configure ephemeral Postgres fixture maintenance
         working-directory: apps/api

@@ -38,6 +38,12 @@ checks:
       # `if:` holds; scripts/generated-files-guard.test.ts binds each entry to
       # its owning job's condition. An empty entry delegates nothing.
       GENERATED_CHECKS_IN_OTHER_JOBS: ${{ format('["{0}","{1}"]', inputs.pr_depth_only != true && needs.ci-plan.outputs.scan_engine_wasm_required == 'true' && 'scan-engine-wasm' || '', (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true') && needs.ci-plan.outputs.run_required != 'false' && inputs.heavy_only != true && needs.ci-plan.outputs.package_checks_required == 'true' && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && 'api-typecheck-projects' || '') }}
+      # A plan that proves the scan engine's inputs unchanged leaves its
+      # committed WebAssembly as scan-engine-wasm-drift last proved it; this
+      # job has no Rust cache, so rebuilding it here compiles the toolchain
+      # from source. scripts/generated-files-guard.test.ts binds the entry to
+      # the plan paths that cover the family.
+      GENERATED_CHECKS_UNCHANGED: ${{ format('["{0}"]', needs.ci-plan.outputs.scan_engine_wasm_required == 'false' && 'scan-engine-wasm' || '') }}
     id: generated_manifest
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
     # Guard A registers tracked generated files; Guard B checks the

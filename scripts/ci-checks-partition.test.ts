@@ -25,7 +25,10 @@ import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { CI_GENERATED_OUTPUTS } from "./generated-files";
-import { DELEGATED_CHECKS_ENV } from "./generated-files-guard";
+import {
+  DELEGATED_CHECKS_ENV,
+  UNCHANGED_CHECKS_ENV,
+} from "./generated-files-guard";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -784,7 +787,8 @@ const withoutTestTimeout = (step: Step): Step => {
 };
 
 // Delegation drops only a family whose owning job runs the same check in this
-// run; scripts/generated-files-guard.test.ts binds it to that job's `if:`.
+// run, and an unchanged family only when the plan proves its paths untouched;
+// scripts/generated-files-guard.test.ts binds each to its job's `if:` or plan.
 const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   const { env } = v.parse(
     v.looseObject({ env: v.optional(v.record(v.string(), v.unknown())) }),
@@ -793,11 +797,18 @@ const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   if (
     step.name !== "Generated files manifest guard" ||
     env === undefined ||
-    !Object.hasOwn(env, DELEGATED_CHECKS_ENV)
+    !(
+      Object.hasOwn(env, DELEGATED_CHECKS_ENV) ||
+      Object.hasOwn(env, UNCHANGED_CHECKS_ENV)
+    )
   ) {
     return step;
   }
-  const { [DELEGATED_CHECKS_ENV]: _delegated, ...environment } = env;
+  const {
+    [DELEGATED_CHECKS_ENV]: _delegated,
+    [UNCHANGED_CHECKS_ENV]: _unchanged,
+    ...environment
+  } = env;
   const { env: _env, ...original } = step;
   return Object.keys(environment).length === 0
     ? original
