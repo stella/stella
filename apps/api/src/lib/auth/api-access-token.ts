@@ -22,6 +22,7 @@ import type { JWTPayload } from "jose";
 import * as v from "valibot";
 
 import type { ApiOAuthResourceScope } from "@stll/api-contract/api-oauth-resource";
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   getAuthEndpointUrl,
@@ -69,7 +70,11 @@ export class ApiAccessTokenError extends TaggedError("ApiAccessTokenError")<{
   /** `rejected` is the caller's token (401); `unavailable` is ours (retryable 5xx). */
   reason: "rejected" | "unavailable";
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export type ApiAccessTokenSession = {
   readonly userId: string;
