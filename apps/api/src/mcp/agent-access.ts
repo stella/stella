@@ -40,7 +40,10 @@ type PersonOnlyLocation = keyof typeof PERSON_ONLY_LOCATIONS;
 
 export type AgentAccess =
   | { kind: typeof AGENT_ACCESS_KIND.open }
-  | { kind: typeof AGENT_ACCESS_KIND.callerConfirms; reason: "destroys-data" }
+  | {
+      kind: typeof AGENT_ACCESS_KIND.callerConfirms;
+      reason: "destroys-data" | "writes-content";
+    }
   | {
       kind: typeof AGENT_ACCESS_KIND.callerConfirms;
       reason: "outbound";
@@ -53,6 +56,7 @@ export type AgentAccess =
         | "grants-access"
         | "revokes-access"
         | "destroys-data"
+        | "writes-content"
         | "outbound"
         /** Settings that apply to everyone in the organization. */
         | "changes-organization-settings";
@@ -73,6 +77,10 @@ const OPEN = { kind: AGENT_ACCESS_KIND.open } as const satisfies AgentAccess;
 const CONFIRM_DESTROYS_DATA = {
   kind: AGENT_ACCESS_KIND.callerConfirms,
   reason: "destroys-data",
+} as const satisfies AgentAccess;
+const CONFIRM_WRITES_CONTENT = {
+  kind: AGENT_ACCESS_KIND.callerConfirms,
+  reason: "writes-content",
 } as const satisfies AgentAccess;
 const APPROVE_DESTROYS_DATA = {
   kind: AGENT_ACCESS_KIND.personApproves,
@@ -221,8 +229,8 @@ const CAPABILITY_AGENT_ACCESS = {
   "document-types.update": OPEN,
   "documents.compare": OPEN,
   "docx-suggestions.list": OPEN,
-  "docx-suggestions.resolve": CONFIRM_DESTROYS_DATA,
-  "docx-suggestions.revert": CONFIRM_DESTROYS_DATA,
+  "docx-suggestions.resolve": CONFIRM_WRITES_CONTENT,
+  "docx-suggestions.revert": CONFIRM_WRITES_CONTENT,
   "entities.bilingual.create": OPEN,
   "entities.blank-document.create": OPEN,
   "entities.clip": OPEN,
@@ -364,9 +372,9 @@ const CAPABILITY_AGENT_ACCESS = {
   "matters.workflow.get": OPEN,
   "matters.workflow.start": OPEN,
   "matters.workflow.targets.count": OPEN,
-  "memories.create": OPEN,
+  "memories.create": CONFIRM_WRITES_CONTENT,
   "memories.list": OPEN,
-  "memories.update": OPEN,
+  "memories.update": CONFIRM_WRITES_CONTENT,
   "notifications.list": OPEN,
   "notifications.read-state.update": OPEN,
   "number-series.archive": OPEN,
@@ -708,6 +716,12 @@ const confirmationRefusal = (
   subject: string,
 ): AgentCallRefusal => {
   switch (access.reason) {
+    case "writes-content":
+      return {
+        code: "confirmation_required",
+        message: `${subject} changes stored content and was called without confirmation`,
+        hint: "Ask the human user to confirm this change, then retry with confirm: true.",
+      };
     case "destroys-data":
       return {
         code: "confirmation_required",

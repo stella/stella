@@ -14,7 +14,9 @@
           "content-type": "application/json"
         },
         "body": {
-          "include": ["reasoning.encrypted_content"],
+          "include": [
+            "reasoning.encrypted_content"
+          ],
           "store": false,
           "max_output_tokens": 128000,
           "service_tier": "default",
@@ -58,7 +60,6 @@
             "delete_document",
             "set_field_value",
             "save_matter",
-            "delete_matter",
             "save_contact",
             "delete_contact",
             "save_task",
@@ -102,7 +103,9 @@
           "content-type": "application/json"
         },
         "body": {
-          "include": ["reasoning.encrypted_content"],
+          "include": [
+            "reasoning.encrypted_content"
+          ],
           "store": false,
           "max_output_tokens": 128000,
           "service_tier": "default",
@@ -146,7 +149,6 @@
             "delete_document",
             "set_field_value",
             "save_matter",
-            "delete_matter",
             "save_contact",
             "delete_contact",
             "save_task",
