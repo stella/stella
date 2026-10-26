@@ -4,7 +4,7 @@ import {
   isLegacyRequest,
   McpServer,
 } from "@modelcontextprotocol/server";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -427,6 +427,53 @@ const reviewFetcher = (
 };
 
 describe("restricted review-account journey", () => {
+  test("cleans up a successful write whose latency exceeds its budget", async () => {
+    const observed: { url: string; headers: Headers; body: string }[] = [];
+    const fetcher = reviewFetcher({ observed });
+    let elapsedMs = 0;
+    const clock = spyOn(performance, "now").mockImplementation(() => elapsedMs);
+    try {
+      const results = await runReviewAccountJourney(
+        {
+          baseUrl: REVIEW_BASE_URL,
+          configuredBaseUrl: REVIEW_BASE_URL,
+          frontendUrl: REVIEW_FRONTEND_URL,
+          password: REVIEW_PASSWORD,
+          mode: "full",
+        },
+        async (input, init) => {
+          const body = await readFakeRequestBody(
+            init.body,
+            input instanceof Request ? input : undefined,
+          );
+          const response = await fetcher(input, init);
+          if (body.includes('"name":"save_task"')) {
+            elapsedMs += 3000;
+          }
+          return response;
+        },
+      );
+      expect(elapsedMs).toBe(3000);
+      expect(
+        results.find(({ name }) => name === "restricted account: write"),
+      ).toMatchObject({
+        status: "failed",
+        detail: expect.stringContaining(
+          "save_task answered in 3000 ms, over its 2000 ms latency budget",
+        ),
+      });
+      expect(
+        observed.filter(({ body }) => body.includes('"name":"delete_task"')),
+      ).toHaveLength(1);
+      expect(results.at(-1)).toMatchObject({
+        name: "restricted account: cleanup",
+        status: "passed",
+      });
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   test.each(["frontend", "api"] as const)(
     "completes OAuth across configured origins with the token endpoint on %s",
     async (tokenOrigin) => {

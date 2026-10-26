@@ -1848,6 +1848,7 @@ const createReviewJourneyContext = (
     token?: string;
     refreshToken?: string;
     createdTaskId?: string;
+    toolLatencyFailure?: string;
   } = { step: "sign-in", lastResponse: undefined };
 
   const reject: (assertion: string) => never = (assertion) => {
@@ -1856,6 +1857,13 @@ const createReviewJourneyContext = (
     });
   };
   const complete = () => {
+    // Let the step retain a successful mutation's identity before a timing
+    // failure interrupts it, so cleanup can still remove the created record.
+    const latencyFailure = state.toolLatencyFailure;
+    state.toolLatencyFailure = undefined;
+    if (latencyFailure !== undefined) {
+      reject(latencyFailure);
+    }
     results.push(passed(`${journey}: ${state.step}`, "assertions passed"));
   };
   const request = async (
@@ -1915,16 +1923,13 @@ const createReviewJourneyContext = (
     state.lastResponse = undefined;
     const startedAt = performance.now();
     state.lastResponse = await postJsonRpc(call, targetFetch);
-    const overBudget =
+    state.toolLatencyFailure =
       call.method === "tools/call"
         ? describeToolLatencyOverBudget({
             toolName: call.params.name,
             elapsedMs: performance.now() - startedAt,
           })
         : undefined;
-    if (overBudget !== undefined) {
-      reject(overBudget);
-    }
     const result = jsonRpcResult(state.lastResponse.body);
     if (
       state.lastResponse.status !== 200 ||
