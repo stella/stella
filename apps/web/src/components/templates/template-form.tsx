@@ -90,7 +90,7 @@ import {
 } from "@/components/templates/template-form.logic";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
@@ -689,7 +689,7 @@ const FieldRenderer = ({
    *  fields, never for array sub-item rows. */
   onEditField?: ((path: string) => void) | undefined;
 }) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const inputType =
     field.inputType ?? (field.kind === "boolean" ? "boolean" : "text");
   const label = field.label ?? field.path;

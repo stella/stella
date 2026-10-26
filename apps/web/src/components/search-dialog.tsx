@@ -138,7 +138,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
   useOwnerScopedState,
@@ -580,7 +580,7 @@ export const SearchDialog = ({
   mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
