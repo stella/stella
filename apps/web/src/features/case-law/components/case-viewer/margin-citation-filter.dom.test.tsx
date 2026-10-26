@@ -117,9 +117,10 @@ describe("the margin's citation filter", () => {
 
   test("the paragraph's permalink focuses it, as Enter on the link does", () => {
     const { listed, view } = renderReader();
-    const eighth =
-      view.container.querySelector('[data-anchor="p-8"]') ??
-      panic("No eighth paragraph");
+    const eighth = view.container.querySelector('[data-anchor="p-8"]');
+    if (!(eighth instanceof HTMLElement)) {
+      return panic("No eighth paragraph");
+    }
     fireEvent.click(within(eighth).getByRole("link", { name: "¶" }));
     expect(listed()).toEqual(["§ 72", "§ 257"]);
   });
