@@ -4781,10 +4781,8 @@
   },
   "readerAnswers": {
     "budgetError": "A válaszokra szánt keret kimerült.",
-    "citation": "¶{paragraph}",
     "expand": "Válasz kibontása",
     "explain": "Magyarázat",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Kiegészítő kérdés feltevése",
     "invalidCitations": "{count, plural, one {# hivatkozást nem sikerült ellenőrizni.} other {# hivatkozást nem sikerült ellenőrizni.}}",
     "loading": "Válasz generálása…",

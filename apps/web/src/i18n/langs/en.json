@@ -4781,10 +4781,8 @@
   },
   "readerAnswers": {
     "budgetError": "The answer budget is exhausted.",
-    "citation": "¶{paragraph}",
     "expand": "Expand answer",
     "explain": "Explain",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Ask a follow-up",
     "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}",
     "loading": "Generating answer…",

@@ -4781,10 +4781,8 @@
   },
   "readerAnswers": {
     "budgetError": "نفدت الميزانية المخصصة للإجابات.",
-    "citation": "¶{paragraph}",
     "expand": "توسيع الإجابة",
     "explain": "شرح",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "طرح سؤال متابعة",
     "invalidCitations": "{count, plural, zero {تعذر التحقق من # إحالات.} one {تعذر التحقق من إحالة واحدة.} two {تعذر التحقق من إحالتين.} few {تعذر التحقق من # إحالات.} many {تعذر التحقق من # إحالة.} other {تعذر التحقق من # إحالة.}}",
     "loading": "جارٍ توليد الإجابة…",

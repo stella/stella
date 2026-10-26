@@ -781,6 +781,15 @@ const webUseIntlFormatterImport = {
     "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
 };
 
+// A citation's kind decides its chip: a paragraph of the open decision
+// previews from its loaded text, another decision from its metadata. The one
+// owner dispatches on that kind, so a surface never picks a chip itself.
+const webCitationChipImport = {
+  group: ["**/paragraph-reference", "**/decision-citation-chip"],
+  message:
+    "Render citations through '@/components/references/citation-chip', which picks the chip by citation kind.",
+};
+
 const apiSafeIdBrandingImport = {
   name: "@/api/lib/branded-types",
   importNames: ["toSafeId"],
@@ -4053,6 +4062,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4090,6 +4100,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4318,6 +4329,39 @@ const config = defineConfig({
                 message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The citation chip owner, and the chip's own test: the modules that
+      // import the chips it dispatches to. Every other apps/web import
+      // restriction still applies, so they are restated here.
+      files: [
+        "apps/web/src/components/references/citation-chip.tsx",
+        "apps/web/src/components/references/decision-citation-chip.dom.test.tsx",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4354,6 +4398,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4390,6 +4435,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4444,6 +4490,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4500,6 +4547,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },

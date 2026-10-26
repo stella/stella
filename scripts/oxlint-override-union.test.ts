@@ -61,6 +61,14 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
+    scope:
+      "apps/web/src/components/references/citation-chip.tsx, apps/web/src/components/references/decision-citation-chip.dom.test.tsx",
+    drops: ["pattern:**/paragraph-reference|**/decision-citation-chip"],
+    reason:
+      "The citation chip owner dispatches each citation kind to its chip, so it and the chip's own test are the web modules that import the chips.",
+  },
+  {
+    rule: "no-restricted-imports",
     scope: "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     drops: ["path:@valibot/to-json-schema+types"],
     reason:

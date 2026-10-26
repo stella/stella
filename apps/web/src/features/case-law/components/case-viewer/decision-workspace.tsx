@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
@@ -101,15 +102,22 @@ import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useReaderProvisionMode } from "@/hooks/use-reader-provision-mode";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
+import { useUnresolvedCitationTelemetry } from "./paragraph-citation-telemetry";
+import {
+  citedDecisionRead,
+  resolveReaderAnswerCitation,
+} from "./reader-answer-citation.logic";
 import {
   attachReaderAnswerMarkers,
   jumpReaderAnswerCitation,
@@ -369,6 +377,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     citationSummary.type === "items" &&
     hasIncomingCitations(citationSummary.items);
   const t = useTranslations();
+  const format = useFormatter();
   const ast = parseDocumentAst(decision.documentAst);
   const astBlocks = decisionBlocks(ast);
   // The case's citable name, for the legal copy modes.
@@ -460,16 +469,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       onOpen: openAnswer,
     });
   }, [viewportElement, visibleAnswers, openAnswer, t]);
+  const answerCitations = visibleAnswers.flatMap((answer) =>
+    answer.messages.flatMap((message) => message.citations),
+  );
+  // Every drawn card's chips name the decisions they cite, so each one is
+  // read; the open action reads the same cache entries.
   const foreignDecisionIds = [
-    ...new Set(
-      answers.answers
-        .filter((answer) => answer.id === answers.activeAnswerId)
-        .flatMap((answer) =>
-          answer.messages.flatMap((message) =>
-            message.citations.map((citation) => citation.decisionId),
-          ),
-        ),
-    ),
+    ...new Set(answerCitations.map((citation) => citation.decisionId)),
   ].filter((id) => id !== decisionId);
   const foreignDecisions = useQueries({
     queries: foreignDecisionIds.map((id) => decisionOptions(id)),
@@ -477,6 +483,27 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const foreignDecisionError = foreignDecisions.find(
     (query) => query.error !== null,
   )?.error;
+  const citedDecisionReads = new Map(
+    foreignDecisionIds.map((id, index) => {
+      const query = foreignDecisions.at(index);
+      return [
+        id,
+        query === undefined
+          ? panic("Every cited decision must have a read")
+          : citedDecisionRead(queryView(query)),
+      ] as const;
+    }),
+  );
+  useUnresolvedCitationTelemetry({
+    blocks: astBlocks,
+    ranges: answerCitations
+      .filter((citation) => citation.decisionId === decisionId)
+      .map(({ paragraphId }) => ({
+        startAnchorId: paragraphId,
+        endAnchorId: paragraphId,
+      })),
+    source: decisionId,
+  });
   const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
     kind: "answer",
     id: answer.id,
@@ -502,29 +529,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         answers.setVisibility(answer.id, visibility),
         "reader-answer.visibility",
       ),
-    citationLabel: (citation) => {
-      const foreignIndex = foreignDecisionIds.indexOf(citation.decisionId);
-      const foreignRead =
-        foreignIndex !== -1 ? foreignDecisions.at(foreignIndex) : undefined;
-      const foreignCited =
-        foreignRead?.data ??
-        queryClient.getQueryData(decisionOptions(citation.decisionId).queryKey);
-      const cited =
-        citation.decisionId === decisionId ? decision : foreignCited;
-      const citedAst = parseDocumentAst(cited?.documentAst);
-      const paragraph = citedAst?.blocks.find(
-        (block) => block.anchorId === citation.paragraphId,
-      );
-      const number = paragraph?.type === "paragraph" ? paragraph.number : null;
-      return citation.decisionId === decisionId
-        ? t("readerAnswers.citation", {
-            paragraph: number?.toString() ?? citation.paragraphId,
-          })
-        : t("readerAnswers.externalCitation", {
-            decision: cited?.caseNumber ?? citation.decisionId,
-            paragraph: number?.toString() ?? citation.paragraphId,
-          });
-    },
+    citationTarget: (citation) =>
+      resolveReaderAnswerCitation({
+        citation,
+        decisionId,
+        blocks: astBlocks,
+        formatNumber: format.number,
+        readCitedDecision: (id) =>
+          citedDecisionReads.get(id) ??
+          panic("Every cited decision must have a read"),
+      }),
+    language: decision.language,
     onCitation: (citation) =>
       detachedUserAction(
         jumpReaderAnswerCitation({

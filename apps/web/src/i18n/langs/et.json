@@ -4781,10 +4781,8 @@
   },
   "readerAnswers": {
     "budgetError": "Vastuste eelarve on ammendatud.",
-    "citation": "¶{paragraph}",
     "expand": "Laienda vastust",
     "explain": "Selgita",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Esita täpsustav küsimus",
     "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
     "loading": "Vastuse loomine…",

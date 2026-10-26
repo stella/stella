@@ -12,12 +12,10 @@ import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
 
+import { CitationChip } from "@/components/references/citation-chip";
 import { useFormatter } from "@/i18n/formatting-context";
 
-import {
-  ParagraphReference,
-  useUnresolvedCitationTelemetry,
-} from "../paragraph-reference";
+import { useUnresolvedCitationTelemetry } from "../paragraph-citation-telemetry";
 import { resolveParagraphReference } from "../paragraph-reference.logic";
 
 /** Every block here was written by a model, and says so on each block. */
@@ -160,7 +158,8 @@ function CitedSpans({
           .map((anchor) => (
             <Fragment key={`${anchor.startAnchorId}-${anchor.endAnchorId}`}>
               {" "}
-              <ParagraphReference
+              <CitationChip
+                kind="paragraph"
                 language={language}
                 onAnchorClick={onAnchorClick}
                 reference={anchor}

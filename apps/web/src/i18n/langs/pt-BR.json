@@ -4781,10 +4781,8 @@
   },
   "readerAnswers": {
     "budgetError": "O orçamento para respostas foi esgotado.",
-    "citation": "¶{paragraph}",
     "expand": "Expandir resposta",
     "explain": "Explicar",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Fazer uma pergunta de acompanhamento",
     "invalidCitations": "{count, plural, one {Não foi possível verificar # citação.} many {Não foi possível verificar # citações.} other {Não foi possível verificar # citações.}}",
     "loading": "Gerando resposta…",

@@ -25,7 +25,7 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { DecisionCitationChip } from "@/components/references/decision-citation-chip";
+import { CitationChip } from "@/components/references/citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
@@ -225,7 +225,8 @@ export const CitedDecisionChip = ({
   };
 
   return (
-    <DecisionCitationChip
+    <CitationChip
+      kind="decision"
       decision={{
         decisionId: decision.id,
         court: decision.court,
