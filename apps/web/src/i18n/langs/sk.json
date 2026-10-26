@@ -4770,6 +4770,7 @@
     "modelError": "Model nedokázal túto odpoveď dokončiť.",
     "networkError": "Spojenie bolo prerušené. Skúste to znova.",
     "regenerate": "Vygenerovať odpoveď znova",
+    "selectionError": "Vyberte text zo samotného rozhodnutia.",
     "send": "Odoslať doplňujúcu otázku",
     "share": "Zdieľať s tímom",
     "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
