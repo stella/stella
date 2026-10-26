@@ -12,6 +12,7 @@ import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
 
+import { checkBudgetMinutes, readCheckBudgets } from "./ci-check-pool-registry";
 import {
   BUN_FLAGS,
   checkDockerSource,
@@ -1504,7 +1505,15 @@ describe("Docker source closure", () => {
     expect(guard).toBeGreaterThan(restore);
     expect(steps[guard]?.if).toContain("steps.install.outcome == 'success'");
     expect(steps[guard]?.if).toContain("package_checks_required == 'true'");
-    expect(steps[guard]?.["timeout-minutes"]).toBe(1);
+    // The pool caps the step at its generated budget; the command's own
+    // `timeout 30s` stays the check's fixed total budget.
+    expect(steps[guard]?.["timeout-minutes"]).toBe(
+      checkBudgetMinutes(
+        readCheckBudgets(),
+        "ci-checks-rest",
+        "Check Docker source closure",
+      ),
+    );
     expect(steps[guard]?.run).toBe(
       "timeout 30s bun test scripts/docker-source-closure.test.ts",
     );
