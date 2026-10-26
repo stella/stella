@@ -8,7 +8,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { compareCodeUnit } from "@stll/collation";
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import {
   caseLawDecisions,
@@ -153,7 +153,7 @@ beforeAll(async () => {
       }),
     ),
   );
-}, DB_TEST_TIMEOUT_MS); // timeout: the full schema push runs on an embedded Postgres
+}, propertyTestTimeout(DB_TEST_TIMEOUT_MS)); // timeout: the full schema push runs on an embedded Postgres
 
 afterAll(async () => {
   await client.close();
@@ -325,7 +325,7 @@ test(
     expect(await loggedMonths()).not.toContain("CZE/2019/07");
     expect(await loggedMonths()).toContain("CZE/2024/06");
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -345,7 +345,7 @@ test(
     ).toEqual(["cze/undated/00", "cze/2021/01", "cze/2020/03"]);
     expect(unsplit.every((shard) => shard.lastmod !== null)).toBe(true);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -374,7 +374,7 @@ test(
     }
     expect(served.size).toBe(BULK_MONTH_DECISIONS);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -418,7 +418,7 @@ test(
       ).length,
     ).toBeGreaterThan(1);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -433,7 +433,7 @@ test(
     expect(shards.some((shard) => shard.year === "2021")).toBe(false);
     expect(shards.some((shard) => shard.year === "2020")).toBe(true);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 const insertOne = async (
@@ -497,7 +497,7 @@ test(
     expect(await loggedMonths()).toEqual(["XAA/undated/00"]);
     await expectMatchesFullRecount();
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -525,7 +525,7 @@ test(
     );
     expect(await loggedMonths()).toEqual([]);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -562,7 +562,7 @@ test(
     expect(await loggedMonths()).toEqual(["CZE/2023/02", "CZE/2023/03"]);
     await expectMatchesFullRecount();
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -603,7 +603,7 @@ test(
       ),
     ).toBe(false);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -627,7 +627,7 @@ test(
     await expectMatchesFullRecount();
     expect(await loggedMonths()).toEqual([]);
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -660,7 +660,7 @@ test(
     expect(await loggedMonths()).toEqual([]);
     expect(await snapshot()).toEqual(await fullRecount());
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -687,7 +687,7 @@ test(
     expect(runs).toBe(2);
     expect(await snapshot()).toEqual(await fullRecount());
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -709,7 +709,7 @@ test(
     expect(await loggedMonths()).toEqual(["CZE/2014/01"]);
     await expectMatchesFullRecount();
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 /**
@@ -772,7 +772,7 @@ test(
     expect(await loggedMonths()).toEqual(["CZE/2013/01"]);
     await expectMatchesFullRecount();
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test(
@@ -799,7 +799,7 @@ test(
       ).toBe(true);
     }
   },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
 
 test("every refresh statement is budgeted under the pool's idle timeout", () => {
@@ -868,7 +868,7 @@ for (const target of [
           : /Index Cond: \(\(country = .*\) AND \(decision_date >= .*\) AND \(decision_date < .*\)\)/u,
       );
     },
-    DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
+    propertyTestTimeout(DB_TEST_TIMEOUT_MS), // timeout: an embedded Postgres runs each statement and the schema push in WASM
   );
 }
 
@@ -1044,5 +1044,5 @@ test(
       propertyConfig({ numRuns: 25 }),
     );
   },
-  DB_TEST_TIMEOUT_MS * 3, // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres
+  propertyTestTimeout(DB_TEST_TIMEOUT_MS * 3), // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres
 );
