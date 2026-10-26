@@ -804,27 +804,25 @@ const LIST_ITEM_BLOCK_TAGS: ReadonlySet<string> = new Set([
   "ul",
 ]);
 
-const isListItemBlock = (node: AnyNode): node is Element =>
-  isTag(node) &&
-  LIST_ITEM_BLOCK_TAGS.has(node.tagName.toLowerCase()) &&
-  isHtmlBlock(node);
+const isListItemBlock = (node: Element): boolean =>
+  LIST_ITEM_BLOCK_TAGS.has(node.tagName.toLowerCase()) && isHtmlBlock(node);
 
-const isListItemBoundary = (
+const listItemBoundary = (
   state: ParserState,
   node: AnyNode,
-): node is Element => {
+): Element | undefined => {
   if (!isTag(node) || isExcludedHtmlTag(node.tagName.toLowerCase())) {
-    return false;
+    return undefined;
   }
   const cached = state.listItemBoundaries.get(node);
   if (cached !== undefined) {
-    return cached;
+    return cached ? node : undefined;
   }
   const boundary =
     isListItemBlock(node) ||
-    node.children.some((child) => isListItemBoundary(state, child));
+    node.children.some((child) => listItemBoundary(state, child) !== undefined);
   state.listItemBoundaries.set(node, boundary);
-  return boundary;
+  return boundary ? node : undefined;
 };
 
 type ParseListItemContentOptions = {
@@ -847,7 +845,7 @@ const parseListItemContent = ({
 }: ParseListItemContentOptions): string | undefined => {
   let marker = initialMarker;
   const children = item.children;
-  if (!children.some((child) => isListItemBoundary(state, child))) {
+  if (!children.some((child) => listItemBoundary(state, child) !== undefined)) {
     return parseParagraphElement($, state, $(item), marker)
       ? undefined
       : marker;
@@ -869,8 +867,9 @@ const parseListItemContent = ({
       }
     }
   };
-  for (const [index, child] of children.entries()) {
-    if (!isListItemBoundary(state, child)) {
+  for (const [index, node] of children.entries()) {
+    const child = listItemBoundary(state, node);
+    if (child === undefined) {
       continue;
     }
     readInline(index);
@@ -1024,14 +1023,16 @@ const COMMON_COURT_BLOCK_TAGS: ReadonlySet<string> = new Set([
 ]);
 const COMMON_COURT_BLOCK_SELECTOR = [...COMMON_COURT_BLOCK_TAGS].join(", ");
 
-const isCommonCourtBlock = (
+const commonCourtBlock = (
   $: cheerio.CheerioAPI,
   node: AnyNode,
-): node is Element =>
+): Element | undefined =>
   isTag(node) &&
   ((COMMON_COURT_BLOCK_TAGS.has(node.tagName.toLowerCase()) &&
     isHtmlBlock(node)) ||
-    $(node).find(COMMON_COURT_BLOCK_SELECTOR).length > 0);
+    $(node).find(COMMON_COURT_BLOCK_SELECTOR).length > 0)
+    ? node
+    : undefined;
 
 /**
  * A common court's container, read as HTML lays it out: each run of text
@@ -1054,7 +1055,7 @@ function parseCommonCourtChildren(
     parseParagraphElement($, state, wrapper);
   };
   for (const node of root.contents().toArray()) {
-    if (isCommonCourtBlock($, node)) {
+    if (commonCourtBlock($, node) !== undefined) {
       flush();
       parseNode($, state, node);
     } else {
