@@ -5844,6 +5844,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Travail interne"
+    },
+    "week": {
+      "allLogged": "Tout est saisi. Votre nouvelle activité apparaîtra ici au fil de votre travail.",
+      "days": "Jours de la semaine",
+      "entriesTitle": "Temps saisi",
+      "nextWeek": "Semaine suivante",
+      "noActivity": "Rien à saisir pour l’instant. Travaillez dans un dossier et votre activité apparaîtra ici pour être acceptée.",
+      "pendingCount": "{count, plural, one {# suggestion en attente} other {# suggestions en attente}}",
+      "previousWeek": "Semaine précédente",
+      "range": "{start} – {end}",
+      "title": "Ma semaine",
+      "totals": "{logged} saisi · {billable} facturable"
     }
   },
   "translate": {

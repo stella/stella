@@ -5844,6 +5844,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Iekšējais darbs"
+    },
+    "week": {
+      "allLogged": "Viss ir reģistrēts. Jauna aktivitāte parādīsies šeit, kamēr strādājat.",
+      "days": "Nedēļas dienas",
+      "entriesTitle": "Reģistrētais laiks",
+      "nextWeek": "Nākamā nedēļa",
+      "noActivity": "Pagaidām nav ko reģistrēt. Strādājiet lietā, un jūsu aktivitāte parādīsies šeit apstiprināšanai.",
+      "pendingCount": "{count, plural, zero {# ieteikumu} one {# ieteikums} other {# ieteikumi}}",
+      "previousWeek": "Iepriekšējā nedēļa",
+      "range": "{start} – {end}",
+      "title": "Mana nedēļa",
+      "totals": "Reģistrēts: {logged} · apmaksājams: {billable}"
     }
   },
   "translate": {

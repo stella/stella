@@ -5844,6 +5844,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Interní práce"
+    },
+    "week": {
+      "allLogged": "Vše je vykázáno. Nová aktivita se tu objeví, jak budete pracovat.",
+      "days": "Dny v týdnu",
+      "entriesTitle": "Vykázaný čas",
+      "nextWeek": "Další týden",
+      "noActivity": "Zatím není co vykázat. Pracujte ve spisu a vaše aktivita se tu objeví k přijetí.",
+      "pendingCount": "{count, plural, one {# návrh} few {# návrhy} many {# návrhu} other {# návrhů}}",
+      "previousWeek": "Předchozí týden",
+      "range": "{start} – {end}",
+      "title": "Můj týden",
+      "totals": "Vykázáno {logged} · fakturovatelné {billable}"
     }
   },
   "translate": {

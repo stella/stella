@@ -5844,6 +5844,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Sisemine töö"
+    },
+    "week": {
+      "allLogged": "Kõik on kirjendatud. Uus tegevus ilmub siia töö käigus.",
+      "days": "Nädalapäevad",
+      "entriesTitle": "Kirjendatud aeg",
+      "nextWeek": "Järgmine nädal",
+      "noActivity": "Veel pole midagi kirjendada. Töötage toimikus ja teie tegevus ilmub siia kinnitamiseks.",
+      "pendingCount": "{count, plural, one {# ettepanek} other {# ettepanekut}}",
+      "previousWeek": "Eelmine nädal",
+      "range": "{start} – {end}",
+      "title": "Minu nädal",
+      "totals": "Kirjendatud {logged} · arveldatav {billable}"
     }
   },
   "translate": {

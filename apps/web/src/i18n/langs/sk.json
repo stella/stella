@@ -5844,6 +5844,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Interná práca"
+    },
+    "week": {
+      "allLogged": "Všetko je vykázané. Nová aktivita sa tu zobrazí počas práce.",
+      "days": "Dni v týždni",
+      "entriesTitle": "Vykázaný čas",
+      "nextWeek": "Nasledujúci týždeň",
+      "noActivity": "Zatiaľ nie je čo vykázať. Pracujte v spise a vaša aktivita sa tu zobrazí na prijatie.",
+      "pendingCount": "{count, plural, one {# návrh} few {# návrhy} many {# návrhu} other {# návrhov}}",
+      "previousWeek": "Predchádzajúci týždeň",
+      "range": "{start} – {end}",
+      "title": "Môj týždeň",
+      "totals": "Vykázané {logged} · fakturovateľné {billable}"
     }
   },
   "translate": {
