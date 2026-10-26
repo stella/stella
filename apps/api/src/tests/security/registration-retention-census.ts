@@ -551,7 +551,11 @@ export const collectRetentionWrites = ({
           ...(receiver.implements ?? []).map((clause) => clause.expression),
         ];
         for (const type of bases) {
-          const base = type && resolveReference(type, seen);
+          // A class without `extends` has no superclass to search.
+          if (type === null) {
+            continue;
+          }
+          const base = resolveReference(type, seen);
           if (isClassDeclaration(base)) {
             const inherited = classMember(base, name);
             if (inherited) {
