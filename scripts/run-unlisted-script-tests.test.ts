@@ -443,29 +443,39 @@ describe("directory scan coverage", () => {
     });
   });
 
-  test("recognizes a subprocess git ls-files scan", () => {
+  test("recognizes a subprocess git ls-files scan as recursive", () => {
     withTrackedFixture(({ root, tracked }) => {
+      // `git ls-files -- data` also lists data/nested/new.txt once it exists.
       const trace =
         '1 execve("/usr/bin/git", ["git", "ls-files", "--", "data"], 0x0) = 0';
+      for (const declared of [["data/a.txt"], ["data/*"]]) {
+        expect(
+          uncoveredScans({ scanLog: "", trace, declared, tracked, root }),
+        ).toEqual([{ directory: path.join(root, "data"), recursive: true }]);
+      }
       expect(
         uncoveredScans({
           scanLog: "",
           trace,
-          declared: ["data/a.txt"],
-          tracked,
-          root,
-        }),
-      ).toEqual([{ directory: path.join(root, "data") }]);
-      expect(
-        uncoveredScans({
-          scanLog: "",
-          trace,
-          declared: ["data/*"],
+          declared: ["data/**"],
           tracked,
           root,
         }),
       ).toEqual([]);
     });
+  });
+
+  test("a truncated trace record fails instead of escaping verification", () => {
+    const trace =
+      '1 openat(AT_FDCWD</repo>, "apps/web/src/components/a-very-long-"..., O_RDONLY) = 3';
+    expect(() =>
+      undeclaredTracedFiles({
+        trace,
+        closure: new Set(),
+        declared: [],
+        tracked: new Set(),
+      }),
+    ).toThrow("Truncated trace record");
   });
 
   test("resolves subprocess scans against the process working directory", () => {

@@ -322,6 +322,15 @@ const trackedFiles = (): Set<string> => {
   return new Set(result.stdout.toString().split("\0").filter(Boolean));
 };
 
+const TRACE_STRING_LIMIT = 65_535;
+// strace marks a string it cut short with "..." after the closing quote.
+const TRUNCATED_STRING = /"\.\.\./u;
+const assertWholeRecord = (line: string) => {
+  if (TRUNCATED_STRING.test(line)) {
+    panic(`Truncated trace record; raise the strace string limit: ${line}`);
+  }
+};
+
 export const undeclaredTracedFiles = ({
   trace,
   closure,
@@ -336,6 +345,7 @@ export const undeclaredTracedFiles = ({
   const globs = declared.map((pattern) => new Bun.Glob(pattern));
   const opened = new Set<string>();
   for (const line of trace.split("\n")) {
+    assertWholeRecord(line);
     const match =
       /(?:open|openat|openat2|execve)\([^"]*"((?:\\.|[^"])*)"/u.exec(line);
     if (match?.[1] === undefined) {
@@ -479,6 +489,7 @@ const commandScans = (trace: string, initialCwd: string): ScanRecord[] => {
     if (updateWorkingDirectory(line, pid, workingDirectories)) {
       continue;
     }
+    assertWholeRecord(line);
     const call = /execve\([^,]+, \[((?:.|\n)*?)\],/u.exec(line)?.[1];
     if (call === undefined) {
       continue;
@@ -496,13 +507,17 @@ const commandScans = (trace: string, initialCwd: string): ScanRecord[] => {
       operands = (
         separator === -1 ? args.slice(2) : args.slice(separator + 1)
       ).filter((argument) => !argument.startsWith("-"));
-      recursive = operands.length === 0;
+      // A pathspec matches everything below it, so a git listing of a
+      // directory operand is recursive too.
+      recursive = true;
     } else if (gitSubcommand === "grep") {
       const separator = args.indexOf("--");
       operands = separator === -1 ? [] : args.slice(separator + 1);
+      recursive = true;
     } else if (gitSubcommand === "diff" && args.includes("--name-only")) {
       const separator = args.indexOf("--");
       operands = separator === -1 ? [] : args.slice(separator + 1);
+      recursive = true;
     } else if (executable === "find") {
       const findArguments = args.slice(1);
       const expression = findArguments.findIndex(
@@ -625,6 +640,10 @@ const run = async ({
           "strace",
           "-f",
           "-yy",
+          // strace cuts strings at 32 bytes by default; a cut path would
+          // not match a tracked file and escape verification.
+          "-s",
+          String(TRACE_STRING_LIMIT),
           "-e",
           "trace=open,openat,openat2,execve,clone,clone3,fork,vfork,chdir,fchdir",
           "-o",
