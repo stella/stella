@@ -11,6 +11,12 @@ import {
 } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -77,11 +83,15 @@ const waitForFileFieldId = async (
 ) => {
   const result: { fieldId: string | null } = { fieldId: null };
   await expect
-    .poll(async () => {
-      const entity = await readEntity(request, workspaceId, entityId);
-      result.fieldId = findFileFieldForProperty(entity, propertyId)?.id ?? null;
-      return result.fieldId;
-    })
+    .poll(
+      async () => {
+        const entity = await readEntity(request, workspaceId, entityId);
+        result.fieldId =
+          findFileFieldForProperty(entity, propertyId)?.id ?? null;
+        return result.fieldId;
+      },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+    )
     .not.toBeNull();
   if (result.fieldId === null) {
     throw new Error("Saved file field was not created");
@@ -98,21 +108,24 @@ const waitForDocumentContaining = async (
 ) => {
   const result: { xml: string | null } = { xml: null };
   await expect
-    .poll(async () => {
-      const entity = await readEntity(request, workspaceId, entityId);
-      const field = findFileFieldForProperty(entity, propertyId);
-      if (field === undefined) {
-        return false;
-      }
-      const xml = await readDocumentXml(
-        await apiDownloadFileField(request, workspaceId, field.id),
-      );
-      if (!xml.includes(text)) {
-        return false;
-      }
-      result.xml = xml;
-      return true;
-    })
+    .poll(
+      async () => {
+        const entity = await readEntity(request, workspaceId, entityId);
+        const field = findFileFieldForProperty(entity, propertyId);
+        if (field === undefined) {
+          return false;
+        }
+        const xml = await readDocumentXml(
+          await apiDownloadFileField(request, workspaceId, field.id),
+        );
+        if (!xml.includes(text)) {
+          return false;
+        }
+        result.xml = xml;
+        return true;
+      },
+      { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
+    )
     .toBe(true);
   if (result.xml === null) {
     throw new Error("Saved document was not updated");
@@ -228,7 +241,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .poll(
           async () =>
             await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-          {},
+          { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
         )
         .toBe(200);
 
@@ -241,7 +254,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         page.locator(".layout-run-text", {
           hasText: "Stella E2E test document.",
         }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(page.locator("html")).toHaveAttribute(
@@ -263,7 +276,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await expect(evidenceDialog).toBeHidden();
       await expect(
         page.locator('[aria-label="Document content"][contenteditable="true"]'),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await page
         .locator('[aria-label="Document content"][contenteditable="true"]')
@@ -271,7 +284,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       await page.keyboard.type(": Faktura");
       await expect(
         page.locator(".layout-run-text", { hasText: "Důkaz 1" }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const finalizeResponse = page.waitForResponse(
         (response) =>
@@ -303,7 +316,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       );
       await expect(
         page.locator('[aria-label="Document content"][contenteditable="true"]'),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
       await evidenceButton.click();
       const reloadedDialog = page.getByRole("dialog", {
@@ -338,7 +351,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
         .click();
       await expect(
         page.locator(".layout-run-text", { hasText: "Důkaz 2" }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
       const secondFinalizeResponse = page.waitForResponse(
         (response) =>

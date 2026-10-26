@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 test("a word copied from a transcript pastes only that selection", async ({
   page,
@@ -7,14 +8,18 @@ test("a word copied from a transcript pastes only that selection", async ({
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible();
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.fill("Clipboard");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   const transcript = page.getByRole("log");
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
-    {},
-  );
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
 
   const message = transcript.getByText("Clipboard", { exact: true });
   const wordPosition = await message.evaluate((element) => {
@@ -61,7 +66,9 @@ test("composer ignores whole-page HTML when plain text is short or absent", asyn
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible();
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   const html =
     "<main><nav>Unselected navigation</nav><article><p>Unselected thread</p><button>Technical action</button></article><footer>Unselected footer</footer></main>";
   for (const plain of ["Selected word", ""]) {

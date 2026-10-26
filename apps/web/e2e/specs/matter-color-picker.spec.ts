@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
 test("sidebar color picker stays open when custom colors are expanded", async ({
@@ -19,7 +20,9 @@ test("sidebar color picker stays open when custom colors are expanded", async ({
       .locator('[data-sidebar="menu-item"]')
       .filter({ hasText: workspaceName });
     const matterLink = matterItem.getByRole("link", { name: workspaceName });
-    await expect(matterLink).toBeVisible();
+    await expect(matterLink).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
 
     const colorTrigger = matterItem.getByRole("button", {
       name: "Change color",

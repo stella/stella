@@ -62,15 +62,15 @@
 //     budget the property-testing convention owns.
 //
 // no-literal-wait-timeout
-//   A per-call numeric timeout turns an asynchronous condition into a speed
-//   assertion and can be shorter than the suite's shared hang guard.
+//   Testing Library condition waits run under the suite's shared hang guard,
+//   so every per-call timeout is redundant. Playwright waits instead keep
+//   explicit, reviewable budgets as named constants; only bare numeric values
+//   and numeric expressions are rejected there.
 //   Flagged:
 //     Testing Library `waitFor`, `waitForElementToBeRemoved`, and `findBy*` /
-//       `findAllBy*` calls with a numeric `timeout` option
+//       `findAllBy*` calls with any `timeout` option
 //     Playwright `expect.poll`, `toPass`, and locator assertions with a
-//       numeric `timeout` option
-//   Allowed: a site with a `// real-time: <reason>` comment, when elapsed real
-//     time is the behaviour under test.
+//       bare numeric `timeout` option (including numeric expressions)
 //
 // Existing sites are budgeted per file, enclosing function and spelling in
 // scripts/test-timing-ledger.json (no line numbers, a reason per row). A hit
@@ -216,25 +216,6 @@ const hasTaggedCommentInAncestors = (lookup: TaggedLookup): boolean => {
     node = node.parent;
   }
   return false;
-};
-
-const hasNearbyTaggedComment = ({
-  node,
-  pattern,
-  text,
-}: TaggedLookup): boolean => {
-  if (!isAstNode(node)) {
-    return false;
-  }
-  const start = lineStartOf(text, node.range[0]);
-  const previousStart = start === 0 ? 0 : lineStartOf(text, start - 1);
-  return text
-    .slice(previousStart, lineEndOf(text, node.range[1]))
-    .split("\n")
-    .some((line) => {
-      const marker = line.indexOf("//");
-      return marker !== -1 && pattern.test(line.slice(marker + 2));
-    });
 };
 
 // --- Waits -------------------------------------------------------------------
@@ -957,9 +938,9 @@ const memberChainNames = (node: unknown): string[] => {
 type LiteralWaitTimeout = { node: AstNode; pattern: string };
 
 const literalTimeoutOption = (
-  context: ScopeContext,
   options: unknown,
   pattern: string,
+  mode: "any" | "bare-number",
 ): LiteralWaitTimeout | null => {
   const object = unwrapExpression(options);
   if (!isAstNode(object) || object.type !== "ObjectExpression") {
@@ -967,9 +948,27 @@ const literalTimeoutOption = (
   }
   const timeout = optionValue(object, "timeout");
   const node = unwrapExpression(timeout);
-  return isAstNode(node) && staticNumber(context, node) !== null
-    ? { node, pattern }
-    : null;
+  if (!isAstNode(node)) {
+    return null;
+  }
+  if (mode === "any") {
+    return { node, pattern };
+  }
+  const isBareNumber = (candidate: unknown): boolean => {
+    const expression = unwrapExpression(candidate);
+    if (!isAstNode(expression)) {
+      return false;
+    }
+    return (
+      (expression.type === "Literal" && typeof expression.value === "number") ||
+      (expression.type === "BinaryExpression" &&
+        typeof expression.operator === "string" &&
+        Object.hasOwn(ARITHMETIC, expression.operator) &&
+        isBareNumber(expression.left) &&
+        isBareNumber(expression.right))
+    );
+  };
+  return isBareNumber(node) ? { node, pattern } : null;
 };
 
 const literalWaitTimeout = (
@@ -983,23 +982,24 @@ const literalWaitTimeout = (
     return null;
   }
   if (method === "waitFor" || method === "waitForElementToBeRemoved") {
-    return literalTimeoutOption(context, args.at(1), method);
+    return literalTimeoutOption(args.at(1), method, "any");
   }
   if (/^find(?:All)?By\p{Lu}/u.test(method)) {
-    return literalTimeoutOption(context, args.at(2), method);
+    return literalTimeoutOption(args.at(2), method, "any");
   }
   const expectBinding = resolveImportedExpressionForEnforcement(
     context,
     ownNodes(call.callee).find((node) => isIdentifier(node, "expect")),
   );
   const playwrightExpect =
-    expectBinding?.source === "@playwright/test" &&
-    expectBinding.imported === "expect";
+    expectBinding?.imported === "expect" &&
+    (expectBinding.source === "@playwright/test" ||
+      /(?:^|\/)helpers\/test$/u.test(expectBinding.source));
   if (playwrightExpect && method === "poll" && names.at(-2) === "expect") {
-    return literalTimeoutOption(context, args.at(1), "expect.poll");
+    return literalTimeoutOption(args.at(1), "expect.poll", "bare-number");
   }
   if (playwrightExpect && (method === "toPass" || /^to\p{Lu}/u.test(method))) {
-    return literalTimeoutOption(context, args.at(-1), method);
+    return literalTimeoutOption(args.at(-1), method, "bare-number");
   }
   return null;
 };
@@ -1227,11 +1227,10 @@ export default eslintCompatPlugin({
         schema: [],
         messages: {
           timeout:
-            "`{{pattern}}` uses a numeric per-call timeout, which turns a condition wait into a speed assertion. Remove it and use the suite's shared hang guard; when real time is the behaviour under test, say so with `// real-time: <reason>`.",
+            "`{{pattern}}` uses a disallowed per-call timeout. DOM condition waits use the suite's shared hang guard; Playwright waits express numeric budgets as named constants.",
         },
       },
       createOnce(context) {
-        let comments: readonly SourceComment[] | null = null;
         return {
           CallExpression(call) {
             const node: unknown = call;
@@ -1240,25 +1239,6 @@ export default eslintCompatPlugin({
             }
             const timeout = literalWaitTimeout(context, node);
             if (timeout === null) {
-              return;
-            }
-            comments ??= context.sourceCode
-              .getAllComments()
-              .filter(isSourceComment);
-            if (
-              hasNearbyTaggedComment({
-                comments,
-                node,
-                pattern: REAL_TIME_REASON,
-                text: context.sourceCode.text,
-              }) ||
-              hasTaggedCommentInAncestors({
-                comments,
-                node: timeout.node,
-                pattern: REAL_TIME_REASON,
-                text: context.sourceCode.text,
-              })
-            ) {
               return;
             }
             context.report({

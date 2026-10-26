@@ -6,6 +6,10 @@ import { assertSsrDocument } from "@stll/ssr-testkit";
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { findChromeDividerProblems } from "../helpers/chrome-divider";
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS,
+} from "../helpers/wait-budgets";
 
 const PUBLIC_SSR_TIMEOUT_MS = 45_000;
 const identityValue = v.pipe(v.string(), v.nonEmpty());
@@ -178,8 +182,10 @@ test("anonymous visitors can search and browse by legal task", async ({
   await expect(async () => {
     await search.fill("");
     await search.fill("Companies House");
-    await expect(page.getByText("1 result", { exact: true })).toBeVisible();
-  }).toPass();
+    await expect(page.getByText("1 result", { exact: true })).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_1_SECOND_MS,
+    });
+  }).toPass({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_15_SECONDS_MS });
   await expect(
     page.getByRole("link", { name: /Companies House/u }),
   ).toBeVisible();

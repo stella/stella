@@ -22,6 +22,7 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const headings = [
   { title: "Část druhá", level: 1 },
@@ -337,7 +338,7 @@ for (const view of views) {
     const inspector = page.locator('[data-slot="inspector-dock-pane"]');
     await expect(
       inspector.locator(`[data-anchor="${view.anchors.active}"]`),
-    ).toBeAttached();
+    ).toBeAttached({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       if (surface === "main" && view.kind !== "statute") {

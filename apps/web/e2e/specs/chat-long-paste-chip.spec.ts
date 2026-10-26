@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 for (const pointer of ["fine", "coarse"]) {
   test.describe(`${pointer} pointer attachment controls`, () => {
@@ -11,7 +12,9 @@ for (const pointer of ["fine", "coarse"]) {
         const composer = page.locator(
           '[role="textbox"][contenteditable="true"]',
         );
-        await expect(composer).toBeVisible();
+        await expect(composer).toBeVisible({
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+        });
         const text = `Pasted contract excerpt\r\n\t${"A".repeat(1501)}\n `;
         const paste = async () => {
           await composer.evaluate((element, content) => {

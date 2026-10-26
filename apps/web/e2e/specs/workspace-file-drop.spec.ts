@@ -4,6 +4,11 @@ import path from "node:path";
 import { apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -68,6 +73,7 @@ const openFilesView = async (
         await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
       {
         message: "browser context can read the created workspace",
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
       },
     )
     .toBe(200);
@@ -127,7 +133,7 @@ test.describe("workspace file drop", () => {
     await openFilesView(page, request, testWorkspace);
     await expect(
       page.getByRole("heading", { name: "Upload your first documents" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 
     const shellContent = page.locator('[data-slot="workspace-shell-content"]');
     const dropZone = shellContent.locator(
@@ -159,7 +165,7 @@ test.describe("workspace file drop", () => {
     // exactly one also fails if the drop created the file twice.
     await expect(
       shellContent.getByRole("button", { name: /^simple\.docx\b/u }),
-    ).toHaveCount(1);
+    ).toHaveCount(1, { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS });
   });
   test("a native file dropped on a folder row uploads into that folder", async ({
     page,
@@ -176,7 +182,9 @@ test.describe("workspace file drop", () => {
 
     await openFilesView(page, request, testWorkspace);
     const folderLabel = page.getByTitle(folderName, { exact: true });
-    await expect(folderLabel).toBeVisible();
+    await expect(folderLabel).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     const folderBox = await folderLabel.boundingBox();
     if (folderBox === null) {
       throw new Error("Folder row geometry is unavailable");
@@ -202,7 +210,7 @@ test.describe("workspace file drop", () => {
       page
         .locator('[data-slot="workspace-shell-content"]')
         .getByRole("button", { name: /^simple\.docx\b/u }),
-    ).toHaveCount(1);
+    ).toHaveCount(1, { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS });
   });
 
   test("the keyboard upload inside a folder still targets that folder", async ({
@@ -220,7 +228,9 @@ test.describe("workspace file drop", () => {
 
     await openFilesView(page, request, testWorkspace);
     const folderLabel = page.getByTitle(folderName, { exact: true });
-    await expect(folderLabel).toBeVisible();
+    await expect(folderLabel).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await folderLabel.dblclick();
 
     const shellContent = page.locator('[data-slot="workspace-shell-content"]');

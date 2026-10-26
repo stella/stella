@@ -1,4 +1,8 @@
 import { expect, test } from "../helpers/test";
+import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
 
 // A long, fast keystroke burst. Under the editor-update loop class this spec
 // guards, per-keystroke draft persistence re-rendered the composer, the react
@@ -29,7 +33,9 @@ test("anonymized-mode typing keeps every keystroke and paints highlights", async
   const composer = page.getByRole("textbox", { name: /type your question/iu });
   // First locator after navigation: a cold server can compile the chat route
   // chunk on demand, exceeding the default expect timeout.
-  await expect(composer).toBeVisible();
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
 
   // Enabling anonymized mode also warms up the wasm worker, so the pipeline
   // loads while the burst below is being typed.
@@ -52,7 +58,7 @@ test("anonymized-mode typing keeps every keystroke and paints highlights", async
   // cold, hence the generous timeout on the first highlight.
   const highlights = composer.locator(".stll-anon-highlight");
   await expect(highlights.filter({ hasText: "Jan Novák" }).first()).toBeVisible(
-    {},
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS },
   );
   await expect(
     highlights.filter({ hasText: "jan.novak@example.com" }).first(),

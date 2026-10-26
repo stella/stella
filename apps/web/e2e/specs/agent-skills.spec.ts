@@ -11,6 +11,7 @@ import * as v from "valibot";
 import { apiDelete, apiGet, apiStatus, E2E_API_ORIGIN } from "../helpers/api";
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 const AGENT_SKILLS_TEST_TIMEOUT_MS = 180_000;
@@ -83,7 +84,9 @@ const createSkillFromBlueprint = async ({
 }: CreateFromBlueprintOptions): Promise<string> => {
   await page.goto("/knowledge/tools?kind=skill", { waitUntil: "commit" });
   const addCustom = page.getByRole("button", { name: "Add custom" });
-  await expect(addCustom).toBeVisible();
+  await expect(addCustom).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await addCustom.click();
   await page.getByRole("menuitem", { name: "Add skill" }).click();
 
@@ -101,7 +104,9 @@ const createSkillFromBlueprint = async ({
     .getByRole("button", { name: new RegExp(blueprint, "u") })
     .click();
 
-  await expect(page).toHaveURL(SKILL_URL_PATTERN);
+  await expect(page).toHaveURL(SKILL_URL_PATTERN, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   return skillIdFromUrl(page);
 };
 
@@ -158,7 +163,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     });
     const enableSkill = page.getByRole("button", { name: "Enable skill" });
     const disableSkill = page.getByRole("button", { name: "Disable skill" });
-    await expect(name).toBeEditable();
+    await expect(name).toBeEditable({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(page.getByText("Everyone in the team")).toBeVisible();
     await commitSkillField({
       field: name,
@@ -180,7 +187,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     await expect(enableSkill).toHaveCount(0);
 
     await page.reload({ waitUntil: "commit" });
-    await expect(name).toHaveValue(teamSkillName);
+    await expect(name).toHaveValue(teamSkillName, {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(description).toHaveValue(teamSkillDescription);
     await expect(disableSkill).toBeVisible();
 
@@ -197,7 +206,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     const composer = page.getByRole("textbox", {
       name: /type your question/iu,
     });
-    await expect(composer).toBeVisible();
+    await expect(composer).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await composer.click();
     await composer.pressSequentially(`/${token}`);
     // "/" opens the composer menu's Skills submenu; the typed text filters it.
@@ -209,17 +220,23 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     await expect(composer).toContainText(teamSkillName);
     await composer.pressSequentially(" Review the indemnity clause.");
     await page.getByRole("button", { name: "Send message" }).click();
-    await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
+    await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
 
     const transcript = page.getByRole("log");
     const retry = transcript.getByRole("button", { name: "Retry" });
     const resend = transcript.getByRole("button", { name: "Resend" });
-    await expect(transcript.getByText(teamSkillName)).toBeVisible();
+    await expect(transcript.getByText(teamSkillName)).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(
       transcript.getByText("Review the indemnity clause."),
     ).toBeVisible();
     await expect(transcript.getByText(/stella-skill-ref/u)).toHaveCount(0);
-    await expect(retry).toBeVisible();
+    await expect(retry).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(resend).toHaveCount(0);
     await expect.poll(skillReads).toBe(1);
 
@@ -234,7 +251,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     );
     await expect(
       page.getByRole("heading", { name: teamSkillName, exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 
     // 3. A member opens the team skill read-only: no enable control, and no
     //    field accepts edits.
@@ -260,7 +277,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
         name: "Name",
         exact: true,
       });
-      await expect(memberName).toHaveValue(teamSkillName);
+      await expect(memberName).toHaveValue(teamSkillName, {
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
       await expect(memberName).not.toBeEditable();
       await expect(
         memberPage.getByRole("textbox", { name: "Description", exact: true }),
@@ -278,7 +297,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
       const memberAddCustom = memberPage.getByRole("button", {
         name: "Add custom",
       });
-      await expect(memberAddCustom).toBeVisible();
+      await expect(memberAddCustom).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
       await memberAddCustom.click();
       await memberPage.getByRole("menuitem", { name: "Add skill" }).click();
       const memberGallery = memberPage.getByRole("dialog", {
@@ -292,14 +313,18 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
         memberGallery.getByRole("combobox", { name: "Visibility" }),
       ).toContainText("Only me");
       await answerFromSources.click();
-      await expect(memberPage).toHaveURL(SKILL_URL_PATTERN);
+      await expect(memberPage).toHaveURL(SKILL_URL_PATTERN, {
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
       privateSkillId = skillIdFromUrl(memberPage);
 
       const privateName = memberPage.getByRole("textbox", {
         name: "Name",
         exact: true,
       });
-      await expect(privateName).toBeEditable();
+      await expect(privateName).toBeEditable({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+      });
       // The visibility badge and the availability summary both say "Only me"
       // for a private, unbound skill; assert the summary itself.
       await expect(
@@ -321,7 +346,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
         memberPage.getByRole("button", {
           name: new RegExp(escapeRegExp(privateSkillName), "u"),
         }),
-      ).toBeVisible();
+      ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
     } finally {
       detachMemberErrors();
       await memberContext.close();
@@ -332,7 +357,9 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
     const teamSkillRow = page.getByRole("button", {
       name: new RegExp(escapeRegExp(teamSkillName), "u"),
     });
-    await expect(teamSkillRow).toBeVisible();
+    await expect(teamSkillRow).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await teamSkillRow.getByRole("button", { name: "Remove" }).click();
     const confirmation = page.getByRole("alertdialog");
     await expect(confirmation).toContainText(teamSkillName);

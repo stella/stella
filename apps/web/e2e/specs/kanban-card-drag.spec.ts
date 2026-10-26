@@ -4,6 +4,10 @@ import { randomUUID } from "node:crypto";
 import { apiGet, apiPut, apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -74,6 +78,7 @@ test.describe("kanban card drag", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -87,7 +92,9 @@ test.describe("kanban card drag", () => {
 
     const openColumn = column("Open");
     const inProgressColumn = column("In progress");
-    await expect(openColumn).toBeVisible();
+    await expect(openColumn).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await expect(inProgressColumn).toBeVisible();
 
     const card = openColumn.getByText(cardName, { exact: true });

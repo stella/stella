@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { apiDeleteStatus, apiGet, apiUploadDocx } from "../helpers/api";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -40,12 +41,14 @@ const expectCollaborativeDocumentReady = async ({
   // Publication is enabled only after the editor has joined and synced.
   await expect(
     page.getByRole("button", { exact: true, name: "Create version" }).first(),
-  ).toBeEnabled();
+  ).toBeEnabled({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
   await expect(
     page.getByRole("status").filter({ hasText: "Synced" }).first(),
   ).toBeVisible();
   await expect
-    .poll(async () => await readDocumentText(page))
+    .poll(async () => await readDocumentText(page), {
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+    })
     .toContain(expectedText);
 };
 
@@ -208,7 +211,9 @@ test.describe("lockless DOCX collaboration", () => {
         collaboratorPage.keyboard.insertText(whilePublishingToken),
       ]);
       expect((await publishResponse).ok()).toBe(true);
-      await expect(page.getByText("Version created").first()).toBeVisible();
+      await expect(page.getByText("Version created").first()).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+      });
 
       await expect
         .poll(async () => await readDocumentText(page))
@@ -284,7 +289,9 @@ test.describe("lockless DOCX collaboration", () => {
         .first()
         .click();
       expect((await secondPublishResponse).ok()).toBe(true);
-      await expect(page.getByText("Version created").first()).toBeVisible();
+      await expect(page.getByText("Version created").first()).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+      });
       await expect
         .poll(async () => await readDocumentText(rejoinedPage))
         .toContain(secondToken);

@@ -11,6 +11,12 @@ import {
 } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -108,6 +114,7 @@ test.describe("DOCX upload + inspector", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -124,14 +131,18 @@ test.describe("DOCX upload + inspector", () => {
     // tab before opening the uploaded file so this remains a client-side user
     // transition instead of falling back to a direct document URL.
     const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible();
+    await expect(tableTab).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await tableTab.click();
 
     const fileButton = page.getByRole("button", {
       exact: true,
       name: "stella-e2e.docx",
     });
-    await expect(fileButton).toBeVisible();
+    await expect(fileButton).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
 
     await fileButton.click({ button: "right" });
     const translateAction = page.getByRole("menuitem", {
@@ -157,7 +168,7 @@ test.describe("DOCX upload + inspector", () => {
     // would pass if its local error boundary had silently removed the overlay.
     await expect(
       page.getByRole("toolbar", { name: "AI message composer" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
     // Positive proof the viewer actually rendered: the fixture's first
     // paragraph appears in the painted layout. This catches render crashes
@@ -176,7 +187,9 @@ test.describe("DOCX upload + inspector", () => {
       hasText: "Stella E2E test document.",
     });
     try {
-      await expect(docxText).toBeVisible();
+      await expect(docxText).toBeVisible({
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+      });
     } catch (error) {
       // Surface any errors collected so far — they're usually the real cause
       // of the viewer never mounting (network failure, render crash caught
@@ -236,6 +249,7 @@ test.describe("DOCX upload + inspector", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
         },
       )
       .toBe(200);
@@ -249,18 +263,20 @@ test.describe("DOCX upload + inspector", () => {
 
     await expect(
       page.locator('[aria-label="Document content"][contenteditable="true"]'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS });
 
     const firstParagraphText = page.locator(".layout-run-text", {
       hasText: "Stella E2E test document.",
     });
-    await expect(firstParagraphText).toBeVisible();
+    await expect(firstParagraphText).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+    });
 
     await firstParagraphText.click();
     await page.keyboard.type(editToken);
     await expect(
       page.locator(".layout-run-text", { hasText: editToken }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS });
 
     const finalizeResponse = page.waitForResponse(
       (response) =>
@@ -290,6 +306,7 @@ test.describe("DOCX upload + inspector", () => {
         },
         {
           message: "saved DOCX version appears on the entity",
+          timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
         },
       )
       .not.toBeNull();

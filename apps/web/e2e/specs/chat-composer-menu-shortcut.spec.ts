@@ -1,6 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 // "/" opens the Skills list as a standalone popup, not as the (+) root menu
 // with a submenu forced open: a shortcut leaves the pointer wherever the caret
@@ -12,7 +13,9 @@ test("the slash shortcut opens a Skills popup that survives pointer movement", a
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible();
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.click();
   await page.keyboard.press("/");
 
@@ -94,7 +97,9 @@ test("the at-sign shortcut opens a Context popup and hands focus back on Escape"
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible();
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.click();
   await page.keyboard.press("@");
 
@@ -115,7 +120,9 @@ test("the pickers open wherever a word starts and stay literal inside one", asyn
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible();
+  await expect(composer).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   await composer.click();
 
   // Inside a word the character types normally.

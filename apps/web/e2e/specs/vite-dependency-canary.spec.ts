@@ -87,14 +87,16 @@ const mountChatIndex = async (page: Page): Promise<void> => {
   await page.goto("/chat", { waitUntil: "commit" });
   await expect(
     page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
 };
 
 const mountChatThread = async (page: Page): Promise<void> => {
   // The thread route is a separate lazy chunk. A missing record is valid for
   // this dependency check; the route deliberately supports an empty thread.
   await page.goto(`/chat/${randomUUID()}`, { waitUntil: "commit" });
-  await expect(page.getByRole("log")).toBeVisible();
+  await expect(page.getByRole("log")).toBeVisible({
+    timeout: ROUTE_READY_TIMEOUT_MS,
+  });
 };
 
 const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
@@ -103,12 +105,12 @@ const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
   await page.goto(route, { waitUntil: "commit" });
   await expect(
     page.getByRole("toolbar", { name: "AI message composer" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
   await expect(
     page.locator(".layout-run-text", {
       hasText: "Stella E2E test document.",
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
 };
 
 const mountAutocomplete = async (page: Page): Promise<void> => {
@@ -117,7 +119,7 @@ const mountAutocomplete = async (page: Page): Promise<void> => {
     page.getByRole("heading", {
       name: "stella autocomplete — dev playground",
     }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
 };
 
 const isTemporalImplementationRequest = (url: string): boolean =>

@@ -3,6 +3,10 @@ import type { Page } from "@playwright/test";
 import { apiStatus } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 import {
+  PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
+  PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+} from "../helpers/wait-budgets";
+import {
   createTestWorkspace,
   deleteTestWorkspace,
   type TestWorkspace,
@@ -10,7 +14,9 @@ import {
 
 const openSearch = async (page: Page, route = "/workspaces") => {
   await page.goto(route, { waitUntil: "commit" });
-  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible();
+  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
 
   const modifier = await page.evaluate(() =>
     navigator.platform.includes("Mac") ? "Meta" : "Control",
@@ -18,7 +24,9 @@ const openSearch = async (page: Page, route = "/workspaces") => {
   await page.keyboard.press(`${modifier}+k`);
 
   const input = page.getByRole("combobox").first();
-  await expect(input).toBeVisible();
+  await expect(input).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+  });
   return input;
 };
 
@@ -164,7 +172,7 @@ test.describe("global create actions", () => {
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        {},
+        { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS },
       )
       .toBe(200);
 
@@ -214,7 +222,9 @@ test.describe("global create actions", () => {
     await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
       waitUntil: "domcontentloaded",
     });
-    await expect(page.locator('[data-slot="sidebar"]')).toBeVisible();
+    await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
 
     const input = await openSearch(page, `/workspaces/${testWorkspace.id}`);
     const taskAction = page.locator(
@@ -223,7 +233,9 @@ test.describe("global create actions", () => {
     await expect(taskAction).toBeVisible();
     await expect(input).toHaveValue("");
     await taskAction.click();
-    await expect(page.getByPlaceholder("Untitled task")).toBeVisible();
+    await expect(page.getByPlaceholder("Untitled task")).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
 
     const uploadInput = await openSearch(
       page,

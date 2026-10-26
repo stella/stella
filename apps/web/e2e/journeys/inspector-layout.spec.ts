@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -99,12 +100,14 @@ const expectDocumentOpen = async (page: Page, dock: Locator) => {
   await expect(dock).toHaveAttribute("data-state", DOCK_STATE.expanded);
   await expect(
     page.locator(".layout-run-text", { hasText: FIXTURE_TEXT }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS });
 };
 
 const reloadAndRestore = async (page: Page, dock: Locator) => {
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(dock).toBeVisible();
+  await expect(dock).toBeVisible({
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS,
+  });
   await expectInteractive(page);
   if ((await dock.getAttribute("data-state")) === DOCK_STATE.collapsed) {
     await paneToggle(dock, messages.inspector.showPane).click();

@@ -18,6 +18,7 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { installDockedChatPageFixtures } from "../helpers/docked-chat-page-fixtures";
 import { expect, test as base } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS } from "../helpers/wait-budgets";
 
 const { hosts, providerSources } = readDockedChatHosts();
 const viewports = [
@@ -89,7 +90,9 @@ const expectDockGeometry = async (page: Page) => {
     .filter({
       has: page.getByRole("dialog", { name: messages.chat.aiThread }),
     });
-  await expect(thread).toHaveCount(1);
+  await expect(thread).toHaveCount(1, {
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_45_SECONDS_MS,
+  });
   const card = thread.getByRole("dialog", { name: messages.chat.aiThread });
   await expect(card).toContainText("Saved geometry test answer.");
   await expect

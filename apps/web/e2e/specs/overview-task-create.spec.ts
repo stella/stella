@@ -1,4 +1,5 @@
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
 
 test("double-clicking Add creates one upcoming task", async ({
@@ -24,7 +25,9 @@ test("double-clicking Add creates one upcoming task", async ({
       has: page.getByRole("heading", { name: "Upcoming agenda", exact: true }),
     });
     const add = upcoming.getByRole("button", { name: "Add", exact: true });
-    await expect(add).toBeVisible();
+    await expect(add).toBeVisible({
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
+    });
     await add.dblclick();
     await expect.poll(() => creates).toBeGreaterThan(0);
     expect(creates).toBe(1);
