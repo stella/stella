@@ -123,6 +123,8 @@
     "scripts/check-test-input-coverage.ts",
     "scripts/check-test-retries.test.ts",
     "scripts/check-test-retries.ts",
+    "scripts/check-tracked-file-sizes.test.ts",
+    "scripts/check-tracked-file-sizes.ts",
     "scripts/check-web-docker-platform.test.ts",
     "scripts/check-workflow-shells.test.ts",
     "scripts/check-workflow-shells.ts",

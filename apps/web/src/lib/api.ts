@@ -50,7 +50,7 @@ export const webApiClientOptions = {
     await waitForSimulatedApiDelay();
   },
   headers: getApiRequestHeaders,
-  async onResponse(response: Response) {
+  async onScopedResponse({ response, scope }) {
     await reportUnhandledMeResponse(response, reportUserVisibleError);
     await observeActionAdmissionResponse(response, {
       // Only a refusal is announced here; the caller's own handler owns every
@@ -59,7 +59,10 @@ export const webApiClientOptions = {
         actionAdmissionOutcome(error) !== undefined &&
         notifyUserError(error, getTranslator()("errors.actionFailed")),
       captureError: (error) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "onResponse:failure",
+          scope,
+        });
       },
     });
   },

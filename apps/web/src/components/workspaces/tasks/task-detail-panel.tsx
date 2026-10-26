@@ -173,7 +173,10 @@ const TaskDetailPanelContent = ({
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure",
+        scope: { type: "handler", handlerId: "TaskDetailPanelContent:failure" },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -209,7 +212,13 @@ const TaskDetailPanelContent = ({
       await invalidateWorkflow();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "TaskDetailPanelContent:failure-2",
+        },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -244,7 +253,13 @@ const TaskDetailPanelContent = ({
       await invalidateWorkflow();
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TaskDetailPanelContent:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "TaskDetailPanelContent:failure-3",
+        },
+      });
       notifyUserError(error, tCommon("unexpectedError"));
     },
   });
@@ -274,7 +289,13 @@ const TaskDetailPanelContent = ({
                     userId: toSafeId<"user">(userId),
                   });
                 if (response.error) {
-                  analytics.captureError(toAPIError(response.error));
+                  analytics.captureError(toAPIError(response.error), {
+                    fingerprintKey: "TaskDetailPanelContent:failure-4",
+                    scope: {
+                      type: "handler",
+                      handlerId: "TaskDetailPanelContent:failure-4",
+                    },
+                  });
                   await queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),
                   });
@@ -292,7 +313,13 @@ const TaskDetailPanelContent = ({
                   }),
                 ]);
               } catch (error: unknown) {
-                analytics.captureError(error);
+                analytics.captureError(error, {
+                  fingerprintKey: "TaskDetailPanelContent:failure-5",
+                  scope: {
+                    type: "handler",
+                    handlerId: "TaskDetailPanelContent:failure-5",
+                  },
+                });
                 detached(
                   queryClient.invalidateQueries({
                     queryKey: taskKeys.detail(workspaceId, taskId),

@@ -48,6 +48,42 @@ test("archive action lint rewrites are one-to-one and preserve workflow semantic
   expect(normalized).toContain("run: echo '$/.github/actions/ci-install'");
 });
 
+test("archive normalization preserves shared step aliases and repeated references", () => {
+  const source = `jobs:
+  first:
+    steps: &shared
+      - uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile"]'
+  second:
+    steps: *shared
+  third:
+    steps:
+      - uses: $/.github/actions/ci-install
+`;
+  const normalized = actionlintWorkflowSource({
+    source,
+    root: ROOT,
+    file: "fixture.yml",
+  });
+  expect(normalized).toBe(source.replaceAll("uses: $/", "uses: ./"));
+  const expected = Bun.YAML.parse(source.replaceAll("uses: $/", "uses: ./"));
+  expect(Bun.YAML.parse(normalized)).toEqual(expected);
+});
+
+test("archive normalization never rewrites text inside a script body", () => {
+  const source = `jobs:
+  check:
+    steps:
+      - uses: $/.github/actions/ci-install
+      - run: |
+          uses: $/.github/actions/ci-install
+`;
+  expect(() =>
+    actionlintWorkflowSource({ source, root: ROOT, file: "fixture.yml" }),
+  ).toThrow("normalization must be one-to-one");
+});
+
 test("archive normalization preserves scalar spelling, indentation and line endings", () => {
   for (const quote of ["", "'", '"']) {
     for (const newline of ["\n", "\r\n"]) {

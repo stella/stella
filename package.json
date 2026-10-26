@@ -133,7 +133,7 @@
     "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
-    "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
+    "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts >&2 && knip-bun",
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",
@@ -326,7 +326,6 @@
     "@stll/regex-set@1.0.5": "patches/@stll%2Fregex-set@1.0.5.patch",
     "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
     "mailauth@7.1.1": "patches/mailauth@7.1.1.patch",
-    "@astrojs/mdx@7.0.7": "patches/@astrojs__mdx@7.0.7.patch",
     "drizzle-kit@1.0.0-rc.4": "patches/drizzle-kit@1.0.0-rc.4.patch",
     "better-call@1.4.0": "patches/better-call@1.4.0.patch",
     "@better-auth/oauth-provider@1.7.6": "patches/@better-auth%2Foauth-provider@1.7.6.patch",
@@ -343,7 +342,8 @@
     "@tanstack/ai-openrouter@0.21.1": "patches/@tanstack%2Fai-openrouter@0.21.1.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
     "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch",
-    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch"
+    "oxlint-tailwindcss@1.16.0": "patches/oxlint-tailwindcss@1.16.0.patch",
+    "@astrojs/mdx@8.0.0": "patches/@astrojs%2Fmdx@8.0.0.patch"
   },
   "trustedDependencies": [
     "lefthook"

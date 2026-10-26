@@ -24,6 +24,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { cents } from "@/api/lib/money";
@@ -113,7 +114,7 @@ afterEach(async () => {
 });
 afterAll(releaseRlsFixture);
 
-const context = <TContext>(
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   body: unknown,
   {
