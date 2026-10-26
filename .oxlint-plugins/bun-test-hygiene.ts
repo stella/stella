@@ -49,6 +49,15 @@
 //   holds its connections for the rest of the run. Tests open them through
 //   `apps/api/src/tests/gated-test-database.ts`, which closes every client it
 //   opens; the lint config exempts that module.
+//
+// require-module-mock-reset
+//   A file that creates `mock(...)`, `mock.module(...)`, or `spyOn(...)` at
+//   module scope must call `mock.restore()` in a file-level `beforeEach` or
+//   `afterEach`. Bun's `mock.clearAllMocks()` only clears call history: it
+//   leaves implementations installed by `mockImplementation` and
+//   `mockReturnValue` in place. The hook must therefore restore globally and
+//   re-install any file defaults there. A describe-local hook is insufficient
+//   because it cannot protect sibling or subsequently added suites.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -68,6 +77,8 @@ import type { AstNode, FilenameContext, ScopeContext } from "./utils.ts";
 
 const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
+const MODULE_MOCK_EXPORTS = new Set(["mock", "spyOn"]);
+const FILE_HOOK_EXPORTS = new Set(["beforeEach", "afterEach"]);
 
 const FORCED_DATABASE_DROP =
   /(?:^|;)\s*DROP\s+DATABASE\b[^;]*(?:\bWITH\s*)?\(\s*FORCE\b/iu;
@@ -456,6 +467,65 @@ const enclosingBlock = (node: AstNode): EnclosingBlock => {
 const mentionsBunTest = (text: string): boolean =>
   text.includes(BUN_TEST_MODULE);
 
+const isProgram = (node: unknown): boolean =>
+  isAstNode(node) && node.type === "Program";
+
+const bunTestExport = (context: ScopeContext, node: unknown): string | null => {
+  const binding = resolveImportedExpressionForEnforcement(context, node);
+  return binding?.source === BUN_TEST_MODULE ? binding.imported : null;
+};
+
+const isModuleMockCreation = (
+  context: ScopeContext,
+  node: AstNode,
+): boolean => {
+  const callee = unwrapExpression(node.callee);
+  const directExport = bunTestExport(context, callee);
+  if (directExport !== null && MODULE_MOCK_EXPORTS.has(directExport)) {
+    return true;
+  }
+  return (
+    isAstNode(callee) &&
+    callee.type === "MemberExpression" &&
+    memberPropertyName(callee) === "module" &&
+    bunTestExport(context, callee.object) === "mock"
+  );
+};
+
+const isFileLevelMockRestore = (
+  context: ScopeContext,
+  node: AstNode,
+): boolean => {
+  const callee = unwrapExpression(node.callee);
+  if (
+    !isAstNode(callee) ||
+    callee.type !== "MemberExpression" ||
+    memberPropertyName(callee) !== "restore" ||
+    bunTestExport(context, callee.object) !== "mock"
+  ) {
+    return false;
+  }
+  let current: unknown = node;
+  while (isAstNode(current)) {
+    if (FUNCTION_TYPES.has(current.type)) {
+      const callback = current;
+      const hookCall = callback.parent;
+      if (
+        !isAstNode(hookCall) ||
+        hookCall.type !== "CallExpression" ||
+        !Array.isArray(hookCall.arguments) ||
+        !hookCall.arguments.includes(callback) ||
+        !FILE_HOOK_EXPORTS.has(bunTestExport(context, hookCall.callee) ?? "")
+      ) {
+        return false;
+      }
+      return isProgram(enclosingBlock(hookCall).node);
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
 // Exports that open a database connection pool when constructed, by module.
 const CLIENT_CONSTRUCTORS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["bun", new Set(["SQL"])],
@@ -565,6 +635,48 @@ const constructedClient = (
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
+    "require-module-mock-reset": {
+      meta: {
+        type: "problem",
+        messages: {
+          missingReset:
+            "Module-level Bun mocks require `mock.restore()` in a file-level beforeEach or afterEach, followed by re-installing file defaults. `mock.clearAllMocks()` preserves mock implementations, and describe-local cleanup does not cover sibling suites.",
+        },
+      },
+      createOnce(context) {
+        const moduleMocks: AstNode[] = [];
+        let hasFileLevelRestore = false;
+        return {
+          before() {
+            moduleMocks.length = 0;
+            hasFileLevelRestore = false;
+            return mentionsBunTest(context.sourceCode.text);
+          },
+          CallExpression(node) {
+            if (!isAstNode(node)) {
+              return;
+            }
+            if (
+              isProgram(enclosingBlock(node).node) &&
+              isModuleMockCreation(context, node)
+            ) {
+              moduleMocks.push(node);
+            }
+            if (isFileLevelMockRestore(context, node)) {
+              hasFileLevelRestore = true;
+            }
+          },
+          "Program:exit"() {
+            if (hasFileLevelRestore) {
+              return;
+            }
+            for (const node of moduleMocks) {
+              context.report({ node, messageId: "missingReset" });
+            }
+          },
+        };
+      },
+    },
     "no-forced-database-drop": {
       meta: {
         type: "problem",
