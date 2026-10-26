@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
+    "from": "a774c0b2607cacdca45c27acc68b0b61a7274becfe62af902c8ae5bbb6fdc5e4",
+    "to": "07022d20d5cca0acfb3575d8afa2cefebffc1d933be57d1ba457cd88cdd71c66",
+    "reason": "The existing verification transaction now rechecks a paused checkpoint under its row lock before processing the page; the transaction boundary and lock order are unchanged."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
+    "from": "a8b679fd9fb9198bdc0a2906772f67957f17e522b6d0f821e41600e2bd0482ff",
+    "to": "e8375d15241c6b4c861f6576c2301a8178b0c7429ed4f3fa66a159d2e06112d5",
+    "reason": "The existing restart transaction now names its reset as a new pass so completed repair counts reset only at that boundary; the transaction and checkpoint row lock are unchanged."
+  }
+]

@@ -745,6 +745,12 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
+    "fingerprint": "07022d20d5cca0acfb3575d8afa2cefebffc1d933be57d1ba457cd88cdd71c66",
+    "count": 1,
+    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "29a9f972af8e230d7302a1202ad1470d274565c75710558630915983890995ed",
     "count": 3,
     "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
@@ -769,18 +775,6 @@
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
-    "fingerprint": "a774c0b2607cacdca45c27acc68b0b61a7274becfe62af902c8ae5bbb6fdc5e4",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
-    "fingerprint": "a8b679fd9fb9198bdc0a2906772f67957f17e522b6d0f821e41600e2bd0482ff",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "d33b55fb69eb346f147762a78b70e052d5c6662dafe7c1da9df780b808d76f22",
     "count": 1,
     "reason": "for update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -796,6 +790,12 @@
     "fingerprint": "e253e8dd45e01ee13520c256846cb8135b62b6b7be85ad6913c904c9328be85a",
     "count": 1,
     "reason": "for no key update in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
+    "fingerprint": "e8375d15241c6b4c861f6576c2301a8178b0c7429ed4f3fa66a159d2e06112d5",
+    "count": 1,
+    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",

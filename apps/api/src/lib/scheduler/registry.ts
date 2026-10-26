@@ -28,6 +28,10 @@ import {
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import {
+  RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+  reconcileCaseLawDecisionIdentifiersTask,
+} from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
+import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
 } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
@@ -254,6 +258,8 @@ const SCHEDULER_TASKS = {
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
+  [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
+    reconcileCaseLawDecisionIdentifiersTask,
   [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
   [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,

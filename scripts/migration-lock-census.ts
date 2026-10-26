@@ -700,6 +700,18 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261026110000_decision_identifier_reconciliation",
+    form: "add-column",
+    reason:
+      "The three count columns use PostgreSQL's constant fast-default catalog path; the completion and retry timestamps are nullable. No checkpoint row is rewritten or scanned, with 1s lock_timeout and 30s statement_timeout.",
+  },
+  {
+    migration: "20261026110000_decision_identifier_reconciliation",
+    form: "add-constraint",
+    reason:
+      "The retry-shape CHECK is added NOT VALID without scanning checkpoint rows; its new columns begin at the valid zero/null default. Lock acquisition is bounded by 1s and execution by 30s.",
+  },
+  {
     migration: "20261025130000_reader_answer_continuation_spans",
     form: "add-column",
     reason:

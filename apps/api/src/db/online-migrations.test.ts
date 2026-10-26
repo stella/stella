@@ -8,6 +8,10 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
+import {
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
+  CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
+} from "./case-law-identifier-retry-constraint-validation";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { MigrationTimingRecord } from "./migration-timing";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -133,6 +137,15 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test("registers the identifier retry shape for bounded online validation", () => {
+    expect(ONLINE_MIGRATION_REPAIRS).toContain(
+      CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
+    );
+    expect(ONLINE_CONSTRAINT_VALIDATIONS).toContain(
+      CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS[0],
+    );
+  });
+
   /**
    * The online phase runs inside the release's migrate run, so a walk or a
    * full-table scan there holds the release for its whole length. The

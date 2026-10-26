@@ -1419,6 +1419,8 @@ const config = defineConfig({
       "error",
     "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
       "error",
+    "no-direct-decision-identifier-column-write/no-direct-decision-identifier-column-write":
+      "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
@@ -1848,6 +1850,7 @@ const config = defineConfig({
     "./.oxlint-plugins/fill-diagnostics.ts",
     "./.oxlint-plugins/no-direct-folio-snapshot-retirement.ts",
     "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
+    "./.oxlint-plugins/no-direct-decision-identifier-column-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-direct-entity-insert.ts",

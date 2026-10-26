@@ -105,6 +105,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
   ),
+  "caseLaw.reconcileDecisionIdentifiers": platform(
+    "case-law-decision-identifier-reconciliation.ts",
+    "Public legal corpus identifier reconciliation.",
+  ),
   "caseLaw.reconcileRawSweeps": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
