@@ -5,13 +5,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
+import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@stll/decision-reader/decision-text.logic";
+import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
+import {
+  readerSelectionMatches,
+  visibleDecisionBlocks,
+  visibleReaderAnchorPiecesOf,
+} from "@stll/legal-ast/case-law-reader";
 import {
   type DocumentAst,
   parseDocumentAst,
@@ -511,24 +514,37 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         },
       ),
   }));
-  // A selection over any number of paragraphs is explained as a whole; the
-  // API checks every span against the decision text.
-  const explain = async (spans: SelectionAnchor[]) => {
+  // A selection over any number of paragraphs is explained as a whole. The
+  // server checks it against the same visible pieces, so Explain is offered
+  // exactly where the server accepts it.
+  const explainableSpans = (
+    spans: SelectionAnchor[],
+  ): ReaderAnswerSpans | undefined => {
     const [first, ...rest] = spans.map((span) => ({
       paragraphId: span.blockAnchorId,
       quote: span.quote,
       startOffset: span.startOffset,
       endOffset: span.endOffset,
     }));
+    return first !== undefined &&
+      readerSelectionMatches(
+        visibleReaderAnchorPiecesOf(ast, decision.caseNumberType),
+        spans.map((span) => ({ ...span, anchorId: span.blockAnchorId })),
+      )
+      ? [first, ...rest]
+      : undefined;
+  };
+  const explain = async (spans: SelectionAnchor[]) => {
+    const selection = explainableSpans(spans);
     if (
-      first === undefined ||
+      selection === undefined ||
       props.aiMode !== "enabled" ||
       !(await props.ensureAIAvailable())
     ) {
       return;
     }
     setNotesFilter("all");
-    await answers.createExplain({ spans: [first, ...rest] });
+    await answers.createExplain({ spans: selection });
   };
   // Only an account may start a run, so only this branch polls. Everything
   // below reads `analysisState` alone: a gated reader never starts a run, so
@@ -1119,6 +1135,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           onExplain={
             props.aiMode === "enabled"
               ? (spans) => detached(explain(spans), "reader-answer.explain")
+              : undefined
+          }
+          explainRefusal={(spans) =>
+            explainableSpans(spans) === undefined
+              ? t("readerAnswers.selectionError")
               : undefined
           }
           scrollContainerRef={mainRef}

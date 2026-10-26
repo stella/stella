@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch, useNavigate } from "@tanstack/react-router";
@@ -119,8 +120,13 @@ import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-fe
 import { PDF_MIME_TYPE } from "@/consts";
 import {
   DesktopRequiredDialog,
+  DesktopSetupMenuItem,
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
+import type {
+  DesktopActionStatus,
+  DesktopSetupStep,
+} from "@/features/desktop/desktop-action-gate.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -135,6 +141,7 @@ import {
 } from "@/lib/desktop-bridge";
 import {
   canOpenDesktopEdit,
+  canReleaseDesktopEditLock,
   DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
@@ -145,6 +152,7 @@ import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -1094,18 +1102,12 @@ export const RowActions = ({
   // handler is undefined, so the item hides.
   const openAction = offer(sections, "open", openVersionHistory);
   const editPagesAction = offer(sections, "edit-pages", openPDFPageEditor);
-  const signAction = offer(
-    sections,
-    "sign",
-    pdfSignTarget === null ? undefined : pdfSignFlow.start,
-  );
   const chatAction = offer(sections, "chat", handleChatAbout);
   const offeredTranslationTarget =
     offer(sections, "translate", translationTarget) ?? null;
   const hasFeatureActions = [
     openAction,
     editPagesAction,
-    signAction,
     chatAction,
     offeredTranslationTarget,
   ].some((action) => action !== undefined && action !== null);
@@ -1170,29 +1172,10 @@ export const RowActions = ({
           rowSources={rowOcrSources}
           selectedSource={ocrSource}
         />
-        <RowFolderDesktopMenuActions
-          canOpenInDesktop={offerWhen(
-            sections,
-            "desktop-edit",
-            canOpenInDesktop,
-          )}
-          canReleaseDesktopLock={offerWhen(
-            sections,
-            "desktop-edit",
-            !entity.readOnly &&
-              hasDesktopEditFileType &&
-              desktopEditLockState !== "unlocked",
-          )}
+        <RowFolderMenuActions
           entity={entity}
           isBulk={isBulk}
           isFolder={isFolder}
-          onOpenInDesktop={() => {
-            desktopEditGate.run(() => {
-              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
-            });
-          }}
-          openInDesktopLabel={desktopEditGate.label}
-          onReleaseDesktopLock={handleReleaseLock}
           onSubfolderCreated={offer(
             sections,
             "new-subfolder",
@@ -1213,6 +1196,60 @@ export const RowActions = ({
             workspaceId={workspaceId}
           />,
         )}
+        <RowDesktopMenuActions
+          edit={
+            offerWhen(sections, "desktop-edit", canOpenInDesktop) &&
+            desktopEditFileType !== null
+              ? {
+                  capability: "desktop",
+                  label: t.rich(
+                    "workspaces.files.desktopEdit.editInApplication",
+                    {
+                      application:
+                        DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType]
+                          .application,
+                      bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+                    },
+                  ),
+                  onSelect: () => {
+                    desktopEditGate.run(() => {
+                      detached(
+                        handleOpenInDesktop(),
+                        "row-actions.open-in-desktop",
+                      );
+                    });
+                  },
+                  onSetUp: desktopEditGate.setUp,
+                  status: desktopEditGate.status,
+                }
+              : null
+          }
+          onReleaseLock={
+            offerWhen(
+              sections,
+              "desktop-edit",
+              canReleaseDesktopEditLock({
+                context: rowActionContext,
+                fileType: desktopEditFileType,
+                lockState: desktopEditLockState,
+                readOnly: entity.readOnly,
+              }),
+            )
+              ? handleReleaseLock
+              : null
+          }
+          sign={
+            offerWhen(sections, "sign", pdfSignTarget !== null)
+              ? {
+                  capability: "desktop",
+                  label: pdfSignFlow.actionLabel,
+                  onSelect: pdfSignFlow.start,
+                  onSetUp: pdfSignFlow.setUp,
+                  status: pdfSignFlow.status,
+                }
+              : null
+          }
+        />
 
         {hasFeatureActions && <MenuSeparator />}
 
@@ -1226,8 +1263,6 @@ export const RowActions = ({
           onChatAbout={chatAction}
           onOpenVersionHistory={openAction}
           onEditPages={editPagesAction}
-          onSign={signAction}
-          signLabel={pdfSignFlow.label}
           onTranslate={openTranslationDialog}
           translationTarget={offeredTranslationTarget}
         />
@@ -1497,54 +1532,91 @@ const RowCellMenuActions = ({
   );
 };
 
-const RowFolderDesktopMenuActions = ({
-  canOpenInDesktop,
-  canReleaseDesktopLock,
+const RowFolderMenuActions = ({
   entity,
   isBulk,
   isFolder,
-  onOpenInDesktop,
-  openInDesktopLabel,
-  onReleaseDesktopLock,
   onSubfolderCreated,
   workspaceId,
 }: {
-  canOpenInDesktop: boolean;
-  canReleaseDesktopLock: boolean;
   entity: WorkspaceEntity;
   isBulk: boolean;
   isFolder: boolean;
-  onOpenInDesktop: () => void;
-  openInDesktopLabel: string;
-  onReleaseDesktopLock: () => Promise<void>;
   onSubfolderCreated: RowActionsProps["onSubfolderCreated"];
   workspaceId: string;
 }) => {
+  if (isBulk || !isFolder || onSubfolderCreated === undefined) {
+    return null;
+  }
+  return (
+    <CreateSubfolderMenuItem
+      entity={entity}
+      onSubfolderCreated={onSubfolderCreated}
+      workspaceId={workspaceId}
+    />
+  );
+};
+
+/** A file action stella desktop runs, with the desktop status it depends on. */
+type RowDesktopAction = {
+  capability: Capability;
+  label: ReactNode;
+  onSelect: () => void;
+  onSetUp: (step: DesktopSetupStep) => void;
+  status: DesktopActionStatus;
+};
+
+/**
+ * The menu's desktop group: the desktop status first, so it reads as what the
+ * actions below need, then actions named by what they do. Editing applies to
+ * Office files and signing to PDFs, so at most one of them is offered.
+ */
+const RowDesktopMenuActions = ({
+  edit,
+  onReleaseLock,
+  sign,
+}: {
+  edit: RowDesktopAction | null;
+  onReleaseLock: (() => Promise<void>) | null;
+  sign: RowDesktopAction | null;
+}) => {
   const t = useTranslations();
+  const statusSource = edit ?? sign;
+  if (statusSource === null && onReleaseLock === null) {
+    return null;
+  }
   return (
     <>
-      {!isBulk && isFolder && onSubfolderCreated !== undefined && (
-        <CreateSubfolderMenuItem
-          entity={entity}
-          onSubfolderCreated={onSubfolderCreated}
-          workspaceId={workspaceId}
+      <MenuSeparator />
+      {statusSource !== null && (
+        <DesktopSetupMenuItem
+          onSetUp={statusSource.onSetUp}
+          status={statusSource.status}
         />
       )}
-      {canOpenInDesktop && (
-        <CapabilityAction action={{ capability: "desktop" }}>
+      {edit !== null && (
+        <CapabilityAction action={{ capability: edit.capability }}>
           {(capabilityProps) => (
-            <MenuItem onClick={onOpenInDesktop} {...capabilityProps}>
+            <MenuItem onClick={edit.onSelect} {...capabilityProps}>
               <LaptopIcon />
-              {openInDesktopLabel}
+              {edit.label}
             </MenuItem>
           )}
         </CapabilityAction>
       )}
-      {canReleaseDesktopLock && (
+      {sign !== null && (
+        <CapabilityAction action={{ capability: sign.capability }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={sign.onSelect} {...capabilityProps}>
+              <SignatureIcon />
+              {sign.label}
+            </MenuItem>
+          )}
+        </CapabilityAction>
+      )}
+      {onReleaseLock !== null && (
         <MenuItem
-          onClick={() =>
-            detached(onReleaseDesktopLock(), "row-actions.release-lock")
-          }
+          onClick={() => detached(onReleaseLock(), "row-actions.release-lock")}
         >
           <LockOpenIcon />
           {t("workspaces.files.desktopEdit.releaseLock")}
@@ -1563,9 +1635,7 @@ export const RowFeatureMenuActions = ({
   onChatAbout,
   onEditPages,
   onOpenVersionHistory,
-  onSign,
   onTranslate,
-  signLabel,
   translationTarget,
 }: {
   canCreateEntity: boolean;
@@ -1576,9 +1646,7 @@ export const RowFeatureMenuActions = ({
   onChatAbout: (() => void) | undefined;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
-  onSign: (() => void) | undefined;
   onTranslate: () => void;
-  signLabel: string;
   translationTarget: TranslationTarget | null;
 }) => {
   const t = useTranslations();
@@ -1602,16 +1670,6 @@ export const RowFeatureMenuActions = ({
           <FilePenLineIcon />
           {t("workspaces.pdf.pageEditor.editPages")}
         </MenuItem>
-      )}
-      {onSign !== undefined && (
-        <CapabilityAction action={{ capability: "desktop" }}>
-          {(capabilityProps) => (
-            <MenuItem onClick={onSign} {...capabilityProps}>
-              <SignatureIcon />
-              {signLabel}
-            </MenuItem>
-          )}
-        </CapabilityAction>
       )}
       {onChatAbout !== undefined && (
         <CapabilityAction action={{ capability: "ai" }}>

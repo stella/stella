@@ -1437,7 +1437,7 @@ const comparisonCommit = () => {
   const reference = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (reference.status !== 0) {
     panic(`Write contract comparison ref unavailable: ${requested}`);
@@ -1446,6 +1446,7 @@ const comparisonCommit = () => {
     process.env["BASE_SHA"] !== undefined
       ? reference
       : spawnSync("git", ["merge-base", "HEAD", reference.stdout.trim()], {
+          maxBuffer: 2 ** 30,
           cwd: ROOT,
           encoding: "utf-8",
         });
@@ -1462,6 +1463,7 @@ if (import.meta.main) {
       ? readFileSync(path.join(ROOT, file), "utf-8")
       : undefined;
   const previousSource = spawnSync("git", ["show", `${commit}:${BASELINE}`], {
+    maxBuffer: 2 ** 30,
     cwd: ROOT,
     encoding: "utf-8",
   });
