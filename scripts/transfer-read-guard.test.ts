@@ -241,13 +241,16 @@ test("lowercase constant bindings need budgets while shadowed page inputs do not
   ).toEqual(["constant-limit"]);
 });
 
-test("literal, named, arithmetic and computed constant limits need a contract", () => {
+test("literal, named, arithmetic, fallback and computed constant limits need a contract", () => {
   for (const limit of [
     "10_000",
     "EXPORT_CAP",
     "LIMITS.exportRowLimit",
     "LIMITS.exportRowLimit + 1",
     'LIMITS["exportRowLimit"]',
+    "PRIMARY_CAP ?? FALLBACK_CAP",
+    "PRIMARY_CAP || 10_000",
+    "HAS_CAP && LIMITS.exportRowLimit",
   ]) {
     expect(
       findTransferReads(
@@ -260,6 +263,12 @@ test("literal, named, arithmetic and computed constant limits need a contract", 
     findTransferReads(
       file,
       "const list = ({ limit }) => query.limit(limit + 1);",
+    ),
+  ).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      "const list = ({ limit }) => query.limit(limit ?? EXPORT_CAP);",
     ),
   ).toEqual([]);
   expect(
