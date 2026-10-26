@@ -3,21 +3,31 @@ import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import {
-  durationSeconds,
+  durationSeconds as durationSecondsResult,
   parseTestDurationWeights,
-  readTestDurationWeights,
+  readTestDurationWeights as readTestDurationWeightsResult,
   TEST_DURATION_HISTORY_LIMIT,
   TEST_DURATION_SOURCE,
-  testFileDurationWeights,
+  testFileDurationWeights as testFileDurationWeightsResult,
+  type TestShardPlanningResult,
 } from "@stll/scripts/src/test-shard-planning";
 import { sha256Hex } from "@stll/sha256/bun";
 
-export {
-  durationSeconds,
-  TEST_DURATION_HISTORY_LIMIT,
-  TEST_DURATION_SOURCE,
-  testFileDurationWeights,
-};
+export { TEST_DURATION_HISTORY_LIMIT, TEST_DURATION_SOURCE };
+
+const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
+  result.status === "ok" ? result.value : panic(result.message);
+
+export const readTestDurationWeights = (value: unknown) =>
+  unwrapPlanningResult(readTestDurationWeightsResult(value));
+
+export const durationSeconds = (value: unknown) =>
+  unwrapPlanningResult(durationSecondsResult(value));
+
+export const testFileDurationWeights = (
+  files: readonly string[],
+  durations: Readonly<Record<string, number>>,
+) => unwrapPlanningResult(testFileDurationWeightsResult(files, durations));
 
 export const API_TEST_DURATIONS_FILE_ENV = "API_TEST_DURATIONS_FILE";
 

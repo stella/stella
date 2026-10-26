@@ -1,6 +1,3 @@
-import { panic, Result } from "better-result";
-import { readFileSync } from "node:fs";
-
 export const API_TEST_SHARD_ENV = "API_TEST_SHARD";
 
 export const TEST_DURATION_SOURCE = {
@@ -14,13 +11,27 @@ export const POSTGRES_MIN_SHARDS = 2;
 export const POSTGRES_MAX_SHARDS = 8;
 export const POSTGRES_UNKNOWN_TEST_SECONDS = 5;
 
-export type TestDuration = {
+type TestDuration = {
   seconds: number;
   source: typeof TEST_DURATION_SOURCE.measured;
   history?: number[];
 };
 
-export type TestDurationWeights = Record<string, TestDuration>;
+type TestDurationWeights = Record<string, TestDuration>;
+
+// CI invokes this planner before installation; failures stay data at this owner.
+export type TestShardPlanningResult<T> =
+  { status: "ok"; value: T } | { status: "invalid"; message: string };
+
+const ok = <T>(value: T): TestShardPlanningResult<T> => ({
+  status: "ok",
+  value,
+});
+
+const invalid = (message: string): TestShardPlanningResult<never> => ({
+  status: "invalid",
+  message,
+});
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -78,21 +89,28 @@ export const parseTestDurationWeights = (
 
 export const readTestDurationWeights = (
   value: unknown,
-): TestDurationWeights => {
+): TestShardPlanningResult<TestDurationWeights> => {
   const weights = parseTestDurationWeights(value);
   if (weights === undefined) {
-    return panic("Invalid test duration weights");
+    return invalid("Invalid test duration weights");
   }
-  return weights;
+  return ok(weights);
 };
 
-export const durationSeconds = (value: unknown): Record<string, number> => {
-  const weights = parseTestDurationWeights(value);
-  if (weights === undefined) {
-    return panic("Invalid test duration weights");
+export const durationSeconds = (
+  value: unknown,
+): TestShardPlanningResult<Record<string, number>> => {
+  const weights = readTestDurationWeights(value);
+  if (weights.status === "invalid") {
+    return weights;
   }
-  return Object.fromEntries(
-    Object.entries(weights).map(([file, { seconds }]) => [file, seconds]),
+  return ok(
+    Object.fromEntries(
+      Object.entries(weights.value).map(([file, { seconds }]) => [
+        file,
+        seconds,
+      ]),
+    ),
   );
 };
 
@@ -100,22 +118,24 @@ export const durationSeconds = (value: unknown): Record<string, number> => {
 export const testFileDurationWeights = (
   files: readonly string[],
   durations: Readonly<Record<string, number>>,
-) => {
-  const measured = files
-    .flatMap((file) => {
-      const duration = durations[file];
-      if (duration === undefined) {
-        return [];
-      }
-      if (!isDurationSample(duration)) {
-        return panic(`Invalid duration for ${file}`);
-      }
-      return [duration];
-    })
-    .toSorted((a, b) => a - b);
+): TestShardPlanningResult<Record<string, number>> => {
+  const measured: number[] = [];
+  for (const file of files) {
+    const duration = durations[file];
+    if (duration === undefined) {
+      continue;
+    }
+    if (!isDurationSample(duration)) {
+      return invalid(`Invalid duration for ${file}`);
+    }
+    measured.push(duration);
+  }
+  measured.sort((a, b) => a - b);
   const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
-  return Object.fromEntries(
-    files.map((file) => [file, durations[file] ?? fallback]),
+  return ok(
+    Object.fromEntries(
+      files.map((file) => [file, durations[file] ?? fallback]),
+    ),
   );
 };
 
@@ -130,35 +150,40 @@ export const partitionTestFiles = ({
   files,
   durations,
   count,
-}: PartitionTestFilesOptions): string[][] => {
+}: PartitionTestFilesOptions): TestShardPlanningResult<string[][]> => {
   if (!Number.isSafeInteger(count) || count < 1) {
-    return panic("Test shard count must be a positive integer");
+    return invalid("Test shard count must be a positive integer");
   }
   if (new Set(files).size !== files.length) {
-    return panic("Test paths must be unique");
+    return invalid("Test paths must be unique");
   }
   const canonicalFiles = files.toSorted();
   const weights = testFileDurationWeights(canonicalFiles, durations);
-  if (count === 1) {
-    return [canonicalFiles];
+  if (weights.status === "invalid") {
+    return weights;
   }
-  const weight = (file: string) => {
-    const duration = weights[file];
-    if (duration === undefined) {
-      return panic(`Missing resolved duration for ${file}`);
+  if (count === 1) {
+    return ok([canonicalFiles]);
+  }
+  const weightedFiles: { file: string; seconds: number }[] = [];
+  for (const file of canonicalFiles) {
+    const seconds = weights.value[file];
+    if (seconds === undefined) {
+      return invalid(`Missing resolved duration for ${file}`);
     }
-    return duration;
-  };
+    weightedFiles.push({ file, seconds });
+  }
   const bins = Array.from({ length: count }, () => ({
     files: new Set<string>(),
     seconds: 0,
   }));
-  for (const file of canonicalFiles.toSorted(
-    (a, b) => weight(b) - weight(a) || (a < b ? -1 : Number(a > b)),
+  for (const { file, seconds } of weightedFiles.toSorted(
+    (a, b) =>
+      b.seconds - a.seconds || (a.file < b.file ? -1 : Number(a.file > b.file)),
   )) {
     let bin = bins.at(0);
     if (bin === undefined) {
-      return panic("Test shard bins must exist");
+      return invalid("Test shard bins must exist");
     }
     for (const candidate of bins) {
       if (candidate.seconds < bin.seconds) {
@@ -166,16 +191,18 @@ export const partitionTestFiles = ({
       }
     }
     bin.files.add(file);
-    bin.seconds += weight(file);
+    bin.seconds += seconds;
   }
-  return bins.map((bin) =>
-    canonicalFiles.filter((file) => bin.files.has(file)),
+  return ok(
+    bins.map((bin) => canonicalFiles.filter((file) => bin.files.has(file))),
   );
 };
 
-export const parseApiTestShard = (value: string | undefined) => {
+export const parseApiTestShard = (
+  value: string | undefined,
+): TestShardPlanningResult<null | { index: number; count: number }> => {
   if (value === undefined || value === "") {
-    return null;
+    return ok(null);
   }
   const match = /^(?<index>[1-9]\d*)\/(?<count>[1-9]\d*)$/u.exec(value);
   const index = Number(match?.groups?.["index"]);
@@ -185,11 +212,11 @@ export const parseApiTestShard = (value: string | undefined) => {
     !Number.isSafeInteger(count) ||
     index > count
   ) {
-    return panic(
+    return invalid(
       `Invalid ${API_TEST_SHARD_ENV}: expected i/n with 1 <= i <= n`,
     );
   }
-  return { index, count };
+  return ok({ index, count });
 };
 
 export type PostgresShardPlan = { files: string[]; seconds: number }[];
@@ -204,19 +231,19 @@ export const planPostgresTestShards = ({
   files,
   durations,
   count,
-}: PlanPostgresTestShardsOptions): PostgresShardPlan => {
-  const measured = files
-    .flatMap((file) => {
-      const seconds = durations[file];
-      if (seconds === undefined) {
-        return [];
-      }
-      if (!isDurationSample(seconds)) {
-        return panic(`Invalid Postgres test duration: ${file}`);
-      }
-      return [seconds];
-    })
-    .toSorted((a, b) => a - b);
+}: PlanPostgresTestShardsOptions): TestShardPlanningResult<PostgresShardPlan> => {
+  const measured: number[] = [];
+  for (const file of files) {
+    const seconds = durations[file];
+    if (seconds === undefined) {
+      continue;
+    }
+    if (!isDurationSample(seconds)) {
+      return invalid(`Invalid Postgres test duration: ${file}`);
+    }
+    measured.push(seconds);
+  }
+  measured.sort((a, b) => a - b);
   const fallback = Math.max(
     POSTGRES_UNKNOWN_TEST_SECONDS,
     measured.at(Math.floor(measured.length / 2)) ?? 0,
@@ -224,19 +251,23 @@ export const planPostgresTestShards = ({
   const weights = Object.fromEntries(
     files.map((file) => [file, durations[file] ?? fallback]),
   );
-  return partitionTestFiles({ files, durations: weights, count }).map(
-    (shardFiles) => {
-      let seconds = 0;
-      for (const file of shardFiles) {
-        const duration = weights[file];
-        if (duration === undefined) {
-          return panic(`Missing duration: ${file}`);
-        }
-        seconds += duration;
+  const partition = partitionTestFiles({ files, durations: weights, count });
+  if (partition.status === "invalid") {
+    return partition;
+  }
+  const plan: PostgresShardPlan = [];
+  for (const shardFiles of partition.value) {
+    let seconds = 0;
+    for (const file of shardFiles) {
+      const duration = weights[file];
+      if (duration === undefined) {
+        return invalid(`Missing duration: ${file}`);
       }
-      return { files: shardFiles, seconds };
-    },
-  );
+      seconds += duration;
+    }
+    plan.push({ files: shardFiles, seconds });
+  }
+  return ok(plan);
 };
 
 export const postgresShardBudgetWarnings = (
@@ -265,77 +296,60 @@ export const planPostgresShardCount = ({
   budgetSeconds = POSTGRES_SHARD_TEST_BUDGET_SECONDS,
   minShards = POSTGRES_MIN_SHARDS,
   maxShards = POSTGRES_MAX_SHARDS,
-}: PlanPostgresShardCountOptions) => {
+}: PlanPostgresShardCountOptions): TestShardPlanningResult<{
+  count: number;
+  plan: PostgresShardPlan;
+  warnings: string[];
+}> => {
   if (
     !Number.isSafeInteger(minShards) ||
     !Number.isSafeInteger(maxShards) ||
     minShards < 1 ||
     maxShards < minShards
   ) {
-    return panic("Postgres shard bounds must satisfy 1 <= min <= max");
+    return invalid("Postgres shard bounds must satisfy 1 <= min <= max");
   }
-  const total = planPostgresTestShards({ files, durations, count: 1 }).reduce(
-    (sum, { seconds }) => sum + seconds,
-    0,
-  );
+  const initial = planPostgresTestShards({ files, durations, count: 1 });
+  if (initial.status === "invalid") {
+    return initial;
+  }
+  const total = initial.value.reduce((sum, { seconds }) => sum + seconds, 0);
   const lowerBound = Math.min(
     maxShards,
     Math.max(minShards, Math.ceil(total / budgetSeconds)),
   );
-  let plan = planPostgresTestShards({ files, durations, count: lowerBound });
+  let planned = planPostgresTestShards({
+    files,
+    durations,
+    count: lowerBound,
+  });
+  if (planned.status === "invalid") {
+    return planned;
+  }
   for (let count = lowerBound; count < maxShards; count += 1) {
-    const reducible = plan.some(
+    const reducible = planned.value.some(
       ({ files: shardFiles, seconds }) =>
         seconds > budgetSeconds && shardFiles.length > 1,
     );
     if (!reducible) {
       break;
     }
-    plan = planPostgresTestShards({ files, durations, count: count + 1 });
+    planned = planPostgresTestShards({
+      files,
+      durations,
+      count: count + 1,
+    });
+    if (planned.status === "invalid") {
+      return planned;
+    }
   }
-  return {
+  const plan = planned.value;
+  return ok({
     count: plan.length,
     plan,
     warnings: postgresShardBudgetWarnings(plan, budgetSeconds),
-  };
+  });
 };
 
 export const postgresShardMatrix = (count: number) =>
   Array.from({ length: count }, (_, index) => `${index + 1}/${count}`);
-
-export const readPostgresTestDurations = (
-  durationPath: string | undefined,
-): Readonly<Record<string, number>> => {
-  if (durationPath === undefined || durationPath === "") {
-    console.log(
-      "::notice::Postgres duration cache unavailable; using conservative estimates",
-    );
-    return {};
-  }
-
-  const contents = Result.try(() => readFileSync(durationPath, "utf-8"));
-  if (contents.isErr()) {
-    console.log(
-      "::notice::Postgres duration cache unreadable; using conservative estimates",
-    );
-    return {};
-  }
-
-  const parsed = Result.try((): unknown => JSON.parse(contents.value));
-  if (parsed.isErr()) {
-    console.log(
-      "::notice::Postgres duration cache unreadable; using conservative estimates",
-    );
-    return {};
-  }
-  const weights = parseTestDurationWeights(parsed.value);
-  if (weights === undefined) {
-    console.log(
-      "::notice::Postgres duration cache has an invalid schema; using conservative estimates",
-    );
-    return {};
-  }
-  return Object.fromEntries(
-    Object.entries(weights).map(([file, { seconds }]) => [file, seconds]),
-  );
-};

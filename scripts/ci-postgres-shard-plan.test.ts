@@ -6,6 +6,14 @@ import {
 } from "../packages/scripts/src/test-shard-planning";
 import { postgresShardOutputs } from "./ci-postgres-shard-plan";
 
+const unwrapOutputs = (result: ReturnType<typeof postgresShardOutputs>) => {
+  expect(result.status).toBe("ok");
+  if (result.status === "invalid") {
+    throw new Error(result.message);
+  }
+  return result.value;
+};
+
 const suite = (fileCount: number, seconds: number) => {
   const files = Array.from({ length: fileCount }, (_, index) => `${index}`);
   return {
@@ -27,13 +35,15 @@ const parseOutputs = (output: string) =>
 
 test("the matrix output follows measured time and names its own n", () => {
   const budget = POSTGRES_SHARD_TEST_BUDGET_SECONDS;
-  const fits = parseOutputs(postgresShardOutputs(suite(24, budget / 8)).output);
+  const fits = parseOutputs(
+    unwrapOutputs(postgresShardOutputs(suite(24, budget / 8))).output,
+  );
   expect(fits).toEqual({
     postgres_shards: '["1/3","2/3","3/3"]',
     postgres_shard_count: "3",
   });
   // One more file past three budgets plans a fourth shard, not a failure.
-  const grown = postgresShardOutputs(suite(25, budget / 8));
+  const grown = unwrapOutputs(postgresShardOutputs(suite(25, budget / 8)));
   expect(parseOutputs(grown.output)).toEqual({
     postgres_shards: '["1/4","2/4","3/4","4/4"]',
     postgres_shard_count: "4",
@@ -42,8 +52,10 @@ test("the matrix output follows measured time and names its own n", () => {
 });
 
 test("a suite beyond the maximum keeps the maximum and warns", () => {
-  const capped = postgresShardOutputs(
-    suite(POSTGRES_MAX_SHARDS * 4, POSTGRES_SHARD_TEST_BUDGET_SECONDS / 2),
+  const capped = unwrapOutputs(
+    postgresShardOutputs(
+      suite(POSTGRES_MAX_SHARDS * 4, POSTGRES_SHARD_TEST_BUDGET_SECONDS / 2),
+    ),
   );
   const outputs = parseOutputs(capped.output);
   expect(outputs["postgres_shard_count"]).toBe(String(POSTGRES_MAX_SHARDS));
@@ -52,4 +64,11 @@ test("a suite beyond the maximum keeps the maximum and warns", () => {
   );
   expect(capped.warnings).toHaveLength(POSTGRES_MAX_SHARDS);
   expect(capped.summary).toContain(`${POSTGRES_MAX_SHARDS} shards`);
+});
+
+test("an empty gated suite fails planning so CI keeps its maximum-shard fallback", () => {
+  expect(postgresShardOutputs({ files: [], durations: {} })).toEqual({
+    status: "invalid",
+    message: "No Postgres-gated test files discovered",
+  });
 });

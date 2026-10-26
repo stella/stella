@@ -1,29 +1,44 @@
 import { panic } from "better-result";
 
 import {
-  parseApiTestShard,
-  planPostgresShardCount,
-  planPostgresTestShards,
+  planPostgresShardCount as planPostgresShardCountResult,
+  planPostgresTestShards as planPostgresTestShardsResult,
   POSTGRES_MAX_SHARDS,
   POSTGRES_MIN_SHARDS,
   POSTGRES_SHARD_TEST_BUDGET_SECONDS,
   POSTGRES_UNKNOWN_TEST_SECONDS,
   postgresShardBudgetWarnings,
   postgresShardMatrix,
-  readPostgresTestDurations,
+  type TestShardPlanningResult,
 } from "@stll/scripts/src/test-shard-planning";
+
+import { parseApiTestShard } from "./test-file-shards";
 
 export {
   POSTGRES_MAX_SHARDS,
   POSTGRES_MIN_SHARDS,
   POSTGRES_SHARD_TEST_BUDGET_SECONDS,
   POSTGRES_UNKNOWN_TEST_SECONDS,
-  planPostgresShardCount,
-  planPostgresTestShards,
   postgresShardBudgetWarnings,
   postgresShardMatrix,
-  readPostgresTestDurations,
 };
+
+const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
+  result.status === "ok" ? result.value : panic(result.message);
+
+export const planPostgresShardCount = (options: {
+  files: readonly string[];
+  durations: Readonly<Record<string, number>>;
+  budgetSeconds?: number;
+  minShards?: number;
+  maxShards?: number;
+}) => unwrapPlanningResult(planPostgresShardCountResult(options));
+
+export const planPostgresTestShards = (options: {
+  files: readonly string[];
+  durations: Readonly<Record<string, number>>;
+  count: number;
+}) => unwrapPlanningResult(planPostgresTestShardsResult(options));
 
 type SelectPostgresTestShardOptions = {
   files: readonly string[];

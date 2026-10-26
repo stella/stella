@@ -3,11 +3,24 @@ import { readFileSync } from "node:fs";
 
 import {
   API_TEST_SHARD_ENV,
-  parseApiTestShard,
-  partitionTestFiles,
+  parseApiTestShard as parseApiTestShardResult,
+  partitionTestFiles as partitionTestFilesResult,
+  type TestShardPlanningResult,
 } from "@stll/scripts/src/test-shard-planning";
 
-export { API_TEST_SHARD_ENV, parseApiTestShard, partitionTestFiles };
+export { API_TEST_SHARD_ENV };
+
+const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
+  result.status === "ok" ? result.value : panic(result.message);
+
+export const parseApiTestShard = (value: string | undefined) =>
+  unwrapPlanningResult(parseApiTestShardResult(value));
+
+export const partitionTestFiles = (options: {
+  files: readonly string[];
+  durations: Readonly<Record<string, number>>;
+  count: number;
+}) => unwrapPlanningResult(partitionTestFilesResult(options));
 
 /** Resolve the explicit selection before duration bins partition it. */
 export const restrictApiTestFiles = (
