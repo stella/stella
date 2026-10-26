@@ -163,7 +163,7 @@ const isBase64Secret = (encoded: string): boolean => {
 
   const normalized = trimBase64Padding(encoded);
   const canonical = trimBase64Padding(
-    Buffer.from(encoded, "base64").toString("base64"),
+    Buffer.from(encoded, "base64").toBase64(),
   );
   return canonical === normalized;
 };

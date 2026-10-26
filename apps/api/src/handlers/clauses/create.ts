@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
@@ -167,7 +168,13 @@ export const createClauseHandler = async function* ({
     body.body,
   );
   if (Result.isError(searchVectorResult)) {
-    captureError(searchVectorResult.error, { clauseId });
+    captureError(
+      searchVectorResult.error,
+      handlerErrorContext(
+        "clauses.createClauseHandler.searchVectorResult_error",
+        { clauseId },
+      ),
+    );
   }
 
   if (!inserted) {

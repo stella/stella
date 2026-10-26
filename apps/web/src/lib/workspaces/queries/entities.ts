@@ -296,7 +296,7 @@ export const filesystemEntitiesOptions = (
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
@@ -492,7 +492,7 @@ const fetchAllWorkspaceFolders = async ({
 // organizer payload.
 export const workspaceFoldersOptions = (workspaceId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "folders"],
+    queryKey: entitiesKeys.folders(workspaceId),
     queryFn: async ({ signal }) =>
       await fetchAllWorkspaceFolders({ signal, workspaceId }),
   });
@@ -550,7 +550,7 @@ const fetchAllWorkspaceFiles = async ({
 // whole matter, but no single request returns the whole file set.
 export const workspaceFilesOptions = (workspaceId: string) =>
   queryOptions({
-    queryKey: [...entitiesKeys.all(workspaceId), "files"],
+    queryKey: entitiesKeys.files(workspaceId),
     queryFn: async ({ signal }) =>
       await fetchAllWorkspaceFiles({ signal, workspaceId }),
   });

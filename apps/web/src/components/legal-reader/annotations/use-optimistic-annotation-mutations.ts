@@ -103,6 +103,7 @@ const applyChange = (
 };
 
 type OptimisticAnnotationRequests<TCreate, TCreated, TChange> = {
+  handlerId: string;
   /** The cached rows the changes land in at once. */
   queryKey: DataTag<QueryKey, ReaderAnnotation[], Error>;
   /** Stores a new mark on the server. */
@@ -146,6 +147,7 @@ export const useOptimisticAnnotationMutations = <
   TChange extends UpdateAnnotationInput,
 >({
   create: createRequest,
+  handlerId,
   pendingInput,
   queryKey,
   remove: removeRequest,
@@ -165,7 +167,7 @@ export const useOptimisticAnnotationMutations = <
   ): Promise<{ previous: ReaderAnnotation[] | undefined }> =>
     await patchAnnotationCache(queryClient, queryKey, patch);
 
-  const settle = {
+  const settle = (operation: "create" | "update" | "delete") => ({
     onError: (
       error: unknown,
       _input: unknown,
@@ -174,13 +176,16 @@ export const useOptimisticAnnotationMutations = <
       if (context !== undefined) {
         queryClient.setQueryData(queryKey, context.previous);
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useOptimisticAnnotationMutations:failure",
+        scope: { type: "handler", handlerId: `${handlerId}.${operation}` },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey });
     },
-  };
+  });
 
   const create = useMutation({
     mutationFn: createRequest,
@@ -202,7 +207,7 @@ export const useOptimisticAnnotationMutations = <
         }),
       ]);
     },
-    ...settle,
+    ...settle("create"),
   });
 
   const update = useMutation({
@@ -214,7 +219,7 @@ export const useOptimisticAnnotationMutations = <
           touched(row) ? applyChange(row, input) : row,
         );
       }),
-    ...settle,
+    ...settle("update"),
   });
 
   const remove = useMutation({
@@ -224,7 +229,7 @@ export const useOptimisticAnnotationMutations = <
         const touched = rowsOfSame(rows, id);
         return rows.filter((row) => !touched(row));
       }),
-    ...settle,
+    ...settle("delete"),
   });
 
   return {

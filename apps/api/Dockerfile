@@ -111,6 +111,15 @@ RUN bun build \
 #   `set-password` reads the password from standard input.
 #     ["bun", "/app/review-account.js", "provision"]
 #     ["bun", "/app/review-account.js", "set-password"]
+# - partner-oauth-client.js: partner OAuth client commands (a hosted assistant
+#   without dynamic client registration). The secret is minted on the
+#   operator's machine (`bun run oauth:partner-client-secret`); only its digest
+#   comes here.
+#     ["bun", "/app/partner-oauth-client.js", "create", "--name", "...",
+#      "--redirect-uri", "https://...", "--secret-sha256", "..."]
+#     ["bun", "/app/partner-oauth-client.js", "rotate", "--client-id", "...",
+#      "--secret-sha256", "..."]
+#     ["bun", "/app/partner-oauth-client.js", "disable", "--client-id", "..."]
 # - replay-tick.js: one bounded, load-aware background replay tick; enrolment
 #   is reviewed in code.
 # - import-cz-us-roster.js: weekly Czech Constitutional Court roster import
@@ -201,6 +210,7 @@ RUN bun build \
     apps/api/src/scripts/better-auth-sign-in-replay.ts \
     apps/api/src/scripts/replay-case-law-source.ts \
     apps/api/src/scripts/review-account.ts \
+    apps/api/src/scripts/partner-oauth-client.ts \
     apps/api/src/scripts/replay-tick.ts \
     apps/api/src/scripts/import-cz-us-roster.ts \
     apps/api/src/scripts/eu-completion-tick.ts \

@@ -185,7 +185,14 @@ export const Route = createFileRoute(
             queryClient,
             correspondenceAddressOptions(workspaceId),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "loader.correspondence:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId/",
+                },
+              });
             },
           ),
         ]);

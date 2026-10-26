@@ -26,7 +26,10 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getPossibleDuplicateMatters } from "@/components/workspaces/create-matter-dialog.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
@@ -140,7 +143,7 @@ const CreateMatterDialogBody = ({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
   const workspacesDataView = useQueryView(workspacesDataQuery);
-  useQueryViewError(workspacesDataView);
+  useQueryViewError(workspacesDataView, "CreateMatterDialogBody:query");
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
 
@@ -325,6 +328,7 @@ const CreateMatterDialogBody = ({
                 ? t("workspaces.parties.changeClient")
                 : t("workspaces.parties.noClientOptional")
             }
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
           {selectedClient === null ? (
             <p className="text-muted-foreground text-xs">

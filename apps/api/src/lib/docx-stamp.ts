@@ -18,6 +18,7 @@ import {
   VERIFICATION_CODE_LENGTH,
 } from "@stll/api-contract";
 import { writeZipEntry } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
@@ -114,7 +115,11 @@ const STAMP_TEXT_RE = new RegExp(`^\\S(?:.*\\S)? {2}stl:${VCODE_SOURCE}$`, "u");
 class DocxStampError extends TaggedError("DocxStampError")<{
   message: string;
   reason: "incomplete-xml" | "too-many-footer-parts";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 // ── Public API ──────────────────────────────────────────
 

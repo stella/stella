@@ -48,6 +48,7 @@ import {
   RAW_SOURCE_FAMILY,
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { RawSourceWriteWindow } from "@/api/lib/legal-search/raw-source-storage";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 /** One supplement's placement: its options and what they resolve to. */
@@ -228,7 +229,13 @@ const supplementRawWriteFailed = (
       "error.detail": wrappedErrorDetail(error),
     }),
   );
-  captureError(error, { sourceId, step: "processSupplement.raw" });
+  captureError(
+    error,
+    handlerErrorContext("pipeline.supplementRawWriteFailed", {
+      sourceId,
+      step: "processSupplement.raw",
+    }),
+  );
   return {
     status: PROCESS_DECISION_STATUS.RETRYABLE,
     reason: PROCESS_DECISION_RETRY_REASON.SOURCE_RAW_WRITE,

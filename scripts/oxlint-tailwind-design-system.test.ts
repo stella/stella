@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   cp,
@@ -13,9 +13,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import oxlintConfig from "../oxlint.config.ts";
 import {
-  cacheProblems,
+  checkCache,
   mergeCache,
+  snapshotProblems,
   tailwindEntryPoints,
   tailwindFailureMessages,
 } from "./generate-tailwind-classes";
@@ -224,41 +226,45 @@ const shardA = `${"a".repeat(32)}.decl-00.json`;
 const shard = (answers: Record<string, unknown>) =>
   `${JSON.stringify(answers)}\n`;
 
-test("the cache check fails only on missing or changed answers", () => {
-  const generated = new Map([
-    [snapshotA, '{"v":1}\n'],
-    [shardA, shard({ "w-[1px]": { valid: true }, "w-[2px]": { valid: true } })],
-  ]);
+test("the cache check compares digests and never compiles", async () => {
+  // Every compile starts a lint child process; the check starts none.
+  const spawn = spyOn(Bun, "spawn");
+  const spawnSync = spyOn(Bun, "spawnSync");
+  try {
+    expect(await checkCache()).toEqual([]);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(spawnSync).not.toHaveBeenCalled();
+  } finally {
+    spawn.mockRestore();
+    spawnSync.mockRestore();
+  }
+});
+
+test("the cache check names each stylesheet whose snapshot is missing", async () => {
+  const committed = await readdir(generatedCache);
+  const shards = new Set(committed.filter((name) => name.includes(".decl-")));
+  const stylesheets = [
+    ...new Set(tailwindEntryPoints.map(({ stylesheet }) => stylesheet)),
+  ];
   expect(
-    cacheProblems(
-      new Map([
-        [snapshotA, '{"v":1}\n'],
-        [
-          shardA,
-          shard({
-            "w-[1px]": { valid: true },
-            "w-[2px]": { valid: true },
-            "w-[9px]": { valid: true },
-          }),
-        ],
-        [
-          `${"a".repeat(32)}.decl-ff.json`,
-          shard({ "h-[9px]": { valid: true } }),
-        ],
-        [`${"b".repeat(32)}.json`, '{"v":0}\n'],
-      ]),
-      generated,
-    ),
-  ).toEqual([]);
-  expect(
-    cacheProblems(
-      new Map([[shardA, shard({ "w-[1px]": { valid: false } })]]),
-      generated,
-    ),
-  ).toEqual([
-    `- ${shardA}: w-[1px] (answer changed), w-[2px] (missing)`,
-    `- ${snapshotA}: design-system snapshot missing`,
-  ]);
+    snapshotProblems(shards).map((problem) => problem.split(":")[0]),
+  ).toEqual(stylesheets.map((stylesheet) => `- ${stylesheet}`).toSorted());
+});
+
+test("every Tailwind entry point is linted by the Tailwind rules", () => {
+  // A mapping no rule reads names a snapshot lint never loads, so the
+  // generator never writes it and the cache check would demand it.
+  const linted = oxlintConfig.overrides.flatMap(({ files, rules }) =>
+    Object.keys(rules ?? {}).some((rule) => rule.startsWith("tailwindcss/"))
+      ? files
+      : [],
+  );
+  for (const { root } of tailwindEntryPoints) {
+    expect({
+      root,
+      linted: linted.some((glob) => glob.startsWith(`${root}/`)),
+    }).toEqual({ root, linted: true });
+  }
 });
 
 test("the cache write keeps unused answers and drops obsolete snapshots", () => {
