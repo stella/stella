@@ -78,27 +78,31 @@ const WORD_NUMBERING_LABEL = /(?:^|;)\s*display\s*:\s*inline-block/iu;
  * line's end against the document's own right edge.
  */
 const GLYPH_WIDTHS: ReadonlyMap<string, number> = new Map([
-  ...[..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].map(
-    (letter, index) =>
-      [
-        letter,
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    .split("")
+    .map(
+      (letter, index) =>
         [
-          667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722,
-          778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
-        ][index] ?? 556,
-      ] as const,
-  ),
-  ...[..."abcdefghijklmnopqrstuvwxyz"].map(
-    (letter, index) =>
-      [
-        letter,
+          letter,
+          [
+            667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833,
+            722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611,
+          ][index] ?? 556,
+        ] as const,
+    ),
+  ..."abcdefghijklmnopqrstuvwxyz"
+    .split("")
+    .map(
+      (letter, index) =>
         [
-          556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556,
-          556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500,
-        ][index] ?? 556,
-      ] as const,
-  ),
-  ...[..."0123456789"].map((digit) => [digit, 556] as const),
+          letter,
+          [
+            556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833,
+            556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500,
+          ][index] ?? 556,
+        ] as const,
+    ),
+  ..."0123456789".split("").map((digit) => [digit, 556] as const),
   [" ", 278],
   ["!", 278],
   ['"', 355],

@@ -1,7 +1,7 @@
 // parser-output-unchanged: [pl-sn] the paragraph helpers moved unchanged to pl-printed-lines.ts; positioned spaces and superscript placement stay as on main.
-// parser-output-unchanged: [pl-kis] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [pl-uokik] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading, positioned word spaces included, never reaches.
+// parser-output-unchanged: [pl-kis] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [pl-uokik] extracting paragraph helpers leaves the default PDF reader unchanged; it calls readPage without the positioned block metadata those helpers require.
+// parser-output-unchanged: [cz-uohs] the helper extraction does not affect extractPlPdfSeparatedContent, which reads through readPagesWithFootnotes and never calls readPage.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *

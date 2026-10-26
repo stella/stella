@@ -173,7 +173,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:

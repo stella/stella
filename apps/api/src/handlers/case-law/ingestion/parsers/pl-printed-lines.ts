@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-sn] the paragraph helpers and their constants moved unchanged from pl-sn.ts; their positioned-line inputs and calculations are identical.
 // parser-output-unchanged: [pl-kis] moved unchanged out of pl-sn.ts so the procurement reader shares it; the Supreme Court reading is the only caller in pl-sn.ts.
 // parser-output-unchanged: [pl-uokik] moved unchanged out of pl-sn.ts so the procurement reader shares it; the Supreme Court reading is the only caller in pl-sn.ts.
 // parser-output-unchanged: [cz-uohs] moved unchanged out of pl-sn.ts so the procurement reader shares it; the Supreme Court reading is the only caller in pl-sn.ts.
