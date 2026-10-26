@@ -38,6 +38,12 @@ export const SANCTIONS_WARM_RETRY_MS = {
   max: 5 * 60 * 1000,
 } as const;
 
+/** Slower recovery after the startup bound; editions stay unavailable until loaded. */
+export const SANCTIONS_POST_STARTUP_WARM_RETRY_MS = {
+  initial: 60_000,
+  max: 5 * 60_000,
+} as const;
+
 /**
  * How long one edition's database read may run before it counts as stalled:
  * its read is cancelled and the warmup moves on to the next edition.
@@ -277,17 +283,12 @@ const createEditionWarmer = ({
       targets.delete(source);
       return;
     }
-    // An edition that missed startup is not retried.
-    if (target.terminal) {
-      return;
-    }
+    const retry = target.terminal
+      ? SANCTIONS_POST_STARTUP_WARM_RETRY_MS
+      : SANCTIONS_WARM_RETRY_MS;
     target.failures += 1;
     target.retryAt =
-      now() +
-      Math.min(
-        SANCTIONS_WARM_RETRY_MS.initial * 2 ** (target.failures - 1),
-        SANCTIONS_WARM_RETRY_MS.max,
-      );
+      now() + Math.min(retry.initial * 2 ** (target.failures - 1), retry.max);
     // Reported here, once per attempt, rather than by every request that
     // meets the list while it waits out the backoff.
     reportFailure({
@@ -301,9 +302,7 @@ const createEditionWarmer = ({
   const pass = async () => {
     for (;;) {
       const instant = now();
-      const due = [...targets].find(
-        ([, target]) => !target.terminal && target.retryAt <= instant,
-      );
+      const due = [...targets].find(([, target]) => target.retryAt <= instant);
       if (due === undefined || state.db === null) {
         // In the same step as the last look: any later request starts a pass.
         state.active = false;
@@ -355,7 +354,11 @@ const createEditionWarmer = ({
     // Failure belongs to the edition that missed startup, not later publications.
     terminalize: () => {
       for (const target of targets.values()) {
-        target.terminal = true;
+        if (!target.terminal) {
+          target.terminal = true;
+          target.failures = 1;
+          target.retryAt = now() + SANCTIONS_POST_STARTUP_WARM_RETRY_MS.initial;
+        }
       }
     },
     terminalized: () => [...targets.values()].some((target) => target.terminal),
@@ -386,16 +389,13 @@ const createEditionWarmer = ({
         };
         targets.set(source, target);
       }
-      if (target.terminal) {
-        return "load-failed";
-      }
       if (target.retryAt > instant) {
         return "load-failed";
       }
       if (!state.active) {
         start();
       }
-      return "warming";
+      return target.terminal ? "load-failed" : "warming";
     },
   };
 };

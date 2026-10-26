@@ -68,6 +68,7 @@ import type {
 } from "./matcher-protocol";
 import {
   createPublicSanctionsScreening,
+  SANCTIONS_POST_STARTUP_WARM_RETRY_MS,
   SANCTIONS_WARM_READ_STALL_MS,
   SANCTIONS_WARM_RETRY_MS,
   SANCTIONS_WARM_STALL_MS,
@@ -930,6 +931,64 @@ test("a startup failure remains tied to its edition while a replacement warms", 
     await pool.close();
   }
 });
+
+test.each([1, 6])(
+  "an unchanged terminal edition recovers on retry %i with capped slow backoff",
+  async (retryCount) => {
+    const clock = createMatcherTestClock();
+    const pool = createSanctionsMatcherPool({ clock });
+    const reads: number[] = [];
+    const publicScreen = createPublicSanctionsScreening({
+      pool,
+      clock,
+      reportFailure: () => undefined,
+      loadEntries: async (options) => {
+        const entries = await loadEditionEntries(options);
+        if (entries.at(0)?.source === "eu") {
+          reads.push(clock.now());
+          if (reads.length <= retryCount) {
+            throw new TypeError("Transient edition read failure");
+          }
+        }
+        return entries;
+      },
+    });
+    const ask = async () =>
+      (await publicScreen(publicProps("A Completely Distant Name"))).unwrap();
+    try {
+      await ask();
+      await publicScreen.warmupSettled();
+      publicScreen.warmupTerminalize();
+      expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+      expect(SANCTIONS_POST_STARTUP_WARM_RETRY_MS.initial).toBeGreaterThan(
+        SANCTIONS_WARM_RETRY_MS.initial,
+      );
+      for (let retry = 0; retry < retryCount; retry += 1) {
+        const delay = Math.min(
+          SANCTIONS_POST_STARTUP_WARM_RETRY_MS.initial * 2 ** retry,
+          SANCTIONS_POST_STARTUP_WARM_RETRY_MS.max,
+        );
+        clock.advance(delay - 1);
+        expect(reasonsBySource((await ask()).lists)["eu"]).toBe("load-failed");
+        expect(reads).toHaveLength(retry + 1);
+        clock.advance(1);
+        expect(reasonsBySource((await ask()).lists)["eu"]).toBe("load-failed");
+        await publicScreen.warmupSettled();
+        expect(reads).toHaveLength(retry + 2);
+        expect(
+          (reads.at(-1) ?? panic("Missing retry")) -
+            (reads.at(-2) ?? panic("Missing previous attempt")),
+        ).toBe(delay);
+        if (retry + 1 < retryCount) {
+          expect(publicScreen.warmupStartupState("eu")).toBe("terminal");
+        }
+      }
+      expect((await ask()).status).toBe("clear");
+    } finally {
+      await pool.close();
+    }
+  },
+);
 
 test("an edition that finishes loading after startup gave up clears its failure", async () => {
   const clock = createMatcherTestClock();
