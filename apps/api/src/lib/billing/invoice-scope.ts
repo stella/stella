@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { outerColumnReference } from "@/api/lib/db/outer-column-reference";
 
 type InvoiceScopeColumns = {
   id: SQLWrapper;
@@ -16,7 +17,7 @@ export const invoiceTouchesMatter = (
   table: InvoiceScopeColumns,
   workspaceId: SafeId<"workspace">,
 ) =>
-  sql`(${table.workspaceId} = ${workspaceId} OR EXISTS (SELECT 1 FROM public.invoice_lines scope_line WHERE scope_line.invoice_id = ${table.id} AND scope_line.workspace_id = ${workspaceId}))`;
+  sql`(${outerColumnReference(table.workspaceId)} = ${workspaceId} OR EXISTS (SELECT 1 FROM public.invoice_lines scope_line WHERE scope_line.invoice_id = ${outerColumnReference(table.id)} AND scope_line.workspace_id = ${workspaceId}))`;
 
 /**
  * A client invoice stays addressable through any matter of its client after
@@ -28,7 +29,7 @@ export const invoiceInMatter = (
   table: InvoiceScopeColumns,
   workspaceId: SafeId<"workspace">,
 ) =>
-  sql`(${invoiceTouchesMatter(table, workspaceId)} OR (${table.workspaceId} IS NULL AND EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${table.organizationId} AND invoice_matter.client_id = ${table.clientId})))`;
+  sql`(${invoiceTouchesMatter(table, workspaceId)} OR (${outerColumnReference(table.workspaceId)} IS NULL AND EXISTS (SELECT 1 FROM public.workspaces invoice_matter WHERE invoice_matter.id = ${workspaceId} AND invoice_matter.organization_id = ${outerColumnReference(table.organizationId)} AND invoice_matter.client_id = ${outerColumnReference(table.clientId)})))`;
 
 /**
  * Tool matter scope covers this invoice and every matter of its linked
@@ -48,7 +49,7 @@ export const invoiceWithinMatterAllowlist = (
     workspaceIds.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
-  return sql`((${table.workspaceId} IS NULL OR ${table.workspaceId} IN (${allowed})) AND NOT EXISTS (SELECT 1 FROM public.invoice_lines credential_line WHERE credential_line.invoice_id IN (${table.id}, ${table.originalInvoiceId}) AND credential_line.workspace_id NOT IN (${allowed})))`;
+  return sql`((${outerColumnReference(table.workspaceId)} IS NULL OR ${outerColumnReference(table.workspaceId)} IN (${allowed})) AND NOT EXISTS (SELECT 1 FROM public.invoice_lines credential_line WHERE credential_line.invoice_id IN (${outerColumnReference(table.id)}, ${outerColumnReference(table.originalInvoiceId)}) AND credential_line.workspace_id NOT IN (${allowed})))`;
 };
 
 type InvoiceShareColumns = {
@@ -68,6 +69,6 @@ export const invoiceMatterShare = (
   table: InvoiceShareColumns,
   workspaceId: SafeId<"workspace">,
 ) =>
-  sql<number>`(CASE WHEN ${table.workspaceId} IS NOT NULL THEN CASE WHEN ${table.workspaceId} = ${workspaceId} THEN ${table.totalAmount} ELSE 0 END ELSE COALESCE((SELECT SUM(share_line.gross_amount) FROM public.invoice_lines share_line WHERE share_line.invoice_id = ${table.id} AND share_line.workspace_id = ${workspaceId}), 0) END)::bigint`.mapWith(
+  sql<number>`(CASE WHEN ${outerColumnReference(table.workspaceId)} IS NOT NULL THEN CASE WHEN ${outerColumnReference(table.workspaceId)} = ${workspaceId} THEN ${outerColumnReference(table.totalAmount)} ELSE 0 END ELSE COALESCE((SELECT SUM(share_line.gross_amount) FROM public.invoice_lines share_line WHERE share_line.invoice_id = ${outerColumnReference(table.id)} AND share_line.workspace_id = ${workspaceId}), 0) END)::bigint`.mapWith(
     Number,
   );
