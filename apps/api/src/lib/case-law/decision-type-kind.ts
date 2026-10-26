@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds the Brazilian decision types to the facet table, which no parser reads.
 import { panic } from "better-result";
 
 import {
@@ -139,6 +140,12 @@ export const STATED_DECISION_TYPE_KINDS = {
   "postanowienie o odmowie wydania opinii w sprawie opodatkowania wyrównawczego":
     "top_up_tax_opinion",
   "postanowienie rozstrzygające spór o właściwość": "order",
+
+  // Brazilian (TJDFT bases). A panel's judgment, and a decision one judge,
+  // or the court's presidency, gives alone.
+  acórdão: "judgment",
+  "decisão monocrática": "decision",
+  "decisão da presidência": "decision",
 
   // EU (CDM resource types) and the United States (CourtListener).
   judgment: "judgment",

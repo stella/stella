@@ -54,6 +54,7 @@ export const SOURCE_AUTHORITY = {
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+  [ADAPTER_KEYS.BR_TJDFT]: 0,
 } as const satisfies Record<AdapterKey, number>;
 
 type CandidateSide = {

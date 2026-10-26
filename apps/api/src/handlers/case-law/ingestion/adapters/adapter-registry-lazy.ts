@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /**
  * Lazy adapter module registry.
  *
@@ -60,6 +61,8 @@ export const ADAPTER_MODULES = {
   [ADAPTER_KEYS.PL_UODO]: async () => (await import("./pl-uodo")).plUodoAdapter,
   [ADAPTER_KEYS.PL_UOKIK]: async () =>
     (await import("./pl-uokik")).plUokikAdapter,
+  [ADAPTER_KEYS.BR_TJDFT]: async () =>
+    (await import("./br-tjdft")).brTjdftAdapter,
 } as const satisfies Record<AdapterKey, AdapterLoader>;
 
 const adapterKeyFromString = (key: string): AdapterKey | undefined =>

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "15ceff85bb6279a4931e42005145a58e2f5161d422a2fe5df003940cb83119af",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:27:21.000Z",
+  "note": "POST body {\"query\":\"\",\"termosAcessorios\":[{\"campo\":\"base\",\"valor\":\"acordaos\"},{\"campo\":\"dataPublicacao\",\"valor\":\"entre 1975-01-01 e 1975-12-31\"}],\"pagina\":5,\"tamanho\":1,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; a 1975 acórdão for which the court publishes no full text, only the record"
+}

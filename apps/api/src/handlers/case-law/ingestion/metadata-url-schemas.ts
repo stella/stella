@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/at-courts.metadata-urls";
 import { CZ_UOHS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs.metadata-urls";
@@ -53,6 +54,7 @@ export const METADATA_URL_SCHEMAS = {
   [ADAPTER_KEYS.PL_KIS]: PL_KIS_METADATA_URL_SCHEMA,
   [ADAPTER_KEYS.PL_UODO]: undefined,
   [ADAPTER_KEYS.PL_UOKIK]: PL_UOKIK_METADATA_URL_SCHEMA,
+  [ADAPTER_KEYS.BR_TJDFT]: undefined,
   [ADAPTER_KEYS.CZ_UOHS]: CZ_UOHS_METADATA_URL_SCHEMA,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: undefined,
 } as const satisfies Record<AdapterKey | ImportSourceKey, unknown>;

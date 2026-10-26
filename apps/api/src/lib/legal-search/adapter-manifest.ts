@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 // parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.
@@ -683,6 +684,27 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    key: ADAPTER_KEYS.BR_TJDFT,
+    documentStage: "inline",
+    name: "Court of Justice of the Federal District and Territories (TJDFT)",
+    publisher: "Tribunal de Justiça do Distrito Federal e dos Territórios",
+    publicHomeUrl: "https://jurisdf.tjdft.jus.br",
+    ...ADAPTER_JURISDICTIONS.BRA,
+    // Brazil issues no ECLI, so there is no court code to resolve one against.
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      // Sliced by publication date. The court sits since 1960, but the
+      // search dates 21 acórdãos between 1900 and 1957 (data-entry dates,
+      // served as published), so the range opens with them; reconciliation
+      // walks those years a year at a time.
+      type: "publication-date",
+      fromInclusive: "1900-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     documentStage: "inline",
@@ -786,6 +808,7 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.CZ_UOHS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.BR_TJDFT]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
   ...FIXTURE_SOURCE_APP_READER_TEXT,
 } as const satisfies Record<

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "1c3e8fb7c1854ea87eb0de16a06786fcd211010f7927e776b2b5a8d923a46ded",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:42.000Z",
+  "note": "POST body {\"query\":\"\",\"termosAcessorios\":[{\"campo\":\"base\",\"valor\":\"decisoes\"},{\"campo\":\"dataPublicacao\",\"valor\":\"entre 2024-03-01 e 2024-03-01\"}],\"pagina\":0,\"tamanho\":40,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":false,\"retornaTotalizacao\":false}; the first listing page of the monocratic and presidency decisions published on 2024-03-01"
+}

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "6420ad740e2ff83c2b0e6047d28e616c6061d1740dc0b6ffb0a9c4849eb30d52",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:18.000Z",
+  "note": "POST body {\"termosAcessorios\":[{\"campo\":\"uuid\",\"valor\":\"aaf2982b-44e3-4a3d-9b74-df1c8555a667\"}],\"pagina\":0,\"tamanho\":1,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; an electronic-process (PJe) acórdão with its word-processor HTML and a Jurisprudência em Foco link"
+}

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the EU Publications Office gate paces one request per second; request timing only, parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
@@ -43,6 +44,16 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
   "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
+  /**
+   * jurisdf.tjdft.jus.br. The search answers `x-ratelimit-limit: 60` per
+   * 60-second window; a gap of a little over a second keeps a window that
+   * does not start on a request below that count.
+   */
+  "tjdft-jus-br": {
+    publisher: "TJDFT",
+    intervalMs: 1100,
+    hosts: ["jurisdf.tjdft.jus.br"],
+  },
   "edpb-eu": {
     publisher: "European Data Protection Board",
     intervalMs: 1000,

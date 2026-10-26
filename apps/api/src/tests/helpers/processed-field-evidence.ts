@@ -14,6 +14,10 @@ import path from "node:path";
 import { parseDocx } from "@stll/folio-core/server";
 import { type DocumentAst, isDocumentAst } from "@stll/legal-ast/document-ast";
 
+import {
+  assembleBrTjdftDecision,
+  readBrTjdftSearch,
+} from "@/api/handlers/case-law/ingestion/adapters/br-tjdft";
 import { parseCzUohsDocumentPdf } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
 import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
@@ -357,6 +361,22 @@ const readAtFindok: EvidenceReader = async (fixture) => {
   return [{ id: fixture, ast: parsed.value.documentAst }];
 };
 
+/** A recorded one-record detail answer, assembled as the crawl assembles it. */
+const readBrTjdft: EvidenceReader = async (fixture) => {
+  const raw = await textOf(fixture);
+  const record =
+    readBrTjdftSearch(raw)?.rows.at(0) ??
+    panic(`${fixture}: no TJDFT detail record`);
+  const { documentAst } = assembleBrTjdftDecision({
+    listing: record,
+    detail: { record, raw },
+    detailStatus: undefined,
+  });
+  return isDocumentAst(documentAst)
+    ? [{ id: fixture, ast: documentAst }]
+    : panic(`${fixture}: the TJDFT record parsed to no document`);
+};
+
 /** Every source's reader, or `null` where its declaration names no recording. */
 export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "cz-regional": readCzRegional,
@@ -389,5 +409,6 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "pl-kis": null,
   "pl-uodo": null,
   "pl-uokik": null,
+  "br-tjdft": readBrTjdft,
   "us-courtlistener": null,
 } as const satisfies Record<ProcessedFieldSourceKey, EvidenceReader | null>;

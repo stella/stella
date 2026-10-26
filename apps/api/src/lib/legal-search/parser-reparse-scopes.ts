@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { panic } from "better-result";
 
 import {
@@ -335,6 +336,13 @@ export const PARSER_VERSION_SCOPES = {
       type: "all",
       reason:
         "Revalidate document AST identities across the complete parser output.",
+    },
+  },
+  [ADAPTER_KEYS.BR_TJDFT]: {
+    version: 1,
+    scope: {
+      type: "all",
+      reason: "the source's first parser; there are no stored rows to narrow",
     },
   },
 } as const satisfies ParserVersionScopes<

@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "5142d8cc3de54dec93d75471f8e4c3ca5672c47d443fc4391ffaa80ebcb52a36",
+  "sourceUrl": "https://jurisdf.tjdft.jus.br/api/v1/pesquisa",
+  "capturedAt": "2026-10-25T02:26:23.000Z",
+  "note": "POST body {\"termosAcessorios\":[{\"campo\":\"uuid\",\"valor\":\"cb8d3a91-a3ed-4b85-b1f7-a4ed68efede7\"}],\"pagina\":0,\"tamanho\":1,\"espelho\":false,\"inteiroTeor\":false,\"sinonimos\":false,\"retornaInteiroTeor\":true,\"retornaTotalizacao\":false}; a 2010 acórdão whose full text is a preformatted text rendering, with a pre-CNJ process number"
+}

@@ -1,3 +1,4 @@
+// parser-output-unchanged: the br-tjdft adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: replay enrolment chooses which stored rows are re-parsed, never how a row is parsed.
 import { panic } from "better-result";
 
@@ -53,6 +54,7 @@ export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.PL_KIS]: { mode: "off" },
   [ADAPTER_KEYS.PL_UODO]: { mode: "off" },
   [ADAPTER_KEYS.PL_UOKIK]: { mode: "off" },
+  [ADAPTER_KEYS.BR_TJDFT]: { mode: "off" },
   [ADAPTER_KEYS.CZ_UOHS]: { mode: "off" },
 } as const satisfies Record<AdapterKey, ReplayEnrolment>;
 

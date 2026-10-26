@@ -114,6 +114,7 @@
       "ordentliche erledigung (sachentscheidung)",
       "zurückweisung mangels erheblicher rechtsfrage"
     ],
+    "BRA": ["acórdão", "decisão da presidência", "decisão monocrática"],
     "CZE": [
       "příkaz ministerstva spravedlnosti",
       "rozhodnutí ministerstva spravedlnosti",
