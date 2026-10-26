@@ -10,7 +10,6 @@ import {
   ruleOptions,
   scopeMatches,
 } from "../../scripts/oxlint-config-scopes.ts";
-import { parseSource } from "../../scripts/parse-memo.ts";
 import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
 
 const plugin = "prefer-bun-native";
@@ -219,6 +218,16 @@ test.each([
     ruleOptions(effectiveRule({ file, rule: hmacRule })),
   ).not.toContainEqual(expect.objectContaining({ hmacTarget: "bun" }));
 });
+
+// The parse memo keeps only oxc trees; this test still reads compiler trees.
+const parseSource = ({ fileName, text }: { fileName: string; text: string }) =>
+  ts.createSourceFile(
+    fileName,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
 
 const sourceNodes = (source: ReturnType<typeof parseSource>) => {
   const nodes = [...source.getChildren(source)];
