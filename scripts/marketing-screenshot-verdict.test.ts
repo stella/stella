@@ -75,6 +75,21 @@ test("a timeout, a crash or a global error is never a screenshot difference", ()
   expect(verdictOf(undefined, 1).kind).toBe("fail");
 });
 
+test("a screenshot that never stabilised is a failure, not a difference", () => {
+  expect(
+    verdictOf(
+      report({
+        title: "capture landing product screenshots",
+        status: "failed",
+        messages: [
+          "Error: expect(page).toHaveScreenshot(expected) failed\n\n  Timeout 15000ms exceeded.\n  - 2 consecutive screenshots were not stable",
+        ],
+      }),
+      1,
+    ).kind,
+  ).toBe("fail");
+});
+
 test("a passing run passes", () => {
   expect(verdictOf(undefined, 0)).toEqual({ kind: "pass" });
 });

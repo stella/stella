@@ -37,9 +37,11 @@ const REPORT = v.looseObject({
   errors: v.optional(v.array(ERROR), []),
 });
 
-// Playwright's messages for a baseline mismatch (pixel or size difference).
+// Evidence of a real baseline difference: a pixel difference or a size
+// mismatch against the committed image. A bare `toHaveScreenshot` failure
+// (a page that never stabilised, a capture error) is not one.
 const SCREENSHOT_MISMATCH =
-  /toHaveScreenshot|Screenshot comparison failed|pixels \(ratio [\d.]+ of all image pixels\) are different|Expected an image \d+px by \d+px, received/u;
+  /\d+ pixels \(ratio [\d.]+ of all image pixels\) are different|Expected an image \d+px by \d+px, received \d+px by \d+px/u;
 
 export type Verdict =
   | { kind: "pass" }
