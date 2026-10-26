@@ -19,7 +19,8 @@ export type CitedDecisionRead =
   | {
       type: "loaded";
       decision: DecisionCitationMetadata;
-      blocks: readonly Block[];
+      /** Null when the decision has no parsed text to number paragraphs in. */
+      blocks: readonly Block[] | null;
     };
 
 /** A cited decision's read, parsed once for every citation into it. */
@@ -36,7 +37,7 @@ export const citedDecisionRead = (
       return {
         type: "loaded",
         decision: decisionCitationMetadata(view.items),
-        blocks: parseDocumentAst(view.items.documentAst)?.blocks ?? [],
+        blocks: parseDocumentAst(view.items.documentAst)?.blocks ?? null,
       };
     default:
       view satisfies never;
@@ -99,7 +100,7 @@ export const resolveReaderAnswerCitation = ({
     case "unavailable":
       return { type: "unresolved" };
     case "loaded": {
-      const block = read.blocks.find(
+      const block = read.blocks?.find(
         ({ anchorId }) => anchorId === citation.paragraphId,
       );
       return {
