@@ -54,11 +54,11 @@ describe("legal render census fixtures", () => {
       clause: legalClause(index),
       row: reviewRecord({ index, rowCount: 500 }),
     }));
-    for (let index = records.length - 1; index >= 0; index--) {
+    for (const [index, record] of Array.from(records.entries()).toReversed()) {
       expect({
         clause: legalClause(index),
         row: reviewRecord({ index, rowCount: 500 }),
-      }).toEqual(records.at(index));
+      }).toEqual(record);
       expect(reviewRecord({ index, rowCount: 50 }).name).toBe(
         reviewRecord({ index, rowCount: 500 }).name,
       );
