@@ -206,15 +206,20 @@ const decisionListOrderBy = (sort: DecisionListSort): SQL[] => {
  * (`decisionDatedFilterSql`): read forward, the `-infinity` band would lead
  * every first page, and a decision the source never dated is not the oldest.
  * Stated on the sort key, so the exclusion is where the index range starts
- * rather than a filter over it.
+ * rather than a filter over it. Applied to the siblings as well, like the
+ * request filters: an undated version the order excludes must not hide a
+ * dated one it lists.
  */
-const decisionListDatedConditions = (sort: DecisionListSort): SQL[] => {
+const decisionListDatedConditions = (
+  sort: DecisionListSort,
+  table: Pick<DecisionFilterColumns, "decisionDate">,
+): SQL[] => {
   switch (sort) {
     case "newest":
       return [];
     case "oldest":
       return [
-        sql`${decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)} > '-infinity'::date`,
+        sql`${decisionDateSortKeySql(table.decisionDate)} > '-infinity'::date`,
       ];
     default:
       sort satisfies never;
@@ -304,7 +309,7 @@ export const listDecisionsPageQuery = ({
   const conditions: SQL[] = [
     redistributableCaseLawSource,
     ...decisionFilterConditions(query, publishedCaseLawDecisions),
-    ...decisionListDatedConditions(sort),
+    ...decisionListDatedConditions(sort, publishedCaseLawDecisions),
   ];
   if (cursor !== undefined) {
     conditions.push(decisionDateKeysetAfter(cursor));
@@ -333,6 +338,7 @@ export const listDecisionsPageQuery = ({
         sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
         redistributableCaseLawSourceFor(siblingSource.descriptor),
         ...decisionFilterConditions(query, sibling),
+        ...decisionListDatedConditions(sort, sibling),
       ),
     )
     .limit(1);

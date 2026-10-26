@@ -103,6 +103,26 @@ const seeds: Seed[] = [
     language: "sk",
     languageGroupKey: null,
   },
+  // One judgment in two languages: the version stored first carries no date,
+  // the later translation does.
+  {
+    caseNumber: "5 C 1/2024",
+    court: "Okresný súd Košice I",
+    country: "SVK",
+    createdAt: day(60),
+    decisionDate: null,
+    language: "sk",
+    languageGroupKey: "SVK:OSKE1:5C1/2024",
+  },
+  {
+    caseNumber: "5 C 1/2024",
+    court: "Okresný súd Košice I",
+    country: "SVK",
+    createdAt: day(61),
+    decisionDate: "2024-05-02",
+    language: "en",
+    languageGroupKey: "SVK:OSKE1:5C1/2024",
+  },
 ];
 
 let client: PGlite;
@@ -333,6 +353,29 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("oldest first lists a dated version whose undated sibling it excludes", async () => {
+  const result = await listDecisionsHandler(
+    {
+      country: "SVK",
+      court: "Okresný súd Košice I",
+      limit: 10,
+      sort: "oldest",
+    },
+    caseLawDb,
+    async () => courtWeightMapFromSeed(),
+  );
+  if (!("items" in result)) {
+    throw new Error("list failed");
+  }
+  expect(
+    result.items.map(({ caseNumber, decisionDate, language }) => [
+      caseNumber,
+      decisionDate,
+      language,
+    ]),
+  ).toEqual([["5 C 1/2024", "2024-05-02", "en"]]);
+});
 
 test(
   "a tampered cursor is rejected, not silently restarted",
