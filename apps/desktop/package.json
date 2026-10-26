@@ -34,8 +34,7 @@
     "better-result": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
-    "use-intl": "catalog:",
-    "valibot": "catalog:"
+    "use-intl": "catalog:"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",

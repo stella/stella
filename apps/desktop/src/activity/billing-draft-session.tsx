@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
@@ -233,12 +232,12 @@ export const useBillingDraftSession = ({
             ...(previousResult === null ? {} : { previousResult }),
           },
         }),
-    ).then((response) => {
+    ).then(async (response) => {
       if (request !== draftRequest.current) {
         return undefined;
       }
-      setDrafting({ type: "idle" });
       if (Result.isError(response)) {
+        setDrafting({ type: "idle" });
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
@@ -246,11 +245,14 @@ export const useBillingDraftSession = ({
         onError(t("aiDraftFailed"));
         return undefined;
       }
-      const parsed = v.safeParse(
-        desktopBillingDraftReviewSchema,
-        response.value,
-      );
-      if (!parsed.success) {
+      const parsed = await desktopBillingDraftReviewSchema[
+        "~standard"
+      ].validate(response.value);
+      if (request !== draftRequest.current) {
+        return undefined;
+      }
+      setDrafting({ type: "idle" });
+      if (parsed.issues !== undefined) {
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
@@ -258,7 +260,7 @@ export const useBillingDraftSession = ({
         onError(t("aiDraftFailed"));
         return undefined;
       }
-      applyReview({ review: parsed.output, groups, steer });
+      applyReview({ review: parsed.value, groups, steer });
       return undefined;
     });
   };

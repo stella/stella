@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
-import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
@@ -59,7 +58,7 @@ import type {
   StructureSummary,
 } from "./billing-draft-logic";
 
-export type BillingDraftSettings =
+type BillingDraftSettings =
   | { type: "loading" }
   | { type: "unavailable" }
   | {
@@ -74,18 +73,23 @@ export type BillingDraftSettingsControl = {
   setPreference: (preference: string | null) => Promise<boolean>;
 };
 
-const settingsFrom = (value: unknown): BillingDraftSettings | null => {
-  const parsed = v.safeParse(desktopBillingDraftSettingsResponseSchema, value);
-  if (!parsed.success) {
+const settingsFrom = async (
+  value: unknown,
+): Promise<BillingDraftSettings | null> => {
+  const parsed =
+    await desktopBillingDraftSettingsResponseSchema["~standard"].validate(
+      value,
+    );
+  if (parsed.issues !== undefined) {
     return null;
   }
-  if (parsed.output.organizationMode === "disabled") {
+  if (parsed.value.organizationMode === "disabled") {
     return { type: "unavailable" };
   }
   return {
     type: "ready",
-    consent: parsed.output.consent,
-    preference: parsed.output.preference,
+    consent: parsed.value.consent,
+    preference: parsed.value.preference,
   };
 };
 
@@ -110,11 +114,14 @@ export const useBillingDraftSettings = (
       return undefined;
     }
     invoke<unknown>("billing_draft_get_settings")
-      .then((value) => {
+      .then(async (value) => {
         if (current !== request.current) {
           return undefined;
         }
-        const next = settingsFrom(value);
+        const next = await settingsFrom(value);
+        if (current !== request.current) {
+          return undefined;
+        }
         if (next === null) {
           reportActivityError(
             DESKTOP_TELEMETRY_OPERATIONS.activityRead,
@@ -143,6 +150,9 @@ export const useBillingDraftSettings = (
       const response = await Result.tryPromise(
         async () => await invoke<unknown>(command, args),
       );
+      if (current !== request.current) {
+        return false;
+      }
       if (Result.isError(response)) {
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
@@ -150,7 +160,10 @@ export const useBillingDraftSettings = (
         );
         return false;
       }
-      const next = settingsFrom(response.value);
+      const next = await settingsFrom(response.value);
+      if (current !== request.current) {
+        return false;
+      }
       if (next === null) {
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
@@ -277,7 +290,7 @@ type SteerInputProps = {
 };
 
 /** A plain-text adjustment with quick chips, for every draft or for one. */
-export const BillingDraftSteerInput = ({
+const BillingDraftSteerInput = ({
   id,
   disabled,
   placeholder,

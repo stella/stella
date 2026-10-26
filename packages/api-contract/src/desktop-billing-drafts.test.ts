@@ -461,3 +461,56 @@ test("model grammar preserves shape while canonical validation enforces every re
     );
   }
 });
+
+test("desktop billing response boundaries validate through Standard Schema", async () => {
+  for (const { schema, valid, invalid } of [
+    {
+      schema: desktopBillingDraftSettingsResponseSchema,
+      valid: [
+        { organizationMode: "enabled", consent: "granted", preference: null },
+        {
+          organizationMode: "disabled",
+          consent: "revoked",
+          preference: "Concise",
+        },
+      ],
+      invalid: [
+        { consent: "granted", preference: null },
+        { organizationMode: "enabled", consent: "unknown", preference: null },
+        {
+          organizationMode: "enabled",
+          consent: "granted",
+          preference: null,
+          extra: true,
+        },
+      ],
+    },
+    {
+      schema: desktopBillingDraftReviewSchema,
+      valid: [{ result: response, earlierEntries: [] }],
+      invalid: [
+        { earlierEntries: [] },
+        { result: response, earlierEntries: [], extra: true },
+        {
+          result: {
+            ...response,
+            drafts: response.drafts.map((draft) => ({
+              ...draft,
+              classification: { type: "unknown" },
+            })),
+          },
+          earlierEntries: [],
+        },
+      ],
+    },
+  ]) {
+    for (const value of valid) {
+      const parsed = await schema["~standard"].validate(value);
+      expect(parsed.issues).toBeUndefined();
+      expect(parsed).toMatchObject({ value });
+    }
+    for (const value of invalid) {
+      expect((await schema["~standard"].validate(value)).issues).toBeDefined();
+    }
+  }
+});
