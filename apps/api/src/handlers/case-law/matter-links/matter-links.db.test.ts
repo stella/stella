@@ -20,6 +20,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createMatterLinksBatch from "@/api/handlers/case-law/matter-links/batch/create";
 import createMatterLink from "@/api/handlers/case-law/matter-links/create";
 import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -67,7 +68,7 @@ const workspaceContext = () => ({
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/case/matter-links"),
-  route: "/case/matter-links/:workspaceId",
+  route: "/v1/case/matter-links/:workspaceId" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   session: { activeOrganizationId: ids.orgA },

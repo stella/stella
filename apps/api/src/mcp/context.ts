@@ -125,7 +125,7 @@ import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
-import type { McpSession } from "@/api/mcp/auth";
+import type { McpCredentialType, McpSession } from "@/api/mcp/auth";
 import type { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
 import type { McpFeatureAccessBindings } from "@/api/mcp/feature-access";
@@ -267,6 +267,8 @@ export type McpRequestContext = {
   clientIp?: string | null;
   credentialType?: "oauth" | "api-key" | "anonymous";
   clientId?: string | null;
+  /** Credential classification copied from the authenticated MCP session. */
+  sessionCredentialType?: McpCredentialType | undefined;
   /**
    * The credential's own permission set, when it carries one (machine API
    * keys). Authorization ANDs it with `memberRole` through
@@ -726,6 +728,9 @@ export const resolveMcpSessionContext = async (
     ),
     accessibleWorkspaces: usableWorkspaces,
     clientIp,
+    ...(session.credential === undefined
+      ? {}
+      : { sessionCredentialType: session.credential.type }),
     createOperationDatabaseScope,
     featureAccessSnapshot,
     ...credentialPermissionContext(session),

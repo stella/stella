@@ -72,7 +72,7 @@ type IssuanceContext = {
 };
 const assertIssuanceReference = (
   node: ts.Node,
-  { filename, ast, isMachineOwner }: IssuanceContext,
+  { filename, isMachineOwner }: IssuanceContext,
 ) => {
   // An operation-name constant such as `REVIEW_ACCOUNT_OPERATION.createApiKey`
   // holds a label, not the provider issuance function.
@@ -99,17 +99,15 @@ const assertIssuanceReference = (
   if (isMemberReference || isBareReference) {
     const directCall =
       ts.isCallExpression(node.parent) && node.parent.expression === node;
-    const parameter = ts.isParameter(node.parent) ? node.parent : null;
-    const defaultParameter =
-      isMemberReference && ts.isParameter(node.parent) ? node.parent : null;
-    const machineParameter = parameter ?? defaultParameter;
+    // The machine owner takes its writer as a required parameter: its callers
+    // pass the fenced in-transaction writer, never the provider function.
+    const machineParameter = ts.isParameter(node.parent) ? node.parent : null;
     const machineAlias =
       isMachineOwner &&
       machineParameter !== null &&
       ts.isIdentifier(machineParameter.name) &&
       machineParameter.name.text === "createApiKey" &&
-      machineParameter.initializer?.getText(ast) ===
-        "getAuth().api.createApiKey";
+      machineParameter.initializer === undefined;
     if (!directCall && !machineAlias) {
       throw new TypeError(`${filename}: issuance function cannot be aliased`);
     }
@@ -171,6 +169,19 @@ const assertIssuanceCall = (
     configName !== "desktop-registry"
   ) {
     throw new TypeError(`${filename}: issuance config must have a known owner`);
+  }
+  // The provider endpoint commits on its own connection, outside the
+  // account's credential fence that an access reset serializes against.
+  const callee = node.expression;
+  if (
+    (ts.isPropertyAccessExpression(callee) ||
+      ts.isElementAccessExpression(callee)) &&
+    ts.isPropertyAccessExpression(callee.expression) &&
+    callee.expression.name.text === "api"
+  ) {
+    throw new TypeError(
+      `${filename}: desktop issuance must write under the credential fence`,
+    );
   }
 
   const names: string[] = [];
@@ -405,8 +416,23 @@ describe("desktop registry API-key configuration", () => {
             ? {
                 ...entry,
                 source: entry.source.replace(
-                  "expiresIn: null",
-                  "expiresIn: DESKTOP_REGISTRY_KEY_SECONDS",
+                  "desktopCredentialWriter(fence, now).createApiKey(",
+                  "getAuth().api.createApiKey(",
+                ),
+              }
+            : entry,
+        ),
+      ),
+    ).toThrow("desktop issuance must write under the credential fence");
+    expect(() =>
+      assertDesktopIssuance(
+        sources.map((entry) =>
+          entry === issuer
+            ? {
+                ...entry,
+                source: entry.source.replace(
+                  "expiresIn: null,",
+                  "expiresIn: DESKTOP_REGISTRY_KEY_SECONDS,",
                 ),
               }
             : entry,
@@ -449,7 +475,7 @@ describe("desktop registry API-key configuration", () => {
         {
           filename: "unowned-issuer.ts",
           source:
-            "auth.api.createApiKey({ body: { configId: DESKTOP_REGISTRY_KEY_CONFIG, expiresIn: 2592000, metadata: {} } });",
+            "writer.createApiKey({ body: { configId: DESKTOP_REGISTRY_KEY_CONFIG, expiresIn: 2592000, metadata: {} } });",
         },
       ]),
     ).toThrow("desktop provider expiry must be null");
@@ -468,6 +494,22 @@ describe("desktop registry API-key configuration", () => {
         ),
       ),
     ).toThrow("machine issuance cannot mint desktop credentials");
+    // A provider default would let a caller mint outside the credential fence.
+    expect(() =>
+      assertDesktopIssuance(
+        sources.map((entry) =>
+          entry.filename.replace(/^\.\//u, "") === "handlers/api-keys/mint.ts"
+            ? {
+                ...entry,
+                source: entry.source.replace(
+                  "createApiKey: CreateApiKey,",
+                  "createApiKey: CreateApiKey = getAuth().api.createApiKey,",
+                ),
+              }
+            : entry,
+        ),
+      ),
+    ).toThrow("issuance function cannot be aliased");
     for (const reference of [
       "auth.api.createApiKey",
       'auth.api["createApiKey"]',

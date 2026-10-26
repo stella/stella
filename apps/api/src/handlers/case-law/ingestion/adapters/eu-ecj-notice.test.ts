@@ -1009,7 +1009,7 @@ describe("stored Formex refresh", () => {
 
   test("treats a stored archive as current without contacting Cellar", async () => {
     const currentFormex = `formex-archive:${encodeSourceRawEnvelope({
-      "FORMEX/main.xml": Buffer.from("<current-formex />").toString("base64"),
+      "FORMEX/main.xml": Buffer.from("<current-formex />").toBase64(),
     })}`;
 
     const outcome = await refreshEcjStoredFormex({

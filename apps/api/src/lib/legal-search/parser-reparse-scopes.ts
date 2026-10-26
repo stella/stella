@@ -165,11 +165,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 7,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
@@ -189,10 +189,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Rejoin sentences split across paragraphs, drop page numbers after the closing rule and join marked superscript article numbers.",
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {

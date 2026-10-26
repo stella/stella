@@ -9,6 +9,9 @@
  * own `LIMITS` so server call sites keep one lookup table.
  */
 
+/** Bun's 128 MiB default ingress ceiling, shared with request schemas. */
+export const HTTP_REQUEST_BODY_MAX_BYTES = 128 * 1024 * 1024;
+
 /**
  * Max length of a short required text field such as a matter or contact
  * name. The API schema rejects longer input, and inputs bound to those

@@ -1,0 +1,7 @@
+# Issuing account-bound desktop credentials
+
+Generated from `scripts/ownership/desktop-account-issuance.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                             | Owner                                                      | Enforcement                                                                    | Summary                                                                                                                                                                                                                        |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `desktop-account-issuance` — Issuing account-bound desktop credentials | `apps/api/src/lib/business-registries/desktop/issuance.ts` | import `@/api/lib/business-registries/desktop/issuance` (plus 2 allowed files) | Issuance holds the account's credential fence with the connection request's live browser session, rechecks the desktop permission under the membership lock, and writes the credential with its audit in the same transaction. |
