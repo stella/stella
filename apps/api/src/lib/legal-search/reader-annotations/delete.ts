@@ -57,6 +57,8 @@ export const deleteReaderAnnotationRows = async ({
     )
     .returning({
       id: legalReaderAnnotations.id,
+      entityId: legalReaderAnnotations.entityId,
+      targetId: legalReaderAnnotations.targetId,
       targetType: legalReaderAnnotations.targetType,
       verificationClaimId: legalReaderAnnotations.verificationClaimId,
       verificationRunId: legalReaderAnnotations.verificationRunId,
@@ -66,6 +68,8 @@ export const deleteReaderAnnotationRows = async ({
   if (first !== undefined) {
     const subject = annotationAuditSubject({
       annotationId,
+      entityId: first.entityId,
+      targetId: first.targetId,
       targetType: requireAnnotationTargetType(first.targetType),
       verificationClaimId: first.verificationClaimId,
       verificationRunId: first.verificationRunId,

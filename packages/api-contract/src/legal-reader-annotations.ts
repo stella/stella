@@ -4,13 +4,21 @@ export type ReaderDocumentTargetType =
   (typeof READER_DOCUMENT_TARGET_TYPES)[number];
 
 /**
- * What a reader's mark sits on: a public-law document, or one claim of a
- * matter's document verification. A claim's notes belong to the matter and
- * are read and written only through the verification routes.
+ * Matter content a mark sits on: one claim of a matter's document
+ * verification, or a passage of a matter document's PDF. These notes belong
+ * to the matter and are read and written only through the matter's routes.
  */
+export const READER_MATTER_TARGET_TYPES = [
+  "verification-claim",
+  "matter-document",
+] as const;
+export type ReaderMatterTargetType =
+  (typeof READER_MATTER_TARGET_TYPES)[number];
+
+/** What a reader's mark sits on: a public-law document or matter content. */
 export const READER_ANNOTATION_TARGET_TYPES = [
   ...READER_DOCUMENT_TARGET_TYPES,
-  "verification-claim",
+  ...READER_MATTER_TARGET_TYPES,
 ] as const;
 export type ReaderAnnotationTargetType =
   (typeof READER_ANNOTATION_TARGET_TYPES)[number];
@@ -60,3 +68,34 @@ export const READER_COPY_MODES = [
   "citationOnly",
 ] as const;
 export type ReaderCopyMode = (typeof READER_COPY_MODES)[number];
+
+const PDF_PAGE_ANCHOR_PREFIX = "page-";
+/** The last page a PDF anchor can name: six digits, as the pattern and the
+ *  database check allow. */
+export const READER_PDF_PAGE_NUMBER_MAX = 999_999;
+const PDF_PAGE_ANCHOR_PATTERN = /^page-([1-9][0-9]{0,5})$/u;
+
+/** The block a mark on one page of a PDF sits in, by the page's 1-based number. */
+export const readerPdfPageAnchorId = (pageNumber: number): string =>
+  `${PDF_PAGE_ANCHOR_PREFIX}${String(pageNumber)}`;
+
+/** The 1-based page a PDF block anchor names; null for any other anchor. */
+export const readerPdfPageNumber = (anchorId: string): number | null => {
+  const digits = PDF_PAGE_ANCHOR_PATTERN.exec(anchorId)?.at(1);
+  return digits === undefined ? null : Number(digits);
+};
+
+/**
+ * Why a mark on a matter document's PDF was refused, as the error `code` the
+ * API answers with: the file is not a readable PDF, the page is not in it or
+ * has no text to mark, or the selected words are not the page's words.
+ */
+export const MATTER_DOCUMENT_ANNOTATION_REFUSALS = {
+  fileNotPdf: "annotation_file_not_pdf",
+  fileEncrypted: "annotation_file_encrypted",
+  pageMissing: "annotation_page_missing",
+  pageWithoutText: "annotation_page_without_text",
+  quoteMismatch: "annotation_quote_mismatch",
+} as const;
+export type MatterDocumentAnnotationRefusal =
+  (typeof MATTER_DOCUMENT_ANNOTATION_REFUSALS)[keyof typeof MATTER_DOCUMENT_ANNOTATION_REFUSALS];
