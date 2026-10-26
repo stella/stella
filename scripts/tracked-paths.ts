@@ -78,7 +78,8 @@ export const readTrackedPaths = async (root: string): Promise<string[]> => {
   }
   if (inventory.decodingError !== undefined) {
     throw new TrackedPathEnumerationError(
-      `Tracked path list is not valid UTF-8: ${String(inventory.decodingError)}`,
+      "Tracked path list is not valid UTF-8",
+      { cause: inventory.decodingError },
     );
   }
   if (inventory.unterminatedPath !== undefined) {
