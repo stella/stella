@@ -19,6 +19,7 @@ import {
   parseCheckPool,
   readWorkingTreeCheckPool,
 } from "./ci-check-pool-registry";
+import { CODE_CHECK_EXECUTION_BUDGET_MS } from "./code-check-affected";
 
 const FLOOR_SECONDS = 5 * 60;
 /** A check no passing run has measured yet. */
@@ -34,14 +35,33 @@ export const percentile = (samples: readonly number[], rank: number) => {
   return sorted[index] ?? panic("percentile of an empty sample");
 };
 
-/** max(p99 x 3, p95 x 5, 5 min), in whole minutes. */
-export const checkBudget = (samples: readonly number[]): CheckBudget => {
+/**
+ * Checks that must never stop before a limit of their own: the code-quality
+ * runs warn only after their execution budget, so their cap stays above it.
+ */
+export const MINIMUM_BUDGET_SECONDS: Readonly<
+  Partial<Record<CheckPoolJob, Readonly<Record<string, number>>>>
+> = {
+  "code-quality-web-rest": {
+    "Code quality (web)": CODE_CHECK_EXECUTION_BUDGET_MS / 1000,
+    "Code quality (rest)": CODE_CHECK_EXECUTION_BUDGET_MS / 1000,
+  },
+};
+
+/** max(p99 x 3, p95 x 5, 5 min, the check's own minimum), in whole minutes. */
+export const checkBudget = (
+  samples: readonly number[],
+  minimumSeconds = 0,
+): CheckBudget => {
   if (samples.length === 0) {
-    return { minutes: DEFAULT_BUDGET_MINUTES, samples: 0 };
+    return {
+      minutes: Math.max(DEFAULT_BUDGET_MINUTES, Math.ceil(minimumSeconds / 60)),
+      samples: 0,
+    };
   }
   const p95 = percentile(samples, 95);
   const p99 = percentile(samples, 99);
-  const seconds = Math.max(p99 * 3, p95 * 5, FLOOR_SECONDS);
+  const seconds = Math.max(p99 * 3, p95 * 5, FLOOR_SECONDS, minimumSeconds);
   return {
     minutes: Math.ceil(seconds / 60),
     samples: samples.length,
@@ -125,7 +145,10 @@ const refresh = (runs: number) => {
       Object.fromEntries(
         parseCheckPool(readWorkingTreeCheckPool(job)).map(({ name }) => [
           name,
-          checkBudget(samples.get(`${job}\0${name}`) ?? []),
+          checkBudget(
+            samples.get(`${job}\0${name}`) ?? [],
+            MINIMUM_BUDGET_SECONDS[job]?.[name],
+          ),
         ]),
       ),
     ]),

@@ -3,10 +3,12 @@ import { expect, test } from "bun:test";
 import {
   checkBudget,
   DEFAULT_BUDGET_MINUTES,
+  MINIMUM_BUDGET_SECONDS,
   passedDurations,
   percentile,
   poolJobOf,
 } from "./ci-check-budgets";
+import { CHECK_POOL_JOBS, readCheckBudgets } from "./ci-check-pool-registry";
 
 test("percentiles use the nearest rank", () => {
   const samples = Array.from({ length: 100 }, (_, index) => index + 1);
@@ -54,4 +56,18 @@ test("matrix partitions map to their pool", () => {
   expect(poolJobOf("ci-checks-rest (2)")).toBe("ci-checks-rest");
   expect(poolJobOf("ci-checks-policy")).toBe("ci-checks-policy");
   expect(poolJobOf("ci-tests (api-1)")).toBeUndefined();
+});
+
+test("a check's own minimum raises its budget, and committed budgets keep it", () => {
+  expect(checkBudget([60], 1086).minutes).toBe(19);
+  expect(checkBudget([], 3600).minutes).toBe(60);
+  const budgets = readCheckBudgets();
+  for (const job of CHECK_POOL_JOBS) {
+    for (const [name, seconds] of Object.entries(
+      MINIMUM_BUDGET_SECONDS[job] ?? {},
+    )) {
+      const committed = budgets[job][name]?.minutes ?? 0;
+      expect(committed * 60, `${job}: ${name}`).toBeGreaterThanOrEqual(seconds);
+    }
+  }
 });

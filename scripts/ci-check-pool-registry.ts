@@ -212,14 +212,25 @@ export const parseCheckBudgets = (source: string): CheckBudgets => {
       `${CHECK_BUDGETS_PATH} declares exactly the pooled jobs`,
     );
   }
-  for (const job of CHECK_POOL_JOBS) {
+  const jobBudgets = (job: CheckPoolJob): Record<string, CheckBudget> => {
     const budgets = parsed[job];
-    if (!record(budgets) || !Object.values(budgets).every(isBudget)) {
+    if (!record(budgets)) {
       throw new CheckPoolRegistryError(`${job}: invalid check budgets`);
     }
-  }
-  // Validated above, job by job.
-  return parsed as CheckBudgets;
+    return Object.fromEntries(
+      Object.entries(budgets).map(([name, budget]) => {
+        if (!isBudget(budget)) {
+          throw new CheckPoolRegistryError(`${job}: invalid budget: ${name}`);
+        }
+        return [name, budget];
+      }),
+    );
+  };
+  return {
+    "ci-checks-policy": jobBudgets("ci-checks-policy"),
+    "ci-checks-rest": jobBudgets("ci-checks-rest"),
+    "code-quality-web-rest": jobBudgets("code-quality-web-rest"),
+  } satisfies CheckBudgets;
 };
 
 export const readCheckBudgets = (root: string = ROOT) =>

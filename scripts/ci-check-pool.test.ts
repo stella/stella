@@ -735,7 +735,8 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
         },
         ...Array.from({ length: 9 }, (_, index) => ({
           name: `Buffered log ${index}`,
-          run: `printf '%s\\n' '${(index % 2 === 0 ? "\n" : "é🙂\n\n").repeat(20 * 1024)}'`,
+          // Long lines: the 40-line tail still reaches the byte limits.
+          run: `printf '%s\\n' '${`${index % 2 === 0 ? "x".repeat(1024) : "é🙂".repeat(400)}\n`.repeat(20)}'`,
         })),
         { name: "Later check", run: "sleep 600" },
       ].map((entry) => ({ ...entry, if: "true" })),
