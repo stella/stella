@@ -1486,7 +1486,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všetky modely ({count, number})",
+      "allModels": "Všetky modely",
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod najlepšími kompromismi",
@@ -6643,6 +6643,12 @@
     "referenceTaken": "Toto referenčné číslo sa už používa",
     "sections": {
       "parties": "Strany"
+    },
+    "switcher": {
+      "searchPlaceholder": "Nájsť spis…",
+      "trigger": "Prepnúť spis",
+      "viewAll": "Zobraziť všetky spisy",
+      "viewAllForClient": "Zobraziť všetky spisy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Vymazať označenia",

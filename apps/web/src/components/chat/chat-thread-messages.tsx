@@ -2213,11 +2213,13 @@ const AssistantProcessGroup = ({
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "size-3.5 shrink-0 transition-transform",
             isOpen && "rotate-90",
           )}
+          flip={!isOpen}
+          icon={ChevronRightIcon}
         />
         <span className="text-xs font-medium">
           <SwapText

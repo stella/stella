@@ -360,7 +360,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -7004,7 +7004,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -14424,7 +14424,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
@@ -16444,7 +16444,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Read case-law coverage is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     "annotations": {
       "title": "Read case-law coverage",
       "destructiveHint": false,
