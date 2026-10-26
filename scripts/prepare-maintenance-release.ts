@@ -485,11 +485,13 @@ const runChangesetVersion = (rootDir: string) => {
 };
 
 export const prepareMaintenanceReleaseFiles = ({
+  previousFinalVersion,
   previousRelease,
   rootDir,
   versionPackages = runChangesetVersion,
   writeFile = atomicWriteFile,
 }: {
+  previousFinalVersion: string;
   previousRelease: PreviousRelease;
   rootDir: string;
   /** Consumes the pending changesets; the repository's own version script. */
@@ -506,7 +508,7 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const versionPath = nodePath.join(rootDir, "VERSION");
-  const current = parseStableVersion(readFileSync(versionPath, "utf-8").trim());
+  const current = parseStableVersion(previousFinalVersion);
   const next = nextPatchVersion(current);
   const previousTag = `v${current.value}`;
   const previousChangelogPath = `docs/changelog/${previousTag}.md`;
@@ -683,8 +685,6 @@ export const refreshMaintenanceReleaseFiles = ({
     writeFile,
   });
 };
-
-const REFRESH_FLAG = "--refresh";
 
 const run = (command: readonly string[]) => {
   const result = Bun.spawnSync([...command], {
@@ -1407,6 +1407,9 @@ export type MaintenanceCutEffects = {
   readonly rootDir: string;
   readonly assertCleanWorktree: () => void;
   readonly resolveHeadSha: () => string;
+  readonly latestFinalVersion: () => string;
+  readonly assertNoOpenRelease: () => void;
+  readonly openReleasePullRequest: (version: string) => void;
   readonly runGate: CutGateRunner;
   readonly queueHistoryWarning: (baseSha: string) => string | null;
   readonly readPreviousRelease: (tag: string) => Promise<PreviousRelease>;
@@ -1428,9 +1431,8 @@ export const cutMaintenanceRelease = async (
   const { rootDir } = effects;
   const options = parseMaintenanceReleaseOptions(args);
   effects.assertCleanWorktree();
-  const current = parseStableVersion(
-    readFileSync(nodePath.join(rootDir, "VERSION"), "utf-8").trim(),
-  );
+  effects.assertNoOpenRelease();
+  const current = parseStableVersion(effects.latestFinalVersion());
   const baseSha = effects.resolveHeadSha();
   await assertPreCutGates({
     allowUnprovenMain: options.allowUnprovenMain,
@@ -1453,6 +1455,7 @@ export const cutMaintenanceRelease = async (
     operation: () => {
       effects.ensureFreshRecordings(options.recordingReviewReason);
       const release = prepareMaintenanceReleaseFiles({
+        previousFinalVersion: current.value,
         previousRelease,
         rootDir,
         versionPackages: effects.versionPackages,
@@ -1470,6 +1473,7 @@ export const cutMaintenanceRelease = async (
       ...versionRollbackPaths(rootDir, pending),
     ],
   });
+  effects.openReleasePullRequest(prepared.version);
   effects.write(
     [
       `maintenance-release: prepared ${prepared.version}`,
@@ -1486,8 +1490,7 @@ export const cutMaintenanceRelease = async (
         : [
             `  package versions, changelogs and ${String(prepared.changesets.length)} consumed changeset(s): ${prepared.changesets.join(", ")}`,
           ]),
-      "Review the diff, commit it, and open the release PR.",
-      "Once its CI is green, add the release PR to the merge queue.",
+      "The release PR head will be tagged and proved as a release candidate.",
       "",
     ].join("\n"),
   );
@@ -1499,6 +1502,89 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
     assertCleanWorktree(rootDir);
   },
   resolveHeadSha: () => resolveHeadSha(rootDir),
+  latestFinalVersion: () => {
+    run(["git", "fetch", "origin", "main", "--tags"]);
+    const head = resolveHeadSha(rootDir);
+    const main = spawnOutput(["git", "rev-parse", "origin/main"])?.trim();
+    if (head !== main) {
+      throw new MaintenanceReleaseError(
+        "Cut releases from the fetched main commit",
+      );
+    }
+    const tags = spawnOutput([
+      "git",
+      "tag",
+      "--list",
+      "v*",
+      "--sort=-v:refname",
+    ]);
+    const latest = tags
+      ?.split("\n")
+      .find((tag) => /^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(tag));
+    if (!latest) {
+      throw new MaintenanceReleaseError("No final release tag exists");
+    }
+    return latest.slice(1);
+  },
+  assertNoOpenRelease: () => {
+    const listing = spawnOutput([
+      "gh",
+      "pr",
+      "list",
+      "--repo",
+      "stella/stella",
+      "--state",
+      "open",
+      "--base",
+      "main",
+      "--limit",
+      "500",
+      "--json",
+      "title",
+    ]);
+    if (listing === null) {
+      throw new MaintenanceReleaseError(
+        "Could not read open release pull requests",
+      );
+    }
+    const pulls: unknown = JSON.parse(listing);
+    if (
+      !Array.isArray(pulls) ||
+      pulls.length >= 500 ||
+      pulls.some(
+        (pull: unknown) =>
+          isRecord(pull) &&
+          typeof pull["title"] === "string" &&
+          pull["title"].startsWith("chore: release v"),
+      )
+    ) {
+      throw new MaintenanceReleaseError(
+        "An earlier release pull request is still open, or the listing is incomplete",
+      );
+    }
+  },
+  openReleasePullRequest: (version) => {
+    const branch = `release/v${version}`;
+    run(["git", "switch", "-c", branch]);
+    run(["git", "add", "--all"]);
+    run(["git", "commit", "-S", "-m", `chore: release v${version}`]);
+    run(["git", "push", "--set-upstream", "origin", branch]);
+    run([
+      "gh",
+      "pr",
+      "create",
+      "--repo",
+      "stella/stella",
+      "--base",
+      "main",
+      "--head",
+      branch,
+      "--title",
+      `chore: release v${version}`,
+      "--body",
+      `Release v${version}.`,
+    ]);
+  },
   runGate: runCutGate,
   queueHistoryWarning: (baseSha) =>
     releaseQueueHistoryWarning(() => ({ baseSha })),
@@ -1516,19 +1602,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
 
 const main = async () => {
   const args = process.argv.slice(2);
-  // The release pull request refresh runs in CI on the release branch: it
-  // versions files only, so the cut's gates, recordings and prompts stay out.
-  if (args.length === 1 && args.at(0) === REFRESH_FLAG) {
-    assertCleanWorktree(ROOT_DIR);
-    const refreshed = refreshMaintenanceReleaseFiles({ rootDir: ROOT_DIR });
-    process.stdout.write(`${JSON.stringify({ refreshed })}\n`);
-    return;
-  }
-  if (args.includes(REFRESH_FLAG)) {
-    throw new MaintenanceReleaseError(
-      `${REFRESH_FLAG} takes no other argument`,
-    );
-  }
   await cutMaintenanceRelease(args, productionCutEffects(ROOT_DIR));
 };
 

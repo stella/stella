@@ -177,6 +177,10 @@ const runCut = async (
     rootDir: root,
     assertCleanWorktree: () => undefined,
     resolveHeadSha: () => BASE_SHA,
+    latestFinalVersion: () =>
+      readFileSync(nodePath.join(root, "VERSION"), "utf-8").trim(),
+    assertNoOpenRelease: () => undefined,
+    openReleasePullRequest: () => undefined,
     runGate,
     queueHistoryWarning: () => null,
     readPreviousRelease: async () => ({

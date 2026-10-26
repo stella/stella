@@ -59,10 +59,7 @@ refuse() {
     echo "\`${DEPLOY_SHA}\` was not deployed. Dispatch this workflow again once staging answers."
   } >> "$summary"
   echo "::error::${message} Nothing was deployed: ${deploy_run_url}"
-  jq -n --arg url "$deploy_run_url" --arg description "$description" \
-    '{state: "error", context: "staging/verified", description: $description, target_url: $url}' |
-    bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/statuses/${DEPLOY_SHA}" \
-      --method POST --input - >/dev/null
+  bash "${STAGING_STATUS_WRITER:-$(dirname "${BASH_SOURCE[0]}")/post-staging-verification.sh}" error "$description"
   exit 1
 }
 

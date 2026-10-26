@@ -94,6 +94,7 @@ describe("PostHog server analytics adapter", () => {
         $exception_type: "HandlerError",
         app_commit: "dev",
         app_version: "dev",
+        deploy_environment: "development",
         organization_id: "org_123",
       },
     });

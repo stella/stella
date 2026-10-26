@@ -9,7 +9,7 @@ import {
   type RuntimeMode,
 } from "@stll/runtime-mode";
 
-import { featureFlagSchema } from "@/api/env-base-schema";
+import { envBaseServerSchema, featureFlagSchema } from "@/api/env-base-schema";
 import {
   AUTH_CLIENT_ADDRESS_HEADER,
   ORIGIN_VERIFY_HEADER,
@@ -101,6 +101,7 @@ const originVerifyValue = v.pipe(
 );
 
 export const envApiServerSchema = {
+  DEPLOY_ENVIRONMENT: envBaseServerSchema.DEPLOY_ENVIRONMENT,
   ...rateLimitBudgetEnvSchema,
   ...verificationRunCapEnvSchema,
   // Data invariants: each adapter's expected published decisions per day, and

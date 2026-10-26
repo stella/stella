@@ -236,6 +236,7 @@ const INTERNAL_SERVER_KEYS = new Set([
 ]);
 
 const EXAMPLE_VALUES: Record<string, string> = {
+  DEPLOY_ENVIRONMENT: "development",
   API_FEATURE_ACCESS_GRANTS: "{}",
   KILL_SWITCHES: "{}",
   BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
@@ -388,6 +389,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Container-reachable MCP endpoint used by isolated agent runs.",
   AGENT_SANDBOX_RUNS_ENABLED:
     "Enable explicit agent-mode chat requests for this deployment.",
+  DEPLOY_ENVIRONMENT:
+    "Runtime deployment environment: production, staging, or development. Required independently of NODE_ENV.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:
@@ -784,6 +787,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   AZURE_RESOURCE_NAME: ENV_CREDENTIAL_KIND.notCredential,
   BEDROCK_API_KEY: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_COOKIE_PREFIX: ENV_CREDENTIAL_KIND.notCredential,
+  DEPLOY_ENVIRONMENT: ENV_CREDENTIAL_KIND.notCredential,
   BETTER_AUTH_SECRET: ENV_CREDENTIAL_KIND.credential,
   BETTER_AUTH_URL: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_POOL_MAX: ENV_CREDENTIAL_KIND.notCredential,
@@ -1281,7 +1285,11 @@ export const ENV_CATALOG = [
   }),
   ...createCatalogEntries({
     owner: ENV_OWNER.apiServer,
-    schema: envApiServerSchema,
+    schema: Object.fromEntries(
+      Object.entries(envApiServerSchema).filter(
+        ([name]) => !Object.hasOwn(envBaseServerSchema, name),
+      ),
+    ),
   }),
   ...createCatalogEntries({ owner: ENV_OWNER.web, schema: envWebClientSchema }),
   ...createCatalogEntries({

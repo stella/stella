@@ -1,3 +1,4 @@
+// parser-output-unchanged: Deployment environment labels telemetry; no parser reads it.
 // parser-output-unchanged: kill-switch overrides are admission state read per request; no parser reads them.
 // parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
@@ -38,6 +39,7 @@ import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layo
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { QUERY_EXPANSION_MODES } from "@/api/lib/legal-search/query-expansion-mode";
+import { DEPLOY_ENVIRONMENTS } from "@/api/lib/observability/release-failure-contract";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
 import {
   isLoopbackHostname,
@@ -123,6 +125,7 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 };
 
 export const envBaseServerSchema = {
+  DEPLOY_ENVIRONMENT: v.picklist(DEPLOY_ENVIRONMENTS),
   API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   KILL_SWITCHES: killSwitchesEnvSchema,
   STELLA_VERSION: v.optional(v.string()),

@@ -806,7 +806,7 @@ describe("release proof trust boundary", () => {
       expect(verify(reverted, target).exitCode).not.toBe(0);
     }));
 
-  test("accepts an open same-repository release PR only against the tested main tip", async () =>
+  test("accepts an open same-repository release PR against its merge-base with advancing main", async () =>
     withRepository(
       ({
         base,
@@ -826,11 +826,10 @@ describe("release proof trust boundary", () => {
         publishPullRequests(proof, [openPullRequest]);
         git("update-ref", "refs/remotes/origin/main", base);
         expect(verify(proof, proof, true).exitCode).toBe(0);
-        expect(verify(proof, proof).exitCode).not.toBe(0);
+        expect(verify(proof, proof).exitCode).toBe(0);
         git("update-ref", "refs/remotes/origin/main", target);
-        const stale = verify(proof, proof, true);
-        expect(stale.exitCode).toBe(3);
-        expect(stale.stderr.toString()).toContain("RELEASE_TREE_PROOF_STALE");
+        const advancedMain = verify(proof, proof, true);
+        expect(advancedMain.exitCode, advancedMain.stderr.toString()).toBe(0);
       },
     ));
 });
@@ -914,7 +913,7 @@ describe("release health with reused proof", () => {
         const draft = verify(proof, proof, true);
         expect(draft.exitCode).not.toBe(0);
         expect(draft.stderr.toString()).toContain(
-          "open release PR relation is unverified",
+          "release PR head relation is unverified",
         );
       },
     ));

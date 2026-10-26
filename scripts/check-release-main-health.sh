@@ -25,7 +25,8 @@ refuse() { echo "::error::$1" >&2; exit 1; }
 required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
 receipt=false
 coverage=uncovered
-if bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
+rc_tags=$(git tag --points-at "$sha" --list 'v*-rc.*')
+if [[ -z "$rc_tags" ]] && bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
   receipt=true
   coverage=covered
   required_contexts='["staging/verified"]'
@@ -69,13 +70,11 @@ validate_workflow_status() {
     .status == "completed" and .conclusion == "success"
   ' <<< "$run" >/dev/null || refuse "$code: run provenance or conclusion does not match"
 }
-if [[ "$proof" != "$sha" ]]; then
+if [[ "$proof" != "$sha" || -n "$rc_tags" ]]; then
   validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof " "RELEASE_STAGING_NOT_GREEN"
 fi
 if [[ "$receipt" != true ]]; then
   validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites " "RELEASE_HEAVY_NOT_GREEN"
   validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks " "RELEASE_PR_DEPTH_NOT_GREEN"
 fi
-incidents=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/issues?state=open&labels=main-health-incident&per_page=100")
-jq -e '[.[][]] | length == 0' <<< "$incidents" >/dev/null \
-  || refuse 'RELEASE_OPEN_MAIN_INCIDENT: an unresolved main-health incident blocks tagging'
+bash "$script_dir/check-release-open-incidents.sh" "$repo"

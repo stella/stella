@@ -61,11 +61,9 @@ all_success() {
   ! grep -qv ' = success$' <<< "$1"
 }
 
-if [[ -z "$sha" ]]; then
-  sha=$(bash "$script_dir/check-release-candidate.sh" --version-commit)
-fi
+[[ -n "$sha" ]] || { echo "::error::An explicit release PR head SHA is required" >&2; exit 2; }
 
-candidate=$(RELEASE_PROOF_REPOSITORY= bash "$script_dir/check-release-candidate.sh" "$sha")
+candidate=$(RELEASE_PROOF_REPOSITORY="$repo" RELEASE_TREE_PROOF_VERIFIER="$tree_proof_verifier" bash "$script_dir/check-release-candidate.sh" "$sha")
 while IFS='=' read -r key value; do
   case "$key" in sha) sha="$value" ;; esac
 done <<< "$candidate"

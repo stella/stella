@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
@@ -28,6 +30,7 @@ const WORKFLOW_RUN_WORKFLOWS = [
   "cla.yml",
   "publish-npm.yml",
   "release-desktop.yml",
+  "release-tag.yml",
   "scheduled-run-alerts.yml",
 ] as const;
 
@@ -78,8 +81,10 @@ const runsAfterSkippedGate = (condition: string, gatedNeeds: string[]) =>
     values: Object.fromEntries(
       gatedNeeds.map((need) => [`needs.${need}.result`, "skipped"]),
     ),
-    fallback: (path) =>
-      gatedNeeds.some((need) => path.startsWith(`needs.${need}.outputs.`))
+    fallback: (expressionPath) =>
+      gatedNeeds.some((need) =>
+        expressionPath.startsWith(`needs.${need}.outputs.`),
+      )
         ? ""
         : undefined,
     status: { always: true },
@@ -215,8 +220,10 @@ const canRunOnFeatureDispatch = (
         "github.ref": "refs/heads/feature",
         "github.repository": "stella/stella",
       },
-      fallback: (path) =>
-        path.startsWith("github.event.workflow_run.") ? "" : undefined,
+      fallback: (expressionPath) =>
+        expressionPath.startsWith("github.event.workflow_run.")
+          ? ""
+          : undefined,
       status: {
         always: true,
         success: true,
@@ -756,15 +763,8 @@ const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
 // keyed by `<workflow file>#<step name>`, with the workflows each starts.
 const ALERTING_WORKFLOW = "scheduled-run-alerts.yml";
 const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
-  "main-heavy.yml#Dispatch release PR-depth checks": ["main-pr-depth.yml"],
-  "main-heavy.yml#Dispatch version commit staging": ["deploy-staging.yml"],
   "network-baseline-request.yml#Request main recording": [
     "network-baseline-record.yml",
-  ],
-  "release-pr.yml#Dispatch the version commit": ["release-tag.yml"],
-  "release-proof.yml#Dispatch pinned release proofs once": [
-    "deploy-staging.yml",
-    "main-heavy.yml",
   ],
   "release.yml#Dispatch release-health.yml": ["release-health.yml"],
 };
@@ -1053,4 +1053,126 @@ test("publishing tokens and their artifact chain reject cached Bun setup", () =>
     },
   };
   expect(workflowCacheProblems(artifacts)).toHaveLength(1);
+});
+
+describe("publication follows the production job receipt", () => {
+  const sha = "a".repeat(40);
+  const run = {
+    head_repository: { full_name: "stella/stella" },
+    path: ".github/workflows/release.yml",
+    event: "push",
+    display_title: "Release Artifacts v1.2.3",
+    head_sha: sha,
+    conclusion: "failure",
+  };
+  const check = (upstream: typeof run, conclusion: string) => {
+    const work = mkdtempSync(path.join(tmpdir(), "stella-publication-source-"));
+    try {
+      const stub = path.join(work, "gh-retry.sh");
+      writeFileSync(
+        stub,
+        `case "$*" in
+  *'/jobs?'*) printf '%s' "$JOBS" ;;
+  *) printf '%s' "$RUN" ;;
+esac
+`,
+      );
+      return Bun.spawnSync(
+        [
+          "bash",
+          path.join(import.meta.dir, "check-release-publication-source.sh"),
+          "123",
+          "v1.2.3",
+          sha,
+        ],
+        {
+          env: {
+            ...process.env,
+            GH_RETRY_SCRIPT: stub,
+            GITHUB_REPOSITORY: "stella/stella",
+            RUN: JSON.stringify(upstream),
+            JOBS: JSON.stringify([
+              { jobs: [{ name: "promote-production", conclusion }] },
+            ]),
+          },
+        },
+      );
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  };
+
+  test("desktop and npm accept a green promotion in a red run", () => {
+    expect(check(run, "success").exitCode).toBe(0);
+    for (const conclusion of ["failure", "cancelled", "skipped", "neutral"]) {
+      expect(check(run, conclusion).exitCode, conclusion).toBe(1);
+    }
+  });
+
+  test("publication accepts only the promoted ref and SHA from the trusted workflow", () => {
+    for (const upstream of [
+      { ...run, display_title: "Release Artifacts v1.2.4" },
+      { ...run, head_sha: "b".repeat(40) },
+      { ...run, path: ".github/workflows/ci.yml" },
+      { ...run, head_repository: { full_name: "fork/stella" } },
+      { ...run, event: "pull_request" },
+    ]) {
+      const result = check(upstream, "success");
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain(
+        "does not own the requested ref and SHA",
+      );
+    }
+  });
+});
+
+test("npm and desktop consume the production receipt guard", () => {
+  for (const file of ["publish-npm.yml", "release-desktop.yml"]) {
+    const source = readFileSync(
+      new URL(`../.github/workflows/${file}`, import.meta.url),
+      "utf-8",
+    );
+    expect(source, file).toContain(
+      'bash "$RUNNER_TEMP/check-release-publication-source.sh"',
+    );
+  }
+});
+
+test("desktop reruns keep installers and the updater receipt already published", () => {
+  const workflow = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/release-desktop.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const decision = workflow.jobs.resolve.steps.find(
+    (step: { id?: string }) => step.id === "diff",
+  );
+  const work = mkdtempSync(path.join(tmpdir(), "stella-desktop-idempotence-"));
+  try {
+    const stub = path.join(work, "gh-retry.sh");
+    writeFileSync(
+      stub,
+      "printf '%s\\n' latest.json Stella-macos-universal.dmg Stella-windows-x64-setup.exe\n",
+    );
+    const output = path.join(work, "output");
+    const result = Bun.spawnSync(["bash", "-c", decision.run], {
+      env: {
+        ...process.env,
+        CURRENT_TAG: "v1.2.3",
+        EVENT_NAME: "workflow_dispatch",
+        GH_RETRY_SCRIPT: stub,
+        GITHUB_OUTPUT: output,
+      },
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(readFileSync(output, "utf-8")).toBe(
+      "should_build=false\nalready_published=true\n",
+    );
+    expect(workflow.jobs["carry-forward"].if).toContain(
+      "needs.resolve.outputs.already_published != 'true'",
+    );
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
 });
