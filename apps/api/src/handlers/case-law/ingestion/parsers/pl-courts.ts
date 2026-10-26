@@ -844,12 +844,13 @@ const parseListItemContent = ({
   state,
   item,
   marker: initialMarker,
-}: ParseListItemContentOptions): void => {
+}: ParseListItemContentOptions): string | undefined => {
   let marker = initialMarker;
   const children = item.children;
   if (!children.some((child) => isListItemBoundary(state, child))) {
-    parseParagraphElement($, state, $(item), marker);
-    return;
+    return parseParagraphElement($, state, $(item), marker)
+      ? undefined
+      : marker;
   }
   // The item's inline children from `start` up to `end`, read as one
   // paragraph through a detached element holding just those nodes. It does
@@ -875,8 +876,7 @@ const parseListItemContent = ({
     readInline(index);
     start = index + 1;
     if (!isListItemBlock(child)) {
-      parseListItemContent({ $, state, item: child, marker });
-      marker = undefined;
+      marker = parseListItemContent({ $, state, item: child, marker });
       continue;
     }
     if (marker !== undefined && child.tagName.toLowerCase() === "p") {
@@ -898,6 +898,7 @@ const parseListItemContent = ({
     parseNode($, state, child);
   }
   readInline(children.length);
+  return marker;
 };
 
 const parseNode = (
