@@ -56,6 +56,29 @@ export const MatterApprovalView = ({ workspaceId }: Props) => {
   return canApprove ? <ApprovalLists workspaceId={workspaceId} /> : null;
 };
 
+/**
+ * The rows with a request in flight. Each row action awaits its own request
+ * and settles only its own rows, so concurrent actions never drop an outcome.
+ */
+const usePendingRows = () => {
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const track = async (ids: readonly string[], request: Promise<void>) => {
+    setPending((current) => new Set([...current, ...ids]));
+    try {
+      await request;
+    } finally {
+      setPending((current) => {
+        const next = new Set(current);
+        for (const id of ids) {
+          next.delete(id);
+        }
+        return next;
+      });
+    }
+  };
+  return { has: (id: string) => pending.has(id), track };
+};
+
 /** Per-item errors, shown next to the entry or expense they are about. */
 const useItemErrors = () => {
   const t = useTranslations();
@@ -163,54 +186,62 @@ const TimeApprovals = ({
   const [comments, setComments] = useState<Record<string, string>>({});
   const approve = useApproveTimeEntries();
   const returnEntry = useReturnTimeEntry();
+  const pending = usePendingRows();
 
   // A checked entry that another approver handled meanwhile is no longer here.
   const selected = draftEntries
     .filter((entry) => checked.has(entry.id))
     .map((entry) => entry.id);
-  const approveEntries = (ids: readonly string[]) => {
-    approve.mutate(
-      { workspaceId, ids },
-      {
-        onSuccess: ({ results }) => {
-          itemErrors.show(
-            ids,
-            Object.fromEntries(
-              results.flatMap((result) =>
-                result.status === "refused"
-                  ? [[result.id, itemErrors.refusalText(result.reason)]]
-                  : [],
-              ),
-            ),
-          );
-          setChecked((current) => {
-            const next = new Set(current);
-            for (const id of ids) {
-              next.delete(id);
-            }
-            return next;
-          });
-        },
-        onError: (error) =>
-          itemErrors.show(
-            ids,
-            Object.fromEntries(
-              ids.map((id) => [id, itemErrors.errorText(error)]),
-            ),
-          ),
-      },
+  const requestApproval = async (ids: readonly string[]) => {
+    const outcome = await approve.mutateAsync({ workspaceId, ids }).then(
+      (batch) => ({ type: "answered" as const, batch }),
+      (error: unknown) => ({ type: "failed" as const, error }),
     );
+    if (outcome.type === "failed") {
+      itemErrors.show(
+        ids,
+        Object.fromEntries(
+          ids.map((id) => [id, itemErrors.errorText(outcome.error)]),
+        ),
+      );
+      return;
+    }
+    itemErrors.show(
+      ids,
+      Object.fromEntries(
+        outcome.batch.results.flatMap((result) =>
+          result.status === "refused"
+            ? [[result.id, itemErrors.refusalText(result.reason)]]
+            : [],
+        ),
+      ),
+    );
+    setChecked((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        next.delete(id);
+      }
+      return next;
+    });
   };
-  const isApproving = (id: string) =>
-    approve.isPending && approve.variables.ids.includes(id);
+  const approveEntries = (ids: readonly string[]) =>
+    detached(
+      pending.track(ids, requestApproval(ids)),
+      "matter-approval.approve-time",
+    );
   const returnToDraft = (id: string) =>
-    returnEntry.mutate(
-      { workspaceId, id, comment: comments[id]?.trim() ?? "" },
-      {
-        onSuccess: () => itemErrors.show([id], {}),
-        onError: (error) =>
-          itemErrors.show([id], { [id]: itemErrors.errorText(error) }),
-      },
+    detached(
+      pending.track(
+        [id],
+        returnEntry
+          .mutateAsync({ workspaceId, id, comment: comments[id]?.trim() ?? "" })
+          .then(
+            () => itemErrors.show([id], {}),
+            (error: unknown) =>
+              itemErrors.show([id], { [id]: itemErrors.errorText(error) }),
+          ),
+      ),
+      "matter-approval.return-time",
     );
 
   return (
@@ -221,7 +252,7 @@ const TimeApprovals = ({
         </h2>
         {selected.length > 0 && (
           <Button
-            loading={approve.isPending}
+            loading={selected.some(pending.has)}
             onClick={() => approveEntries(selected)}
             size="sm"
           >
@@ -274,8 +305,7 @@ const TimeApprovals = ({
               <ItemError message={itemErrors.errors[entry.id]} />
             </div>
             <Button
-              disabled={approve.isPending && !isApproving(entry.id)}
-              loading={isApproving(entry.id)}
+              loading={pending.has(entry.id)}
               onClick={() => approveEntries([entry.id])}
               size="sm"
             >
@@ -309,9 +339,7 @@ const TimeApprovals = ({
             />
             <Button
               disabled={!comments[entry.id]?.trim()}
-              loading={
-                returnEntry.isPending && returnEntry.variables.id === entry.id
-              }
+              loading={pending.has(entry.id)}
               onClick={() => returnToDraft(entry.id)}
               size="sm"
               variant="outline"
@@ -339,31 +367,37 @@ const ExpenseApprovals = ({
   const itemErrors = useItemErrors();
   const updateExpense = useUpdateExpense();
   const queryClient = useQueryClient();
+  const pending = usePendingRows();
 
-  const setStatus = (id: string, status: "draft" | "approved") =>
-    updateExpense.mutate(
-      { workspaceId, id, status },
-      {
-        onSuccess: () => {
-          itemErrors.show([id], {});
-          detached(
-            Promise.all([
-              queryClient.invalidateQueries({
-                queryKey: expensesQueryRoot(workspaceId),
-              }),
-              queryClient.invalidateQueries({
-                queryKey: invoicesKeys.all(workspaceId),
-              }),
-            ]),
-            "matter-approval.expense-refresh",
-          );
-        },
-        onError: (error) =>
-          itemErrors.show([id], { [id]: itemErrors.errorText(error) }),
-      },
+  const requestStatus = async (id: string, status: "draft" | "approved") => {
+    const outcome = await updateExpense
+      .mutateAsync({ workspaceId, id, status })
+      .then(
+        () => ({ type: "updated" as const }),
+        (error: unknown) => ({ type: "failed" as const, error }),
+      );
+    if (outcome.type === "failed") {
+      itemErrors.show([id], { [id]: itemErrors.errorText(outcome.error) });
+      return;
+    }
+    itemErrors.show([id], {});
+    detached(
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: expensesQueryRoot(workspaceId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: invoicesKeys.all(workspaceId),
+        }),
+      ]),
+      "matter-approval.expense-refresh",
     );
-  const isUpdating = (id: string) =>
-    updateExpense.isPending && updateExpense.variables.id === id;
+  };
+  const setStatus = (id: string, status: "draft" | "approved") =>
+    detached(
+      pending.track([id], requestStatus(id, status)),
+      "matter-approval.update-expense",
+    );
 
   return (
     <section className="flex flex-col gap-3">
@@ -385,7 +419,7 @@ const ExpenseApprovals = ({
           </div>
           {expense.status === "draft" ? (
             <Button
-              loading={isUpdating(expense.id)}
+              loading={pending.has(expense.id)}
               onClick={() => setStatus(expense.id, "approved")}
               size="sm"
             >
@@ -393,7 +427,7 @@ const ExpenseApprovals = ({
             </Button>
           ) : (
             <Button
-              loading={isUpdating(expense.id)}
+              loading={pending.has(expense.id)}
               onClick={() => setStatus(expense.id, "draft")}
               size="sm"
               variant="outline"

@@ -85,6 +85,13 @@ type Server = {
   approveCalls: string[][];
   returnCalls: unknown[];
   expenseCalls: unknown[];
+  /**
+   * While set, each return or expense change is recorded and then waits for
+   * the test to release it, so several can be in flight at once.
+   */
+  holdWrites: boolean;
+  /** One release per held request, in arrival order. */
+  held: (() => void)[];
   prefillReads: number;
   listReads: number;
 };
@@ -96,8 +103,18 @@ const server: Server = {
   approveCalls: [],
   returnCalls: [],
   expenseCalls: [],
+  holdWrites: false,
+  held: [],
   prefillReads: 0,
   listReads: 0,
+};
+
+const holdIfAsked = async () => {
+  if (server.holdWrites) {
+    await new Promise<void>((resolve) => {
+      server.held.push(resolve);
+    });
+  }
 };
 
 // The API's own shapes: a list page, a per-entry approval outcome, a returned
@@ -157,6 +174,7 @@ globalThis.fetch = Object.assign(
       const body: unknown = await request.json();
       server.returnCalls.push(body);
       const { id } = v.parse(v.object({ id: v.string() }), body);
+      await holdIfAsked();
       const reason = server.refusals.get(id);
       if (reason) {
         return Response.json(
@@ -184,6 +202,7 @@ globalThis.fetch = Object.assign(
         v.object({ id: v.string(), status: v.picklist(["draft", "approved"]) }),
         body,
       );
+      await holdIfAsked();
       if (server.expenseRefusals.has(id)) {
         return Response.json(
           { message: "Cannot edit a billed or written-off expense" },
@@ -255,6 +274,8 @@ const resetServer = (entries: TimeEntry[], expenses: Expense[] = []) => {
   server.approveCalls = [];
   server.returnCalls = [];
   server.expenseCalls = [];
+  server.holdWrites = false;
+  server.held = [];
   server.prefillReads = 0;
   server.listReads = 0;
 };
@@ -502,6 +523,17 @@ const clickIn = async (row: HTMLElement, name: string) => {
   });
 };
 
+/** Lets the `index`th held request reach its handler and answer. */
+const releaseHeld = async (index: number) => {
+  const release = server.held[index];
+  if (!release) {
+    throw new Error(`No held request at ${index}`);
+  }
+  await testing.act(async () => {
+    release();
+  });
+};
+
 describe("returning approved time to draft", () => {
   test("sends the trimmed comment, moves the entry back to draft and reads the invoice prefill again", async () => {
     resetServer([entry("entry-a", { status: "approved" })]);
@@ -567,6 +599,51 @@ describe("returning approved time to draft", () => {
     ).toBeTruthy();
     expect(testing.screen.queryByText("Narrative entry-locked")).toBeNull();
     expect(server.prefillReads).toBe(1);
+  });
+
+  test("two returns in flight each settle on their own outcome", async () => {
+    resetServer([
+      entry("entry-locked", { status: "approved" }),
+      entry("entry-open", { status: "approved" }),
+    ]);
+    await mount("owner", approvalPage);
+    await testing.screen.findByText("Timekeeper One: Narrative entry-locked");
+    server.refusals.set("entry-locked", "time_period_locked");
+    server.holdWrites = true;
+
+    for (const [narrative, comment] of [
+      ["Timekeeper One: Narrative entry-locked", "Wrong matter"],
+      ["Timekeeper One: Narrative entry-open", "Wrong date"],
+    ] as const) {
+      await typeReturnComment(rowOf(narrative), comment);
+      await clickIn(rowOf(narrative), messages.billing.revertToDraft);
+    }
+    // Both requests are in flight before either answers.
+    await testing.waitFor(() => expect(server.held).toHaveLength(2));
+    expect(server.returnCalls).toEqual([
+      { id: "entry-locked", comment: "Wrong matter" },
+      { id: "entry-open", comment: "Wrong date" },
+    ]);
+
+    await releaseHeld(0);
+    const alert = await testing.screen.findByRole("alert");
+    expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
+    await releaseHeld(1);
+    await testing.waitFor(() =>
+      expect(
+        testing
+          .within(rowOf("Narrative entry-open"))
+          .getByRole("button", { name: messages.billing.approve }),
+      ).toBeTruthy(),
+    );
+
+    expect(
+      rowOf("Timekeeper One: Narrative entry-locked").contains(alert),
+    ).toBe(true);
+    expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
+    expect(
+      testing.within(rowOf("Narrative entry-open")).queryByRole("alert"),
+    ).toBeNull();
   });
 });
 
@@ -647,6 +724,49 @@ describe("expense approval", () => {
         .getByRole("button", { name: messages.billing.approve }),
     ).toBeTruthy();
     expect(server.prefillReads).toBe(1);
+  });
+
+  test("two expense changes in flight each settle on their own outcome", async () => {
+    resetServer([], [expense("expense-billed"), expense("expense-open")]);
+    await mount("owner", approvalPage);
+    await testing.screen.findByText("Timekeeper One: Expense expense-billed");
+    server.expenseRefusals.add("expense-billed");
+    server.holdWrites = true;
+
+    for (const description of [
+      "Timekeeper One: Expense expense-billed",
+      "Timekeeper One: Expense expense-open",
+    ]) {
+      await clickIn(rowOf(description), messages.billing.approve);
+    }
+    // Both requests are in flight before either answers.
+    await testing.waitFor(() => expect(server.held).toHaveLength(2));
+    expect(server.expenseCalls).toEqual([
+      { id: "expense-billed", status: "approved" },
+      { id: "expense-open", status: "approved" },
+    ]);
+
+    await releaseHeld(0);
+    const alert = await testing.screen.findByRole("alert");
+    expect(alert.textContent).toBe(messages.billing.approval.failed);
+    await releaseHeld(1);
+    await testing.waitFor(() =>
+      expect(
+        testing
+          .within(rowOf("Timekeeper One: Expense expense-open"))
+          .getByRole("button", { name: messages.billing.revertToDraft }),
+      ).toBeTruthy(),
+    );
+
+    expect(
+      rowOf("Timekeeper One: Expense expense-billed").contains(alert),
+    ).toBe(true);
+    expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
+    expect(
+      testing
+        .within(rowOf("Timekeeper One: Expense expense-open"))
+        .queryByRole("alert"),
+    ).toBeNull();
   });
 });
 
