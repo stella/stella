@@ -1914,6 +1914,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
@@ -4236,6 +4237,14 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-in-transaction.fixture.ts",
+      ],
+      rules: {
+        "no-network-in-transaction/no-network-in-transaction": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -4980,6 +4989,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-network-await-in-loop/no-network-await-in-loop": "error",
+        "no-network-in-transaction/no-network-in-transaction": "error",
       },
     },
     {
