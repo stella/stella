@@ -380,6 +380,7 @@ export const TAGGED_FAILURE_REASON = {
   SanctionsSubjectError: "tagged_failure",
   SandboxError: "tagged_failure",
   ScanEngineError: "tagged_failure",
+  SchedulerJobPauseError: "tagged_failure",
   SchedulerJobTimeoutError: "tagged_failure",
   SchedulerTaskFailure: "tagged_failure",
   ScreeningQueryError: "tagged_failure",

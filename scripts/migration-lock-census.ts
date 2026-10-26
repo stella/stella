@@ -1090,6 +1090,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "Replacing the reader-note policies installs catalog metadata without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
   },
   {
+    migration: "20261025180000_search_history_entry_country",
+    form: "add-column",
+    reason:
+      "The nullable, default-free country and country_used_at columns are catalog-only changes under a 1s lock_timeout; the index is built online.",
+  },
+  {
     migration: "20261021080000_reader_annotation_verification_claims",
     form: "row-level-security",
     reason:

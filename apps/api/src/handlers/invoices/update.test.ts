@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { INVOICE_STATUS, invoices, timeEntries } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -30,7 +31,7 @@ const createContext = ({
           method: "PATCH",
         },
       ),
-      route: "/v1/invoices/:workspaceId/:invoiceId",
+      route: "/v1/invoices/:workspaceId/:invoiceId" satisfies ApiRoutePath,
       safeDb,
       params: {
         workspaceId: toSafeId<"workspace">("ws_test"),

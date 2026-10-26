@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import { BILLING_STATUS, INVOICE_STATUS, invoices } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -27,7 +28,8 @@ const createContext = (
         "https://example.test/v1/invoices/ws_test/inv_test/entries",
         { method: "POST" },
       ),
-      route: "/v1/invoices/:workspaceId/:invoiceId/entries",
+      route:
+        "/v1/invoices/:workspaceId/:invoiceId/entries" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       params: {

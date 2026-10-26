@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { BILLING_STATUS } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -59,7 +60,7 @@ const createContext = ({
       request: new Request("https://example.test/v1/invoices/ws_test", {
         method: "PUT",
       }),
-      route: "/v1/invoices/:workspaceId",
+      route: "/v1/invoices/:workspaceId" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       recordAuditEvent,

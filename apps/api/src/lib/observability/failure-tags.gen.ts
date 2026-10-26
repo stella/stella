@@ -370,6 +370,7 @@ export const FAILURE_TAGS = [
   "SanctionsSubjectError",
   "SandboxError",
   "ScanEngineError",
+  "SchedulerJobPauseError",
   "SchedulerJobTimeoutError",
   "SchedulerTaskFailure",
   "ScreeningQueryError",

@@ -38,7 +38,8 @@ if (import.meta.main) {
       process.exit(status);
     }
   }
-  const crossWorkspacePrograms = typecheckCacheCrossWorkspacePrograms(root);
+  const crossWorkspacePrograms =
+    await typecheckCacheCrossWorkspacePrograms(root);
   const projects = explicitTypecheckProjects(root);
   const inputs = new Map<string, string[]>();
   for (const [name, task] of readTypecheckCacheTasks(root)) {
@@ -67,7 +68,10 @@ if (import.meta.main) {
   if (inputs.size > 0) {
     writeTurboTypecheckInputs(path.join(root, "turbo.json"), inputs);
   }
-  const issues = typecheckCacheContractIssues(root, crossWorkspacePrograms);
+  const issues = await typecheckCacheContractIssues(
+    root,
+    crossWorkspacePrograms,
+  );
   if (issues.length > 0) {
     panic(issues.join("\n"));
   }
