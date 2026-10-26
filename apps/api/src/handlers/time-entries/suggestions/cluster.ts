@@ -147,7 +147,9 @@ export type CoveredSuggestionCluster = SuggestionCluster & {
 /**
  * Removes the union of recorded timer/activity windows from each candidate.
  * Duration-only entries cannot be placed on the clock, so they are exposed as
- * day-level coverage without being guessed into a particular window.
+ * day-level coverage without being guessed into a particular window: every
+ * remaining candidate counts as covered only when their minutes together fit
+ * in the duration-only total, since nothing says which candidate it was for.
  */
 export const subtractRecordedTime = (
   clusters: readonly SuggestionCluster[],
@@ -166,7 +168,7 @@ export const subtractRecordedTime = (
     )
     .toSorted((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
 
-  const uncovered: CoveredSuggestionCluster[] = [];
+  const uncovered: SuggestionCluster[] = [];
   for (const cluster of clusters) {
     const start = cluster.startedAt.getTime();
     const end = start + cluster.durationMinutes * MS_PER_MINUTE;
@@ -200,13 +202,15 @@ export const subtractRecordedTime = (
     if (durationMinutes === 0) {
       continue;
     }
-    uncovered.push({
-      ...cluster,
-      durationMinutes,
-      alreadyCovered: durationOnlyMinutes >= durationMinutes,
-    });
+    uncovered.push({ ...cluster, durationMinutes });
   }
-  return uncovered;
+  const uncoveredMinutes = uncovered.reduce(
+    (sum, cluster) => sum + cluster.durationMinutes,
+    0,
+  );
+  const alreadyCovered =
+    uncovered.length > 0 && durationOnlyMinutes >= uncoveredMinutes;
+  return uncovered.map((cluster) => ({ ...cluster, alreadyCovered }));
 };
 
 /**

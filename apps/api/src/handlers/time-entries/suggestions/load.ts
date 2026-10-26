@@ -1,5 +1,15 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gte, inArray, lte, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gte,
+  inArray,
+  lte,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { parseTimeEntrySuggestionEvidence } from "@stll/api-contract/time-entries";
 import { Temporal } from "@stll/time";
@@ -11,6 +21,7 @@ import {
   chatMessages,
   chatThreads,
   entities,
+  TIME_ENTRY_SOURCE,
   timeEntries,
   timeEntrySuggestions,
 } from "@/api/db/schema";
@@ -87,7 +98,23 @@ const payloadEntityId = (
     : null;
 };
 
-type DateRange = { start: Date; end: Date; days: number };
+type DayBounds = { date: string; start: Date; end: Date };
+
+type DateRange = {
+  start: Date;
+  end: Date;
+  days: number;
+  /** Each calendar day of the range with its own bounds in the zone. */
+  dayBounds: DayBounds[];
+};
+
+const boundsOfDay = (day: Temporal.PlainDate, timezoneId: string) => ({
+  date: day.toString(),
+  start: new Date(day.toZonedDateTime(timezoneId).epochMilliseconds),
+  end: new Date(
+    day.add({ days: 1 }).toZonedDateTime(timezoneId).epochMilliseconds,
+  ),
+});
 
 /**
  * The instants that bound whole calendar days in the timekeeper's zone, from
@@ -103,12 +130,16 @@ const dateRangeInTimeZone = (
     try: () => {
       const first = Temporal.PlainDate.from(startDate);
       const last = Temporal.PlainDate.from(endDate);
+      const days = first.until(last, { largestUnit: "days" }).days + 1;
+      const dayBounds = Array.from(
+        { length: Math.min(Math.max(days, 0), LIMITS.timeRangeDaysMax) },
+        (_, index) => boundsOfDay(first.add({ days: index }), timezoneId),
+      );
       return {
-        start: new Date(first.toZonedDateTime(timezoneId).epochMilliseconds),
-        end: new Date(
-          last.add({ days: 1 }).toZonedDateTime(timezoneId).epochMilliseconds,
-        ),
-        days: first.until(last, { largestUnit: "days" }).days + 1,
+        start: boundsOfDay(first, timezoneId).start,
+        end: boundsOfDay(last, timezoneId).end,
+        days,
+        dayBounds,
       };
     },
     catch: () =>
@@ -321,11 +352,15 @@ const readDecidedEvidence = async (
       ),
     );
 
+// The timekeeper's time booked to the range, plus timed entries booked to
+// another day whose clock overlaps it: a timer booked to the day before the
+// range still covers the first day's activity past midnight.
 const readRecordedTime = async (tx: Transaction, scope: SuggestionReadScope) =>
   await tx
     .select({
       workspaceId: timeEntries.workspaceId,
       dateWorked: timeEntries.dateWorked,
+      source: timeEntries.source,
       durationMinutes: timeEntries.durationMinutes,
       startedAt: timeEntries.timerStartedAt,
       endedAt: timeEntries.timerStoppedAt,
@@ -335,10 +370,54 @@ const readRecordedTime = async (tx: Transaction, scope: SuggestionReadScope) =>
       and(
         inArray(timeEntries.workspaceId, scope.workspaceIds),
         eq(timeEntries.userId, scope.userId),
-        gte(timeEntries.dateWorked, scope.startDate),
-        lte(timeEntries.dateWorked, scope.endDate),
+        or(
+          and(
+            gte(timeEntries.dateWorked, scope.startDate),
+            lte(timeEntries.dateWorked, scope.endDate),
+          ),
+          and(
+            sql`${timeEntries.timerStartedAt} < ${scope.rangeEnd}::timestamptz`,
+            sql`${timeEntries.timerStoppedAt} > ${scope.rangeStart}::timestamptz`,
+          ),
+        ),
       ),
     );
+
+type RecordedRow = Awaited<ReturnType<typeof readRecordedTime>>[number];
+
+/**
+ * The range's days a recorded entry bears on: the day it is booked to, and
+ * every day its timer's clock overlaps.
+ */
+const daysCoveredBy = (row: RecordedRow, dayBounds: readonly DayBounds[]) =>
+  dayBounds
+    .filter(
+      ({ date, start, end }) =>
+        row.dateWorked === date ||
+        (row.startedAt !== null &&
+          row.endedAt !== null &&
+          row.startedAt < end &&
+          row.endedAt > start),
+    )
+    .map(({ date }) => date);
+
+// The day's logged time counts only entries booked to it; a timer booked to
+// the previous day that ran past midnight covers activity but is not logged here.
+const loggedMinutesOn = (date: string, recorded: readonly RecordedRow[]) => {
+  let minutes = 0;
+  for (const entry of recorded) {
+    if (entry.dateWorked === date) {
+      minutes += entry.durationMinutes;
+    }
+  }
+  return minutes;
+};
+
+// An accepted suggestion's entry paid for exactly the signals its decision
+// covers, which are already excluded before clustering; counting its minutes
+// again would mark unrelated activity as covered.
+const recordedOutsideSuggestions = (recorded: readonly RecordedRow[]) =>
+  recorded.filter(({ source }) => source !== TIME_ENTRY_SOURCE.SUGGESTED);
 
 // One transaction for every read: the signals, the names behind them, the
 // decisions already taken, and the time already recorded. Each source is one
@@ -431,7 +510,7 @@ type ScopeInputs = {
   workspaceId: SafeId<"workspace">;
   date: string;
   signals: ActivitySignal[];
-  recorded: SuggestionInputs["recordedRows"];
+  recorded: RecordedRow[];
 };
 
 const decidedFingerprintKey = (
@@ -449,13 +528,15 @@ const decidedFingerprintKey = (
 const groupByMatterAndDay = ({
   workspaceIds,
   timezoneId,
+  dayBounds,
   signals,
   recordedRows,
 }: {
   workspaceIds: readonly SafeId<"workspace">[];
   timezoneId: string;
+  dayBounds: readonly DayBounds[];
   signals: readonly DatedSignal[];
-  recordedRows: SuggestionInputs["recordedRows"];
+  recordedRows: readonly RecordedRow[];
 }) => {
   const authorized = new Set<string>(workspaceIds);
   const scopes = new Map<string, ScopeInputs>();
@@ -488,7 +569,9 @@ const groupByMatterAndDay = ({
     scopeFor(workspaceId, date).signals.push(signal);
   }
   for (const row of recordedRows) {
-    scopeFor(row.workspaceId, row.dateWorked).recorded.push(row);
+    for (const date of daysCoveredBy(row, dayBounds)) {
+      scopeFor(row.workspaceId, date).recorded.push(row);
+    }
   }
   return [...scopes.values()];
 };
@@ -520,12 +603,9 @@ const suggestScope = (
             decidedFingerprintKey(workspaceId, date, fingerprint),
           ),
       ),
-      recorded,
+      recordedOutsideSuggestions(recorded),
     ),
-    loggedMinutes: recorded.reduce(
-      (sum, entry) => sum + entry.durationMinutes,
-      0,
-    ),
+    loggedMinutes: loggedMinutesOn(date, recorded),
   };
 };
 
@@ -597,6 +677,7 @@ export const loadTimeSuggestionRange = async function* ({
   return groupByMatterAndDay({
     workspaceIds,
     timezoneId,
+    dayBounds: range.dayBounds,
     signals: signals.filter(({ signal }) => undecidedSignals.has(signal)),
     recordedRows: inputs.recordedRows,
   })
