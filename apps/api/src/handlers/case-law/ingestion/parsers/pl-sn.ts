@@ -1,6 +1,6 @@
-// parser-output-unchanged: [pl-kis] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [pl-uokik] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
-// parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading never reaches.
+// parser-output-unchanged: [pl-kis] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
+// parser-output-unchanged: [pl-uokik] the Supreme Court page reading, positioned word spaces included, is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
+// parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading, positioned word spaces included, never reaches.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
