@@ -119,3 +119,42 @@ test("the retry workflow agrees with retryDecision", async () => {
     expect(retried).toBe(retryDecision(fixture.jobs, fixture.attempt).retry);
   }
 });
+
+// A completion with nothing to retry starts no job at all.
+test("only a first failed pull request attempt of CI Checks starts the retry job", () => {
+  const source: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci-runner-loss-retry.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const parsed = v.parse(
+    v.object({ jobs: v.object({ retry: v.object({ if: v.string() }) }) }),
+    source,
+  );
+  const condition = new Script(
+    parsed.jobs.retry.if.replaceAll(
+      "contains(fromJSON('[\"pull_request\"]'), github.event.workflow_run.event)",
+      "github.event.workflow_run.event === 'pull_request'",
+    ),
+  );
+  const starts = (conclusion: string, attempt: number) =>
+    condition.runInNewContext({
+      github: {
+        repository: "owner/repository",
+        event: {
+          workflow_run: {
+            head_repository: { full_name: "owner/repository" },
+            path: ".github/workflows/ci.yml",
+            event: "pull_request",
+            conclusion,
+            run_attempt: attempt,
+          },
+        },
+      },
+    });
+  expect(starts("failure", 1)).toBe(true);
+  expect(starts("success", 1)).toBe(false);
+  expect(starts("cancelled", 1)).toBe(false);
+  expect(starts("failure", 2)).toBe(false);
+});
