@@ -307,6 +307,8 @@ export type SearchHistoryUse = {
 type PreparedUse = {
   kind: SearchHistoryEntryInput["kind"];
   country: CaseLawJurisdiction | null;
+  /** When the latest use that named a jurisdiction happened. */
+  countryUsedAt: Date | null;
   lookupKey: string;
   entry: SearchHistoryEntryInput;
   firstUsedAt: Date;
@@ -341,6 +343,7 @@ const prepareUses = async (
       prepared.set(mapKey, {
         kind: use.entry.kind,
         country: canonical.country,
+        countryUsedAt: canonical.country === null ? null : use.usedAt,
         lookupKey,
         entry: canonical.entry,
         firstUsedAt: use.usedAt,
@@ -350,13 +353,15 @@ const prepareUses = async (
       continue;
     }
     const isLatest = use.usedAt >= previous.lastUsedAt;
+    // The latest use that names a jurisdiction files the entry, whatever
+    // order the uses arrive in; a use without one never unfiles it.
+    const refiles =
+      canonical.country !== null &&
+      (previous.countryUsedAt === null || use.usedAt >= previous.countryUsedAt);
     prepared.set(mapKey, {
       kind: previous.kind,
-      // The latest use files the entry; a use without a jurisdiction never
-      // unfiles one.
-      country: isLatest
-        ? (canonical.country ?? previous.country)
-        : (previous.country ?? canonical.country),
+      country: refiles ? canonical.country : previous.country,
+      countryUsedAt: refiles ? use.usedAt : previous.countryUsedAt,
       lookupKey,
       entry: isLatest ? canonical.entry : previous.entry,
       firstUsedAt:
@@ -393,6 +398,7 @@ export const prepareSearchHistoryRows = async (
         userId: owner.userId,
         kind: use.kind,
         country: use.country,
+        countryUsedAt: use.countryUsedAt,
         courtId:
           use.entry.kind === "decision" ? (use.entry.courtId ?? null) : null,
         lookupKey: use.lookupKey,
@@ -604,7 +610,10 @@ export const upsertSearchHistoryRows = async ({
               table.lookupKey,
             ],
             set: {
-              country: sql`CASE WHEN ${incomingIsLatest} THEN COALESCE(excluded.country, ${table.country}) ELSE COALESCE(${table.country}, excluded.country) END`,
+              // Each side carries the time of its latest jurisdiction-naming
+              // use; the later one files the entry.
+              country: sql`CASE WHEN excluded.country_used_at IS NOT NULL AND (${table.countryUsedAt} IS NULL OR excluded.country_used_at::timestamptz >= ${table.countryUsedAt}) THEN excluded.country ELSE ${table.country} END`,
+              countryUsedAt: sql`GREATEST(${table.countryUsedAt}, excluded.country_used_at)`,
               courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
               ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
               iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
@@ -701,6 +710,8 @@ const UNPROJECTED_SEARCH_HISTORY_COLUMNS = [
   "userId",
   // A keyed hash for matching repeats; meaningless outside the database.
   "lookupKey",
+  // Orders refiling between uses; the entry's `country` is what it decides.
+  "countryUsedAt",
   // Sent decrypted, as the entry's own fields (query, or document, title
   // and path).
   "ciphertext",

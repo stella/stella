@@ -47,6 +47,8 @@ export const searchHistoryEntries = p.pgTable(
      * from before entries named one; no country-scoped list shows those.
      */
     country: p.text("country").$type<CaseLawJurisdiction>(),
+    /** When the latest use naming `country` happened; it decides refiling. */
+    countryUsedAt: timestamptz("country_used_at"),
     courtId: p.varchar("court_id", { length: 128 }),
     lookupKey: p.varchar("lookup_key", { length: 64 }).notNull(),
     ciphertext: bytea("ciphertext").notNull(),

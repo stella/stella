@@ -65,6 +65,7 @@ const UNSELECTED_HISTORY_COLUMNS = [
   "organizationId",
   "userId",
   "lookupKey",
+  "countryUsedAt",
 ] as const satisfies readonly (keyof typeof searchHistoryEntries.$inferSelect)[];
 
 const searchHistoryCursor = createTimestampIdCursorCodec({

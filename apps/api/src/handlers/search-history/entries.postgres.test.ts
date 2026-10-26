@@ -873,6 +873,86 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test("the latest use naming a jurisdiction files an entry, whatever order uses arrive in", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const at = (minute: number) =>
+          new Date(NOW.getTime() - 60 * 60_000 + minute * 60_000);
+        const importUses = async (
+          uses: Parameters<typeof prepareSearchHistoryRows>[1],
+        ) => {
+          const rows = await prepareSearchHistoryRows(fixture, uses);
+          await fixture.db.transaction(
+            async (tx) =>
+              await upsertSearchHistoryRows({
+                tx,
+                rows,
+                mode: "import",
+                recordAuditEvent: historyAuditRecorder(fixture),
+              }),
+          );
+        };
+        const filed = async (country: CaseLawJurisdiction) =>
+          (await readHistory(fixture, { country })).items.map(
+            (item) => item.kind,
+          );
+
+        // One batch, out of order: the use without a jurisdiction is the
+        // latest, POL is the latest that names one.
+        await importUses([
+          {
+            entry: {
+              kind: "search",
+              query: "Odpowiedzialność",
+              country: "CZE",
+            },
+            usedAt: at(1),
+          },
+          {
+            entry: { kind: "search", query: "Odpowiedzialność" },
+            usedAt: at(3),
+          },
+          {
+            entry: {
+              kind: "search",
+              query: "Odpowiedzialność",
+              country: "POL",
+            },
+            usedAt: at(2),
+          },
+        ]);
+        expect(await filed("POL")).toEqual(["search"]);
+        expect(await filed("CZE")).toEqual([]);
+
+        // A later batch carrying an older jurisdiction-naming use keeps it.
+        await importUses([
+          {
+            entry: {
+              kind: "search",
+              query: "odpowiedzialność",
+              country: "CZE",
+            },
+            usedAt: at(0),
+          },
+        ]);
+        expect(await filed("POL")).toEqual(["search"]);
+        expect(await filed("CZE")).toEqual([]);
+
+        // A newer one refiles it.
+        await importUses([
+          {
+            entry: {
+              kind: "search",
+              query: "odpowiedzialność",
+              country: "CZE",
+            },
+            usedAt: at(4),
+          },
+        ]);
+        expect(await filed("CZE")).toEqual(["search"]);
+        expect(await filed("POL")).toEqual([]);
+      });
+    });
+
     test("entries keep their jurisdiction and a country filter lists only its own", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const refiled = await recordQuery(fixture, "Náhrada škody", "CZE");
