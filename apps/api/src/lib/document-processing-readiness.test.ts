@@ -15,16 +15,19 @@ process.env["GOTENBERG_URL"] ??= "http://localhost:3002";
 process.env["GOTENBERG_USERNAME"] ??= "test";
 process.env["GOTENBERG_PASSWORD"] ??= "test";
 
-let readinessGet = async (): Promise<string | null> => null;
+let readinessSend = async (
+  _command: string,
+  _args: string[],
+): Promise<unknown> => [null, null];
 
 const {
   createSingleFlightBeat,
-  isDocumentOcrWorkerAvailable,
-  readDocumentOcrWorkerAvailability,
+  getDocumentOcrAvailability,
+  readDocumentOcrAvailability,
   refreshDocumentOcrWorkerReadiness,
 } = await import("@/api/lib/document-processing-readiness");
 
-const createReadinessClient = () => ({ get: readinessGet });
+const createReadinessClient = () => ({ send: readinessSend });
 
 /**
  * The class these pin: the heartbeat's wait is bounded, but a deadline
@@ -175,19 +178,50 @@ describe("document OCR worker readiness", () => {
     ).toHaveLength(2);
   });
 
-  test("reports availability only from a live shared lease", async () => {
-    expect(await readDocumentOcrWorkerAvailability(async () => "ready")).toBe(
-      true,
-    );
-    expect(await readDocumentOcrWorkerAvailability(async () => null)).toBe(
-      false,
-    );
-    expect(await readDocumentOcrWorkerAvailability(async () => "stale")).toBe(
-      false,
-    );
+  test("derives the status from the live lease first, then the batch lease", async () => {
+    const statusFor = async (live: string | null, batch: string | null) =>
+      (await readDocumentOcrAvailability(async () => ({ live, batch }))).type;
+    for (const batch of ["ready", null, "stale"]) {
+      expect(await statusFor("ready", batch)).toBe("live");
+    }
+    for (const live of [null, "stale"]) {
+      expect(await statusFor(live, "ready")).toBe("batched");
+      expect(await statusFor(live, null)).toBe("unconfigured");
+      expect(await statusFor(live, "stale")).toBe("unconfigured");
+    }
   });
 
-  test("degrades to unavailable on a dropped socket without capturing", async () => {
+  test("reads both leases in one MGET on the shared slot", async () => {
+    const calls: [string, string[]][] = [];
+    readinessSend = async (command, args) => {
+      calls.push([command, args]);
+      return [null, "ready"];
+    };
+
+    expect(await getDocumentOcrAvailability(createReadinessClient)).toEqual({
+      type: "batched",
+    });
+    expect(calls).toEqual([
+      [
+        "MGET",
+        [
+          "ocr-readiness:{ocr-worker}:v1",
+          "ocr-readiness:{ocr-worker}:batch-v1",
+        ],
+      ],
+    ]);
+  });
+
+  test("captures a malformed lease reply and degrades to unconfigured", async () => {
+    readinessSend = async () => "ready";
+
+    expect(await getDocumentOcrAvailability(createReadinessClient)).toEqual({
+      type: "unconfigured",
+    });
+    expect(analytics.exceptions()).toHaveLength(1);
+  });
+
+  test("degrades to unconfigured on a dropped socket without capturing", async () => {
     // The transient and non-transient fixtures must classify differently,
     // or both assertions below would pass through the same branch.
     const transient = Object.assign(new Error("Connection closed"), {
@@ -199,12 +233,12 @@ describe("document OCR worker readiness", () => {
     expect(isTransientRedisConnectionError(transient)).toBe(true);
     expect(isTransientRedisConnectionError(defect)).toBe(false);
 
-    readinessGet = async () => {
+    readinessSend = async () => {
       throw transient;
     };
-    expect(await isDocumentOcrWorkerAvailable(createReadinessClient)).toBe(
-      false,
-    );
+    expect(await getDocumentOcrAvailability(createReadinessClient)).toEqual({
+      type: "unconfigured",
+    });
     expect(analytics.exceptions()).toEqual([]);
     expect(logs.at("WARN")).toMatchObject([
       {
@@ -213,12 +247,12 @@ describe("document OCR worker readiness", () => {
       },
     ]);
 
-    readinessGet = async () => {
+    readinessSend = async () => {
       throw defect;
     };
-    expect(await isDocumentOcrWorkerAvailable(createReadinessClient)).toBe(
-      false,
-    );
+    expect(await getDocumentOcrAvailability(createReadinessClient)).toEqual({
+      type: "unconfigured",
+    });
     expect(
       analytics.exceptions().map((event) => event.properties),
     ).toMatchObject([
@@ -233,8 +267,8 @@ describe("document OCR worker readiness", () => {
       // Deliberately pending to exercise the caller's deadline.
     });
 
-    const rejection: unknown = await readDocumentOcrWorkerAvailability(
-      async () => await neverResolves,
+    const rejection: unknown = await readDocumentOcrAvailability(
+      async () => ({ live: await neverResolves, batch: null }),
       5,
     ).then(
       () => null,
@@ -246,7 +280,7 @@ describe("document OCR worker readiness", () => {
     });
   });
 
-  test("publishes an expiring lease atomically", async () => {
+  test("publishes a live lease and a batch lease spanning two batch intervals", async () => {
     const calls: [string, string, number][] = [];
     const writeLease = async (
       key: string,
@@ -257,9 +291,15 @@ describe("document OCR worker readiness", () => {
       return "OK";
     };
 
-    await refreshDocumentOcrWorkerReadiness(writeLease);
+    await refreshDocumentOcrWorkerReadiness({
+      writeLease,
+      batchIntervalMinutes: 1440,
+    });
 
-    expect(calls).toEqual([["ocr-readiness:{ocr-worker}:v1", "ready", 90]]);
+    expect(calls).toEqual([
+      ["ocr-readiness:{ocr-worker}:v1", "ready", 90],
+      ["ocr-readiness:{ocr-worker}:batch-v1", "ready", 2 * 1440 * 60],
+    ]);
   });
 
   test("bounds readiness heartbeats", async () => {
@@ -267,10 +307,11 @@ describe("document OCR worker readiness", () => {
       // Deliberately pending to exercise the caller's deadline.
     });
 
-    const rejection: unknown = await refreshDocumentOcrWorkerReadiness(
-      async () => await neverResolves,
-      5,
-    ).then(
+    const rejection: unknown = await refreshDocumentOcrWorkerReadiness({
+      writeLease: async () => await neverResolves,
+      batchIntervalMinutes: 1440,
+      timeoutMs: 5,
+    }).then(
       () => null,
       (error: unknown) => error,
     );

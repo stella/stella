@@ -6056,8 +6056,10 @@
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
       "ocrAlreadyProcessed": "Rozpoznávání textu již bylo dokončeno",
+      "ocrBatchHelp": "Dokumenty ve frontě se zpracují v příští dávce OCR.",
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
-      "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
+      "ocrQueued": "Rozpoznávání textu bylo zařazeno do fronty",
+      "ocrQueuedForBatch": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Podepisování ve stella desktop už probíhá",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Vyberte ve stella desktop podpisový certifikát a podepište toto PDF.",
         "waitingTitle": "Čeká se na stella desktop"
       },
+      "queueForOcr": "Zařadit do fronty OCR",
       "rateLimited": "Omezení rychlosti; pokračování za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Co udělat se souborem {fileName}",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Odebrat metadata dokumentu",
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům}}",
       "retryFailed": "Opakovat {count, plural, one {# soubor} few {# soubory} other {# souborů}}",
-      "runOcr": "Zařadit OCR do fronty",
       "scrubFailed": "Metadata tohoto souboru se nepodařilo odstranit, proto se nic nestáhlo",
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo}} z {total, number}",
       "uploadedSuccessfully": "Soubory úspěšně nahrány",

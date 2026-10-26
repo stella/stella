@@ -6056,8 +6056,10 @@
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
       "ocrAlreadyProcessed": "Text recognition has already completed",
+      "ocrBatchHelp": "Queued documents are processed in the next OCR batch.",
       "ocrQueueFailed": "Couldn't queue text recognition",
-      "ocrQueued": "Text recognition queued for the next OCR batch",
+      "ocrQueued": "Text recognition queued",
+      "ocrQueuedForBatch": "Text recognition queued for the next OCR batch",
       "pdfSigning": {
         "alreadySigningTitle": "Signing is already in progress in stella desktop",
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Choose a signing certificate in stella desktop to sign this PDF.",
         "waitingTitle": "Waiting for stella desktop"
       },
+      "queueForOcr": "Queue for OCR",
       "rateLimited": "Rate limited; resuming in {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "What to do with {fileName}",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Remove document metadata",
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
-      "runOcr": "Queue OCR",
       "scrubFailed": "This file's metadata could not be removed, so nothing was downloaded",
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
       "uploadedSuccessfully": "Files uploaded successfully",

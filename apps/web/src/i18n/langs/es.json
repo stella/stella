@@ -6056,8 +6056,10 @@
       "itemLimitReached": "Este asunto ha alcanzado su límite de elementos.",
       "maxEntitiesReached": "Se ha alcanzado el número máximo de elementos",
       "ocrAlreadyProcessed": "El reconocimiento de texto ya se completó",
+      "ocrBatchHelp": "Los documentos en cola se procesan en el próximo lote de OCR.",
       "ocrQueueFailed": "No se pudo poner en cola el reconocimiento de texto",
-      "ocrQueued": "Reconocimiento de texto añadido al próximo lote de OCR",
+      "ocrQueued": "Reconocimiento de texto puesto en cola",
+      "ocrQueuedForBatch": "Reconocimiento de texto añadido al próximo lote de OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Ya hay una firma en curso en stella desktop",
         "cancelledBaseVersionDescription": "El documento cambió mientras se firmaba. Abre la versión más reciente y fírmalo de nuevo.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Elige un certificado de firma en stella desktop para firmar este PDF.",
         "waitingTitle": "Esperando a stella desktop"
       },
+      "queueForOcr": "Poner en cola para OCR",
       "rateLimited": "Límite de velocidad; se reanuda en {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Qué hacer con {fileName}",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Eliminar metadatos del documento",
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
-      "runOcr": "Poner OCR en cola",
       "scrubFailed": "No se pudieron eliminar los metadatos de este archivo, por lo que no se descargó nada",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",

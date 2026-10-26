@@ -6056,8 +6056,10 @@
       "itemLimitReached": "Šioje byloje pasiektas elementų limitas.",
       "maxEntitiesReached": "Pasiektas didžiausias įrašų skaičius",
       "ocrAlreadyProcessed": "Teksto atpažinimas jau baigtas",
+      "ocrBatchHelp": "Eilėje esantys dokumentai apdorojami kitame OCR pakete.",
       "ocrQueueFailed": "Nepavyko įtraukti teksto atpažinimo į eilę",
-      "ocrQueued": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
+      "ocrQueued": "Teksto atpažinimas įtrauktas į eilę",
+      "ocrQueuedForBatch": "Teksto atpažinimas įtrauktas į kitą OCR paketą",
       "pdfSigning": {
         "alreadySigningTitle": "Pasirašymas stella desktop jau vyksta",
         "cancelledBaseVersionDescription": "Dokumentas pasikeitė pasirašymo metu. Atidarykite naujausią versiją ir pasirašykite iš naujo.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Programoje stella desktop pasirinkite pasirašymo sertifikatą, kad pasirašytumėte šį PDF.",
         "waitingTitle": "Laukiama stella desktop"
       },
+      "queueForOcr": "Įtraukti į OCR eilę",
       "rateLimited": "Greičio ribojimas; tęsiama po {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ką daryti su failu {fileName}",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Pašalinti dokumento metaduomenis",
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
-      "runOcr": "Įtraukti OCR į eilę",
       "scrubFailed": "Nepavyko pašalinti šio failo metaduomenų, todėl nieko neatsisiųsta",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",
