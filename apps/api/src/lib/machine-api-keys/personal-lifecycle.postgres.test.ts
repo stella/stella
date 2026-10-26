@@ -1,12 +1,29 @@
 import { panic } from "better-result";
+import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, inArray, sql } from "drizzle-orm";
 
-import { apikey, member, organization, user } from "@/api/db/auth-schema";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import {
+  apikey,
+  member,
+  organization,
+  session,
+  user,
+} from "@/api/db/auth-schema";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
+import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
+import type { SafeId } from "@/api/lib/branded-types";
+import { issueDesktopAccountCredential } from "@/api/lib/business-registries/desktop/issuance";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
   createPersonalApiKey,
+  issueMachineApiKey,
   listPersonalApiKeys,
 } from "@/api/lib/machine-api-keys/personal-lifecycle";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -14,6 +31,15 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+
+const liveSessionRow = (userId: string) => ({
+  id: `session-${userId}`,
+  token: `token-${userId}`,
+  userId,
+  expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+  updatedAt: new Date(),
+});
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -63,12 +89,16 @@ if (!databaseUrl || !runPostgres) {
           role: "member",
           createdAt: new Date(),
         });
+        const liveSession = liveSessionRow(userId);
+        await firstDb.insert(session).values(liveSession);
+        const sessionId = liveSession.id;
         try {
           const create = async (database: typeof firstDb) =>
             await createPersonalApiKey({
               name: "Parallel key",
               organizationId,
               userId,
+              sessionId,
               recordAuditEvent,
               database,
             });
@@ -164,6 +194,213 @@ if (!databaseUrl || !runPostgres) {
           await firstDb.delete(user).where(eq(user.id, userId));
         }
       });
-    }, 15_000);
+    }, 15_000); // timeout: three pooled clients connect and seed before the lock barrier
+
+    type RacingMint = {
+      organizationId: SafeId<"organization">;
+      userId: SafeId<"user">;
+      sessionId: string;
+      database: NonNullable<
+        Parameters<typeof createPersonalApiKey>[0]["database"]
+      >;
+    };
+    const racingAuditRecorder = ({ organizationId, userId }: RacingMint) =>
+      createBackgroundAuditRecorder({
+        organizationId,
+        userId,
+        workspaceId: null,
+        execution: {
+          performer: { type: "user", id: userId },
+          trigger: {
+            type: "system",
+            source: "personal_key_concurrency_test",
+          },
+        },
+      });
+    // Every session-authorized issuer takes the same fence.
+    const ISSUERS = {
+      "personal key": async (options: RacingMint) =>
+        await createPersonalApiKey({
+          ...options,
+          name: "Racing key",
+          recordAuditEvent: racingAuditRecorder(options),
+        }),
+      "machine key": async (options: RacingMint) =>
+        await issueMachineApiKey({
+          ...options,
+          name: "Racing key",
+          scopes: ["stella:read"],
+          permissions: { workspace: ["read"] },
+          expiresInDays: undefined,
+          audience: undefined,
+          recordAuditEvent: racingAuditRecorder(options),
+          auditEvent: (key) => ({
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.MACHINE_API_KEY,
+            resourceId: key.id,
+            metadata: { name: key.name, scopes: key.scopes },
+          }),
+        }),
+      // A desktop connection issues under the browser session that requested it.
+      "desktop account": async (options: RacingMint) =>
+        await issueDesktopAccountCredential({
+          identity: {
+            userId: options.userId,
+            organizationId: options.organizationId,
+            deviceJkt: "A".repeat(43),
+            sessionId: options.sessionId,
+          },
+          recordAuditEvent: racingAuditRecorder(options),
+          database: options.database,
+        }),
+    } satisfies Record<
+      string,
+      (options: RacingMint) => Promise<Result<unknown, HandlerError>>
+    >;
+
+    test.each(Object.entries(ISSUERS))(
+      "a %s mint racing an access reset either is revoked by it or finds its session ended",
+      async (_name, issue) => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const { db: mintDb } = openClient();
+          const { db: resetDb } = openClient();
+          const { sql: observer } = openClient();
+          const organizationId = mintAuthProviderId<"organization">();
+          const userId = mintAuthProviderId<"user">();
+          await mintDb.insert(user).values({
+            id: userId,
+            name: "Fixture member",
+            email: `${userId}@example.test`,
+            emailVerified: true,
+          });
+          await mintDb.insert(organization).values({
+            id: organizationId,
+            name: "Key reset fixture",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          await mintDb.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId,
+            userId,
+            role: "member",
+            createdAt: new Date(),
+          });
+          const liveSession = liveSessionRow(userId);
+          await mintDb.insert(session).values(liveSession);
+          const sessionId = liveSession.id;
+          const [mintWorker] = await mintDb
+            .select({ pid: sql<number>`pg_backend_pid()` })
+            .from(organization)
+            .where(eq(organization.id, organizationId));
+          if (!mintWorker) {
+            panic("The mint session must exist");
+          }
+          try {
+            let pending: ReturnType<typeof issue> | undefined;
+            // The reset holds the credential fence while the mint arrives; the
+            // mint must wait for it and then see the session the reset ended.
+            await resetDb.transaction(async (tx) => {
+              const [resetWorker] = await tx
+                .select({ pid: sql<number>`pg_backend_pid()` })
+                .from(organization)
+                .where(eq(organization.id, organizationId));
+              if (!resetWorker) {
+                panic("The reset session must exist");
+              }
+              await revokeAllUserDurableCredentials(tx, userId);
+              pending = issue({
+                organizationId,
+                userId,
+                sessionId,
+                database: mintDb,
+              });
+              await waitForBlockedPid(observer, {
+                waitingPid: mintWorker.pid,
+                holdingPid: resetWorker.pid,
+              });
+            });
+            if (pending === undefined) {
+              panic("The racing mint must have started");
+            }
+            const minted = await pending;
+            expect(minted.isErr()).toBe(true);
+            if (minted.isErr()) {
+              expect(minted.error.status).toBe(401);
+            }
+            expect(
+              await mintDb
+                .select({ id: apikey.id })
+                .from(apikey)
+                .where(eq(apikey.referenceId, userId)),
+            ).toEqual([]);
+          } finally {
+            await mintDb.delete(apikey).where(eq(apikey.referenceId, userId));
+            await mintDb
+              .delete(organization)
+              .where(eq(organization.id, organizationId));
+            await mintDb.delete(user).where(eq(user.id, userId));
+          }
+        });
+      },
+      15_000,
+    );
+
+    test("a desktop credential whose audit receipt fails leaves no key", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
+        await db.insert(user).values({
+          id: userId,
+          name: "Fixture member",
+          email: `${userId}@example.test`,
+          emailVerified: true,
+        });
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Audit failure fixture",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
+        await db.insert(member).values({
+          id: mintAuthProviderIdValue(),
+          organizationId,
+          userId,
+          role: "member",
+          createdAt: new Date(),
+        });
+        const liveSession = liveSessionRow(userId);
+        await db.insert(session).values(liveSession);
+        try {
+          const issued = await issueDesktopAccountCredential({
+            identity: {
+              userId,
+              organizationId,
+              deviceJkt: "A".repeat(43),
+              sessionId: liveSession.id,
+            },
+            // The receipt write fails after the key row is inserted.
+            recordAuditEvent: async () => {
+              throw new DatabaseError({ message: "Audit write failed" });
+            },
+            database: db,
+          });
+          expect(issued.isErr()).toBe(true);
+          expect(
+            await db
+              .select({ id: apikey.id })
+              .from(apikey)
+              .where(eq(apikey.referenceId, userId)),
+          ).toEqual([]);
+        } finally {
+          await db.delete(apikey).where(eq(apikey.referenceId, userId));
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      });
+    });
   });
 }

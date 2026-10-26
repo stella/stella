@@ -1139,10 +1139,6 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
-        {
-          files: "packages/mcp-apps/**",
-          use: "packages/mcp-apps/src/shared/style.css",
-        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1763,6 +1759,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
+    "./.oxlint-plugins/query-invalidation-scope.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -2588,6 +2585,17 @@ const config = defineConfig({
       ],
       rules: {
         "require-loader-prefetch/require-loader-prefetch": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-invalidation-scope.fixture.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.logic.ts",
+        "apps/web/src/lib/workspaces/queries/entities.ts",
+      ],
+      rules: {
+        "query-invalidation-scope/query-invalidation-scope": "error",
       },
     },
     {

@@ -10,7 +10,7 @@ import { createDesktopLinkRedeemHandler } from "@/api/handlers/desktop-registry/
 import { createHttpApp } from "@/api/http/app";
 import { PRIVATE_CACHE_CONTROL, responseCachePolicy } from "@/api/http/cache";
 import { routes } from "@/api/http/route";
-import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
@@ -29,8 +29,7 @@ type RedemptionScenario =
   | "connected"
   | "other-user"
   | "other-organization"
-  | "audit-failure"
-  | "mint-failure";
+  | "issue-failure";
 
 const createRedemptionFixture = async (
   scenario: RedemptionScenario,
@@ -43,23 +42,13 @@ const createRedemptionFixture = async (
       userId: "user-1",
       organizationId: "organization-1",
     }),
-    // Every service owns its persistence; the HTTP handler only threads this
-    // capability through, so an accidental database call must fail this test.
-    scopedDb: async () =>
-      panic("Unexpected database call in redemption fixture"),
+    sessionId: "issuing-session",
   };
   const key = "stella_dr_fixture";
-  const keyId = "key-fixture";
   const expiresAt = new Date("2026-10-08T12:00:00.000Z");
   const serviceCalls: string[] = [];
   const grantBodies: unknown[] = [];
   const mintIdentities: unknown[] = [];
-  const auditKeyIds: string[] = [];
-  const revocations: {
-    userId: string;
-    organizationId: string;
-    keyId: string;
-  }[] = [];
   const services = {
     authorizeGrant: async (body, request, proof) => {
       expect(request.headers.has("DPoP")).toBe(true);
@@ -105,51 +94,29 @@ const createRedemptionFixture = async (
           keyId: "existing-key",
           credential: "stella_dr_existing",
         }),
-        scopedDb: identity.scopedDb,
+        // Every service owns its persistence, so an accidental database call
+        // must fail this test.
+        scopedDb: async () =>
+          panic("Unexpected database call in redemption fixture"),
       });
     },
-    loadAccount: async (loadedIdentity) => {
-      serviceCalls.push("loadAccount");
-      expect(loadedIdentity.userId).toBe(identity.userId);
-      expect(loadedIdentity.organizationId).toBe(identity.organizationId);
-      return Result.ok({
-        email: "lawyer@example.com",
-        name: "Example Lawyer",
-        organizationName: "Example Organization",
-      });
-    },
-    mintCredential: async (mintedIdentity) => {
-      serviceCalls.push("mintCredential");
-      mintIdentities.push(mintedIdentity);
-      return scenario === "mint-failure"
+    issueCredential: async (issuedIdentity, request) => {
+      serviceCalls.push("issueCredential");
+      expect(request.headers.has("DPoP")).toBe(true);
+      mintIdentities.push(issuedIdentity);
+      return scenario === "issue-failure"
         ? Result.err(
             new HandlerError({
               status: 503,
               message: "Could not connect desktop account",
             }),
           )
-        : Result.ok({ id: keyId, key, expiresAt });
-    },
-    auditCredential: async ({
-      identity: auditedIdentity,
-      keyId: auditedKeyId,
-    }) => {
-      serviceCalls.push("auditCredential");
-      expect(auditedIdentity.userId).toBe(identity.userId);
-      expect(auditedIdentity.organizationId).toBe(identity.organizationId);
-      auditKeyIds.push(auditedKeyId);
-      return scenario === "audit-failure"
-        ? Result.err(new DatabaseError({ message: "Audit write failed" }))
-        : Result.ok(undefined);
-    },
-    revokeCredential: async (revokedIdentity, revokedKeyId) => {
-      serviceCalls.push("revokeCredential");
-      revocations.push({
-        userId: revokedIdentity.userId,
-        organizationId: revokedIdentity.organizationId,
-        keyId: revokedKeyId,
-      });
-      return Result.ok(undefined);
+        : Result.ok({
+            account: { email: "lawyer@example.com", name: "Example Lawyer" },
+            organizationName: "Example Organization",
+            key,
+            expiresAt,
+          });
     },
   } satisfies RedemptionServices;
   const route = createDesktopLinkRedeemHandler(services);
@@ -198,13 +165,10 @@ const createRedemptionFixture = async (
     body,
     identity,
     key,
-    keyId,
     expiresAt,
     serviceCalls,
     grantBodies,
     mintIdentities,
-    auditKeyIds,
-    revocations,
   };
 };
 
@@ -231,8 +195,6 @@ describe("desktop link redemption over HTTP", () => {
         expect(fixture.serviceCalls).toEqual([]);
         expect(fixture.grantBodies).toEqual([]);
         expect(fixture.mintIdentities).toEqual([]);
-        expect(fixture.auditKeyIds).toEqual([]);
-        expect(fixture.revocations).toEqual([]);
         const payload: unknown = await response.json();
         expect(payload).toMatchObject({
           code: "desktop_update_required",
@@ -260,8 +222,6 @@ describe("desktop link redemption over HTTP", () => {
     });
     expect(fixture.grantBodies).toEqual([fixture.body]);
     expect(fixture.mintIdentities).toEqual([fixture.identity]);
-    expect(fixture.auditKeyIds).toEqual([fixture.keyId]);
-    expect(fixture.revocations).toEqual([]);
   });
 
   test("an existing credential for the same identity confirms the link without minting", async () => {
@@ -279,8 +239,6 @@ describe("desktop link redemption over HTTP", () => {
     });
     expect(fixture.grantBodies).toEqual([fixture.body]);
     expect(fixture.mintIdentities).toEqual([]);
-    expect(fixture.auditKeyIds).toEqual([]);
-    expect(fixture.revocations).toEqual([]);
   });
 
   test("a bearer for another user or organization cannot confirm the granted identity", async () => {
@@ -295,8 +253,6 @@ describe("desktop link redemption over HTTP", () => {
       });
       expect(fixture.grantBodies).toEqual([fixture.body]);
       expect(fixture.mintIdentities).toEqual([]);
-      expect(fixture.auditKeyIds).toEqual([]);
-      expect(fixture.revocations).toEqual([]);
     }
   });
 
@@ -308,32 +264,10 @@ describe("desktop link redemption over HTTP", () => {
     expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
     expect(fixture.grantBodies).toEqual([]);
     expect(fixture.mintIdentities).toEqual([]);
-    expect(fixture.auditKeyIds).toEqual([]);
-    expect(fixture.revocations).toEqual([]);
   });
 
-  test("an audit failure revokes the issued key before returning a credential-free failure", async () => {
-    const fixture = await createRedemptionFixture("audit-failure");
-    await using server = fixture.serve();
-    const response = await server.fetch(fixture.request);
-    expect(response.status).toBe(500);
-    expect(response.headers.get("cache-control")).toBe(PRIVATE_CACHE_CONTROL);
-    const payload: unknown = await response.json();
-    expect(payload).not.toHaveProperty("key");
-    expect(payload).not.toHaveProperty("account");
-    expect(JSON.stringify(payload)).not.toContain(fixture.key);
-    expect(fixture.auditKeyIds).toEqual([fixture.keyId]);
-    expect(fixture.revocations).toEqual([
-      {
-        userId: fixture.identity.userId,
-        organizationId: fixture.identity.organizationId,
-        keyId: fixture.keyId,
-      },
-    ]);
-  });
-
-  test("a credential issuer failure returns unavailable without auditing or revoking", async () => {
-    const fixture = await createRedemptionFixture("mint-failure");
+  test("a credential issuer failure returns its refusal without a credential", async () => {
+    const fixture = await createRedemptionFixture("issue-failure");
     await using server = fixture.serve();
     const response = await server.fetch(fixture.request);
     expect(response.status).toBe(503);
@@ -342,7 +276,5 @@ describe("desktop link redemption over HTTP", () => {
       message: "Could not connect desktop account",
     });
     expect(fixture.mintIdentities).toEqual([fixture.identity]);
-    expect(fixture.auditKeyIds).toEqual([]);
-    expect(fixture.revocations).toEqual([]);
   });
 });
