@@ -3,7 +3,12 @@ import type { Result } from "better-result";
 
 import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
-export const SK_COLLECTION_PARSER_VERSION = 4;
+/**
+ * The revision a cached issue outcome was read with. Bump it when the parser
+ * or the PDF text extractor (`@libpdf/core` and its patch) changes what an
+ * issue's pages read as: an outcome cached at another revision is read again.
+ */
+export const SK_COLLECTION_PARSER_VERSION = 5;
 
 export const SK_COLLECTION_SERIES = {
   NS_R: "ns-r",
