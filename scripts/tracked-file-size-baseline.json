@@ -25,11 +25,6 @@
     "reason": "Compressed page recording that the case-law source-surface census replays."
   },
   {
-    "path": "apps/api/src/handlers/case-law/ingestion/parsers/__snapshots__/pl-tk-all-rulings.pre-change.json",
-    "maxBytes": 2566405,
-    "reason": "Parser snapshot that pl-tk.test.ts compares every recorded ruling against."
-  },
-  {
     "path": "apps/api/src/lib/files/pdf-signing/fonts/NotoSansSC-Subset.ttf",
     "maxBytes": 3715724,
     "reason": "CJK font subset embedded in signature stamps at runtime; produced by apps/api/src/scripts/subset-stamp-fonts.ts."

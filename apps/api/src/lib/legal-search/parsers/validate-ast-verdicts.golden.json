@@ -5962,7 +5962,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165293,
+        "astLength": 165328,
         "retainedPct": 99.4,
         "blockCount": 316,
         "missingWords": [],
@@ -5996,7 +5996,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165117,
+        "astLength": 165152,
         "retainedPct": 99.3,
         "blockCount": 315,
         "missingWords": [],
@@ -6036,7 +6036,7 @@
       ],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165469,
+        "astLength": 165504,
         "retainedPct": 99.5,
         "blockCount": 317,
         "missingWords": [],
@@ -6070,7 +6070,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165292,
+        "astLength": 165327,
         "retainedPct": 99.4,
         "blockCount": 316,
         "missingWords": [],
@@ -6104,7 +6104,7 @@
       "issues": [],
       "stats": {
         "originalLength": 166281,
-        "astLength": 165293,
+        "astLength": 165328,
         "retainedPct": 99.4,
         "blockCount": 316,
         "missingWords": [],
@@ -6132,13 +6132,234 @@
     }
   },
   {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68613,
+        "astLength": 68512,
+        "retainedPct": 99.9,
+        "blockCount": 121,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259560,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68613,
+        "astLength": 68355,
+        "retainedPct": 99.6,
+        "blockCount": 120,
+        "missingWords": [
+          "oczywiście",
+          "lettre",
+          "rekonstruować",
+          "kilku",
+          "wtedy"
+        ],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 28,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259560,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 68613,
+        "astLength": 68669,
+        "retainedPct": 100.1,
+        "blockCount": 122,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 30,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259560,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68613,
+        "astLength": 68511,
+        "retainedPct": 99.9,
+        "blockCount": 121,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259560,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68613,
+        "astLength": 68512,
+        "retainedPct": 99.9,
+        "blockCount": 121,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29,
+          "paragraph-apparatus": 1
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259560,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-k-24-04.html.gz#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 68613,
+        "astLength": 68432,
+        "retainedPct": 99.7,
+        "blockCount": 120,
+        "missingWords": ["sentencja", "ogłoszona"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 9,
+          "paragraph-intro": 4,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 17,
+          "paragraph-holding": 1,
+          "paragraph-argumentation": 58,
+          "paragraph-dissent": 29
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 314,
+          "textCharacters": 259560,
+          "ancestorChecks": 507
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/pl-tk-case-k-44-16.html.gz#current",
     "result": {
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62023,
+        "originalLength": 62227,
+        "astLength": 62025,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -6159,7 +6380,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245246,
           "ancestorChecks": 452
         }
       }
@@ -6171,8 +6392,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 61407,
+        "originalLength": 62227,
+        "astLength": 61409,
         "retainedPct": 98.7,
         "blockCount": 96,
         "missingWords": [
@@ -6209,7 +6430,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245246,
           "ancestorChecks": 452
         }
       }
@@ -6227,8 +6448,8 @@
         }
       ],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62639,
+        "originalLength": 62227,
+        "astLength": 62641,
         "retainedPct": 100.7,
         "blockCount": 98,
         "missingWords": [],
@@ -6249,7 +6470,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245246,
           "ancestorChecks": 452
         }
       }
@@ -6261,8 +6482,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62022,
+        "originalLength": 62227,
+        "astLength": 62024,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -6283,7 +6504,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245246,
           "ancestorChecks": 452
         }
       }
@@ -6295,8 +6516,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 62023,
+        "originalLength": 62227,
+        "astLength": 62025,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -6317,7 +6538,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245246,
           "ancestorChecks": 452
         }
       }
@@ -6329,8 +6550,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62225,
-        "astLength": 61738,
+        "originalLength": 62227,
+        "astLength": 61740,
         "retainedPct": 99.2,
         "blockCount": 96,
         "missingWords": [
@@ -6360,7 +6581,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245241,
+          "textCharacters": 245246,
           "ancestorChecks": 452
         }
       }
@@ -6533,6 +6754,211 @@
           "textComputations": 36,
           "textCharacters": 11202,
           "ancestorChecks": 43
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#current",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135556,
+        "retainedPct": 101.1,
+        "blockCount": 251,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 127,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135278,
+        "retainedPct": 100.9,
+        "blockCount": 250,
+        "missingWords": ["europejskich", "sporu", "inicjowanych"],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 126,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        },
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135834,
+        "retainedPct": 101.3,
+        "blockCount": 252,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 128,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135555,
+        "retainedPct": 101.1,
+        "blockCount": 251,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 127,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-tk-case-sk-68-25.html.gz#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "HUGE_BLOCKS",
+          "message": "1 blocks exceed 5000 chars",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 134076,
+        "astLength": 135556,
+        "retainedPct": 101.1,
+        "blockCount": 251,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "paragraph-front-matter": 1,
+          "heading": 7,
+          "paragraph-intro": 13,
+          "paragraph-case-number": 1,
+          "paragraph-panel": 8,
+          "paragraph-holding": 4,
+          "paragraph-argumentation": 127,
+          "paragraph-dissent": 90
+        },
+        "tinyBlocks": 3,
+        "hugeBlocks": 1,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 702,
+          "textCharacters": 490688,
+          "ancestorChecks": 1167
         }
       }
     }
@@ -6904,8 +7330,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44393,
+        "originalLength": 44571,
+        "astLength": 44394,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": [],
@@ -6925,7 +7351,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172365,
           "ancestorChecks": 396
         }
       }
@@ -6937,8 +7363,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 43593,
+        "originalLength": 44571,
+        "astLength": 43594,
         "retainedPct": 97.8,
         "blockCount": 86,
         "missingWords": ["odnosząc", "drugiego"],
@@ -6958,7 +7384,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172365,
           "ancestorChecks": 396
         }
       }
@@ -6976,8 +7402,8 @@
         }
       ],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 45193,
+        "originalLength": 44571,
+        "astLength": 45194,
         "retainedPct": 101.4,
         "blockCount": 88,
         "missingWords": [],
@@ -6997,7 +7423,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172365,
           "ancestorChecks": 396
         }
       }
@@ -7009,8 +7435,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44392,
+        "originalLength": 44571,
+        "astLength": 44393,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": ["odnosząc"],
@@ -7030,7 +7456,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172365,
           "ancestorChecks": 396
         }
       }
@@ -7042,8 +7468,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44393,
+        "originalLength": 44571,
+        "astLength": 44394,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": [],
@@ -7063,7 +7489,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172365,
           "ancestorChecks": 396
         }
       }
@@ -7075,8 +7501,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44570,
-        "astLength": 44341,
+        "originalLength": 44571,
+        "astLength": 44342,
         "retainedPct": 99.5,
         "blockCount": 86,
         "missingWords": [],
@@ -7095,7 +7521,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172364,
+          "textCharacters": 172365,
           "ancestorChecks": 396
         }
       }

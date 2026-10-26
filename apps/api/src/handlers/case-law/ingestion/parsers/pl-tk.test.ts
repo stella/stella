@@ -9,6 +9,11 @@ import { describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import fc from "fast-check";
 
+import {
+  type Block,
+  hasInlineChildren,
+  type Inline,
+} from "@stll/legal-ast/document-ast";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
 import {
@@ -20,7 +25,6 @@ import {
   readPlTkRuling,
   validatePlTkBlocks,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
-import * as preChange from "@/api/handlers/case-law/ingestion/parsers/pl-tk.pre-change-reference.test-helper";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -30,51 +34,6 @@ const casePage = async (name: string): Promise<string> =>
       new Uint8Array(await Bun.file(new URL(name, FIXTURES)).arrayBuffer()),
     ),
   );
-
-test("one parsed page preserves the pre-change output for every committed ruling", async () => {
-  const fixtureNames = (
-    await Array.fromAsync(
-      new Bun.Glob("pl-tk-case-*.html.gz").scan({ cwd: FIXTURES.pathname }),
-    )
-  ).toSorted();
-  const actual = [];
-  for (const fixture of fixtureNames) {
-    const parsedPage = parsePlTkPage(await casePage(fixture));
-    const fields = listPlTkPageFields(parsedPage);
-    const page = readPlTkCasePage(parsedPage);
-    if (page === null) {
-      throw new Error(`${fixture} is not a case page`);
-    }
-    for (const documentId of page.rulingIds) {
-      const ruling = readPlTkRuling(parsedPage, documentId);
-      if (ruling === null) {
-        throw new Error(`${fixture} holds no ruling ${documentId}`);
-      }
-      const parsed =
-        ruling.textHtml === undefined
-          ? null
-          : parsePlTkText({
-              page: parsedPage,
-              caseNumber: page.record.caseNumber ?? documentId,
-              court: ruling.courtAsPrinted ?? "Trybunał Konstytucyjny",
-              decisionDate: ruling.decisionDate,
-              decisionType: ruling.decisionForm,
-              documentId,
-              sourceUrl: `https://ipo.trybunal.gov.pl/ipo/Sprawa?cid=1&sprawa=${documentId}`,
-              documentUrl:
-                typeof ruling.wordDocumentUrl === "string"
-                  ? ruling.wordDocumentUrl
-                  : undefined,
-              textHtml: ruling.textHtml,
-            });
-      actual.push({ fixture, documentId, fields, page, ruling, parsed });
-    }
-  }
-  const snapshot = await Bun.file(
-    new URL("__snapshots__/pl-tk-all-rulings.pre-change.json", import.meta.url),
-  ).text();
-  expect(JSON.stringify(actual)).toBe(JSON.stringify(JSON.parse(snapshot)));
-});
 
 const rulingOf = async (name: string, documentId: string) => {
   const { ruling } = await rulingAndPageOf(name, documentId);
@@ -302,7 +261,8 @@ describe("the ruling's text as blocks", () => {
       "2 I",
       "2 II",
       "2 III",
-      "1 Zdanie odrębne",
+      // The heading prints `Zdanie odrębne`; the next line names the author.
+      "1 Zdanie odrębne sędziego TK Andrzeja Zielonackiego",
     ]);
     const roleOf = (text: string): string | undefined =>
       documentAst.blocks.flatMap((block) =>
@@ -507,123 +467,6 @@ describe("the court a ruling names", () => {
   });
 });
 
-const generatedCasePage = (seed: number): string => {
-  let state = seed;
-  const pick = (limit: number): number => {
-    state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296;
-    return Math.abs(state) % limit;
-  };
-  const wrap = (value: string, depth: number): string => {
-    let wrapped = value;
-    for (let index = 0; index < depth; index += 1) {
-      wrapped = `<div class="wrapper-${index}">${wrapped}</div>`;
-    }
-    return wrapped;
-  };
-  const rulingCount = 2 + pick(2);
-  const rulings = Array.from({ length: rulingCount }, (_, index) => {
-    const id = String(seed * 10 + index + 1);
-    const printedCourt = pick(2) === 0 ? "Trybunał Konstytucyjny" : undefined;
-    const front = printedCourt
-      ? `<p>${printedCourt} w składzie:</p>`
-      : `<p>Sygn. akt K ${seed}/${index + 1}</p>`;
-    const afterBench = [
-      "wyrok_sentencja",
-      "wyrok_uzasadnienie",
-      "wyrok_zdanieodrebne",
-    ]
-      .map(
-        (className, region) =>
-          `<div class="${className}">${wrap(
-            `<p>Sąd ${seed}-${index}-${region} w składzie:</p><p>Treść ${region}</p>`,
-            pick(4),
-          )}</div>`,
-      )
-      .join("");
-    const container = `<div id="sprawaForm:tabView:dok_${id}">
-      <div class="prop"><div class="name">Rodzaj orzeczenia<script>ignored</script></div><div class="value">Wyrok<style>ignored</style></div></div>
-      <div class="prop"><div class="name">Data</div><div class="value">${1 + pick(28)} stycznia 2026</div></div>
-      <div class="prop"><div class="name">Dotyczy</div><div class="value">Sprawa ${seed}-${index}</div></div>
-      <div id="tekst_${id}">${wrap(
-        `<p>WYROK</p>${front}${afterBench}<div class="prop"><div class="name">Pole tekstu</div><div class="value">Wartość</div></div><script>ignored</script><style>ignored</style>`,
-        1 + pick(4),
-      )}</div>
-    </div>`;
-    return { container: wrap(container, pick(4)), wrapped: pick(2) === 0 };
-  });
-  const wrappedRulings = rulings
-    .filter((ruling) => ruling.wrapped)
-    .map((ruling) => ruling.container)
-    .join("");
-  const standaloneRulings = rulings
-    .filter((ruling) => !ruling.wrapped)
-    .map((ruling) => ruling.container)
-    .join("");
-  return `${wrap(
-    `<div id="sprawaForm:tabView">
-    <div id="sprawaForm:tabView:metryka">
-      <div class="prop"><div class="name">Sygnatura</div><div class="value">K ${seed}/26</div></div>
-      <div class="prop"><div class="name">Data wpływu do TK</div><div class="value">2 lutego 2026</div></div>
-      <div class="ui-panel"><span class="ui-panel-title">Podmiot w sprawie</span><ul><li class="ui-datalist-item">Wnioskodawca ${seed}</li></ul></div>
-    </div>${wrappedRulings}
-  </div>`,
-    pick(4),
-  )}${standaloneRulings}`;
-};
-
-test(
-  "pl-tk.generated-pages-match-pre-change-reader",
-  () => {
-    assertProperty(
-      "pl-tk.generated-pages-match-pre-change-reader",
-      fc.property(fc.integer({ min: 1, max: 1_000_000 }), (seed) => {
-        const html = generatedCasePage(seed);
-        const parsedPage = parsePlTkPage(html);
-        const page = readPlTkCasePage(parsedPage);
-        const referencePage = preChange.readPlTkCasePage(html);
-        expect(page).not.toBeNull();
-        expect(referencePage).not.toBeNull();
-        for (const documentId of page?.rulingIds ?? []) {
-          const ruling = readPlTkRuling(parsedPage, documentId);
-          const referenceRuling = preChange.readPlTkRuling(html, documentId);
-          const parseInput = {
-            caseNumber: page?.record.caseNumber ?? documentId,
-            court: ruling?.courtAsPrinted ?? "Trybunał Konstytucyjny",
-            decisionDate: ruling?.decisionDate,
-            decisionType: ruling?.decisionForm,
-            documentId,
-            sourceUrl: "https://ipo.trybunal.gov.pl/ipo/Sprawa",
-            documentUrl: undefined,
-            textHtml: ruling?.textHtml ?? "",
-          };
-          const actual = {
-            fields: listPlTkPageFields(parsedPage),
-            page,
-            ruling,
-            parsed: parsePlTkText({ page: parsedPage, ...parseInput }),
-          };
-          const reference = {
-            fields: preChange.listPlTkPageFields(html),
-            page: referencePage,
-            ruling: referenceRuling,
-            parsed: preChange.parsePlTkText({
-              ...parseInput,
-              decisionDate: referenceRuling?.decisionDate,
-              decisionType: referenceRuling?.decisionForm,
-              court:
-                referenceRuling?.courtAsPrinted ?? "Trybunał Konstytucyjny",
-              textHtml: referenceRuling?.textHtml ?? "",
-            }),
-          };
-          expect(JSON.stringify(actual)).toBe(JSON.stringify(reference));
-        }
-      }),
-      { numRuns: 300, seed: 62_850_001 },
-    );
-  },
-  propertyTestTimeout(30_000),
-);
-
 for (const href of [
   "/ipo/dok?dok=F 1.pdf",
   "/ipo/dok?dok=F:1.pdf",
@@ -671,4 +514,260 @@ test("excludes script and style from ruling metadata", () => {
   const url = publication?.links.at(0)?.url;
   // A defect object is not a string and fails the comparison.
   expect(typeof url === "string" && url === "https://example.org/").toBe(true);
+});
+
+/** Every ruling of a capture, read and built the way ingestion builds it. */
+const everyRuling = async (name: string) => {
+  const page = parsePlTkPage(await casePage(name));
+  const record = readPlTkCasePage(page);
+  if (record === null) {
+    throw new Error(`${name} is not a case page`);
+  }
+  return record.rulingIds.flatMap((documentId) => {
+    const ruling = readPlTkRuling(page, documentId);
+    if (ruling?.textHtml === undefined) {
+      return [];
+    }
+    const { documentAst } = parsePlTkText({
+      page,
+      caseNumber: record.record.caseNumber ?? documentId,
+      court: "Trybunał Konstytucyjny",
+      decisionDate: ruling.decisionDate,
+      decisionType: ruling.decisionForm,
+      documentId,
+      sourceUrl: "https://ipo.trybunal.gov.pl/ipo/Sprawa",
+      documentUrl: undefined,
+      textHtml: ruling.textHtml,
+    });
+    return [{ documentId, ruling, blocks: documentAst.blocks }];
+  });
+};
+
+const textLeaves = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => {
+    if (inline.type === "text") {
+      return [inline.text];
+    }
+    return hasInlineChildren(inline) ? textLeaves(inline.children) : [];
+  });
+
+const linksIn = (inline: Inline): Inline[] => {
+  if (inline.type === "link") {
+    return [inline];
+  }
+  return hasInlineChildren(inline) ? inline.children.flatMap(linksIn) : [];
+};
+
+const inlinesOf = (block: Block | undefined): Inline[] =>
+  block?.type === "paragraph" || block?.type === "heading" ? block.inlines : [];
+
+/** The text before and after the first inline of `type`, and that inline. */
+const aroundFirst = (inlines: readonly Inline[], type: Inline["type"]) => {
+  const at = inlines.findIndex((inline) => inline.type === type);
+  return at === -1
+    ? undefined
+    : {
+        before: textLeaves(inlines.slice(0, at)).join(""),
+        found: inlines[at],
+        after: textLeaves(inlines.slice(at + 1)).join(""),
+      };
+};
+
+describe("the portal's typesetting, read as a browser lays it out", () => {
+  // A word, the export's line break and indentation, a word.
+  const HARD_WRAP = /\S\n[ \t]+\S/u;
+  const SOURCE_WHITESPACE = /[\t\n\r\f]| {2}/u;
+
+  test("the export's line wrapping and indentation never reach a block's text", async () => {
+    const names = (
+      await Array.fromAsync(
+        new Bun.Glob("pl-tk-case-*.html.gz").scan({ cwd: FIXTURES.pathname }),
+      )
+    ).toSorted();
+    const offenders: string[] = [];
+    let wrappedRulings = 0;
+    for (const name of names) {
+      for (const { documentId, ruling, blocks } of await everyRuling(name)) {
+        if (HARD_WRAP.test(ruling.textHtml ?? "")) {
+          wrappedRulings += 1;
+        }
+        for (const block of blocks) {
+          const leaves = textLeaves(inlinesOf(block));
+          if (leaves.some((leaf) => SOURCE_WHITESPACE.test(leaf))) {
+            offenders.push(`${name} ${documentId} ${block.anchorId}`);
+          }
+        }
+      }
+    }
+
+    // The captures carry the export's hard wrapping, so the check reaches it.
+    expect(wrappedRulings).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+
+  test(
+    "pl-tk.hard-wrapped-paragraph-reads-as-its-words",
+    () => {
+      const word = fc.stringMatching(/^[a-ząćęłńóśźż0-9.,()§]{1,8}$/u);
+      const gap = fc.oneof(
+        fc.constant(" "),
+        fc
+          .integer({ min: 0, max: 24 })
+          .map((width) => `\n${" ".repeat(width)}`),
+      );
+      assertProperty(
+        "pl-tk.hard-wrapped-paragraph-reads-as-its-words",
+        fc.property(
+          fc.array(fc.tuple(word, gap, fc.boolean()), {
+            minLength: 1,
+            maxLength: 30,
+          }),
+          (runs) => {
+            const body = runs
+              .map(([text, separator, italic], index) => {
+                const run = italic
+                  ? `<font class="wyrok_kursywa">${text}</font>`
+                  : text;
+                return index === 0 ? run : `${separator}${run}`;
+              })
+              .join("");
+            const page = parsePlTkPage(`<div id="sprawaForm:tabView:dok_1">
+              <div id="tekst_1"><div class="wyrok_akapitCaly">
+                <div class="wyrok_akapitNr"><a name="akapit1">1</a></div>
+                <div class="wyrok_akapitNumerowany">
+                  ${body}
+                </div>
+              </div></div>
+            </div>`);
+            const ruling = readPlTkRuling(page, "1");
+            const { documentAst } = parsePlTkText({
+              page,
+              caseNumber: "K 1/26",
+              court: "Trybunał Konstytucyjny",
+              decisionDate: undefined,
+              decisionType: undefined,
+              documentId: "1",
+              sourceUrl: "https://ipo.trybunal.gov.pl/ipo/Sprawa",
+              documentUrl: undefined,
+              textHtml: ruling?.textHtml ?? "",
+            });
+            const words = runs.map(([text]) => text).join(" ");
+            const [paragraph] = documentAst.blocks;
+
+            expect(paragraph?.plainText).toBe(words);
+            expect(textLeaves(inlinesOf(paragraph)).join("")).toBe(words);
+          },
+        ),
+        { numRuns: 200, seed: 69_000_001 },
+      );
+    },
+    propertyTestTimeout(30_000),
+  );
+
+  test("a raised number stays on the word it belongs to", async () => {
+    const judgment = (await everyRuling("pl-tk-case-sk-14-11.html.gz")).find(
+      (ruling) => ruling.documentId === "9897",
+    );
+    const cited = judgment?.blocks.find((block) =>
+      block.plainText.startsWith("2.4. W myśl art. 767"),
+    );
+    const around = aroundFirst(inlinesOf(cited), "superscript");
+
+    expect(around?.before).toBe("2.4. W myśl art. 767");
+    expect(around?.found).toEqual({
+      type: "superscript",
+      children: [{ type: "text", text: "4" }],
+    });
+    expect(around?.after).toStartWith(" § 1 k.p.c.");
+  });
+
+  test("a raised number the export indents inside its own run still closes up", async () => {
+    const [judgment] = await everyRuling("pl-tk-case-sk-68-25.html.gz");
+    const quoted = judgment?.blocks.find(
+      (block) => block.type === "paragraph" && block.number === 170,
+    );
+    const around = aroundFirst(
+      inlinesOf(quoted).flatMap((inline) =>
+        inline.type === "italic" ? inline.children : [inline],
+      ),
+      "superscript",
+    );
+
+    // `(§ 2</font> <font> <font class="wyrok_indeks_gorny">1</font> </font>).`
+    expect(around?.before).toEndWith("stosuje się odpowiednio (§ 2");
+    expect(around?.found).toEqual({
+      type: "superscript",
+      children: [{ type: "text", text: "1" }],
+    });
+    expect(around?.after).toStartWith("). Jeżeli powód");
+  });
+
+  test("a footnote mark in the text links to the note the closing table prints", async () => {
+    for (const [name, documentId, mark] of [
+      ["pl-tk-case-k-24-04.html.gz", "238", "*"],
+      ["pl-tk-case-k-44-16.html.gz", "16940", "1"],
+    ] as const) {
+      const ruling = (await everyRuling(name)).find(
+        (candidate) => candidate.documentId === documentId,
+      );
+      const reference = (ruling?.blocks ?? [])
+        .flatMap((block) => inlinesOf(block).flatMap(linksIn))
+        .find(
+          (link) =>
+            link.type === "link" && textLeaves(link.children).join("") === mark,
+        );
+      const href = reference?.type === "link" ? reference.href : "";
+      const note = ruling?.blocks.find(
+        (block) => `#${block.anchorId}` === href,
+      );
+
+      expect(href).toStartWith("#tresc-przypisu-");
+      expect(note?.type === "paragraph" && note.note).toMatchObject({
+        type: "footnote",
+        label: mark,
+      });
+    }
+  });
+});
+
+describe("dissenting opinions", () => {
+  test("each dissent's heading names its authors, wherever the Tribunal prints them", async () => {
+    const [judgment] = await everyRuling("pl-tk-case-k-24-04.html.gz");
+    const dissentHeadings = (judgment?.blocks ?? []).flatMap((block) =>
+      block.type === "heading" && block.plainText.startsWith("Zdanie odrębne")
+        ? [block.plainText]
+        : [],
+    );
+
+    expect(dissentHeadings).toEqual([
+      "Zdanie odrębne Sędziego TK Jerzego Ciemniewskiego",
+      "Zdanie odrębne sędzi TK Ewy Łętowskiej",
+      // Printed with the name in the heading itself.
+      "Zdanie odrębne sędziego TK Janusza Niemcewicza",
+    ]);
+    // The author line keeps the Tribunal's running number.
+    const authorLine = judgment?.blocks.find(
+      (block) => block.plainText === "sędzi TK Ewy Łętowskiej",
+    );
+    expect(authorLine?.type === "paragraph" && authorLine.number).toBe(66);
+  });
+
+  test("the line naming the ruling is never read as a dissent's author", async () => {
+    const ruling = await rulingOf("pl-tk-case-k-24-04.html.gz", "238");
+
+    expect(ruling.dissents).toEqual([
+      {
+        authorsAsPrinted: "Sędziego TK Jerzego Ciemniewskiego",
+        judges: ["Jerzy Ciemniewski"],
+      },
+      {
+        authorsAsPrinted: "sędzi TK Ewy Łętowskiej",
+        judges: ["Ewa Łętowska"],
+      },
+      {
+        authorsAsPrinted: "sędziego TK Janusza Niemcewicza",
+        judges: ["Janusz Niemcewicz"],
+      },
+    ]);
+  });
 });

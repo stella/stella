@@ -181,11 +181,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read Constitutional Tribunal text: wrapped whitespace, superscripts, footnote references, dissent headings and dissent authors change inlines and metadata.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
