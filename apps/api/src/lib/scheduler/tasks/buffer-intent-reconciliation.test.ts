@@ -7,9 +7,15 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
   reconcileStaleBufferIntentsGloballyMock.mockReset();
+  reconcileStaleBufferIntentsGloballyMock.mockImplementation(
+    reconcileStaleBufferIntentsGloballyDefault,
+  );
 });
 
-const reconcileStaleBufferIntentsGloballyMock = mock(async () => 0);
+const reconcileStaleBufferIntentsGloballyDefault = async () => 0;
+const reconcileStaleBufferIntentsGloballyMock = mock(
+  reconcileStaleBufferIntentsGloballyDefault,
+);
 const { createReconcileBufferIntentsTask } =
   await import("@/api/lib/scheduler/tasks/buffer-intent-reconciliation");
 

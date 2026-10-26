@@ -17,8 +17,7 @@ import {
 } from "@/api/lib/sse-broadcast";
 
 beforeEach(() => {
-  createRedisClientMock.mockReset();
-  mock.restore();
+  createRedisClientMock.mockClear();
 });
 
 type MessageHandler = (message: string) => void;

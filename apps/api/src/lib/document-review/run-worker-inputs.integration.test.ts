@@ -5,7 +5,6 @@ import {
   beforeEach,
   describe,
   expect,
-  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -47,10 +46,6 @@ import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 const { testDb, ids } = await getRlsFixture();
 const database = asTestRaw<RlsDatabase<Transaction>>(testDb);

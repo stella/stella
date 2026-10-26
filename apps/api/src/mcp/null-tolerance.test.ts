@@ -12,7 +12,7 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 beforeEach(() => {
-  loadOrgSettingsMock.mockReset();
+  loadOrgSettingsMock.mockClear();
 });
 
 /**

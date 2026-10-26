@@ -51,10 +51,10 @@ import { copyFileObject, resolveEntityName } from "./copy-utils";
 import { createDuplicateEntity } from "./duplicate";
 
 beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockReset();
-  enqueueEntitySearchRepairsMock.mockReset();
-  flushEntitySearchRepairsMock.mockReset();
-  requestNativeExtractionRunsMock.mockReset();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
 });
 
 const requestNativeExtractionRunsMock = mock(

@@ -106,8 +106,8 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 beforeEach(() => {
-  enqueueFlowStepMock.mockReset();
-  generateTanStackTextForTaskMock.mockReset();
+  enqueueFlowStepMock.mockClear();
+  generateTanStackTextForTaskMock.mockClear();
 });
 
 setDefaultTimeout(60_000);

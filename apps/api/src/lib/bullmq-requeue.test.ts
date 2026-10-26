@@ -6,8 +6,8 @@ import { requeueDeterministicJob } from "./bullmq-requeue";
 import type { RequeueableQueue } from "./bullmq-requeue";
 
 beforeEach(() => {
-  pending.mockReset();
-  settled.mockReset();
+  pending.mockClear();
+  settled.mockClear();
 });
 
 type Data = { id: string };

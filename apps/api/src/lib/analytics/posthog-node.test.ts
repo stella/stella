@@ -5,9 +5,9 @@ import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 
 beforeEach(() => {
-  clientCaptureMock.mockReset();
-  clientFlushMock.mockReset();
-  clientGroupIdentifyMock.mockReset();
+  clientCaptureMock.mockClear();
+  clientFlushMock.mockClear();
+  clientGroupIdentifyMock.mockClear();
 });
 
 const clientCaptureMock = mock((_event: unknown) => undefined);

@@ -7,7 +7,6 @@ import {
   describe,
   expect,
   jest,
-  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -24,10 +23,6 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ClauseDetailTransport, ClauseHead } from "./clause-detail";
 import type { ClauseBodyWrite } from "./use-clause-body-save";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 GlobalRegistrator.register({ url: "http://localhost:3000/knowledge" });
 // Importing the real page also initializes the auth client. Its unauthenticated

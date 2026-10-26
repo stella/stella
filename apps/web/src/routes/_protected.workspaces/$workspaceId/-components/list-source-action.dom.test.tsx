@@ -1,15 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { InferDataFromTag } from "@tanstack/react-query";
 import { panic } from "better-result";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { sleep } from "@stll/concurrency/sleep";
@@ -22,10 +14,6 @@ import english from "@/i18n/langs/en.json";
 import slovak from "@/i18n/langs/sk.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondRequest: (request: Request) => Promise<Response> = async () => {

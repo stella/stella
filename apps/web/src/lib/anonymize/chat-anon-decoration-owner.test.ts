@@ -5,7 +5,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 import { createChatAnonDecorationOwner } from "./chat-anon-decoration-owner";
 
 beforeEach(() => {
-  setPairs.mockReset();
+  setPairs.mockClear();
 });
 
 const setPairs = mock(

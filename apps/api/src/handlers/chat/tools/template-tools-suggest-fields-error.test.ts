@@ -23,7 +23,7 @@ import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemet
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 beforeEach(() => {
-  suggestTemplateFieldsMock.mockReset();
+  suggestTemplateFieldsMock.mockClear();
 });
 
 const PROVIDER_ERROR = new Error(

@@ -11,7 +11,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 beforeEach(() => {
-  decryptAIConfigMock.mockReset();
+  decryptAIConfigMock.mockClear();
 });
 
 const decryptedAIConfig: OrgAIConfig = {

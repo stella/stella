@@ -176,8 +176,8 @@ beforeEach(() => {
   anonymizeTextFieldsMock.mockReset();
   listCaseLawProvisionDecisionsMock.mockReset();
   listStatuteVersionsHandlerMock.mockReset();
-  loadAllowlistByWorkspaceMock.mockReset();
-  loadGazetteerByWorkspaceMock.mockReset();
+  loadAllowlistByWorkspaceMock.mockClear();
+  loadGazetteerByWorkspaceMock.mockClear();
   readCaseLawProvisionScopeMock.mockReset();
   readContactExecute.mockReset();
   readContentAcrossMattersExecute.mockReset();
@@ -198,9 +198,10 @@ beforeEach(() => {
   searchAcrossMattersExecute.mockReset();
   searchDecisionsHandlerMock.mockReset();
   searchLegislationHandlerMock.mockReset();
-  searchProviderSearchMock.mockReset();
+  searchProviderSearchMock.mockClear();
   withRedistributableSubjectMock.mockReset();
   withTimeoutMock.mockReset();
+  withTimeoutMock.mockImplementation(withTimeoutDefault);
 });
 
 const wireSchemaValidator = createWireSchemaValidator();
@@ -385,9 +386,9 @@ const seedDocxFile = async (fileId: string, workspaceId = WORKSPACE_ID) => {
 // test exercises the real S3-read-and-convert logic unchanged. Individual
 // tests override this with `mockImplementationOnce` to simulate the
 // operation timing out, without an actual wall-clock wait.
-const withTimeoutMock = mock(
-  async (operation: () => Promise<unknown>) => await operation(),
-);
+const withTimeoutDefault = async (operation: () => Promise<unknown>) =>
+  await operation();
+const withTimeoutMock = mock(withTimeoutDefault);
 const withTimeoutDependency = asTestRaw<typeof withTimeout>(withTimeoutMock);
 
 const anonymizeTextFieldsMock = mock();

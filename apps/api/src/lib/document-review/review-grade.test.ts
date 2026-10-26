@@ -23,8 +23,8 @@ import {
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 beforeEach(() => {
-  gradeReferencePositionsMock.mockReset();
-  gradeTierMatchesMock.mockReset();
+  gradeReferencePositionsMock.mockClear();
+  gradeTierMatchesMock.mockClear();
 });
 
 let modelCallCount = 0;

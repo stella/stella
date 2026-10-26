@@ -57,7 +57,7 @@ import getThreads from "../threads/list";
 import { createForkThread } from "./create";
 
 beforeEach(() => {
-  indexChatThreadMock.mockReset();
+  indexChatThreadMock.mockClear();
 });
 
 // Search indexing writes through the root (unscoped) database, which this

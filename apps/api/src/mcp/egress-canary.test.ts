@@ -18,8 +18,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 beforeEach(() => {
-  anonymizeTextFieldsMock.mockReset();
-  loadOrgAIConfigMock.mockReset();
+  anonymizeTextFieldsMock.mockClear();
+  loadOrgAIConfigMock.mockClear();
 });
 
 /**

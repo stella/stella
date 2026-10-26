@@ -26,9 +26,9 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 beforeEach(() => {
-  createEntityFromBufferMock.mockReset();
-  loadEntityVersionDocxBufferMock.mockReset();
-  scanFileMock.mockReset();
+  createEntityFromBufferMock.mockClear();
+  loadEntityVersionDocxBufferMock.mockClear();
+  scanFileMock.mockClear();
 });
 
 const organizationId = toSafeId<"organization">(

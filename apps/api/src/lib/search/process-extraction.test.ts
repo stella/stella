@@ -36,28 +36,6 @@ import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockReset();
-  extractedContentFindFirstMock.mockReset();
-  findFirstMock.mockReset();
-  indexEntityMock.mockReset();
-  insertMock.mockReset();
-  onConflictDoNothingMock.mockReset();
-  persistProjectionSpy.mockReset();
-  recordLanguageMock.mockReset();
-  requestAutomaticDocumentOcrMock.mockReset();
-  restoreManualOcrRunAfterProjectionLossMock.mockReset();
-  selectFromMock.mockReset();
-  selectLimitMock.mockReset();
-  selectMock.mockReset();
-  selectWhereMock.mockReset();
-  transactionMock.mockReset();
-  updateMock.mockReset();
-  updateSetMock.mockReset();
-  updateWhereMock.mockReset();
-  valuesMock.mockReset();
-});
-
 const entityId = toSafeId<"entity">("entity_1");
 const entityVersionId = toSafeId<"entityVersion">("entity_version_1");
 const fieldId = toSafeId<"field">("field_1");

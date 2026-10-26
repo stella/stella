@@ -49,10 +49,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { removeWorkspaceMemberHandler } from "./remove";
 
 beforeEach(() => {
-  broadcastMock.mockReset();
-  broadcastSessionEventMock.mockReset();
-  closeSessionConnectionsMock.mockReset();
-  revokeWorkspaceSseAccessMock.mockReset();
+  broadcastMock.mockClear();
+  broadcastSessionEventMock.mockClear();
+  closeSessionConnectionsMock.mockClear();
+  revokeWorkspaceSseAccessMock.mockClear();
 });
 
 const broadcastSessionEventMock = mock(() => undefined);

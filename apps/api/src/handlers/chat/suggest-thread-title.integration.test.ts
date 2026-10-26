@@ -29,7 +29,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 beforeEach(() => {
-  generateTextMock.mockReset();
+  generateTextMock.mockClear();
 });
 
 const generateTextMock = mock(async () => '"Title: Drafting an NDA"');

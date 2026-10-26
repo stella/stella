@@ -1,22 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 GlobalRegistrator.register();
 const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(

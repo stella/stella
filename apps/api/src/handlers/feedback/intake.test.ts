@@ -18,7 +18,7 @@ import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 beforeEach(() => {
-  submitMock.mockReset();
+  submitMock.mockClear();
 });
 
 const SUBMIT_RESPONSE: FeedbackSubmitResponse = {

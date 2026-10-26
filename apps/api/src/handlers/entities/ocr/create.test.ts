@@ -21,7 +21,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
-  recordAuditEvent.mockReset();
+  recordAuditEvent.mockClear();
   rootTransactionMock.mockReset();
 });
 

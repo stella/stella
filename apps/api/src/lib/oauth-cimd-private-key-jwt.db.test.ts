@@ -6,7 +6,6 @@ import {
 import {
   afterAll,
   beforeAll,
-  beforeEach,
   describe,
   expect,
   mock,
@@ -17,10 +16,6 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import * as v from "valibot";
 
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 // Mirrors https://chatgpt.com/oauth/client.json, fetched 2026-10-05. The
 // documents and signing keys are test-owned; no request reaches ChatGPT.

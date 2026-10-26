@@ -5,7 +5,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { leadSectionContent } from "./lead-section.logic";
 
 beforeEach(() => {
-  retry.mockReset();
+  retry.mockClear();
 });
 
 const readError = new Error("Matter read failed");

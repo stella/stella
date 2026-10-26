@@ -34,7 +34,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 beforeEach(() => {
-  flushEntitySearchRepairsMock.mockReset();
+  flushEntitySearchRepairsMock.mockClear();
 });
 
 const flushEntitySearchRepairsMock = mock(async () => ({

@@ -52,10 +52,12 @@
 //
 // require-module-mock-reset
 //   Every test using a module-scope standalone `mock(...)` binding must be
-//   enclosed by a `beforeEach` or `afterEach` that resets that binding by name.
-//   A parent describe's hook covers nested suites, but not sibling suites.
-//   Module-scope `spyOn(...)` calls are covered by `mock.restore()` in the same
-//   set of enclosing scopes.
+//   enclosed by a `beforeEach` or `afterEach` that restores its default state:
+//   `mock()` needs `mockReset()`; `mock(implementation)` needs `mockReset()`
+//   followed by a default implementation; and a mock whose implementation is
+//   never overridden may use `mockClear()`. A parent describe's hook covers
+//   nested suites, but not sibling suites. `mock.restore()` applies to spies,
+//   not standalone mocks, which this rule covers.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -77,6 +79,19 @@ const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
 const MODULE_MOCK_EXPORTS = new Set(["mock", "spyOn"]);
 const FILE_HOOK_EXPORTS = new Set(["beforeEach", "afterEach"]);
+const MOCK_DEFAULT_METHODS = new Set([
+  "mockImplementation",
+  "mockReturnValue",
+  "mockResolvedValue",
+  "mockRejectedValue",
+]);
+const MOCK_OVERRIDE_METHODS = new Set([
+  ...MOCK_DEFAULT_METHODS,
+  "mockImplementationOnce",
+  "mockReturnValueOnce",
+  "mockResolvedValueOnce",
+  "mockRejectedValueOnce",
+]);
 
 const FORCED_DATABASE_DROP =
   /(?:^|;)\s*DROP\s+DATABASE\b[^;]*(?:\bWITH\s*)?\(\s*FORCE\b/iu;
@@ -671,24 +686,22 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingReset:
-            'Module-level mock "{{binding}}" is not reset for test "{{test}}". Add a beforeEach or afterEach in the file or an enclosing describe that resets it by name; `mock.restore()` covers spies only.',
+            'Module-level mock "{{binding}}" is not reset for test "{{test}}". {{required}}; `mock.restore()` covers spies only.',
         },
       },
       createOnce(context) {
         const moduleMocks = new Map<string, AstNode>();
-        const moduleSpies: AstNode[] = [];
         const tests: { node: AstNode; title: string }[] = [];
         const hookResets = new Map<unknown, Set<string>>();
         const hookImplementations = new Map<unknown, Set<string>>();
-        const hookRestores = new Set<unknown>();
+        const overriddenMocks = new Set<string>();
         return {
           before() {
             moduleMocks.clear();
-            moduleSpies.length = 0;
             tests.length = 0;
             hookResets.clear();
             hookImplementations.clear();
-            hookRestores.clear();
+            overriddenMocks.clear();
             return mentionsBunTest(context.sourceCode.text);
           },
           CallExpression(node) {
@@ -715,25 +728,30 @@ export default eslintCompatPlugin({
                 unwrapExpression(node.callee),
               );
               if (exportName === "spyOn") {
-                moduleSpies.push(node);
-              } else {
-                const declarator = node.parent;
-                const name =
-                  isAstNode(declarator) &&
-                  declarator.type === "VariableDeclarator"
-                    ? identifierName(declarator.id)
-                    : null;
-                if (name !== null) {
-                  moduleMocks.set(name, node);
-                }
+                return;
+              }
+              const declarator = node.parent;
+              const name =
+                isAstNode(declarator) &&
+                declarator.type === "VariableDeclarator"
+                  ? identifierName(declarator.id)
+                  : null;
+              if (name !== null) {
+                moduleMocks.set(name, node);
               }
             }
 
             const scope = hookScope(context, node);
+            const member = calledMember(node);
+            if (scope === null && member !== null) {
+              const name = identifierName(member.object);
+              if (name !== null && MOCK_OVERRIDE_METHODS.has(member.property)) {
+                overriddenMocks.add(name);
+              }
+            }
             if (scope === null) {
               return;
             }
-            const member = calledMember(node);
             if (member === null) {
               return;
             }
@@ -741,7 +759,6 @@ export default eslintCompatPlugin({
               member.property === "restore" &&
               bunTestExport(context, member.object) === "mock"
             ) {
-              hookRestores.add(scope);
               return;
             }
             const name = identifierName(member.object);
@@ -752,11 +769,13 @@ export default eslintCompatPlugin({
               const resets = hookResets.get(scope) ?? new Set<string>();
               resets.add(name);
               hookResets.set(scope, resets);
-            } else if (member.property === "mockImplementation") {
-              const implementations =
-                hookImplementations.get(scope) ?? new Set<string>();
-              implementations.add(name);
-              hookImplementations.set(scope, implementations);
+            } else if (MOCK_DEFAULT_METHODS.has(member.property)) {
+              if (hookResets.get(scope)?.has(name) === true) {
+                const implementations =
+                  hookImplementations.get(scope) ?? new Set<string>();
+                implementations.add(name);
+                hookImplementations.set(scope, implementations);
+              }
             } else if (member.property === "mockClear") {
               const resets = hookResets.get(scope) ?? new Set<string>();
               resets.add(`${name}:clear`);
@@ -764,15 +783,22 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
-            for (const binding of moduleMocks.keys()) {
+            for (const [binding, creation] of moduleMocks) {
+              const hasDefault =
+                Array.isArray(creation.arguments) &&
+                creation.arguments.length > 0;
+              const isOverridden = overriddenMocks.has(binding);
               const uncovered = tests.find(
                 ({ node }) =>
                   !enclosingTestScopes(context, node).some((scope) => {
                     const resets = hookResets.get(scope);
                     return (
-                      resets?.has(binding) === true ||
+                      (resets?.has(binding) === true &&
+                        (!hasDefault ||
+                          hookImplementations.get(scope)?.has(binding) ===
+                            true)) ||
                       (resets?.has(`${binding}:clear`) === true &&
-                        hookImplementations.get(scope)?.has(binding) === true)
+                        !isOverridden)
                     );
                   }),
               );
@@ -780,22 +806,15 @@ export default eslintCompatPlugin({
                 context.report({
                   node: uncovered.node,
                   messageId: "missingReset",
-                  data: { binding, test: uncovered.title },
-                });
-              }
-            }
-            for (const _spy of moduleSpies) {
-              const uncovered = tests.find(
-                ({ node }) =>
-                  !enclosingTestScopes(context, node).some((scope) =>
-                    hookRestores.has(scope),
-                  ),
-              );
-              if (uncovered !== undefined) {
-                context.report({
-                  node: uncovered.node,
-                  messageId: "missingReset",
-                  data: { binding: "spyOn", test: uncovered.title },
+                  data: {
+                    binding,
+                    test: uncovered.title,
+                    required: !hasDefault
+                      ? "use mockReset() in an enclosing hook"
+                      : isOverridden
+                        ? "use mockReset() and reinstall its default implementation in the same enclosing hook"
+                        : "use mockReset() and reinstall its default implementation, or use mockClear() because nothing overrides it",
+                  },
                 });
               }
             }

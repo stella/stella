@@ -219,7 +219,7 @@ setDefaultTimeout(120_000);
 const testState = createTestState({ file: import.meta.path, config: env });
 
 beforeEach(() => {
-  streamChatStub.mockReset();
+  streamChatStub.mockClear();
 });
 
 type TestHandlerContext = {

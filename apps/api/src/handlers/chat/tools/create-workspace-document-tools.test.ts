@@ -35,9 +35,9 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 beforeEach(() => {
-  enqueueImageThumbnailOrMarkFailedMock.mockReset();
-  enqueuePdfDerivativeOrMarkFailedMock.mockReset();
-  processExtractionMock.mockReset();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  processExtractionMock.mockClear();
 });
 
 const processExtractionMock = mock(async () => {});

@@ -30,13 +30,13 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 import { createCopyToWorkspace } from "./copy";
 
 beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockReset();
-  enqueueEntitySearchRepairsMock.mockReset();
-  enqueueImageThumbnailOrMarkFailedMock.mockReset();
-  enqueuePdfDerivativeOrMarkFailedMock.mockReset();
-  flushEntitySearchRepairsMock.mockReset();
-  requestNativeExtractionRunsMock.mockReset();
-  syncWorkspaceSearchActivityMock.mockReset();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
+  syncWorkspaceSearchActivityMock.mockClear();
 });
 
 // Every copy is a real server-side copy inside a real store, so the keys the

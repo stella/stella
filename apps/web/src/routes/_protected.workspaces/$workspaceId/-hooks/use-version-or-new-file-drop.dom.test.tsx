@@ -1,23 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import englishMessages from "@/i18n/langs/en.json";
 import type { WorkspaceView } from "@/lib/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 

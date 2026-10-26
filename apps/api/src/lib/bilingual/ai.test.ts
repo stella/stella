@@ -22,7 +22,7 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
-  generateObjectMock.mockReset();
+  generateObjectMock.mockClear();
 });
 
 type GenerateOptions = {

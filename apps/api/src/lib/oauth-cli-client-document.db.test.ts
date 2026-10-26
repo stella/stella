@@ -1,23 +1,10 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  mock,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
 import type { LoopbackCallback } from "../../../../packages/cli/src/auth/loopback-listener.ts";
-
-beforeEach(() => {
-  mock.restore();
-});
 
 /**
  * The stella CLI signing in end to end: the CLI's own login code (discovery,

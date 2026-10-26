@@ -51,14 +51,14 @@ import {
 } from "@/api/tests/scoped-db-mock";
 
 beforeEach(() => {
-  broadcastMock.mockReset();
-  computeVersionDiffStatsMock.mockReset();
-  enqueueImageThumbnailOrMarkFailedMock.mockReset();
-  enqueuePdfDerivativeOrMarkFailedMock.mockReset();
-  flushEntitySearchRepairsMock.mockReset();
-  processExtractionMock.mockReset();
-  requestNativeExtractionRunMock.mockReset();
-  scanFileMock.mockReset();
+  broadcastMock.mockClear();
+  computeVersionDiffStatsMock.mockClear();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  processExtractionMock.mockClear();
+  requestNativeExtractionRunMock.mockClear();
+  scanFileMock.mockClear();
 });
 
 const processExtractionMock = mock(async () => {});

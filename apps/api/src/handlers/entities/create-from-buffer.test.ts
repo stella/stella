@@ -66,10 +66,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 beforeEach(() => {
   broadcastMock.mockReset();
-  enqueueImageThumbnailOrMarkFailedMock.mockReset();
-  enqueuePdfDerivativeOrMarkFailedMock.mockReset();
-  flushSearchRepairsMock.mockReset();
-  processExtractionMock.mockReset();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushSearchRepairsMock.mockClear();
+  processExtractionMock.mockClear();
 });
 
 setDefaultTimeout(120_000);

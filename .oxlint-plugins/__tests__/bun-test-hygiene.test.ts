@@ -39,7 +39,7 @@ test("accepts a named reset and default reinstallation", async () => {
   ).toEqual([]);
 });
 
-test("accepts clear plus default reinstallation in the same hook", async () => {
+test("reports reset alone for a mock with a default implementation", async () => {
   expect(
     await lintSingleRule(
       rule,
@@ -47,14 +47,43 @@ test("accepts clear plus default reinstallation in the same hook", async () => {
         'import { beforeEach, mock, test } from "bun:test";',
         "const dependency = mock(() => 1);",
         "beforeEach(() => {",
-        "  dependency.mockClear();",
-        "  dependency.mockImplementation(() => 1);",
+        "  dependency.mockReset();",
         "});",
         'test("covered", () => {});',
       ].join("\n"),
       { plugin },
     ),
+  ).toEqual([6]);
+});
+
+test("accepts clear when nothing overrides the implementation", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { beforeEach, mock, test } from "bun:test";',
+        "const dependency = mock(() => 1);",
+        "beforeEach(() => dependency.mockClear());",
+        'test("covered", () => dependency());',
+      ].join("\n"),
+      { plugin },
+    ),
   ).toEqual([]);
+});
+
+test("reports clear when a test overrides the implementation", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { beforeEach, mock, test } from "bun:test";',
+        "const dependency = mock(() => 1);",
+        "beforeEach(() => dependency.mockClear());",
+        'test("uncovered", () => dependency.mockReturnValue(2));',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([4]);
 });
 
 test("reports a sibling describe not covered by another describe reset", async () => {
@@ -96,7 +125,7 @@ test("inherits a parent describe reset in a nested describe", async () => {
   ).toEqual([]);
 });
 
-test("requires mock.restore for module-scope spies", async () => {
+test("does not apply standalone mock resets to spies", async () => {
   expect(
     await lintSingleRule(
       rule,
@@ -108,7 +137,7 @@ test("requires mock.restore for module-scope spies", async () => {
       ].join("\n"),
       { plugin },
     ),
-  ).toEqual([4]);
+  ).toEqual([]);
 });
 
 test("ignores mocks created inside tests and helper callbacks", async () => {

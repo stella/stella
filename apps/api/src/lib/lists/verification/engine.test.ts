@@ -40,7 +40,7 @@ import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
-  generateMock.mockReset();
+  generateMock.mockClear();
 });
 
 type Captured = { tenantWorkspaceIds: readonly string[]; messages: unknown[] };

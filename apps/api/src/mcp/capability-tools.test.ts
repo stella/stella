@@ -67,7 +67,7 @@ import {
 
 beforeEach(() => {
   consumeRateLimitMock.mockReset();
-  loadOrgSettingsMock.mockReset();
+  loadOrgSettingsMock.mockClear();
 });
 
 const loadOrgSettingsMock = mock(async () => ({

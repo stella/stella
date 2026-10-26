@@ -17,8 +17,8 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 beforeEach(() => {
-  noopAuditRecorder.mockReset();
-  upsertSearchDocumentMock.mockReset();
+  noopAuditRecorder.mockClear();
+  upsertSearchDocumentMock.mockClear();
 });
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";

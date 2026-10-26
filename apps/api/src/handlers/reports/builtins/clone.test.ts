@@ -18,7 +18,7 @@ import { createCloneBuiltinReportTemplate } from "./clone";
 import type { CloneBuiltinReportTemplateDependencies } from "./clone";
 
 beforeEach(() => {
-  createStoredTemplateMock.mockReset();
+  createStoredTemplateMock.mockClear();
 });
 
 // The fidelity regression this file guards is that a clone of the built-in

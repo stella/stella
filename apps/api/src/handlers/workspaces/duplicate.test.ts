@@ -46,12 +46,12 @@ import {
 import { createDuplicateWorkspace } from "./duplicate";
 
 beforeEach(() => {
-  enqueueDocumentProcessingRunMock.mockReset();
-  enqueueEntitySearchRepairsMock.mockReset();
-  enqueueWorkspaceSearchRepairsMock.mockReset();
-  flushEntitySearchRepairsMock.mockReset();
-  flushWorkspaceSearchRepairsMock.mockReset();
-  requestNativeExtractionRunsMock.mockReset();
+  enqueueDocumentProcessingRunMock.mockClear();
+  enqueueEntitySearchRepairsMock.mockClear();
+  enqueueWorkspaceSearchRepairsMock.mockClear();
+  flushEntitySearchRepairsMock.mockClear();
+  flushWorkspaceSearchRepairsMock.mockClear();
+  requestNativeExtractionRunsMock.mockClear();
 });
 
 const requestNativeExtractionRunsMock = mock(

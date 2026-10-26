@@ -9,7 +9,7 @@ import { assertProperty } from "@stll/property-testing";
 import { queryView, queryViewError } from "./query-view.logic";
 
 beforeEach(() => {
-  refetch.mockReset();
+  refetch.mockClear();
 });
 
 const FETCH_STATUSES: readonly FetchStatus[] = ["idle", "fetching", "paused"];

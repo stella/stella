@@ -46,11 +46,12 @@ import {
 
 beforeEach(() => {
   sweepMock.mockReset();
+  sweepMock.mockImplementation(sweepDefault);
 });
 
-const sweepMock = mock(async () =>
-  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }),
-);
+const sweepDefault = async () =>
+  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 });
+const sweepMock = mock(sweepDefault);
 const {
   createSweepFileComparisonUploadsTask,
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,

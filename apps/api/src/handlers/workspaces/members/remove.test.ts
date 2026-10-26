@@ -28,7 +28,7 @@ import {
 } from "./remove";
 
 beforeEach(() => {
-  revokeWorkspaceSseAccessMock.mockReset();
+  revokeWorkspaceSseAccessMock.mockClear();
 });
 
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);

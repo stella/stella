@@ -29,10 +29,10 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 beforeEach(() => {
-  clearMock.mockReset();
-  releaseClaimMock.mockReset();
-  setRequestIdMock.mockReset();
-  tryClaimMock.mockReset();
+  clearMock.mockClear();
+  releaseClaimMock.mockClear();
+  setRequestIdMock.mockClear();
+  tryClaimMock.mockClear();
 });
 
 const claimedRequestIds: string[] = [];

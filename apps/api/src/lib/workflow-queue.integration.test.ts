@@ -56,10 +56,6 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
-beforeEach(() => {
-  mock.restore();
-});
-
 setDefaultTimeout(120_000);
 
 const { testDb, ids } = await getRlsFixture();

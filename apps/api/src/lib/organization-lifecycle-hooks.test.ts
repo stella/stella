@@ -6,10 +6,10 @@ import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecyc
 
 beforeEach(() => {
   identifyOrganizationGroup.mockReset();
-  recordAccessState.mockReset();
-  recordProfessionalUse.mockReset();
-  seedDefaultDocumentTypes.mockReset();
-  seedMemberDefaults.mockReset();
+  recordAccessState.mockClear();
+  recordProfessionalUse.mockClear();
+  seedDefaultDocumentTypes.mockClear();
+  seedMemberDefaults.mockClear();
 });
 
 const identifyOrganizationGroup =

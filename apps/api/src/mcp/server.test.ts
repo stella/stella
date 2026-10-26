@@ -104,7 +104,6 @@ const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 beforeEach(() => {
-  mock.restore();
   actionSizePolicyMock.mockReset();
   actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
   authenticateMcpRequestMock.mockReset();
