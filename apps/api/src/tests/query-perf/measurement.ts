@@ -4,6 +4,7 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   explainAsStella,
@@ -32,6 +33,19 @@ const QUERY_PERF_HANG_GUARD_MS = 10_000;
 export type QueryPerfMetrics = {
   sharedBlocks: number;
   executionTimeMs: number;
+};
+
+/** A scheduled run costs every statement's buffers and execution time. */
+export const sumMetrics = (
+  measurements: readonly QueryPerfMetrics[],
+): QueryPerfMetrics => {
+  let sharedBlocks = 0;
+  let executionTimeMs = 0;
+  for (const measured of measurements) {
+    sharedBlocks += measured.sharedBlocks;
+    executionTimeMs += measured.executionTimeMs;
+  }
+  return { sharedBlocks, executionTimeMs };
 };
 
 export const median = (values: readonly number[]) => {
@@ -98,6 +112,36 @@ export const budgetViolations = (
     });
   }
   return violations;
+};
+
+/**
+ * Why a measurement breaks its budget, if it does. An entry marked over
+ * budget must stay over it: once a change brings it under, the marker has to
+ * go, so the budget is enforced again.
+ */
+const pageBudgetProblem = (
+  id: ReadBudgetId,
+  sharedBlocks: number,
+): string | undefined => {
+  const budget = READ_BUDGETS[id];
+  const over = sharedBlocks > budget.pages;
+  if ("overBudget" in budget) {
+    return over
+      ? undefined
+      : `${id} is marked over budget but measured ${String(sharedBlocks)} <= ${String(budget.pages)}; remove its overBudget marker`;
+  }
+  return over
+    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
+    : undefined;
+};
+
+export const budgetProblem = (id: ReadBudgetId, measured: QueryPerfMetrics) => {
+  const hang = budgetViolations(measured, READ_BUDGETS[id].pages).find(
+    (violation) => violation.kind === "execution-time-hang-guard",
+  );
+  return hang === undefined
+    ? pageBudgetProblem(id, measured.sharedBlocks)
+    : `${id}: ${hang.message}`;
 };
 
 /**

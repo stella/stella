@@ -10,7 +10,12 @@ import type {
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { explainOwnerStatement, metricsFromPlan } from "./measurement";
+import {
+  explainOwnerStatement,
+  metricsFromPlan,
+  type QueryPerfMetrics,
+  sumMetrics,
+} from "./measurement";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -129,12 +134,12 @@ export const measureScheduledJobRun = async ({
   }
   const statements = await database.transaction(async (tx) => {
     await applyPlannerSettings(tx);
-    const measured: { pages: number; statement: string }[] = [];
+    const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
     for (const statement of reads) {
       // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
       const plan = await explainOwnerStatement(tx, asQuery(statement));
       measured.push({
-        pages: metricsFromPlan(plan).sharedBlocks,
+        metrics: metricsFromPlan(plan),
         statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
       });
     }
@@ -142,7 +147,7 @@ export const measureScheduledJobRun = async ({
     return measured;
   });
   return {
-    pages: statements.reduce((total, { pages }) => total + pages, 0),
+    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
     statements,
   };
 };

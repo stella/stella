@@ -3,11 +3,13 @@ import { expect, test } from "bun:test";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 
 import {
+  budgetProblem,
   budgetViolations,
   median,
   metricsFromPlan,
   scaleViolations,
   shapeViolations,
+  sumMetrics,
 } from "./measurement";
 
 test("an absolute budget accepts its own page count and rejects one page more", () => {
@@ -103,4 +105,28 @@ test("median supports odd and even samples and rejects malformed measurements", 
   expect(() => metricsFromPlan({ Plan: {}, "Execution Time": 1 })).toThrow(
     "lacks finite execution time",
   );
+});
+
+test("scheduled runs retain execution time and reject a slow statement within the page budget", () => {
+  const id = "scheduled.caseLaw.reportFreshness";
+  for (const statements of [
+    [{ sharedBlocks: 1, executionTimeMs: 10_001 }],
+    [
+      { sharedBlocks: 1, executionTimeMs: 5000 },
+      { sharedBlocks: 2, executionTimeMs: 5001 },
+    ],
+  ]) {
+    const metrics = sumMetrics(statements);
+    expect(metrics.sharedBlocks).toBeLessThan(READ_BUDGETS[id].pages);
+    expect(metrics.executionTimeMs).toBe(10_001);
+    expect(budgetProblem(id, metrics)).toContain(
+      "execution time hang guard exceeded",
+    );
+  }
+  expect(
+    budgetProblem(
+      id,
+      sumMetrics([{ sharedBlocks: 1, executionTimeMs: 10_000 }]),
+    ),
+  ).toBeUndefined();
 });

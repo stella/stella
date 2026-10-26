@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
-import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
@@ -20,10 +20,10 @@ import {
 } from "./corpus-seed";
 import { withQueryPerfFixture } from "./fixture";
 import {
+  budgetProblem,
   budgetViolations,
   measureOwnerStatement,
   measureQueryPerf,
-  type QueryPerfMetrics,
   scaleViolations,
   shapeViolations,
 } from "./measurement";
@@ -51,38 +51,9 @@ const profileBudgets = (profile: "corpus" | "tenant") =>
     .map(([id]) => id)
     .toSorted();
 
-/**
- * Why a measurement breaks its budget, if it does. An entry marked over
- * budget must stay over it: once a change brings it under, the marker has to
- * go, so the budget is enforced again.
- */
-const pageBudgetProblem = (
-  id: ReadBudgetId,
-  sharedBlocks: number,
-): string | undefined => {
-  const budget = READ_BUDGETS[id];
-  const over = sharedBlocks > budget.pages;
-  if ("overBudget" in budget) {
-    return over
-      ? undefined
-      : `${id} is marked over budget but measured ${String(sharedBlocks)} <= ${String(budget.pages)}; remove its overBudget marker`;
-  }
-  return over
-    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
-    : undefined;
-};
-
-const budgetProblem = (id: ReadBudgetId, measured: QueryPerfMetrics) => {
-  const hang = budgetViolations(measured, READ_BUDGETS[id].pages).find(
-    (violation) => violation.kind === "execution-time-hang-guard",
-  );
-  return hang === undefined
-    ? pageBudgetProblem(id, measured.sharedBlocks)
-    : `${id}: ${hang.message}`;
-};
-
-test("corpus execution guard applies even when pages fit or carry an over-budget marker", () => {
+test("every measurement execution guard applies even when pages fit or carry an over-budget marker", () => {
   for (const id of [
+    "scheduled.caseLaw.reportFreshness",
     "statement.documents.searchHits",
     "statement.legislation.candidateRows",
   ] as const) {
@@ -170,7 +141,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               plan: good.plan.Plan,
             });
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
-            expect(budgetViolations(good.metrics, budget.pages)).toEqual([]);
+            expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
             await deadline.run(
               `CREATE POLICY ${id}`,
               async () =>
@@ -277,7 +248,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           note(budgetProblem(budgetId, result.metrics));
         }
 
-        const runPages = async (
+        const runMetrics = async (
           jobId: string,
           task: string,
           served: ServedCaseLaw,
@@ -294,10 +265,10 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             event: "read_budget_job_run",
             jobId,
             generation,
-            pages: run.pages,
+            ...run.metrics,
             statements: run.statements,
           });
-          return run.pages;
+          return run.metrics;
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.
@@ -319,9 +290,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             const size = await deadline.run(
               `run ${jobId} on ${label}`,
               async () =>
-                await runPages(jobId, measurement.task, scenario.size),
+                await runMetrics(jobId, measurement.task, scenario.size),
             );
-            note(pageBudgetProblem(budgetId, size));
+            note(budgetProblem(budgetId, size));
             const twin = scenario.double;
             if (twin === undefined) {
               continue;
@@ -329,10 +300,13 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             // db-await-in-loop: the twin scenario moves the served generations after the first run finished.
             const double = await deadline.run(
               `run ${jobId} on ${describeServed(twin)}`,
-              async () => await runPages(jobId, measurement.task, twin),
+              async () => await runMetrics(jobId, measurement.task, twin),
             );
-            note(pageBudgetProblem(budgetId, double));
-            for (const violation of scaleViolations({ size, double })) {
+            note(budgetProblem(budgetId, double));
+            for (const violation of scaleViolations({
+              size: size.sharedBlocks,
+              double: double.sharedBlocks,
+            })) {
               note(`${jobId} on ${label}: ${violation}`);
             }
           }
