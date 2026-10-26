@@ -11,6 +11,7 @@ import readEndpoint from "@/api/handlers/desktop-presence/read";
 import { reportDesktopPresence } from "@/api/handlers/desktop-presence/service";
 import { HttpStatusResponse } from "@/api/http/status";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   createTestHandlerContext,
@@ -76,6 +77,15 @@ test("organization removal clears only the departing member's presence and rejoi
         slug: id,
         createdAt: new Date(),
       })),
+    );
+    await Promise.all(
+      [organizationId, otherOrganizationId].map(
+        async (id) =>
+          await recordNewOrganizationAccessState(db, {
+            organizationId: id,
+            now: new Date(),
+          }),
+      ),
     );
     await db.insert(member).values([
       {

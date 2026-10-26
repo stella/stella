@@ -297,6 +297,7 @@ export const FAILURE_TAGS = [
   "OrganizationStorageTeardownStateError",
   "OwnerAccessLostError",
   "ParseXmlError",
+  "PartnerClientOperatorError",
   "PatternError",
   "PayloadBudgetError",
   "PdfRevisionAppendError",

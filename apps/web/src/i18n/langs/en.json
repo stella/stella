@@ -1486,7 +1486,7 @@
       "label": "Mock AI"
     },
     "modelSelector": {
-      "allModels": "All models ({count, number})",
+      "allModels": "All models",
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",
       "belowFrontier": "Below the best trade-offs",
@@ -6643,6 +6643,12 @@
     "referenceTaken": "This reference number is already in use",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Find a matter…",
+      "trigger": "Switch matter",
+      "viewAll": "View all matters",
+      "viewAllForClient": "View all matters for {clientName}"
     },
     "table": {
       "clearFlags": "Clear flags",
