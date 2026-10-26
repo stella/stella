@@ -32,7 +32,10 @@ export const CopyActionButton = ({
   const copy = async () => {
     const copied = await copyToClipboard(text);
     if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
+      getAnalytics().captureError(copied.error, {
+        fingerprintKey: "CopyActionButton.copy:failure",
+        scope: { type: "handler", handlerId: "CopyActionButton.copy:failure" },
+      });
       notifyUserError(copied.error, t("errors.actionFailed"));
       return false;
     }

@@ -77,6 +77,7 @@ export const exactIconScalingScenario = {
         const response = await handler.handler(
           asTestRaw<Parameters<typeof handler.handler>[0]>({
             query: { url: first },
+            route: "/v1/chat/link-icons/exact",
             user: { id: mintAuthProviderId<"user">() },
             memberRole: sessionMemberRole("owner"),
             request: new Request(

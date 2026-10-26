@@ -22,6 +22,8 @@ restricted exports (or the whole module), the owner files, and the message. The
 plugin files named after each rule are entry points that keep rule IDs stable; add a
 row there instead of writing a new import detector.
 
+- [`require-fingerprint-fields`](./require-fingerprint-fields.ts) (`require-fingerprint-fields`): requires inline TaggedError reason, phase and stage fields in API code to register each dimension in a class static block; import aliases are resolved, unrestricted strings and named prop types are outside this syntactic guard.
+
 ## Automatic fixes
 
 `oxlint --fix` repairs violations only when the rule can derive one local,
@@ -69,7 +71,7 @@ runtime validation, or integration tests.
 - [`no-string-zip-entry`](./no-string-zip-entry.ts) (`no-string-zip-entry`): rejects zip entry writes (`.file(path, content)`) outside `writeZipEntry` in `@stll/docx-utils`, which UTF-8 encodes text once; JSZip's own string encoding splits surrogate pairs at its 16 KiB pieces. Reads, `Bun.file`, and the callback form of `FileSystemFileEntry.file` remain clean.
 - [`no-raw-api-url`](./no-raw-api-url.ts) (`no-direct-api-env`, `no-raw-api-url`): confines the browser and external API bases to one resolver and rejects hand-written API request paths, preventing same-origin routing from drifting back to direct cross-origin calls.
 - [`raw-hash-from-source-fingerprint`](./raw-hash-from-source-fingerprint.ts) (`raw-hash-from-source-fingerprint`): in case-law adapters, a `rawHash` property or assignment must be a `sourceFingerprint(...)` call or another decision's `.rawHash`; files that predate the owner are listed, shrink-only, in `scripts/source-fingerprint-baseline.json`, which `scripts/source-fingerprint-baseline.ts` regenerates by running this rule in census mode.
-- [`no-raw-sha256`](./no-raw-sha256.ts) (`no-raw-sha256`): confines SHA-256 primitives and aliases to registered runtime owners. The generated migration ledger is reasoned and shrink-only; keyed HMAC and other algorithms remain available.
+- [`no-raw-sha256`](./no-raw-sha256.ts) (`no-raw-sha256`): confines SHA-256 primitives and aliases to registered runtime owners. The generated migration ledger is reasoned and shrink-only; other algorithms remain available. The `hmacTarget: "bun"` option prefers Bun's keyed `Bun.CryptoHasher` only in explicitly enrolled Bun files; other runtime owners retain HMAC.
 - [`no-raw-cache-control`](./no-raw-cache-control.ts) (`no-raw-cache-control`): confines API `Cache-Control` names and caching directive literals to `lib/security-headers.ts`; isolated `public` and `private` domain literals are left alone.
 - [`confine-online-ddl`](./confine-online-ddl.ts) (`confine-online-ddl`): confines table-locking SQL text (index builds, drops and reindexes, ALTER TABLE/INDEX, VALIDATE CONSTRAINT, LOCK TABLE, ANALYZE) in `apps/api/src/db/**` to `apps/api/src/db/online-ddl.ts`, whose builders return a statement type only its gate runs; a `createSql` index declaration is exempt and reading it elsewhere is reported, as is importing the gate openers outside the owner. Tests, fixtures and the schema-phase `migration-runner.ts` (ledger DDL under its own transaction budget) are out of scope.
 - [`confine-sql-close`](./confine-sql-close.ts) (`confine-sql-close`): confines explicit `.close({ timeout: … })` budgets and `closeTimeout` options to `apps/api/src/db/sql-close.ts`; callers use its pool/reserved helpers. Follows stable local aliases and object spreads; default `.close()` remains allowed. No other source exemptions.
@@ -154,6 +156,7 @@ runtime validation, or integration tests.
 
 ### React, routing, query state, and performance
 
+- [`query-invalidation-scope`](./query-invalidation-scope.ts) (`query-invalidation-scope`): keeps entity-root invalidations restricted to collection query keys through the owned predicate, so an edit refreshes the changed entity's details and the collections without refetching every cached entity detail.
 - [`query-data-requires-state`](./query-data-requires-state.ts) (`query-data-requires-state`): requires query data consumers to inspect response state through the owned query view or an explicit state read, with no grandfathered bindings. Rendered state uses `useQueryView` and retry feedback; optional reads use `useQueryViewError` to report failures while retaining cached content.
 - [`no-beforeload-redirect`](./no-beforeload-redirect.ts) (`no-beforeload-redirect`): rejects unconditional redirects from `beforeLoad` or `loader`; redirect-only routes must mount a navigation component so abandoned pending trees cannot leak.
 - [`no-centered-scroll-column`](./no-centered-scroll-column.ts) (`no-centered-scroll-column`): keeps the scrollbar on the full content pane instead of a centered, width-capped inner column.
@@ -245,6 +248,7 @@ runtime validation, or integration tests.
 ### Errors, async work, results, and observability
 
 - [`no-async-context-enter-with`](./no-async-context-enter-with.ts) (`no-async-context-enter-with`): bans `AsyncLocalStorage.enterWith`, whose ambient context can leak into unrelated background work; use `run`.
+- [`prefer-bun-native`](./prefer-bun-native.ts) (`no-buffer-string-encoding`, `no-headers-from-entries`): explicitly enrolled Bun files prefer native byte encoding for proven Buffer factories/randomBytes and native Headers records. Scope-aware constructor/import identity and immutable aliases reject custom or shadowed receivers; reassigned, mutated, escaped and unknown receivers stay outside analysis. Computed and optional calls receive no automatic replacement. Headers reports stay manual because `toJSON()` retains `set-cookie` as an array. Unknown, browser and Node targets never inherit Bun enrollment.
 - [`request-lifetime`](./request-lifetime.ts) (`confine-request-reads`): on a chat turn's send-to-settlement path, reads the request only through the send's `isClientConnectionAborted` probe, called while the send runs, so a turn's run never depends on a request that has ended.
 - [`no-bare-error`](./no-bare-error.ts) (`no-bare-error`): requires structured tagged errors or `panic()` instead of unclassified `new Error()` values.
 - [`no-raw-api-error-telemetry`](./no-raw-api-error-telemetry.ts) (`no-raw-api-error-telemetry`): follows imported API response aliases and requires conversion before error telemetry.

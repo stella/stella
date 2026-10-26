@@ -1488,7 +1488,7 @@
       "label": "Simuleeritud AI"
     },
     "modelSelector": {
-      "allModels": "Kõik mudelid ({count, number})",
+      "allModels": "Kõik mudelid",
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
       "belowFrontier": "Allpool parimaid kompromisse",
@@ -4772,7 +4772,6 @@
     "modelError": "Mudel ei suutnud seda vastust lõpetada.",
     "networkError": "Ühendus katkes. Proovi uuesti.",
     "regenerate": "Loo vastus uuesti",
-    "selectionError": "Vali tekst ühe lõigu piires (kuni 2000 märki).",
     "send": "Saada täpsustav küsimus",
     "share": "Jaga meeskonnaga",
     "timeoutError": "Vastuse loomise aeg sai otsa. Proovi uuesti.",

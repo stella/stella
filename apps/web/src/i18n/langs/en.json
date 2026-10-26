@@ -1488,7 +1488,7 @@
       "label": "Mock AI"
     },
     "modelSelector": {
-      "allModels": "All models ({count, number})",
+      "allModels": "All models",
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",
       "belowFrontier": "Below the best trade-offs",
@@ -4772,7 +4772,6 @@
     "modelError": "The model could not finish this answer.",
     "networkError": "The connection was interrupted. Try again.",
     "regenerate": "Regenerate answer",
-    "selectionError": "Select text within a single paragraph (up to 2,000 characters).",
     "send": "Send follow-up",
     "share": "Share with team",
     "timeoutError": "The answer timed out. Try again.",

@@ -57,6 +57,7 @@ import {
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
+  isPartnerOAuthClient,
   rlsDb,
   rootDb,
 } from "@/api/db/root";
@@ -267,6 +268,7 @@ import {
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -334,6 +336,7 @@ import {
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
+  getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
   MCP_OAUTH_SCOPES,
@@ -1649,7 +1652,12 @@ export const createAuth = (
           catch: (cause) => cause,
         });
         if (Result.isError(teardown)) {
-          captureError(teardown.error, { organizationId });
+          captureError(
+            teardown.error,
+            handlerErrorContext("lib.beforeDeleteOrganization.teardown_error", {
+              organizationId,
+            }),
+          );
           throw teardown.error instanceof OrganizationStorageTeardownBoundError
             ? new APIError("BAD_REQUEST", {
                 error: "organization_storage_too_large",
@@ -2302,6 +2310,14 @@ export const createAuth = (
           refreshTokenReuseInterval: REFRESH_TOKEN_REUSE_INTERVAL,
           clientReference: ({ session }) =>
             getSessionActiveOrganizationId(session),
+          // `prompt=select_account` opens the organization step, which names
+          // the signed-in account, offers to switch it and lists the
+          // memberships to pick from; its continue step clears the prompt.
+          // Without the prompt, account selection is never forced.
+          selectAccount: {
+            page: OAUTH_UI_ORGANIZATION_PATH,
+            shouldRedirect: () => false,
+          },
           postLogin: {
             page: OAUTH_UI_ORGANIZATION_PATH,
             shouldRedirect: async ({
@@ -2412,6 +2428,10 @@ export const createAuth = (
             env.FRONTEND_URL,
             getAuthIssuerUrl(),
           ]),
+          partnerResource: {
+            url: getMcpResourceUrl(),
+            isPartnerClient: isPartnerOAuthClient,
+          },
         },
       ),
       oauthUiFragmentBridgePlugin,
@@ -2552,7 +2572,12 @@ export const createAuth = (
                   sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
                   lang,
                 }).catch((error: unknown) => {
-                  captureError(error, { source: "new-device-login-email" });
+                  captureError(
+                    error,
+                    handlerErrorContext("lib.notified", {
+                      source: "new-device-login-email",
+                    }),
+                  );
                   throw error;
                 }),
               );
@@ -2560,7 +2585,12 @@ export const createAuth = (
             isTransactionalEmailConfigured,
             isLocalDev: isLocalDevOpen,
             onError: (error) =>
-              captureError(error, { source: "new-device-login-hook" }),
+              captureError(
+                error,
+                handlerErrorContext("lib.auth.notified_error", {
+                  source: "new-device-login-hook",
+                }),
+              ),
           },
         });
       }),

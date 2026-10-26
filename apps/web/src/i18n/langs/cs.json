@@ -1488,7 +1488,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všechny modely ({count, number})",
+      "allModels": "Všechny modely",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod nejlepšími kompromisy",
@@ -4772,7 +4772,6 @@
     "modelError": "Model nedokázal tuto odpověď dokončit.",
     "networkError": "Spojení bylo přerušeno. Zkuste to znovu.",
     "regenerate": "Vygenerovat odpověď znovu",
-    "selectionError": "Vyberte text v rámci jednoho odstavce (nejvýše 2 000 znaků).",
     "send": "Odeslat doplňující otázku",
     "share": "Sdílet s týmem",
     "timeoutError": "Vypršel časový limit pro odpověď. Zkuste to znovu.",

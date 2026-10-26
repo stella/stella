@@ -6,10 +6,11 @@ import * as v from "valibot";
 import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -471,7 +472,9 @@ const generateDecisionChunk = async ({
     analytics: TanStackAIAnalyticsCallbacks | undefined,
   ): TanStackAIAnalyticsCallbacks => ({
     usageMetering: analytics?.usageMetering,
-    captureError: analytics?.captureError ?? captureError,
+    captureError:
+      analytics?.captureError ??
+      createErrorCapture(handlerErrorContext("workflow.generateDecisionChunk")),
     forModel: (requestModel) => withUsage(analytics?.forModel(requestModel)),
     middleware: {
       ...analytics?.middleware,

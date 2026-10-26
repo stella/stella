@@ -53,6 +53,21 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 
+const ERROR_CAPTURE = {
+  enable: {
+    fingerprintKey: "EnableTwoFactorDialog:failure",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure" },
+  },
+  verify: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-2",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-2" },
+  },
+  backup: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-3",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-3" },
+  },
+} as const;
+
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
 const BACKUP_CODES_FILE_NAME = "stella-backup-codes.txt";
@@ -360,7 +375,7 @@ const EnableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.enable);
     },
   });
 
@@ -408,7 +423,7 @@ const EnableTwoFactorDialog = ({
       // rejected password can be retyped).
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.verify);
     },
   });
 
@@ -440,7 +455,7 @@ const EnableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.backup);
     },
   });
 
@@ -689,7 +704,10 @@ const DisableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure",
+        scope: { type: "handler", handlerId: "DisableTwoFactorDialog:failure" },
+      });
     },
   });
 
@@ -736,7 +754,13 @@ const DisableTwoFactorDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "DisableTwoFactorDialog:failure-2",
+        },
+      });
     },
   });
 
@@ -881,7 +905,13 @@ const RegenerateBackupCodesDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure",
+        },
+      });
     },
   });
 
@@ -933,7 +963,13 @@ const RegenerateBackupCodesDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure-2",
+        },
+      });
     },
   });
 

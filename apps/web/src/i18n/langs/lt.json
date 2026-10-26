@@ -1488,7 +1488,7 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
-      "allModels": "Visi modeliai ({count, number})",
+      "allModels": "Visi modeliai",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
       "belowFrontier": "Žemiau geriausių kompromisų",
@@ -4772,7 +4772,6 @@
     "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
     "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
     "regenerate": "Generuoti atsakymą iš naujo",
-    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
     "send": "Siųsti papildomą klausimą",
     "share": "Bendrinti su komanda",
     "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",

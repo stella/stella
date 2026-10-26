@@ -1488,7 +1488,7 @@
       "label": "IA simulée"
     },
     "modelSelector": {
-      "allModels": "Tous les modèles ({count, number})",
+      "allModels": "Tous les modèles",
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
       "belowFrontier": "En deçà des meilleurs compromis",
@@ -4772,7 +4772,6 @@
     "modelError": "Le modèle n’a pas pu terminer cette réponse.",
     "networkError": "La connexion a été interrompue. Réessayez.",
     "regenerate": "Régénérer la réponse",
-    "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
     "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",

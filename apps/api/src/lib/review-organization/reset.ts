@@ -1,6 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import { createFencedRlsDatabase } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -82,7 +84,11 @@ export class ReviewResetRefusedError extends TaggedError(
 )<{
   message: string;
   reason: ReviewResetRefusalReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const refuse = (reason: ReviewResetRefusalReason, message: string) =>
   Result.err(new ReviewResetRefusedError({ message, reason }));
