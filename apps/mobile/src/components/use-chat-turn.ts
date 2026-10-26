@@ -221,10 +221,22 @@ export const useChatTurn = ({
 
   /** Asks the server to stop the turn; its stream then ends with the answer stopped. */
   const stop = () => {
-    if (turn.turnId === undefined) {
+    const { turnId } = turn;
+    if (turnId === undefined) {
       return;
     }
-    void cancelChatTurn({ fetch, source, threadId, turnId: turn.turnId });
+    void (async () => {
+      const stopped = await cancelChatTurn({
+        fetch,
+        source,
+        threadId,
+        turnId,
+      });
+      // Any other failure leaves the answer streaming, so Stop stays offered.
+      if (Result.isError(stopped)) {
+        signedOut(stopped.error);
+      }
+    })();
   };
 
   const joinActiveTurn = useEffectEvent(() => {
