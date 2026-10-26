@@ -1502,7 +1502,7 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
-      "allModels": "Wszystkie modele ({count, number})",
+      "allModels": "Wszystkie modele",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
       "belowFrontier": "Poniżej najlepszych kompromisów",
@@ -4786,7 +4786,6 @@
     "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
     "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
     "regenerate": "Wygeneruj odpowiedź ponownie",
-    "selectionError": "Zaznacz tekst w obrębie jednego akapitu (do 2000 znaków).",
     "send": "Wyślij dodatkowe pytanie",
     "share": "Udostępnij zespołowi",
     "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
@@ -6660,6 +6659,12 @@
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {
       "parties": "Strony"
+    },
+    "switcher": {
+      "searchPlaceholder": "Znajdź sprawę…",
+      "trigger": "Przełącz sprawę",
+      "viewAll": "Pokaż wszystkie sprawy",
+      "viewAllForClient": "Pokaż wszystkie sprawy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Wyczyść oznaczenia",

@@ -146,18 +146,22 @@ const withHeadroom = (name: string, value: number): number => {
   return panic(`No headroom rule for ${name}`);
 };
 
-/** A path's budgets: each measurement plus its headroom. */
+/** A path's budget getter: each measurement plus its headroom. */
 const budgetOf = <TPath extends keyof typeof CHAT_PATH_BUDGETS>(
   path: TPath,
-): Record<keyof (typeof CHAT_PATH_BUDGETS)[TPath]["measured"], number> =>
-  asTestRaw(
-    Object.fromEntries(
-      Object.entries(CHAT_PATH_BUDGETS[path].measured).map(([name, value]) => [
-        name,
-        withHeadroom(name, value),
-      ]),
-    ),
-  );
+) => {
+  const measured: Readonly<Record<string, number>> =
+    CHAT_PATH_BUDGETS[path].measured;
+  return (
+    name: Extract<keyof (typeof CHAT_PATH_BUDGETS)[TPath]["measured"], string>,
+  ) => {
+    const value = measured[name];
+    if (value === undefined) {
+      return panic(`No ${name} measurement for ${path}`);
+    }
+    return withHeadroom(name, value);
+  };
+};
 
 type StatementLog = { statements: string[] };
 const statementStore = new AsyncLocalStorage<StatementLog>();
@@ -410,6 +414,7 @@ const loadThreadPage = async (threadId: SafeId<"chatThread">) => {
       await getMessages.handler(
         asTestRaw<Parameters<typeof getMessages.handler>[0]>({
           ...readerContext(threadId),
+          route: "/v1/chat/threads/:threadId/messages",
           params: { threadId },
           query: {},
         }),
@@ -435,6 +440,7 @@ const loadOlderPage = async (
       await getOlderMessages.handler(
         asTestRaw<Parameters<typeof getOlderMessages.handler>[0]>({
           ...readerContext(threadId),
+          route: "/v1/chat/threads/:threadId/messages/older",
           params: { threadId },
           query: { before },
         }),
@@ -731,11 +737,11 @@ describe("chat path budgets", () => {
     const budget = budgetOf("openThread");
     expectFlatStatements(
       ({ openThread }) => openThread.statements,
-      budget.statements,
+      budget("statements"),
     );
     for (const { openThread } of [measured.short, measured.long]) {
       expect(openThread.pageBytes, report).toBeLessThanOrEqual(
-        budget.pageBytes,
+        budget("pageBytes"),
       );
     }
   });
@@ -747,15 +753,15 @@ describe("chat path budgets", () => {
       panic("The long thread has no older page");
     for (const page of measured.long.olderPages) {
       expect(page.statements, report).toBe(first.statements);
-      expect(page.statements, report).toBeLessThanOrEqual(budget.statements);
-      expect(page.bytes, report).toBeLessThanOrEqual(budget.pageBytes);
+      expect(page.statements, report).toBeLessThanOrEqual(budget("statements"));
+      expect(page.bytes, report).toBeLessThanOrEqual(budget("pageBytes"));
     }
   });
 
   test("a send reaches its stream in a fixed number of statements", () => {
     expectFlatStatements(
       ({ send }) => send.beforeStream,
-      budgetOf("sendUntilStream").statements,
+      budgetOf("sendUntilStream")("statements"),
     );
   });
 
@@ -769,14 +775,14 @@ describe("chat path budgets", () => {
         [...new Set(send.appendStatements)].toSorted((a, b) =>
           a < b ? -1 : 1,
         ),
-      budget.statementsPerAppend,
+      budget("statementsPerAppend"),
     );
     for (const { send } of [measured.short, measured.long]) {
       expect(send.statementsPer100Deltas, report).toBeLessThanOrEqual(
-        budget.statementsPer100Deltas,
+        budget("statementsPer100Deltas"),
       );
       expect(send.framingBytesPerDelta, report).toBeLessThanOrEqual(
-        budget.framingBytesPerDelta,
+        budget("framingBytesPerDelta"),
       );
     }
   });
@@ -784,7 +790,7 @@ describe("chat path budgets", () => {
   test("a turn settles in a fixed number of statements", () => {
     expectFlatStatements(
       ({ send }) => send.settlement,
-      budgetOf("settleTurn").statements,
+      budgetOf("settleTurn")("statements"),
     );
   });
 
@@ -796,26 +802,26 @@ describe("chat path budgets", () => {
         rejoin.replayed.probeStatements,
         rejoin.snapshotted.probeStatements,
       ],
-      probe.statements,
+      probe("statements"),
     );
     expectFlatStatements(
       ({ rejoin }) => rejoin.replayed.joinStatements,
-      join.replayedStatements,
+      join("replayedStatements"),
     );
     expectFlatStatements(
       ({ rejoin }) => rejoin.snapshotted.joinStatements,
-      join.snapshotStatements,
+      join("snapshotStatements"),
     );
     for (const { rejoin } of [measured.short, measured.long]) {
       const { replayed, snapshotted } = rejoin;
-      expect(replayed.probeBytes, report).toBeLessThanOrEqual(probe.bytes);
+      expect(replayed.probeBytes, report).toBeLessThanOrEqual(probe("bytes"));
       // Within the bound the join replays the log as stored.
       expect(BigInt(replayed.logEntries), report).toBeLessThanOrEqual(
         MAX_CATCHUP_CHUNKS,
       );
       expect(replayed.catchUpEvents, report).toBe(replayed.logEntries);
       expect(replayed.catchUpBytes, report).toBeLessThanOrEqual(
-        join.replayedBytes,
+        join("replayedBytes"),
       );
       // Past it the join folds the stored prefix into one snapshot.
       expect(BigInt(snapshotted.logEntries), report).toBeGreaterThan(
@@ -825,7 +831,7 @@ describe("chat path budgets", () => {
         MAX_CATCHUP_CHUNKS,
       );
       expect(snapshotted.catchUpBytes, report).toBeLessThanOrEqual(
-        join.snapshotBytes,
+        join("snapshotBytes"),
       );
       for (const { catchUpBytes } of [replayed, snapshotted]) {
         expect(BigInt(catchUpBytes), report).toBeLessThanOrEqual(
@@ -862,7 +868,7 @@ describe("chat path budgets", () => {
         rejoin.replayed.stopStatements,
         rejoin.snapshotted.stopStatements,
       ],
-      budgetOf("stop").statements,
+      budgetOf("stop")("statements"),
     );
   });
 });

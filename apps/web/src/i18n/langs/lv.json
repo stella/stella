@@ -1502,7 +1502,7 @@
       "label": "Simulēts AI"
     },
     "modelSelector": {
-      "allModels": "Visi modeļi ({count, number})",
+      "allModels": "Visi modeļi",
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
       "belowFrontier": "Zem labākajiem kompromisiem",
@@ -4786,7 +4786,6 @@
     "modelError": "Modelis nevarēja pabeigt šo atbildi.",
     "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
     "regenerate": "Ģenerēt atbildi atkārtoti",
-    "selectionError": "Atlasiet tekstu vienā rindkopā (līdz 2000 rakstzīmēm).",
     "send": "Nosūtīt papildjautājumu",
     "share": "Kopīgot ar komandu",
     "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
@@ -6660,6 +6659,12 @@
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
       "parties": "Puses"
+    },
+    "switcher": {
+      "searchPlaceholder": "Atrast lietu…",
+      "trigger": "Mainīt lietu",
+      "viewAll": "Skatīt visas lietas",
+      "viewAllForClient": "Skatīt visas klienta {clientName} lietas"
     },
     "table": {
       "clearFlags": "Notīrīt atzīmes",

@@ -622,7 +622,13 @@ const PeekDocxViewer = ({
         fetchPrintPdf({ workspaceId, fieldId })
           .then(printPdfBuffer)
           .catch((error: unknown) => {
-            analytics.captureError(error);
+            analytics.captureError(error, {
+              fingerprintKey: "PeekDocxViewer.print:failure",
+              scope: {
+                type: "handler",
+                handlerId: "PeekDocxViewer.print:failure",
+              },
+            });
           }),
         "peek-pdf-viewer.fetch-print-pdf",
       );

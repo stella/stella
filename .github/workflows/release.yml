@@ -130,6 +130,7 @@ jobs:
 
       - name: Verify release source
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.release.outputs.ref }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           VERSION: ${{ steps.release.outputs.version }}
@@ -159,7 +160,7 @@ jobs:
             echo "::error::Release commit must have exactly one parent"
             exit 1
           fi
-          node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_parent" "$RELEASE_SHA"
+          node "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_parent" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
 
           expected_title="chore: release $RELEASE_REF"
           release_pulls="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp \

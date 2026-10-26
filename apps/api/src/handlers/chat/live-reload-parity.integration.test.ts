@@ -882,6 +882,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
         query: {},
         recordAuditEvent: async () => undefined,
         request: new Request("http://localhost/v1/chat/threads/fork"),
+        route: "/v1/chat/threads/:threadId/fork",
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },

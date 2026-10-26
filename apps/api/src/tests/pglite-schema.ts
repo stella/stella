@@ -1118,6 +1118,14 @@ export const installPgliteOrganizationMemberCapacity = async (
         "migration.sql",
       ),
     ),
+    // A missing access state admits only the creation membership.
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261023160000_organization_access_state_origin",
+        "migration.sql",
+      ),
+    ),
     ...readMigrationStatements(
       nodePath.join(
         DRIZZLE_DIR,

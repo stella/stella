@@ -15,10 +15,14 @@ const fixture = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-12",
-    quote: "The party must be given an opportunity to respond.",
-    startOffset: 0,
-    endOffset: 53,
+    spans: [
+      {
+        paragraphId: "p-12",
+        quote: "The party must be given an opportunity to respond.",
+        startOffset: 0,
+        endOffset: 53,
+      },
+    ],
   },
   messages: [
     {
@@ -59,7 +63,7 @@ export const ReaderAnswersPlayground = () => {
       <article className="reader-body space-y-4 leading-relaxed">
         <p data-anchor="p-12">
           <span className="underline decoration-dotted underline-offset-4">
-            {fixture.anchor.quote}
+            {fixture.anchor.spans[0].quote}
           </span>
         </p>
         <p data-anchor="p-13">

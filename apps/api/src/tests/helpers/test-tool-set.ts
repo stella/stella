@@ -1,3 +1,4 @@
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 /**
@@ -69,11 +70,16 @@ export const asFetchMock = (fn: TestFetchMock): typeof fetch =>
  * exact shape, but the abstraction's type is intentionally
  * `unknown` to force production callers to validate explicitly.
  */
-// SAFETY: tests construct the raw object directly, so its shape
-// matches by construction. This helper centralises the assertion
-// in one place per test file. The single-use type parameter is
-// the helper's whole API surface.
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters
-export const asTestRaw = <T>(raw: unknown): T =>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- centralised test-only raw cast; the helper IS the cast
-  raw as T;
+// Handler invocations may fake unrelated collaborators, but must carry the
+// request and declared route that the safe-handler boundary always reads.
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- the explicit target type is the test cast API
+export function asTestRaw<T extends SafeHandlerLogContext>(
+  raw: Pick<SafeHandlerLogContext, "request" | "route"> &
+    Record<string, unknown>,
+): T;
+export function asTestRaw<T>(
+  raw: T extends SafeHandlerLogContext ? never : unknown,
+): T;
+export function asTestRaw(raw: unknown): unknown {
+  return raw;
+}

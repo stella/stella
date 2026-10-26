@@ -1502,7 +1502,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všetky modely ({count, number})",
+      "allModels": "Všetky modely",
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod najlepšími kompromismi",
@@ -4786,7 +4786,6 @@
     "modelError": "Model nedokázal túto odpoveď dokončiť.",
     "networkError": "Spojenie bolo prerušené. Skúste to znova.",
     "regenerate": "Vygenerovať odpoveď znova",
-    "selectionError": "Vyberte text v rámci jedného odseku (najviac 2 000 znakov).",
     "send": "Odoslať doplňujúcu otázku",
     "share": "Zdieľať s tímom",
     "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
@@ -6660,6 +6659,12 @@
     "referenceTaken": "Toto referenčné číslo sa už používa",
     "sections": {
       "parties": "Strany"
+    },
+    "switcher": {
+      "searchPlaceholder": "Nájsť spis…",
+      "trigger": "Prepnúť spis",
+      "viewAll": "Zobraziť všetky spisy",
+      "viewAllForClient": "Zobraziť všetky spisy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Vymazať označenia",

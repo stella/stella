@@ -223,6 +223,7 @@ const readResponse = async (fixture: Fixture, messages: Messages) =>
       orgAIConfig: null,
       memberRole: sessionMemberRole("member"),
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages",
       getWorkspaceAccess: async (id: SafeId<"workspace">) =>
         id === fixture.workspaceId ? { id, status: "active" } : null,
     }),

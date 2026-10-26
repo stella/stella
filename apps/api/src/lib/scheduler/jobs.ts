@@ -352,10 +352,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
+    // Hourly: nothing alarms on these gauges at a finer resolution, and a
+    // source falls behind by sync cycles, not minutes. The id is the row's
+    // key and outlives its old cadence: a new id would register a second
+    // job beside the existing row, which only retires by task name.
     description: "Report case-law projection backlog and source freshness",
     id: "caseLaw.reportFreshness.fiveMinute",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
   },
   {

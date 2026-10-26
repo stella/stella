@@ -27,6 +27,7 @@ export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS, AI_FAILURE_CODES, isAIFailureCode } from "./ai-errors";
 export type { AIErrorKind, AIFailureCode } from "./ai-errors";
 export {
+  caseLawAnalysisProgressSchema,
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
@@ -34,6 +35,7 @@ export {
 export type {
   CaseLawAnalysisFailureCode,
   CaseLawAnalysisKeySource,
+  CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
 } from "./case-law-analysis";
 export {

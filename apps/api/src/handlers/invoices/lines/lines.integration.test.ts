@@ -41,6 +41,7 @@ import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -1448,7 +1449,7 @@ const manual = (
   vatTreatment: "domestic_vat",
 });
 
-const contextFor = <TContext>(
+const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (handlerContext: TContext) => unknown,
   {
     body,
