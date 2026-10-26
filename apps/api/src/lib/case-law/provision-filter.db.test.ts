@@ -17,6 +17,7 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import {
   type CaseLawProvisionFilter,
   readCaseLawProvisionScope,
+  readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
@@ -116,45 +117,41 @@ test("the Postgres search narrows to decisions citing the provision, level by le
   const courtWeights = courtWeightMapFromSeed();
 
   const cases: {
-    provision: Omit<CaseLawProvisionFilter, "unit">;
+    provision: CaseLawProvisionFilter;
     expected: string[];
   }[] = [
     {
-      provision: { work: "262/2006 Sb.", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
       expected: [subsection.id],
     },
     {
-      provision: { work: "262/2006 Sb.", section: 316, subsection: "2" },
+      provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
       expected: [subsection.id],
     },
     {
-      provision: { work: "262/2006 Sb.", section: 316, subsection: "1" },
+      provision: { work: "262/2006 Sb.", anchor: "par_316-odst_1" },
       expected: [],
     },
     {
-      provision: { work: "262/2006 Sb.", section: 52, letter: "g" },
+      provision: { work: "262/2006 Sb.", anchor: "par_52-pism_g" },
       expected: [letter.id],
     },
     {
-      provision: { work: "262/2006 Sb.", section: 52, letter: "h" },
+      provision: { work: "262/2006 Sb.", anchor: "par_52-pism_h" },
       expected: [],
     },
     {
-      provision: { work: "262/2006 Sb.", section: 31 },
+      provision: { work: "262/2006 Sb.", anchor: "par_31" },
       expected: [shorterSection.id],
     },
     {
-      provision: { work: "89/2012 Sb.", section: 316 },
+      provision: { work: "89/2012 Sb.", anchor: "par_316" },
       expected: [otherWork.id],
     },
   ];
   for (const { provision, expected } of cases) {
     const plan = caseLawSearchPlan({
-      body: {
-        country: "CZE",
-        query: WORD,
-        provision: { unit: "section", ...provision },
-      },
+      body: { country: "CZE", query: WORD, provision },
       configs,
       courtWeights,
       excerpt: DEFAULT_SEARCH_EXCERPT,
@@ -286,9 +283,7 @@ test("the provision scope includes only published redistributable decisions in i
     });
   const subsection: CaseLawProvisionFilter = {
     work: "262/2006 Sb.",
-    unit: "section",
-    section: 316,
-    subsection: "2",
+    anchor: "par_316-odst_2",
   };
   const scope = await read(subsection);
   expect(scope.type).toBe("decisions");
@@ -296,14 +291,16 @@ test("the provision scope includes only published redistributable decisions in i
     scope.type === "decisions" ? scope.decisionIds.map(String).toSorted() : [],
   ).toEqual([first.id, second.id].map(String).toSorted());
   // Past the bound the set is not handed over, but its size is exact.
-  expect(
-    await read({ work: "262/2006 Sb.", unit: "section", section: 316 }, 2),
-  ).toEqual({ type: "broad", citingDecisions: 3 });
+  expect(await read({ work: "262/2006 Sb.", anchor: "par_316" }, 2)).toEqual({
+    type: "broad",
+    citingDecisions: 3,
+  });
   // Exactly at the bound the set still fits.
   expect((await read(subsection, 2)).type).toBe("decisions");
-  expect(
-    await read({ work: "262/2006 Sb.", unit: "section", section: 317 }),
-  ).toEqual({ type: "decisions", decisionIds: [] });
+  expect(await read({ work: "262/2006 Sb.", anchor: "par_317" })).toEqual({
+    type: "decisions",
+    decisionIds: [],
+  });
   await db
     .update(caseLawDecisions)
     .set({ country: "SVK" })
@@ -325,13 +322,36 @@ test("the provision scope includes only published redistributable decisions in i
   const euScope = await read({
     jurisdiction: "EU",
     work: "32016R0679",
-    unit: "article",
-    section: 6,
+    anchor: "art_6",
   });
   expect(euScope).toEqual({ type: "decisions", decisionIds: [first.id] });
   // The same work token in a national filter cannot reach EU links.
+  expect(await read({ work: "32016R0679", anchor: "art_6" })).toEqual({
+    type: "decisions",
+    decisionIds: [],
+  });
+
+  // An act no link names is told apart from a provision nobody cites, so a
+  // caller never reports the missing extraction as "cited by 0".
+  const linked = async (provision: CaseLawProvisionFilter) =>
+    await withPublicLawReaderRole(db, async (roleTx) => {
+      // SAFETY: the role transaction supplies the select surface the read uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+      const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+      return await readProvisionWorkLinked(tx, {
+        jurisdiction: "CZE",
+        provision,
+      });
+    });
+  expect(await linked({ work: "262/2006 Sb.", anchor: "par_317" })).toBe(true);
+  expect(await linked({ work: "89/2012 Sb.", anchor: "par_2910" })).toBe(false);
   expect(
-    await read({ work: "32016R0679", unit: "article", section: 6 }),
-  ).toEqual({ type: "decisions", decisionIds: [] });
+    await linked({ jurisdiction: "EU", work: "32016R0679", anchor: "art_6" }),
+  ).toBe(true);
+  expect(
+    await linked({ jurisdiction: "EU", work: "12016E/TXT", anchor: "art_267" }),
+  ).toBe(false);
+  // A national filter never counts the EU links of the same token.
+  expect(await linked({ work: "32016R0679", anchor: "art_6" })).toBe(false);
   await client.close();
 }, 60_000);

@@ -36,7 +36,10 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  euProvisionAnchor,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
 import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import {
@@ -86,6 +89,7 @@ import {
   type CaseLawProvisionFilter,
   type CaseLawProvisionScope,
   readCaseLawProvisionScope,
+  readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
@@ -2242,22 +2246,12 @@ const resolveSearchProvision = (
         'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
       );
     }
-    const reference = euCitation.reference;
     return {
       type: "resolved",
       provision: {
         jurisdiction: "EU",
         work: euCitation.act.celex,
-        unit: reference.unit,
-        section: reference.section,
-        ...(reference.sectionSuffix === null
-          ? {}
-          : { sectionSuffix: reference.sectionSuffix }),
-        ...(reference.subsection === null
-          ? {}
-          : { subsection: reference.subsection }),
-        ...(reference.letter === null ? {} : { letter: reference.letter }),
-        ...(reference.point === null ? {} : { point: reference.point }),
+        anchor: euProvisionAnchor(euCitation.reference),
       },
     };
   }
@@ -2277,17 +2271,7 @@ const resolveSearchProvision = (
     case "resolved":
       return {
         type: "resolved",
-        provision: {
-          work: read.workIdentifier,
-          unit: read.unit,
-          section: read.section,
-          ...(read.sectionSuffix === null
-            ? {}
-            : { sectionSuffix: read.sectionSuffix }),
-          ...(read.subsection === null ? {} : { subsection: read.subsection }),
-          ...(read.letter === null ? {} : { letter: read.letter }),
-          ...(read.point === null ? {} : { point: read.point }),
-        },
+        provision: { work: read.workIdentifier, anchor: read.anchor },
       };
     case "no_provision":
       return provisionRefusal(
@@ -2587,6 +2571,24 @@ const readSearchProvision = async ({
     return resolved;
   }
   const { provision } = resolved;
+  // An act no recorded link names would read as an exact 0 ("nothing cites
+  // it") when its citations were never extracted; the caller is told so and
+  // sent to the text search, which reads the decisions themselves.
+  const readWorkLinked =
+    context.testDependencies?.readProvisionWorkLinked ??
+    (async (scope) =>
+      await caseLawPublicReadDb(
+        async (tx) => await readProvisionWorkLinked(tx, scope),
+      ));
+  if (!(await readWorkLinked({ jurisdiction: country, provision }))) {
+    return {
+      type: "refused",
+      result: notFoundResult(
+        `The case-law corpus records no provision links to ${provision.work} yet, so it cannot list the decisions citing ${text}`,
+        `Search for the provision as text instead: omit provision and pass queries, for example ${JSON.stringify([text])}.`,
+      ),
+    };
+  }
   // A provision-only list is complete by construction: no set to read.
   if (args.queries === undefined) {
     return { type: "read", body: { provision }, warnings: [] };

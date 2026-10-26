@@ -61,16 +61,6 @@ import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
  * rather than composes.
  */
 const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
-  // A structured provision path from the citation resolver; the filter
-  // canonicalises each value, so the bound limits size, not spelling.
-  "POST /v1/case/decisions/search.body.provision.sectionSuffix":
-    "provision path value bounded in size; the filter canonicalises case and leading zeros",
-  "POST /v1/case/decisions/search.body.provision.subsection":
-    "provision path value bounded in size; the filter canonicalises case and leading zeros",
-  "POST /v1/case/decisions/search.body.provision.letter":
-    "provision path value bounded in size; the filter canonicalises case and leading zeros",
-  "POST /v1/case/decisions/search.body.provision.point":
-    "provision path value bounded in size; the filter canonicalises case and leading zeros",
   // A BCP-47 language tag bounded at 8 characters instead of bound to the
   // locale kind, so `cs_CZ` and `Czech` are rejected before it runs.
   "read_statute.language": "language tag length-bounded, not the locale kind",

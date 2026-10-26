@@ -427,6 +427,7 @@ const searchProviderSearchMock = mock(
 const searchDecisionsHandlerMock = mock();
 const listCaseLawProvisionDecisionsMock = mock();
 const readCaseLawProvisionScopeMock = mock();
+const readProvisionWorkLinkedMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
@@ -1269,6 +1270,7 @@ const createContext = ({
       searchDecisionsHandler: searchDecisionsHandlerMock,
       listCaseLawProvisionDecisions: listCaseLawProvisionDecisionsMock,
       readCaseLawProvisionScope: readCaseLawProvisionScopeMock,
+      readProvisionWorkLinked: readProvisionWorkLinkedMock,
       readCaseLawCourtNames: async () => STORED_CZ_COURTS,
       searchLegislationHandler: searchLegislationHandlerMock,
       resolveStatuteExpression: resolveStatuteExpressionMock,
@@ -1358,6 +1360,8 @@ describe("OpenAI-compatible MCP tools", () => {
       type: "decisions",
       decisionIds: [],
     });
+    readProvisionWorkLinkedMock.mockReset();
+    readProvisionWorkLinkedMock.mockResolvedValue(true);
     searchLegislationHandlerMock.mockReset();
     resolveStatuteExpressionMock.mockReset();
     resolveStatuteWorkVersionMock.mockReset();
@@ -5648,30 +5652,16 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     test.each([
-      [
-        "§ 316 odst. 2 ZP",
-        {
-          work: "262/2006 Sb.",
-          unit: "section",
-          section: 316,
-          subsection: "2",
-        },
-      ],
+      ["§ 316 odst. 2 ZP", { work: "262/2006 Sb.", anchor: "par_316-odst_2" }],
       [
         "§ 52 písm. g) zákoníku práce",
-        { work: "262/2006 Sb.", unit: "section", section: 52, letter: "g" },
+        { work: "262/2006 Sb.", anchor: "par_52-pism_g" },
       ],
-      ["čl. 10 Listiny", { unit: "article", section: 10 }],
+      ["§ 2910 OZ", { work: "89/2012 Sb.", anchor: "par_2910" }],
+      ["čl. 10 Listiny", { anchor: "cl_10" }],
       [
         "Article 6(1)(a) GDPR",
-        {
-          jurisdiction: "EU",
-          work: "32016R0679",
-          unit: "article",
-          section: 6,
-          subsection: "1",
-          letter: "a",
-        },
+        { jurisdiction: "EU", work: "32016R0679", anchor: "art_6-par_1-pt_a" },
       ],
     ])(
       "reads the provision %s onto every phrasing's search",
@@ -5690,11 +5680,38 @@ describe("OpenAI-compatible MCP tools", () => {
         for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
           expect(body.provision).toMatchObject(expected);
         }
-        // A level the caller left out is absent, so it matches every value.
-        const body = searchedBody();
-        if (!("subsection" in expected)) {
-          expect(body["provision"]).not.toHaveProperty("subsection");
-        }
+      },
+    );
+
+    test.each([
+      [["kamera"], "Article 6(1)(f) GDPR"],
+      [undefined, "Article 267 TFEU"],
+      [undefined, "§ 2910 OZ"],
+    ])(
+      "a provision of an act no link names is refused as unknown, never an exact 0 (queries %p, %s)",
+      async (queries, provision) => {
+        readProvisionWorkLinkedMock.mockResolvedValue(false);
+        const result = await handleMcpToolCall({
+          args: {
+            ...(queries === undefined ? {} : { queries }),
+            country: "CZE",
+            provision,
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(result.isError).toBe(true);
+        expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+        expect(listCaseLawProvisionDecisionsMock).not.toHaveBeenCalled();
+        expect(readCaseLawProvisionScopeMock).not.toHaveBeenCalled();
+        const payload = parseToolPayload(result);
+        expect(payload).toMatchObject({
+          error: {
+            code: "not_found",
+            message: expect.stringContaining("no provision links"),
+            hint: expect.stringContaining(JSON.stringify([provision])),
+          },
+        });
       },
     );
 
@@ -5808,12 +5825,7 @@ describe("OpenAI-compatible MCP tools", () => {
         sort: "newest",
         // The list's own cursor is passed through, not split per phrasing.
         cursor: listCursor,
-        provision: {
-          work: "262/2006 Sb.",
-          unit: "section",
-          section: 316,
-          subsection: "2",
-        },
+        provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
       });
       expect(parseToolPayload(result)).toMatchObject({
         total: { type: "exact", count: 21 },

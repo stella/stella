@@ -38,6 +38,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { citingDecisionIdsSubquery } from "@/api/lib/case-law/provision-filter";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -1301,41 +1302,38 @@ test.each([
 test.each([
   {
     name: "a section matches a link to one of its subsections",
-    provision: { work: "262/2006 Sb.", section: 316 },
+    provision: { work: "262/2006 Sb.", anchor: "par_316" },
     expectedIds: [czechId],
   },
   {
     name: "a subsection matches its own links",
-    provision: { work: "262/2006 Sb.", section: 316, subsection: "2" },
+    provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
     expectedIds: [czechId],
   },
   {
     name: "a sibling subsection matches nothing",
-    provision: { work: "262/2006 Sb.", section: 316, subsection: "1" },
+    provision: { work: "262/2006 Sb.", anchor: "par_316-odst_1" },
     expectedIds: [],
   },
   {
     name: "a shorter section number is not a prefix of a longer one",
-    provision: { work: "262/2006 Sb.", section: 31 },
+    provision: { work: "262/2006 Sb.", anchor: "par_31" },
     expectedIds: [slovakId],
   },
   {
     name: "the work is part of the provision",
-    provision: { work: "89/2012 Sb.", section: 316 },
+    provision: { work: "89/2012 Sb.", anchor: "par_316" },
     expectedIds: [slovakId],
   },
   {
     name: "a section suffix the link lacks matches nothing",
-    provision: { work: "262/2006 Sb.", section: 316, sectionSuffix: "a" },
+    provision: { work: "262/2006 Sb.", anchor: "par_316a" },
     expectedIds: [],
   },
 ] as const)(
   "both indexed reads apply the provision filter: $name",
   async ({ provision, expectedIds }) => {
-    const body = {
-      ...SEARCH_BODY,
-      provision: { unit: "section" as const, ...provision },
-    };
+    const body = { ...SEARCH_BODY, provision };
     const ranking = await rehydrateCaseLawCandidates({
       body,
       candidates: candidatesOf(czechId, slovakId),
@@ -1358,7 +1356,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   const listed = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
     },
     caseLawDb,
     dependencies: {
@@ -1382,7 +1380,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   const none = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 317 },
+      provision: { work: "262/2006 Sb.", anchor: "par_317" },
     },
     caseLawDb,
     dependencies: {
@@ -1424,7 +1422,7 @@ test("a provision-only list escapes the citing sentence it shows as markup", asy
     const listed = await listCaseLawProvisionDecisions({
       body: {
         ...SEARCH_BODY,
-        provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+        provision: { work: "262/2006 Sb.", anchor: "par_316" },
       },
       caseLawDb,
       dependencies: {
@@ -1452,7 +1450,7 @@ test("a provision-only list under the Postgres provider says it needs corpus-ind
   const refused = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
     },
     caseLawDb,
     dependencies: { provider: "pg-fts" },
@@ -1468,7 +1466,7 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
   await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
     },
     caseLawDb,
     dependencies: {
@@ -1509,7 +1507,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   try {
     const request = {
       ...SEARCH_BODY,
-      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      provision: { work: "262/2006 Sb.", anchor: "par_316" },
       limit: 1,
     } as const;
     const list = async (
@@ -1550,13 +1548,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       { court: "Nejvyšší správní soud" },
       { language: "sk" },
       { sort: "newest" as const },
-      {
-        provision: {
-          work: "262/2006 Sb.",
-          unit: "section" as const,
-          section: 317,
-        },
-      },
+      { provision: { work: "262/2006 Sb.", anchor: "par_317" } },
       { cursor: "not-a-list-cursor" },
     ]) {
       expect("hits" in (await list({ ...request, cursor, ...change }))).toBe(
@@ -1610,20 +1602,17 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   }
 });
 
-// The planner picks the decision-id or the work index by the data's shape;
-// either probes the provision's own links, and neither scans the table.
+// The planner picks the decision-id or the work-subtree index by the data's
+// shape; either probes the provision's own links. Neither scans the table,
+// and neither walks every link of the act, which for a civil code is
+// millions of rows.
 test("the provision filter reads links through an index, never by scanning them", async () => {
   await caseLawDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
     const options = {
       body: {
         ...SEARCH_BODY,
-        provision: {
-          work: "262/2006 Sb.",
-          unit: "section" as const,
-          section: 316,
-          subsection: "2",
-        },
+        provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
       },
       generation: GENERATION,
       ids: [czechId, slovakId],
@@ -1636,10 +1625,30 @@ test("the provision filter reads links through an index, never by scanning them"
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
       expect(plan).toMatch(
-        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_subtree|work)_idx/u,
+        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_subtree)_idx/u,
       );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }
+  });
+});
+
+test("every decision citing a provision is read from the provision's own anchor range, not the whole act", async () => {
+  await caseLawDb(async (tx) => {
+    await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+    const plan = JSON.stringify(
+      await tx.execute(
+        sql`EXPLAIN (COSTS OFF) ${citingDecisionIdsSubquery(tx, {
+          jurisdiction: "CZE",
+          provision: { work: "89/2012 Sb.", anchor: "par_2910" },
+        }).getSQL()}`,
+      ),
+    );
+    expect(plan).toContain(
+      "Index Scan using case_law_provision_citations_work_subtree_idx",
+    );
+    // The anchor bounds are the seek, not a filter over the act's links.
+    expect(plan).toMatch(/Index Cond: [^"]*anchor[^"]*>=/u);
+    expect(plan).not.toContain("case_law_provision_citations_work_idx");
   });
 });
 
