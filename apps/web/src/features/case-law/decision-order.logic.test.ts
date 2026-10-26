@@ -151,7 +151,9 @@ describe("the date column's part in the order", () => {
     const asked: DecisionSort[] = [];
     const order = decisionDateOrder({
       order: { type: "browse", sort: "newest" },
-      onSortChange: (sort) => asked.push(sort),
+      onSortChange: (sort) => {
+        asked.push(sort);
+      },
       unavailableReason: REASON,
     });
     order?.onChange("asc");
