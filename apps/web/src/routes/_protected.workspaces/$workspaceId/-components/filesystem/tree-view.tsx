@@ -75,6 +75,11 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getFileSizeDisplay } from "@/lib/file-size";
+import {
+  applySelectionGesture,
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/multi-selection.logic";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -614,35 +619,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     entityId: string,
     mods: { meta: boolean; shift: boolean },
   ) => {
-    const selectedEntityId = toSafeId<"entity">(entityId);
-    setSelectedIds((prev) => {
-      if (mods.shift && anchorIdRef.current !== null) {
-        const from = orderedEntityIds.indexOf(
-          toSafeId<"entity">(anchorIdRef.current),
-        );
-        const to = orderedEntityIds.indexOf(selectedEntityId);
-        if (from !== -1 && to !== -1) {
-          const [lo, hi] = from <= to ? [from, to] : [to, from];
-          return new Set(orderedEntityIds.slice(lo, hi + 1));
-        }
-      }
-      // A plain or cmd/ctrl click makes this row the new range anchor.
-      anchorIdRef.current = selectedEntityId;
-      if (mods.meta) {
-        const next = new Set(prev);
-        if (next.has(selectedEntityId)) {
-          next.delete(selectedEntityId);
-        } else {
-          next.add(selectedEntityId);
-        }
-        return next;
-      }
+    const next = applySelectionGesture({
+      selection: { selectedIds, anchorId: anchorIdRef.current },
       // Plain click: sole selection (clicking the only selected row clears it).
-      if (prev.size === 1 && prev.has(selectedEntityId)) {
-        return new Set();
-      }
-      return new Set([selectedEntityId]);
+      gesture: selectionGestureForModifiers(
+        mods,
+        SELECTION_GESTURE.exclusiveToggle,
+      ),
+      id: entityId,
+      orderedIds: orderedEntityIds,
     });
+    anchorIdRef.current = next.anchorId;
+    setSelectedIds(new Set(next.selectedIds));
   };
 
   const rowsViewportRef = useRef<HTMLDivElement>(null);
