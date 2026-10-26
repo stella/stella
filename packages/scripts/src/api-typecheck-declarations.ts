@@ -205,20 +205,28 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
   // Local names bound to a constructor, and namespaces that carry one.
   const constructors = new Set<string>();
   const namespaces = new Map<string, readonly string[]>();
-  for (const { moduleRequest, entries } of parsed.module.staticImports) {
+  for (const statement of parsed.program.body) {
+    if (
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
+    ) {
+      continue;
+    }
     const names =
-      RUNTIME_CONSTRUCTORS[constructorModule(moduleRequest.value, relative)];
+      RUNTIME_CONSTRUCTORS[constructorModule(statement.source.value, relative)];
     if (!names) {
       continue;
     }
-    for (const { importName, localName, isType } of entries) {
-      if (isType) {
-        continue;
-      }
-      if (importName.kind === "NamespaceObject") {
-        namespaces.set(localName.value, names);
-      } else if (importName.name !== null && names.includes(importName.name)) {
-        constructors.add(localName.value);
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaces.set(specifier.local.name, names);
+      } else if (
+        specifier.type === "ImportSpecifier" &&
+        specifier.importKind !== "type" &&
+        specifier.imported.type === "Identifier" &&
+        names.includes(specifier.imported.name)
+      ) {
+        constructors.add(specifier.local.name);
       }
     }
   }
