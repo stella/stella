@@ -1,6 +1,5 @@
 {
   "metric": "nullish-array-fallback",
-  "file": "apps/api/src/handlers/legislation/ingestion/eu-cellar-metadata.ts",
   "delta": 4,
   "reason": "A missing optional RDF predicate or OWL date annotation means no matching terms, while absent graph and axiom map buckets are initialized before the first term. These four empty collections represent stated source absence; required identity and manifestation relationships are validated separately and still fail closed."
 }
