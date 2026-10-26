@@ -4,7 +4,7 @@ import { useTranslations } from "use-intl";
 import {
   MEMBER_CHOICE,
   MemberCombobox,
-  workspaceMemberOptions,
+  workspaceMemberOptionsFromView,
 } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -29,9 +29,7 @@ export const CorrespondenceAssigneeField = ({
   const membersView = useQueryView(
     useQuery(workspaceMembersOptions(workspaceId)),
   );
-  const members = workspaceMemberOptions(
-    membersView.type === "items" ? membersView.items : [],
-  );
+  const members = workspaceMemberOptionsFromView(membersView);
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
 

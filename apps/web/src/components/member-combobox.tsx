@@ -18,6 +18,7 @@ import { SearchIcon } from "@stll/ui/icons";
 import { UserIdentity, UserIdentityAvatar } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { getDisplayName } from "@/lib/get-display-name";
+import type { QueryView } from "@/lib/query-view.logic";
 
 /** A person the picker offers. */
 export type MemberOption = {
@@ -48,6 +49,26 @@ export const workspaceMemberOptions = (
       ? []
       : [{ userId, name: user.name, email: user.email, image: user.image }],
   );
+
+/**
+ * The options a matter's members read offers: none until the read has
+ * members; the caller shows the read's own pending or error state beside it.
+ */
+export const workspaceMemberOptionsFromView = (
+  view: QueryView<readonly WorkspaceMember[], unknown>,
+): MemberOption[] => {
+  switch (view.type) {
+    case "items":
+      return workspaceMemberOptions(view.items);
+    case "pending":
+    case "error":
+    case "empty":
+      return [];
+    default:
+      view satisfies never;
+      return panic("Unhandled matter members read state");
+  }
+};
 
 export const MEMBER_CHOICE = {
   /** The list offers members only. */
@@ -84,6 +105,8 @@ type MemberComboboxProps = {
    * who has since left the organization), so the field still names them.
    */
   selectedFallback?: MemberOption | null | undefined;
+  /** What an empty search says; defaults to the generic "no results". */
+  emptyLabel?: string | undefined;
   disabled?: boolean | undefined;
   autoFocus?: boolean | undefined;
   /**
@@ -114,6 +137,7 @@ export const MemberCombobox = ({
   choice,
   unavailable,
   selectedFallback,
+  emptyLabel,
   disabled,
   autoFocus,
   onSubmit,
@@ -294,7 +318,7 @@ export const MemberCombobox = ({
             }
           }}
         </ComboboxList>
-        <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+        <ComboboxEmpty>{emptyLabel ?? t("common.noResults")}</ComboboxEmpty>
       </ComboboxPopup>
     </Combobox>
   );

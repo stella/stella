@@ -19,7 +19,7 @@ import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/com
 import {
   MEMBER_CHOICE,
   MemberCombobox,
-  workspaceMemberOptions,
+  workspaceMemberOptionsFromView,
 } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
@@ -248,7 +248,6 @@ type OwnerPickerProps = {
     id: string;
     name: string | null;
     image: string | null;
-    deletedAt?: string | null;
   } | null;
   reason: string;
   disabled?: boolean;
@@ -267,69 +266,41 @@ export const OwnerPicker = ({
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
   const membersView = useQueryView(membersQuery);
   useQueryViewError(membersView, "OwnerPicker:query");
-  const members = membersView.type === "items" ? membersView.items : undefined;
-  const selectableMembers = members?.filter(
-    (member) => member.user && member.user.id !== owner?.id,
-  );
+  const members = workspaceMemberOptionsFromView(membersView);
+  // A handover needs its reason first; a task without an owner takes one
+  // without.
+  const awaitingReason = owner !== null && reason.trim().length === 0;
+  // An owner whose account is gone is not offered, but the field still names
+  // them until someone takes over.
+  const ownerFallback =
+    owner !== null && !members.some((member) => member.userId === owner.id)
+      ? {
+          userId: owner.id,
+          name: owner.name ?? t("deletedAccount"),
+          email: null,
+          image: owner.image,
+        }
+      : null;
 
   return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <button
-            className="hover:bg-muted flex min-h-11 w-full items-center gap-1.5 rounded-md px-1.5 text-sm"
-            disabled={disabled}
-            type="button"
-          />
-        }
-      >
-        {owner ? (
-          <UserIdentity
-            as="span"
-            avatarClassName="size-4 shrink-0 text-3xs"
-            className="gap-1.5"
-            deleted={hasDeletedAccount(owner.deletedAt)}
-            image={owner.image}
-            name={owner.name ?? t("deletedAccount")}
-            nameClassName="text-sm font-normal"
-          />
-        ) : (
-          <span className="text-muted-foreground">{tCommon("unassigned")}</span>
-        )}
-      </PopoverTrigger>
-      <PopoverPopup className="w-64" padding="sm" side="bottom">
-        <QueryViewFeedback view={membersView} />
-        <div className="flex flex-col gap-2">
-          <div className="flex max-h-56 flex-col overflow-y-auto">
-            {selectableMembers?.map((member) => {
-              const candidate = member.user;
-              if (!candidate) {
-                return null;
-              }
-              return (
-                <button
-                  className="hover:bg-muted flex min-h-11 items-center gap-2 rounded-md px-2 py-1.5 text-sm disabled:opacity-50"
-                  disabled={owner !== null && reason.trim().length === 0}
-                  key={candidate.id}
-                  onClick={() => {
-                    onChange(candidate.id);
-                  }}
-                  type="button"
-                >
-                  <UserIdentity
-                    as="span"
-                    avatarClassName="size-5 text-3xs"
-                    image={candidate.image}
-                    name={candidate.name}
-                    nameClassName="text-sm font-normal"
-                  />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </PopoverPopup>
-    </Popover>
+    <div className="flex w-full flex-col gap-1">
+      <QueryViewFeedback view={membersView} />
+      <MemberCombobox
+        choice={{ type: MEMBER_CHOICE.member }}
+        disabled={disabled === true || awaitingReason}
+        label={t("owner")}
+        members={members}
+        onValueChange={(userId) => {
+          if (userId === null || userId === owner?.id) {
+            return;
+          }
+          onChange(userId);
+        }}
+        placeholder={tCommon("unassigned")}
+        selectedFallback={ownerFallback}
+        value={owner?.id ?? null}
+      />
+    </div>
   );
 };
 
@@ -358,7 +329,6 @@ export const AssigneePicker = ({
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
   const membersView = useQueryView(membersQuery);
   useQueryViewError(membersView, "AssigneePicker:query");
-  const members = membersView.type === "items" ? membersView.items : [];
   const [addOpen, setAddOpen] = useState(false);
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));
@@ -366,7 +336,7 @@ export const AssigneePicker = ({
   const addAssignee = useAddTaskAssignee(workspaceId);
   const removeAssignee = useRemoveTaskAssignee(workspaceId);
 
-  const unassignedMembers = workspaceMemberOptions(members).filter(
+  const unassignedMembers = workspaceMemberOptionsFromView(membersView).filter(
     (member) => !assignedIds.has(member.userId),
   );
 

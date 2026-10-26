@@ -68,6 +68,13 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
   }
   const leadUserId = content.workspace.leadUserId;
   const memberOptions = workspaceMemberOptions(content.members);
+  // A lead whose account is gone is not offered, but the field still shows
+  // that someone leads the matter, as the remove button beside it does.
+  const leadFallback =
+    leadUserId !== null &&
+    !memberOptions.some((member) => member.userId === leadUserId)
+      ? { userId: leadUserId, name: "", email: null, image: null }
+      : null;
 
   const handleSelect = (value: string | null) => {
     if (value === leadUserId) {
@@ -104,10 +111,12 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
             <MemberCombobox
               choice={{ type: MEMBER_CHOICE.member }}
               disabled={!canUpdate || updateWorkspace.isPending}
+              emptyLabel={t("workspaces.leadPicker.noMatchingMembers")}
               label={t("workspaces.lead")}
               members={memberOptions}
               onValueChange={handleSelect}
               placeholder={t("workspaces.leadEmpty")}
+              selectedFallback={leadFallback}
               value={leadUserId}
             />
           </div>

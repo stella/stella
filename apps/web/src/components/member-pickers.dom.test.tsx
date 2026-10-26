@@ -56,7 +56,7 @@ const { AuthenticatedUserProvider } =
 const { AddMemberDialog } =
   await import("@/components/workspaces/add-member-dialog");
 const { LeadSection } = await import("@/components/workspaces/lead-section");
-const { AssigneePicker } =
+const { AssigneePicker, OwnerPicker } =
   await import("@/components/workspaces/tasks/task-metadata");
 const { CorrespondenceAssigneeField } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field");
@@ -270,6 +270,58 @@ describe("member pickers save the chosen member", () => {
     expect(
       await sent("POST", new RegExp(`/workspaces/${WORKSPACE}$`, "u")),
     ).toEqual({ leadUserId: DVORAK.id });
+  });
+
+  test("a lead whose account is gone is still named", async () => {
+    reads = [
+      roleRead,
+      matterMembersRead(PEOPLE),
+      {
+        pattern: new RegExp(`/workspaces/${WORKSPACE}$`, "u"),
+        body: {
+          id: WORKSPACE,
+          name: "Novák v. Horák",
+          leadUserId: "00000000-0000-7000-8000-0000000000d1",
+        },
+      },
+    ];
+    await mount(() => <LeadSection workspaceId={WORKSPACE} />);
+    const input = await pickerInput(messages.workspaces.lead);
+
+    expect(input.value).toBe(messages.common.unknownUser);
+  });
+
+  test("task owner without one takes the chosen member", async () => {
+    reads = [roleRead, matterMembersRead(PEOPLE)];
+    const chosen: string[] = [];
+    await mount(() => (
+      <OwnerPicker
+        onChange={(userId) => chosen.push(userId)}
+        owner={null}
+        reason=""
+        workspaceId={WORKSPACE}
+      />
+    ));
+    await choose(await pickerInput(messages.tasks.owner), "dvorak");
+    expect(chosen).toEqual([DVORAK.id]);
+  });
+
+  test("task owner: a handover waits for its reason", async () => {
+    reads = [roleRead, matterMembersRead(PEOPLE)];
+    await mount(() => (
+      <OwnerPicker
+        onChange={() => undefined}
+        owner={{ id: DVORAK.id, image: null, name: DVORAK.name }}
+        reason=" "
+        workspaceId={WORKSPACE}
+      />
+    ));
+    const input = await testing.screen.findByRole("combobox", {
+      name: messages.tasks.owner,
+    });
+
+    expect(input).toHaveProperty("disabled", true);
+    expect(input).toHaveProperty("value", DVORAK.name);
   });
 
   test("task assignee", async () => {
