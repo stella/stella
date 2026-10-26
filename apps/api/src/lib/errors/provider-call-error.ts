@@ -114,7 +114,7 @@ export class ProviderCallError extends HandlerError {
     super({
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status,
-      code,
+      code: code ?? "internal_error",
       ...(retryAfterMs === undefined ? {} : { retryable: true, retryAfterMs }),
       ...(facts === undefined
         ? {}
@@ -173,7 +173,7 @@ export class ModelRunError extends HandlerError {
     { model, finish }: ModelRunErrorOptions,
     message: string = MODEL_RUN_ERROR_MESSAGE,
   ) {
-    super({ message, status: 502 });
+    super({ message, status: 502, code: "internal_error" });
     this.name = "ModelRunError";
     this.provider = model.provider;
     this.keySource = model.keySource;
@@ -278,7 +278,11 @@ export class ModelDeadlineExceededError extends HandlerError {
   }
 
   constructor({ deadlineMs }: { deadlineMs: number }) {
-    super({ message: MODEL_DEADLINE_EXCEEDED_MESSAGE, status: 502 });
+    super({
+      message: MODEL_DEADLINE_EXCEEDED_MESSAGE,
+      status: 502,
+      code: "ai_deadline_exceeded",
+    });
     this.name = "ModelDeadlineExceededError";
     this.deadlineMs = deadlineMs;
   }
