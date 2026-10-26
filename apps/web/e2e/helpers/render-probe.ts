@@ -110,14 +110,14 @@ export const measureAction = async (
     );
   }
   const network = pageNetwork(page);
-  const waitUntilQuiet = async () => {
+  const waitUntilQuiet = async (actionEndedAt = 0) => {
     const deadline = Date.now() + TIMEOUT_MS;
     while (Date.now() < deadline) {
       const state = await page.evaluate(readBrowserProbe, "read");
       const reactQuiet =
         state.rendererCount > 0 &&
         state.observedCommits > 0 &&
-        Date.now() - state.lastCommitAt >= QUIET_MS;
+        Date.now() - Math.max(actionEndedAt, state.lastCommitAt) >= QUIET_MS;
       if (
         reactQuiet &&
         network.pending.size === 0 &&
@@ -138,7 +138,7 @@ export const measureAction = async (
   }
   const startedAt = reset.startedAt;
   const actionResult = await action();
-  await waitUntilQuiet();
+  await waitUntilQuiet(Date.now());
   const result = await page.evaluate(readBrowserProbe, "read");
   if (result.rendererCount === 0 || result.observedCommits === 0) {
     throw new Error(`The render probe lost its React renderer during ${label}`);
@@ -162,7 +162,10 @@ export const measureAction = async (
   return {
     ...result.snapshot,
     label,
-    wallMs: Math.max(0, result.lastCommitAt - startedAt),
+    wallMs:
+      result.snapshot.commits === 0
+        ? 0
+        : Math.max(0, result.lastCommitAt - startedAt),
     longTasks: result.longTasks,
     longTaskMs: result.longTaskMs,
     ...(typeof textDeltas === "number"

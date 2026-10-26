@@ -80,6 +80,106 @@ test("an action waits for a finite request that began before measurement", async
   expect(await response).toBe(204);
 });
 
+test("an action includes delayed React updates without network activity", async ({
+  context,
+  page,
+}) => {
+  test.skip(
+    !EXPECTS_DEV_RUNTIME,
+    "The probe measures the development renderer.",
+  );
+  await installRenderProbe(context);
+  await page.goto("/dev?visual=task-metadata", {
+    waitUntil: "domcontentloaded",
+  });
+  await expect(
+    page.locator('[data-playground-section="task-metadata"]'),
+  ).toBeVisible();
+  const directory = await mkdtemp(
+    new URL("../render-census-delayed-", import.meta.url),
+  );
+  const fixture = page.locator("#render-census-delayed");
+  try {
+    await writeFile(
+      path.join(directory, "component.tsx"),
+      `import { useState } from "react";
+export const RenderCensusDelayed = () => {
+  const [status, setStatus] = useState("idle");
+  return <div>
+    <button onClick={() => { setTimeout(() => setStatus("short complete"), 100); }}>Short update</button>
+    <button onClick={() => { setTimeout(() => setStatus("late complete"), 100); }}>Late update</button>
+    <output>{status}</output>
+  </div>;
+};
+`,
+    );
+    const mountPath = path.join(directory, "mount.tsx");
+    await writeFile(
+      mountPath,
+      `import { createRoot } from "react-dom/client";
+import { RenderCensusDelayed } from "./component";
+const host = document.createElement("div");
+host.id = "render-census-delayed";
+document.body.append(host);
+createRoot(host).render(<RenderCensusDelayed />);
+`,
+    );
+    await page.evaluate(async (moduleUrl) => {
+      await import(moduleUrl);
+    }, `/@fs${mountPath}`);
+    await expect(fixture.getByText("idle", { exact: true })).toBeVisible();
+
+    const short = await measureAction(
+      page,
+      "short delayed update",
+      async () => {
+        await fixture
+          .getByRole("button", { name: "Short update", exact: true })
+          .click();
+      },
+    );
+    const shortComponent = short.components["RenderCensusDelayed"];
+    if (shortComponent === undefined) {
+      throw new Error("The short delayed render was not measured");
+    }
+    expect(shortComponent.renders).toBeGreaterThan(0);
+    expect(short.wallMs).toBeGreaterThanOrEqual(100);
+    await expect(
+      fixture.getByText("short complete", { exact: true }),
+    ).toBeVisible();
+
+    const late = await measureAction(page, "late delayed update", async () => {
+      // real-time: consume one quiet window before scheduling work that follows the action.
+      await sleep(600);
+      await fixture
+        .getByRole("button", { name: "Late update", exact: true })
+        .click();
+    });
+    const lateComponent = late.components["RenderCensusDelayed"];
+    if (lateComponent === undefined) {
+      throw new Error(
+        "The delayed render after the long action was not measured",
+      );
+    }
+    expect(lateComponent.renders).toBeGreaterThan(0);
+    expect(late.wallMs).toBeGreaterThanOrEqual(700);
+    await expect(
+      fixture.getByText("late complete", { exact: true }),
+    ).toBeVisible();
+    const idle = await measureAction(
+      page,
+      "idle fixture",
+      async () => undefined,
+    );
+    expect(idle.commits).toBe(0);
+    expect(idle.wallMs).toBe(0);
+  } finally {
+    await page.close().finally(async () => {
+      await rm(directory, { recursive: true, force: true });
+    });
+  }
+});
+
 test("React Refresh keeps rendering through the probe after a source update", async ({
   context,
   page,

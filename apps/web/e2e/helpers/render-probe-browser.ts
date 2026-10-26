@@ -25,7 +25,7 @@ const state: BrowserRenderMeasurement = {
     probe.reset();
     observer.takeRecords();
     startedAt = Date.now();
-    state.lastCommitAt = 0;
+    state.lastCommitAt = startedAt;
     longTasks = 0;
     longTaskMs = 0;
     return startedAt;
