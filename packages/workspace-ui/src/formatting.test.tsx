@@ -34,6 +34,10 @@ const renderIn = (formattingLocale: string, node: ReactNode) =>
     </IntlProvider>,
   );
 
+// Expected text goes through the same escaping as the rendered markup (fr-CH
+// groups with an apostrophe).
+const asMarkup = (text: string) => Bun.escapeHTML(text);
+
 const CALCULATION_LABELS = {
   choose: "Choose calculation",
   kinds: {
@@ -72,7 +76,7 @@ describe("formatting locale", () => {
       );
 
       expect(markup).toContain(
-        new Intl.NumberFormat(locale).format(1_234_567.5),
+        asMarkup(new Intl.NumberFormat(locale).format(1_234_567.5)),
       );
     });
 
@@ -90,11 +94,13 @@ describe("formatting locale", () => {
       );
 
       expect(markup).toContain(
-        formatMoneyCents({
-          amountCents: cents(123_456),
-          currency: "EUR",
-          locale,
-        }),
+        asMarkup(
+          formatMoneyCents({
+            amountCents: cents(123_456),
+            currency: "EUR",
+            locale,
+          }),
+        ),
       );
     });
 
@@ -108,12 +114,14 @@ describe("formatting locale", () => {
       );
 
       expect(markup).toContain(
-        new Intl.DateTimeFormat(locale, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          timeZone: TIME_ZONE,
-        }).format(Date.UTC(2026, 9, 26)),
+        asMarkup(
+          new Intl.DateTimeFormat(locale, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            timeZone: TIME_ZONE,
+          }).format(Date.UTC(2026, 9, 26)),
+        ),
       );
     });
 
@@ -130,7 +138,9 @@ describe("formatting locale", () => {
         />,
       );
 
-      expect(markup).toContain(new Intl.NumberFormat(locale).format(1_234_567));
+      expect(markup).toContain(
+        asMarkup(new Intl.NumberFormat(locale).format(1_234_567)),
+      );
     });
   }
 
