@@ -16,7 +16,7 @@ import type { KanbanCardDragItem } from "./kanban-selection.logic";
 
 const card = (
   entityId: string,
-  subgroupValue: string | null | undefined = undefined,
+  subgroupValue?: string | null,
 ): KanbanCardDragItem => ({
   entityId,
   name: `Card ${entityId}`,
