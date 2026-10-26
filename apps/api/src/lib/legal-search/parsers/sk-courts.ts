@@ -40,6 +40,11 @@ import { PDF, SecurityError } from "@libpdf/core";
 
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import {
+  classifyLineWrap,
+  LINE_JOIN,
+  lineJoinOf,
+} from "@stll/legal-ast/line-wrap";
+import {
   isSkDecisionTitle,
   isSkHoldingMarker,
   isSkInstructionMarker,
@@ -389,8 +394,11 @@ const buildSpanSegments = (
 const STARTS_NEW_PARAGRAPH_RE =
   /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
 
+/** A line set larger than this is the decision title. */
+const TITLE_FONT_SIZE = 14;
+
 function isStructuralStart(line: PdfLine, section: Section): boolean {
-  if (line.fontSize > 14) {
+  if (line.fontSize > TITLE_FONT_SIZE) {
     return true; // title
   }
   if (
@@ -419,11 +427,34 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
   return false;
 }
 
+/**
+ * Whether each line continues the sentence of the line before it, as the
+ * shared line-wrap reader decides: the line above was full, ended by the
+ * layout inside a sentence, as in `dňa 22.` / `10. 2003` or `exekútora` /
+ * `JUDr. A. B.`. Such a line opens nothing, whatever its first word looks
+ * like. Bold lines (section markers, headings) and the title are not
+ * running prose, so they neither count toward the page's line width nor
+ * continue anything.
+ */
+const sentenceContinuations = (lines: readonly PdfLine[]): boolean[] => {
+  const prose = lines.map(({ text, bold, fontSize }) =>
+    bold || fontSize > TITLE_FONT_SIZE ? null : text,
+  );
+  const classification = classifyLineWrap(prose);
+  return prose.map(
+    (text, index) =>
+      index > 0 &&
+      lineJoinOf(classification, prose[index - 1] ?? null, text) !==
+        LINE_JOIN.BREAK,
+  );
+};
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
+  const continuations = sentenceContinuations(lines);
   let section: Section = "preamble";
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     if (line.bold && isSkHoldingMarker(line.text)) {
       section = "holding";
     }
@@ -442,13 +473,16 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     // - first line
     // - bold changed
     // - font size changed
-    // - line is a structural start (numbered, section marker)
+    // - line is a structural start (numbered, section marker) that does
+    //   not continue the previous line's sentence
     // - previous line was bold (section markers are standalone)
     // Font size tolerance: libpdf/core may report
     // slightly different sizes across pages (e.g., 10.0
     // vs 9.98) due to PDF matrix rounding.
     const fontSizeChanged =
       Math.abs(line.fontSize - (prev?.fontSize ?? 0)) > 0.5;
+    const structuralStart =
+      continuations[index] !== true && isStructuralStart(line, section);
 
     // SK ÚS PDFs sometimes bold a short continuation
     // (e.g., "zrušuje.", "1 014,41 eur ...") that belongs
@@ -457,17 +491,13 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     // section marker. This preserves the prev.bold rule
     // that prevents merging after section headings.
     const boldContinuation =
-      prev &&
-      !prev.bold &&
-      line.bold &&
-      !fontSizeChanged &&
-      !isStructuralStart(line, section);
+      prev && !prev.bold && line.bold && !fontSizeChanged && !structuralStart;
 
     const startNew =
       !prev ||
       (line.bold !== prev.bold && !boldContinuation) ||
       fontSizeChanged ||
-      isStructuralStart(line, section) ||
+      structuralStart ||
       prev.bold;
 
     if (startNew) {
@@ -547,7 +577,10 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     const { text, bold, fontSize } = line;
 
     // Decision title: large font or matching decision type
-    if (section === "preamble" && (fontSize > 14 || isSkDecisionTitle(text))) {
+    if (
+      section === "preamble" &&
+      (fontSize > TITLE_FONT_SIZE || isSkDecisionTitle(text))
+    ) {
       blocks.push({
         id: makeId(),
         anchorId: "h-title",

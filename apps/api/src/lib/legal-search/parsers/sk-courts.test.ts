@@ -239,3 +239,124 @@ test("bold Roman verdict items keep their holding role and reasoning titles beco
     documentAst.blocks.find((block) => block.plainText === "XII. Argumentacia"),
   ).toMatchObject({ type: "heading", level: 3 });
 });
+
+describe("paragraphs across the PDF's line wraps", () => {
+  type Line = { text: string; bold?: boolean; fontSize?: number };
+  const plain = (text: string): Line => ({ text });
+  const bold = (text: string): Line => ({ text, bold: true });
+
+  /**
+   * A general-court resolution as libpdf reads it: one line per printed
+   * line, justified near column 80. Written for this test in the court's
+   * register; not a real decision.
+   */
+  const RESOLUTION: readonly Line[] = [
+    { text: "Uznesenie", fontSize: 20 },
+    plain(
+      "Okresný súd Mesto v exekučnej veci oprávneného: Firma, s. r. o., so sídlom",
+    ),
+    plain(
+      "Mesto, Hlavná 1, proti povinnému: A. B., bytom Mesto, o vymoženie sumy 1 000",
+    ),
+    plain(
+      "eur s príslušenstvom, vedenej u súdneho exekútora so sídlom v Meste, ktorým je",
+    ),
+    plain(
+      "JUDr. Adam Vzorový, pod sp. zn. EX 100/2003, o návrhu povinného na zastavenie",
+    ),
+    plain("exekúcie, takto"),
+    bold("r o z h o d o l :"),
+    plain("Exekúciu z a s t a v u j e ."),
+    bold("o d ô v o d n e n i e :"),
+    plain(
+      "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22.",
+    ),
+    plain(
+      "10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+    ),
+    plain(
+      "2. Povinný podal návrh na zastavenie exekúcie, ktorý odôvodnil tým, že jeho",
+    ),
+    plain(
+      "pohľadávka zanikla zaplatením ešte pred začatím exekúcie, čo preukázal v bode",
+    ),
+    plain("22."),
+    plain(
+      "3. Súd návrhu vyhovel, lebo pohľadávka bola zaplatená, a exekúciu zastavil.",
+    ),
+    bold("P o u č e n i e :"),
+    plain(
+      "Proti tomuto uzneseniu je prípustné odvolanie do pätnástich dní odo dňa jeho",
+    ),
+    plain("doručenia na súd, ktorý rozhodnutie vydal."),
+    plain("V Meste dňa 1. februára 2004"),
+    plain("JUDr. Ivana Vzorová"),
+    plain("sudkyňa"),
+  ];
+
+  const blocksOf = (lines: readonly Line[]) =>
+    buildSkDecisionPdfBlocks({
+      lines: lines.map(({ text, bold: isBold = false, fontSize = 10 }) => ({
+        text,
+        segments: [isBold ? { text, bold: true } : { text }],
+        bold: isBold,
+        fontSize,
+        pageIndex: 0,
+      })),
+      metadata: {
+        court: "Okresný súd Mesto",
+        caseNumber: "1Er/1/2003",
+        ecli: undefined,
+      },
+    });
+
+  test("a sentence wrapped before an academic title stays one paragraph", () => {
+    const intro = blocksOf(RESOLUTION).find((block) =>
+      block.plainText.startsWith("Okresný súd Mesto"),
+    );
+    expect(intro?.plainText).toBe(
+      "Okresný súd Mesto v exekučnej veci oprávneného: Firma, s. r. o., so sídlom Mesto, Hlavná 1, proti povinnému: A. B., bytom Mesto, o vymoženie sumy 1 000 eur s príslušenstvom, vedenej u súdneho exekútora so sídlom v Meste, ktorým je JUDr. Adam Vzorový, pod sp. zn. EX 100/2003, o návrhu povinného na zastavenie exekúcie, takto",
+    );
+  });
+
+  test("a date wrapped after its day stays in its paragraph and opens no point", () => {
+    const blocks = blocksOf(RESOLUTION);
+    expect(
+      blocks.find((block) => block.plainText.startsWith("1. ")),
+    ).toMatchObject({
+      type: "paragraph",
+      plainText:
+        "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22. 10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+    });
+    expect(blocks.some((block) => block.plainText.startsWith("10. 2003"))).toBe(
+      false,
+    );
+  });
+
+  test("numbered points, the closing formula and the signature stay apart", () => {
+    const texts = blocksOf(RESOLUTION).map((block) => block.plainText);
+    expect(texts.slice(-8)).toEqual([
+      "o d ô v o d n e n i e :",
+      "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22. 10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+      "2. Povinný podal návrh na zastavenie exekúcie, ktorý odôvodnil tým, že jeho pohľadávka zanikla zaplatením ešte pred začatím exekúcie, čo preukázal v bode 22.",
+      "3. Súd návrhu vyhovel, lebo pohľadávka bola zaplatená, a exekúciu zastavil.",
+      "P o u č e n i e :",
+      "Proti tomuto uzneseniu je prípustné odvolanie do pätnástich dní odo dňa jeho doručenia na súd, ktorý rozhodnutie vydal.",
+      "V Meste dňa 1. februára 2004",
+      "JUDr. Ivana Vzorová sudkyňa",
+    ]);
+  });
+
+  test("a numbered point after a day number at a full line's end stays a point", () => {
+    const point =
+      "10. Súd ďalej uvádza, že oprávnený sa k návrhu povinného nijako nevyjadril.";
+    const texts = blocksOf([
+      ...RESOLUTION.slice(0, 9),
+      plain(
+        "1. Exekútor začal exekúciu a povinný sa k nej vyjadril tak, ako uvádza bod 22.",
+      ),
+      plain(point),
+    ]).map((block) => block.plainText);
+    expect(texts.at(-1)).toBe(point);
+  });
+});

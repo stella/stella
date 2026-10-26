@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, ParagraphBlock } from "./document-ast.js";
 import {
+  classifyLineWrap,
   LINE_CONTINUATION_SEPARATOR,
   LINE_JOIN,
   LINE_WRAP_TYPE,
+  lineJoinOf,
   planBlockLineWrap,
   planLineWrap,
 } from "./line-wrap.js";
@@ -196,5 +198,99 @@ describe("hard-wrapped decision text", () => {
     expect(continuations.has(`b${String(numbered)}`)).toBe(false);
     expect(continuations.has(`b${String(numbered + 1)}`)).toBe(false);
     expect(continuations.has(`b${String(signature)}`)).toBe(false);
+  });
+});
+
+/**
+ * A Slovak general-court resolution as a PDF lays it out: one line per
+ * printed line, justified near column 78. Written for this test in the
+ * court's register; not a real decision.
+ */
+const WRAPPED_SLOVAK_DECISION = [
+  "Okresný súd Mesto v exekučnej veci oprávneného: Firma, s. r. o., so sídlom",
+  "Mesto, Hlavná 1, proti povinnému: A. B., bytom Mesto, o vymoženie sumy 1 000",
+  "eur s príslušenstvom, vedenej u súdneho exekútora so sídlom v Meste, ktorým je",
+  "JUDr. Adam Vzorový, pod sp. zn. EX 100/2003, o návrhu povinného na zastavenie",
+  "exekúcie, takto",
+  "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22.",
+  "10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+  "2. Povinný podal návrh na zastavenie exekúcie, ktorý odôvodnil tým, že jeho",
+  "pohľadávka zanikla zaplatením ešte pred začatím exekúcie, čo preukázal v bode",
+  "22.",
+  "3. Súd návrhu vyhovel, lebo pohľadávka bola zaplatená, a exekúciu zastavil.",
+  "V Meste dňa 22.",
+  "10. 2004",
+] as const;
+
+describe("line boundaries a wrapped Slovak decision continues", () => {
+  const joinAfter = (line: string): LineJoin => {
+    const index = WRAPPED_SLOVAK_DECISION.indexOf(
+      line as (typeof WRAPPED_SLOVAK_DECISION)[number],
+    );
+    const classification = classifyLineWrap(WRAPPED_SLOVAK_DECISION);
+    return lineJoinOf(
+      classification,
+      WRAPPED_SLOVAK_DECISION[index] ?? null,
+      WRAPPED_SLOVAK_DECISION[index + 1] ?? null,
+    );
+  };
+
+  test("the resolution is read as wrapped", () => {
+    expect(classifyLineWrap(WRAPPED_SLOVAK_DECISION)).toMatchObject({
+      type: LINE_WRAP_TYPE.FIXED_WIDTH_WRAPPED,
+    });
+  });
+
+  test("a day number ending a full line continues into the month and year", () => {
+    expect(
+      joinAfter(
+        "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22.",
+      ),
+    ).toBe(LINE_JOIN.SPACE);
+  });
+
+  test("an academic title opening a line inside a sentence continues it", () => {
+    expect(
+      joinAfter(
+        "eur s príslušenstvom, vedenej u súdneho exekútora so sídlom v Meste, ktorým je",
+      ),
+    ).toBe(LINE_JOIN.SPACE);
+  });
+
+  test("a numbered point after a closed sentence still opens a new paragraph", () => {
+    expect(joinAfter("22.")).toBe(LINE_JOIN.BREAK);
+    expect(
+      joinAfter(
+        "10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+      ),
+    ).toBe(LINE_JOIN.BREAK);
+  });
+
+  test("a short line the author ended is not continued, even by a date", () => {
+    expect(joinAfter("V Meste dňa 22.")).toBe(LINE_JOIN.BREAK);
+  });
+
+  test("the display plan reads each boundary the same way", () => {
+    const classification = classifyLineWrap(WRAPPED_SLOVAK_DECISION);
+    const { joins } = planLineWrap(WRAPPED_SLOVAK_DECISION);
+    expect(joins).toEqual(
+      WRAPPED_SLOVAK_DECISION.slice(0, -1).map((line, index) =>
+        lineJoinOf(
+          classification,
+          line,
+          WRAPPED_SLOVAK_DECISION[index + 1] ?? null,
+        ),
+      ),
+    );
+  });
+
+  test("an unwrapped document continues no line", () => {
+    expect(
+      lineJoinOf(
+        { type: LINE_WRAP_TYPE.UNWRAPPED },
+        "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22.",
+        "10. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+      ),
+    ).toBe(LINE_JOIN.BREAK);
   });
 });
