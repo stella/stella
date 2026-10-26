@@ -85,7 +85,7 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
-import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference";
+import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference.logic";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -670,6 +670,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <AiHeadnotes
         analysis={completeAnalysis}
         blocks={astBlocks}
+        language={decision.language}
         onAnchorClick={jumpToAnchor}
       />
     ) : null;

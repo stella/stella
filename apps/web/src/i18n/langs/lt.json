@@ -1147,6 +1147,7 @@
       "citedDecisionPassage": "Sprendimo ištrauka",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Eiti į pastraipą} few {Eiti į pastraipas} many {Eiti į pastraipas} other {Eiti į pastraipas}}",
       "judgeRole": {
         "advocateGeneral": "Generalinis advokatas",
         "dissenting": "Atskiroji nuomonė",

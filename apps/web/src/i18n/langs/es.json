@@ -1147,6 +1147,7 @@
       "citedDecisionPassage": "Pasaje de la resolución",
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ir al párrafo} other {Ir a los párrafos}}",
       "judgeRole": {
         "advocateGeneral": "Abogado General",
         "dissenting": "Voto particular",

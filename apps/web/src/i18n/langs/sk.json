@@ -1147,6 +1147,7 @@
       "citedDecisionPassage": "Pasáž v rozhodnutí",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Prejsť na odsek} few {Prejsť na odseky} other {Prejsť na odseky}}",
       "judgeRole": {
         "advocateGeneral": "Generálny advokát",
         "dissenting": "Odlišné stanovisko",
