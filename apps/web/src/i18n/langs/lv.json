@@ -1486,7 +1486,7 @@
       "label": "Simulēts AI"
     },
     "modelSelector": {
-      "allModels": "Visi modeļi ({count, number})",
+      "allModels": "Visi modeļi",
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
       "belowFrontier": "Zem labākajiem kompromisiem",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Paaugstināt klientam",
       "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
       "promotedSuccess": "Lieta paaugstināta",
+      "recentClients": "Nesenie klienti",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
       "parties": "Puses"
+    },
+    "switcher": {
+      "searchPlaceholder": "Atrast lietu…",
+      "trigger": "Mainīt lietu",
+      "viewAll": "Skatīt visas lietas",
+      "viewAllForClient": "Skatīt visas klienta {clientName} lietas"
     },
     "table": {
       "clearFlags": "Notīrīt atzīmes",

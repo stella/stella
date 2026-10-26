@@ -1486,7 +1486,7 @@
       "label": "IA simulée"
     },
     "modelSelector": {
-      "allModels": "Tous les modèles ({count, number})",
+      "allModels": "Tous les modèles",
       "autoDescription": "Choisit automatiquement le modèle et le niveau de raisonnement.",
       "autoLabel": "Automatique",
       "belowFrontier": "En deçà des meilleurs compromis",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Promouvoir au client",
       "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
       "promotedSuccess": "Dossier promu",
+      "recentClients": "Clients récents",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "Ce numéro de référence est déjà utilisé",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rechercher un dossier…",
+      "trigger": "Changer de dossier",
+      "viewAll": "Voir tous les dossiers",
+      "viewAllForClient": "Voir tous les dossiers du client {clientName}"
     },
     "table": {
       "clearFlags": "Effacer les marqueurs",

@@ -1486,7 +1486,7 @@
       "label": "Simuleeritud AI"
     },
     "modelSelector": {
-      "allModels": "Kõik mudelid ({count, number})",
+      "allModels": "Kõik mudelid",
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
       "belowFrontier": "Allpool parimaid kompromisse",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Eduta kliendile",
       "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
       "promotedSuccess": "Toimik edutatud",
+      "recentClients": "Hiljutised kliendid",
       "removeClient": "Eemalda klient",
       "removeParty": "Eemalda osapool",
       "removePartyConfirm": "Kas olete kindel, et soovite selle osapoole toimikust eemaldada?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {
       "parties": "Osapooled"
+    },
+    "switcher": {
+      "searchPlaceholder": "Leia toimik…",
+      "trigger": "Vaheta toimikut",
+      "viewAll": "Kuva kõik toimikud",
+      "viewAllForClient": "Kuva kõik kliendi {clientName} toimikud"
     },
     "table": {
       "clearFlags": "Eemalda märgised",

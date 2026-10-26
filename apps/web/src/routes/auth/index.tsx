@@ -6,7 +6,9 @@ import * as v from "valibot";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import {
   getOauthHashFragment,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { pageTitle } from "@/lib/page-title";
@@ -29,6 +31,20 @@ export const Route = createFileRoute("/auth/")({
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
     if (context.session) {
+      // A client that asks for a fresh sign-in gets the form even with a
+      // session; the provider resumes the request for whoever signs in.
+      if (
+        hasOauthPrompt(
+          getSignedOauthQuery({
+            hash: location.hash,
+            searchStr: location.searchStr,
+          }),
+          "login",
+        )
+      ) {
+        return;
+      }
+
       const oauthRedirectTo = getOauthPostLoginRedirectTo({
         hash: location.hash,
         searchStr: location.searchStr,

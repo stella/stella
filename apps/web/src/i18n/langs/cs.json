@@ -1486,7 +1486,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všechny modely ({count, number})",
+      "allModels": "Všechny modely",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod nejlepšími kompromisy",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Povýšit na klientský spis",
       "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
       "promotedSuccess": "Spis povýšen",
+      "recentClients": "Nedávní klienti",
       "removeClient": "Odebrat klienta",
       "removeParty": "Odebrat stranu",
       "removePartyConfirm": "Opravdu chcete odebrat tuto stranu ze spisu?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "Toto referenční číslo je již použito",
     "sections": {
       "parties": "Strany"
+    },
+    "switcher": {
+      "searchPlaceholder": "Najít spis…",
+      "trigger": "Přepnout spis",
+      "viewAll": "Zobrazit všechny spisy",
+      "viewAllForClient": "Zobrazit všechny spisy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Odstranit označení",

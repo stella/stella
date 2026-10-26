@@ -1486,7 +1486,7 @@
       "label": "ذكاء اصطناعي مُحاكى"
     },
     "modelSelector": {
-      "allModels": "كل النماذج ({count, number})",
+      "allModels": "كل النماذج",
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",
       "belowFrontier": "دون أفضل الموازنات",
@@ -6432,6 +6432,7 @@
       "promoteCta": "الترقية إلى عميل",
       "promoteDescription": "أرفِق عميلًا لمشاركة هذا الملف القانوني مع الفريق. هذا الإجراء أحادي الاتجاه — لا يمكن للملفات المُرقّاة العودة إلى الحالة الشخصية.",
       "promotedSuccess": "تمت ترقية الملف القانوني",
+      "recentClients": "العملاء الأخيرون",
       "removeClient": "إزالة العميل",
       "removeParty": "إزالة الطرف",
       "removePartyConfirm": "هل أنت متأكد من رغبتك في إزالة هذا الطرف من الملف القانوني؟",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {
       "parties": "الأطراف"
+    },
+    "switcher": {
+      "searchPlaceholder": "ابحث عن ملف قانوني…",
+      "trigger": "تبديل الملف القانوني",
+      "viewAll": "عرض جميع الملفات القانونية",
+      "viewAllForClient": "عرض جميع الملفات القانونية للعميل {clientName}"
     },
     "table": {
       "clearFlags": "مسح العلامات",

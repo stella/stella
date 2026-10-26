@@ -1486,7 +1486,7 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
-      "allModels": "Visi modeliai ({count, number})",
+      "allModels": "Visi modeliai",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
       "belowFrontier": "Žemiau geriausių kompromisų",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Paaukštinti į klientinę",
       "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
       "promotedSuccess": "Byla paaukštinta",
+      "recentClients": "Naujausi klientai",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {
       "parties": "Šalys"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rasti bylą…",
+      "trigger": "Pakeisti bylą",
+      "viewAll": "Rodyti visas bylas",
+      "viewAllForClient": "Rodyti visas kliento {clientName} bylas"
     },
     "table": {
       "clearFlags": "Išvalyti žymas",

@@ -1195,7 +1195,6 @@
     "workspaces.infosoud.statusDate",
     "workspaces.infosoud.validTo",
     "workspaces.lockMatter",
-    "workspaces.mattersCount",
     "workspaces.members.alreadyMember",
     "workspaces.members.cannotRemoveLast",
     "workspaces.noMatters",

@@ -1486,7 +1486,7 @@
       "label": "Szimulált AI"
     },
     "modelSelector": {
-      "allModels": "Összes modell ({count, number})",
+      "allModels": "Összes modell",
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
       "belowFrontier": "A legjobb kompromisszumok alatt",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Előléptetés ügyfélüggyé",
       "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
       "promotedSuccess": "Ügy előléptetve",
+      "recentClients": "Legutóbbi ügyfelek",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
       "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {
       "parties": "Felek"
+    },
+    "switcher": {
+      "searchPlaceholder": "Ügy keresése…",
+      "trigger": "Ügy váltása",
+      "viewAll": "Összes ügy megjelenítése",
+      "viewAllForClient": "{clientName} ügyfél összes ügyének megjelenítése"
     },
     "table": {
       "clearFlags": "Jelölések törlése",

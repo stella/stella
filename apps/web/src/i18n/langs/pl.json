@@ -1486,7 +1486,7 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
-      "allModels": "Wszystkie modele ({count, number})",
+      "allModels": "Wszystkie modele",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
       "belowFrontier": "Poniżej najlepszych kompromisów",
@@ -6432,6 +6432,7 @@
       "promoteCta": "Awansuj na sprawę kliencką",
       "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne — awansowane sprawy nie mogą wrócić do osobistych.",
       "promotedSuccess": "Sprawa awansowana",
+      "recentClients": "Ostatni klienci",
       "removeClient": "Usuń klienta",
       "removeParty": "Usuń stronę",
       "removePartyConfirm": "Czy na pewno chcesz usunąć tę stronę ze sprawy?",
@@ -6643,6 +6644,12 @@
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {
       "parties": "Strony"
+    },
+    "switcher": {
+      "searchPlaceholder": "Znajdź sprawę…",
+      "trigger": "Przełącz sprawę",
+      "viewAll": "Pokaż wszystkie sprawy",
+      "viewAllForClient": "Pokaż wszystkie sprawy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Wyczyść oznaczenia",
