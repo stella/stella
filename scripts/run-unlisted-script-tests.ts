@@ -229,15 +229,30 @@ type SelectScriptTestsOptions = {
   readonly tracked?: ReadonlySet<string>;
 };
 
+// A submodule's gitlink is a commit pointer, not a file a test reads; the
+// submodule's own files are not tracked here either.
+const GITLINK_MODE = "160000";
+
 const trackedFiles = (): Set<string> => {
-  const result = Bun.spawnSync(["git", "ls-files", "-z"], {
+  const result = Bun.spawnSync(["git", "ls-files", "-z", "--stage"], {
     cwd: REPO_ROOT,
     stdout: "pipe",
   });
   if (result.exitCode !== 0) {
     panic("Could not list tracked repository files");
   }
-  return new Set(result.stdout.toString().split("\0").filter(Boolean));
+  return new Set(
+    result.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .flatMap((entry) => {
+        const tab = entry.indexOf("\t");
+        return entry.startsWith(`${GITLINK_MODE} `) || tab === -1
+          ? []
+          : [entry.slice(tab + 1)];
+      }),
+  );
 };
 
 /** Select tests only when HEAD proves their code or declared data changed. */
@@ -439,6 +454,11 @@ export const undeclaredTracedFiles = ({
       relative.startsWith(".git/") ||
       closure.has(relative) ||
       !tracked.has(relative) ||
+      // Bun reads these for every test, and a change to any of them already
+      // selects every test.
+      Object.values(SCRIPT_TEST_ALL_RULES).some((rule) =>
+        rule.test(relative),
+      ) ||
       globs.some((glob) => glob.match(relative))
     ) {
       continue;

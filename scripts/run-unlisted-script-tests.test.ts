@@ -652,6 +652,29 @@ describe("directory scan coverage", () => {
     ).toThrow("Truncated trace record");
   });
 
+  test("reads of files whose change selects every test need no declaration", () => {
+    const shared = [
+      "package.json",
+      "bunfig.toml",
+      "tsconfig.scripts.json",
+      "packages/sha256/package.json",
+      "packages/sha256/tsconfig.json",
+    ];
+    const trace = [...shared, "scripts/data.json"]
+      .map(
+        (file) => `1 openat(AT_FDCWD, "${path.resolve(file)}", O_RDONLY) = 3`,
+      )
+      .join("\n");
+    expect(
+      undeclaredTracedFiles({
+        trace,
+        closure: new Set(),
+        declared: [],
+        tracked: new Set([...shared, "scripts/data.json"]),
+      }),
+    ).toEqual(["scripts/data.json"]);
+  });
+
   test("an escaped quote before an ellipsis is text, not a cut string", () => {
     for (const script of [
       String.raw`git diff \"origin/$BASE_REF\"...HEAD`,
