@@ -194,7 +194,13 @@ runs:
         if [[ "$MODE" == "update" ]]; then
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing:update
         else
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing
+          # A baseline difference is a report, not a failure: the verdict
+          # passes a screenshot-only failure with a warning (the diff images
+          # stay in the artifact) and fails on anything else.
+          status=0
+          export PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/apps/web/.cache/marketing-report.json"
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing || status=$?
+          bun "$GITHUB_WORKSPACE/scripts/marketing-screenshot-verdict.ts" "$PLAYWRIGHT_JSON_OUTPUT_FILE" "$status"
         fi
 
     - name: Stop production web server

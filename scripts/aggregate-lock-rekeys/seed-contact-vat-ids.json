@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "150c8cdf0aecb2f554acc69954b4731add918733069d71a1ab2e5297b110cb4b",
+    "to": "4520f47f0843baf6b7d849352ada98c187c2f93ae190d5a83a04d18efbdb332b",
+    "reason": "Existing seed transaction; seeding contacts' VAT numbers as VAT ids changes the inserted values, not the transaction boundary."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "42c4ec4b26e56ef8c424bb5f053a93e790862dd7a52816f41c3211c65fb3258b",
+    "to": "5abe04df0c869b1faa6517be46cf5595331cb2a0c86b64533c49b0987494b2cb",
+    "reason": "Existing seed transaction; seeding contacts' VAT numbers as VAT ids changes the inserted values, not the transaction boundary."
+  }
+]

@@ -6,10 +6,12 @@ import {
   CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
+  clipboardPastePreview,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
@@ -25,13 +27,17 @@ import {
   highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
+  NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
   refreshClipboardEditorName,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "../src/clipboard/clipboard-logic";
-import type { ClipboardItem } from "../src/clipboard/clipboard-types";
+import type {
+  ClipboardCopyFormat,
+  ClipboardItem,
+} from "../src/clipboard/clipboard-types";
 
 const TEXT_ITEM = {
   copiedAt: "2026-08-23T10:00:00Z",
@@ -1047,6 +1053,59 @@ describe("clipboard editor name ownership", () => {
           refreshClipboardEditorName({ type: "edited", value }, externalName),
         ).toEqual({ type: "edited", value });
       }
+    }
+  });
+});
+
+describe("paste format previews", () => {
+  // Keys of a total map, so a new copy format cannot skip this matrix.
+  const FORMATS = Object.keys({
+    original: true,
+    plainText: true,
+  } as const satisfies Record<ClipboardCopyFormat, true>).filter(
+    (format): format is ClipboardCopyFormat =>
+      format === "original" || format === "plainText",
+  );
+
+  test("only a formatted clip renders as plain text, and only for its own preview", () => {
+    for (const item of ITEMS) {
+      for (const highlighted of ITEMS) {
+        for (const format of FORMATS) {
+          const preview = clipboardPastePreview(highlighted, format);
+          const expected =
+            item.id === highlighted.id &&
+            item.type === "formattedText" &&
+            format === "plainText"
+              ? "plainText"
+              : "original";
+          expect(clipboardCardRenderFormat(item, [preview])).toBe(expected);
+          expect(
+            clipboardCardRenderFormat(item, [
+              NO_CLIPBOARD_PASTE_PREVIEW,
+              preview,
+            ]),
+          ).toBe(expected);
+        }
+      }
+    }
+  });
+
+  test("a card without previews renders its clip as copied", () => {
+    for (const item of ITEMS) {
+      expect(clipboardCardRenderFormat(item, [])).toBe("original");
+      expect(
+        clipboardCardRenderFormat(item, [NO_CLIPBOARD_PASTE_PREVIEW]),
+      ).toBe("original");
+    }
+  });
+
+  test("a plain-text preview for an unformatted clip changes nothing", () => {
+    for (const item of [TEXT_ITEM, IMAGE_ITEM]) {
+      expect(
+        clipboardCardRenderFormat(item, [
+          { itemId: item.id, type: "plainText" },
+        ]),
+      ).toBe("original");
     }
   });
 });
