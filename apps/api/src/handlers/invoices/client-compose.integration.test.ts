@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -18,11 +18,13 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import deleteInvoice from "@/api/handlers/invoices/delete";
 import readInvoice from "@/api/handlers/invoices/get";
+import createLine from "@/api/handlers/invoices/lines/create";
 import deleteLine from "@/api/handlers/invoices/lines/delete";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -49,6 +51,14 @@ const matters = [
 const matterIds = matters.map(({ workspaceId }) => workspaceId);
 const entryIds = matters.map(({ entryId }) => entryId);
 type InvoiceSource = (typeof matters)[number];
+// A third matter of the client that no client invoice bills yet.
+const quotaMatterId = createSafeId<"workspace">();
+const quotaEntryId = createSafeId<"timeEntry">();
+const quotaSources = matters.map(({ workspaceId }) => ({
+  workspaceId,
+  entryId: createSafeId<"timeEntry">(),
+}));
+const scopeMatterIds = [...matterIds, quotaMatterId];
 // Fresh entries on the same two matters, one set per running-entry case.
 const runningCaseSources = (["delete", "void"] as const).map((operation) => ({
   operation,
@@ -89,7 +99,7 @@ beforeAll(async () => {
     },
   });
   await db.insert(workspaces).values(
-    matterIds.map((id) => ({
+    scopeMatterIds.map((id) => ({
       id,
       organizationId: ids.orgA,
       clientId,
@@ -118,6 +128,7 @@ beforeAll(async () => {
   );
 });
 
+// timeout: removes the 10 000 invoices the quota test seeds for one matter.
 afterAll(async () => {
   try {
     await db.delete(invoices).where(eq(invoices.clientId, clientId));
@@ -126,19 +137,21 @@ afterAll(async () => {
       .where(
         inArray(timeEntries.id, [
           ...entryIds,
+          quotaEntryId,
+          ...quotaSources.map(({ entryId }) => entryId),
           ...runningCaseSources.flatMap(({ sources }) =>
             sources.map(({ entryId }) => entryId),
           ),
         ]),
       );
-    await db.delete(workspaces).where(inArray(workspaces.id, matterIds));
+    await db.delete(workspaces).where(inArray(workspaces.id, scopeMatterIds));
     await db.delete(contacts).where(eq(contacts.id, clientId));
     await db.delete(sellerProfiles).where(eq(sellerProfiles.id, sellerId));
     await db.delete(vatRates).where(inArray(vatRates.id, vatIds));
   } finally {
     await releaseRlsFixture();
   }
-});
+}, 120_000);
 
 const context = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
@@ -149,14 +162,14 @@ const context = <TContext extends SafeHandlerLogContext>(
     body,
     params,
     workspaceId: matterIds.at(0),
-    safeDb: createSafeDb(db, matterIds, ids.orgA, ids.userAdmin),
-    scopedDb: createScopedDb(db, matterIds, ids.orgA, ids.userAdmin),
+    safeDb: createSafeDb(db, scopeMatterIds, ids.orgA, ids.userAdmin),
+    scopedDb: createScopedDb(db, scopeMatterIds, ids.orgA, ids.userAdmin),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userAdmin },
     memberRole: sessionMemberRole("owner"),
-    getActiveWorkspaceIds: async () => matterIds,
+    getActiveWorkspaceIds: async () => scopeMatterIds,
     getAccessibleWorkspaces: async () =>
-      matterIds.map((id) => ({ id, status: "active" })),
+      scopeMatterIds.map((id) => ({ id, status: "active" })),
     getWorkspaceAccess: async () => ({ id: matterIds.at(0), status: "active" }),
     request: new Request("https://example.test/client-invoices", {
       method: "PUT",
@@ -362,4 +375,144 @@ describe("client invoice release and running time", () => {
       }
     },
   );
+});
+
+describe("client invoice matter quota", () => {
+  const quota = async () =>
+    await createScopedDb(
+      db,
+      scopeMatterIds,
+      ids.orgA,
+      ids.userAdmin,
+    )(async (tx) => {
+      const [row] = await tx
+        .select({
+          count: sql<number>`public.stella_matter_invoice_count(${quotaMatterId})::int`,
+        })
+        .from(sql`(SELECT 1) quota`);
+      return row?.count;
+    });
+  const throughQuotaMatter = <TContext extends SafeHandlerLogContext>(
+    handler: (context: TContext) => unknown,
+    body: unknown,
+    params: Record<string, unknown>,
+  ) => ({ ...context(handler, body, params), workspaceId: quotaMatterId });
+  const manualLine = {
+    source: {
+      type: "manual",
+      description: "Advice",
+      quantity: "1",
+      unitPriceMinor: 10_000,
+    },
+    vatRateBps: 2300,
+    vatTreatment: "domestic_vat",
+  } as const;
+  const limitRefusal = {
+    code: 409,
+    response: { message: "Matter invoice limit reached" },
+  };
+
+  // timeout: seeds a matter to its 10 000-invoice limit, and every quota read counts across all of them.
+  test("a matter at its invoice limit cannot join a client invoice on any path", async () => {
+    const invoiceId = await create(quotaSources);
+    await db.insert(timeEntries).values({
+      id: quotaEntryId,
+      organizationId: ids.orgA,
+      workspaceId: quotaMatterId,
+      userId: ids.userAdmin,
+      dateWorked: "2026-09-25",
+      timezoneId: "UTC",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(20_000),
+      currency: "CZK",
+      status: BILLING_STATUS.APPROVED,
+      narrative: "Legal services",
+    });
+    await db.execute(sql`INSERT INTO invoices
+        (id, organization_id, workspace_id, client_id, invoice_date, currency, status)
+        SELECT gen_random_uuid(), ${ids.orgA}, ${quotaMatterId}::uuid,
+          ${clientId}::uuid, '2026-10-16'::date, 'CZK', 'draft'
+        FROM generate_series(1, ${LIMITS.invoicesPerWorkspace})`);
+    expect(await quota()).toBe(LIMITS.invoicesPerWorkspace);
+    const state = async () =>
+      await Promise.all([
+        db.select().from(invoices).where(eq(invoices.id, invoiceId)),
+        db
+          .select()
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, invoiceId)),
+        db.select().from(timeEntries).where(eq(timeEntries.id, quotaEntryId)),
+        db
+          .select({ id: invoices.id })
+          .from(invoices)
+          .where(
+            and(eq(invoices.clientId, clientId), eq(invoices.status, "draft")),
+          ),
+      ]);
+    const before = await state();
+    const params = { invoiceId, workspaceId: quotaMatterId };
+
+    expect(
+      await createLine.handler(
+        throughQuotaMatter(createLine.handler, manualLine, params),
+      ),
+    ).toMatchObject(limitRefusal);
+    // Entries reach a client invoice as time-entry lines; entries.add
+    // addresses only single-matter invoices.
+    expect(
+      await createLine.handler(
+        throughQuotaMatter(
+          createLine.handler,
+          {
+            source: { type: "time_entry", timeEntryId: quotaEntryId },
+            vatRateBps: 2300,
+            vatTreatment: "domestic_vat",
+          },
+          params,
+        ),
+      ),
+    ).toMatchObject(limitRefusal);
+    expect(
+      await createClientInvoice.handler(
+        context(
+          createClientInvoice.handler,
+          {
+            invoiceDate: "2026-10-15",
+            currency: "CZK",
+            sellerProfileId: sellerId,
+            matters: [
+              {
+                workspaceId: quotaMatterId,
+                timeEntryIds: [quotaEntryId],
+                expenseIds: [],
+              },
+            ],
+          },
+          { clientId },
+        ),
+      ),
+    ).toMatchObject(limitRefusal);
+    expect(await state()).toEqual(before);
+    expect(await quota()).toBe(LIMITS.invoicesPerWorkspace);
+
+    // One slot below the limit, the matter joins and fills it.
+    await db.execute(sql`DELETE FROM invoices WHERE id = (
+        SELECT id FROM invoices WHERE workspace_id = ${quotaMatterId}::uuid LIMIT 1)`);
+    expect(await quota()).toBe(LIMITS.invoicesPerWorkspace - 1);
+    expect(
+      await createLine.handler(
+        throughQuotaMatter(createLine.handler, manualLine, params),
+      ),
+    ).toHaveProperty("id");
+    expect(
+      (
+        await db
+          .select({ workspaceId: invoiceLines.workspaceId })
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, invoiceId))
+      ).filter(({ workspaceId }) => workspaceId === quotaMatterId),
+    ).toHaveLength(1);
+    expect(await quota()).toBe(LIMITS.invoicesPerWorkspace);
+  }, 120_000);
 });

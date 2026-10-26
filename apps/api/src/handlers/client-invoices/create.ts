@@ -1,8 +1,6 @@
-import { panic, Result } from "better-result";
-import { and, eq, inArray, max, sql } from "drizzle-orm";
+import { Result } from "better-result";
+import { and, eq, inArray, max } from "drizzle-orm";
 import * as v from "valibot";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
 import { resultTx } from "@/api/db/safe-db";
 import { expenses, invoices, timeEntries, workspaces } from "@/api/db/schema";
@@ -14,7 +12,11 @@ import {
   createInvoiceInput,
   invoiceCreationError,
 } from "@/api/lib/billing/invoice-create-operation";
-import { recalculateInvoiceTotals } from "@/api/lib/billing/invoice-lines";
+import {
+  matterInvoiceCount,
+  matterInvoiceLimitRefusal,
+  recalculateInvoiceTotals,
+} from "@/api/lib/billing/invoice-lines";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -95,24 +97,12 @@ const createClientInvoice = createSafeRootHandler(
         );
       }
       for (const matter of selected) {
+        // Refuse before any write. insertInvoiceLines enforces the same quota
+        // on every path that adds a matter to an invoice.
         // db-await-in-loop: at most 50 matter arrangements, locked in stable ID order
-        const counts = await tx
-          .select({
-            count: sql<string>`public.stella_matter_invoice_count(${matter.id})::text`,
-          })
-          .from(sql`(SELECT 1) quota`);
-        const totalInvoices = parseIntegerToken(
-          counts.at(0)?.count ??
-            panic("Invoice quota aggregate returned no row"),
-          { sign: "unsigned" },
-        ).unwrap("Invoice quota must be a non-negative safe integer");
+        const totalInvoices = await matterInvoiceCount(tx, matter.id);
         if (totalInvoices >= LIMITS.invoicesPerWorkspace) {
-          return Result.err(
-            new HandlerError({
-              status: 409,
-              message: "Matter invoice limit reached",
-            }),
-          );
+          return Result.err(matterInvoiceLimitRefusal());
         }
         // db-await-in-loop: at most 50 matter arrangements, locked in stable ID order
         const arrangement = await lockBillingArrangement(tx, matter.id);

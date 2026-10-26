@@ -350,7 +350,12 @@ if (!databaseUrl || !runPostgres) {
       if (draft.isErr()) {
         throw draft.error;
       }
-      await insertInvoiceLines(tx, scope, [draft.value], { recordAuditEvent });
+      const inserted = await insertInvoiceLines(tx, scope, [draft.value], {
+        recordAuditEvent,
+      });
+      if (inserted.isErr()) {
+        throw inserted.error;
+      }
       const totals = await recalculateInvoiceTotals(
         tx,
         scope,

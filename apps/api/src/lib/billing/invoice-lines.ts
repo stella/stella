@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, isNull, max, notExists } from "drizzle-orm";
+import { and, asc, eq, isNull, max, notExists, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   INVOICE_LINE_INPUT_LIMITS,
   INVOICE_LINE_QUANTITY_PATTERN,
@@ -349,6 +350,29 @@ type InvoiceScope = {
   workspaceId: SafeId<"workspace">;
 };
 
+/** A matter already counts the most invoices it may take part in. */
+export const matterInvoiceLimitRefusal = () =>
+  new HandlerError({
+    status: 409,
+    message: "Matter invoice limit reached",
+  });
+
+/** Invoices that count toward a matter's quota (`stella_matter_invoice_count`). */
+export const matterInvoiceCount = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const [row] = await tx
+    .select({
+      count: sql<string>`public.stella_matter_invoice_count(${workspaceId})::text`,
+    })
+    .from(sql`(SELECT 1) quota`);
+  return parseIntegerToken(
+    row?.count ?? panic("Invoice quota aggregate returned no row"),
+    { sign: "unsigned" },
+  ).unwrap("Invoice quota must be a non-negative safe integer");
+};
+
 /**
  * Appends priced lines after the invoice's last position and records them on
  * the invoice's audit trail (ids, sources and amounts, never descriptions,
@@ -356,6 +380,13 @@ type InvoiceScope = {
  * (`lockInvoiceInStatus`), which serializes positions. Drafts come from the
  * builders above, whose amounts are already validated, so pricing them cannot
  * fail.
+ *
+ * Every line write goes through here, so this owns the matter invoice quota:
+ * a client invoice starts counting toward a matter once it has a line there,
+ * and a write that makes it count where the matter is already at
+ * `LIMITS.invoicesPerWorkspace` is refused. The caller holds the matter lock
+ * (`guardRunningTimeEntries` or `withInvoiceMatterLocks`) and rolls back the
+ * transaction on a refusal.
  */
 export const insertInvoiceLines = async (
   tx: Transaction,
@@ -365,21 +396,45 @@ export const insertInvoiceLines = async (
     recordAuditEvent: AuditRecorder;
     metadata?: Record<string, unknown>;
   },
-): Promise<{ id: SafeId<"invoiceLine">; source: InvoiceLineSource }[]> => {
+): Promise<
+  Result<
+    { id: SafeId<"invoiceLine">; source: InvoiceLineSource }[],
+    HandlerError
+  >
+> => {
   const { recordAuditEvent, metadata } = audit;
   if (drafts.length === 0) {
-    return [];
+    return Result.ok([]);
   }
   const invoice = await tx.query.invoices.findFirst({
     where: {
       id: { eq: scope.invoiceId },
       organizationId: { eq: scope.organizationId },
     },
-    columns: { documentType: true },
+    columns: { documentType: true, workspaceId: true },
   });
   if (!invoice) {
     return panic("The locked invoice disappeared before line insertion");
   }
+  // A single-matter invoice always counts toward its own matter, and a client
+  // invoice with a line in this matter already counts; only a first line can
+  // start counting, so only then is the quota read on both sides of the write.
+  const countedBefore =
+    invoice.workspaceId === null &&
+    (
+      await tx
+        .select({ id: invoiceLines.id })
+        .from(invoiceLines)
+        .where(
+          and(
+            eq(invoiceLines.invoiceId, scope.invoiceId),
+            eq(invoiceLines.workspaceId, scope.workspaceId),
+          ),
+        )
+        .limit(1)
+    ).length === 0
+      ? await matterInvoiceCount(tx, scope.workspaceId)
+      : null;
   const priced = priceLines(drafts, invoice.documentType);
   if (priced.isErr()) {
     return panic(
@@ -426,6 +481,17 @@ export const insertInvoiceLines = async (
       netAmount: invoiceLines.netAmount,
       vatRateBps: invoiceLines.vatRateBps,
     });
+  if (countedBefore !== null) {
+    // Compare the function's own count, so a credit note already counted
+    // through its original is not mistaken for a new participant.
+    const countedAfter = await matterInvoiceCount(tx, scope.workspaceId);
+    if (
+      countedAfter > countedBefore &&
+      countedAfter > LIMITS.invoicesPerWorkspace
+    ) {
+      return Result.err(matterInvoiceLimitRefusal());
+    }
+  }
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.UPDATE,
     resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
@@ -433,7 +499,7 @@ export const insertInvoiceLines = async (
     changes: { linesAdded: { old: null, new: inserted } },
     ...(metadata ? { metadata } : {}),
   });
-  return inserted.map(({ id, source }) => ({ id, source }));
+  return Result.ok(inserted.map(({ id, source }) => ({ id, source })));
 };
 
 /**
@@ -485,7 +551,7 @@ const materialiseAttachedEntryLines = async (
   tx: Transaction,
   scope: InvoiceScope,
   recordAuditEvent: AuditRecorder,
-): Promise<number> => {
+): Promise<Result<number, HandlerError>> => {
   const unlinedTimeEntries = async () =>
     await readBounded(
       tx
@@ -571,7 +637,7 @@ const materialiseAttachedEntryLines = async (
       `Invoice ${scope.invoiceId} has more attached entries than an invoice holds lines`,
     );
   }
-  await insertInvoiceLines(
+  const inserted = await insertInvoiceLines(
     tx,
     scope,
     [
@@ -584,7 +650,7 @@ const materialiseAttachedEntryLines = async (
     ],
     { recordAuditEvent, metadata: { materialisedFromAttachedEntries: true } },
   );
-  return missing;
+  return inserted.isErr() ? Result.err(inserted.error) : Result.ok(missing);
 };
 
 /**
@@ -618,10 +684,13 @@ export const lockDraftInvoiceForLines = async (
       return Result.err(refusal);
     }
   }
-  if (
-    invoice &&
-    (await materialiseAttachedEntryLines(tx, scope, recordAuditEvent)) > 0
-  ) {
+  const materialised = invoice
+    ? await materialiseAttachedEntryLines(tx, scope, recordAuditEvent)
+    : Result.ok(0);
+  if (materialised.isErr()) {
+    return Result.err(materialised.error);
+  }
+  if (materialised.value > 0) {
     const totals = await recalculateInvoiceTotals(
       tx,
       scope,

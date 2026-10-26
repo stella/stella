@@ -470,7 +470,7 @@ const addEntries = createSafeHandler(
       }
 
       const scope = { invoiceId: params.invoiceId, workspaceId };
-      await insertInvoiceLines(
+      const inserted = await insertInvoiceLines(
         tx,
         { ...scope, organizationId: session.activeOrganizationId },
         attachedEntryLineDrafts({
@@ -480,6 +480,9 @@ const addEntries = createSafeHandler(
         }),
         { recordAuditEvent },
       );
+      if (inserted.isErr()) {
+        return Result.err(inserted.error);
+      }
       const totals = await recalculateInvoiceTotals(
         tx,
         scope,

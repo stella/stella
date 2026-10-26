@@ -781,9 +781,15 @@ export const billCreatedDraft = async (
     return Result.err(drafted.error);
   }
   const lines = drafted.value;
-  await insertInvoiceLines(tx, { ...scope, organizationId }, lines, {
-    recordAuditEvent,
-  });
+  const inserted = await insertInvoiceLines(
+    tx,
+    { ...scope, organizationId },
+    lines,
+    { recordAuditEvent },
+  );
+  if (inserted.isErr()) {
+    return Result.err(inserted.error);
+  }
   const totals = await recalculateInvoiceTotals(
     tx,
     scope,

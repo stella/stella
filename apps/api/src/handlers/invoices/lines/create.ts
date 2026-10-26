@@ -352,13 +352,18 @@ const createInvoiceLine = createSafeHandler(
 
         const scope = { invoiceId: params.invoiceId, workspaceId };
         // The line and the new totals record their own invoice events.
-        const [line] = await insertInvoiceLines(
+        const inserted = await insertInvoiceLines(
           tx,
           { ...scope, organizationId: session.activeOrganizationId },
           [draft],
           { recordAuditEvent },
         );
-        const lineId = line?.id ?? panic("Invoice line insert returned no row");
+        if (inserted.isErr()) {
+          return Result.err(inserted.error);
+        }
+        const lineId =
+          inserted.value.at(0)?.id ??
+          panic("Invoice line insert returned no row");
         const totals = await recalculateInvoiceTotals(
           tx,
           scope,
