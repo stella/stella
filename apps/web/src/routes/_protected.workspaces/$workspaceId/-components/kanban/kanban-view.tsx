@@ -504,8 +504,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       const status = targetValue;
       await settleCardMoves({
         cards,
-        moveCard: async ({ entityId }) =>
-          Result.ok(await patchTaskStatus(entityId, status)),
+        moveCard: async ({ entityId }) => {
+          await patchTaskStatus(entityId, status);
+          return Result.ok(undefined);
+        },
         touchesTasks: true,
       });
       return;
