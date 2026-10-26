@@ -18,23 +18,29 @@ import {
   MarkStyleButtons,
   MarkVisibilityToggle,
 } from "@/components/selection-toolbar-marks";
+import { selectionToolbarAnchor } from "@/components/selection-toolbar.logic";
+import type { SelectionToolbarAnchor } from "@/components/selection-toolbar.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 
-type Geometry = { bounds: DOMRect; rect: DOMRect };
-
-/** The first drawn box of the mark, where the bar floats. */
-const markGeometry = (root: HTMLElement, id: string): Geometry | null => {
+/**
+ * The first drawn box of the mark, where the bar floats, clipped to the
+ * reader's visible scroll area as a selection's bar is.
+ */
+const markGeometry = (
+  root: HTMLElement,
+  id: string,
+): SelectionToolbarAnchor | null => {
   const box = root.querySelector(
     `[${DOCUMENT_MARK_BOX_ATTRIBUTE}="${CSS.escape(id)}"]`,
   );
-  return box === null
-    ? null
-    : {
-        bounds: root.getBoundingClientRect(),
-        rect: box.getBoundingClientRect(),
-      };
+  if (box === null) {
+    return null;
+  }
+  const range = root.ownerDocument.createRange();
+  range.selectNode(box);
+  return selectionToolbarAnchor({ range, root });
 };
 
 /**
@@ -58,7 +64,7 @@ export const DocumentMarkBar = ({
   rootRef: RefObject<HTMLElement | null>;
 }) => {
   const t = useTranslations();
-  const [geometry, setGeometry] = useState<Geometry | null>(null);
+  const [geometry, setGeometry] = useState<SelectionToolbarAnchor | null>(null);
   const [doc, setDoc] = useState<Document | null>(null);
 
   useExternalSyncEffect(() => {

@@ -42,7 +42,7 @@ export type DocumentMark = DocumentAnnotation & { placement: MarkPlacement };
 /** One page's share of a new mark, with the digest of the page it is on. */
 export type PlacedSpan = LocatedSpan & { pageTextSha256: string };
 
-export type CreateDocumentMarkInput = {
+type CreateDocumentMarkInput = {
   spans: PlacedSpan[];
   visibility: AnnotationVisibility;
 } & (
@@ -50,7 +50,7 @@ export type CreateDocumentMarkInput = {
   | { kind: "comment"; body: string }
 );
 
-export type DocumentMarkLocation =
+type DocumentMarkLocation =
   | { type: "located"; spans: PlacedSpan[] }
   | Extract<LocatedSelection, { type: "refused" }>;
 

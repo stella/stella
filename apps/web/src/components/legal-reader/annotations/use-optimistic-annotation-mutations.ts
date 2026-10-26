@@ -29,7 +29,7 @@ export const isPendingAnnotationId = (id: string): boolean =>
   id.startsWith(PENDING_ID_PREFIX);
 
 /** Who a pending mark shows as written by: the signed-in reader. */
-export type PendingMarkAuthor = {
+type PendingMarkAuthor = {
   id: string;
   image: string | null;
   name: string | null;

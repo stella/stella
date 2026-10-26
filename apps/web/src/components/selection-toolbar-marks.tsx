@@ -36,7 +36,7 @@ const STYLE_ICONS = {
   strikethrough: StrikethroughIcon,
 } as const satisfies Record<ReaderAnnotationStyle, unknown>;
 
-export const markColorLabelKey = (color: ReaderAnnotationColor) => {
+const markColorLabelKey = (color: ReaderAnnotationColor) => {
   switch (color) {
     case "yellow": {
       return "legalReader.annotations.colorYellow" as const;
