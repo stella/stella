@@ -4,9 +4,10 @@
  * Every loader reads through the handle its caller passes: a request's scoped
  * transaction (the `organization_settings` policy admits the caller's own
  * organization), a worker's database, or the authentication boundary's
- * connection before any request scope exists. The lookup is a single indexed
- * select on organization_id, so a request can fold it into a transaction it
- * already holds, and the BYOK key material is decrypted in process.
+ * connection before any request scope exists. Settings use an indexed select
+ * on organization_id; the authorization step separately proves current
+ * membership (and any applicable seat assignment) before a caller receives
+ * decrypted BYOK material.
  */
 
 import { Result } from "better-result";

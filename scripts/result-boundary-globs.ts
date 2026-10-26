@@ -131,6 +131,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
   "apps/api/src/lib/workspaces/**/*.ts",
+  "apps/api/src/lib/write-contract/**/*.ts",
   "apps/desktop/src/onboarding/**/*.{ts,tsx}",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
@@ -218,6 +219,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 export const RESULT_BOUNDARY_GLOBS = [
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
+  // The tools/call callback observer preserves the SDK's result/rejection contract;
+  // it records thrown failures and rethrows the original value to the protocol owner.
+  "apps/api/src/mcp/observe-tool-call.ts",
   // Process startup consumes login refusals through Promise rejection before accepting work.
   "apps/api/src/lib/db/assert-database-login-posture.ts",
   // The HTTP core turns thrown pipeline failures (a malformed body, an unknown

@@ -8,7 +8,8 @@ import { groupReasoningEfforts } from "@stll/chat/model-selector";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { ChevronDownIcon, InfoIcon } from "@stll/ui/icons";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ChevronRightIcon, InfoIcon } from "@stll/ui/icons";
 import {
   MenuCheckboxItem,
   MenuGroupLabel,
@@ -40,6 +41,7 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useQueryView } from "@/lib/use-query-view";
@@ -100,6 +102,7 @@ export const ChatModelOptionsMenu = ({
   open,
 }: ChatModelOptionsMenuProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const {
     activeOrganizationId,
     selectedModel,
@@ -227,20 +230,23 @@ export const ChatModelOptionsMenu = ({
           onClick={() => setAllModelsExpanded((expanded) => !expanded)}
         >
           <span className="text-muted-foreground flex-1">
-            {t("chat.modelSelector.allModels", { count: visibleCount })}
+            {t("chat.modelSelector.allModels")}
           </span>
-          <ChevronDownIcon
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {format.number(visibleCount)}
+          </span>
+          <DirectionalIcon
             className={cn(
               "text-muted-foreground size-3.5 transition-transform duration-150",
-              allModelsExpanded && "rotate-180",
+              allModelsExpanded && "rotate-90",
             )}
+            flip={!allModelsExpanded}
+            icon={ChevronRightIcon}
           />
         </MenuItem>
         {allModelsExpanded && (
           <MenuRadioGroup
-            aria-label={t("chat.modelSelector.allModels", {
-              count: visibleCount,
-            })}
+            aria-label={t("chat.modelSelector.allModels")}
             value={radioValue}
           >
             {view.others.map(renderRow)}

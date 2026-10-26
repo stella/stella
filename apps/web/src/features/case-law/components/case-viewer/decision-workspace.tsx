@@ -5,14 +5,16 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragraph-range";
-import { READER_ANSWER_QUOTE_MAX_LENGTH } from "@stll/api-contract/reader-answers";
+import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
-import {
-  decisionCaseName,
-  visibleDecisionBlocks,
-} from "@stll/decision-reader/decision-text.logic";
+import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
+import {
+  readerSelectionMatches,
+  visibleDecisionBlocks,
+  visibleReaderAnchorPiecesOf,
+} from "@stll/legal-ast/case-law-reader";
 import {
   type DocumentAst,
   parseDocumentAst,
@@ -113,10 +115,7 @@ import {
   openReaderAnswerFromMark,
   readerAnswerAnchors,
 } from "./reader-answer-navigation";
-import {
-  ReaderAnswerFailure,
-  readerAnswerFailureKind,
-} from "./reader-answers.logic";
+import { readerAnswerFailureKind } from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 import { useReaderAnswers } from "./use-reader-answers";
 
@@ -302,8 +301,8 @@ const decisionAnalysisView = (
   const hasAnalysis =
     analysisState.status === "done" ||
     (analysisState.status === "generating" && analysisState.tree.length > 0);
-  const isAnalyzing =
-    analysisState.status === "generating" && analysisState.tree.length === 0;
+  // Streamed sections render as they arrive; the loader marks the remainder.
+  const isAnalyzing = analysisState.status === "generating";
   const analysisTree = (() => {
     if (analysisState.status === "done") {
       return analysisState.analysis.tree;
@@ -445,7 +444,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const answerNotes: AnswerMarginItem[] = visibleAnswers.map((answer) => ({
     kind: "answer",
     id: answer.id,
-    startAnchorId: answer.anchor.paragraphId,
+    startAnchorId: answer.anchor.spans[0].paragraphId,
     answer,
     generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
@@ -515,32 +514,37 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         },
       ),
   }));
-  const explain = async (spans: SelectionAnchor[]) => {
-    const span = spans.at(0);
-    if (
-      spans.length !== 1 ||
-      span === undefined ||
-      span.quote.length > READER_ANSWER_QUOTE_MAX_LENGTH
-    ) {
-      notifyUserError(
-        new ReaderAnswerFailure({
-          kind: "request",
-          message: "Selection is outside the reader answer anchor limits",
-        }),
-        t("readerAnswers.selectionError"),
-      );
-      return;
-    }
-    if (props.aiMode !== "enabled" || !(await props.ensureAIAvailable())) {
-      return;
-    }
-    setNotesFilter("all");
-    await answers.createExplain({
+  // A selection over any number of paragraphs is explained as a whole. The
+  // server checks it against the same visible pieces, so Explain is offered
+  // exactly where the server accepts it.
+  const explainableSpans = (
+    spans: SelectionAnchor[],
+  ): ReaderAnswerSpans | undefined => {
+    const [first, ...rest] = spans.map((span) => ({
       paragraphId: span.blockAnchorId,
       quote: span.quote,
       startOffset: span.startOffset,
       endOffset: span.endOffset,
-    });
+    }));
+    return first !== undefined &&
+      readerSelectionMatches(
+        visibleReaderAnchorPiecesOf(ast, decision.caseNumberType),
+        spans.map((span) => ({ ...span, anchorId: span.blockAnchorId })),
+      )
+      ? [first, ...rest]
+      : undefined;
+  };
+  const explain = async (spans: SelectionAnchor[]) => {
+    const selection = explainableSpans(spans);
+    if (
+      selection === undefined ||
+      props.aiMode !== "enabled" ||
+      !(await props.ensureAIAvailable())
+    ) {
+      return;
+    }
+    setNotesFilter("all");
+    await answers.createExplain({ spans: selection });
   };
   // Only an account may start a run, so only this branch polls. Everything
   // below reads `analysisState` alone: a gated reader never starts a run, so
@@ -552,7 +556,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const [panelWidth, setPanelWidth] = useState(220);
   // The same per-browser size the inspector's readers step, so a size chosen
   // in either place holds in both.
-  const textScale = useWebReaderTextScale();
+  const textScale = useWebReaderTextScale("decision");
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -1130,6 +1134,11 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           onExplain={
             props.aiMode === "enabled"
               ? (spans) => detached(explain(spans), "reader-answer.explain")
+              : undefined
+          }
+          explainRefusal={(spans) =>
+            explainableSpans(spans) === undefined
+              ? t("readerAnswers.selectionError")
               : undefined
           }
           scrollContainerRef={mainRef}

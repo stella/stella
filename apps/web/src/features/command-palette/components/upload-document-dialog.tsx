@@ -57,7 +57,7 @@ export const UploadDocumentDialog = ({
     enabled: workspaceId !== undefined,
   });
   const mattersView = useQueryView(mattersQuery);
-  useQueryViewError(mattersView);
+  useQueryViewError(mattersView, "UploadDocumentDialog:query");
   const { refetch } = mattersQuery;
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   const selectedMatter =

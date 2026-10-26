@@ -177,7 +177,7 @@ const fixtureRuleOverrides = [
   {
     files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
     rules: {
-      "no-raw-sha256/no-raw-sha256": "error",
+      "no-raw-sha256/no-raw-sha256": ["error", { hmacTarget: "bun" }],
       "no-unused-vars": "off",
       "no-new": "off",
       "prefer-const": "off",
@@ -260,6 +260,10 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
+  ]),
+  fixtureRuleOverride("prefer-bun-native.fixture.ts", [
+    "prefer-bun-native/no-buffer-string-encoding",
+    "prefer-bun-native/no-headers-from-entries",
   ]),
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
@@ -348,6 +352,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
+  ]),
+  fixtureRuleOverride("require-fingerprint-fields.fixture.ts", [
+    "require-fingerprint-fields/require-fingerprint-fields",
   ]),
   fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
     "no-raw-mcp-error-result/no-raw-mcp-error-result",
@@ -762,6 +769,15 @@ const webDatePickerImport = {
     "Use '@/components/date-picker-popover' so locale labels are injected.",
 };
 
+// use-intl's formatter formats in the UI language; FormattingProvider's
+// formatter applies the reader's region, calendar, numbering and week start.
+const webUseIntlFormatterImport = {
+  name: "use-intl",
+  importNames: ["useFormatter"],
+  message:
+    "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
+};
+
 const apiSafeIdBrandingImport = {
   name: "@/api/lib/branded-types",
   importNames: ["toSafeId"],
@@ -971,6 +987,143 @@ const customCssClassNames = [
   "word",
 ] satisfies string[];
 
+// Exact files with verified Bun execution owners; new paths do not inherit a runtime.
+const bunNativeFiles = [
+  ".oxlint-plugins/__tests__/no-raw-sha256.test.ts",
+  ".oxlint-plugins/__tests__/prefer-bun-native.test.ts",
+  "apps/api/evals/template-authoring.ts",
+  "apps/api/scripts/ai-native-image-canary.ts",
+  "apps/api/scripts/ai-provider-canary.ts",
+  "apps/api/scripts/seed-dev.ts",
+  "apps/api/scripts/visual-sandbox-fonts.test.ts",
+  "apps/api/scripts/visual-sandbox-fonts.ts",
+  "apps/api/src/agent-auth/credentials.ts",
+  "apps/api/src/db/schema/bytea.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj-notice.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts.ts",
+  "apps/api/src/handlers/chat/link-icons/cache.ts",
+  "apps/api/src/handlers/chat/message-page.test.ts",
+  "apps/api/src/handlers/chat/third-party-boundary.test.ts",
+  "apps/api/src/handlers/chat/upload-files.test.ts",
+  "apps/api/src/handlers/chat/upload-files.ts",
+  "apps/api/src/handlers/desktop-registry/redeem-link.postgres.test.ts",
+  "apps/api/src/handlers/docx-suggestions/cursor.property.test.ts",
+  "apps/api/src/handlers/entities/pdf-signing-certificate.ts",
+  "apps/api/src/handlers/entities/pdf-signing-signature.integration.test.ts",
+  "apps/api/src/handlers/entities/pdf-signing-signature.ts",
+  "apps/api/src/handlers/entities/version-cursor.test.ts",
+  "apps/api/src/handlers/legal-resolve/authorization.test.ts",
+  "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
+  "apps/api/src/handlers/lists/verifications/get.db.test.ts",
+  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
+  "apps/api/src/handlers/soft-law/adapters/edpb.ts",
+  "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
+  "apps/api/src/handlers/soft-law/adapters/wp29.ts",
+  "apps/api/src/handlers/soft-law/eu-expressions.db.test.ts",
+  "apps/api/src/handlers/soft-law/ingestion.db.test.ts",
+  "apps/api/src/handlers/templates/list-cursor.test.ts",
+  "apps/api/src/handlers/templates/prepare.ts",
+  "apps/api/src/handlers/workspaces/activity-cursor.test.ts",
+  "apps/api/src/lib/agent-client-credential-storage.postgres.test.ts",
+  "apps/api/src/lib/agent-client-credentials.postgres.test.ts",
+  "apps/api/src/lib/agent-client-credentials.test.ts",
+  "apps/api/src/lib/auth/http-basic-auth.ts",
+  "apps/api/src/lib/auth/mcp-web-handoff.ts",
+  "apps/api/src/lib/auth/session-lifetime-store.ts",
+  "apps/api/src/lib/bbox/ai-generate-b-boxes.ts",
+  "apps/api/src/lib/business-registries/desktop/proof.test.ts",
+  "apps/api/src/lib/business-registries/desktop/proof.ts",
+  "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
+  "apps/api/src/lib/chat/provider-image-input.test.ts",
+  "apps/api/src/lib/chat/provider-image-input.ts",
+  "apps/api/src/lib/content-encryption.test.ts",
+  "apps/api/src/lib/content-encryption.ts",
+  "apps/api/src/lib/data-url.ts",
+  "apps/api/src/lib/db-pagination.test.ts",
+  "apps/api/src/lib/db/operator-registrations/input.test.ts",
+  "apps/api/src/lib/db/service-client-operator.ts",
+  "apps/api/src/lib/email/inbound/address.ts",
+  "apps/api/src/lib/email/inbound/authentication.test.ts",
+  "apps/api/src/lib/email/inbound/email-file.test-fixture.ts",
+  "apps/api/src/lib/email/inbound/message.test.ts",
+  "apps/api/src/lib/email/inbound/original-signature.test.ts",
+  "apps/api/src/lib/email/inbound/upload.db.test.ts",
+  "apps/api/src/lib/entities/window-cursor.ts",
+  "apps/api/src/lib/files/email-attachment-token.ts",
+  "apps/api/src/lib/files/email-to-html.test.ts",
+  "apps/api/src/lib/files/email-to-html.ts",
+  "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
+  "apps/api/src/lib/files/pdf-signing/certificate-chain.test.ts",
+  "apps/api/src/lib/files/pdf-signing/certificate-chain.ts",
+  "apps/api/src/lib/files/pdf-signing/sign-pdf.test.ts",
+  "apps/api/src/lib/files/pdf-signing/sign-pdf.ts",
+  "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts",
+  "apps/api/src/lib/files/pdf-signing/timestamp-trust.test.ts",
+  "apps/api/src/lib/folio-collab-rooms.test.ts",
+  "apps/api/src/lib/folio-collab-rooms.ts",
+  "apps/api/src/lib/health/database-login-probe.postgres.test.ts",
+  "apps/api/src/lib/hosted-usage-provider/verify-signature.test.ts",
+  "apps/api/src/lib/hosted-usage-provider/verify-signature.ts",
+  "apps/api/src/lib/legal-search/corpus-search-cursor.test.ts",
+  "apps/api/src/lib/legal-search/corpus-search-cursor.ts",
+  "apps/api/src/lib/mcp-upstream/oauth.ts",
+  "apps/api/src/lib/member-credential-lifecycle.db.test.ts",
+  "apps/api/src/lib/pagination.property.test.ts",
+  "apps/api/src/lib/pagination.ts",
+  "apps/api/src/lib/provider-document-adapters.test.ts",
+  "apps/api/src/lib/search/cursor.test.ts",
+  "apps/api/src/lib/search/cursor.ts",
+  "apps/api/src/lib/stella-openrouter-text-adapter.test.ts",
+  "apps/api/src/lib/tanstack-ai-models.test.ts",
+  "apps/api/src/lib/workflow/ai-generate-batch.ts",
+  "apps/api/src/mcp/decision-reader.logic.test.ts",
+  "apps/api/src/mcp/feedback-approval.ts",
+  "apps/api/src/mcp/file-comparison-links-tool.test.ts",
+  "apps/api/src/mcp/file-comparison-prepare-tool.test.ts",
+  "apps/api/src/mcp/file-comparison-prepare-tool.ts",
+  "apps/api/src/mcp/file-comparison-run.test.ts",
+  "apps/api/src/mcp/sha256-storage-parity.test.ts",
+  "apps/api/src/mcp/template-tools.test.ts",
+  "apps/api/src/mcp/template-tools.ts",
+  "apps/api/src/scripts/mcp-canary.ts",
+  "apps/api/src/tests/helpers/case-law-enrolled-fixtures.ts",
+  "apps/api/src/tests/helpers/oauth-grant.ts",
+  "apps/api/src/tests/helpers/read-fault-drivers.ts",
+  "apps/api/src/tests/security/business-registry-credentials-rls.integration.test.ts",
+  "apps/collab/src/server.test.ts",
+  "apps/collab/src/server.ts",
+  "apps/landing/scripts/render-og-card.ts",
+  "apps/landing/src/lib/og-card.ts",
+  "apps/web/src/lib/desktop-bridge.test.ts",
+  "packages/agent-engine/scripts/e2e-mcp-canary.ts",
+  "packages/agent-engine/src/bun-docker/provider.ts",
+  "packages/business-registries/src/companies-house/client.test.ts",
+  "packages/catalogue/scripts/generate-manifest.ts",
+  "packages/mcp-apps/scripts/build-mcp-apps.ts",
+  "packages/property-testing/src/sha256.property.test.ts",
+  "packages/scripts/src/dev-runtime.ts",
+  "packages/sha256/src/sha256.test.ts",
+  "scripts/check-published-versions.test.ts",
+  "scripts/ci-checks-partition.test.ts",
+  "scripts/ci-windows-dry-run-result.test.ts",
+  "scripts/cla-workflow.test.ts",
+  "scripts/dated-waiver-fix-task.ts",
+  "scripts/dated-waiver-publish.ts",
+  "scripts/dependency-review-workflow.test.ts",
+  "scripts/generated-conflicts.ts",
+  "scripts/gh-retry.test.ts",
+  "scripts/product-media.test.ts",
+  "scripts/product-media.ts",
+  "scripts/verify.test.ts",
+  "scripts/verify.ts",
+];
+
+const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
+
 const config = defineConfig({
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
@@ -995,10 +1148,6 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
-        {
-          files: "packages/mcp-apps/**",
-          use: "packages/mcp-apps/src/shared/style.css",
-        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1031,7 +1180,7 @@ const config = defineConfig({
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
-      { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
+      { allowedFiles: sha256AllowedFiles },
     ],
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
@@ -1580,6 +1729,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
+    "./.oxlint-plugins/require-fingerprint-fields.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -1618,6 +1768,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
+    "./.oxlint-plugins/query-invalidation-scope.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -1772,6 +1923,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
@@ -1796,6 +1948,7 @@ const config = defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/prefer-bun-native.ts",
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
@@ -2442,6 +2595,17 @@ const config = defineConfig({
       ],
       rules: {
         "require-loader-prefetch/require-loader-prefetch": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-invalidation-scope.fixture.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.logic.ts",
+        "apps/web/src/lib/workspaces/queries/entities.ts",
+      ],
+      rules: {
+        "query-invalidation-scope/query-invalidation-scope": "error",
       },
     },
     {
@@ -3093,6 +3257,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-async-context-enter-with/no-async-context-enter-with": "error",
+      },
+    },
+    {
+      // Native preferences require this exact Bun execution enrollment.
+      files: bunNativeFiles,
+      rules: {
+        "prefer-bun-native/no-buffer-string-encoding": "error",
+        "prefer-bun-native/no-headers-from-entries": "error",
+        "no-raw-sha256/no-raw-sha256": [
+          "error",
+          { allowedFiles: sha256AllowedFiles, hmacTarget: "bun" },
+        ],
       },
     },
     {
@@ -3828,6 +4004,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -3864,6 +4041,7 @@ const config = defineConfig({
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4070,6 +4248,14 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-in-transaction.fixture.ts",
+      ],
+      rules: {
+        "no-network-in-transaction/no-network-in-transaction": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -4084,6 +4270,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4112,6 +4299,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -4148,6 +4336,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4195,6 +4384,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -4240,6 +4430,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -4814,6 +5005,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-network-await-in-loop/no-network-await-in-loop": "error",
+        "no-network-in-transaction/no-network-in-transaction": "error",
       },
     },
     {
@@ -4910,6 +5102,7 @@ const config = defineConfig({
       ],
       rules: {
         "failure-sink-handle/failure-sink-handle": "error",
+        "require-fingerprint-fields/require-fingerprint-fields": "error",
       },
     },
     {

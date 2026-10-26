@@ -1486,7 +1486,7 @@
       "label": "Simulēts AI"
     },
     "modelSelector": {
-      "allModels": "Visi modeļi ({count, number})",
+      "allModels": "Visi modeļi",
       "autoDescription": "Automātiski izvēlas modeli un spriešanas līmeni.",
       "autoLabel": "Automātiski",
       "belowFrontier": "Zem labākajiem kompromisiem",
@@ -4770,7 +4770,7 @@
     "modelError": "Modelis nevarēja pabeigt šo atbildi.",
     "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
     "regenerate": "Ģenerēt atbildi atkārtoti",
-    "selectionError": "Atlasiet tekstu vienā rindkopā (līdz 2000 rakstzīmēm).",
+    "selectionError": "Atlasiet tekstu no paša nolēmuma.",
     "send": "Nosūtīt papildjautājumu",
     "share": "Kopīgot ar komandu",
     "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
@@ -5360,7 +5360,7 @@
     "importDescription": "Stili tiek iegūti jaunā DOCX failā bez satura.",
     "importTitle": "Importēt stilu kopu",
     "loadFailed": "Neizdevās ielādēt stilu kopas",
-    "newDocument": "Jauns dokuments",
+    "newDocument": "Jauns DOCX dokuments",
     "pickerDescription": "Izvēlieties jaunā faila formatēšanas sistēmu.",
     "renameTitle": "Pārdēvēt stilu kopu",
     "replace": "Aizstāt avotu",
@@ -5644,7 +5644,7 @@
     "moveToMatter": "Saglabāt lietā",
     "moveToMatterAnyway": "Tomēr saglabāt",
     "myDefaultLookupFormat": "Mans noklusējums",
-    "newFromTemplate": "Jauns dokuments no veidnes",
+    "newFromTemplate": "Jauns DOCX dokuments no veidnes",
     "newFromTemplateFillHint": "Aizpildiet laukus; dokuments tiks izveidots šajā lietā.",
     "newTemplate": "Jauna veidne",
     "noTemplates": "Veidņu pagaidām nav",
@@ -6015,6 +6015,7 @@
         "action": "Rediģēt datora lietotnē",
         "authRequiredDescription": "Pirms rediģēšanas datora lietotnē atsvaidziniet stella un piesakieties vēlreiz.",
         "authRequiredTitle": "Sesija ir beigusies",
+        "editInApplication": "Rediģēt lietotnē <bdi>{application}</bdi>",
         "editLocallyPrompt": "Rediģējiet šo failu lokāli un sinhronizējiet izmaiņas ar stella.",
         "forceRelease": "Piespiedu atbrīvošana",
         "notOpenedDescription": "stella desktop neapstiprināja, ka <bdi>{application}</bdi> ir atvērts. Palaidiet stella desktop un mēģiniet vēlreiz.",
@@ -6038,13 +6039,15 @@
         "alreadyInstalled": "Jau instalēts? Savienot",
         "connect": "Savienot stella desktop",
         "connected": "stella desktop ir pievienota",
+        "download": "Lejupielādēt stella desktop",
         "editNone": "Lejupielādējiet stella desktop, lai rediģētu šo failu",
         "editOutdated": "Atjauniniet stella desktop, lai rediģētu",
         "editReason": "Rediģēšana datorā atver failu jūsu datora lietotnē, izmantojot stella desktop.",
         "signCurrent": "Parakstīt ar stella desktop",
         "signNone": "Lejupielādējiet stella desktop, lai parakstītu šo PDF",
         "signOutdated": "Atjauniniet stella desktop, lai parakstītu",
-        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop."
+        "signReason": "Parakstīšana izmanto sertifikātu jūsu datorā, tāpēc tā notiek stella desktop.",
+        "update": "Atjaunināt stella desktop"
       },
       "downloadAs": "Lejupielādēt kā…",
       "downloadAsZip": "Lejupielādēt .zip failu",
@@ -6057,8 +6060,10 @@
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
+      "ocrBatchHelp": "Rindā esošie dokumenti tiek apstrādāti nākamajā OCR pakotnē.",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
-      "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
+      "ocrQueued": "Teksta atpazīšana ievietota rindā",
+      "ocrQueuedForBatch": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "pdfSigning": {
         "alreadySigningTitle": "Parakstīšana stella desktop jau notiek",
         "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
@@ -6115,6 +6120,7 @@
         "waitingDescription": "Lietotnē stella desktop izvēlieties parakstīšanas sertifikātu, lai parakstītu šo PDF.",
         "waitingTitle": "Gaida stella desktop"
       },
+      "queueForOcr": "Ievietot OCR rindā",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ko darīt ar failu {fileName}",
@@ -6126,7 +6132,6 @@
       "removeMetadata": "Noņemt dokumenta metadatus",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
-      "runOcr": "Ievietot OCR rindā",
       "scrubFailed": "Neizdevās noņemt šī faila metadatus, tāpēc nekas netika lejupielādēts",
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",
@@ -6414,6 +6419,7 @@
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
       "client": "Klients",
+      "movedToClient": "Lieta <bdi>{matterName}</bdi> pārvietota pie klienta <bdi>{clientName}</bdi>",
       "noClient": "Klients nav piešķirts",
       "noClientOptional": "Bez klienta (neobligāti)",
       "noParties": "Šai lietai nav pievienotas puses.",
@@ -6432,7 +6438,9 @@
       "personalLabel": "Personīga",
       "promoteCta": "Paaugstināt klientam",
       "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
+      "promoteToClientConfirm": "Lieta <bdi>{matterName}</bdi> tiks piesaistīta klientam <bdi>{clientName}</bdi> un kopīgota ar komandu. To vairs nevarēs atgriezt personīgajās.",
       "promotedSuccess": "Lieta paaugstināta",
+      "recentClients": "Nesenie klienti",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",
@@ -6644,6 +6652,12 @@
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
       "parties": "Puses"
+    },
+    "switcher": {
+      "searchPlaceholder": "Atrast lietu…",
+      "trigger": "Mainīt lietu",
+      "viewAll": "Skatīt visas lietas",
+      "viewAllForClient": "Skatīt visas klienta {clientName} lietas"
     },
     "table": {
       "clearFlags": "Notīrīt atzīmes",

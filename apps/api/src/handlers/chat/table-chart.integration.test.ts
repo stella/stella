@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -69,7 +70,7 @@ const runTableChart = async (decide: TableChartDecisionCaller) =>
       promptCachingEnabled: false,
       recordAuditEvent: noopAuditRecorder,
       request: new Request("http://localhost/v1/chat/table-chart"),
-      route: "/chat/table-chart",
+      route: "/v1/chat/table-chart" satisfies ApiRoutePath,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       set: { headers: {} },
