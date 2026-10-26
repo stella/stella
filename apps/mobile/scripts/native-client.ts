@@ -132,18 +132,44 @@ const readRecord = (
   return parsed.success ? parsed.output : null;
 };
 
-const build = async (platform: NativePlatform, device: string) => {
-  const handle = Bun.spawn(
-    ["bunx", "expo", `run:${platform}`, "--device", device, "--no-bundler"],
-    {
-      cwd: APP_ROOT,
-      env: { ...process.env, APP_VARIANT: "development" },
-      stderr: "inherit",
-      stdout: "inherit",
+const runInApp = async (command: readonly string[]) => {
+  const handle = Bun.spawn([...command], {
+    cwd: APP_ROOT,
+    // A dirty checkout must not stop the clean prebuild with a prompt.
+    env: {
+      ...process.env,
+      APP_VARIANT: "development",
+      EXPO_NO_GIT_STATUS: "1",
     },
-  );
+    stderr: "inherit",
+    stdout: "inherit",
+  });
   await handle.exited;
   return childExitStatus(handle);
+};
+
+const build = async (platform: NativePlatform, device: string) => {
+  // A stale native folder keeps the config plugins it was generated with, so
+  // the folder is generated afresh from the app config before every build.
+  const prebuilt = await runInApp([
+    "bunx",
+    "expo",
+    "prebuild",
+    "--clean",
+    "--platform",
+    platform,
+  ]);
+  if (prebuilt !== 0) {
+    return prebuilt;
+  }
+  return await runInApp([
+    "bunx",
+    "expo",
+    `run:${platform}`,
+    "--device",
+    device,
+    "--no-bundler",
+  ]);
 };
 
 const main = async (): Promise<number> => {
