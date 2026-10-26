@@ -1,12 +1,11 @@
 import { panic } from "better-result";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { listedPaths } from "./listed-paths";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
@@ -102,14 +101,27 @@ const findFiles = (directoryPath: string): string[] => {
 
 const listRepositoryFiles = (rootDir: string): string[] | null => {
   try {
-    return listedPaths(rootDir, [
-      "--cached",
-      "--others",
-      "--exclude-standard",
-      "--",
-      "apps",
-      "packages",
-    ])
+    const output = execFileSync(
+      "git",
+      [
+        "ls-files",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "--",
+        "apps",
+        "packages",
+      ],
+      {
+        maxBuffer: 2 ** 30,
+        cwd: rootDir,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    );
+    return output
+      .split("\n")
+      .filter((filePath) => filePath !== "")
       .map((filePath) => path.resolve(rootDir, filePath))
       .filter((filePath) => existsSync(filePath));
   } catch {
@@ -544,6 +556,7 @@ export type AppBoundaryOptions = {
 
 const runGit: GitRunner = (rootDir, arguments_) => {
   const result = spawnSync("git", arguments_, {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
     encoding: "utf-8",
     // Untranslated diagnostics, so a failure can be told apart by its stderr.

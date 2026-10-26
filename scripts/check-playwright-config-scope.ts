@@ -17,15 +17,13 @@
 //
 //   bun scripts/check-playwright-config-scope.ts
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
-
-import { listedPaths } from "../packages/scripts/src/listed-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const PLAYWRIGHT_BIN = path.join(REPO_ROOT, "node_modules/.bin/playwright");
@@ -186,10 +184,20 @@ export const owningPackage = ({
   );
 };
 
-const trackedConfigs = (): string[] =>
-  listedPaths(REPO_ROOT)
+const trackedConfigs = (): string[] => {
+  const result = spawnSync("git", ["ls-files", "-z"], {
+    cwd: REPO_ROOT,
+    encoding: "utf-8",
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    panic(`git ls-files failed: ${result.stderr}`);
+  }
+  return result.stdout
+    .split("\0")
     .filter((file) => CONFIG_NAME.test(path.basename(file)))
     .toSorted();
+};
 
 type ListRunProblemsOptions = {
   config: string;
