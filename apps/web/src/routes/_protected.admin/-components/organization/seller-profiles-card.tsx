@@ -72,6 +72,10 @@ const SellerProfilesCardBody = ({
   const query = useInfiniteQuery(sellerProfilesOptions(organizationId));
   const [dialog, setDialog] = useState<ProfileDialog>({ type: "closed" });
   const mutation = useSettingsMutation({
+    exceptionScope: (command) => ({
+      type: "handler",
+      handlerId: `settings.seller-profile.${command.type}`,
+    }),
     mutationFn: sendSellerProfileCommand,
     invalidate: sellerProfilesKeys.all(organizationId),
   });

@@ -65,7 +65,7 @@ export const VersionsFacet = ({
     }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "VersionsFacet:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Accumulated list seeded from the query's newest page and extended
@@ -148,7 +148,10 @@ export const VersionsFacet = ({
       // it for telemetry and surface a toast. Keep the cursor but flag
       // the error so auto-loading pauses (the manual button retries)
       // instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "VersionsFacet:failure",
+        scope: { type: "handler", handlerId: "VersionsFacet:failure" },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;

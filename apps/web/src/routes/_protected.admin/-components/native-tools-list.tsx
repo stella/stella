@@ -81,6 +81,10 @@ const NativeToolRow = ({
   const t = useTranslations();
   const { activeOrganizationId } = useAuthenticatedUser();
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "NativeToolRow.update:failure",
+    },
     mutationFn: async (enabled: boolean) =>
       unwrapApiResponse(
         await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),

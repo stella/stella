@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 import type { InferOk } from "better-result";
 
 import type { GeneratedVisualInput } from "@stll/api-contract/generated-visual";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { collectLiteralVisualLinks } from "./literal-links";
 import { sanitizeVisualHtml } from "./sanitize";
@@ -9,7 +10,11 @@ import { sanitizeVisualHtml } from "./sanitize";
 class VisualDefinitionError extends TaggedError("VisualDefinitionError")<{
   message: string;
   reason: "title" | "data" | "links";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const isRow = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
