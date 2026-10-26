@@ -35,11 +35,11 @@ export const ReaderSelectionPlayground = () => {
         activeAnnotation={null}
         activeSpans={[]}
         controller={{
-          create: async () => Promise.resolve(Result.ok(undefined)),
+          create: async () => await Promise.resolve(Result.ok(undefined)),
           redo: async () => await Promise.resolve(),
-          remove: async () => Promise.resolve(Result.ok(undefined)),
+          remove: async () => await Promise.resolve(Result.ok(undefined)),
           undo: async () => await Promise.resolve(),
-          update: async () => Promise.resolve(Result.ok(undefined)),
+          update: async () => await Promise.resolve(Result.ok(undefined)),
         }}
         mode="authenticated"
         onActivateAnnotation={() => undefined}
