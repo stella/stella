@@ -7,10 +7,11 @@ import {
 } from "./check-oxlint-plugin-registry.ts";
 
 describe("plugin rule census", () => {
-  test("keeps shared rule data modules out of the plugin census", () => {
+  test("keeps shared rule data and detector helpers out of the plugin census", () => {
     expect(
       NON_PLUGIN_MODULES.has("public-law-decision-surface-modules.ts"),
     ).toBe(true);
+    expect(NON_PLUGIN_MODULES.has("network-call.ts")).toBe(true);
   });
 
   test("derives literal and computed rule names independently of formatting or factory nesting", () => {

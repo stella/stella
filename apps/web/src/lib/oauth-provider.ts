@@ -28,6 +28,36 @@ export const getSignedOauthQueryFromHash = (hash: string): string | null => {
   return query;
 };
 
+/** The signed OAuth request a page received, from the hash bridge or its query. */
+export const getSignedOauthQuery = ({
+  hash,
+  searchStr,
+}: {
+  hash: string;
+  searchStr: string;
+}): string | null => {
+  const bridgedQuery = getSignedOauthQueryFromHash(hash);
+  if (bridgedQuery) {
+    return bridgedQuery;
+  }
+
+  return hasSignedOauthQuery(searchStr) ? searchStr.replace(/^\?/u, "") : null;
+};
+
+/**
+ * Whether the client asked for this interaction with `prompt`: `login` for a
+ * fresh sign-in even with a session, `select_account` for the account and
+ * organization step even with a single membership.
+ */
+export const hasOauthPrompt = (
+  signedQuery: string | null,
+  prompt: "login" | "select_account",
+): boolean =>
+  signedQuery !== null &&
+  (new URLSearchParams(signedQuery).get("prompt") ?? "")
+    .split(" ")
+    .includes(prompt);
+
 export const getOauthHashFragment = (query: string): string => {
   const fragment = new URLSearchParams();
   fragment.set(OAUTH_QUERY_HASH_PARAM, query);

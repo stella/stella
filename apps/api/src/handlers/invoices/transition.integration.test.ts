@@ -22,6 +22,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { VatRateUnavailableError } from "@/api/lib/billing/vat-exchange-rates";
@@ -858,7 +859,8 @@ const createContext = ({
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-    route: "/test/invoices/transition",
+    route:
+      "/v1/invoices/:workspaceId/:invoiceId/transition" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     session: { activeOrganizationId: ids.orgA },

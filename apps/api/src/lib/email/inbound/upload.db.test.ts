@@ -47,6 +47,7 @@ import {
 import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueue";
 import { processUploadedMailJob } from "@/api/lib/email/inbound/upload-queue";
 import { toArrayBuffer } from "@/api/lib/files/outlook-msg.test-fixture";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   type GatedTestDb,
   openGatedTestDatabase,
@@ -220,6 +221,10 @@ if (!databaseUrl || !runPostgresTests) {
         name: "Uploaded mail",
         slug: `uploaded-mail-${organizationId}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(member).values([
         {

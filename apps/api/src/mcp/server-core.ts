@@ -24,13 +24,18 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+import type { HandlerExceptionScope } from "@stll/errors";
 
+import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
+import type { BoundedRequest } from "@/api/http/request-body";
 import type { captureError as captureApiError } from "@/api/lib/analytics/capture";
 import { detached } from "@/api/lib/analytics/capture";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
@@ -212,6 +217,7 @@ type McpServerDependencies = {
     },
   ) => Promise<Result<McpSession, McpAuthenticationFailure>>;
   captureError: typeof captureApiError;
+  observeTransportFailure?: typeof observeMcpTransportFailure;
   getMcpToolDefinition: (
     toolName: string,
     context: McpRequestResources,
@@ -584,48 +590,25 @@ const declaredBodyLength = (request: Request): DeclaredBodyLength => {
  * length is checked without touching the body. Every actual stream is metered,
  * including one whose declared length is smaller: parsedBody bypasses the
  * transports' own byte limit. Abandon at the cap and hand on only bounded bytes.
+ * A body the action size policy already metered is not read again: its
+ * metered size is checked against the cap.
  */
 const withCappedRequestBody = async (
   request: Request,
+  metered: BoundedRequest | undefined,
 ): Promise<McpRequestFrame> => {
-  const declared = declaredBodyLength(request);
-  if (declared === "too_large") {
-    return { status: "too_large" };
+  if (metered !== undefined) {
+    return metered.bytes > MCP_MAX_REQUEST_BODY_BYTES
+      ? { status: "too_large" }
+      : { request: metered.request, status: "within_limit" };
   }
-  if (request.body === null) {
-    return { request, status: "within_limit" };
-  }
-
-  // Bun types the stream's chunks as `any`; a request body is bytes.
-  const stream: ReadableStream<Uint8Array> = request.body;
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for await (const chunk of stream) {
-    total += chunk.length;
-    if (total > MCP_MAX_REQUEST_BODY_BYTES) {
-      // Leaving the loop cancels the stream: the rest of the upload is never
-      // read into this process.
-      return { status: "too_large" };
-    }
-    chunks.push(chunk);
-  }
-
-  const body = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    body.set(chunk, offset);
-    offset += chunk.length;
-  }
-
-  return {
-    request: new Request(request.url, {
-      body,
-      headers: request.headers,
-      method: request.method,
-      signal: request.signal,
-    }),
-    status: "within_limit",
-  };
+  const bounded = await reframeBoundedRequest(
+    request,
+    MCP_MAX_REQUEST_BODY_BYTES,
+  );
+  return Result.isError(bounded)
+    ? { status: "too_large" }
+    : { request: bounded.value.request, status: "within_limit" };
 };
 
 /**
@@ -656,12 +639,39 @@ const readFactoryState = (): McpFactoryState => {
 /** Hint (seconds) for a client to back off before retrying a transient fault. */
 const MCP_RETRY_AFTER_SECONDS = 2;
 
+/** The exception scope every MCP transport exchange of a mode runs in. */
+const mcpTransportExceptionScope = (mode: McpMode): HandlerExceptionScope => ({
+  type: "handler",
+  handlerId: `mcp.transport.${mode}`,
+});
+
+const MCP_TRANSPORT_FAILURE_SINK = failureSink({
+  event: "mcp.transport_failed",
+  expected: [],
+});
+
+/**
+ * Observe the server-side fault behind a retryable 5xx. The request is passed
+ * so its scope records the failure and the completion log carries the cause.
+ */
+const observeMcpTransportFailure = (
+  error: unknown,
+  { mode, request }: { mode: McpMode; request: Request },
+): void => {
+  observeFailure(error, {
+    sink: MCP_TRANSPORT_FAILURE_SINK,
+    request,
+    scope: mcpTransportExceptionScope(mode),
+    ctx: { mode, phase: "transport", source: "mcp" },
+  });
+};
+
 /**
  * A server-side fault (token-verification infrastructure outage, a bug in
  * session resolution, or a transport failure) is not a bad token: it must not
  * carry `WWW-Authenticate` (which would trigger a re-consent loop) and must not
  * leak internals. A generic, retryable 5xx tells the client to back off and
- * retry; the real cause is captured for observability by the caller.
+ * retry; the caller observes the real cause.
  */
 const retryableServerErrorResponse = (requestId: RequestId | null) => {
   const headers = createMcpCorsHeaders();
@@ -712,7 +722,7 @@ const readInboundMessage = async (
 ): Promise<McpInboundMessage> => {
   if (
     request.method !== "POST" ||
-    request.body === null ||
+    !hasRequestBody(request) ||
     !isJsonContentType(request.headers.get("content-type"))
   ) {
     return { parsedBody: undefined, request, requestId: null, status: "read" };
@@ -866,6 +876,7 @@ export const createMcpHttpRequestHandler = ({
   decorateToolResult = withWebHandoffLinks,
   authenticateMcpRequest,
   captureError,
+  observeTransportFailure = observeMcpTransportFailure,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -1467,18 +1478,20 @@ export const createMcpHttpRequestHandler = ({
   // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
   // else (a token-verification infrastructure outage surfaced as
   // `McpTokenVerificationError`, a bug in session resolution, or a transport
-  // fault) is a server-side problem, not a bad token: capture it and return
+  // fault) is a server-side problem, not a bad token: observe it and return
   // a retryable 5xx so the client backs off instead of dropping into a
   // re-consent loop. Every answer carries the id of the request once its
   // body has been read.
   type FailureResponseOptions = {
     error: unknown;
     mode: McpMode;
+    request: Request;
     requestId: RequestId | null;
   };
   const failureResponse = ({
     error,
     mode,
+    request,
     requestId,
   }: FailureResponseOptions): Response => {
     const denial = accessRefusalDenial(error);
@@ -1486,14 +1499,7 @@ export const createMcpHttpRequestHandler = ({
       return accessDeniedResponse({ denial, mode, requestId });
     }
 
-    captureError(
-      error,
-      handlerErrorContext("createMcpHttpRequestHandler.failureResponse.error", {
-        phase: "transport",
-        mode,
-        source: "mcp",
-      }),
-    );
+    observeTransportFailure(error, { mode, request });
 
     return retryableServerErrorResponse(requestId);
   };
@@ -1506,7 +1512,7 @@ export const createMcpHttpRequestHandler = ({
     }: { clientIp?: string | null | undefined; mode?: McpMode } = {},
   ): Promise<Response> =>
     await withExceptionScope(
-      { type: "handler", handlerId: `mcp.transport.${mode}` },
+      mcpTransportExceptionScope(mode),
       async () =>
         await observeMcpRequest({
           method: incomingRequest.headers.get("mcp-method"),
@@ -1545,7 +1551,10 @@ export const createMcpHttpRequestHandler = ({
                     });
               return withMcpCors(bounded, accepted, mode);
             };
-            let framedRequest = incomingRequest;
+            // With the size policy on, the body is read once here; the
+            // transport cap below checks the metered size instead of reading
+            // it again.
+            let metered: BoundedRequest | undefined;
             if (policy !== undefined) {
               const bounded = await boundActionRequest(
                 incomingRequest,
@@ -1558,7 +1567,7 @@ export const createMcpHttpRequestHandler = ({
                   mode,
                 );
               }
-              framedRequest = bounded.value;
+              metered = bounded.value;
             }
 
             // Preserve the existing transport frame limit while admission is disabled.
@@ -1593,6 +1602,7 @@ export const createMcpHttpRequestHandler = ({
                 return failureResponse({
                   error: authenticated.error,
                   mode,
+                  request: incomingRequest,
                   requestId,
                 });
               }
@@ -1633,7 +1643,10 @@ export const createMcpHttpRequestHandler = ({
               // without one is refused from the headers alone, so it cannot hold
               // connections and buffers open by streaming a body that is discarded
               // anyway.
-              const frame = await withCappedRequestBody(framedRequest);
+              const frame = await withCappedRequestBody(
+                incomingRequest,
+                metered,
+              );
               if (frame.status === "too_large") {
                 return await completeResponse(
                   payloadTooLargeResponse(),
@@ -1708,7 +1721,12 @@ export const createMcpHttpRequestHandler = ({
 
               return await completeResponse(response, accepted);
             } catch (error) {
-              return failureResponse({ error, mode, requestId });
+              return failureResponse({
+                error,
+                mode,
+                request: incomingRequest,
+                requestId,
+              });
             }
             // No teardown here on purpose. The handler owns instance lifetime and a
             // response body may still be streaming when this returns; closing it here

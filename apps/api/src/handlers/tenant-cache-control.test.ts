@@ -1,7 +1,9 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { apiPipeline } from "@/api/api-pipeline";
 import { env } from "@/api/env";
+import type { ApiRouteKey } from "@/api/http/api-route-types";
 import {
   cacheControlFor,
   NO_CACHE,
@@ -18,35 +20,44 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
 // TTL changes and new shared-cache routes require an explicit review decision.
 const DISCOVERY_CACHE_HEADER =
   "public, max-age=300, stale-while-revalidate=3600";
-const PUBLIC_CACHE_HEADERS = {
-  "GET /.well-known/oauth-authorization-server": DISCOVERY_CACHE_HEADER,
-  "GET /.well-known/oauth-authorization-server/api/auth":
+const PUBLIC_CACHE_HEADERS: ReadonlyMap<ApiRouteKey, string> = new Map([
+  ["GET /.well-known/oauth-authorization-server", DISCOVERY_CACHE_HEADER],
+  [
+    "GET /.well-known/oauth-authorization-server/api/auth",
     DISCOVERY_CACHE_HEADER,
-  "GET /.well-known/openid-configuration": DISCOVERY_CACHE_HEADER,
-  "GET /.well-known/oauth-protected-resource": DISCOVERY_CACHE_HEADER,
-  ...Object.fromEntries(
-    MCP_MODES.map((mode) => [
-      `GET ${MCP_RESOURCE_MODE_CONFIG[mode].discoveryPath}`,
-      DISCOVERY_CACHE_HEADER,
-    ]),
+  ],
+  ["GET /.well-known/openid-configuration", DISCOVERY_CACHE_HEADER],
+  ["GET /.well-known/oauth-protected-resource", DISCOVERY_CACHE_HEADER],
+  ...MCP_MODES.map(
+    (mode) =>
+      [
+        `GET ${MCP_RESOURCE_MODE_CONFIG[mode].discoveryPath}` satisfies ApiRouteKey,
+        DISCOVERY_CACHE_HEADER,
+      ] as const,
   ),
-  "GET /auth.md": "public, max-age=300",
-  "GET /v1/mcp/oauth/client-metadata.json": "public, max-age=3600",
-  "GET /v1/mcp/oauth/cli-client-metadata.json": "public, max-age=3600",
-  "GET /v1/mcp/oauth/mobile-client-metadata.json": "public, max-age=3600",
-  "GET /v1/case/coverage": "public, max-age=900, stale-while-revalidate=3600",
-  "GET /v1/case/judges/:judgeId/portrait": "public, max-age=86400",
-  "GET /v1/law/statutes/:documentId/provisions/:anchor/preview":
+  ["GET /auth.md", "public, max-age=300"],
+  ["GET /v1/mcp/oauth/client-metadata.json", "public, max-age=3600"],
+  ["GET /v1/mcp/oauth/cli-client-metadata.json", "public, max-age=3600"],
+  ["GET /v1/mcp/oauth/mobile-client-metadata.json", "public, max-age=3600"],
+  ["GET /v1/case/coverage", "public, max-age=900, stale-while-revalidate=3600"],
+  ["GET /v1/case/judges/:judgeId/portrait", "public, max-age=86400"],
+  [
+    "GET /v1/law/statutes/:documentId/provisions/:anchor/preview",
     "public, max-age=3600, stale-while-revalidate=86400",
-  "GET /v1/public/knowledge/template-packs": "public, max-age=300",
-  "GET /v1/public/knowledge/template-packs/:packId": "public, max-age=300",
-  "GET /v1/public/knowledge/template-packs/:packId/templates/:templateId":
+  ],
+  ["GET /v1/public/knowledge/template-packs", "public, max-age=300"],
+  ["GET /v1/public/knowledge/template-packs/:packId", "public, max-age=300"],
+  [
+    "GET /v1/public/knowledge/template-packs/:packId/templates/:templateId",
     "public, max-age=300",
-  "GET /v1/public/knowledge/template-packs/:packId/templates/:templateId/preview":
+  ],
+  [
+    "GET /v1/public/knowledge/template-packs/:packId/templates/:templateId/preview",
     "public, max-age=300",
-  "GET /v1/public/knowledge/playbook-starters": "public, max-age=300",
-  "GET /v1/public/knowledge/playbook-starters/:id": "public, max-age=300",
-} as const satisfies Record<string, string>;
+  ],
+  ["GET /v1/public/knowledge/playbook-starters", "public, max-age=300"],
+  ["GET /v1/public/knowledge/playbook-starters/:id", "public, max-age=300"],
+]);
 
 describe("composed API cache policy", () => {
   test("every mounted route declares its response cache policy", () => {
@@ -92,7 +103,9 @@ describe("composed API cache policy", () => {
       observedPublicHeaders[routeName] = success;
     }
 
-    expect(observedPublicHeaders).toEqual(PUBLIC_CACHE_HEADERS);
+    expect(observedPublicHeaders).toEqual(
+      Object.fromEntries(PUBLIC_CACHE_HEADERS),
+    );
   });
 
   test("OAuth discovery is shareable across origins on the actual API", async () => {
@@ -185,8 +198,10 @@ describe("composed API cache policy", () => {
         new Request("http://localhost/v1/public/knowledge/playbook-starters"),
       );
       expect(response.status).toBe(200);
-      expect(response.headers.get("Cache-Control")).toBe(
-        PUBLIC_CACHE_HEADERS["GET /v1/public/knowledge/playbook-starters"],
+      expect(response.headers.get("Cache-Control")).toEqual(
+        PUBLIC_CACHE_HEADERS.get(
+          "GET /v1/public/knowledge/playbook-starters" satisfies ApiRouteKey,
+        ) ?? panic("Public playbook starters must declare their cache header"),
       );
     } finally {
       env.FEATURE_PUBLIC_KNOWLEDGE = previous;

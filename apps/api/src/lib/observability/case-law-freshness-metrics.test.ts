@@ -14,11 +14,30 @@ afterEach(resetMetricLineSinkForTesting);
 
 const report = {
   backlogItems: 3,
-  oldestUnpublishedAgeSeconds: 42,
-  oldestUnpublishedAgeSource: "desired_at",
+  backlogCapped: false,
+  oldestUnpublishedAge: { type: "measured", seconds: 42, source: "desired_at" },
   sourceAges: [{ source: "cz-ns", ageSeconds: 19 }],
   convergence: "pending",
 } as const;
+
+test("an incomplete oldest age emits no age record", () => {
+  const records: Record<string, unknown>[] = [];
+  setMetricLineSinkForTesting((line) => {
+    records.push(JSON.parse(line));
+  });
+  emitCaseLawFreshnessReport({
+    ...report,
+    backlogCapped: true,
+    oldestUnpublishedAge: { type: "incomplete" },
+  });
+
+  expect(
+    records.flatMap((record) =>
+      Object.keys(record).filter((key) => key !== "_aws"),
+    ),
+  ).not.toContain("CaseLawOldestUnpublishedAgeSeconds");
+  expect(records).toHaveLength(3);
+});
 
 test("emits one owned EMF record per metric with only its bounded dimension", () => {
   const records: Record<string, unknown>[] = [];

@@ -9,6 +9,7 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -32,6 +33,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -94,6 +96,12 @@ const withHistory = async (
           createdAt: new Date(),
         })),
       );
+      for (const id of organizationIds) {
+        await recordNewOrganizationAccessState(db, {
+          organizationId: id,
+          now: new Date(),
+        });
+      }
       await db.insert(member).values([
         {
           id: memberId,
@@ -202,11 +210,14 @@ const readHistory = async (
   return result;
 };
 
-const recordQuery = async (fixture: HistoryFixture, query: string) => {
+const recordEntry = async (
+  fixture: HistoryFixture,
+  body: Parameters<typeof record.handler>[0]["body"],
+) => {
   const result = await record.handler(
     createTestHandlerContext<Parameters<typeof record.handler>[0]>({
       ...identity(fixture),
-      body: { kind: "search", query },
+      body,
     }),
   );
   if (result instanceof HttpStatusResponse) {
@@ -214,6 +225,12 @@ const recordQuery = async (fixture: HistoryFixture, query: string) => {
   }
   return result;
 };
+
+const recordQuery = async (
+  fixture: HistoryFixture,
+  query: string,
+  country: CaseLawJurisdiction = "CZE",
+) => await recordEntry(fixture, { kind: "search", query, country });
 
 if (!databaseUrl || !enabled) {
   describe.skip("search history (postgres)", () => {
@@ -446,13 +463,22 @@ if (!databaseUrl || !enabled) {
                     entry: { kind: "search", query: "  NÁHRADA\t škody  " },
                     usedAt: "2020-01-01T00:00:00Z",
                   },
+                  {
+                    entry: {
+                      kind: "search",
+                      query: "náhrada škody",
+                      country: "POL",
+                    },
+                    usedAt: "2020-01-02T00:00:00Z",
+                  },
                 ],
               },
             },
           ),
         );
 
-        expect(imported).toEqual({ entries: 0, skipped: 1, rejected: 0 });
+        // The deletion holds whichever jurisdiction, or none, an import names.
+        expect(imported).toEqual({ entries: 0, skipped: 2, rejected: 0 });
         expect((await readHistory(fixture)).items).toEqual([]);
         const scopedEntries = await fixture.db
           .select()
@@ -854,6 +880,148 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test("the latest use naming a jurisdiction files an entry, whatever order uses arrive in", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const at = (minute: number) =>
+          new Date(NOW.getTime() - 60 * 60_000 + minute * 60_000);
+        const importUses = async (
+          uses: Parameters<typeof prepareSearchHistoryRows>[1],
+        ) => {
+          const rows = await prepareSearchHistoryRows(fixture, uses);
+          await fixture.db.transaction(
+            async (tx) =>
+              await upsertSearchHistoryRows({
+                tx,
+                rows,
+                mode: "import",
+                recordAuditEvent: historyAuditRecorder(fixture),
+              }),
+          );
+        };
+        const filed = async (country: CaseLawJurisdiction) =>
+          (await readHistory(fixture, { country })).items.map(
+            (item) => item.kind,
+          );
+
+        // One batch, out of order: the use without a jurisdiction is the
+        // latest, POL is the latest that names one.
+        await importUses([
+          {
+            entry: {
+              kind: "search",
+              query: "Odpowiedzialność",
+              country: "CZE",
+            },
+            usedAt: at(1),
+          },
+          {
+            entry: { kind: "search", query: "Odpowiedzialność" },
+            usedAt: at(3),
+          },
+          {
+            entry: {
+              kind: "search",
+              query: "Odpowiedzialność",
+              country: "POL",
+            },
+            usedAt: at(2),
+          },
+        ]);
+        expect(await filed("POL")).toEqual(["search"]);
+        expect(await filed("CZE")).toEqual([]);
+
+        // A later batch carrying an older jurisdiction-naming use keeps it.
+        await importUses([
+          {
+            entry: {
+              kind: "search",
+              query: "odpowiedzialność",
+              country: "CZE",
+            },
+            usedAt: at(0),
+          },
+        ]);
+        expect(await filed("POL")).toEqual(["search"]);
+        expect(await filed("CZE")).toEqual([]);
+
+        // A newer one refiles it.
+        await importUses([
+          {
+            entry: {
+              kind: "search",
+              query: "odpowiedzialność",
+              country: "CZE",
+            },
+            usedAt: at(4),
+          },
+        ]);
+        expect(await filed("CZE")).toEqual(["search"]);
+        expect(await filed("POL")).toEqual([]);
+      });
+    });
+
+    test("entries keep their jurisdiction and a country filter lists only its own", async () => {
+      await withHistory(databaseUrl, async (fixture) => {
+        const refiled = await recordQuery(fixture, "Náhrada škody", "CZE");
+        const czechQuery = await recordQuery(fixture, "Zástavní právo", "CZE");
+        // One query is one entry: the latest jurisdiction it ran under files it.
+        const polishQuery = await recordQuery(fixture, "náhrada  škody", "POL");
+        expect(polishQuery.id).toBe(refiled.id);
+        const polishDecision = await recordEntry(fixture, {
+          kind: "decision",
+          documentId: "01a16610-b177-712f-bff9-4732ef2df307",
+          title: "II CSKP 61/24",
+          path: "/law/pol/cases/sad-najwyzszy/ii-cskp-61-24",
+        });
+        const legacyRows = await prepareSearchHistoryRows(fixture, [
+          {
+            entry: { kind: "search", query: "kept before countries" },
+            usedAt: new Date(NOW.getTime() - 60_000),
+          },
+          {
+            // A use kept before jurisdictions never unfiles its entry.
+            entry: { kind: "search", query: "NÁHRADA škody" },
+            usedAt: new Date(NOW.getTime() - 60_000),
+          },
+        ]);
+        await fixture.db.transaction(
+          async (tx) =>
+            await upsertSearchHistoryRows({
+              tx,
+              rows: legacyRows,
+              mode: "import",
+              recordAuditEvent: historyAuditRecorder(fixture),
+            }),
+        );
+
+        const czech = await readHistory(fixture, { country: "CZE" });
+        expect(czech.items.map(({ id }) => id)).toEqual([czechQuery.id]);
+        expect(czech.items.at(0)).toMatchObject({
+          kind: "search",
+          country: "CZE",
+        });
+        const polish = await readHistory(fixture, { country: "POL" });
+        expect(new Set(polish.items.map(({ id }) => id))).toEqual(
+          new Set([polishQuery.id, polishDecision.id]),
+        );
+        expect(
+          polish.items.find(({ id }) => id === polishQuery.id),
+        ).toMatchObject({ useCount: 2 });
+        expect(polish.items.every(({ country }) => country === "POL")).toBe(
+          true,
+        );
+        expect(
+          (await readHistory(fixture, { country: "POL", kind: "decision" }))
+            .items,
+        ).toMatchObject([{ id: polishDecision.id, country: "POL" }]);
+        const unscoped = await readHistory(fixture);
+        expect(unscoped.items).toHaveLength(4);
+        expect(
+          unscoped.items.find(({ country }) => country === null),
+        ).toMatchObject({ kind: "search", query: "kept before countries" });
+      });
+    });
+
     test("delete erases one entry and clear erases only the active owner's remaining entries", async () => {
       await withHistory(databaseUrl, async (fixture) => {
         const first = await recordQuery(fixture, "First");
@@ -962,7 +1130,7 @@ if (!databaseUrl || !enabled) {
         const staleRecord = await record.handler(
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
-            body: { kind: "search", query: "Stale record" },
+            body: { kind: "search", query: "Stale record", country: "CZE" },
           }),
         );
         const staleImport = await importEntries.handler(
@@ -1079,7 +1247,7 @@ if (!databaseUrl || !enabled) {
           createTestHandlerContext<Parameters<typeof record.handler>[0]>({
             ...identity(fixture),
             audit: interruptedRecorder,
-            body: { kind: "search", query: "Atomic record" },
+            body: { kind: "search", query: "Atomic record", country: "CZE" },
           }),
         );
         expect(auditInserted).toBe(true);

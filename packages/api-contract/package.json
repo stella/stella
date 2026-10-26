@@ -133,6 +133,7 @@
     "./statute-query-capability": "./src/statute-query-capability.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
     "./desktop-presence": "./src/desktop-presence.ts",
+    "./document-ocr-availability": "./src/document-ocr-availability.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
     "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",
     "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts",

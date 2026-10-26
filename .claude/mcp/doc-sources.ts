@@ -218,6 +218,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "oxlint",
       "@oxlint/plugins",
+      "oxc-parser",
       "oxc-transform-react",
       "oxlint-tsgolint",
     ],

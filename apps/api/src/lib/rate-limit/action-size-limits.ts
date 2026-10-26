@@ -1,10 +1,11 @@
-import { panic, Result, TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { env } from "@/api/env";
+import { reframeBoundedRequest } from "@/api/http/request-body";
+import type { BoundedRequest } from "@/api/http/request-body";
 import { logger } from "@/api/lib/observability/logger";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
 
@@ -80,52 +81,31 @@ const requestTooLarge = () =>
     reason: "request_too_large",
   });
 
-// Meter actual bytes even when Content-Length is present. Retain at most the
-// allowed body and stop reading immediately when a chunk crosses the bound.
+// A reframed request carries its metered size, so nested admission
+// boundaries (multipart, then the tenant action) never read a body twice.
+const reframedBytes = new WeakMap<Request, number>();
+
+/**
+ * Meters and re-frames a tenant action's request body against the action
+ * size policy; an oversized body is refused as `request_too_large`.
+ */
 export const boundActionRequest = async (
   request: Request,
   maximum: number,
-): Promise<Result<Request, ActionSizeError>> => {
-  const length = request.headers.get("content-length");
-  if (
-    length !== null &&
-    parseIntegerToken(length, { sign: "unsigned", max: maximum }).isErr()
-  ) {
-    return Result.err(requestTooLarge());
+): Promise<Result<BoundedRequest, ActionSizeError>> => {
+  const measured = reframedBytes.get(request);
+  if (measured !== undefined) {
+    return measured <= maximum
+      ? Result.ok({ request, bytes: measured })
+      : Result.err(requestTooLarge());
   }
-  if (request.body === null) {
-    return Result.ok(request);
+  const bounded = (await reframeBoundedRequest(request, maximum)).mapError(() =>
+    requestTooLarge(),
+  );
+  if (Result.isOk(bounded)) {
+    reframedBytes.set(bounded.value.request, bounded.value.bytes);
   }
-  // Meter a tee while retaining Bun's original socket-bound Request.
-  const metered = request.clone();
-  const stream: ReadableStream<Uint8Array> | null = metered.body;
-  if (stream === null) {
-    return panic("Cloned action request lost its body");
-  }
-  let size = 0;
-  const reader = stream.getReader();
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) {
-        request.headers.set("content-length", String(size));
-        return Result.ok(request);
-      }
-      size += chunk.value.byteLength;
-      if (size <= maximum) {
-        continue;
-      }
-      // Both tee branches must cancel together; either alone waits for its peer.
-      await Promise.all([reader.cancel(), request.body.cancel()]);
-      return Result.err(requestTooLarge());
-    }
-  } finally {
-    try {
-      await reader.cancel();
-    } finally {
-      reader.releaseLock();
-    }
-  }
+  return bounded;
 };
 
 export const actionSizeErrorResponse = (

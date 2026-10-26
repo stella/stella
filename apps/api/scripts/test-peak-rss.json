@@ -20240,7 +20240,7 @@
         "job": "measure-3"
       }
     },
-    "src/lib/write-contract.test.ts": {
+    "src/lib/write-contract/write-contract.test.ts": {
       "peakMb": 202,
       "baselineMb": 202,
       "source": {

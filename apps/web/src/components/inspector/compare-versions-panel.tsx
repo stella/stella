@@ -3,7 +3,7 @@ import { useState } from "react";
 import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
@@ -18,6 +18,7 @@ import {
 } from "@stll/ui/select";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
