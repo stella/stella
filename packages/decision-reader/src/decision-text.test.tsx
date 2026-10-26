@@ -311,6 +311,45 @@ test("a citation the corpus could not resolve is marked in the text, not linked"
   expect(mark[0]).not.toContain("href=");
 });
 
+test("an unresolved CJEU citation keeps its official CURIA link", () => {
+  const cjeuText = "Soudní dvůr ve věci C-106/89 rozhodl jinak.";
+  const cjeuAst = {
+    ...ast,
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cjeu",
+        anchorId: "p-1",
+        inlines: [{ type: "text", text: cjeuText }],
+        plainText: cjeuText,
+      },
+    ],
+  } satisfies DocumentAst;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: cjeuAst.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    citationAnchors: [],
+    unresolvedCitationAnchors: [
+      { id: "unresolved-cjeu", citationText: "C-106/89" },
+    ],
+    provisionAnchors: [],
+  });
+  const markup = renderToStaticMarkup(
+    <DecisionReaderProvider adapters={fakeReaderAdapters}>
+      <DecisionText
+        decision={{ ...decision, documentAst: cjeuAst }}
+        decisionId={decision.id}
+        isHydrated
+        placements={placements}
+      />
+    </DecisionReaderProvider>,
+  );
+  expect(markup).not.toContain('data-unresolved-citation="unresolved-cjeu"');
+  expect(markup).toMatch(/href="https:\/\/curia\.europa\.eu[^"]*"/u);
+});
+
 const permalinkFixture = (variant: "case-law" | "statute") =>
   ast.blocks.map((block) => (
     <BlockRenderer

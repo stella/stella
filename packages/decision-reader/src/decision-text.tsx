@@ -634,10 +634,19 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
+    // An official CURIA link already navigates; an unresolved peek over the
+    // same words would have nothing to open, so the link keeps them.
+    const externalDecisions = externalCjeuSpansByBlock.get(blockId);
     anchors.push(
       ...unresolvedCitationTextAnchors({
         annotations: blockAnnotations,
-        spans: unresolvedCitationSpans[blockId],
+        spans: unresolvedCitationSpans[blockId]?.filter(
+          (span) =>
+            externalDecisions?.some(
+              (external) =>
+                external.start < span.end && span.start < external.end,
+            ) !== true,
+        ),
       }),
     );
     for (const span of provisionSpans[blockId] ?? []) {
