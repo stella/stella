@@ -105,7 +105,7 @@ test("a call without its own limit is found, one with it is not", () => {
     'import { execFileSync, spawnSync as run } from "node:child_process";',
     'import * as child from "child_process";',
     'execFileSync("git", ["ls-files"]);',
-    'run("git", ["log"], { cwd: "." });',
+    'run("git", ["status", "--porcelain"], { cwd: "." });',
     'child.execSync("ls");',
     'execFileSync("git", ["ls-files"], { maxBuffer: 2 ** 30 });',
     'Bun.spawnSync(["git", "ls-files"]);',
