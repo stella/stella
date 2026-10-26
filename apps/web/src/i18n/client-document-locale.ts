@@ -69,7 +69,7 @@ export const createClientDocumentLocaleOwner = (
   let selection: Selection = { kind: "none" };
   const applied = new WeakMap<QueryClient, string | null>();
 
-  const enqueue = <T>(work: () => Promise<T>): Promise<T> => {
+  const enqueue = async <T>(work: () => Promise<T>): Promise<T> => {
     const next = tail.then(work);
     // The caller receives failures; the next document action must still run.
     tail = next.then(
@@ -79,7 +79,7 @@ export const createClientDocumentLocaleOwner = (
     return next;
   };
 
-  const boot = (queryClient: QueryClient) =>
+  const boot = async (queryClient: QueryClient) =>
     enqueue(async () => {
       const user = await operations.readBootUser(queryClient);
       const userId = user?.id ?? null;
@@ -135,7 +135,7 @@ export const createClientDocumentLocaleOwner = (
       return prefs;
     });
 
-  const select = (queryClient: QueryClient, locale: SupportedLanguage) =>
+  const select = async (queryClient: QueryClient, locale: SupportedLanguage) =>
     enqueue(async () => {
       const session = await Result.tryPromise(
         async () => await operations.readSelectionUser(),
@@ -250,5 +250,7 @@ const clientLocaleOwner = createClientDocumentLocaleOwner({
 });
 
 export const loadClientDocumentPresentation = clientLocaleOwner.boot;
-export const setLang = (queryClient: QueryClient, locale: SupportedLanguage) =>
-  clientLocaleOwner.select(queryClient, locale);
+export const setLang = async (
+  queryClient: QueryClient,
+  locale: SupportedLanguage,
+) => clientLocaleOwner.select(queryClient, locale);
