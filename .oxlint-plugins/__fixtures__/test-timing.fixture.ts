@@ -94,3 +94,24 @@ test("bounded case", () => undefined, 2000);
 // timeout: the case starts a real database cluster
 // expect-clean: test-timing/no-unreasoned-timeout
 test("reasoned case", () => undefined, 30_000);
+
+// --- no-literal-wait-timeout ---
+
+declare const waitFor: (
+  check: () => void,
+  options?: { timeout?: number },
+) => Promise<void>;
+declare const ready: () => void;
+
+// a per-call timeout on a DOM condition wait
+
+// oxlint-disable-next-line test-timing/no-literal-wait-timeout
+await waitFor(ready, { timeout: 1000 });
+
+// a DOM wait under the shared hang guard
+// expect-clean: test-timing/no-literal-wait-timeout
+await waitFor(ready);
+
+// real-time: the subject polls its status on its own interval
+// expect-clean: test-timing/no-literal-wait-timeout
+await waitFor(ready, { timeout: 5000 });
