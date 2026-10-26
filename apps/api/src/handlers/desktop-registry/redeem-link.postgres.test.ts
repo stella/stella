@@ -14,6 +14,7 @@ import {
   apikey,
   member,
   organization,
+  session,
   user,
   verification,
 } from "@/api/db/auth-schema";
@@ -22,6 +23,7 @@ import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-
 import { createDesktopLinkRedeemHandler } from "@/api/handlers/desktop-registry/redeem-link";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
+import { revokeAllUserDurableCredentials } from "@/api/lib/auth-artifacts";
 import {
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
@@ -44,7 +46,13 @@ const postgresUrl = process.env["DATABASE_URL"];
 describe.skipIf(
   process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true" || !postgresUrl,
 )("desktop link proof authorization boundary (postgres)", () => {
-  for (const link of ["initial", "existing-account"] as const) {
+  // "reset-before-redeem": an access reset ended the browser session that
+  // requested the link before the desktop redeemed it.
+  for (const link of [
+    "initial",
+    "existing-account",
+    "reset-before-redeem",
+  ] as const) {
     for (const proofState of ["missing", "valid"] as const) {
       test(`${link} link ${proofState} proof is authorized before grant claim`, async () => {
         if (!postgresUrl) {
@@ -59,6 +67,7 @@ describe.skipIf(
           const verifier = "a".repeat(64);
           const credential = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
           const keyId = mintAuthProviderIdValue();
+          const sessionId = mintAuthProviderIdValue();
           await db.transaction(async (tx) => {
             await tx.insert(user).values({
               id: userId,
@@ -78,6 +87,13 @@ describe.skipIf(
               organizationId,
               role: "member",
               createdAt: new Date(),
+            });
+            await tx.insert(session).values({
+              id: sessionId,
+              token: `token-${sessionId}`,
+              userId,
+              expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+              updatedAt: new Date(),
             });
             if (link === "existing-account") {
               await tx.insert(apikey).values({
@@ -110,8 +126,14 @@ describe.skipIf(
               deviceJkt: device.deviceJkt,
               userId,
               organizationId,
+              sessionId,
             });
             expect(issued.isOk()).toBe(true);
+            if (link === "reset-before-redeem") {
+              await db.transaction(
+                async (tx) => await revokeAllUserDurableCredentials(tx, userId),
+              );
+            }
             const body = {
               correlationId,
               verifier,
@@ -159,7 +181,9 @@ describe.skipIf(
             }
             const response = await server.fetch(request);
             const payload: unknown = await response.json();
-            expect(response.status).toBe(proofState === "valid" ? 200 : 401);
+            const issues =
+              proofState === "valid" && link !== "reset-before-redeem";
+            expect(response.status).toBe(issues ? 200 : 401);
             const grant = await db
               .select({ id: verification.id })
               .from(verification)
@@ -172,7 +196,14 @@ describe.skipIf(
               .select({ id: auditLogs.id })
               .from(auditLogs)
               .where(eq(auditLogs.organizationId, organizationId));
-            if (proofState === "valid") {
+            if (proofState === "valid" && link === "reset-before-redeem") {
+              expect(payload).toMatchObject({
+                message: "Sign in again to connect stella desktop",
+              });
+              expect(grant).toEqual([]);
+              expect(keys).toEqual([]);
+              expect(audit).toEqual([]);
+            } else if (proofState === "valid") {
               expect(payload).toMatchObject({
                 status:
                   link === "existing-account" ? "connected" : "credential",
