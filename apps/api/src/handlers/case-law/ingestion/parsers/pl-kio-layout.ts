@@ -861,14 +861,14 @@ const pageNumbersOf = ({
   );
 };
 
-type ReadBlocksOptions = {
+type ReadLayoutBlocksOptions = {
   bodySize: number;
   authorBreaks: ReadonlySet<Element>;
 };
 
-const readBlocks = (
+const readLayoutBlocks = (
   $: CheerioAPI,
-  { bodySize, authorBreaks }: ReadBlocksOptions,
+  { bodySize, authorBreaks }: ReadLayoutBlocksOptions,
 ): Block[] => {
   let page = 0;
   const blocks: Block[] = [];
@@ -969,7 +969,7 @@ export const readPlKioLayout = ($: CheerioAPI): PlKioLayoutReading => {
   liftSmallTypeIndices($, bodySize);
   spaceWordNumbering($);
 
-  const blocks = readBlocks($, { bodySize, authorBreaks });
+  const blocks = readLayoutBlocks($, { bodySize, authorBreaks });
   const numbered = pageNumbersOf({ blocks, bodyTypeface });
   const { merges, breaks } = reflowOf(blocks, numbered);
 
