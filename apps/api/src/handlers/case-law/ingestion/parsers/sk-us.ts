@@ -24,6 +24,7 @@
  * there.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
@@ -38,6 +39,7 @@ import type {
 import {
   mapInlineText,
   normalizeInlineLine,
+  rewriteInlineWhitespace,
   stripInlinePrefix,
   stripInlineSuffix,
 } from "@stll/legal-ast/inline-line";
@@ -233,6 +235,169 @@ const PAGE_NUMBER_PATTERN = /^\d{1,4}$/u;
 const LEADING_PAGE_NUMBER = /^(?<number>\d{1,4})\s+(?=\S)/u;
 const TRAILING_PAGE_NUMBER = /\s{2,}(?<number>\d{1,4})$/u;
 
+/** Where a page number may stand, and how many characters it takes. */
+type FooterCandidate = {
+  readonly index: number;
+  readonly number: number;
+  /** Characters of text before the line, the page axis. */
+  readonly offset: number;
+  readonly form: "alone" | "leading" | "trailing";
+  readonly length: number;
+  /**
+   * The document's last text: the final page's footer, after a page that
+   * may hold only the closing lines.
+   */
+  readonly last: boolean;
+};
+
+const PAGE_SEQUENCE = {
+  /** Pages that must confirm each other before any number is removed. */
+  minPages: 2,
+  /** No page of a decision holds less text than this. */
+  minPageChars: 1000,
+} as const;
+
+/**
+ * Every line where a page number may stand: a number on a line of its own,
+ * or one glued to a line that a blank line separates from the other page.
+ */
+const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
+  const candidates: FooterCandidate[] = [];
+  const isBlank = (index: number): boolean => lines[index]?.text === "";
+  const lastText = lines.findLastIndex(({ text }) => text.length > 0);
+  let offset = 0;
+  for (const [index, { text }] of lines.entries()) {
+    const leading = isBlank(index - 1) ? LEADING_PAGE_NUMBER.exec(text) : null;
+    const trailing = isBlank(index + 1)
+      ? TRAILING_PAGE_NUMBER.exec(text)
+      : null;
+    if (PAGE_NUMBER_PATTERN.test(text)) {
+      candidates.push({
+        index,
+        number: Number(text),
+        offset,
+        form: "alone",
+        length: text.length,
+        last: index === lastText,
+      });
+    } else if (leading !== null) {
+      candidates.push({
+        index,
+        number: Number(leading.groups?.["number"]),
+        offset,
+        form: "leading",
+        length: leading[0].length,
+        last: false,
+      });
+    } else if (trailing !== null) {
+      candidates.push({
+        index,
+        number: Number(trailing.groups?.["number"]),
+        offset: offset + text.length,
+        form: "trailing",
+        length: trailing[0].length,
+        last: false,
+      });
+    }
+    offset += text.length;
+  }
+  return candidates;
+};
+
+/**
+ * The candidates that number the pages: the longest run of numbers that
+ * advance by one, each a page of text after the one before; among runs as
+ * long, the one whose pages are most alike in length. A number the run
+ * does not reach (`Zostáva zaplatiť` / `2 eurá.`, `5 Cdo …`) is the text's.
+ */
+const pageSequence = (
+  candidates: readonly FooterCandidate[],
+): FooterCandidate[] => {
+  const chain = (pageChars: number | null): FooterCandidate[] => {
+    const best = candidates.map(() => ({
+      length: 0,
+      cost: 0,
+      previous: -1,
+    }));
+    for (const [at, candidate] of candidates.entries()) {
+      const first = candidate.number - 1;
+      if (candidate.offset < first * PAGE_SEQUENCE.minPageChars) {
+        continue;
+      }
+      best[at] = {
+        length: 1,
+        cost:
+          pageChars === null
+            ? 0
+            : Math.abs(candidate.offset - first * pageChars),
+        previous: -1,
+      };
+      for (let before = 0; before < at; before += 1) {
+        const previous = candidates[before];
+        const step = best[before];
+        if (
+          previous === undefined ||
+          step === undefined ||
+          step.length === 0 ||
+          previous.number !== candidate.number - 1 ||
+          (!candidate.last &&
+            candidate.offset - previous.offset < PAGE_SEQUENCE.minPageChars)
+        ) {
+          continue;
+        }
+        const gap = candidate.offset - previous.offset;
+        const length = step.length + 1;
+        const cost =
+          step.cost + (pageChars === null ? 0 : Math.abs(gap - pageChars));
+        const current = best[at];
+        if (
+          current !== undefined &&
+          (length > current.length ||
+            (length === current.length && cost < current.cost))
+        ) {
+          best[at] = { length, cost, previous: before };
+        }
+      }
+    }
+    let last = -1;
+    for (const [at, step] of best.entries()) {
+      const current = best[last];
+      if (
+        step.length > (current?.length ?? 0) ||
+        (current !== undefined &&
+          step.length === current.length &&
+          step.cost < current.cost)
+      ) {
+        last = at;
+      }
+    }
+    const members: FooterCandidate[] = [];
+    for (let at = last; at >= 0; at = best[at]?.previous ?? -1) {
+      const member = candidates[at];
+      if (member !== undefined) {
+        members.unshift(member);
+      }
+    }
+    return members;
+  };
+  const rough = chain(null);
+  const head = rough.at(0);
+  const tail = rough.at(-1);
+  if (
+    head === undefined ||
+    tail === undefined ||
+    rough.length < PAGE_SEQUENCE.minPages
+  ) {
+    return [];
+  }
+  const pageChars =
+    tail.number === head.number
+      ? null
+      : (tail.offset - head.offset) / (tail.number - head.number);
+  const members = chain(pageChars);
+  return members.length < PAGE_SEQUENCE.minPages ? [] : members;
+};
+
 /**
  * Remove the page numbers the court prints, and mark the blank lines around
  * them as page breaks rather than paragraph breaks.
@@ -245,15 +410,13 @@ const TRAILING_PAGE_NUMBER = /\s{2,}(?<number>\d{1,4})$/u;
  * the first word of a sentence, hides a section numeral or a paragraph
  * number, and the blank line cuts a sentence in two.
  *
- * A number is a page number only where the pages put one: it is the next in
- * the sequence the earlier pages started, and a blank line separates it from
- * the other page. `35 poslancov` after a blank line is not one, because the
- * page it would number is not the next page.
+ * A number is removed only as a member of the document's own page sequence
+ * (see {@link pageSequence}): a blank line before `2 eurá.` does not make
+ * the amount a page number, and a document whose pages do not confirm each
+ * other keeps every number it prints.
  */
 const removePageFurniture = (lines: readonly MarkupLine[]): MarkupLine[] => {
   const result = lines.map((line) => ({ ...line }));
-  // The first page is rarely numbered, so the sequence may open at 2.
-  let expected: readonly number[] = [1, 2];
   const isBlank = (index: number): boolean => result[index]?.text === "";
   const markBreak = (from: number, step: 1 | -1): void => {
     for (let index = from; isBlank(index); index += step) {
@@ -263,46 +426,30 @@ const removePageFurniture = (lines: readonly MarkupLine[]): MarkupLine[] => {
       }
     }
   };
-  const take = (raw: string | undefined): boolean => {
-    const number = Number(raw);
-    if (!expected.includes(number)) {
-      return false;
-    }
-    expected = [number + 1];
-    return true;
-  };
-
-  for (const [index, line] of result.entries()) {
-    if (line.text === "") {
+  for (const { index, form, length } of pageSequence(
+    footerCandidates(result),
+  )) {
+    const line = result[index];
+    if (line === undefined) {
       continue;
     }
-    if (PAGE_NUMBER_PATTERN.test(line.text)) {
-      // Dropped by the classifier whatever its number; it only advances the
-      // sequence when it is the next page's.
-      if (take(line.text)) {
+    switch (form) {
+      case "alone":
+        // Dropped by the classifier as a footer whatever its number.
         markBreak(index - 1, -1);
         markBreak(index + 1, 1);
-      }
-      continue;
-    }
-    const leading = LEADING_PAGE_NUMBER.exec(line.text);
-    if (
-      leading !== null &&
-      isBlank(index - 1) &&
-      take(leading.groups?.["number"])
-    ) {
-      setInlines(line, stripInlinePrefix(line.inlines, leading[0].length));
-      markBreak(index - 1, -1);
-      continue;
-    }
-    const trailing = TRAILING_PAGE_NUMBER.exec(line.text);
-    if (
-      trailing !== null &&
-      isBlank(index + 1) &&
-      take(trailing.groups?.["number"])
-    ) {
-      setInlines(line, stripInlineSuffix(line.inlines, trailing[0].length));
-      markBreak(index + 1, 1);
+        break;
+      case "leading":
+        setInlines(line, stripInlinePrefix(line.inlines, length));
+        markBreak(index - 1, -1);
+        break;
+      case "trailing":
+        setInlines(line, stripInlineSuffix(line.inlines, length));
+        markBreak(index + 1, 1);
+        break;
+      default:
+        form satisfies never;
+        panic("Unhandled page footer form");
     }
   }
   return result;
@@ -332,8 +479,12 @@ const SOFT_HYPHEN = String.fromCodePoint(0xad);
  * is a visible hyphen, the ones at a line's end included (`obrazovo<U+00AD>`
  * / `zvukových`, `C<U+00AD>` / `293/12`).
  */
-const readTypography = (text: string): string =>
-  collapseLetterSpacing(text.replaceAll(SOFT_HYPHEN, "-"), { setApart: true });
+const readTypography = (inlines: readonly Inline[]): Inline[] =>
+  rewriteInlineWhitespace(
+    mapInlineText(inlines, (text) => text.replaceAll(SOFT_HYPHEN, "-")),
+    // Over the whole line: a wrapper's edge is not a gap between words.
+    (text) => collapseLetterSpacing(text, { setApart: true }),
+  );
 
 type Section = SkDocumentSection;
 
@@ -441,13 +592,25 @@ const titleEnd = (
   // A part title ends with its line; at the foot of a page, the next page
   // must not go on with the sentence (`… v znení` / `neskorších …`).
   const last = lines[end - 1]?.text ?? "";
-  const next = lines.slice(end).find(({ text: line }) => line.length > 0);
+  const next = nextTextLine(lines, end);
   const cutByPage =
     lines[end]?.pageBreak === true && /^\p{Ll}/u.test(next?.text ?? "");
   return ENDS_PROSE.test(last) || cutByPage || chars > TITLE_LIMITS.maxPartChars
     ? undefined
     : end;
 };
+
+/**
+ * The first line from `from` that carries text: past blank lines, and past
+ * a page number on a line of its own, which the classifier drops.
+ */
+const nextTextLine = (
+  lines: readonly MarkupLine[],
+  from: number,
+): MarkupLine | undefined =>
+  lines
+    .slice(from)
+    .find(({ text }) => text.length > 0 && !PAGE_NUMBER_PATTERN.test(text));
 
 /** The lines `from` to `to` (exclusive) as one line. */
 const joinRange = (
@@ -569,7 +732,7 @@ const readBlankLine = (
   index: number,
 ): void => {
   const open = builder.paragraph?.text;
-  const next = lines.slice(index + 1).find(({ text }) => text.length > 0)?.text;
+  const next = nextTextLine(lines, index + 1)?.text;
   if (
     lines[index]?.pageBreak === true &&
     open !== undefined &&
@@ -954,7 +1117,7 @@ export const parseSkUsDocumentXhtml = ({
   markHiddenRuns($);
   const lines = removePageFurniture(readMarkupLines($));
   for (const line of lines) {
-    setInlines(line, mapInlineText(line.inlines, readTypography));
+    setInlines(line, readTypography(line.inlines));
   }
   const blocks = courtParagraphNumbers(classifyLines(lines), {
     parser: "sk-us",
