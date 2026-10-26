@@ -87,9 +87,9 @@ describe("letter-spaced emphasis (PL. ÚS 15/98)", () => {
     );
     const next = blocks[reasoning + 1];
     expect(next?.type).toBe("paragraph");
-    expect(
-      next !== undefined && next.type === "paragraph" ? textOf(next) : "",
-    ).toStartWith("Ústavnému súdu Slovenskej republiky bol 30. júna 1998");
+    expect(next?.type === "paragraph" ? textOf(next) : "").toStartWith(
+      "Ústavnému súdu Slovenskej republiky bol 30. júna 1998",
+    );
   });
 });
 
