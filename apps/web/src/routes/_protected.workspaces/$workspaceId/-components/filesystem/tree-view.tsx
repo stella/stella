@@ -75,11 +75,6 @@ import {
 } from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getFileSizeDisplay } from "@/lib/file-size";
-import {
-  applySelectionGesture,
-  SELECTION_GESTURE,
-  selectionGestureForModifiers,
-} from "@/lib/multi-selection.logic";
 import { UTC_CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -89,6 +84,11 @@ import type {
 } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import {
+  applySelectionGesture,
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/workspaces/multi-selection.logic";
 import {
   useMoveEntity,
   useRenameEntity,

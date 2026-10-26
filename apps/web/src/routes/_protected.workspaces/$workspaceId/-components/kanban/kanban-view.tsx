@@ -30,9 +30,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
-import { moveKanbanCards } from "@/components/workspaces/kanban/kanban-card-moves.logic";
 import { useKanbanSelectionOwner } from "@/components/workspaces/kanban/kanban-selection";
-import { KanbanSelectionSurface } from "@/components/workspaces/kanban/kanban-selection-surface";
 import type { KanbanDraggedCard } from "@/components/workspaces/kanban/kanban-selection.logic";
 import {
   buildKanbanAssigneeMatrix,
@@ -100,8 +98,10 @@ import {
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { mergeLayout } from "@/lib/workspaces/view-layout";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
+import { moveKanbanCards } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card-moves.logic";
 import { KanbanColumn } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
 import type { KanbanCalculations } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column";
+import { KanbanSelectionSurface } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-selection-surface";
 import { KanbanSubgroupBoard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-subgroup-board";
 import { viewEntityKinds } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 
@@ -117,7 +117,7 @@ type CreateFromKanbanOptions = {
 
 type SettleCardMovesOptions = {
   cards: readonly KanbanDraggedCard[];
-  moveCard: (card: KanbanDraggedCard) => Promise<unknown>;
+  moveCard: (card: KanbanDraggedCard) => Promise<Result<unknown, unknown>>;
   /** Whether a move writes task state (status, assignees). */
   touchesTasks: boolean;
 };
@@ -505,7 +505,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       await settleCardMoves({
         cards,
         moveCard: async ({ entityId }) =>
-          await patchTaskStatus(entityId, status),
+          Result.ok(await patchTaskStatus(entityId, status)),
         touchesTasks: true,
       });
       return;
@@ -520,16 +520,18 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     await settleCardMoves({
       cards,
       moveCard: async ({ entityId }) =>
-        await upsertFieldRequest({
-          workspaceId,
-          propertyId: groupByPropertyId,
-          entityId,
-          content: {
-            version: 1,
-            type: "single-select",
-            value: targetValue,
-          },
-        }),
+        Result.ok(
+          await upsertFieldRequest({
+            workspaceId,
+            propertyId: groupByPropertyId,
+            entityId,
+            content: {
+              version: 1,
+              type: "single-select",
+              value: targetValue,
+            },
+          }),
+        ),
       touchesTasks: false,
     });
   };
@@ -819,10 +821,12 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       if (!sourceEntity) {
         // A selected card can leave the loaded rows (a filter now hides it,
         // someone deleted it) between being selected and being dropped.
-        throw new ClientOperationError({
-          action: "move-kanban-card",
-          message: "Dragged Kanban card is no longer loaded",
-        });
+        return Result.err(
+          new ClientOperationError({
+            action: "move-kanban-card",
+            message: "Dragged Kanban card is no longer loaded",
+          }),
+        );
       }
       if (isAssigneeSubgroup) {
         await handleAssigneeLaneDrop(
@@ -833,7 +837,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       }
       if (isStatusGrouping) {
         await patchTaskStatus(entityId, columnValue);
-        return;
+        return Result.ok(undefined);
       }
       if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
         panic("Read-only Kanban primary grouping accepted a drag");
@@ -848,7 +852,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           value: columnValue,
         },
       });
-      return;
+      return Result.ok(undefined);
     }
 
     const subgroupContent = subgroupFieldContent(laneValue);
@@ -878,6 +882,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         },
       ],
     });
+    return Result.ok(undefined);
   };
 
   const handleDropCardInCell = async (

@@ -38,14 +38,12 @@ const MARQUEE_BLOCKING_SELECTOR = [
   '[role="dialog"]',
 ].join(", ");
 
-/** Only a precise pointer draws a marquee; a finger on the board scrolls it. */
-const MARQUEE_POINTER_TYPES = new Set(["mouse", "pen"]);
-
 const isMarqueeStart = (event: ReactPointerEvent<HTMLElement>): boolean => {
   const { target } = event;
   if (
     event.button !== 0 ||
-    !MARQUEE_POINTER_TYPES.has(event.pointerType) ||
+    // Only a precise pointer draws a marquee; a finger on the board scrolls it.
+    (event.pointerType !== "mouse" && event.pointerType !== "pen") ||
     !(target instanceof Element) ||
     // React bubbles events out of portals (menus, popovers) through the
     // component tree; only a press on the board itself starts a marquee.

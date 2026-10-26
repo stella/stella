@@ -16,11 +16,11 @@ import type {
 import {
   applySelectionGesture,
   SELECTION_GESTURE,
-} from "@/lib/multi-selection.logic";
+} from "@/lib/workspaces/multi-selection.logic";
 import type {
   MultiSelection,
   SelectionGesture,
-} from "@/lib/multi-selection.logic";
+} from "@/lib/workspaces/multi-selection.logic";
 
 /**
  * The selected cards, each with the drag item it last rendered as, so a drag

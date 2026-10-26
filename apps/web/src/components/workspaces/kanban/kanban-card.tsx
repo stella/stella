@@ -53,10 +53,6 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter } from "@/i18n/formatting-context";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import {
-  SELECTION_GESTURE,
-  selectionGestureForModifiers,
-} from "@/lib/multi-selection.logic";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -64,6 +60,10 @@ import type {
   WorkspaceFieldContent,
   WorkspaceProperty,
 } from "@/lib/types";
+import {
+  SELECTION_GESTURE,
+  selectionGestureForModifiers,
+} from "@/lib/workspaces/multi-selection.logic";
 
 type KanbanCardProps = {
   context?: ReactNode;
@@ -126,9 +126,11 @@ export const KanbanCard = ({
     toKanbanCardDragItem(entity, dragSubgroupValue),
   );
   const getSelectionScope = useLatestCallback(() =>
-    (selection?.scope ?? []).map((scoped) =>
-      toKanbanCardDragItem(scoped, dragSubgroupValue),
-    ),
+    selection === undefined
+      ? []
+      : selection.scope.map((scoped) =>
+          toKanbanCardDragItem(scoped, dragSubgroupValue),
+        ),
   );
   const getDragItems = useLatestCallback((primary: KanbanCardDragItem) =>
     selectionOwner ? selectionOwner.getDragItems(primary) : [primary],
@@ -351,7 +353,7 @@ export const KanbanCard = ({
           item: getDragItem(),
           getScope: getSelectionScope,
         });
-        openCard();
+        openCard?.();
       }}
       onSelectionClick={
         selectionOwner

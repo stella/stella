@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
-import type { MultiSelection } from "@/lib/multi-selection.logic";
 import type { WorkspaceEntity } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
+import type { MultiSelection } from "@/lib/workspaces/multi-selection.logic";
 
 /** What a card contributes to a drag: enough for every entity drop target. */
 export type KanbanCardDragItem = {
@@ -139,7 +139,7 @@ export type ViewportRect = {
 };
 
 /** A pointer travelling less than this is a click, not a marquee. */
-export const MARQUEE_DRAG_THRESHOLD_PX = 4;
+const MARQUEE_DRAG_THRESHOLD_PX = 4;
 
 export const hasPassedMarqueeThreshold = (
   start: ViewportPoint,

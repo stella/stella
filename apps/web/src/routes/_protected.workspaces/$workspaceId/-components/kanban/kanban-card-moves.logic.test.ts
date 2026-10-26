@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -14,7 +15,8 @@ const cards = (count: number) =>
 describe("moving a selection of cards", () => {
   test("attempts every card even when some fail, and reports which moved", async () => {
     const attempted: string[] = [];
-    const failure = new Error("card-1 refused");
+    const failure = new Error("card-1 rejected");
+    const refusal = new Error("card-2 refused");
 
     const outcome = await moveKanbanCards({
       cards: cards(4),
@@ -24,6 +26,9 @@ describe("moving a selection of cards", () => {
           throw failure;
         }
         await Promise.resolve();
+        return entityId === "card-2"
+          ? Result.err(refusal)
+          : Result.ok(entityId);
       },
     });
 
@@ -33,9 +38,9 @@ describe("moving a selection of cards", () => {
       "card-2",
       "card-3",
     ]);
-    expect(outcome.movedIds).toEqual(["card-0", "card-2", "card-3"]);
-    // The original error survives, so the toast can show its message.
-    expect(outcome.failures).toEqual([failure]);
+    expect(outcome.movedIds).toEqual(["card-0", "card-3"]);
+    // The original errors survive, so the toast can show their message.
+    expect(outcome.failures).toEqual([failure, refusal]);
   });
 
   test("keeps at most the bounded number of moves in flight", async () => {
@@ -51,6 +56,7 @@ describe("moving a selection of cards", () => {
         // before the first one finishes.
         await Promise.resolve();
         inFlight -= 1;
+        return Result.ok(undefined);
       },
     });
 

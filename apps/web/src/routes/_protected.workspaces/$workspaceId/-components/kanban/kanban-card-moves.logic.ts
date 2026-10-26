@@ -14,8 +14,8 @@ export const KANBAN_MOVE_CONCURRENCY = 6;
 
 type MoveKanbanCardsOptions = {
   cards: readonly KanbanDraggedCard[];
-  /** Moves one card; a rejection counts that card as failed. */
-  moveCard: (card: KanbanDraggedCard) => Promise<unknown>;
+  /** Moves one card; an error result or a rejection counts it as failed. */
+  moveCard: (card: KanbanDraggedCard) => Promise<Result<unknown, unknown>>;
 };
 
 export type KanbanCardMoveOutcome = {
@@ -35,13 +35,16 @@ export const moveKanbanCards = async ({
   const results = await mapWithConcurrency({
     items: cards,
     limit: KANBAN_MOVE_CONCURRENCY,
-    operation: async (card) => ({
-      card,
-      result: await Result.tryPromise({
+    operation: async (card) => {
+      const attempted = await Result.tryPromise({
         try: async () => await moveCard(card),
         catch: (cause) => cause,
-      }),
-    }),
+      });
+      return {
+        card,
+        result: Result.isError(attempted) ? attempted : attempted.value,
+      };
+    },
   });
   const movedIds: string[] = [];
   const failures: unknown[] = [];
