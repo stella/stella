@@ -1676,6 +1676,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  // The script test runner's scan preload logs directory scans here.
+  "SCRIPT_TEST_SCAN_LOG",
   "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",

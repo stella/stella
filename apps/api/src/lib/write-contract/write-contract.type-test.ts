@@ -4,7 +4,8 @@ import type {
   SessionHandlerConfig,
   TokenHandlerConfig,
   WorkspaceHandlerConfig,
-} from "./api-handlers";
+} from "@/api/lib/api-handlers";
+
 import type { WriteContract } from "./write-contract";
 
 type HasRequiredContract<T> = [T] extends [WriteContract] ? true : never;

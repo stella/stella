@@ -225,6 +225,19 @@ type SelectScriptTestsOptions = {
   readonly root?: string;
   readonly inputs?: Readonly<Record<string, readonly string[]>>;
   readonly exemptions?: Readonly<Record<string, string>>;
+  /** Tracked files; a closure file outside it is generated output. */
+  readonly tracked?: ReadonlySet<string>;
+};
+
+const trackedFiles = (): Set<string> => {
+  const result = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    panic("Could not list tracked repository files");
+  }
+  return new Set(result.stdout.toString().split("\0").filter(Boolean));
 };
 
 /** Select tests only when HEAD proves their code or declared data changed. */
@@ -234,6 +247,7 @@ export const selectScriptTests = ({
   root = REPO_ROOT,
   inputs = scriptTestInputs.inputs,
   exemptions = scriptTestInputs.noTrackedInputs,
+  tracked = root === REPO_ROOT ? trackedFiles() : undefined,
 }: SelectScriptTestsOptions): ScriptTestSelection => {
   const realRoot = realpathSync(root);
   const graph = buildImportGraph(realRoot, [
@@ -264,8 +278,18 @@ export const selectScriptTests = ({
       !Object.hasOwn(exemptions, test)
     );
   });
-  const unresolved = tests.filter((test) =>
-    [...graph.closure(test)].some((file) => graph.failed.has(file)),
+  // Generated sources exist only where CI prepared them, and no tracked file
+  // digest covers their generators' inputs. A test reaching one, or an import
+  // that cannot resolve, can never be proven unaffected, so it declares `**`.
+  const runsAlways = (test: string) => inputs[test]?.includes("**") === true;
+  const unresolved = tests.filter(
+    (test) =>
+      !runsAlways(test) &&
+      [...graph.closure(test)].some(
+        (file) =>
+          graph.failed.has(file) ||
+          (tracked !== undefined && !tracked.has(file)),
+      ),
   );
   if (undeclared.length > 0 || unresolved.length > 0) {
     panic(
@@ -274,7 +298,7 @@ export const selectScriptTests = ({
           ? `Script tests with undeclared data inputs: ${undeclared.join(", ")}`
           : "",
         unresolved.length > 0
-          ? `Script tests with unresolved repository imports: ${unresolved.join(", ")}`
+          ? `Script tests with unresolved or generated imports (declare "**"): ${unresolved.join(", ")}`
           : "",
       ]
         .filter(Boolean)
@@ -317,22 +341,6 @@ const scan = (pattern: string): string[] => [
   ...new Bun.Glob(pattern).scanSync({ cwd: REPO_ROOT }),
 ];
 
-/**
- * Runs `command` with its output in files, then prints it whole, so commands
- * running at once never interleave their reports. Files, not pipes: a piped
- * stdout is truncated for large test reports.
- */
-const trackedFiles = (): Set<string> => {
-  const result = Bun.spawnSync(["git", "ls-files", "-z"], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-  });
-  if (result.exitCode !== 0) {
-    panic("Could not list tracked repository files");
-  }
-  return new Set(result.stdout.toString().split("\0").filter(Boolean));
-};
-
 const TRACE_STRING_LIMIT = 65_535;
 // strace marks a string it cut short with "..." after the closing quote.
 const TRUNCATED_STRING = /"\.\.\./u;
@@ -363,7 +371,7 @@ export const undeclaredTracedFiles = ({
       continue;
     }
     const openedPath = match[1].replaceAll('\\"', '"');
-    const directory = /(?:AT_FDCWD|\d+)<([^>]+)>[^"]*"/u.exec(line)?.[1];
+    const directory = pathDirectoryAnnotation(line);
     const absolute = path.isAbsolute(openedPath)
       ? path.normalize(openedPath)
       : path.resolve(directory ?? REPO_ROOT, openedPath);
@@ -467,6 +475,23 @@ const updateWorkingDirectory = (
   return true;
 };
 
+// With -yy, strace annotates the directory descriptor that a relative path
+// argument resolves against: `openat(AT_FDCWD</repo>, "file", …)`.
+const pathDirectoryAnnotation = (line: string): string | undefined => {
+  const beforePath = line.slice(0, line.indexOf('"'));
+  const open = beforePath.indexOf("<");
+  const close = beforePath.indexOf(">", open);
+  if (open === -1 || close === -1) {
+    return undefined;
+  }
+  const descriptor = beforePath.slice(0, open);
+  const last = descriptor.at(-1);
+  return descriptor.endsWith("AT_FDCWD") ||
+    (last !== undefined && last >= "0" && last <= "9")
+    ? beforePath.slice(open + 1, close)
+    : undefined;
+};
+
 const joinedTraceRecords = (trace: string): string[] => {
   const records: string[] = [];
   const unfinished = new Map<string, string>();
@@ -476,7 +501,10 @@ const joinedTraceRecords = (trace: string): string[] => {
       continue;
     }
     if (line.includes("<unfinished ...>")) {
-      unfinished.set(pid, line.replace(/\s*<unfinished \.\.\.>\s*$/u, ""));
+      unfinished.set(
+        pid,
+        line.slice(0, line.lastIndexOf("<unfinished ...>")).trimEnd(),
+      );
       continue;
     }
     const resumed = /^\s*\d+\s+<\.\.\.\s+\S+\s+resumed>(.*)$/u.exec(line);
@@ -635,6 +663,11 @@ type RunOptions = {
   readonly tracked: ReadonlySet<string>;
 };
 
+/**
+ * Runs `command` with its output in files, then prints it whole, so commands
+ * running at once never interleave their reports. Files, not pipes: a piped
+ * stdout is truncated for large test reports.
+ */
 const run = async ({
   command,
   testFile,

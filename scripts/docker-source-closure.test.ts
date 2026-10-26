@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -9,7 +9,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
 import * as v from "valibot";
 
 import {
@@ -1701,11 +1700,12 @@ describe("Docker source closure", () => {
     expect(configurations.length).toBeGreaterThan(0);
     const patterns = new Set<string>();
     for (const configuration of configurations) {
-      const parsed = ts.parseConfigFileTextToJson(
-        configuration,
-        readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+      const parsed = Result.try(() =>
+        Bun.JSONC.parse(
+          readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+        ),
       );
-      expect(parsed.error, configuration).toBeUndefined();
+      expect(parsed.isOk(), configuration).toBe(true);
       const config = v.parse(
         v.looseObject({
           compilerOptions: v.optional(
@@ -1714,7 +1714,7 @@ describe("Docker source closure", () => {
             }),
           ),
         }),
-        parsed.config,
+        parsed.unwrapOr(undefined),
       );
       for (const pattern of Object.keys(config.compilerOptions?.paths ?? {})) {
         patterns.add(pattern);

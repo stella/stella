@@ -305,6 +305,46 @@ describe("script test impact selection", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test("a test reaching generated or unresolvable sources must declare **", () => {
+    const root = makeFixture();
+    writeFileSync(
+      path.join(root, "scripts/generated.test.ts"),
+      'import { value } from "./generated/output"; void value;\n',
+    );
+    const tests = ["scripts/subject.test.ts", "scripts/generated.test.ts"];
+    const tracked = new Set([
+      "scripts/run-unlisted-script-tests.ts",
+      "scripts/subject.ts",
+      "scripts/transitive.ts",
+      "scripts/subject.test.ts",
+      "scripts/generated.test.ts",
+    ]);
+    try {
+      expect(() =>
+        selectScriptTests({ tests, changed: [], root, inputs: {}, tracked }),
+      ).toThrow("unresolved or generated imports");
+      mkdirSync(path.join(root, "scripts/generated"));
+      writeFileSync(
+        path.join(root, "scripts/generated/output.ts"),
+        "export const value = 1;\n",
+      );
+      expect(() =>
+        selectScriptTests({ tests, changed: [], root, inputs: {}, tracked }),
+      ).toThrow("unresolved or generated imports");
+      expect(
+        selectScriptTests({
+          tests,
+          changed: ["docs/unrelated.md"],
+          root,
+          inputs: { "scripts/generated.test.ts": ["**"] },
+          tracked,
+        }).files,
+      ).toEqual(["scripts/generated.test.ts"]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 test("tracing names tracked reads outside the closure and declarations", () => {

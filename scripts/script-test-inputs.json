@@ -61,11 +61,7 @@
     "scripts/generated-conflicts-workflows.test.ts": [".github/**"],
     "scripts/generated-files-guard.test.ts": ["**"],
     "scripts/generated-files.test.ts": ["**"],
-    "scripts/generated-markdown-merge.test.ts": [
-      "docs/capability-coverage.md",
-      "packages/cli/skills/**",
-      "packages/cli/src/generated/**"
-    ],
+    "scripts/generated-markdown-merge.test.ts": ["**"],
     "scripts/main-workflow-cadence.test.ts": [".github/**"],
     "scripts/manual-checks-workflow.test.ts": [".github/**"],
     "scripts/migration-catalog.test.ts": ["apps/api/drizzle/**"],
@@ -111,6 +107,7 @@
       "**",
       "apps/api/src/lib/file-scan/yara/**"
     ],
+    "scripts/workflow-app-token-permissions.test.ts": ["**"],
     "scripts/workflow-dispatch-run.test.ts": [".github/**"],
     "scripts/workflow-git-environment.test.ts": [".github/**"],
     "scripts/workflow-install-baseline.test.ts": [".github/**"],
