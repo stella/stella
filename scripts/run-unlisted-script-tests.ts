@@ -696,6 +696,9 @@ const run = async ({
       ? [
           "strace",
           "-f",
+          // A kernel filter stops the test only at the traced calls; without
+          // it every syscall of Bun's threads round-trips through strace.
+          "--seccomp-bpf",
           "-yy",
           // strace cuts strings at 32 bytes by default; a cut path would
           // not match a tracked file and escape verification.
