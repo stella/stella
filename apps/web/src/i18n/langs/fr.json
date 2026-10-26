@@ -2223,6 +2223,7 @@
     "scrollToTop": "Retour en haut",
     "search": "Rechercher...",
     "searchIn": "Rechercher dans",
+    "searchMembers": "Rechercher des membres…",
     "selectAMatter": "Sélectionnez un dossier",
     "selectARole": "Sélectionner un rôle",
     "selectAll": "Tout sélectionner",
@@ -6228,8 +6229,7 @@
         "lead": "Responsable",
         "leadActive": "Responsable",
         "leadInactive": "Définir le responsable",
-        "noLead": "Aucun responsable",
-        "searchMembers": "Rechercher des membres…"
+        "noLead": "Aucun responsable"
       },
       "to": "Jusqu'à"
     },
@@ -6309,10 +6309,10 @@
       "addMember": "Ajouter un membre",
       "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
+      "alreadyOnMatter": "Déjà dans ce dossier",
       "cannotRemoveLast": "Impossible de retirer le dernier membre",
       "noMembersFound": "Aucun membre trouvé",
-      "removeMemberConfirm": "Retirer ce membre du dossier ?",
-      "selectMember": "Sélectionner un membre"
+      "removeMemberConfirm": "Retirer ce membre du dossier ?"
     },
     "newDocument": "Nouveau document",
     "newFolder": "Nouveau dossier",

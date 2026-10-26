@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 
 import { queryView } from "@/lib/query-view.logic";
 
-import { addableMembersView } from "./addable-member-select.logic";
+import { addMemberCandidates } from "./add-member-dialog.logic";
 
 const organization = {
   members: [
@@ -12,6 +12,17 @@ const organization = {
       user: { name: "Member", email: "member@example.test", image: null },
     },
   ],
+};
+
+const other = {
+  userId: "other",
+  user: { name: "Other", email: "other@example.test", image: null },
+};
+const OTHER = {
+  email: "other@example.test",
+  image: null,
+  name: "Other",
+  userId: "other",
 };
 
 for (const organizationFails of [true, false]) {
@@ -45,7 +56,7 @@ for (const organizationFails of [true, false]) {
     });
     await failing.refetch();
     expect(
-      addableMembersView(
+      addMemberCandidates(
         queryView(org.getCurrentResult()),
         queryView(members.getCurrentResult()),
       ).type,
@@ -57,10 +68,10 @@ for (const organizationFails of [true, false]) {
 }
 
 test("waits for both reads before offering organization members", () => {
-  expect(addableMembersView({ type: "pending" }, { type: "empty" }).type).toBe(
+  expect(addMemberCandidates({ type: "pending" }, { type: "empty" }).type).toBe(
     "pending",
   );
-  expect(addableMembersView({ type: "empty" }, { type: "pending" }).type).toBe(
+  expect(addMemberCandidates({ type: "empty" }, { type: "pending" }).type).toBe(
     "pending",
   );
 });
@@ -69,25 +80,43 @@ const retry = async () => {
   throw new Error("Retry fixture");
 };
 
-test("offers only organization members outside the matter", () => {
+const MEMBER = {
+  email: "member@example.test",
+  image: null,
+  name: "Member",
+  userId: "member",
+};
+
+test("offers organization members and marks those already on the matter", () => {
   expect(
-    addableMembersView(
+    addMemberCandidates(
       { type: "items", items: organization, retry },
       { type: "empty" },
     ),
   ).toEqual({
     type: "items",
-    items: [
-      {
-        email: "member@example.test",
-        image: null,
-        name: "Member",
-        value: "member",
-      },
-    ],
+    members: [MEMBER],
+    existingUserIds: new Set(),
   });
   expect(
-    addableMembersView(
+    addMemberCandidates(
+      {
+        type: "items",
+        items: { members: [...organization.members, other] },
+        retry,
+      },
+      { type: "items", items: [{ userId: "member" }], retry },
+    ),
+  ).toEqual({
+    type: "items",
+    members: [MEMBER, OTHER],
+    existingUserIds: new Set(["member"]),
+  });
+});
+
+test("is empty once everyone is already on the matter", () => {
+  expect(
+    addMemberCandidates(
       { type: "items", items: organization, retry },
       { type: "items", items: [{ userId: "member" }], retry },
     ),
@@ -96,7 +125,7 @@ test("offers only organization members outside the matter", () => {
 
 test("keeps cached zero candidates with the refetch notice", () => {
   expect(
-    addableMembersView(
+    addMemberCandidates(
       { type: "items", items: organization, retry },
       {
         type: "items",
@@ -105,5 +134,9 @@ test("keeps cached zero candidates with the refetch notice", () => {
         refetchError: new Error("Read unavailable"),
       },
     ),
-  ).toEqual({ type: "items", items: [] });
+  ).toEqual({
+    type: "items",
+    members: [MEMBER],
+    existingUserIds: new Set(["member"]),
+  });
 });

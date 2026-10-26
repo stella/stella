@@ -2223,6 +2223,7 @@
     "scrollToTop": "التمرير إلى الأعلى",
     "search": "بحث...",
     "searchIn": "البحث في",
+    "searchMembers": "البحث عن الأعضاء…",
     "selectAMatter": "اختر ملفًا",
     "selectARole": "اختر دورًا",
     "selectAll": "تحديد الكل",
@@ -6228,8 +6229,7 @@
         "lead": "المسؤول الرئيسي",
         "leadActive": "المسؤول الرئيسي",
         "leadInactive": "تعيين مسؤول رئيسي",
-        "noLead": "لا يوجد مسؤول رئيسي",
-        "searchMembers": "البحث عن الأعضاء…"
+        "noLead": "لا يوجد مسؤول رئيسي"
       },
       "to": "إلى"
     },
@@ -6309,10 +6309,10 @@
       "addMember": "إضافة إلى الملف القانوني",
       "addMemberDescription": "اختر عضو فريق موجودًا لإضافته إلى هذا الملف القانوني",
       "alreadyMember": "المستخدم عضو بالفعل",
+      "alreadyOnMatter": "مُضاف بالفعل إلى هذا الملف القانوني",
       "cannotRemoveLast": "لا يمكن إزالة العضو الأخير",
       "noMembersFound": "لم يُعثر على أعضاء",
-      "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف القانوني؟",
-      "selectMember": "اختر عضوًا"
+      "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف القانوني؟"
     },
     "newDocument": "مستند جديد",
     "newFolder": "مجلد جديد",

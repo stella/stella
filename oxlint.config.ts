@@ -425,6 +425,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-person-select.fixture.tsx", [
+    "no-person-select/no-person-select",
+  ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
@@ -1745,6 +1748,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-person-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -3546,6 +3550,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-file-input/no-raw-file-input": "error",
+      },
+    },
+    {
+      // A person is chosen through MemberCombobox, which searches members by
+      // name and email as people type. A Select over members cannot be
+      // searched, so a long list turns into scrolling.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-person-select.fixture.tsx",
+      ],
+      rules: {
+        "no-person-select/no-person-select": "error",
       },
     },
     {
