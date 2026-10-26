@@ -77,22 +77,41 @@ export const appendThreadsPage = (
   return [...loaded, ...next.filter((thread) => !seen.has(thread.id))];
 };
 
+/**
+ * The list's query: the text a thread's title or matter must contain, when
+ * any is typed, and the page to continue from.
+ */
+export const threadsQuery = ({
+  cursor,
+  search,
+}: {
+  readonly cursor?: string | undefined;
+  readonly search?: string | undefined;
+}): string => {
+  const text = search?.trim() ?? "";
+  const params = [
+    ...(text === "" ? [] : [`search=${encodeURIComponent(text)}`]),
+    ...(cursor === undefined ? [] : [`cursor=${encodeURIComponent(cursor)}`]),
+  ];
+  return params.length === 0 ? "" : `?${params.join("&")}`;
+};
+
 export const listChatThreads = async ({
   cursor,
   fetch,
+  search,
   source,
 }: {
   readonly cursor?: string | undefined;
   readonly fetch: Fetch;
+  readonly search?: string | undefined;
   readonly source: AccessTokenSource;
 }): Promise<Result<ChatThreadsPage, ApiError>> =>
   await Result.gen(async function* () {
-    const query =
-      cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`;
     const page = yield* Result.await(
       requestApi({
         fetch,
-        path: `${THREADS_PATH}${query}`,
+        path: `${THREADS_PATH}${threadsQuery({ cursor, search })}`,
         schema: threadsPageSchema,
         source,
       }),
