@@ -36,9 +36,32 @@ fn pump_until(application: &NSApplication, condition: impl Fn() -> bool) -> bool
   condition()
 }
 
+/// Requests activation for `editor` and reports whether the system granted it.
+/// From macOS 14 activation is cooperative and a request made without the
+/// user's own action may be declined, which this harness cannot supply, so a
+/// decline there is reported and the caller skips what depends on it. Below
+/// macOS 14 activation ignores other apps and must succeed.
+#[cfg(target_os = "macos")]
+fn activated(application: &NSApplication, editor: &NSWindow) -> bool {
+  activation::activate_with_key_window(application, editor);
+  if pump_until(application, || {
+    application.isActive() && editor.isKeyWindow()
+  }) {
+    return true;
+  }
+  assert!(
+    objc2::available!(macos = 14.0),
+    "below macOS 14 the editor must be the key window of the active app"
+  );
+  eprintln!(
+    "the system declined activation without a user action; activation is not observed"
+  );
+  false
+}
+
 #[cfg(target_os = "macos")]
 fn main() {
-  use activation::{ActivationReturn, activate_with_key_window, return_activation};
+  use activation::{ActivationReturn, return_activation};
   use objc2::rc::{Retained, autoreleasepool};
   use objc2::runtime::{AnyObject, ClassBuilder};
   use objc2_app_kit::{
@@ -226,6 +249,7 @@ fn main() {
       editor
     };
     let editor_class = editor.class();
+    let mut activation_observed = true;
     for _ in 0..3 {
       // Production opens the editor while another app is active.
       application.deactivate();
@@ -234,12 +258,11 @@ fn main() {
         "the editor must open with the app inactive"
       );
 
-      activate_with_key_window(&application, &editor);
-      assert!(
-        pump_until(&application, || application.isActive()
-          && editor.isKeyWindow()),
-        "the editor must be the key window of the active app"
-      );
+      if !activated(&application, &editor) {
+        activation_observed = false;
+        editor.orderOut(None);
+        break;
+      }
       assert!(std::ptr::eq::<NSWindow>(
         application.keyWindow().as_deref().unwrap(),
         &*editor,
@@ -281,13 +304,13 @@ fn main() {
     // An app that is no longer running cannot be reactivated, and stella
     // stays active. macOS process identifiers stay far below i32::MAX, so
     // it names no running app.
-    activate_with_key_window(&application, &editor);
-    assert!(pump_until(&application, || application.isActive()));
-    assert_eq!(
-      return_activation(i32::MAX),
-      ActivationReturn::PreviousAppGone
-    );
-    assert!(application.isActive());
+    if activation_observed && activated(&application, &editor) {
+      assert_eq!(
+        return_activation(i32::MAX),
+        ActivationReturn::PreviousAppGone
+      );
+      assert!(application.isActive());
+    }
     editor.orderOut(None);
     editor.close();
 
