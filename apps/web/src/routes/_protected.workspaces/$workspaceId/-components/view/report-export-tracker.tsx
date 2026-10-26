@@ -9,7 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { APIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
   reportExportDetailOptions,
@@ -88,7 +88,7 @@ export const ReportExportTracker = ({
       );
 
     if (settledDetail === undefined) {
-      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      notifyUserProblem(t("workspaces.views.reportExport.failed"), {
         toastId,
         description: t("common.unexpectedError"),
       });
@@ -96,7 +96,7 @@ export const ReportExportTracker = ({
     }
 
     if (settledDetail.status === "failed") {
-      notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+      notifyUserProblem(t("workspaces.views.reportExport.failed"), {
         toastId,
         description: settledDetail.error ?? t("common.unexpectedError"),
       });
@@ -237,7 +237,7 @@ export const ReportExportTracker = ({
       return;
     }
 
-    notifyUserError(undefined, t("workspaces.views.reportExport.failed"), {
+    notifyUserProblem(t("workspaces.views.reportExport.failed"), {
       toastId,
       description: t("common.unexpectedError"),
     });

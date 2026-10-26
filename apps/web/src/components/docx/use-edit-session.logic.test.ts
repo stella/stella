@@ -1,9 +1,45 @@
 import { describe, expect, test } from "bun:test";
 
+import { toAPIError } from "@/lib/errors/api";
+
 import {
+  checkpointLeaveAction,
   resolveEditSessionFailure,
   resolveTakenOverSession,
 } from "./use-edit-session.logic";
+
+describe("leaving after the final checkpoint", () => {
+  test("a saved checkpoint goes on to finalize", () => {
+    expect(checkpointLeaveAction({ type: "saved" })).toEqual({
+      type: "finalize",
+    });
+  });
+
+  test("no session to save into closes without an error", () => {
+    expect(checkpointLeaveAction({ type: "noSession" })).toEqual({
+      type: "close",
+    });
+  });
+
+  test("a released session stays behind its banner without an error", () => {
+    expect(checkpointLeaveAction({ type: "released" })).toEqual({
+      type: "stay",
+    });
+  });
+
+  test("a refused or unreachable checkpoint is reported with its cause", () => {
+    const refused = toAPIError({ status: 500, value: { message: "boom" } });
+    const unreachable = new TypeError("Failed to fetch");
+
+    expect(checkpointLeaveAction({ type: "refused", error: refused })).toEqual({
+      type: "report",
+      error: refused,
+    });
+    expect(
+      checkpointLeaveAction({ type: "unreachable", error: unreachable }),
+    ).toEqual({ type: "report", error: unreachable });
+  });
+});
 
 describe("edit session take-over", () => {
   test("a conflict on open releases the session instead of failing it", () => {

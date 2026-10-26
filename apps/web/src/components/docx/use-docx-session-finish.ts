@@ -1,13 +1,15 @@
 import { useCallback } from "react";
 import type { RefObject } from "react";
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
+import { getTranslator } from "@/i18n/translator";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
@@ -21,12 +23,43 @@ import type { AutosaveStatus } from "./docx-edit-mode.logic";
 import type { DocxBrowserCollaboration } from "./use-docx-browser-collaboration";
 import { useEditSession } from "./use-edit-session";
 import type { EditSession } from "./use-edit-session";
+import { checkpointLeaveAction } from "./use-edit-session.logic";
 
 class CollaborationCloseCutError extends TaggedError(
   "CollaborationCloseCutError",
 )<{
   message: string;
 }> {}
+
+/** Why the editor could not hand over a document to save. */
+class DocxSaveUnavailableError extends TaggedError("DocxSaveUnavailableError")<{
+  reason: "editorUnmounted" | "serializeFailed";
+  message: string;
+}> {}
+
+const SAVE_UNAVAILABLE = {
+  editorUnmounted: {
+    message: "The editor closed before its changes were saved.",
+    title: "folio.saveEditorUnavailableTitle",
+    description: "folio.saveEditorUnavailableDescription",
+  },
+  serializeFailed: {
+    message: "The editor could not serialize the document.",
+    title: "folio.saveSerializeFailedTitle",
+    description: "folio.saveSerializeFailedDescription",
+  },
+} as const satisfies Record<
+  DocxSaveUnavailableError["reason"],
+  { message: string; title: TranslationKey; description: TranslationKey }
+>;
+
+const notifySaveUnavailable = (reason: DocxSaveUnavailableError["reason"]) => {
+  const { message, title, description } = SAVE_UNAVAILABLE[reason];
+  const t = getTranslator();
+  notifyUserError(new DocxSaveUnavailableError({ reason, message }), t(title), {
+    description: t(description),
+  });
+};
 
 type UseDocxEditSessionOptions = {
   entityId: string;
@@ -227,9 +260,12 @@ export const useDocxSessionFinish = ({
 
     const ref = editorRef.current;
     if (!ref) {
-      notifyUserError(undefined, t("folio.saveEditorUnavailableTitle"), {
-        description: t("folio.saveEditorUnavailableDescription"),
-      });
+      // An editor that never mounted holds nothing the user typed.
+      if (!isDirty && !hasSessionChangesRef.current) {
+        await cancelActiveSession();
+        return true;
+      }
+      notifySaveUnavailable("editorUnmounted");
       return false;
     }
 
@@ -247,24 +283,31 @@ export const useDocxSessionFinish = ({
 
     const buffer = await ref.save({ selective: true });
     if (!buffer) {
-      notifyUserError(undefined, t("folio.saveSerializeFailedTitle"), {
-        description: t("folio.saveSerializeFailedDescription"),
-      });
+      notifySaveUnavailable("serializeFailed");
       return false;
     }
 
     setAutosaveStatus("syncing");
-    const checkpoint = await saveActiveCheckpoint(buffer);
-    if (checkpoint !== "saved") {
-      setAutosaveStatus("pending");
-      // A session taken over mid-save has nowhere to retry to; its banner
-      // already says the document is read-only here.
-      if (checkpoint === "failed") {
-        notifyUserError(undefined, t("folio.saveCheckpointFailedTitle"), {
+    const leave = checkpointLeaveAction(await saveActiveCheckpoint(buffer));
+    switch (leave.type) {
+      case "finalize":
+        break;
+      case "close":
+        setAutosaveStatus("synced");
+        await cancelActiveSession();
+        return true;
+      case "stay":
+        setAutosaveStatus("pending");
+        return false;
+      case "report":
+        setAutosaveStatus("pending");
+        notifyUserError(leave.error, t("folio.saveCheckpointFailedTitle"), {
           description: t("folio.saveCheckpointFailedDescription"),
         });
-      }
-      return false;
+        return false;
+      default:
+        leave satisfies never;
+        return panic("Unhandled leave action");
     }
     setAutosaveStatus("synced");
     if (previewFile !== null) {

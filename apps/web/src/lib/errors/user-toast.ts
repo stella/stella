@@ -31,6 +31,18 @@ type UserErrorToastOptions = Omit<
   toastId?: string | undefined;
 };
 
+type ProblemToastOptions = Omit<
+  UserErrorToastOptions,
+  "feature" | "occurrence" | "routeTemplate"
+>;
+
+/**
+ * A user-facing error names its cause. `undefined` or `null` here means there
+ * is nothing to report, which is a problem notice, not an error: that goes
+ * through {@link notifyUserProblem}. A caught `unknown` still passes.
+ */
+type NamedCause<Cause> = [Cause] extends [undefined | null] ? never : unknown;
+
 type UserVisibleErrorReportOptions = {
   notice?: string | undefined;
   occurrence?: string | number | undefined;
@@ -119,8 +131,8 @@ export const reportUserVisibleError = (
   });
 };
 
-export const notifyUserError = (
-  error: unknown,
+export const notifyUserError = <Cause>(
+  error: Cause & NamedCause<Cause>,
   fallback: string,
   {
     feature,
@@ -197,6 +209,23 @@ export const notifyUserError = (
   }
   stellaToast.add(toast);
   return true;
+};
+
+/**
+ * Tell the user about a problem that has no error behind it: input a form
+ * refuses, a limit, a precondition. Nothing is reported, because there is no
+ * cause to report; a failure with one goes through {@link notifyUserError}.
+ */
+export const notifyUserProblem = (
+  title: string,
+  { toastId, ...options }: ProblemToastOptions = {},
+): void => {
+  const toast = { ...options, title, type: "error" } as const;
+  if (toastId !== undefined) {
+    stellaToast.update(toastId, toast);
+    return;
+  }
+  stellaToast.add(toast);
 };
 
 const SERVER_ERROR_THRESHOLD = 500;

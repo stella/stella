@@ -29,7 +29,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -155,7 +155,7 @@ function ContactDetailPage() {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      notifyUserError(undefined, deleteBlockedDescription);
+      notifyUserProblem(deleteBlockedDescription);
       return;
     }
 

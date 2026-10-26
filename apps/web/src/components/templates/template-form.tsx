@@ -98,7 +98,7 @@ import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -1321,7 +1321,7 @@ const RegistryAutofillControl = ({
 
     const updates = buildAutofillUpdates(groupFields, data.hit);
     if (updates.length === 0) {
-      notifyUserError(undefined, t("templates.registryNotFound"));
+      notifyUserProblem(t("templates.registryNotFound"));
       return;
     }
     onApply(updates);
@@ -1878,7 +1878,7 @@ export const TemplateForm = ({
             break;
           }
         }
-        notifyUserError(undefined, t("templates.validationErrors"));
+        notifyUserProblem(t("templates.validationErrors"));
         return;
       }
 
@@ -2060,7 +2060,7 @@ export const TemplateForm = ({
       return;
     }
     if (!validateAll(values)) {
-      notifyUserError(undefined, t("templates.validationErrors"));
+      notifyUserProblem(t("templates.validationErrors"));
       return;
     }
 
@@ -2230,7 +2230,7 @@ export const TemplateForm = ({
    *  submittable form. */
   const handleChooseMatter = () => {
     if (!validateAll(values)) {
-      notifyUserError(undefined, t("templates.validationErrors"));
+      notifyUserProblem(t("templates.validationErrors"));
       return;
     }
     if (!confirmEmptyFields("moveToMatter", values)) {

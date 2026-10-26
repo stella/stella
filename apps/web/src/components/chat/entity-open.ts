@@ -12,7 +12,7 @@ import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { toSafeId } from "@/lib/safe-id";
@@ -181,7 +181,7 @@ export const openEntityInInspector = async (
     }
 
     const t = getTranslator();
-    notifyUserError(undefined, t("errors.actionFailed"));
+    notifyUserProblem(t("errors.actionFailed"));
     return { type: "unsupported" };
   } catch (error) {
     getAnalytics().captureError(error, {
@@ -242,7 +242,7 @@ export const openSourceBoundEntityFile = async ({
     }
 
     const t = getTranslator();
-    notifyUserError(undefined, t("errors.actionFailed"));
+    notifyUserProblem(t("errors.actionFailed"));
     return false;
   } catch (error) {
     getAnalytics().captureError(error, {

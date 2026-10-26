@@ -21,7 +21,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import type { TemplateIntent } from "@/lib/knowledge/catalogue-intent";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationListOptions } from "@/lib/organization/queries";
@@ -109,7 +109,7 @@ export const MemberCatalogueTemplateActions = ({
         ? response.data.items.find(({ slug }) => slug === templateSlug)
         : undefined;
     if (installed === undefined) {
-      notifyUserError(undefined, t("knowledge.catalogue.installFailed"));
+      notifyUserProblem(t("knowledge.catalogue.installFailed"));
       return null;
     }
     templateActions.invalidateTemplates();
@@ -137,7 +137,7 @@ export const MemberCatalogueTemplateActions = ({
       case "download": {
         const sourceUrl = await templateActions.readSourceUrl(templateId);
         if (sourceUrl === null) {
-          notifyUserError(undefined, t("common.unexpectedError"));
+          notifyUserProblem(t("common.unexpectedError"));
           return;
         }
         openIsolatedWindow(sourceUrl);

@@ -62,7 +62,7 @@ import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   CapabilityAction,
   useActionCapabilities,
@@ -348,7 +348,7 @@ export const TranslateDocumentDialog = (
     }
     if (run.status === "failed" || run.status === "cancelled") {
       terminalNotifiedRunRef.current = runId;
-      notifyUserError(undefined, t("translate.error.title"), {
+      notifyUserProblem(t("translate.error.title"), {
         description: t(documentTranslationRunFailureKey(run.errorCode)),
       });
     }

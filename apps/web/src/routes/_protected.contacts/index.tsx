@@ -86,7 +86,7 @@ import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { pageTitle } from "@/lib/page-title";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -604,7 +604,7 @@ const ContactRowActions = ({ contact }: { contact: ContactItem }) => {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      notifyUserError(undefined, deleteBlockedDescription);
+      notifyUserProblem(deleteBlockedDescription);
       return;
     }
 
@@ -924,7 +924,7 @@ const CreateContactDialog = ({
           (birthDate.year || birthDate.month || birthDate.day) &&
           !dateOfBirth
         ) {
-          notifyUserError(undefined, t("contacts.invalidDateOfBirth"));
+          notifyUserProblem(t("contacts.invalidDateOfBirth"));
           return;
         }
         const firstName =
@@ -985,7 +985,7 @@ const CreateContactDialog = ({
     const ico = normalizeIcoInput(form.state.values.registrationNumber);
 
     if (ico.length !== 8) {
-      notifyUserError(undefined, t("contacts.create.invalidIco"));
+      notifyUserProblem(t("contacts.create.invalidIco"));
       return;
     }
 
@@ -999,7 +999,7 @@ const CreateContactDialog = ({
       const hit = data.type === "lookup" ? data.hit : null;
 
       if (!hit) {
-        notifyUserError(undefined, t("contacts.create.aresNotFound"));
+        notifyUserProblem(t("contacts.create.aresNotFound"));
         return;
       }
 

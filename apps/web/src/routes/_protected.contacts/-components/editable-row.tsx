@@ -11,7 +11,7 @@ import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { contactOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
@@ -78,7 +78,7 @@ export const EditableRow = ({
         policy.maxLength !== null &&
         trimmed.length > policy.maxLength
       ) {
-        notifyUserError(undefined, t("errors.actionFailed"));
+        notifyUserProblem(t("errors.actionFailed"));
         return;
       }
 
@@ -99,7 +99,7 @@ export const EditableRow = ({
         });
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");
-          notifyUserError(undefined, message);
+          notifyUserProblem(message);
           setError(message);
           return;
         }
@@ -108,14 +108,14 @@ export const EditableRow = ({
         const result = buildNumericContactPayload(field, trimmed);
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");
-          notifyUserError(undefined, message);
+          notifyUserProblem(message);
           setError(message);
           return;
         }
         payload = result.payload;
       } else {
         if (field === "displayName" && !trimmed) {
-          notifyUserError(undefined, t("errors.actionFailed"));
+          notifyUserProblem(t("errors.actionFailed"));
           return;
         }
         payload = buildTextContactPayload(field, trimmed);

@@ -59,7 +59,7 @@ import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { knowledgeKeys, skillDetailOptions } from "@/lib/knowledge/queries";
 import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -257,7 +257,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     if (!FILENAME_PATTERN.test(trimmed) || folderPrefixes.has(nextPath)) {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return;
     }
     setPendingFolders((current) =>
@@ -565,7 +565,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     const binary = isBinaryUpload(file);
     const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
     if (file.size > maxBytes) {
-      notifyUserError(undefined, t("common.unexpectedError"), {
+      notifyUserProblem(t("common.unexpectedError"), {
         description: tSkills("uploadHelp"),
       });
       return;
@@ -574,7 +574,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     // afterward if they want a different folder.
     const reserved = reserveReferencesPath(file.name, binary, takenPaths);
     if (reserved.type === "invalid") {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return;
     }
     const { path } = reserved;
@@ -599,11 +599,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   const onCreateFile = (path: string, content: string) => {
     if (!SKILL_RESOURCE_PATH_PATTERN.test(path)) {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return false;
     }
     if (existingPaths.has(path)) {
-      notifyUserError(undefined, tSkills("fileExists"));
+      notifyUserProblem(tSkills("fileExists"));
       return false;
     }
     createResource.mutate({ path, content });
@@ -618,11 +618,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return;
     }
     if (!SKILL_RESOURCE_PATH_PATTERN.test(trimmed)) {
-      notifyUserError(undefined, tSkills("invalidPath"));
+      notifyUserProblem(tSkills("invalidPath"));
       return;
     }
     if (existingPaths.has(trimmed)) {
-      notifyUserError(undefined, tSkills("fileExists"));
+      notifyUserProblem(tSkills("fileExists"));
       return;
     }
     renameResource.mutate({ oldPath, newPath: trimmed });

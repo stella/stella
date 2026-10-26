@@ -61,7 +61,7 @@ import {
   resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -272,7 +272,7 @@ function LawHome() {
     if (!decisionNotFound) {
       return;
     }
-    notifyUserError(undefined, t("caseLaw.decisionNotFound"));
+    notifyUserProblem(t("caseLaw.decisionNotFound"));
     detached(
       routeNavigate({
         replace: true,

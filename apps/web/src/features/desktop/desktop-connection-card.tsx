@@ -32,7 +32,7 @@ import {
   hasDesktopAccountChallenge,
 } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 
 const serverHost = () => window.location.host;
@@ -93,7 +93,7 @@ export const DesktopConnectionCard = () => {
       );
       return;
     }
-    notifyUserError(undefined, t("errors.actionFailed"));
+    notifyUserProblem(t("errors.actionFailed"));
   };
   const onConnect = () => {
     detached(handleConnect(), "settings-account-desktop.connect-desktop");
