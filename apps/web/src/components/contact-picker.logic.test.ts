@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import {
   rankRecentClients,
   RECENT_CLIENT_SUGGESTIONS_MAX,
@@ -49,7 +51,10 @@ describe("recent client suggestions", () => {
     // earlier instant (08:00Z).
     const offsetText = "2026-10-01T10:00:00.000+02:00";
     const utcText = "2026-10-01T09:00:00.000Z";
-    expect(offsetText > utcText).toBe(true);
+    expect([offsetText, utcText].toSorted(compareCodeUnit)).toEqual([
+      utcText,
+      offsetText,
+    ]);
 
     const ranked = rankRecentClients([
       matter("offset", offsetText),
