@@ -2079,13 +2079,6 @@
     "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
   },
   {
-    "file": "apps/web/src/lib/auth-client.ts",
-    "function": "module/customFetchImpl",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; select an explicit header or idle policy at the fetch owner."
-  },
-  {
     "file": "apps/web/src/lib/dev-otp.ts",
     "function": "module/fetchDevOtp",
     "kind": "numeric-timeout",

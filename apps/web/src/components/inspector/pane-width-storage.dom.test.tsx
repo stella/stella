@@ -1,148 +1,53 @@
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  test,
-} from "bun:test";
+import { renderToStaticMarkup } from "react-dom/server";
+
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
+import { useSharedInspectorPaneWidth } from "./pane-width-storage";
 
-const { StrictMode } = await import("react");
-const { cleanup, fireEvent, render, screen } =
-  await import("@testing-library/react");
-const { INSPECTOR_PANE_DEFAULT_WIDTH, INSPECTOR_PANE_KEYBOARD_STEP } =
-  await import("@stll/ui/inspector");
-const {
-  INSPECTOR_PANE_WIDTH_STORAGE_KEY,
-  migrateInspectorPaneWidth,
-  useSharedInspectorPaneWidth,
-} = await import("@/components/inspector/pane-width-storage");
-const { deviceStorage } = await import("@/lib/account/browser-storage");
-
-const storage = deviceStorage("local");
-
-type Surface = Parameters<typeof migrateInspectorPaneWidth>[0];
-
-const LEGACY_MATTER_KEY = "stella:inspector-pane-width:v1:matter";
-const LEGACY_PUBLIC_LAW_KEY = "stella:inspector-pane-width:v1:public-law";
-
-// A dock as each section mounts it: the matter shell and the public law
-// reader render this same hook, and nothing else.
-const Dock = ({ openedFrom }: { openedFrom: Surface }) => {
-  const { resizeHandleProps, width } = useSharedInspectorPaneWidth({
-    openedFrom,
+const Dock = () => {
+  const { width } = useSharedInspectorPaneWidth({
     sidebarWidth: 240,
     viewportWidth: 1920,
   });
-  return (
-    <div data-width={width} role="separator" {...resizeHandleProps}>
-      {openedFrom}
-    </div>
-  );
+  return <aside data-width={width} />;
 };
 
-beforeEach(() => {
-  globalThis.history.replaceState(null, "", "/workspaces");
-  for (const key of [
-    INSPECTOR_PANE_WIDTH_STORAGE_KEY,
-    LEGACY_MATTER_KEY,
-    LEGACY_PUBLIC_LAW_KEY,
-  ]) {
-    storage.removeItem(key);
-  }
-});
-
-afterEach(() => {
-  cleanup();
-});
-
-afterAll(async () => {
-  await unregisterDomEnvironment();
-});
-
-describe("one inspector width across sections", () => {
-  test("a width dragged in matters is the width case law opens at, and back", () => {
-    const grown =
-      INSPECTOR_PANE_DEFAULT_WIDTH + 2 * INSPECTOR_PANE_KEYBOARD_STEP;
-
-    const matters = render(<Dock openedFrom="matter" />);
-    fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowLeft" });
-    fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowLeft" });
-    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-      String(grown),
-    );
-    matters.unmount();
-
-    const caseLaw = render(<Dock openedFrom="public-law" />);
-    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-      String(grown),
-    );
-    fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowRight" });
-    caseLaw.unmount();
-
-    render(<Dock openedFrom="matter" />);
-    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-      String(grown - INSPECTOR_PANE_KEYBOARD_STEP),
-    );
+describe("inspector width server snapshot", () => {
+  test("all dock surfaces render the shared cookie width on the server", () => {
+    for (const inspectorWidth of [320, 520, 610]) {
+      const html = renderToStaticMarkup(
+        <PresentationPrefsProvider
+          initialPrefs={{ ...defaultPresentationPrefs, inspectorWidth }}
+          sync={createTestPresentationPrefsSync({
+            ...defaultPresentationPrefs,
+            inspectorWidth,
+          })}
+        >
+          <Dock />
+          <Dock />
+        </PresentationPrefsProvider>,
+      );
+      expect(
+        html.match(new RegExp(`data-width="${inspectorWidth}"`, "gu")),
+      ).toHaveLength(2);
+    }
   });
 });
 
-describe("migrateInspectorPaneWidth", () => {
-  test("the section opened first keeps its earlier width and the old keys go", () => {
-    storage.setItem(LEGACY_MATTER_KEY, "520");
-    storage.setItem(LEGACY_PUBLIC_LAW_KEY, "610");
-
-    migrateInspectorPaneWidth("public-law");
-
-    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("610");
-    expect(storage.getItem(LEGACY_MATTER_KEY)).toBeNull();
-    expect(storage.getItem(LEGACY_PUBLIC_LAW_KEY)).toBeNull();
-  });
-
-  test("falls back to the other section's earlier width", () => {
-    storage.setItem(LEGACY_PUBLIC_LAW_KEY, "610");
-
-    migrateInspectorPaneWidth("matter");
-
-    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("610");
-  });
-
-  test("a shared width already stored is never overwritten", () => {
-    storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "480");
-    storage.setItem(LEGACY_MATTER_KEY, "520");
-
-    migrateInspectorPaneWidth("matter");
-
-    expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe("480");
-    expect(storage.getItem(LEGACY_MATTER_KEY)).toBeNull();
-  });
-
-  test("a dock mounted on migrated storage opens at the migrated width", () => {
-    storage.setItem(LEGACY_MATTER_KEY, "520");
-
-    render(<Dock openedFrom="matter" />);
-
-    expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-      "520",
-    );
-  });
-});
-
-// A second key, or a dock calling the width hook with its own key, would bring
-// back a width per section. Only the owner module may do either.
+// A dock bypassing the shared hook would reintroduce independent persistence.
 test("no source outside the owner keeps an inspector width of its own", async () => {
   const webRoot = nodePath.resolve(import.meta.dir, "../../..");
   const allowed = new Set([
     "src/components/inspector/pane-width-storage.ts",
-    // The device storage registry names the key's prefix, not a second key.
     "src/lib/account/storage-families.ts",
+    // The read-once migration recognizes old local storage keys.
+    "src/i18n/legacy-preferences-migration.ts",
   ]);
   const offenders: string[] = [];
   for await (const file of new Bun.Glob("src/**/*.{ts,tsx}").scan(webRoot)) {
@@ -157,42 +62,5 @@ test("no source outside the owner keeps an inspector width of its own", async ()
       offenders.push(file);
     }
   }
-
   expect(offenders).toEqual([]);
-});
-
-test("released shared width migrates into the registry envelope without changing the preference", () => {
-  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "640");
-  render(<Dock openedFrom="matter" />);
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-    "640",
-  );
-  expect(
-    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
-  ).toEqual({ version: 1, value: 640 });
-});
-
-test("safe-mode StrictMode mounting preserves the saved width until a user resize", () => {
-  const savedWidth = 640;
-  const saved = JSON.stringify({ version: 1, value: savedWidth });
-  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, saved);
-  globalThis.history.replaceState(null, "", "/workspaces?safe=1");
-
-  render(
-    <StrictMode>
-      <Dock openedFrom="matter" />
-    </StrictMode>,
-  );
-
-  expect(screen.getByRole("separator").getAttribute("aria-valuenow")).toBe(
-    String(INSPECTOR_PANE_DEFAULT_WIDTH),
-  );
-  expect(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY)).toBe(saved);
-  fireEvent.keyDown(screen.getByRole("separator"), { key: "ArrowLeft" });
-  expect(
-    JSON.parse(storage.getItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY) ?? "null"),
-  ).toEqual({
-    version: 1,
-    value: INSPECTOR_PANE_DEFAULT_WIDTH + INSPECTOR_PANE_KEYBOARD_STEP,
-  });
 });

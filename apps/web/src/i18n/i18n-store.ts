@@ -1,20 +1,27 @@
+import { createIsomorphicFn } from "@tanstack/react-start";
 import { createFormatter, createTranslator } from "use-intl/core";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { create, useStore } from "zustand";
 
 import folioEn from "@stll/folio-react/messages/en";
 import type { FolioLocale } from "@stll/folio-react/messages/locales";
-import { getUiLocaleDirection, resolveUiLocale } from "@stll/locales";
+import { getUiLocaleDirection } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
 
-import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
+import {
+  getRequestI18nStore,
+  initializeRequestI18n,
+} from "@/i18n/request-i18n.server";
 import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
-import { getTranslator, setTranslator } from "@/i18n/translator";
+import {
+  getTranslator as getBrowserTranslator,
+  setTranslator,
+} from "@/i18n/translator";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { persistPresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 // UI presentation order for language pickers. The membership is enforced
 // against the shared `UiLocale` set (a stale entry fails typecheck); only the
@@ -108,56 +115,6 @@ export const LANG_ENDONYMS = {
 
 export const getLangDir = getUiLocaleDirection;
 
-const resolveSupportedLanguage = resolveUiLocale;
-
-const normalizeLocale = (value: string): string => value.replace("_", "-");
-
-const detectLang = (): SupportedLanguage => {
-  const languages =
-    typeof navigator !== "undefined" && "languages" in navigator
-      ? navigator.languages
-      : [];
-
-  for (const candidate of languages) {
-    const lang = resolveSupportedLanguage(candidate);
-    if (lang) {
-      return lang;
-    }
-  }
-
-  return "en";
-};
-
-/**
- * Region subtag of the first browser locale that maps to a supported language
- * (e.g. "SA" from "ar-SA"). Drives region-specific formatting and, crucially,
- * the first day of the week (Saudi starts Sunday, the UAE Monday, generic
- * Arabic Saturday). Empty when the browser provides no region.
- */
-const detectRegion = (): string => {
-  const languages =
-    typeof navigator !== "undefined" && "languages" in navigator
-      ? navigator.languages
-      : [];
-
-  for (const candidate of languages) {
-    const normalized = normalizeLocale(candidate);
-    if (!resolveSupportedLanguage(normalized)) {
-      continue;
-    }
-    try {
-      const region = new Intl.Locale(normalized).region;
-      if (region) {
-        return region;
-      }
-    } catch {
-      // Malformed tag; keep scanning.
-    }
-  }
-
-  return "";
-};
-
 type MessageTree = { [key: string]: string | MessageTree };
 
 const applyMessageDefaults = (
@@ -197,8 +154,8 @@ const withFolioMessages = (
   return { ...messages, folio };
 };
 
-const defaultLanguage = detectLang();
-const defaultRegion = detectRegion();
+const defaultLanguage = "en";
+const defaultRegion = defaultPresentationPrefs.region;
 const defaultMessages = withFolioMessages(en, folioEn);
 
 /**
@@ -227,12 +184,26 @@ setTranslator(
   }),
 );
 
-export { getTranslator } from "@/i18n/translator";
+export const getTranslator = createIsomorphicFn()
+  .server(() => {
+    const state = currentI18nStore().getState();
+    const cached = requestTranslators.get(state);
+    if (cached) {
+      return cached;
+    }
+    const translator = createTranslator({
+      locale: state.loadedLang,
+      messages: state.messages,
+    });
+    requestTranslators.set(state, translator);
+    return translator;
+  })
+  .client(() => getBrowserTranslator());
 
-type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
-export type NumberingPreference = "auto" | "latn" | "arab";
-export type RegionalFormatPreference = "auto" | "en-IN";
-type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
+type CalendarPreference = PresentationPrefs["calendar"];
+type NumberingPreference = PresentationPrefs["numberingSystem"];
+export type RegionalFormatPreference = PresentationPrefs["regionalFormat"];
+type WeekStartPreference = PresentationPrefs["weekStart"];
 
 export const REGIONAL_FORMATS = ["en-IN"] as const satisfies readonly Exclude<
   RegionalFormatPreference,
@@ -297,7 +268,7 @@ export const buildFormattingLocale = ({
   if (weekStart !== "auto") {
     keywords.push(`fw-${WEEK_START_KEYWORD[weekStart]}`);
   }
-  if (numbers !== "latn" || autoNumbers !== "latn") {
+  if (numbers !== "latn") {
     keywords.push(`nu-${numbers}`);
   }
   return keywords.length > 0 ? `${base}-u-${keywords.join("-")}` : base;
@@ -313,7 +284,14 @@ let formatter = createFormatter({
 let formatterLocale = "en";
 let formatterTimeZone = SERVER_I18N_TIME_ZONE;
 
-export const getFormatter = () => formatter;
+export const getFormatter = createIsomorphicFn()
+  .server(() =>
+    createFormatter({
+      locale: getFormattingLocale(),
+      timeZone: SERVER_I18N_TIME_ZONE,
+    }),
+  )
+  .client(() => formatter);
 
 type State = {
   lang: SupportedLanguage;
@@ -324,8 +302,7 @@ type State = {
   // later language switch (which flips isLoaded false while the new locale
   // streams in) cannot send the app back to the boot spinner and unmount it.
   hasLoadedOnce: boolean;
-  // Detected browser region subtag (e.g. "SA"); not persisted — re-detected
-  // each boot. Drives region-specific formatting and the first day of week.
+  // Server-readable region subtag for regional formatting and the first day of week.
   region: string;
   regionalFormat: RegionalFormatPreference;
   calendar: CalendarPreference;
@@ -334,8 +311,10 @@ type State = {
 };
 
 type Actions = {
-  setLang: (lang: SupportedLanguage) => Promise<void>;
-  loadMessages: (lang: SupportedLanguage) => Promise<void>;
+  loadMessages: (
+    lang: SupportedLanguage,
+    isCurrent?: () => boolean,
+  ) => Promise<void>;
   setCalendar: (calendar: CalendarPreference) => void;
   setNumberingSystem: (numberingSystem: NumberingPreference) => void;
   setRegionalFormat: (regionalFormat: RegionalFormatPreference) => void;
@@ -414,149 +393,211 @@ const recomputeFormatterForState = (state: State): void => {
   );
 };
 
-export const useI18nStore = create<State & Actions>()(
-  persist(
-    (set, get) => ({
-      lang: defaultLanguage,
-      messages: defaultMessages,
-      loadedLang: "en",
-      isLoaded: defaultLanguage === "en",
-      // No locale has finished loading at construction, so the latch starts off
-      // regardless of the browser default. loadMessages turns it on once a
-      // bundle resolves (synchronously for English, after the async import
-      // otherwise), which keeps the boot-spinner gate honest: a persisted
-      // non-English locale cannot skip the spinner before its bundle arrives.
-      hasLoadedOnce: false,
-      region: defaultRegion,
-      regionalFormat: "auto",
-      calendar: "auto",
-      numberingSystem: "auto",
-      weekStart: "auto",
+export type I18nState = State & Actions;
 
-      loadMessages: async (lang) => {
-        const state = get();
-        if (state.loadedLang === lang && state.isLoaded) {
-          set({ lang, hasLoadedOnce: true });
-          // The bundle is already loaded (e.g. English on boot), but rehydrated
-          // formatting prefs still need to reach the shared formatter, which
-          // was initialized as plain English/UTC.
-          recomputeFormatterForState(get());
-          return;
-        }
+const browserI18nStore = create<I18nState>()((set, get) => ({
+  lang: defaultLanguage,
+  messages: defaultMessages,
+  loadedLang: "en",
+  isLoaded: true,
+  // Router hydration supplies the request catalogue before the first render.
+  // The default store stays unready until that snapshot exists.
+  hasLoadedOnce: false,
+  region: defaultRegion,
+  regionalFormat: "auto",
+  calendar: "auto",
+  numberingSystem: "auto",
+  weekStart: "auto",
 
-        loadRequestId += 1;
-        const requestId = loadRequestId;
-        set({ lang, isLoaded: false });
+  loadMessages: async (lang, isCurrent = () => true) => {
+    if (!isCurrent()) {
+      return;
+    }
+    const state = get();
+    if (state.loadedLang === lang && state.isLoaded) {
+      set({ lang, hasLoadedOnce: true });
+      // The bundle is already loaded (e.g. English on boot), but rehydrated
+      // formatting prefs still need to reach the shared formatter, which
+      // was initialized as plain English/UTC.
+      recomputeFormatterForState(get());
+      return;
+    }
 
-        let messages: LocaleMessages;
-        try {
-          messages = await loadLocaleMessages(lang);
-        } catch (error) {
-          if (requestId !== loadRequestId) {
-            return;
-          }
+    loadRequestId += 1;
+    const requestId = loadRequestId;
+    set({ lang, isLoaded: false });
 
-          const fallback = get();
-          applyMessages({
-            lang: fallback.loadedLang,
-            messages: fallback.messages,
-            region: fallback.region,
-            regionalFormat: fallback.regionalFormat,
-            calendar: fallback.calendar,
-            numberingSystem: fallback.numberingSystem,
-            weekStart: fallback.weekStart,
-          });
-          set({
-            lang: fallback.loadedLang,
-            isLoaded: true,
-            hasLoadedOnce: true,
-          });
-          // The UI stays in the previous language; tell the user the switch
-          // did not happen. The toast renders in that previous language.
-          getAnalytics().captureError(error, {
-            fingerprintKey: "loadMessages:failure",
-            scope: { type: "handler", handlerId: "loadMessages:failure" },
-          });
-          notifyUserError(error, getTranslator()("common.languageLoadFailed"));
-          return;
-        }
+    let messages: LocaleMessages;
+    try {
+      messages = await loadLocaleMessages(lang);
+    } catch (error) {
+      if (requestId !== loadRequestId || !isCurrent()) {
+        return;
+      }
 
-        if (requestId !== loadRequestId) {
-          return;
-        }
+      const fallback = get();
+      applyMessages({
+        lang: fallback.loadedLang,
+        messages: fallback.messages,
+        region: fallback.region,
+        regionalFormat: fallback.regionalFormat,
+        calendar: fallback.calendar,
+        numberingSystem: fallback.numberingSystem,
+        weekStart: fallback.weekStart,
+      });
+      set({
+        lang: fallback.loadedLang,
+        isLoaded: true,
+        hasLoadedOnce: true,
+      });
+      // The UI stays in the previous language; tell the user the switch
+      // did not happen. The toast renders in that previous language.
+      getAnalytics().captureError(error, {
+        fingerprintKey: "loadMessages:failure",
+        scope: { type: "handler", handlerId: "loadMessages:failure" },
+      });
+      notifyUserError(error, getTranslator()("common.languageLoadFailed"));
+      return;
+    }
 
-        const { region, regionalFormat, calendar, numberingSystem, weekStart } =
-          get();
-        applyMessages({
-          lang,
-          messages,
-          region,
-          regionalFormat,
-          calendar,
-          numberingSystem,
-          weekStart,
-        });
-        set({
-          lang,
-          messages,
-          loadedLang: lang,
-          isLoaded: true,
-          hasLoadedOnce: true,
-        });
-      },
+    if (requestId !== loadRequestId || !isCurrent()) {
+      return;
+    }
 
-      setLang: async (lang) => {
-        await get().loadMessages(lang);
-      },
+    const { region, regionalFormat, calendar, numberingSystem, weekStart } =
+      get();
+    applyMessages({
+      lang,
+      messages,
+      region,
+      regionalFormat,
+      calendar,
+      numberingSystem,
+      weekStart,
+    });
+    set({
+      lang,
+      messages,
+      loadedLang: lang,
+      isLoaded: true,
+      hasLoadedOnce: true,
+    });
+  },
 
-      setCalendar: (calendar) => {
-        set({ calendar });
-        recomputeFormatterForState(get());
-      },
+  setCalendar: (calendar) => {
+    set({ calendar });
+    persistPresentationPrefs(() => ({ calendar }));
+    recomputeFormatterForState(get());
+  },
 
-      setNumberingSystem: (numberingSystem) => {
-        set({ numberingSystem });
-        recomputeFormatterForState(get());
-      },
+  setNumberingSystem: (numberingSystem) => {
+    set({ numberingSystem });
+    persistPresentationPrefs(() => ({ numberingSystem }));
+    recomputeFormatterForState(get());
+  },
 
-      setRegionalFormat: (regionalFormat) => {
-        set({ regionalFormat });
-        recomputeFormatterForState(get());
-      },
+  setRegionalFormat: (regionalFormat) => {
+    set({ regionalFormat });
+    persistPresentationPrefs(() => ({ regionalFormat }));
+    recomputeFormatterForState(get());
+  },
 
-      setWeekStart: (weekStart) => {
-        set({ weekStart });
-        recomputeFormatterForState(get());
-      },
-    }),
-    {
-      name: getStorageKey("i18n"),
-      version: 0,
-      partialize: (state) => ({
-        lang: state.lang,
-        calendar: state.calendar,
-        numberingSystem: state.numberingSystem,
-        regionalFormat: state.regionalFormat,
-        weekStart: state.weekStart,
-      }),
-      onRehydrateStorage: () => (state) => {
-        if (!state) {
-          return;
-        }
-        // Public SSR paths hydrate against server-rendered English; the
-        // client entrypoint loads the persisted locale after first paint
-        // instead of this eager rehydration hook.
-        if (
-          typeof window !== "undefined" &&
-          isPublicSsrPath(window.location.pathname)
-        ) {
-          return;
-        }
-        detached(state.loadMessages(state.lang), "i18n-store.load-messages");
-      },
-    },
-  ),
+  setWeekStart: (weekStart) => {
+    set({ weekStart });
+    persistPresentationPrefs(() => ({ weekStart }));
+    recomputeFormatterForState(get());
+  },
+}));
+
+const requestTranslators = new WeakMap([
+  [browserI18nStore.getInitialState(), getBrowserTranslator()],
+]);
+
+let clientInitialState = browserI18nStore.getInitialState();
+const browserHydrationStore = {
+  getState: browserI18nStore.getState,
+  setState: browserI18nStore.setState,
+  subscribe: browserI18nStore.subscribe,
+  getInitialState: () => clientInitialState,
+};
+
+const currentI18nStore = createIsomorphicFn()
+  .server(() => getRequestI18nStore() ?? browserI18nStore)
+  .client(() => browserHydrationStore);
+
+export const useI18nStore = Object.assign(
+  <T>(selector: (state: I18nState) => T): T =>
+    useStore(currentI18nStore(), selector),
+  {
+    getState: () => currentI18nStore().getState(),
+    setState: browserI18nStore.setState,
+    subscribe: browserI18nStore.subscribe,
+  },
 );
+
+type FormattingPreferences = Pick<
+  PresentationPrefs,
+  "calendar" | "numberingSystem" | "region" | "regionalFormat" | "weekStart"
+>;
+
+/** Apply committed presentation preferences without persisting them again. */
+export const synchronizeFormattingPreferences = (
+  preferences: FormattingPreferences,
+): void => {
+  const state = browserI18nStore.getState();
+  if (
+    state.calendar === preferences.calendar &&
+    state.numberingSystem === preferences.numberingSystem &&
+    state.region === preferences.region &&
+    state.regionalFormat === preferences.regionalFormat &&
+    state.weekStart === preferences.weekStart
+  ) {
+    return;
+  }
+  browserI18nStore.setState(preferences);
+  recomputeFormatterForState(browserI18nStore.getState());
+};
+
+type RenderedLocaleOptions = {
+  locale: SupportedLanguage;
+  messages: LocaleMessages;
+  prefs: PresentationPrefs;
+};
+const renderedLocaleState = ({
+  locale,
+  messages,
+  prefs,
+}: RenderedLocaleOptions): I18nState => ({
+  ...browserI18nStore.getInitialState(),
+  lang: locale,
+  loadedLang: locale,
+  messages,
+  hasLoadedOnce: true,
+  isLoaded: true,
+  region: prefs.region,
+  regionalFormat: prefs.regionalFormat,
+  calendar: prefs.calendar,
+  numberingSystem: prefs.numberingSystem,
+  weekStart: prefs.weekStart,
+});
+export const initializeRenderedLocale = createIsomorphicFn()
+  .server((options: RenderedLocaleOptions) =>
+    initializeRequestI18n(renderedLocaleState(options)),
+  )
+  .client((options: RenderedLocaleOptions) => {
+    clientInitialState = renderedLocaleState(options);
+    browserI18nStore.setState(clientInitialState);
+    applyMessages(clientInitialState);
+  });
+
+/** Apply an account locale after hydration without replacing the SSR snapshot. */
+export const applyClientDocumentLocale = (
+  options: RenderedLocaleOptions,
+): void => {
+  const state = renderedLocaleState(options);
+  browserI18nStore.setState(state);
+  applyMessages(state);
+};
 
 /**
  * The current formatting locale for non-React code (region plus calendar,
@@ -578,20 +619,3 @@ export const getFormattingLocale = (): string => {
 /** The message language, without regional formatting overrides. */
 export const getMessageLocale = (): SupportedLanguage =>
   useI18nStore.getState().loadedLang;
-
-const waitForHydration = async (): Promise<void> => {
-  if (useI18nStore.persist.hasHydrated()) {
-    return;
-  }
-
-  // onFinishHydration only fires after successful persistence reads. Await an
-  // explicit attempt so malformed browser storage settles instead of blocking
-  // React hydration forever; the following loadMessages call persists a valid
-  // default state.
-  await useI18nStore.persist.rehydrate();
-};
-
-export const initializeI18n = async (): Promise<void> => {
-  await waitForHydration();
-  await useI18nStore.getState().loadMessages(useI18nStore.getState().lang);
-};

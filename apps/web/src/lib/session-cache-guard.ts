@@ -194,6 +194,21 @@ export const signedInUserId = (session: unknown): string | undefined =>
     ? session.user.id
     : undefined;
 
+/** A queued document action must not write after an identity transition. */
+export const isCurrentDocumentSession = (
+  queryClient: QueryClient,
+  expectedUserId: string | null,
+): boolean => {
+  if (freshDocumentPending.has(queryClient)) {
+    return false;
+  }
+  const cached = queryClient.getQueryState(sessionOptions.queryKey);
+  return (
+    cached?.status !== "success" ||
+    (signedInUserId(cached.data) ?? null) === expectedUserId
+  );
+};
+
 type SessionCacheGuardOptions = {
   /** Whether the page on screen is a sign-in or onboarding step. */
   isAuthFlowPage: () => boolean;

@@ -6,59 +6,25 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { IntlProvider, useTranslations } from "use-intl";
 
-import { DialogProvider } from "@stll/ui/dialog";
 import { ToastProvider } from "@stll/ui/toast";
 import { TooltipProvider } from "@stll/ui/tooltip";
 
 import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
-import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WebHangRecoveryNotice } from "@/components/web-hang-recovery-notice";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useHydrated } from "@/hooks/use-hydrated";
-import { FormattingProvider } from "@/i18n/formatting-context";
-import {
-  buildFormattingLocale,
-  bundledEnglishMessages,
-  synchronizeFormatterTimeZone,
-  useI18nStore,
-} from "@/i18n/i18n-store";
-import { useHydrationSafeTimeZone } from "@/i18n/time-zone";
+import { useI18nStore } from "@/i18n/i18n-store";
+import { I18nProvider } from "@/i18n/provider";
 import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
-const DialogTranslations = ({ children }: PropsWithChildren) => {
-  const t = useTranslations();
-  return (
-    <DialogProvider
-      labels={{
-        close: t("common.close"),
-        unsavedChanges: t("common.unsavedChangesEscape"),
-      }}
-    >
-      {children}
-    </DialogProvider>
-  );
-};
-
-const I18nProvider = ({ children }: PropsWithChildren) => {
-  const locale = useI18nStore((s) => s.loadedLang);
-  const messages = useI18nStore((s) => s.messages);
-  const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
-  const region = useI18nStore((s) => s.region);
-  const regionalFormat = useI18nStore((s) => s.regionalFormat);
-  const calendar = useI18nStore((s) => s.calendar);
-  const numberingSystem = useI18nStore((s) => s.numberingSystem);
-  const weekStart = useI18nStore((s) => s.weekStart);
-  const hydrated = useHydrated();
-  const timeZone = useHydrationSafeTimeZone(synchronizeFormatterTimeZone);
-
+const LocaleHeadSync = () => {
+  const locale = useI18nStore((state) => state.loadedLang);
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -79,62 +45,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     detached(router.invalidate(), "app-providers.locale-change");
   }, [router, locale, onPublicSsrPath]);
 
-  // Gate the boot spinner on the first load, not on isLoaded: a language
-  // switch flips isLoaded false while the new locale streams in, and gating
-  // the whole subtree on it would unmount the app (losing in-progress state
-  // like onboarding) on every switch. loadedLang/messages are always a
-  // consistent already-loaded pair, so the locale swaps in place instead.
-  //
-  // Server-rendered public paths must skip the spinner entirely: the
-  // server renders full content, so the client's first render has to
-  // produce identical markup or hydration fails.
-  if (!hasLoadedOnce && !onPublicSsrPath) {
-    return <DefaultPendingComponent />;
-  }
-
-  // On those same paths the client may already hold the persisted
-  // locale before hydration (client.tsx awaits initializeI18n first),
-  // so render the bundled English the server used until hydration
-  // completes; the persisted locale then swaps in place.
-  const preHydrationEnglish = onPublicSsrPath && !hydrated;
-
-  const activeMessages = preHydrationEnglish
-    ? bundledEnglishMessages
-    : messages;
-
-  // Plurals and message lookup key off the base language; the -u- extensions
-  // only steer number/date formatting. preHydrationEnglish forces the plain
-  // English tag so client markup matches the server's.
-  const formattingLocale = preHydrationEnglish
-    ? "en"
-    : buildFormattingLocale({
-        lang: locale,
-        region,
-        regionalFormat,
-        calendar,
-        numberingSystem,
-        weekStart,
-      });
-
-  const messageLocale = preHydrationEnglish ? "en" : locale;
-  // The provider can finish hydrating while a nested Suspense boundary still
-  // holds server markup. Remount the context subtree when browser formatting
-  // becomes active so that deferred descendants mount from one coherent
-  // locale and time zone instead of hydrating against changed context.
-  const hydrationPhase = preHydrationEnglish ? "server" : "browser";
-
-  return (
-    <IntlProvider
-      key={hydrationPhase}
-      locale={messageLocale}
-      messages={activeMessages}
-      timeZone={timeZone}
-    >
-      <FormattingProvider locale={formattingLocale} timeZone={timeZone}>
-        <DialogTranslations>{children}</DialogTranslations>
-      </FormattingProvider>
-    </IntlProvider>
-  );
+  return null;
 };
 
 const AnalyticsAuthIdentity = () => {
@@ -177,6 +88,7 @@ export const AppProviders = ({
     <AnalyticsProvider value={analyticsValue}>
       <AnalyticsAuthIdentity />
       <I18nProvider>
+        <LocaleHeadSync />
         <HotkeysProvider
           defaultOptions={{
             hotkey: { conflictBehavior: "allow" },

@@ -9,7 +9,11 @@ import {
   DefaultNotFoundComponent,
   DefaultPendingComponent,
 } from "@/components/route-components";
+import { restoreHydratedDocumentPresentation } from "@/i18n/document-presentation";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { readPresentationPrefs } from "@/lib/account/presentation-prefs/server";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
 import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
@@ -82,12 +86,22 @@ export function getRouter() {
 
   const router = createRouter({
     routeTree,
+    dehydrate: async () => ({
+      locale: useI18nStore.getState().loadedLang,
+      prefs: await readPresentationPrefs(),
+    }),
+    hydrate: restoreHydratedDocumentPresentation,
     defaultPreload: "intent",
     // A scalar param reaches its schema as the URL's text, never as a number
     // or a boolean the default guessed from it.
     parseSearch: parseRouteSearch,
     stringifySearch: stringifyRouteSearch,
-    context: { analyticsValue, queryClient, routeErrorLifecycle },
+    context: {
+      analyticsValue,
+      queryClient,
+      routeErrorLifecycle,
+      presentationPrefs: defaultPresentationPrefs,
+    },
     defaultOnCatch: () => {
       routeErrorLifecycle.caught(readCaughtRouteTemplate());
     },

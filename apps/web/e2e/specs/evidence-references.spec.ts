@@ -9,6 +9,7 @@ import {
   apiStatus,
   apiUploadDocx,
 } from "../helpers/api";
+import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
 import {
   createTestWorkspace,
@@ -140,25 +141,41 @@ for (const locale of ["cs", "en", "ar"] as const) {
   test.describe(`DOCX evidence references (${locale})`, () => {
     test.use({ locale });
     let workspace: TestWorkspace | null = null;
+    let profileSession: Awaited<
+      ReturnType<typeof createProfileTestSession>
+    > | null = null;
 
-    test.beforeEach(async ({ request }) => {
-      workspace = await createTestWorkspace(request, "evidence-references");
+    test.beforeEach(async ({ page, baseURL }) => {
+      profileSession = await createProfileTestSession({
+        page,
+        label: "evidence-references",
+        webUrl: baseURL ?? "http://localhost:3000",
+        locale,
+      });
+      workspace = await createTestWorkspace(
+        page.request,
+        "evidence-references",
+      );
     });
 
-    test.afterEach(async ({ page, request }, testInfo) => {
-      if (workspace === null) {
-        return;
+    test.afterEach(async ({ page }, testInfo) => {
+      try {
+        if (workspace !== null) {
+          await deleteTestWorkspace(page.request, workspace.id, {
+            leave: { page, testInfo },
+          });
+          workspace = null;
+        }
+      } finally {
+        await profileSession?.cleanup();
+        profileSession = null;
       }
-      await deleteTestWorkspace(request, workspace.id, {
-        leave: { page, testInfo },
-      });
-      workspace = null;
     });
 
     test("persists references, resolves the source, and renumbers after reload", async ({
       page,
-      request,
     }) => {
+      const request = page.request;
       const messages = await readEvidenceMessages(locale);
       const testWorkspace = workspace;
       if (testWorkspace === null) {

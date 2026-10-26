@@ -12,6 +12,21 @@ import {
 
 export type StorageArea = "local" | "session";
 
+/** Read-once browser entries superseded by server-rendered preferences. */
+export const LEGACY_STORAGE_FAMILIES = [
+  { area: "local", prefix: "stella-i18n" },
+  { area: "local", prefix: "stella-ui-theme" },
+  { area: "local", prefix: "stella-ui-palette" },
+  { area: "local", prefix: "sidebar_state" },
+  { area: "local", prefix: READER_PROVISION_MODE_STORAGE_KEY },
+  { area: "local", prefix: "reader_text_scale" },
+  { area: "local", prefix: "stella.templates.density" },
+  { area: "local", prefix: "stella:inspector-pane-width:v1:" },
+  { area: "local", prefix: "stella:inspector-pane-width:v2" },
+  { area: "local", prefix: "case_law_hidden_columns" },
+  { area: "local", prefix: "statute_table_layout" },
+] as const satisfies readonly { area: StorageArea; prefix: string }[];
+
 /** How to tell whose entry a key is. */
 type OwnerReading =
   /** Keyed by this module: `<base>:u:<userId>` or `<base>:visitor`. */
@@ -139,14 +154,6 @@ const mergeStringLists = (raw: string, existing: string | null) => {
  * its owner leaves and why.
  */
 export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
-  // A reading preference in the legal reader.
-  {
-    area: "local",
-    prefix: READER_PROVISION_MODE_STORAGE_KEY,
-    restoration: "data",
-    owner: "scoped",
-    retention: "kept-for-owner",
-  },
   // The user's preferred heading depth in DOCX outlines.
   {
     area: "local",
@@ -361,11 +368,6 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
 
 export const DEVICE_STORAGE_FAMILIES = [
   { area: "local", prefix: "stella:web-hang:", restoration: "data" },
-  { area: "local", prefix: "statute_table_layout", restoration: "layout" },
-  { area: "local", prefix: "case_law_hidden_columns", restoration: "layout" },
-  { area: "local", prefix: "reader_text_scale", restoration: "layout" },
-  { area: "local", prefix: "stella-ui-theme", restoration: "data" },
-  { area: "local", prefix: "stella-ui-palette", restoration: "data" },
   {
     area: "local",
     prefix: "document_translation_last_target",
@@ -377,18 +379,12 @@ export const DEVICE_STORAGE_FAMILIES = [
     prefix: "stella:selfhost-update-dismissed:",
     restoration: "data",
   },
-  { area: "local", prefix: "stella.templates.density", restoration: "layout" },
   { area: "local", prefix: "stella-dev", restoration: "data" },
   { area: "local", prefix: "stella.session-signal", restoration: "data" },
   {
     area: "local",
     prefix: "stella:chat-turn-notifications",
     restoration: "data",
-  },
-  {
-    area: "local",
-    prefix: "stella:inspector-pane-width:",
-    restoration: "layout",
   },
   { area: "session", prefix: "stella:preload-reload-at", restoration: "data" },
   {

@@ -56,8 +56,7 @@
     "@stll/legal-atlas": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/ui": "workspace:*",
-    "better-result": "catalog:",
-    "valibot": "catalog:"
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",

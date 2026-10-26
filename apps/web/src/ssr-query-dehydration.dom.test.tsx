@@ -150,6 +150,114 @@ test("a read the server gave up on does not reach the browser as an untyped erro
   expect(client.queryClient.getQueryState(DECISIONS_KEY)).toBeUndefined();
 });
 
+test("router hydration keeps the server catalogue until client presentation applies the account and legacy cleanup", async () => {
+  const {
+    loadClientDocumentPresentation,
+    restoreHydratedDocumentPresentation,
+  } = await import("@/i18n/document-presentation");
+  const { useI18nStore } = await import("@/i18n/i18n-store");
+  const { seedLegacyBrowserStorage } =
+    await import("@/lib/account/browser-storage.test-fixtures");
+  const { legacyBrowserStorage } =
+    await import("@/lib/account/browser-storage");
+  const { defaultPresentationPrefs } =
+    await import("@/lib/account/presentation-prefs/preferences");
+  const { sessionOptions } = await import("@/lib/auth-query-options");
+  const initialI18n = useI18nStore.getState();
+  const legacyKey = "stella-i18n";
+  const createPresentationTree = () => {
+    const root = createRootRoute({
+      component: () => (
+        <html lang="en">
+          <head />
+          <body>
+            <Outlet />
+          </body>
+        </html>
+      ),
+    });
+    const index = createRoute({
+      getParentRoute: () => root,
+      path: "/",
+      component: () => <main />,
+    });
+    return root.addChildren([index]);
+  };
+  const hydrationLocale = "en";
+  const server = createRouter({
+    routeTree: createPresentationTree(),
+    history: createMemoryHistory({ initialEntries: ["/"] }),
+    isServer: true,
+    dehydrate: async () => ({
+      locale: hydrationLocale,
+      prefs: defaultPresentationPrefs,
+    }),
+  });
+  attachRouterServerSsrUtils({ router: server, manifest: undefined });
+  const queryClient = createAppQueryClient();
+  try {
+    await server.load();
+    await server.serverSsr?.dehydrate({
+      signal: new AbortController().signal,
+    });
+    const request = new Request("https://stella.test/");
+    const rendered = await renderSsrResponse({
+      request,
+      rendererSignal: new AbortController().signal,
+      router: server,
+      responseHeaders: new Headers({ "Content-Type": "text/html" }),
+      children: <RouterProvider router={server} />,
+      reportError: (error) => {
+        throw error;
+      },
+    });
+    if (rendered.isErr()) {
+      throw rendered.error;
+    }
+    const html = await bindSsrResponseToRequest(
+      server,
+      rendered.value,
+      request.signal,
+    ).response.text();
+    for (const [, source = ""] of html.matchAll(
+      /<script[^>]*>([\s\S]*?)<\/script>/gu,
+    )) {
+      const script = document.createElement("script");
+      script.textContent = source;
+      document.body.append(script);
+    }
+    seedLegacyBrowserStorage(
+      legacyKey,
+      JSON.stringify({ state: { lang: "cs" } }),
+    );
+    const client = createRouter({
+      routeTree: createPresentationTree(),
+      history: createMemoryHistory({ initialEntries: ["/"] }),
+      isServer: false,
+      hydrate: restoreHydratedDocumentPresentation,
+    });
+    await hydrate(client);
+    expect(useI18nStore.getState().loadedLang).toBe("en");
+    expect(legacyBrowserStorage.getItem(legacyKey).unwrap()).not.toBeNull();
+
+    queryClient.setQueryData(sessionOptions.queryKey, {
+      user: { id: "hydrated-member", locale: "de" },
+      session: { id: "hydrated-session", userId: "hydrated-member" },
+    });
+    await loadClientDocumentPresentation(queryClient);
+    expect(useI18nStore.getState().loadedLang).toBe("de");
+    expect(useI18nStore.getState().messages.common.legalDatabase).toBe(
+      "Rechtsdatenbank",
+    );
+    expect(legacyBrowserStorage.getItem(legacyKey).unwrap()).toBeNull();
+  } finally {
+    legacyBrowserStorage.removeItem(legacyKey);
+    queryClient.clear();
+    await useI18nStore.getState().loadMessages(initialI18n.loadedLang);
+    useI18nStore.setState(initialI18n);
+  }
+});
+
 const SHELF_KEY = ["statutes", "shelf", { country: "CZE" }];
 const SHELF_TITLE = "Civil Code";
 let inBrowser = false;

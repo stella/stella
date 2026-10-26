@@ -1,17 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { QueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, test } from "bun:test";
 
-import { browserStorage } from "@/lib/account/browser-storage";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
-
-const localArea = () =>
-  browserStorage("local") ?? panic("Test requires local browser storage");
-const sessionArea = () =>
-  browserStorage("session") ?? panic("Test requires session browser storage");
-
-GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 
 const { useRef } = await import("react");
 const { act, cleanup, fireEvent, render } =
@@ -19,138 +13,97 @@ const { act, cleanup, fireEvent, render } =
 const { renderToString } = await import("react-dom/server");
 const { useReaderProvisionMode } =
   await import("@/hooks/use-reader-provision-mode");
-const { READER_PROVISION_MODE_STORAGE_KEY } =
-  await import("@/components/legal-reader/reader-provision-mode.logic");
-const { installUserScopedStorage } =
-  await import("@/lib/account/install-user-scoped-storage");
-const { releaseUserStorage, userStorageKey } =
-  await import("@/lib/account/user-scoped-storage");
-const { rootKeys } = await import("@/lib/auth-queries");
+const { useWebReaderTextScale } =
+  await import("@/components/legal-reader/use-web-reader-text-scale");
 
-afterEach(() => {
-  cleanup();
-  releaseUserStorage();
-  localArea().clear();
-  sessionArea().clear();
+GlobalRegistrator.register({ url: "http://localhost:3000/law" });
+
+afterEach(cleanup);
+
+const Reader = ({ label = "reader" }: { label?: string }) => {
+  const scrollRef = useRef<HTMLElement | null>(null);
+  const mode = useReaderProvisionMode(scrollRef);
+  const scale = useWebReaderTextScale();
+  return (
+    <>
+      <article {...scale.rootProps} />
+      <button
+        aria-label={label}
+        aria-pressed={mode.expandProvisions}
+        onClick={mode.toggle}
+        type="button"
+      >
+        {mode.expandProvisions ? "expanded" : "collapsed"}
+      </button>
+    </>
+  );
+};
+
+test("provision mode is present in the host's first server and client render", () => {
+  const initialPrefs = {
+    ...defaultPresentationPrefs,
+    readerTextScale: 1.4 as const,
+    readerProvisionMode: "expanded" as const,
+  };
+  const tree = (
+    <PresentationPrefsProvider
+      initialPrefs={initialPrefs}
+      sync={createTestPresentationPrefsSync(initialPrefs)}
+    >
+      <Reader />
+    </PresentationPrefsProvider>
+  );
+  expect(renderToString(tree)).toContain(
+    '<article data-slot="reader-text-root" style="--reader-text-scale:1.4"></article>',
+  );
+  expect(renderToString(tree)).toContain('aria-pressed="true"');
+  const rendered = render(tree);
+  expect(
+    rendered.container
+      .querySelector('[data-slot="reader-text-root"]')
+      ?.getAttribute("style"),
+  ).toBe("--reader-text-scale: 1.4;");
+  expect(
+    rendered.container.querySelector("button")?.getAttribute("aria-pressed"),
+  ).toBe("true");
+});
+
+test("mounted readers share the server preference and each toggle", async () => {
+  const saved: Partial<PresentationPrefs>[] = [];
+  const tree = (
+    <PresentationPrefsProvider
+      initialPrefs={defaultPresentationPrefs}
+      sync={createTestPresentationPrefsSync(
+        defaultPresentationPrefs,
+        (patch) => {
+          saved.push(patch);
+        },
+      )}
+    >
+      <Reader label="page" />
+      <Reader label="inspector" />
+    </PresentationPrefsProvider>
+  );
+  const rendered = render(tree);
+  const page = rendered.getByRole("button", { name: "page" });
+  const inspector = rendered.getByRole("button", { name: "inspector" });
+  expect(page.getAttribute("aria-pressed")).toBe("false");
+  await act(async () => {
+    fireEvent.click(page);
+  });
+  expect(page.getAttribute("aria-pressed")).toBe("true");
+  expect(inspector.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => {
+    fireEvent.click(inspector);
+  });
+  expect(page.getAttribute("aria-pressed")).toBe("false");
+  expect(inspector.getAttribute("aria-pressed")).toBe("false");
+  expect(saved).toEqual([
+    { readerProvisionMode: "expanded" },
+    { readerProvisionMode: "collapsed" },
+  ]);
 });
 
 afterAll(async () => {
   await unregisterDomEnvironment();
-});
-
-const Reader = ({ label }: { label: string }) => {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const mode = useReaderProvisionMode(scrollRef);
-  return (
-    <button
-      aria-label={label}
-      aria-pressed={mode.expandProvisions}
-      onClick={mode.toggle}
-      type="button"
-    >
-      {mode.expandProvisions ? "expanded" : "collapsed"}
-    </button>
-  );
-};
-
-describe("remembered provision reading mode", () => {
-  test("starts collapsed on the server and with no stored choice", () => {
-    expect(renderToString(<Reader label="server" />)).toContain(
-      'aria-pressed="false"',
-    );
-    const reader = render(<Reader label="reader" />);
-    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "false",
-    );
-  });
-
-  test("keeps server markup collapsed while the client restores a stored choice", () => {
-    localArea().setItem(
-      userStorageKey(READER_PROVISION_MODE_STORAGE_KEY),
-      '"expanded"',
-    );
-    expect(renderToString(<Reader label="server" />)).toContain(
-      'aria-pressed="false"',
-    );
-    const reader = render(<Reader label="reader" />);
-    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-  });
-
-  test("a choice is shared by mounted readers and survives a remount", () => {
-    const readers = render(
-      <>
-        <Reader label="page" />
-        <Reader label="inspector" />
-      </>,
-    );
-    fireEvent.click(readers.getByRole("button", { name: "page" }));
-    expect(
-      readers
-        .getByRole("button", { name: "inspector" })
-        .getAttribute("aria-pressed"),
-    ).toBe("true");
-    expect(
-      localArea().getItem(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)),
-    ).toBe('"expanded"');
-    readers.unmount();
-    const remounted = render(<Reader label="next decision" />);
-    expect(remounted.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-    fireEvent.click(remounted.getByRole("button"));
-    expect(
-      localArea().getItem(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)),
-    ).toBe('"collapsed"');
-  });
-
-  test("reads only valid stored modes and follows another tab's changes", () => {
-    const key = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
-    localArea().setItem(key, '"unexpected"');
-    const reader = render(<Reader label="reader" />);
-    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "false",
-    );
-    act(() => {
-      localArea().setItem(key, '"expanded"');
-      window.dispatchEvent(
-        new StorageEvent("storage", { key, storageArea: localArea() }),
-      );
-    });
-    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-  });
-
-  test("account changes use separate keys and keep the departing owner's choice for them", async () => {
-    const client = new QueryClient();
-    const uninstall = installUserScopedStorage(client);
-    const reader = render(<Reader label="reader" />);
-    fireEvent.click(reader.getByRole("button"));
-    const visitorKey = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
-    await act(() =>
-      client.setQueryData(rootKeys.session, { user: { id: "account-a" } }),
-    );
-    const accountAKey = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
-    expect(accountAKey).not.toBe(visitorKey);
-    expect(localArea().getItem(visitorKey)).toBeNull();
-    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "false",
-    );
-    fireEvent.click(reader.getByRole("button"));
-    expect(localArea().getItem(accountAKey)).toBe('"expanded"');
-    await act(() =>
-      client.setQueryData(rootKeys.session, { user: { id: "account-b" } }),
-    );
-    expect(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)).not.toBe(
-      accountAKey,
-    );
-    expect(localArea().getItem(accountAKey)).toBe('"expanded"');
-    expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
-      "false",
-    );
-    uninstall();
-    client.clear();
-  });
 });

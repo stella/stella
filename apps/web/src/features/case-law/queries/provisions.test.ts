@@ -1,5 +1,5 @@
 import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect } from "bun:test";
 import * as v from "valibot";
 
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
@@ -16,6 +16,7 @@ import {
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { APIError } from "@/lib/errors/api";
+import { requestTest as test } from "@/testing/request-test";
 
 const LISTINA_ELI = "https://www.e-sbirka.cz/eli/cz/sb/1993/2";
 const previousFetch = globalThis.fetch;

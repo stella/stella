@@ -196,3 +196,52 @@ describe("client auth status", () => {
     expect(resolveFeedbackChannel(result.current.status)).toBe("public");
   });
 });
+
+test("a public server shell hydrates without exposing a preloaded browser identity", async () => {
+  const { renderToString } = await import("react-dom/server");
+  const { hydrateRoot } = await import("react-dom/client");
+  const serverClient = new QueryClient();
+  const browserClient = new QueryClient();
+  browserClient.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
+  browserClient.setQueryData(
+    professionalUseOptions(MEMBER_SESSION.session.userId).queryKey,
+    {
+      status: "accepted",
+      statementVersion: "2026-10",
+      termsVersion: "2026-10",
+      acceptedAt: MEMBER_SESSION.session.createdAt.toISOString(),
+    },
+  );
+  const PublicIdentity = () =>
+    React.createElement(
+      "p",
+      null,
+      useClientAuthStatus({ enabled: false }).status,
+    );
+  const tree = (client: Client) =>
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      React.createElement(PublicIdentity),
+    );
+  const container = document.createElement("div");
+  // safe-html: React renderToString output from the local PublicIdentity fixture.
+  container.innerHTML = renderToString(tree(serverClient));
+  expect(container.textContent).toBe("checking");
+  document.body.append(container);
+  const errors: unknown[] = [];
+  const root = hydrateRoot(container, tree(browserClient), {
+    onRecoverableError: (error) => {
+      errors.push(error);
+    },
+  });
+  try {
+    await waitFor(() => expect(container.textContent).toBe("authenticated"));
+    expect(errors).toEqual([]);
+  } finally {
+    await React.act(async () => root.unmount());
+    container.remove();
+    serverClient.clear();
+    browserClient.clear();
+  }
+});

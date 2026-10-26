@@ -6,6 +6,7 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./public-law-table": "./src/public-law-table.ts",
     ".": "./src/index.ts",
     "./api-date": "./src/api-date.ts",
     "./conversion-refusal": "./src/conversion-refusal.ts",

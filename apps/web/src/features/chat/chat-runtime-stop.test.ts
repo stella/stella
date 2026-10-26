@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect } from "bun:test";
 
 import {
   CHAT_TURN_ID_HEADER,
@@ -16,6 +16,7 @@ import {
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
+import { requestTest as test } from "@/testing/request-test";
 
 // The composer's Stop against a server that owns the turn: the stop reaches
 // the server before the page closes its request, the page reloads the thread

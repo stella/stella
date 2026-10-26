@@ -2,13 +2,12 @@ import type { ColumnSizingState } from "@tanstack/react-table";
 import * as v from "valibot";
 import type { StorageValue } from "zustand/middleware";
 
+import { TABLE_CONTENT_MODES } from "@stll/api-contract/public-law-table";
+import type { TableContentMode } from "@stll/api-contract/public-law-table";
+
 import { readStoredJson } from "@/lib/stored-json";
 
 export const TABLE_STORE_VERSION = 1;
-
-export const TABLE_CONTENT_MODES = ["tight", "fit-content"] as const;
-
-export type TableContentMode = (typeof TABLE_CONTENT_MODES)[number];
 
 export type TableViewRef = {
   workspaceId: string;

@@ -700,6 +700,18 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261026130000_user_locale",
+    form: "add-column",
+    reason:
+      "The constant English default uses PostgreSQL's fast-default catalog path without rewriting user rows; lock acquisition is bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261026130000_user_locale",
+    form: "add-constraint",
+    reason:
+      "The locale CHECK is added NOT VALID without scanning existing users and protects new writes immediately; its gated online validation follows schema commit, with 1s lock and 5s statement bounds here.",
+  },
+  {
     migration: "20261025130000_reader_answer_continuation_spans",
     form: "add-column",
     reason:

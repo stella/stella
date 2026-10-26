@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { createTestPresentationPrefsSync } from "@/lib/account/presentation-prefs/sync.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-import { THEME_STORAGE_KEY } from "../consts";
-import { deviceStorage } from "../lib/account/browser-storage";
+import { defaultPresentationPrefs } from "../lib/account/presentation-prefs/preferences";
 import { createRootHead, THEME_COLOR } from "../routes/-root-head";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
@@ -35,6 +35,8 @@ Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
 
 const { act, cleanup, fireEvent, render } =
   await import("@testing-library/react");
+const { PresentationPrefsProvider } =
+  await import("../lib/account/presentation-prefs/provider");
 const { ThemeProvider, useTheme, THEMES } = await import("./theme-provider");
 
 afterAll(async () => {
@@ -61,7 +63,6 @@ const ThemeControls = () => {
 };
 
 test("browser chrome follows runtime light to dark and back without duplicate metadata", async () => {
-  deviceStorage("local").setItem(THEME_STORAGE_KEY, "light");
   const style = document.createElement("style");
   style.textContent = `
     body { background-color: rgb(255, 255, 255); }
@@ -79,9 +80,17 @@ test("browser chrome follows runtime light to dark and back without duplicate me
     document.head.append(meta);
   }
   const view = render(
-    <ThemeProvider>
-      <ThemeControls />
-    </ThemeProvider>,
+    <PresentationPrefsProvider
+      initialPrefs={{ ...defaultPresentationPrefs, theme: "light" }}
+      sync={createTestPresentationPrefsSync({
+        ...defaultPresentationPrefs,
+        theme: "light",
+      })}
+    >
+      <ThemeProvider>
+        <ThemeControls />
+      </ThemeProvider>
+    </PresentationPrefsProvider>,
   );
   const themeMetaSelector = `meta[name="${THEME_COLOR}"]`;
   const activeMeta = document.head.querySelector(

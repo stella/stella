@@ -50,6 +50,8 @@ import { loadAuthContext } from "@/routes/-auth-context";
 
 export const Route = createFileRoute("/consent")({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
+  // Signed OAuth state arrives in the URL fragment, which HTTP omits.
+  ssr: false,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
     const bridgedQuery = getSignedOauthQueryFromHash(location.hash);

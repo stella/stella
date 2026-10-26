@@ -10,23 +10,16 @@ import {
 
 const parse = (raw: unknown) => v.parse(StoredDecisionLayoutSchema, raw);
 
-const layoutOf = (raw: unknown, country = "cz") =>
+const layoutOf = (raw: unknown, country = "CZE") =>
   layoutForCountry(decisionTableLayouts(parse(raw)), country);
 
 describe("what a stored arrangement means", () => {
   test("a jurisdiction nobody arranged gets the defaults", () => {
-    expect(layoutForCountry({}, "cz")).toEqual(DEFAULT_DECISION_TABLE_LAYOUT);
-  });
-
-  test("a value written before order and pins existed is still its hidden set", () => {
-    expect(layoutOf({ cz: ["headnote", "language"] })).toEqual({
-      ...DEFAULT_DECISION_TABLE_LAYOUT,
-      hidden: ["headnote", "language"],
-    });
+    expect(layoutForCountry({}, "CZE")).toEqual(DEFAULT_DECISION_TABLE_LAYOUT);
   });
 
   test("a partial arrangement keeps the defaults for what it omits", () => {
-    expect(layoutOf({ cz: { pinned: ["caseNumber"] } })).toEqual({
+    expect(layoutOf({ CZE: { pinned: ["caseNumber"] } })).toEqual({
       ...DEFAULT_DECISION_TABLE_LAYOUT,
       order: [],
       pinned: ["caseNumber"],
@@ -43,19 +36,13 @@ describe("what a stored arrangement means", () => {
       excerpt: "long" as const,
     };
 
-    expect(layoutOf({ cz: layout })).toEqual(layout);
+    expect(layoutOf({ CZE: layout })).toEqual(layout);
   });
 
-  /**
-   * The whole migration: a browser carrying an arrangement written before a
-   * preference existed reads it back at that preference's default, rather than
-   * as undefined. The schema is an object, so an unlisted key is also stripped
-   * on the way in: forgetting either half loses the value silently.
-   */
-  test("an arrangement written before the excerpt length reads back at its default", () => {
+  test("an omitted excerpt length reads back at its default", () => {
     expect(
       layoutOf({
-        cz: {
+        CZE: {
           hidden: ["country"],
           order: ["summary"],
           pinned: [],
@@ -76,29 +63,38 @@ describe("what a stored arrangement means", () => {
    */
   test("the same jurisdiction reads back as the same object, not a fresh one", () => {
     const layouts = decisionTableLayouts(
-      parse({ cz: ["headnote"], pl: { pinned: ["caseNumber"] } }),
+      parse({ CZE: { hidden: ["headnote"] }, POL: { pinned: ["caseNumber"] } }),
     );
 
-    expect(layoutForCountry(layouts, "cz")).toBe(
-      layoutForCountry(layouts, "cz"),
+    expect(layoutForCountry(layouts, "CZE")).toBe(
+      layoutForCountry(layouts, "CZE"),
     );
-    expect(layoutForCountry(layouts, "pl")).toBe(
-      layoutForCountry(layouts, "pl"),
+    expect(layoutForCountry(layouts, "POL")).toBe(
+      layoutForCountry(layouts, "POL"),
     );
   });
 
   test("a jurisdiction with no arrangement reads back as the one shared default", () => {
-    const layouts = decisionTableLayouts(parse({ cz: ["headnote"] }));
+    const layouts = decisionTableLayouts(
+      parse({ CZE: { hidden: ["headnote"] } }),
+    );
 
-    expect(layoutForCountry(layouts, "sk")).toBe(DEFAULT_DECISION_TABLE_LAYOUT);
-    expect(layoutForCountry(null, "sk")).toBe(DEFAULT_DECISION_TABLE_LAYOUT);
+    expect(layoutForCountry(layouts, "SVK")).toBe(
+      DEFAULT_DECISION_TABLE_LAYOUT,
+    );
+    expect(layoutForCountry(null, "SVK")).toBe(DEFAULT_DECISION_TABLE_LAYOUT);
   });
 
   test("a stored value of the wrong shape is refused rather than half-read", () => {
     for (const raw of [
-      { cz: { hidden: "summary" } },
-      { cz: { contentMode: "huge" } },
-      { cz: { excerpt: "huge" } },
+      { CZE: ["headnote"] },
+      { unknown: { hidden: [] } },
+      { CZE: { hidden: ["private text"] } },
+      { CZE: { sizing: { summary: -1 } } },
+      { CZE: { sizing: { summary: Number.POSITIVE_INFINITY } } },
+      { CZE: { hidden: "summary" } },
+      { CZE: { contentMode: "huge" } },
+      { CZE: { excerpt: "huge" } },
     ]) {
       expect(v.safeParse(StoredDecisionLayoutSchema, raw).success).toBe(false);
     }

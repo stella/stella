@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
+import { Result } from "better-result";
 import {
   appendFileSync,
   existsSync,
@@ -49,6 +50,13 @@ const NETWORK_ROUND_POLL_MS = 10;
 
 // --- collector -------------------------------------------------------------
 
+type ResponseBodyReadFailure = {
+  reason: "navigation-discarded" | "unavailable";
+  status: number;
+  errorName: string;
+  message: string;
+};
+
 export type NetworkCapture = {
   requests: {
     method: string;
@@ -57,11 +65,10 @@ export type NetworkCapture = {
     dbQueryHeaderMissing: boolean;
     // Response body size in bytes; null for a streamed response (excluded by
     // content-type, see STREAMED_RESPONSE_CONTENT_TYPE) or one whose body
-    // Playwright never resolved (see responseBytesUnavailable).
+    // Playwright never resolved (see responseBodyReadFailure).
     responseBytes: number | null;
-    // True only when Playwright saw a non-streamed response and reading its
-    // body failed (e.g. aborted/redirected mid-navigation).
-    responseBytesUnavailable: boolean;
+    // Only populated when a non-streamed response body read rejects.
+    responseBodyReadFailure: ResponseBodyReadFailure | null;
   }[];
   // Scheduled release rounds; only measurement navigations install the barrier.
   depthChain: string[][];
@@ -138,7 +145,7 @@ type NetworkRecord = {
   // Response body length in bytes; null until the async body read resolves,
   // and permanently null for a streamed (SSE) response.
   responseBytes: number | null;
-  responseBytesUnavailable: boolean;
+  responseBodyReadFailure: ResponseBodyReadFailure | null;
 };
 
 const BACKGROUND_POLL_PATHS = new Set(["/health"]);
@@ -172,19 +179,70 @@ const isStreamedResponse = (response: Response): boolean =>
     .toLowerCase()
     .includes(STREAMED_RESPONSE_CONTENT_TYPE);
 
-// Playwright's body() rejects for a response that never finishes (aborted or
-// redirected mid-navigation); that is a legitimate outcome here, not a bug in
-// the collector, so it is caught and recorded rather than left to reject the
-// whole route walk.
-const readResponseBytes = async (
-  response: Response,
-  record: NetworkRecord,
+// Body buffers can disappear after completion or navigation. Retain protocol
+// transfer sizes only when they conservatively bound the decoded body; every
+// other unreadable response remains a measurement failure.
+export const readResponseBytes = async (
+  response: Pick<
+    Response,
+    "body" | "status" | "headers" | "fromServiceWorker"
+  > & {
+    request: () => Pick<Request, "failure" | "sizes">;
+  },
+  record: Pick<NetworkRecord, "responseBytes" | "responseBodyReadFailure">,
 ): Promise<void> => {
   try {
     const body = await response.body();
     record.responseBytes = body.length;
-  } catch {
-    record.responseBytesUnavailable = true;
+  } catch (error) {
+    const request = response.request();
+    const headers = response.headers();
+    const transferEncoding = headers["transfer-encoding"]?.trim().toLowerCase();
+    if (
+      !response.fromServiceWorker() &&
+      (transferEncoding === undefined ||
+        transferEncoding === "chunked" ||
+        transferEncoding === "identity") &&
+      headers["content-encoding"] === undefined &&
+      request.failure() === null
+    ) {
+      // Chromium can discard a completed response's body buffer. For an
+      // unencoded response, the observed transfer body size is at least its
+      // decoded size (chunk framing can only add bytes), so budgets stay
+      // conservative without depending on that buffer's lifetime.
+      const sizes = await Result.tryPromise({
+        try: async () => await request.sizes(),
+        catch: (cause) => cause,
+      });
+      if (
+        sizes.isOk() &&
+        Number.isSafeInteger(sizes.value.responseBodySize) &&
+        sizes.value.responseBodySize > 0
+      ) {
+        record.responseBytes = sizes.value.responseBodySize;
+        return;
+      }
+    }
+    const message =
+      error instanceof Error ? error.message : "Non-Error body-read rejection";
+    const status = response.status();
+    record.responseBodyReadFailure = {
+      // Playwright explicitly identifies bodies the browser discarded on
+      // navigation. A successful response lost this way is not size evidence.
+      // Navigation may also mark the request aborted after its 200 response.
+      reason:
+        status >= 200 &&
+        status < 300 &&
+        message.includes(
+          "Response body is not available for a response that was navigated away from.",
+        )
+          ? "navigation-discarded"
+          : "unavailable",
+      status,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      // Driver errors may include request URLs; redact them before reporting.
+      message: message.replace(/https?:\/\/[^\s)]+/gu, "<response URL>"),
+    };
   }
 };
 
@@ -263,7 +321,7 @@ export const createNetworkCollector = (
           dbQueries: null,
           dbQueryHeaderMissing: false,
           responseBytes: null,
-          responseBytesUnavailable: false,
+          responseBodyReadFailure: null,
         };
         records.push(record);
         byRequest.set(request, record);
@@ -335,14 +393,14 @@ export const createNetworkCollector = (
             dbQueries,
             dbQueryHeaderMissing,
             responseBytes,
-            responseBytesUnavailable,
+            responseBodyReadFailure,
           }) => ({
             method,
             pathname,
             dbQueries,
             dbQueryHeaderMissing,
             responseBytes,
-            responseBytesUnavailable,
+            responseBodyReadFailure,
           }),
         ),
       };
@@ -392,6 +450,7 @@ export type RouteNetworkMetrics = {
   responseSizes: Record<string, number>;
   // Per request key, how many non-streamed responses failed to yield a body.
   missingResponseSizeCounts: Record<string, number>;
+  responseBodyReadFailures: Record<string, ResponseBodyReadFailure[]>;
 };
 
 export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
@@ -419,6 +478,8 @@ export const summarizeCapture = (
   const missingDbQueryCounts: Record<string, number> = {};
   const responseSizes: Record<string, number> = {};
   const missingResponseSizeCounts: Record<string, number> = {};
+  const responseBodyReadFailures: Record<string, ResponseBodyReadFailure[]> =
+    {};
   const requestCounts: Record<string, number> = {};
   const depthChain = capture.depthChain;
   for (const request of capture.requests) {
@@ -430,9 +491,14 @@ export const summarizeCapture = (
     if (request.dbQueries !== null && !Number.isNaN(request.dbQueries)) {
       dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
     }
-    if (request.responseBytesUnavailable) {
-      missingResponseSizeCounts[key] =
-        (missingResponseSizeCounts[key] ?? 0) + 1;
+    if (request.responseBodyReadFailure !== null) {
+      (responseBodyReadFailures[key] ??= []).push(
+        request.responseBodyReadFailure,
+      );
+      if (request.responseBodyReadFailure.reason === "unavailable") {
+        missingResponseSizeCounts[key] =
+          (missingResponseSizeCounts[key] ?? 0) + 1;
+      }
     }
     if (
       request.responseBytes !== null &&
@@ -460,6 +526,7 @@ export const summarizeCapture = (
     responseSizes: Object.fromEntries(
       Object.entries(responseSizes).toSorted(([a], [b]) => a.localeCompare(b)),
     ),
+    responseBodyReadFailures,
     missingResponseSizeCounts: Object.fromEntries(
       Object.entries(missingResponseSizeCounts).toSorted(([a], [b]) =>
         a.localeCompare(b),
@@ -623,10 +690,14 @@ const pushResponseSizeProblems = ({
     }
     problems.push(
       `Response size missing on ${route}: ${key}\n` +
-        `  This request has a committed response-size budget, but Playwright\n` +
-        `  could not read the response body (aborted or redirected mid-\n` +
-        `  navigation is the usual cause). Re-run the suite; if it persists,\n` +
-        `  investigate before trusting this route's payload-size budget.`,
+        `  This request has a committed response-size budget, but Playwright could not read its body.\n${(
+          metrics.responseBodyReadFailures[key] ?? []
+        )
+          .map(
+            ({ status, errorName, message }) =>
+              `  HTTP ${status}; ${errorName}: ${message}`,
+          )
+          .join("\n")}`,
     );
   }
   for (const [key, observed] of Object.entries(metrics.responseSizes)) {

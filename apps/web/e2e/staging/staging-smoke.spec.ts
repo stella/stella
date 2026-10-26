@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import * as v from "valibot";
 
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
@@ -7,8 +8,9 @@ import {
   ROUTE_ERROR_HEADING,
 } from "../helpers/app-shell";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
-import { seedSidebarState } from "../helpers/sidebar-state";
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import { STAGING_CHECKS } from "../helpers/staging-state";
+import { STAGING_API_URL } from "../playwright.staging.config";
 
 const MACOS_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
@@ -122,122 +124,137 @@ test.describe("public hydration", () => {
         .slice(0, 10);
       await setFixedBrowserTime(page, fixedBrowserDate);
 
-      // A persisted non-English locale is the harder hydration case: the
-      // client holds translated messages before hydrating against the
-      // server's English markup. The bug class this guards against only
-      // reproduced with a non-default locale.
-      // String form: the e2e tsconfig has no DOM lib, so a function body
-      // referencing browser globals would not typecheck in this context.
-      // The server renders the sidebar from its cookie, so a non-default
-      // state is part of what hydration must agree with.
-      await seedSidebarState({
-        baseURL,
+      if (baseURL === undefined) {
+        throw new Error("Staging hydration smoke requires a base URL");
+      }
+      // Exercise a non-default server-rendered locale and collapsed sidebar.
+      await setPresentationPrefs({
         context: page.context(),
-        state: "collapsed",
+        url: baseURL,
+        patch: { sidebarOpen: false, theme: "light", palette: "flexoki" },
       });
-      await page.addInitScript({
-        content: `window.localStorage.setItem("stella-ui-theme", "light");
-      window.localStorage.setItem("stella-ui-palette", "flexoki");
-      window.localStorage.setItem(
-        "stella-i18n",
-        JSON.stringify({ state: { lang: "cs" }, version: 0 }),
-      );`,
-      });
+      const sessionResponse = await page.request.get(
+        `${STAGING_API_URL}/api/auth/get-session`,
+      );
+      expect(sessionResponse.ok()).toBe(true);
+      const originalSession = v.parse(
+        v.object({ user: v.object({ locale: v.nullish(v.string(), "en") }) }),
+        await sessionResponse.json(),
+      );
+      const localeResponse = await page.request.post(
+        `${STAGING_API_URL}/api/auth/update-user`,
+        {
+          data: { locale: "cs" },
+          headers: { Origin: baseURL },
+        },
+      );
+      expect(localeResponse.ok()).toBe(true);
 
-      // Hydration mismatches surface as pageerrors (React #418 + a router
-      // invariant) and end in the error boundary; collect them explicitly
-      // so the failure names the real exception instead of a timeout.
-      const pageErrors: string[] = [];
-      const hydrationConsoleErrors: string[] = [];
-      const failedAssets: string[] = [];
-      page.on("pageerror", (error) => {
-        pageErrors.push(error.message);
-      });
-      page.on("console", (message) => {
-        const text = message.text();
-        const normalizedText = text.toLowerCase();
-        if (
-          message.type() === "error" &&
-          (normalizedText.includes("hydrated") ||
-            normalizedText.includes("hydration"))
-        ) {
-          hydrationConsoleErrors.push(text);
-        }
-      });
-      page.on("response", (response) => {
-        if (response.status() >= 400 && response.url().includes("/assets/")) {
-          failedAssets.push(response.url());
-        }
-      });
+      try {
+        // Hydration mismatches surface as pageerrors (React #418 + a router
+        // invariant) and end in the error boundary; collect them explicitly
+        // so the failure names the real exception instead of a timeout.
+        const pageErrors: string[] = [];
+        const hydrationConsoleErrors: string[] = [];
+        const failedAssets: string[] = [];
+        page.on("pageerror", (error) => {
+          pageErrors.push(error.message);
+        });
+        page.on("console", (message) => {
+          const text = message.text();
+          const normalizedText = text.toLowerCase();
+          if (
+            message.type() === "error" &&
+            (normalizedText.includes("hydrated") ||
+              normalizedText.includes("hydration"))
+          ) {
+            hydrationConsoleErrors.push(text);
+          }
+        });
+        page.on("response", (response) => {
+          if (response.status() >= 400 && response.url().includes("/assets/")) {
+            failedAssets.push(response.url());
+          }
+        });
 
-      await page.goto("/law", { waitUntil: "commit" });
-      // A decision link, not a list link: the nav, the top bar and the browse
-      // links all point at `/law/cases` (no trailing slash), so only a
-      // decision's own path matches `/cases/`.
-      const firstDecision = page.locator('a[href*="/cases/"]').first();
+        await page.goto("/law", { waitUntil: "commit" });
+        // A decision link, not a list link: the nav, the top bar and the browse
+        // links all point at `/law/cases` (no trailing slash), so only a
+        // decision's own path matches `/cases/`.
+        const firstDecision = page.locator('a[href*="/cases/"]').first();
 
-      await expect(firstDecision).toBeVisible();
-      await expect(page.locator("html")).toHaveAttribute("lang", "cs");
-      await openGlobalSearchDatePicker(page);
-      await expect(
-        page.locator('[role="gridcell"][aria-current="date"]'),
-      ).toHaveAttribute("data-date", expectedToday);
-      await page.keyboard.press("Escape");
-      const customRangeButton = page.getByRole("button", {
-        name: /custom range|vlastní rozsah/iu,
-      });
-      await expect(customRangeButton).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(customRangeButton).toBeHidden();
-      await firstDecision.click();
-      await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
+        await expect(firstDecision).toBeVisible();
+        await expect(page.locator("html")).toHaveAttribute("lang", "cs");
+        await openGlobalSearchDatePicker(page);
+        await expect(
+          page.locator('[role="gridcell"][aria-current="date"]'),
+        ).toHaveAttribute("data-date", expectedToday);
+        await page.keyboard.press("Escape");
+        const customRangeButton = page.getByRole("button", {
+          name: /custom range|vlastní rozsah/iu,
+        });
+        await expect(customRangeButton).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(customRangeButton).toBeHidden();
+        await firstDecision.click();
+        await expect(page).toHaveURL(/\/law\/[a-z]{2,3}\/cases\//u);
 
-      // Force a full server-rendered load of the decision page: client-side
-      // navigation alone would never exercise the hydration path that broke.
-      await page.reload({ waitUntil: "commit" });
+        // Force a full server-rendered load of the decision page: client-side
+        // navigation alone would never exercise the hydration path that broke.
+        await page.reload({ waitUntil: "commit" });
 
-      await expect(page.locator("article").first()).toBeVisible();
-      // Imported judgments are self-contained articles and may carry their own h1.
-      // Assert the app-owned page title without constraining source-document markup.
-      const decisionTitle = page.locator('h1[data-slot="decision-title"]');
-      await expect(decisionTitle).toHaveCount(1);
-      await expect(decisionTitle).toHaveText(/\S/u);
-      const routeErrorTitle = page.locator("#route-error-title");
-      const inspector = page.locator('[data-slot="inspector-dock"]');
-      await expect(routeErrorTitle).toHaveCount(0);
-      // Decision routes seed their inspector tabs without opening the pane.
-      // Open it as a reader would so the lazy pane content is exercised too.
-      await expect(inspector).toHaveAttribute("data-state", "collapsed");
-      // The smoke user has no AI provider, so the decision's chat composer
-      // opens the modal connect-provider dialog, which hides the rail from the
-      // accessibility tree until it is dismissed.
-      const aiKeyDialog = page.getByRole("dialog").filter({
-        has: page.getByRole("heading", {
-          name: /^(?:connect ai provider|připojit poskytovatele ai)$/iu,
-        }),
-      });
-      await expect(aiKeyDialog).toBeVisible();
-      await page.keyboard.press("Escape");
-      await expect(aiKeyDialog).toBeHidden();
-      await inspector
-        .getByRole("button", { name: /^(?:show pane|zobrazit panel)$/iu })
-        .click();
-      await expect(inspector).toHaveAttribute("data-state", "expanded");
-      await expect(
-        page.locator('[data-slot="sidebar"]').first(),
-      ).toHaveAttribute("data-state", "collapsed");
-      await expect(page.locator("html")).toHaveClass(/\bpalette-flexoki\b/u);
-      await expect(page.locator("html")).not.toHaveClass(/\bdark\b/u);
+        await expect(page.locator("article").first()).toBeVisible();
+        // Imported judgments are self-contained articles and may carry their own h1.
+        // Assert the app-owned page title without constraining source-document markup.
+        const decisionTitle = page.locator('h1[data-slot="decision-title"]');
+        await expect(decisionTitle).toHaveCount(1);
+        await expect(decisionTitle).toHaveText(/\S/u);
+        const routeErrorTitle = page.locator("#route-error-title");
+        const inspector = page.locator('[data-slot="inspector-dock"]');
+        await expect(routeErrorTitle).toHaveCount(0);
+        // Decision routes seed their inspector tabs without opening the pane.
+        // Open it as a reader would so the lazy pane content is exercised too.
+        await expect(inspector).toHaveAttribute("data-state", "collapsed");
+        // The smoke user has no AI provider, so the decision's chat composer
+        // opens the modal connect-provider dialog, which hides the rail from the
+        // accessibility tree until it is dismissed.
+        const aiKeyDialog = page.getByRole("dialog").filter({
+          has: page.getByRole("heading", {
+            name: /^(?:connect ai provider|připojit poskytovatele ai)$/iu,
+          }),
+        });
+        await expect(aiKeyDialog).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(aiKeyDialog).toBeHidden();
+        await inspector
+          .getByRole("button", { name: /^(?:show pane|zobrazit panel)$/iu })
+          .click();
+        await expect(inspector).toHaveAttribute("data-state", "expanded");
+        await expect(
+          page.locator('[data-slot="sidebar"]').first(),
+        ).toHaveAttribute("data-state", "collapsed");
+        await expect(page.locator("html")).toHaveClass(/\bpalette-flexoki\b/u);
+        await expect(page.locator("html")).not.toHaveClass(/\bdark\b/u);
 
-      // Authentication resolution and the lazy inspector graph settle after the
-      // decision body appears. Keep observing long enough to catch a delayed
-      // remount, stale-chunk retry, or cross-tab store reconciliation.
-      await page.waitForTimeout(5000);
-      await expect(routeErrorTitle).toHaveCount(0);
-      await expect(inspector).toHaveAttribute("data-state", "expanded");
-      expect(pageErrors).toEqual([]);
-      expect(hydrationConsoleErrors).toEqual([]);
-      expect(failedAssets).toEqual([]);
+        // Authentication resolution and the lazy inspector graph settle after the
+        // decision body appears. Keep observing long enough to catch a delayed
+        // remount, stale-chunk retry, or cross-tab store reconciliation.
+        await page.waitForTimeout(5000);
+        await expect(routeErrorTitle).toHaveCount(0);
+        await expect(inspector).toHaveAttribute("data-state", "expanded");
+        expect(pageErrors).toEqual([]);
+        expect(hydrationConsoleErrors).toEqual([]);
+        expect(failedAssets).toEqual([]);
+      } finally {
+        const restored = await page.request.post(
+          `${STAGING_API_URL}/api/auth/update-user`,
+          {
+            data: { locale: originalSession.user.locale },
+            headers: { Origin: baseURL },
+          },
+        );
+        expect(restored.ok()).toBe(true);
+      }
     },
   );
 });

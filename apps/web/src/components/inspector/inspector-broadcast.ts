@@ -907,8 +907,12 @@ const initializeInspectorScope = (
   }
   pageLoad.scopeOwnership.set(store, scopeKey);
   const persistedMinimized = readPersistedMinimized(scope);
-  // The previous restore never settled: keep the pane closed this time.
-  const recovering = readRestorePending(scope);
+  // A shell handoff can reconnect before this document's restore settles.
+  // Its live tabs prove that restore is still active; only a fresh scope or
+  // empty store should recover a previous document's unfinished restore.
+  const hasLiveScope =
+    previousScopeKey === scopeKey && store.getState().tabs.length > 0;
+  const recovering = readRestorePending(scope) && !hasLiveScope;
   const minimized = persistedMinimized || recovering;
   if (store.getState().minimized !== minimized) {
     store.setState({ minimized });

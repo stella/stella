@@ -2,16 +2,17 @@ import { startTransition, StrictMode, useLayoutEffect } from "react";
 import { hydrateRoot } from "react-dom/client";
 
 import { CancelledError } from "@tanstack/react-query";
+import { getRouterInstance } from "@tanstack/react-start";
 import { StartClient } from "@tanstack/react-start/client";
-
-import { bootHydratedClient } from "@stll/ssr-kit/hydration";
+import { Result } from "better-result";
 
 import { RenderStormCanary } from "@/components/render-storm-canary";
-import { initializeI18n } from "@/i18n/i18n-store";
+import { loadClientDocumentPresentation } from "@/i18n/document-presentation";
+import { getTranslator } from "@/i18n/translator";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { reportErrorOnce } from "@/lib/analytics/reported-error";
 import { detached } from "@/lib/detached";
-import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 type HydrationCommitSignalProps = {
   onCommit: () => void;
@@ -55,19 +56,16 @@ const hydrate = async () => {
     );
   });
   await hydrationCommit.promise;
+  const router = await getRouterInstance();
+  const presentation = await Result.tryPromise(
+    async () =>
+      await loadClientDocumentPresentation(router.options.context.queryClient),
+  );
+  if (presentation.isErr()) {
+    notifyUserError(presentation.error, getTranslator()("errors.actionFailed"));
+  }
 };
 
-// The server renders public paths with bundled English. They hydrate against
-// that same state before persisted browser state loads after the hydration
-// commit.
-// Client-only paths resolve browser state before their first render.
-detached(
-  bootHydratedClient({
-    type: isPublicSsrPath(window.location.pathname)
-      ? "server-rendered"
-      : "client-rendered",
-    hydrate,
-    initializeClientState: initializeI18n,
-  }),
-  "client.i18n",
-);
+// Router hydration restores the server's locale and presentation preferences
+// before React renders the document.
+detached(hydrate(), "client.hydration");

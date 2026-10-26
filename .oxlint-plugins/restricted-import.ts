@@ -232,6 +232,18 @@ const RESTRICTED_IMPORT_RULES = {
   // Route code has one approved helper; other exports stay at the boundary.
   "confine-server-reads": [
     {
+      messageId: "confineRequestScenarios",
+      message:
+        "Run server-request scenarios through @/testing/request-test so framework HTTP error handling cannot swallow failures.",
+      modules: [TANSTACK_START_SERVER],
+      restriction: {
+        type: "exports",
+        names: new Set(["requestHandler"]),
+        hit: EXPORT_HIT.binding,
+      },
+      owners: ["apps/web/src/testing/request-test.ts"],
+    },
+    {
       messageId: "confineServerReads",
       message: "Use the approved server request helper for this access.",
       modules: [TANSTACK_START_SERVER],
@@ -246,8 +258,10 @@ const RESTRICTED_IMPORT_RULES = {
         ]),
         hit: EXPORT_HIT.binding,
       },
-      // Reads only the sidebar's own open-state cookie, a layout choice.
-      owners: ["apps/web/src/components/sidebar/sidebar-state.ts"],
+      owners: [
+        "apps/web/src/lib/account/ssr-api-headers.ts",
+        "apps/web/src/lib/account/presentation-prefs/server.ts",
+      ],
     },
   ],
   // `<MatterIcon>` always resolves a matter colour (or paints the deliberate

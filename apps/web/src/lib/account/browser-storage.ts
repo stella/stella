@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import {
   DEVICE_STORAGE_FAMILIES,
+  LEGACY_STORAGE_FAMILIES,
   USER_STORAGE_FAMILIES,
 } from "@/lib/account/storage-families";
 import type { StorageArea } from "@/lib/account/storage-families";
@@ -17,6 +18,36 @@ type StorageRegistrationOptions = {
   area: StorageArea;
   key: string;
   ownership: "device" | "any";
+};
+
+const assertLegacyRegistered = (key: string) => {
+  if (
+    !LEGACY_STORAGE_FAMILIES.some((family) => key.startsWith(family.prefix))
+  ) {
+    panic(`Unregistered legacy local storage family: ${key}`);
+  }
+};
+
+/** Superseded entries are deliberately read/delete-only outside test fixtures. */
+export const legacyBrowserStorage = {
+  getItem: (key: string) => {
+    assertLegacyRegistered(key);
+    return Result.try(() => browserStorage("local")?.getItem(key) ?? null);
+  },
+  removeItem: (key: string) => {
+    assertLegacyRegistered(key);
+    return Result.try(() => browserStorage("local")?.removeItem(key));
+  },
+};
+
+/** Internal seam used only by the legacy-storage test fixture module. */
+export const seedLegacyBrowserStorageForTest = (key: string, value: string) => {
+  assertLegacyRegistered(key);
+  const storage = browserStorage("local");
+  if (storage === null) {
+    panic("Legacy storage fixture requires local storage");
+  }
+  storage.setItem(key, value);
 };
 
 const assertRegistered = ({

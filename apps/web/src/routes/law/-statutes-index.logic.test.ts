@@ -9,6 +9,7 @@ import {
   createStatuteListFilters,
   loadPublicStatutesIndex,
 } from "@/routes/law/-statutes-index.logic";
+import { runInRequest } from "@/testing/request-test";
 
 test.each([
   { eli: "/eli/cz/sb/2012/89", country: "CZE" },
@@ -60,14 +61,18 @@ test("publication year reaches the public statute list request", async () => {
   );
   const queryClient = new QueryClient();
   try {
-    await queryClient.infiniteQuery(
-      statutesInfiniteOptions(
-        createStatuteListFilters(
-          "svk",
-          v.parse(statutesIndexSearchSchema, { year: 1964 }),
+    // Server-side API reads forward the incoming request's cookies, so the
+    // read runs inside a request as it does during SSR.
+    await runInRequest(async () => {
+      await queryClient.infiniteQuery(
+        statutesInfiniteOptions(
+          createStatuteListFilters(
+            "svk",
+            v.parse(statutesIndexSearchSchema, { year: 1964 }),
+          ),
         ),
-      ),
-    );
+      );
+    }, new Request("http://localhost:3000/law"));
     expect(requests).toHaveLength(1);
     expect(requests.at(0)?.pathname).toBe("/v1/law/statutes");
     expect(requests.at(0)?.searchParams.get("country")).toBe("SVK");

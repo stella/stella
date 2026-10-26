@@ -1,8 +1,3 @@
-// The e2e tsconfig is node-only (lib ESNext); the `page.evaluate` /
-// `addInitScript` callbacks below run in the browser, so pull in the DOM
-// lib for their globals (document, localStorage, MutationObserver, ...).
-/// <reference lib="dom" />
-/// <reference lib="dom.iterable" />
 import { chromium } from "@playwright/test";
 import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
@@ -17,7 +12,12 @@ import {
 } from "@stll/api-contract/professional-use";
 import { repoRelativePath } from "@stll/portable-path";
 
-import { seedSidebarState } from "../helpers/sidebar-state";
+// The e2e tsconfig is node-only (lib ESNext); the `page.evaluate` /
+// `addInitScript` callbacks below run in the browser, so pull in the DOM
+// lib for their globals (document, localStorage, MutationObserver, ...).
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import {
   anchorMarketingAgentFinalTurn,
   getMarketingAgentThreadId,
@@ -1475,12 +1475,11 @@ const createRecordingContext = async ({
     viewport,
   });
   await context.addCookies(cookies);
-  if (collapsedSidebar) {
-    await seedSidebarState({ baseURL: WEB_URL, context, state: "collapsed" });
-  }
-  await context.addInitScript((nextTheme) => {
-    localStorage.setItem("theme", nextTheme);
-  }, theme);
+  await setPresentationPrefs({
+    context,
+    url: WEB_URL,
+    patch: { sidebarOpen: !collapsedSidebar, theme },
+  });
   if (cursor === "visible") {
     await context.addInitScript(installCursorOverlay, CURSOR_OVERLAY_ID);
   }

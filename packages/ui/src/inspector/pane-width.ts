@@ -105,7 +105,7 @@ export const resolveInspectorPaneMaxWidth = ({
  * A width inside the pane's own bounds, independent of any viewport.
  *
  * Every width the pane keeps goes through this, because the kept width is
- * also the persisted one and the persistence owner rejects —
+ * also the persisted one and the host persistence boundary rejects —
  * and so resets — anything outside these bounds. A raw cursor position is
  * routinely outside them, so a drag past the edge has to be remembered as
  * the bound it stopped at rather than as the pixel the pointer reached.

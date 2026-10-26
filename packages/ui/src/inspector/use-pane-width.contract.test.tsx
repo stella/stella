@@ -31,9 +31,8 @@ describe("useInspectorPaneWidth", () => {
     expect(markup).toContain("onLostPointerCapture");
   });
 
-  test("renders without storage, and without a storage key", () => {
-    // No `storageKey`, so nothing reads `window.localStorage` at all: the
-    // in-memory pane is the fallback the storage guards degrade to.
+  test("renders without browser storage", () => {
+    // Persistence belongs to the host, so rendering never reads browser storage.
     expect(() => renderToStaticMarkup(<HandleProbe />)).not.toThrow();
   });
 });

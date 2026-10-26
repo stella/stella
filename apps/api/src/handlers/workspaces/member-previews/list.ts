@@ -41,6 +41,8 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "emailVerified",
   // Time formatting preferences are not used by avatar labels.
   "timezoneId",
+  // Interface language belongs to the member’s own preferences.
+  "locale",
   // Avatar labels use the canonical name, matching other matter-team surfaces.
   "preferredName",
   // Editor shortcut preferences are unrelated to team previews.

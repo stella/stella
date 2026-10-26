@@ -16,6 +16,8 @@ import {
 } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { cn } from "@stll/ui/utils";
+
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
@@ -24,16 +26,18 @@ import {
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { loadDocumentPresentation } from "@/i18n/document-presentation";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import "@/fonts.css";
 import {
   applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
 import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { PresentationPrefsProvider } from "@/lib/account/presentation-prefs/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
-import "@/fonts.css";
-import { readSidebarStateAttribute } from "@/components/sidebar/sidebar-state";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
 import { detached } from "@/lib/detached";
@@ -61,6 +65,7 @@ const DevRoot = isDev
 export const Route = createRootRouteWithContext<{
   analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
+  presentationPrefs: PresentationPrefs;
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
@@ -75,16 +80,23 @@ export const Route = createRootRouteWithContext<{
     // Public SSR has no browser session. Caching its anonymous response would
     // keep signed-in member actions hidden after hydration.
     if (import.meta.env.SSR) {
-      return;
+      return {
+        presentationPrefs: await loadDocumentPresentation(context.queryClient),
+      };
     }
     // Development fixtures supply their own auth providers without an API.
     if (isDev && location.pathname === "/dev") {
-      return;
+      return {
+        presentationPrefs: await loadDocumentPresentation(context.queryClient),
+      };
     }
     await requireProfessionalUseForSignedInRoute({
       queryClient: context.queryClient,
       location,
     });
+    return {
+      presentationPrefs: await loadDocumentPresentation(context.queryClient),
+    };
   },
   shellComponent: RootDocument,
   component: RootComponent,
@@ -172,6 +184,9 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
+  const prefs = Route.useRouteContext({
+    select: (context) => context.presentationPrefs,
+  });
   const interfaceLocale = useI18nStore((s) => s.loadedLang);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
   const documentLanguage = useRouterState({
@@ -183,10 +198,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   });
   const dir = getLangDir(interfaceLocale);
 
-  // Hydration keeps the attributes the server (or prepaint-init.js) put on
-  // the element, so later locale loads and navigations are written here.
-  // Until the first locale has loaded, the server markup and the prepaint
-  // guess stand.
+  // Synchronize later language changes and navigations with the document.
   useExternalSyncEffect(() => {
     if (!hasLoadedOnce) {
       return;
@@ -195,20 +207,16 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   }, [dir, hasLoadedOnce, lang]);
 
   return (
-    // prepaint-init.js mutates the html element's class, and for RTL
-    // locales its lang/dir, before React hydrates the document, so the
-    // attribute set never matches the server markup; suppress the
-    // per-element warning rather than letting every SSR page log a
-    // recovered hydration error. The server renders the document's own
-    // language on pages that show one, and the interface locale otherwise;
-    // data-lang-source tells prepaint-init.js to keep a document language.
-    // data-sidebar-state carries the sidebar's stored state from the server
-    // render to the browser (see components/sidebar/sidebar-state.ts).
+    // The system colour scheme alone depends on browser media queries.
     <html
+      className={cn(
+        prefs.theme === "dark" && "dark",
+        prefs.palette !== "neutral" && `palette-${prefs.palette}`,
+      )}
+      data-theme={prefs.theme}
       lang={lang}
       dir={dir}
       data-lang-source={langSource}
-      data-sidebar-state={readSidebarStateAttribute()}
       suppressHydrationWarning
     >
       <head>
@@ -219,7 +227,11 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          <RouteProviderScopeBoundary>{children}</RouteProviderScopeBoundary>
+          <RouteProviderScopeBoundary>
+            <PresentationPrefsProvider initialPrefs={prefs}>
+              {children}
+            </PresentationPrefsProvider>
+          </RouteProviderScopeBoundary>
         </RouteErrorLifecycleProvider>
         <Scripts />
       </body>

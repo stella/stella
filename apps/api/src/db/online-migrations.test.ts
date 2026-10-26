@@ -30,6 +30,7 @@ import {
   runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
+import { USER_LOCALE_CONSTRAINT_VALIDATION } from "./user-locale-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
 const healthyIndexGate = {
@@ -187,8 +188,11 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
-    "validates monitoring constraint $name once and rejects incomplete startup",
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    USER_LOCALE_CONSTRAINT_VALIDATION,
+  ])(
+    "validates constraint $name once and rejects incomplete startup",
     async ({ name }) => {
       const harness = createHarness({ unvalidatedConstraints: [name] });
       const rejection = await assertOnlineMigrationsApplied(harness.pool).then(

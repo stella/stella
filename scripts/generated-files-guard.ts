@@ -241,7 +241,6 @@ const LIGHT_CHECK_COMMANDS = [
     "apps/web/src/i18n",
     "--check",
   ],
-  ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
   ["bun", "run", "selfhost:check"],
   [
     "bun",

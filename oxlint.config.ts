@@ -902,6 +902,8 @@ const reactCompilerRulesOff = {
 // component CSS or inline <style> blocks instead, so list each spelling rather
 // than exempting broad prefixes that could hide a Tailwind typo.
 const customCssClassNames = [
+  // Root colour-scheme selector defined by packages/ui/src/styles/theme.css.
+  "dark",
   "animate-flow-in",
   "animate-slide-in",
   "auth-gradient",

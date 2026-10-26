@@ -266,6 +266,13 @@ const HOST_USER_FIELDS = {
         databaseDefault: { kind: "literal", value: "UTC" },
         databaseNotNull: true,
       },
+      locale: {
+        databaseDefault: {
+          kind: "literal",
+          value: AUTH_USER_ADDITIONAL_FIELDS.locale.defaultValue,
+        },
+        databaseNotNull: true,
+      },
       twoFactorEnabled: {
         databaseDefault: { kind: "literal", value: false },
         databaseNotNull: true,

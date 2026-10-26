@@ -846,26 +846,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    id: "prepaint-locales",
-    outputKind: "committed",
-    outputs: CI_GENERATED_OUTPUTS.prepaintLocale,
-    blocks: [
-      {
-        path: "apps/web/public/prepaint-init.js",
-        begin: "// <generated:ui-locales>",
-        end: "// </generated:ui-locales>",
-      },
-    ],
-    inputs: [
-      "packages/locales/**",
-      "apps/web/scripts/sync-prepaint-locales.ts",
-    ],
-    write: ["bun", "apps/web/scripts/sync-prepaint-locales.ts"],
-    check: ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
-    autofix: true,
-    after: [],
-  },
-  {
     id: "env-examples",
     outputKind: "committed",
     outputs: [

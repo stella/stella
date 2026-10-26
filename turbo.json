@@ -1461,6 +1461,7 @@
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
         "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
+        "$TURBO_ROOT$/apps/web/src/testing/request-test.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",

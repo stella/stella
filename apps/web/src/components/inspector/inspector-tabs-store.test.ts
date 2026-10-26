@@ -1408,6 +1408,28 @@ describe("Inspector tab broadcast", () => {
     expect(restored).not.toHaveProperty("metadataLane");
   });
 
+  test("a shell handoff keeps a restored inspector open before its settle delay", () => {
+    installFakeBroadcastChannel();
+    const scope = { organizationId: "org-1", userId: "user-1" };
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    openFullscreenFileTab();
+    useInspectorTabsStore.setState({ minimized: false });
+
+    // A fresh document restores the persisted tab.
+    cleanupInspectorBroadcast();
+    useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+
+    // The route switches shells in the same document before restore settles.
+    cleanupInspectorBroadcast();
+    cleanupInspectorBroadcast = initializeInspectorTabBroadcast(scope);
+    expect(useInspectorTabsStore.getState().minimized).toBe(false);
+    expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+      id: "field-1",
+    });
+  });
+
   test("a restore that never settled reopens minimized on the next start", () => {
     installFakeBroadcastChannel();
     const scope = { organizationId: "org-1", userId: "user-1" };

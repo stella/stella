@@ -5,6 +5,7 @@ import type { WebRoutes } from "@/generated/api-routes.gen";
 import { getTranslator } from "@/i18n/translator";
 import { reportUnhandledMeResponse } from "@/lib/account/auth-code-report";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { externalApiOrigin } from "@/lib/api-origins";
 import {
   getApiRequestHeaders,
   waitForSimulatedApiDelay,
@@ -70,7 +71,7 @@ export const webApiClientOptions = {
 
 /** The whole API, from its origin: `apiClient.public.feedback`, `apiClient.v1`. */
 export const apiClient = createApiClient<WebRoutes>(
-  browserApiBaseUrl(),
+  import.meta.env.SSR ? externalApiOrigin() : browserApiBaseUrl(),
   webApiClientOptions,
 );
 

@@ -27,14 +27,14 @@ import {
   useSidebarLayout,
 } from "@stll/ui/sidebar";
 
-import { DEFAULT_SIDEBAR_OPEN } from "@/components/sidebar/sidebar-state";
 import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePersistedSidebarOpen } from "@/hooks/use-persisted-sidebar-open";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 
 /**
  * App glue around `@stll/ui/sidebar`'s generic shell: wires the app's
- * persisted (cookie-backed) open state in as a controlled value. The
+ * persisted presentation preference in as a controlled value. The
  * shell itself stays host-agnostic and does not persist anything on its own.
  */
 const SidebarProvider = ({
@@ -53,8 +53,8 @@ const SidebarProvider = ({
     persistOpen,
     setOpen: setPersistedOpen,
   } = usePersistedSidebarOpen({
-    defaultOpen: defaultOpen ?? DEFAULT_SIDEBAR_OPEN,
-    hydrateFromStorage: defaultOpen === undefined && openProp === undefined,
+    defaultOpen: defaultOpen ?? defaultPresentationPrefs.sidebarOpen,
+    usePreference: defaultOpen === undefined && openProp === undefined,
   });
 
   const open = openProp ?? persistedOpen;

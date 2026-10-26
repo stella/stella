@@ -12,6 +12,8 @@ import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profil
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { API_TEST_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
+import { runInRequest } from "../../../../web/src/testing/request-test";
+
 // The browser side of a chat thread is the web app's own code, loaded from
 // `apps/web`: `createChatRuntime` (TanStack's `ChatClient` over its SSE
 // adapter, with the web app's request body, native interrupt resolution,
@@ -258,6 +260,11 @@ const QUIET_TICKS = 3;
 
 const nextTick = async () => await sleep(0);
 
+// Bun runs the web modules' server branches; give their API header hooks the
+// same request scope a page has when those hooks run during server rendering.
+const inWebRequest = async (action: () => Promise<void>) =>
+  await runInRequest(action, new Request(WEB_TEST_API_URL));
+
 export type WebChatClient = {
   /** The approval card's Allow or Deny. */
   approve: (toolCallId: string, approved: boolean) => Promise<void>;
@@ -484,15 +491,16 @@ export const createWebChatClient = async ({
    * the step ends when the runtime and the server are idle, and a rejection
    * lands in `errors` whenever it arrives.
    */
-  const act = async (action: () => Promise<void>) => {
-    if (disposed) {
-      panic("The page was closed");
-    }
-    void action().catch((error: unknown) => {
-      errors.push(error instanceof Error ? error : new Error(String(error)));
+  const act = async (action: () => Promise<void>) =>
+    await inWebRequest(async () => {
+      if (disposed) {
+        panic("The page was closed");
+      }
+      void action().catch((error: unknown) => {
+        errors.push(error instanceof Error ? error : new Error(String(error)));
+      });
+      await settle();
     });
-    await settle();
-  };
 
   const messages = () => runtime.getSnapshot().messages;
   const cards = () => cardsOf(web, messages());
@@ -585,24 +593,27 @@ export const createWebChatClient = async ({
     },
     settle,
     waitForMessages,
-    startUserMessage: async (id, text, until) => {
-      void web
-        .sendThreadChatMessage(runtime, { content: text, id })
-        .catch((error: unknown) => {
-          errors.push(
-            error instanceof Error ? error : new Error(String(error)),
-          );
-        });
-      await waitForMessages(until);
-    },
-    stop: async () => {
-      runtime.stop();
-      await settle();
-    },
-    leave: async () => {
-      runtime.leave();
-      await settle();
-    },
+    startUserMessage: async (id, text, until) =>
+      await inWebRequest(async () => {
+        void web
+          .sendThreadChatMessage(runtime, { content: text, id })
+          .catch((error: unknown) => {
+            errors.push(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          });
+        await waitForMessages(until);
+      }),
+    stop: async () =>
+      await inWebRequest(async () => {
+        runtime.stop();
+        await settle();
+      }),
+    leave: async () =>
+      await inWebRequest(async () => {
+        runtime.leave();
+        await settle();
+      }),
     takeErrors: () => errors.splice(0),
   };
 };

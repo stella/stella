@@ -14,6 +14,7 @@ import {
   mergeNetworkBaseline,
   NETWORK_DEPTH_METHOD,
 } from "../apps/web/e2e/helpers/network";
+import type { RouteNetworkMetrics } from "../apps/web/e2e/helpers/network";
 import { generateRevisionRouteTree } from "../apps/web/scripts/network-baseline-route-tree";
 import { prepareComparisonBaseline } from "./network-baseline-scope";
 
@@ -89,8 +90,9 @@ test("successive write recordings retain declarations and timing-conditional pea
             responseSizes: Object.fromEntries(
               observedRequests.map((key) => [key, 1024]),
             ),
+            responseBodyReadFailures: {},
             missingResponseSizeCounts: {},
-          },
+          } satisfies RouteNetworkMetrics,
         ],
       ]),
     );
@@ -116,8 +118,9 @@ test("only a validated declaration permits measured growth", () => {
         dbQueries: { "GET /old": 2 },
         missingDbQueryCounts: {},
         responseSizes: { "GET /old": 1024 },
+        responseBodyReadFailures: {},
         missingResponseSizeCounts: {},
-      },
+      } satisfies RouteNetworkMetrics,
     ],
   ]);
   const common = {
@@ -176,8 +179,9 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
       dbQueries: {},
       missingDbQueryCounts: {},
       responseSizes: {},
+      responseBodyReadFailures: {},
       missingResponseSizeCounts: {},
-    },
+    } satisfies RouteNetworkMetrics,
   };
   expect(
     diffNetworkBaseline(
