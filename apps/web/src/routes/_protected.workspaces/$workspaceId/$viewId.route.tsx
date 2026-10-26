@@ -60,6 +60,7 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceView } from "@/lib/workspaces/queries/views.logic";
 import { useTableStore } from "@/lib/workspaces/table-store";
+import { isWorkspaceViewId } from "@/lib/workspaces/view-params.logic";
 import { routeSearchSchema } from "@/route-search-params";
 import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
@@ -82,10 +83,8 @@ export const Route = createFileRoute(
   validateSearch: searchSchema,
   beforeLoad: ({ params }) => {
     // Reject obviously invalid viewIds (e.g. "workspaces" from stale doubled
-    // URLs). Allow UUIDs and the special "all" slug used by the PDF viewer.
-    const VALID_VIEW_ID =
-      /^(?:all|[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12})$/iu;
-    if (!VALID_VIEW_ID.test(params.viewId)) {
+    // URLs).
+    if (!isWorkspaceViewId(params.viewId)) {
       if (import.meta.env.DEV) {
         // oxlint-disable-next-line no-console -- dev-only stack trace to debug stale doubled URLs
         console.trace(

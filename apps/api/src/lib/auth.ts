@@ -3350,7 +3350,7 @@ export const featureAccessSnapshotFromAuthorization = ({
   });
 
 // Keep the concrete transaction in named declarations without expanding the
-// full database schema into every auth macro.
+// full database schema into every caller type.
 type AuthScopedDb = ReturnType<
   typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
 >;
