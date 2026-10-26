@@ -76,9 +76,7 @@ const loadWith = async ({
     readUpdatedAt: async () => UPDATED_AT,
     readSources,
   });
-  const result = Result.isError(snapshot)
-    ? snapshot
-    : Result.ok(caseLawCorpusStatusAt(snapshot.value, NOW));
+  const result = snapshot.map((value) => caseLawCorpusStatusAt(value, NOW));
   return { result, scopes, snapshot };
 };
 
