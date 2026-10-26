@@ -40,7 +40,7 @@ const runSetPracticeJurisdictions = async ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => {
   const response = await STELLA_TOOL_HANDLERS.set_practice_jurisdictions({
     args,

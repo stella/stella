@@ -33,6 +33,7 @@ import {
 import { TEMPLATE_WORKFLOW_REFERENCE_URI } from "@/api/mcp/template-workflow-reference";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import {
+  agentAccessRefusal,
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
   handleMcpToolCall,
@@ -221,6 +222,7 @@ describe("tools/list scope isolation over HTTP", () => {
     token === "writer" ? WIDE_SCOPES : READ_ONLY_SCOPES;
 
   const handler = createMcpHttpRequestHandler({
+    agentAccessRefusal,
     authenticateMcpRequest: async (token) => {
       const scopes = scopesFor(token);
       return await Promise.resolve(

@@ -11,6 +11,7 @@ import {
 } from "@/api/lib/observability/request-context";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
+import { agentAccessRefusal } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { sendServedRequest } from "@/api/tests/helpers/served-request";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -22,6 +23,7 @@ type HandlerDependencies = Parameters<typeof createMcpHttpRequestHandler>[0];
 
 const handlerWith = (overrides: Partial<HandlerDependencies> = {}) =>
   createMcpHttpRequestHandler({
+    agentAccessRefusal,
     actionSizePolicy: () =>
       Result.ok({
         requestBytes: 1_048_576,
