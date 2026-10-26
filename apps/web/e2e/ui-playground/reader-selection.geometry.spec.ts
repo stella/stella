@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
 
+import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
+import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import { expect, stableBoundingBox, test } from "../helpers/stable-geometry";
 
 type FrameSample = {
@@ -165,4 +167,35 @@ test.skip("the selection bar keeps its place once the drag ends", async ({
   const settled = await stableBoundingBox(page, selectionBar(page));
   expect(duringDrag).toBe(0);
   expect(settled).toEqual(shown);
+});
+
+test("the copy menu's preview stays inside the menu", async ({
+  page,
+  locale,
+}) => {
+  await openReader(page);
+  const first = await paragraphBox(page, 2);
+  await page.mouse.move(first.x + 4, first.y + 6);
+  await page.mouse.down();
+  await page.mouse.move(first.x + 260, first.y + 40, { steps: 10 });
+  await page.mouse.up();
+  const messages = locale === "ar" ? ar : en;
+  await selectionBar(page)
+    .getByRole("button", { name: messages.common.copy, exact: true })
+    .click();
+  const layout = page.locator('[data-slot="menu-preview-layout"]');
+  const options = layout.getByRole("button");
+  await expect(options.first()).toBeVisible();
+  const menu = await stableBoundingBox(page, layout.locator("xpath=.."));
+  for (const option of await options.all()) {
+    await option.hover();
+    // The toolbar is narrower than options plus pane, so a box here also
+    // proves the menu widened instead of dropping the pane.
+    const pane = await stableBoundingBox(
+      page,
+      layout.locator('[data-slot="preview-pane"]'),
+    );
+    expect(pane.x).toBeGreaterThanOrEqual(menu.x);
+    expect(pane.x + pane.width).toBeLessThanOrEqual(menu.x + menu.width);
+  }
 });

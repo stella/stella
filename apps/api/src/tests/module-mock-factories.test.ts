@@ -184,6 +184,7 @@ describe("module mock factories", () => {
       "captureError",
       "captureObservedError",
       "captureRequestError",
+      "createErrorCapture",
       "detached",
       "resetCaptureWindows",
     ]);

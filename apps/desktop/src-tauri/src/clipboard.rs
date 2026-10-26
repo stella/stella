@@ -1,4 +1,5 @@
 use ammonia::Builder as HtmlSanitizer;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Duration, Utc};
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
@@ -348,7 +349,7 @@ impl ClipboardItem {
       })
   }
 
-  fn copied_at(&self) -> DateTime<Utc> {
+  pub(crate) fn copied_at(&self) -> DateTime<Utc> {
     match self {
       Self::Text { copied_at, .. }
       | Self::FormattedText { copied_at, .. }
@@ -356,7 +357,7 @@ impl ClipboardItem {
     }
   }
 
-  fn id(&self) -> &str {
+  pub(crate) fn id(&self) -> &str {
     match self {
       Self::Text { id, .. }
       | Self::FormattedText { id, .. }
@@ -764,7 +765,7 @@ impl ClipboardItem {
     }
   }
 
-  fn clear_image_payload(&mut self) {
+  pub(crate) fn clear_image_payload(&mut self) {
     if let Self::Image { image, preview, .. } = self {
       *image = None;
       *preview = None;
@@ -869,6 +870,7 @@ pub enum ClipboardImageCleanupStatus {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardSnapshot {
+  pub revision: u32,
   pub capture_status: ClipboardCaptureStatus,
   pub group_limit: usize,
   pub groups: Vec<ClipboardGroup>,
@@ -880,6 +882,23 @@ pub struct ClipboardSnapshot {
   pub source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
   pub source_app_visuals: Vec<ClipboardSourceAppVisual>,
   pub welcome_status: ClipboardWelcomeStatus,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardCaptureUpdate {
+  revision: u32,
+  item: ClipboardItem,
+  removed_item_ids: Vec<String>,
+  source_app_visuals: Vec<ClipboardSourceAppVisual>,
+}
+
+/// Events are visible to catch-all webview listeners. Only a revision crosses
+/// that boundary; content is fetched through a verified clipboard caller.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardCaptureRevision {
+  revision: u32,
 }
 
 impl ClipboardSnapshot {
@@ -909,7 +928,10 @@ pub struct PersistedClipboardState {
 }
 
 pub struct ClipboardManager {
+  revision: u32,
+  latest_capture_update: Option<ClipboardCaptureUpdate>,
   capture_status: ClipboardCaptureStatus,
+  pub(crate) preview_cache: Arc<Mutex<ClipboardPreviewCache>>,
   #[cfg(target_os = "macos")]
   image_exports: crate::clipboard_image_export::ClipboardImageExports,
   groups: Vec<ClipboardGroup>,
@@ -925,6 +947,59 @@ pub struct ClipboardManager {
   source_app_visuals: HashMap<String, ClipboardSourceAppVisual>,
   suppressed_content: Option<ClipboardSuppression>,
   welcome: ClipboardWelcome,
+}
+
+// The cache belongs to the local manager, never the persisted history or IPC
+// snapshot. Its byte budget bounds decrypted data retained between mounts.
+#[derive(Default)]
+pub(crate) struct ClipboardPreviewCache {
+  values: HashMap<String, String>,
+  bytes: usize,
+}
+
+impl ClipboardPreviewCache {
+  pub(crate) fn load_preview(
+    &mut self,
+    id: &str,
+    preview: ClipboardImageRead,
+  ) -> Result<String, String> {
+    self.get_or_load(id, || {
+      Ok(format!(
+        "data:image/png;base64,{}",
+        STANDARD.encode(preview.load()?)
+      ))
+    })
+  }
+
+  fn get_or_load(
+    &mut self,
+    id: &str,
+    load: impl FnOnce() -> Result<String, String>,
+  ) -> Result<String, String> {
+    if let Some(value) = self.values.get(id) {
+      return Ok(value.clone());
+    }
+    let value = load()?;
+    const MAX_PREVIEW_CACHE_BYTES: usize = 8 * 1024 * 1024;
+    while self.bytes + value.len() > MAX_PREVIEW_CACHE_BYTES {
+      let Some(key) = self.values.keys().next().cloned() else {
+        break;
+      };
+      if let Some(evicted) = self.values.remove(&key) {
+        self.bytes -= evicted.len();
+      }
+    }
+    if value.len() <= MAX_PREVIEW_CACHE_BYTES {
+      self.bytes += value.len();
+      self.values.insert(id.to_string(), value.clone());
+    }
+    Ok(value)
+  }
+
+  fn retain(&mut self, ids: &HashSet<&str>) {
+    self.values.retain(|id, _| ids.contains(id.as_str()));
+    self.bytes = self.values.values().map(String::len).sum();
+  }
 }
 
 enum ClipboardPersistence {
@@ -1330,7 +1405,10 @@ pub(crate) fn compose_clipboard_items(
 impl ClipboardManager {
   pub fn new() -> Self {
     Self {
+      revision: 0,
+      latest_capture_update: None,
       capture_status: ClipboardCaptureStatus::Active,
+      preview_cache: Arc::default(),
       #[cfg(target_os = "macos")]
       image_exports: crate::clipboard_image_export::ClipboardImageExports::new(),
       groups: Vec::new(),
@@ -1404,6 +1482,7 @@ impl ClipboardManager {
       .collect::<Vec<_>>();
     source_app_visuals.sort_by(|left, right| left.key.cmp(&right.key));
     ClipboardSnapshot {
+      revision: self.revision,
       capture_status: self.capture_status,
       group_limit: MAX_GROUPS,
       groups: self.groups.clone(),
@@ -1428,6 +1507,42 @@ impl ClipboardManager {
       source_app_visuals,
       welcome_status: self.welcome.status(),
     }
+  }
+
+  pub fn capture_update_for_revision(
+    &self,
+    _caller: &ClipboardCaller,
+    revision: u32,
+  ) -> Option<ClipboardCaptureUpdate> {
+    self
+      .latest_capture_update
+      .as_ref()
+      .filter(|update| update.revision == revision && revision == self.revision)
+      .cloned()
+  }
+
+  fn cache_capture_update(
+    &mut self,
+    previous_ids: &[String],
+  ) -> Option<ClipboardCaptureRevision> {
+    let item = self.items.first()?;
+    let current_ids: HashSet<_> = self.items.iter().map(ClipboardItem::id).collect();
+    self.latest_capture_update = Some(ClipboardCaptureUpdate {
+      revision: self.revision,
+      item: self.webview_item(item),
+      removed_item_ids: previous_ids
+        .iter()
+        .filter(|id| !current_ids.contains(id.as_str()))
+        .cloned()
+        .collect(),
+      source_app_visuals: item
+        .source_visual_keys()
+        .filter_map(|key| self.source_app_visuals.get(key).cloned())
+        .collect(),
+    });
+    Some(ClipboardCaptureRevision {
+      revision: self.revision,
+    })
   }
 
   pub fn screen_capture(&self) -> ClipboardScreenCapture {
@@ -2271,10 +2386,24 @@ impl ClipboardManager {
       }
       return Err(error);
     }
+    self.latest_capture_update = None;
+    self.revision = self
+      .revision
+      .checked_add(1)
+      .expect("clipboard history revision exhausted");
     Ok(())
   }
 
   fn persist(&mut self) -> Result<(), String> {
+    let ids = self.items.iter().map(ClipboardItem::id).collect();
+    self
+      .preview_cache
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        "clipboard preview cache lock is poisoned",
+      ))?
+      .retain(&ids);
+
     // Rejecting the write makes `persist_or_restore` roll the mutation
     // back, so `install` can never overwrite a change made before the
     // persisted history arrived.
@@ -3292,19 +3421,33 @@ impl HistoryClipboardHandler {
   }
 
   fn capture(&self, capture: ClipboardCapture) -> ClipboardCaptureOutcome {
-    let outcome = match self.manager.lock() {
-      Ok(mut manager) => match manager.capture(capture) {
-        Ok(outcome) => outcome,
-        Err(error) => {
-          tracing::error!(error = %error, "clipboard capture could not be persisted");
-          self.telemetry.capture(DesktopErrorReport {
-            window: DesktopTelemetryWindow::Clipboard,
-            operation: DesktopTelemetryOperation::ClipboardWatcherRead,
-            code: DesktopTelemetryErrorCode::PersistenceFailed,
-          });
-          return ClipboardCaptureOutcome::Rejected;
+    let (outcome, update) = match self.manager.lock() {
+      Ok(mut manager) => {
+        let previous_ids = manager
+          .items
+          .iter()
+          .map(|item| item.id().to_string())
+          .collect::<Vec<_>>();
+        match manager.capture(capture) {
+          Ok(outcome) => {
+            let update = if outcome == ClipboardCaptureOutcome::Captured {
+              manager.cache_capture_update(&previous_ids)
+            } else {
+              None
+            };
+            (outcome, update)
+          }
+          Err(error) => {
+            tracing::error!(error = %error, "clipboard capture could not be persisted");
+            self.telemetry.capture(DesktopErrorReport {
+              window: DesktopTelemetryWindow::Clipboard,
+              operation: DesktopTelemetryOperation::ClipboardWatcherRead,
+              code: DesktopTelemetryErrorCode::PersistenceFailed,
+            });
+            return ClipboardCaptureOutcome::Rejected;
+          }
         }
-      },
+      }
       Err(_) => {
         tracing::error!("clipboard manager lock is poisoned");
         self.telemetry.capture(DesktopErrorReport {
@@ -3315,8 +3458,8 @@ impl HistoryClipboardHandler {
         return ClipboardCaptureOutcome::Ignored;
       }
     };
-    if outcome == ClipboardCaptureOutcome::Captured {
-      let _ = self.app.emit(HISTORY_EVENT, ());
+    if let Some(update) = update {
+      let _ = self.app.emit(HISTORY_EVENT, update);
     }
     outcome
   }
@@ -3892,11 +4035,16 @@ enum ClipboardWriteOrigin {
 pub(crate) fn write_plain_text(plain_text: String) -> Result<(), String> {
   let clipboard = ClipboardContext::new()
     .map_err(|error| format!("clipboard is unavailable: {error}"))?;
-  set_clipboard_contents(
-    &clipboard,
-    vec![ClipboardContent::Text(plain_text)],
-    ClipboardWriteOrigin::New,
-  )
+  publish_plain_text(plain_text, |contents| {
+    set_clipboard_contents(&clipboard, contents, ClipboardWriteOrigin::New)
+  })
+}
+
+fn publish_plain_text(
+  plain_text: String,
+  publish: impl FnOnce(Vec<ClipboardContent>) -> Result<(), String>,
+) -> Result<(), String> {
+  publish(vec![ClipboardContent::Text(plain_text)])
 }
 
 pub(crate) fn write_text_and_html(
@@ -3934,6 +4082,142 @@ fn set_clipboard_contents(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn clipboard_capture_update_excludes_unchanged_history() {
+    let now = DateTime::parse_from_rfc3339("2026-10-21T12:00:00Z")
+      .unwrap()
+      .with_timezone(&Utc);
+    let mut sizes = Vec::new();
+    for count in [1, MAX_HISTORY_ITEMS] {
+      let mut manager = ready_manager();
+      manager.items = (0..count)
+        .map(|index| {
+          text_item(
+            now - Duration::seconds(index as i64),
+            &format!("{index:04}{}", "x".repeat(1020)),
+          )
+        })
+        .collect();
+      let previous_ids = manager
+        .items
+        .iter()
+        .map(|item| item.id().to_string())
+        .collect::<Vec<_>>();
+      manager
+        .capture(ClipboardCapture::Text(ClipboardTextCapture {
+          copied_at: now + Duration::seconds(1),
+          html: None,
+          rtf: None,
+          plain_text: "n".repeat(1024),
+          source_app: None,
+          source_app_visual: None,
+        }))
+        .unwrap();
+      let before = serde_json::to_vec(&manager.snapshot(&ClipboardCaller::for_test()))
+        .unwrap()
+        .len();
+      let notification = manager.cache_capture_update(&previous_ids).unwrap();
+      assert_eq!(
+        serde_json::to_value(notification).unwrap(),
+        serde_json::json!({ "revision": 1 })
+      );
+      let caller = ClipboardCaller::for_test();
+      assert!(manager.capture_update_for_revision(&caller, 0).is_none());
+      let update = manager
+        .capture_update_for_revision(&caller, notification.revision)
+        .unwrap();
+      let after = serde_json::to_vec(&update).unwrap().len();
+      tracing::debug!(
+        "clipboard capture IPC at {count} items: before={before} after={after} bytes"
+      );
+      assert!(
+        after < 1600,
+        "capture sent unchanged history: {after} bytes"
+      );
+      assert_eq!(update.item.plain_text(), Some("n".repeat(1024).as_str()));
+      assert_eq!(update.revision, 1);
+      assert_eq!(
+        manager.snapshot(&ClipboardCaller::for_test()).revision,
+        update.revision
+      );
+      manager.delete_item(update.item.id()).unwrap();
+      assert_eq!(
+        manager.snapshot(&ClipboardCaller::for_test()).revision,
+        update.revision + 1
+      );
+      assert!(
+        manager
+          .capture_update_for_revision(&caller, update.revision)
+          .is_none()
+      );
+      sizes.push(after);
+    }
+    assert!(
+      sizes[1] <= sizes[0] + 40,
+      "only the evicted ID may grow a capture update"
+    );
+  }
+
+  #[test]
+  fn clipboard_preview_remount_uses_cached_encoding_and_decryption() {
+    let mut cache = ClipboardPreviewCache::default();
+    let loads = std::cell::Cell::new(0);
+    for _ in 0..5 {
+      assert_eq!(
+        cache
+          .get_or_load("image", || {
+            loads.set(loads.get() + 1);
+            Ok("data:image/png;base64,cHJldmlldw==".to_string())
+          })
+          .unwrap(),
+        "data:image/png;base64,cHJldmlldw=="
+      );
+    }
+    assert_eq!(
+      loads.get(),
+      1,
+      "remount decrypted or encoded a cached preview"
+    );
+    let path = unique_store_path();
+    let store = ClipboardStore::new([7; 32], path.clone());
+    let blob_id = uuid::Uuid::new_v4().to_string();
+    store
+      .persist_image(
+        &blob_id,
+        crate::clipboard_store::ClipboardImagePayload {
+          image: b"image",
+          preview: b"preview",
+        },
+      )
+      .unwrap();
+    let first = cache
+      .load_preview(
+        "encrypted",
+        ClipboardImageRead::EncryptedPreview {
+          blob_id: blob_id.clone(),
+          store: store.clone(),
+        },
+      )
+      .unwrap();
+    store.remove_image(&blob_id).unwrap();
+    // The command-owned path must survive an unavailable encrypted file on a
+    // remount: neither decryption nor encoding is needed for a cache hit.
+    assert_eq!(
+      cache
+        .load_preview(
+          "encrypted",
+          ClipboardImageRead::EncryptedPreview { blob_id, store }
+        )
+        .unwrap(),
+      first
+    );
+    assert_eq!(first, "data:image/png;base64,cHJldmlldw==");
+    ClipboardStore::remove(&path).unwrap();
+    cache.retain(&HashSet::new());
+    assert_eq!(cache.bytes, 0);
+    assert!(cache.values.is_empty());
+  }
 
   /// A manager past initialization; a fresh `new()` rejects mutations.
   fn ready_manager() -> ClipboardManager {
@@ -6976,3 +7260,7 @@ mod tests {
     assert_eq!(manager.items[0].rtf(), Some(WORD_RTF));
   }
 }
+
+#[cfg(feature = "allocation-tests")]
+#[path = "clipboard_allocation_harness.rs"]
+pub mod allocation_harness;

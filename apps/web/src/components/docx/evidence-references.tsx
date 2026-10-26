@@ -20,11 +20,12 @@ import { Link2Icon, PlusIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 
 import { openSourceBoundEntityFile } from "@/components/chat/entity-open";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isFileDisplayable } from "@/lib/types";
 import { entitiesWindowOptions } from "@/lib/workspaces/queries/entities";
@@ -243,7 +244,13 @@ const EvidenceFilePicker = ({
     if (controller.current?.signal.aborted !== false) {
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "EvidenceFilePicker.reportInsertError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "EvidenceFilePicker.reportInsertError:failure",
+      },
+    });
     notifyUserError(error, t("folio.evidenceUnavailable"));
   };
   const insert = useMutation({
@@ -254,7 +261,7 @@ const EvidenceFilePicker = ({
       entityId: string;
       fieldId: string;
     }) => {
-      const data = unwrapEden(
+      const data = unwrapApiResponse(
         await api
           .entities({ workspaceId })
           .entity({ entityId: sourceEntityId })
@@ -320,17 +327,20 @@ const EvidenceFilePicker = ({
         </p>
       )}
       {query.isError && (
-        <div role="alert">
-          <p>{t("errors.actionFailed")}</p>
-          <Button
-            onClick={() => {
-              detached(query.refetch(), "evidence-reference.retry");
-            }}
-            variant="ghost"
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+        <RecoverableErrorStatus
+          className=""
+          message={t("errors.actionFailed")}
+          actions={
+            <Button
+              onClick={() => {
+                detached(query.refetch(), "evidence-reference.retry");
+              }}
+              variant="ghost"
+            >
+              {t("common.retry")}
+            </Button>
+          }
+        />
       )}
       <ul className="flex flex-col gap-1">
         {files?.map((file) => (

@@ -21,6 +21,14 @@ import { formatWorkIdentifier } from "./provision-citation-profile";
 import { parseProvisionKey, provisionRefOf } from "./provision-key";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
+
+/** The jurisdictions with a provision grammar, named here so adding one is a decision. */
+const WITH_GRAMMAR = ["CZE", "EU", "USA"] as const;
+
+const hasGrammar = (
+  jurisdiction: (typeof CASE_LAW_JURISDICTIONS)[number],
+): jurisdiction is (typeof WITH_GRAMMAR)[number] =>
+  WITH_GRAMMAR.some((supported) => supported === jurisdiction);
 const reference = fc.record({
   unit: fc.constant("section" as const),
   section: fc.integer({ min: 1, max: 9999 }),
@@ -317,6 +325,8 @@ describe("provision identity construction", () => {
     for (const invalid of [
       { ...ref, unit: "article" as const },
       { ...ref, section: -1 },
+      // The shared schema admits zero for the codes that number from it.
+      { ...ref, section: 0 },
       { ...ref, letter: "two" },
       { ...ref, subsection: "\0" },
     ]) {
@@ -462,7 +472,7 @@ describe("provision identity construction", () => {
       }),
     ).toEqual({ status: "invalid_work_identifier" });
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE" || jurisdiction === "EU") {
+      if (hasGrammar(jurisdiction)) {
         continue;
       }
       expect(
@@ -518,7 +528,7 @@ describe("provision identity construction", () => {
 
   test("unsupported jurisdictions explicitly decline provision construction", () => {
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE" || jurisdiction === "EU") {
+      if (hasGrammar(jurisdiction)) {
         continue;
       }
       expect(PROVISION_CITATION_GRAMMARS[jurisdiction]).toEqual({

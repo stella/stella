@@ -54,10 +54,10 @@ let bridgeRuntime: BrowserExtensionBridgeRuntime | null = null;
 
 /** Fires whenever whether a browser client is connected may have changed. */
 const connectionEvents = new EventTarget();
-const CONNECTION_CHANGED = "connection-changed";
+const connectionChangedEvent = new Event("connection-changed");
 
 const notifyConnectionListeners = (): void => {
-  connectionEvents.dispatchEvent(new Event(CONNECTION_CHANGED));
+  connectionEvents.dispatchEvent(connectionChangedEvent);
 };
 
 const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
@@ -240,9 +240,9 @@ const isBrowserClientConnected = (): boolean =>
   getBrowserClientCapability() !== undefined;
 
 const subscribeBrowserClientConnection = (listener: () => void) => {
-  connectionEvents.addEventListener(CONNECTION_CHANGED, listener);
+  connectionEvents.addEventListener(connectionChangedEvent.type, listener);
   return () => {
-    connectionEvents.removeEventListener(CONNECTION_CHANGED, listener);
+    connectionEvents.removeEventListener(connectionChangedEvent.type, listener);
   };
 };
 

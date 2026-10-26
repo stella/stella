@@ -16,6 +16,16 @@ on:
 
 permissions: {}
 
+# Keep fixture repositories free of background maintenance.
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
 jobs:
   # The chat-turn combinations' all-triples cover: every combination of the
   # values of any three dimensions, every night, split into SHARDS jobs.

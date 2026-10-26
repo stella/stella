@@ -24,6 +24,8 @@
     "allow-shortcut-check",
     "allow-shortcut-pause",
     "allow-shortcut-resume",
+    "allow-onboarding-dismiss",
+    "allow-onboarding-open-activity",
     "allow-shortcut-set"
   ]
 }

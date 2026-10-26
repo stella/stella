@@ -61,6 +61,28 @@ export const waitForStableGeometry = async (
                 if (stableElements.length === 0) {
                   return false;
                 }
+                // A just-started animation holds its first frame while it is
+                // pending, so equal boxes prove nothing until every finite
+                // animation that moves a measured box has ended.
+                const moving = document.getAnimations().some((animation) => {
+                  const target =
+                    animation.effect instanceof KeyframeEffect
+                      ? animation.effect.target
+                      : null;
+                  return (
+                    target !== null &&
+                    (animation.pending || animation.playState === "running") &&
+                    animation.effect?.getComputedTiming().endTime !==
+                      Number.POSITIVE_INFINITY &&
+                    stableElements.some(
+                      (element) =>
+                        element.contains(target) || target.contains(element),
+                    )
+                  );
+                });
+                if (moving) {
+                  return false;
+                }
                 const snapshot = () => {
                   const elements = new Set(
                     stableElements.flatMap((element) => [
@@ -126,7 +148,7 @@ export const waitForStableGeometry = async (
       },
       {
         message:
-          "Geometry did not become stable: expected equal bounding boxes on two consecutive animation frames",
+          "Geometry did not become stable: expected no running animation on the measured boxes and equal bounding boxes on two consecutive animation frames",
         timeout: STABLE_GEOMETRY_TIMEOUT_MS,
       },
     )

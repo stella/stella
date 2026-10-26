@@ -1454,6 +1454,21 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
+  // the commit it deploys, the infrastructure repository and its App token,
+  // the readiness endpoint and edge header, and the bounds tests shorten.
+  "DEPLOY_SHA",
+  "INFRA_REPO",
+  "STAGING_POWER_TOKEN",
+  "STAGING_HEALTH_URL",
+  "EDGE_HEADER_NAME",
+  "EDGE_HEADER_VALUE",
+  "STAGING_WAKE_LOOKUP_ATTEMPTS",
+  "STAGING_WAKE_LOOKUP_INTERVAL_SECONDS",
+  "STAGING_WAKE_START_MINUTES",
+  "STAGING_WAKE_START_POLL_SECONDS",
+  "STAGING_WAKE_READY_MINUTES",
+  "STAGING_WAKE_READY_POLL_SECONDS",
   // Dated-waiver healing: the private repository its fix tasks go to, and
   // the merge hold that keeps it from arming removals.
   "DATED_WAIVER_FIX_REPO",
@@ -1546,12 +1561,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_NPM_REGISTRY_URL",
   "JOURNEY_REGISTRY_TIMEOUT_MS",
   "JOURNEY_RETRY_PAUSE_SECONDS",
+  "JOURNEY_SIGN_IN",
+  "JOURNEY_SMOKE_SESSION_URL",
   "JOURNEY_TIMEOUT_SECONDS",
   "JOURNEY_WEB_DECISION_URL",
   "JOURNEY_WEB_SEARCH_URL",
   "JOURNEY_WEB_STATUTES_URL",
   "JOURNEY_WEB_URL",
   "LANDING_SITE",
+  // Release pull request refresh: the main commit it plans from.
+  "MAIN_SHA",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
   "MARKETING_THEME",
@@ -1578,11 +1597,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Tailwind lint cache configuration.
+  "OXLINT_TAILWINDCSS_CACHE_DIR",
+  "OXLINT_TAILWINDCSS_CACHE_READ_ONLY",
+  "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PR_TITLE",
+  // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
+  "ARMED",
+  "TESTED_TREE",
+  "WORKFLOW_TREE",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
@@ -1619,7 +1646,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
+  "RELEASE_CANDIDATE_CHECKER",
+  "RELEASE_CANDIDATE_TREE_VERIFIER",
   "RELEASE_GATE_DIR",
+  // Release pull request refresh: open release numbers, the release to update,
+  // its branch, whether main merges in, and the versioned staging tip.
+  "RELEASE_NUMBERS",
+  "RELEASE_PULL_REQUEST",
+  "RELEASE_BRANCH",
+  "MERGE_MAIN",
+  "STAGED_HEAD",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
@@ -1696,6 +1732,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
+  // Generator families whose inputs the CI plan proved unchanged in this run.
+  "GENERATED_CHECKS_UNCHANGED",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
   "ImageOS",
@@ -1720,6 +1758,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "VERSION",
+  // Web image build: the previous release image whose own assets carry forward.
+  "PREVIOUS_WEB_IMAGE",
   // Release dependency-audit gate: a reasoned waiver and the remediation branch.
   "WAIVE_DEPENDENCY_AUDIT",
   "WAIVER_REASON",

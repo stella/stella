@@ -23,7 +23,11 @@ import { CI_GATES, CONTINUE_ON_ERROR } from "./ci-gate-classes";
 import { rootCheckGate } from "./ci-root-check-gate";
 import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
 import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
-import { DELEGATED_CHECKS_ENV } from "./generated-files-guard";
+import { CI_GENERATED_OUTPUTS } from "./generated-files";
+import {
+  DELEGATED_CHECKS_ENV,
+  UNCHANGED_CHECKS_ENV,
+} from "./generated-files-guard";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
@@ -223,7 +227,7 @@ const baseCancellationSource = new Bun.Transpiler({
 const baseCancellation = v.parse(
   v.object({ CANONICAL_CANCEL_STEP: v.record(v.string(), v.unknown()) }),
   await import(
-    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
+    `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toBase64()}`
   ),
 ).CANONICAL_CANCEL_STEP;
 const readBaseCheckPool: ReadCheckPool = (pool) =>
@@ -640,7 +644,8 @@ const withoutTestTimeout = (step: Step): Step => {
 };
 
 // Delegation drops only a family whose owning job runs the same check in this
-// run; scripts/generated-files-guard.test.ts binds it to that job's `if:`.
+// run, and an unchanged family only when the plan proves its paths untouched;
+// scripts/generated-files-guard.test.ts binds each to its job's `if:` or plan.
 const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   const { env } = v.parse(
     v.looseObject({ env: v.optional(v.record(v.string(), v.unknown())) }),
@@ -649,11 +654,18 @@ const withoutDelegatedGeneratorChecks = (step: Step): Step => {
   if (
     step.name !== "Generated files manifest guard" ||
     env === undefined ||
-    !Object.hasOwn(env, DELEGATED_CHECKS_ENV)
+    !(
+      Object.hasOwn(env, DELEGATED_CHECKS_ENV) ||
+      Object.hasOwn(env, UNCHANGED_CHECKS_ENV)
+    )
   ) {
     return step;
   }
-  const { [DELEGATED_CHECKS_ENV]: _delegated, ...environment } = env;
+  const {
+    [DELEGATED_CHECKS_ENV]: _delegated,
+    [UNCHANGED_CHECKS_ENV]: _unchanged,
+    ...environment
+  } = env;
   const { env: _env, ...original } = step;
   return Object.keys(environment).length === 0
     ? original
@@ -1016,6 +1028,21 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (step.name === "CLI sharded registry and derived runtime guard") {
+    const run = v.parse(v.string(), fields.run);
+    const continuation = " \\";
+    const anchor = `  packages/cli/src/generated/registry-snapshot.json${continuation}`;
+    const additions = CI_GENERATED_OUTPUTS.cliRegistry
+      .filter((output) => !run.includes(`  ${output}${continuation}`))
+      .map((output) => `  ${output}${continuation}`)
+      .join("\n");
+    if (additions.length > 0) {
+      expect(run).toContain(anchor);
+      return Object.assign(step, {
+        run: run.replace(anchor, () => `${anchor}\n${additions}`),
+      });
+    }
+  }
   // These structural guards no longer own expiry, so their failures block
   // merge groups as well. Normalize only their former clock-based lenience.
   if (

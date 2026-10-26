@@ -1146,6 +1146,8 @@ const VERSION_READERS: Record<string, string> = {
   "scripts/ci-root-check-inputs.json": "changed-path scope",
   "scripts/prepare-maintenance-release.ts":
     "readPreviousRelease answers superseded for an untagged VERSION",
+  "scripts/verify-release-candidate-tree.mjs":
+    "VERSION changed against main and is a supported release version",
   "scripts/verify-release-tree-proof.sh": "VERSION modified in the PR",
 };
 const NOT_VERSION_READERS = new Set([

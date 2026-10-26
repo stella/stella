@@ -1,5 +1,7 @@
 import { panic } from "better-result";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { timingSafeEqual } from "node:crypto";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
 /** Maximum descriptors exposed by one email preview. */
 export const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
@@ -30,7 +32,7 @@ export const createEmailAttachmentDescriptor = ({
     panic("Email attachment index is out of bounds");
   }
 
-  const digest = createHmac("sha256", secret)
+  const digest = new Bun.CryptoHasher("sha256", secret)
     .update(
       descriptorMessage({ attachmentIndex, sourceFileId, sourceVersionId }),
     )
@@ -54,9 +56,11 @@ export const findEmailAttachmentIndex = ({
   if (!attachmentIndexText) {
     return null;
   }
-  const attachmentIndex = Number(attachmentIndexText);
+  const attachmentIndex = parseIntegerToken(attachmentIndexText, {
+    sign: "unsigned",
+  }).unwrapOr(null);
   if (
-    !Number.isSafeInteger(attachmentIndex) ||
+    attachmentIndex === null ||
     String(attachmentIndex) !== attachmentIndexText
   ) {
     return null;

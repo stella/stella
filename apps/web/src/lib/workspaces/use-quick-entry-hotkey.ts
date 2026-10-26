@@ -1,5 +1,5 @@
 import { useHotkey } from "@tanstack/react-hotkeys";
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 
 import { useQuickEntryStore } from "@/lib/workspaces/quick-entry-store";
 
@@ -9,7 +9,7 @@ type QuickEntryScope = Parameters<
 
 type UseQuickEntryHotkeyOptions = {
   enabled: boolean;
-  hotkey: Hotkey;
+  hotkey: HotkeyChord;
   scope: QuickEntryScope;
 };
 

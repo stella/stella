@@ -9,6 +9,7 @@ import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narrati
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
+import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
@@ -131,10 +132,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       lawHistoryKeys.list({
         scope: { organizationId: ORG, userId: USER },
         filter: "all",
+        country: "CZE",
       }),
     ],
     opaqueKeys: {
-      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
         KEY_TYPE_HAS_USER,
     },
   },
@@ -407,6 +409,20 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  "lists/verifications/claim-comments/list.ts": {
+    kind: "keyed",
+    calls: ['api.lists()["claim-comments"].get'],
+    files: ["features/avt/claim-comments-query.ts"],
+    keys: () => [
+      claimCommentKeys.forClaim({
+        claimId: "claim-probe",
+        runId: "run-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -476,7 +492,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   // Filtered by row-level security rather than in the handler.
   "memories/list.ts": {
     kind: "keyed",
-    calls: ["memoriesApi.get", "fetchMemoriesPage"],
+    calls: ["api.memories.get", "fetchMemoriesPage"],
     files: [
       "lib/memory-api.ts",
       "routes/_protected.settings/-queries/memories.ts",
@@ -494,7 +510,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
   },
   "notifications/read-all.ts": { kind: "not-per-user", reason: WRITE },
-  "notifications/read.ts": { kind: "not-per-user", reason: WRITE },
+  "notifications/read-state/update.ts": { kind: "not-per-user", reason: WRITE },
   "playbooks/recent/list.ts": {
     kind: "keyed",
     calls: ["api.playbooks.recent.get"],
@@ -627,7 +643,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
-    calls: ["myTimeEntriesApi.get"],
+    calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
       myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
@@ -1307,11 +1323,11 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
   infiniteQueryOptions({
     queryKey: myTimeEntriesKeys.day(organizationId, date),
     queryFn: async ({ signal }) =>
-      unwrapEden(await myTimeEntriesApi.get({ query: { date }, fetch: { signal } })),
+      unwrapApiResponse(await api["time-entries"].me.get({ query: { date }, fetch: { signal } })),
   });
 `;
 
-    expect(unkeyedQueries(source, ["myTimeEntriesApi.get"])).toEqual([
+    expect(unkeyedQueries(source, ['api["time-entries"].me.get'])).toEqual([
       "myTimeEntriesKeys.day(organizationId, date)",
     ]);
     expect(
@@ -1320,7 +1336,7 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
           "(organizationId, date)",
           "(organizationId, userId, date)",
         ),
-        ["myTimeEntriesApi.get"],
+        ['api["time-entries"].me.get'],
       ),
     ).toEqual([]);
   });

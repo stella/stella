@@ -11,8 +11,9 @@ defaults:
 # and a verified main/PR chain. Tags remain the production path.
 #
 # Staging is off unless someone starts it, so this runs only when
-# dispatched. A dispatch while staging is not answering deploys nothing and
-# fails with a staging/verified error: start staging first, then dispatch again. To
+# dispatched. A release-candidate dispatch starts an off staging itself
+# (staging-wake). Any other dispatch while staging is not answering deploys
+# nothing and fails with a staging/verified error: start staging first, then dispatch again. To
 # deploy a fix to a staging that is up but unhealthy, dispatch with
 # deploy_when_unreachable.
 
@@ -47,6 +48,13 @@ on:
         type: boolean
 
 env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/stella-api
   WEB_IMAGE_NAME: ${{ github.repository_owner }}/stella-web
@@ -95,6 +103,7 @@ jobs:
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
@@ -180,6 +189,7 @@ jobs:
       statuses: write
     outputs:
       deploy: ${{ steps.decide.outputs.deploy }}
+      wake: ${{ steps.decide.outputs.wake }}
 
     steps:
       - name: Checkout GitHub API tooling
@@ -273,12 +283,15 @@ jobs:
 
       # Staging that does not answer is normally off. Deploying into it would
       # leave the smoke below measuring an environment that is not running.
+      # A release candidate hands an off staging to staging-wake, which
+      # starts it; every other dispatch is refused here.
       - name: Decide whether staging can deploy
         id: decide
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           DEPLOY_WHEN_UNREACHABLE: ${{ inputs.deploy_when_unreachable }}
+          RELEASE_CANDIDATE: ${{ inputs.release_candidate == true && inputs.sha != '' }}
           STATUS: ${{ steps.probe.outputs.status }}
         run: |
           set -euo pipefail
@@ -291,6 +304,13 @@ jobs:
           if [[ "$DEPLOY_WHEN_UNREACHABLE" == "true" ]]; then
             echo "deploy=true" >> "$GITHUB_OUTPUT"
             echo "::notice::Staging is not answering; deploying anyway as requested."
+            exit 0
+          fi
+
+          if [[ "${RELEASE_CANDIDATE:-false}" == "true" ]]; then
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            echo "wake=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Staging is not answering; starting it for this release candidate."
             exit 0
           fi
 
@@ -308,12 +328,85 @@ jobs:
               --method POST --input - >/dev/null
           exit 1
 
-  build-api:
-    name: Build staging API image
+  # Starts an off staging for a release candidate: staging-power.yml in the
+  # infra repository with action=on and a 2 h lease, then waits until /ready
+  # answers. A failed or timed-out start refuses like an off staging does.
+  # Only this job holds the App key, and only release candidates reach it.
+  staging-wake:
+    name: Start staging for a release candidate
     needs: [resolve, staging-health]
     if: >-
       github.ref == 'refs/heads/main' &&
-      needs.staging-health.outputs.deploy == 'true'
+      inputs.release_candidate == true &&
+      inputs.sha != '' &&
+      needs.staging-health.outputs.wake == 'true'
+    runs-on: ubuntu-24.04
+    # Covers the script's bounds: 15 minutes for the start run and 45 for
+    # readiness.
+    timeout-minutes: 70
+    permissions:
+      contents: read
+      statuses: write
+    # Release App key lives in this environment (main and v* tags only).
+    environment: release-app
+    outputs:
+      deploy: ${{ steps.wake.outputs.deploy }}
+
+    steps:
+      - name: Checkout GitHub API tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .gh-retry
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/staging-wake.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Preserve GitHub API tooling across source checkouts
+        run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
+          echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+
+      # Scoped to the infra repository with actions: write, as the promote
+      # dispatch is. A failed mint leaves the token empty, and the next step
+      # still runs to refuse with the staging/verified error.
+      - name: Mint staging power token
+        id: power-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          permission-actions: write
+
+      - name: Start staging and wait until it is ready
+        id: wake
+        if: ${{ !cancelled() && steps.power-token.outcome != 'skipped' }}
+        timeout-minutes: 65
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGING_POWER_TOKEN: ${{ steps.power-token.outputs.token }}
+          INFRA_REPO: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
+          STAGING_HEALTH_URL: https://api-staging.stll.app/ready
+          EDGE_HEADER_NAME: x-stella-edge-token
+          EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+        run: bash .gh-retry/scripts/staging-wake.sh
+
+  # `!cancelled()` lets the builds run after a skipped staging-wake; they
+  # still build only when one of the two jobs above says deploy.
+  build-api:
+    name: Build staging API image
+    needs: [resolve, staging-health, staging-wake]
+    if: >-
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (needs.staging-health.outputs.deploy == 'true' ||
+      needs.staging-wake.outputs.deploy == 'true')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
     permissions:
@@ -432,10 +525,12 @@ jobs:
 
   build-web:
     name: Build staging web image
-    needs: [resolve, staging-health]
+    needs: [resolve, staging-health, staging-wake]
     if: >-
+      !cancelled() &&
       github.ref == 'refs/heads/main' &&
-      needs.staging-health.outputs.deploy == 'true'
+      (needs.staging-health.outputs.deploy == 'true' ||
+      needs.staging-wake.outputs.deploy == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     permissions:
@@ -466,6 +561,7 @@ jobs:
 
       - name: Build and publish web image
         id: build
+        timeout-minutes: 45
         uses: ./.github/actions/build-web-image
         with:
           release-ref: ${{ steps.ref.outputs.release-ref }}
@@ -500,10 +596,17 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # The builds run after a skipped wake when staging was already up. A job's
+  # default condition skips it when any job it depends on through `needs` was
+  # skipped, which promoted nothing yet ended the run green, so promotion
+  # names the build results it depends on instead.
   promote-staging:
     name: Promote staging images
     needs: [resolve, build-api, build-web]
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.resolve.result == 'success' &&
+      needs.build-api.result == 'success' && needs.build-web.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     # Deployment and its smoke verification are one serialized side-effecting
@@ -615,6 +718,16 @@ jobs:
         with:
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
+
+      # Journeys run from the target revision, including its dependencies.
+      - name: Require target journey harness
+        run: |
+          for required in .github/actions/user-journeys/action.yml apps/web/e2e/playwright.journeys.config.ts; do
+            if [[ ! -f "$required" ]]; then
+              echo "::error::The target commit must contain the journey harness: $required"
+              exit 1
+            fi
+          done
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
@@ -770,12 +883,57 @@ jobs:
           E2E_EDGE_HEADER_NAME: x-stella-edge-token
           E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
 
+      - name: Run deployed application journeys
+        id: deployed-journeys
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        timeout-minutes: 20
+        uses: ./.github/actions/user-journeys
+        with:
+          project: deployed
+          expected-commit: ${{ needs.resolve.outputs.sha }}
+          health-url: https://api-staging.stll.app/health
+        env:
+          E2E_WEB_URL: https://staging.stll.app
+          E2E_API_URL: https://api-staging.stll.app
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
+          JOURNEY_SIGN_IN: smoke-session
+          JOURNEY_SMOKE_SESSION_URL: https://api-staging.stll.app/smoke/session
+          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+
+      - name: Run mock-model application journeys
+        id: mock-journeys
+        if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' }}
+        timeout-minutes: 40
+        uses: ./.github/actions/user-journeys
+        with:
+          project: local-stack
+          expected-commit: ${{ needs.resolve.outputs.sha }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          E2E_WEB_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:3001
+          JOURNEY_SIGN_IN: seeded
+
       - name: Upload Playwright report
         if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staging-smoke-report
           path: apps/web/playwright-report/
+          retention-days: 7
+
+      - name: Upload failed journey reports
+        if: ${{ failure() && (steps.deployed-journeys.outcome == 'failure' || steps.mock-journeys.outcome == 'failure') }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-user-journeys-report
+          path: |
+            ${{ steps.deployed-journeys.outputs.report-paths }}
+            ${{ steps.mock-journeys.outputs.report-paths }}
+            /tmp/api.log
+            ${{ runner.temp }}/web-user-journeys.log
           retention-days: 7
 
       - name: Record staging verification
@@ -786,6 +944,8 @@ jobs:
           DEPLOY_SHA: ${{ needs.resolve.outputs.sha }}
           WEB_SMOKE: ${{ steps.web-smoke.outcome }}
           API_SMOKE: ${{ steps.api-smoke.outcome }}
+          DEPLOYED_JOURNEYS: ${{ steps.deployed-journeys.outcome }}
+          MOCK_JOURNEYS: ${{ steps.mock-journeys.outcome }}
           MCP_SMOKE: ${{ steps.mcp-smoke.outcome }}
           CORPUS_PREFLIGHT: ${{ steps.corpus-preflight.outcome }}
           CORPUS_SEARCH_WAIVED: ${{ needs.resolve.outputs.corpus_search_waived }}
@@ -796,7 +956,7 @@ jobs:
           set -euo pipefail
           state=failure
           description="Staging smoke failure: run ${GITHUB_RUN_ID}"
-          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$JOB_STATUS" == "success" ]]; then
+          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$DEPLOYED_JOURNEYS" == "success" && "$MOCK_JOURNEYS" == "success" && "$JOB_STATUS" == "success" ]]; then
             if [[ "$CORPUS_PREFLIGHT" == "success" && "$MCP_SMOKE" == "success" ]]; then
               state=success
               description="Staging smoke success: run ${GITHUB_RUN_ID}"

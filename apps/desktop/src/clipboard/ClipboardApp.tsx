@@ -129,10 +129,12 @@ import {
   CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
   CLIPBOARD_SEARCH_SCOPES,
+  clipboardCardRenderFormat,
   clipboardControlsKeyAction,
   clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
+  clipboardPastePreview,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
@@ -150,12 +152,14 @@ import {
   isClipboardCopyShortcut,
   isClipboardNameInput,
   MAX_CLIPBOARD_ITEM_NAME_CHARACTERS,
+  NO_CLIPBOARD_PASTE_PREVIEW,
   quickCopyIndex,
   shouldCopyFromClipboardInput,
   shouldLeaveClipboardSearch,
   shouldReturnToTimelineFromInput,
 } from "./clipboard-logic";
 import type {
+  ClipboardPastePreview,
   ClipboardPointerPosition,
   ClipboardSearchScope,
 } from "./clipboard-logic";
@@ -169,11 +173,14 @@ import {
 import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
+  isClipboardCaptureRevision,
+  isClipboardCaptureUpdate,
   isClipboardCopyError,
   isClipboardSnapshot,
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
+  ClipboardCaptureUpdate,
   ClipboardCopyErrorKind,
   ClipboardCopyFormat,
   ClipboardGroup,
@@ -252,6 +259,7 @@ const IMAGE_CLIPBOARD_CAPTURE_SUPPORTED =
   !navigator.userAgent.includes("Linux");
 
 const EMPTY_SNAPSHOT = {
+  revision: 0,
   captureStatus: "active",
   // Native owns the limit; fail closed until the first runtime snapshot.
   groupLimit: 0,
@@ -363,6 +371,8 @@ type ClipboardCardProps = {
   onCopy: (item: ClipboardItem, format?: ClipboardCopyFormat) => void;
   onRename: (id: string, name: string) => void;
   onSelect: (index: number) => void;
+  /** The preview held by this card's context menu. */
+  pastePreview: ClipboardPastePreview;
   query: string;
   sourceVisual: ClipboardSourceAppVisual | null;
 };
@@ -452,6 +462,51 @@ const ClipboardCardFooterMetadata = ({
   );
 };
 
+type ClipboardFormatShortcutsProps = {
+  onClearPreview: () => void;
+  onCopy: (format: ClipboardCopyFormat) => void;
+  onPreview: (format: ClipboardCopyFormat) => void;
+};
+
+/** The active formatted card's paste format row; highlighting a format previews it. */
+const ClipboardFormatShortcuts = ({
+  onClearPreview,
+  onCopy,
+  onPreview,
+}: ClipboardFormatShortcutsProps) => {
+  const t = useTranslations("clipboard");
+  return (
+    <div
+      className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
+      data-clipboard-format-shortcuts=""
+    >
+      <button
+        type="button"
+        onClick={() => onCopy("original")}
+        onFocus={() => onPreview("original")}
+        onPointerEnter={() => onPreview("original")}
+        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+      >
+        <kbd className="font-mono">↵</kbd>
+        {t("originalFormatting")}
+      </button>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        onClick={() => onCopy("plainText")}
+        onBlur={onClearPreview}
+        onFocus={() => onPreview("plainText")}
+        onPointerEnter={() => onPreview("plainText")}
+        onPointerLeave={onClearPreview}
+        className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
+      >
+        <kbd className="font-mono">⇧↵</kbd>
+        {t("plainText")}
+      </button>
+    </div>
+  );
+};
+
 const ClipboardCard = ({
   active,
   selected,
@@ -467,6 +522,7 @@ const ClipboardCard = ({
   onCopy,
   onRename,
   onSelect,
+  pastePreview,
   query,
   sourceVisual,
 }: ClipboardCardProps) => {
@@ -477,6 +533,23 @@ const ClipboardCard = ({
     useState<ClipboardImagePreviewStatus>("loading");
   const [imagePreviewRetryToken, setImagePreviewRetryToken] = useState(0);
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
+  const formatShortcutsVisible =
+    active && !editingName && item.type === "formattedText";
+  const [shortcutPastePreview, setShortcutPastePreview] =
+    useState<ClipboardPastePreview>(NO_CLIPBOARD_PASTE_PREVIEW);
+  // The shortcut row unmounts without a pointer leave or blur when the card
+  // stops being active, so its preview must not outlive the row.
+  if (!formatShortcutsVisible && shortcutPastePreview.type !== "none") {
+    setShortcutPastePreview(NO_CLIPBOARD_PASTE_PREVIEW);
+  }
+  const renderFormat = clipboardCardRenderFormat(item, [
+    pastePreview,
+    shortcutPastePreview,
+  ]);
+  const previewShortcutFormat = (copyFormat: ClipboardCopyFormat) =>
+    setShortcutPastePreview(clipboardPastePreview(item, copyFormat));
+  const clearShortcutPreview = () =>
+    setShortcutPastePreview(NO_CLIPBOARD_PASTE_PREVIEW);
   const age = formatClipboardAge(item.copiedAt, ageReferenceTime);
   const formattedAge = format.number(age.value, {
     style: "unit",
@@ -580,6 +653,7 @@ const ClipboardCard = ({
       )}
       data-selected={selected ? "" : undefined}
       data-clipboard-id={item.id}
+      data-clipboard-render-format={renderFormat}
       data-clipboard-index={index}
       data-dragging={dragging ? "" : undefined}
       data-source-tint={sourceTintIndex ?? undefined}
@@ -624,7 +698,17 @@ const ClipboardCard = ({
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
+          {renderFormat === "plainText" ? (
+            <span
+              className="text-muted-foreground text-3xs mb-2 flex items-center gap-1 leading-4 font-medium"
+              data-clipboard-paste-preview-label=""
+            >
+              <FileTextIcon aria-hidden="true" className="size-3 shrink-0" />
+              {t("plainTextPreview")}
+            </span>
+          ) : null}
           <ClipboardCardPreview
+            format={renderFormat}
             imagePreviewRetryToken={imagePreviewRetryToken}
             item={item}
             onImagePreviewStatusChange={setImagePreviewStatus}
@@ -633,29 +717,12 @@ const ClipboardCard = ({
         </div>
       </button>
 
-      {active && !editingName && item.type === "formattedText" ? (
-        <div
-          className="bg-background/90 text-muted-foreground ring-foreground/8 text-3xs absolute inset-x-3 bottom-15 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 rounded-lg p-1 leading-4 shadow-sm ring-1 backdrop-blur-md"
-          data-clipboard-format-shortcuts=""
-        >
-          <button
-            type="button"
-            onClick={() => onCopy(item, "original")}
-            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
-          >
-            <kbd className="font-mono">↵</kbd>
-            {t("originalFormatting")}
-          </button>
-          <span aria-hidden="true">·</span>
-          <button
-            type="button"
-            onClick={() => onCopy(item, "plainText")}
-            className="hover:bg-muted focus-visible:bg-muted flex items-center gap-1 rounded-md px-1 py-0.5 whitespace-nowrap focus-visible:outline-none"
-          >
-            <kbd className="font-mono">⇧↵</kbd>
-            {t("plainText")}
-          </button>
-        </div>
+      {formatShortcutsVisible ? (
+        <ClipboardFormatShortcuts
+          onClearPreview={clearShortcutPreview}
+          onCopy={(copyFormat) => onCopy(item, copyFormat)}
+          onPreview={previewShortcutFormat}
+        />
       ) : null}
 
       <Button
@@ -1031,6 +1098,8 @@ type ClipboardContextMenuState =
   | {
       anchor: HTMLElement | { getBoundingClientRect: () => DOMRect };
       item: ClipboardItem;
+      // Owned by the open menu, so closing or reopening it drops the preview.
+      pastePreview: ClipboardPastePreview;
       type: "open";
     };
 
@@ -1059,6 +1128,7 @@ type ClipboardContextMenuProps = {
   onEdit: (id: string) => void;
   onExcludeSourceApp: (id: string) => void;
   onMove: (id: string, groupId: string | null) => void;
+  onPastePreviewChange: (preview: ClipboardPastePreview) => void;
   sourceAppExclusionLimit: number;
   sourceAppExclusions: ClipboardSourceAppExclusion[];
 };
@@ -1075,6 +1145,7 @@ const ClipboardContextMenu = ({
   onEdit,
   onExcludeSourceApp,
   onMove,
+  onPastePreviewChange,
   sourceAppExclusionLimit,
   sourceAppExclusions,
 }: ClipboardContextMenuProps) => {
@@ -1100,7 +1171,13 @@ const ClipboardContextMenu = ({
       <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
       <MenuPopup anchor={menu.anchor} className="w-56" finalFocus={false}>
         {menu.item.type === "formattedText" ? (
-          <MenuSub>
+          <MenuSub
+            onOpenChange={(open) => {
+              if (!open) {
+                onPastePreviewChange(NO_CLIPBOARD_PASTE_PREVIEW);
+              }
+            }}
+          >
             <MenuSubTrigger className="min-h-11 rounded-xl">
               <ClipboardIcon />
               {t("pasteTextAs")}
@@ -1112,16 +1189,27 @@ const ClipboardContextMenu = ({
                   onCopy(menu.item, "original");
                   onClose();
                 }}
+                onFocus={() =>
+                  onPastePreviewChange(
+                    clipboardPastePreview(menu.item, "original"),
+                  )
+                }
               >
                 <CopyPlusIcon />
                 {t("originalFormatting")}
               </MenuItem>
               <MenuItem
                 className="min-h-11 rounded-xl"
+                onBlur={() => onPastePreviewChange(NO_CLIPBOARD_PASTE_PREVIEW)}
                 onClick={() => {
                   onCopy(menu.item, "plainText");
                   onClose();
                 }}
+                onFocus={() =>
+                  onPastePreviewChange(
+                    clipboardPastePreview(menu.item, "plainText"),
+                  )
+                }
               >
                 <FileTextIcon />
                 {t("plainText")}
@@ -1603,6 +1691,9 @@ const ClipboardApp = () => {
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
   const snapshotRequestIdRef = useRef(0);
+  const captureUpdatesRef = useRef<ClipboardCaptureUpdate[]>([]);
+  const snapshotPendingRef = useRef(false);
+  const appliedRevisionRef = useRef(0);
   const [ageReferenceTime, setAgeReferenceTime] = useState(
     () => Temporal.Now.instant().epochMilliseconds,
   );
@@ -1647,7 +1738,10 @@ const ClipboardApp = () => {
     markClipboardShellCommit();
     const stopObservingReopens = observeClipboardReopens();
     let disposed = false;
+    let notifiedRevision = 0;
     const readSnapshot = () => {
+      captureUpdatesRef.current = [];
+      snapshotPendingRef.current = true;
       const requestId = snapshotRequestIdRef.current + 1;
       snapshotRequestIdRef.current = requestId;
       void measureClipboardSnapshotRequest(
@@ -1657,7 +1751,9 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return undefined;
           }
+          snapshotPendingRef.current = false;
           if (!isClipboardSnapshot(value)) {
+            captureUpdatesRef.current = [];
             reportDesktopError({
               code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
               operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
@@ -1667,6 +1763,32 @@ const ClipboardApp = () => {
             return undefined;
           }
           dispatchClipboard({ type: "snapshotReceived", snapshot: value });
+          appliedRevisionRef.current = Math.max(
+            appliedRevisionRef.current,
+            value.revision,
+          );
+          let refreshRequired = false;
+          const pendingUpdates = [...captureUpdatesRef.current].sort(
+            (left, right) => left.revision - right.revision,
+          );
+          for (const update of pendingUpdates) {
+            if (update.revision <= appliedRevisionRef.current) {
+              continue;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              refreshRequired = true;
+              continue;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+          }
+          captureUpdatesRef.current = [];
+          if (
+            refreshRequired ||
+            notifiedRevision > appliedRevisionRef.current
+          ) {
+            readSnapshot();
+          }
           setError((current) => (current?.source === "read" ? null : current));
           return undefined;
         })
@@ -1674,6 +1796,8 @@ const ClipboardApp = () => {
           if (disposed || requestId !== snapshotRequestIdRef.current) {
             return;
           }
+          snapshotPendingRef.current = false;
+          captureUpdatesRef.current = [];
           reportDesktopError({
             code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
             detail: describeError(error),
@@ -1684,9 +1808,88 @@ const ClipboardApp = () => {
         });
     };
     readSnapshot();
-    const stopListening = subscribeDesktopEvent({
+    const stopListening = subscribeDesktopEvent<unknown>({
       event: CLIPBOARD_HISTORY_CHANGED_EVENT,
-      handler: readSnapshot,
+      handler: ({ payload }) => {
+        if (payload === null) {
+          readSnapshot();
+          return;
+        }
+        if (!isClipboardCaptureRevision(payload)) {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({ message: errorReadHistory, source: "read" });
+          return;
+        }
+        notifiedRevision = Math.max(notifiedRevision, payload.revision);
+        if (
+          payload.revision <= appliedRevisionRef.current ||
+          snapshotPendingRef.current
+        ) {
+          return;
+        }
+        void invoke<unknown>("clipboard_get_capture_update", {
+          revision: payload.revision,
+        })
+          .then((update) => {
+            if (disposed) {
+              return undefined;
+            }
+            // Only the most recent capture is retained natively. A gap or a
+            // mutation invalidating it recovers through the authorized snapshot.
+            if (update === null) {
+              if (
+                !snapshotPendingRef.current &&
+                notifiedRevision > appliedRevisionRef.current
+              ) {
+                readSnapshot();
+              }
+              return undefined;
+            }
+            if (
+              !isClipboardCaptureUpdate(update) ||
+              update.revision !== payload.revision
+            ) {
+              reportDesktopError({
+                code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+                operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+                window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+              });
+              setError({ message: errorReadHistory, source: "read" });
+              return undefined;
+            }
+            if (update.revision <= appliedRevisionRef.current) {
+              return undefined;
+            }
+            if (snapshotPendingRef.current) {
+              captureUpdatesRef.current.push(update);
+              return undefined;
+            }
+            if (update.revision !== appliedRevisionRef.current + 1) {
+              readSnapshot();
+              captureUpdatesRef.current.push(update);
+              return undefined;
+            }
+            dispatchClipboard({ type: "captureReceived", update });
+            appliedRevisionRef.current = update.revision;
+            return undefined;
+          })
+          .catch((error: unknown) => {
+            if (disposed) {
+              return;
+            }
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+              detail: describeError(error),
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryRead,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+            });
+            setError({ message: errorReadHistory, source: "read" });
+          });
+      },
       onError: () => {
         reportDesktopError({
           code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
@@ -1901,6 +2104,10 @@ const ClipboardApp = () => {
       void invoke<unknown>(command, args)
         .then((value) => {
           if (isClipboardSnapshot(value)) {
+            appliedRevisionRef.current = Math.max(
+              appliedRevisionRef.current,
+              value.revision,
+            );
             dispatchClipboard({ type: "snapshotReceived", snapshot: value });
             onSuccess?.();
             return undefined;
@@ -1996,6 +2203,7 @@ const ClipboardApp = () => {
     setSelectedIndex(index);
     setContextMenu({
       item,
+      pastePreview: NO_CLIPBOARD_PASTE_PREVIEW,
       type: "open",
       anchor:
         anchor === "button"
@@ -2009,6 +2217,19 @@ const ClipboardApp = () => {
   const closeContextMenu = () => {
     setContextMenu({ type: "closed" });
     contextMenuTriggerRef.current?.focus();
+  };
+
+  const setContextMenuPastePreview = (pastePreview: ClipboardPastePreview) => {
+    setContextMenu((current) =>
+      current.type === "closed"
+        ? current
+        : {
+            anchor: current.anchor,
+            item: current.item,
+            pastePreview,
+            type: "open",
+          },
+    );
   };
 
   useEffect(() => {
@@ -2665,6 +2886,7 @@ const ClipboardApp = () => {
           onMove={(id, groupId) =>
             applySnapshotCommand("clipboard_set_item_group", { groupId, id })
           }
+          onPastePreviewChange={setContextMenuPastePreview}
           sourceAppExclusionLimit={snapshot.sourceAppExclusionLimit}
           sourceAppExclusions={snapshot.sourceAppExclusions}
         />
@@ -2796,6 +3018,12 @@ const ClipboardApp = () => {
                               })
                             }
                             onSelect={setSelectedIndex}
+                            pastePreview={
+                              contextMenu.type === "open" &&
+                              contextMenu.item.id === item.id
+                                ? contextMenu.pastePreview
+                                : NO_CLIPBOARD_PASTE_PREVIEW
+                            }
                             query={filterQuery}
                             sourceVisual={
                               item.sourceApp?.visualKey

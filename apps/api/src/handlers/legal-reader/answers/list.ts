@@ -1,17 +1,18 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
+import { readerAnswerSpansOf } from "@/api/handlers/legal-reader/answers/operation";
 import { listAnswersQuerySchema } from "@/api/handlers/legal-reader/answers/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
   UnbackedProjectionKeys,
@@ -48,6 +49,7 @@ const ANSWER_PROJECTION = {
   quote: legalReaderAnswers.quote,
   startOffset: legalReaderAnswers.startOffset,
   endOffset: legalReaderAnswers.endOffset,
+  continuationSpans: legalReaderAnswers.continuationSpans,
   createdAt: legalReaderAnswers.createdAt,
   updatedAt: legalReaderAnswers.updatedAt,
 } as const;
@@ -108,7 +110,7 @@ true satisfies UnexpectedMessageColumn extends never ? true : never;
 type ListReaderAnswersOptions = Omit<
   AnnotationAuthorScope,
   "recordAuditEvent"
-> & { query: Static<typeof listAnswersQuerySchema> };
+> & { query: v.InferOutput<typeof listAnswersQuerySchema> };
 export const listReaderAnswersHandler = async function* ({
   query,
   organizationId,
@@ -190,12 +192,7 @@ export const listReaderAnswersHandler = async function* ({
     mine: answer.userId === userId,
     kind: answer.kind,
     visibility: answer.visibility,
-    anchor: {
-      paragraphId: answer.paragraphId,
-      quote: answer.quote,
-      startOffset: answer.startOffset,
-      endOffset: answer.endOffset,
-    },
+    anchor: { spans: readerAnswerSpansOf(answer) },
     createdAt: answer.createdAt.toISOString(),
     updatedAt: answer.updatedAt.toISOString(),
     messages: messages

@@ -121,7 +121,17 @@ export const DECISION_REFRESH = {
 export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
+/** A fresh observation or the exact immutable object a stored parse consumed. */
+export type DecisionInputProvenance =
+  | { type: "observation" }
+  | {
+      type: "stored";
+      sourceRawS3Key: string;
+      decisionId: SafeId<"caseLawDecision">;
+    };
+
 export type ProcessDecisionAttemptOptions = {
+  inputProvenance: DecisionInputProvenance;
   signal?: AbortSignal;
   s3Policy?: S3CredentialRefreshOptions;
   metadataUrlSchema?: unknown;
@@ -154,6 +164,7 @@ export type ProcessDecisionAttemptOptions = {
 
 export type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
+  | "inputProvenance"
   | "contentionReconciliation"
   | "corpus"
   | "judges"

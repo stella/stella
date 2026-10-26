@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
+import * as v from "valibot";
 
 import { aiExtractablePropertyContentSchema } from "@/api/db/schema-validators";
 import type { CaseLawResearchColumnContent } from "@/api/lib/case-law/research-answers";
@@ -61,7 +61,7 @@ export const buildResearchColumnContent = ({
     options: trimmed,
     fallback: null,
   };
-  return Value.Check(aiExtractablePropertyContentSchema, content)
+  return v.is(aiExtractablePropertyContentSchema, content)
     ? Result.ok(content)
     : refuse("Invalid select options");
 };

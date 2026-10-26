@@ -1,9 +1,11 @@
+// parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: [cz-regional] rawHash comes from the sourceFingerprint owner, equal to the previous envelope hash for a source that stores no objects.
 import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
@@ -1500,34 +1502,36 @@ type CursorState = {
   emptyDays: number;
 };
 
-const parseCursor = (cursor: string): CursorState => {
+const parseCursor = (cursor: string) => {
   // Format: "YYYY-MM-DD:page" or "YYYY-MM-DD:page:emptyDays"
   const parts = cursor.split(":");
   if (parts.length >= 3) {
-    // New format with emptyDays counter
     const date = parts.slice(0, -2).join(":");
-    const page = Number.parseInt(parts.at(-2) ?? "0", 10);
-    const emptyDays = Number.parseInt(parts.at(-1) ?? "0", 10);
-    return {
-      date: date || cursor,
-      page: Number.isNaN(page) ? 0 : page,
-      emptyDays: Number.isNaN(emptyDays) ? 0 : emptyDays,
-    };
+    return parseIntegerToken(parts.at(-2), { sign: "unsigned" }).andThen(
+      (page) =>
+        parseIntegerToken(parts.at(-1), { sign: "unsigned" }).map(
+          (emptyDays) => ({
+            date: date || cursor,
+            page,
+            emptyDays,
+          }),
+        ),
+    );
   }
 
   const colonIdx = cursor.lastIndexOf(":");
   if (colonIdx === -1) {
-    return { date: cursor, page: 0, emptyDays: 0 };
+    return Result.ok({ date: cursor, page: 0, emptyDays: 0 });
   }
 
   const date = cursor.slice(0, colonIdx);
-  const page = Number.parseInt(cursor.slice(colonIdx + 1), 10);
-
-  return {
+  return parseIntegerToken(cursor.slice(colonIdx + 1), {
+    sign: "unsigned",
+  }).map((page) => ({
     date,
-    page: Number.isNaN(page) ? 0 : page,
+    page,
     emptyDays: 0,
-  };
+  }));
 };
 
 const makeCursor = (state: CursorState): string =>
@@ -2591,6 +2595,12 @@ export const czRegionalAdapter = defineSourceAdapter({
   },
 
   async fetchPage(cursor, _config, signal) {
+    const cursorState = cursor ? parseCursor(cursor) : Result.ok(null);
+    if (cursorState.isErr()) {
+      return Result.err(
+        adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor)(cursorState.error),
+      );
+    }
     return await Result.tryPromise({
       try: async () => {
         const readBudget = AbortSignal.timeout(CZ_REGIONAL_PAGE_READ_BUDGET_MS);
@@ -2602,9 +2612,11 @@ export const czRegionalAdapter = defineSourceAdapter({
         const readBudgetSpent = (): boolean =>
           readBudget.aborted && signal?.aborted !== true;
 
-        const state: CursorState = cursor
-          ? parseCursor(cursor)
-          : { date: defaultDate(), page: 0, emptyDays: 0 };
+        const state = cursorState.value ?? {
+          date: defaultDate(),
+          page: 0,
+          emptyDays: 0,
+        };
 
         const fetchT0 = performance.now();
 

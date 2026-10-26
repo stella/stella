@@ -1,6 +1,6 @@
 {
   "name": "@stll/workspace-ui",
-  "version": "0.12.7",
+  "version": "0.13.1",
   "description": "Reusable workspace presentation components and view helpers for Stella.",
   "keywords": [
     "calculations",
@@ -34,6 +34,7 @@
     "./calculation-selection": "./src/calculation-selection.ts",
     "./colors": "./src/colors.ts",
     "./conditions": "./src/conditions/index.ts",
+    "./feature-previews": "./src/feature-previews/index.ts",
     "./field-value": "./src/field-value.tsx",
     "./field-value-logic": "./src/field-value-logic.ts",
     "./kanban-grouping-picker": "./src/kanban-grouping-picker.tsx",
@@ -42,6 +43,7 @@
     "./responsive-action-toolbar": "./src/responsive-action-toolbar.tsx",
     "./sorts": "./src/sorts.tsx",
     "./table-skeleton-rows": "./src/table-skeleton-rows.tsx",
+    "./task-status": "./src/task-status.ts",
     "./types": "./src/types.ts",
     "./view-switcher": "./src/view-switcher.tsx",
     "./workspace-frame": "./src/workspace-frame.tsx"
@@ -75,7 +77,7 @@
     "@base-ui/react": "catalog:",
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@tanstack/react-table": "9.2.6",
+    "@tanstack/react-table": "9.3.1",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",

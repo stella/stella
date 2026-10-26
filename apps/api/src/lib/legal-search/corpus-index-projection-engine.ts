@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -88,7 +89,11 @@ export class CorpusProjectionAppendError extends TaggedError(
   unattemptedRevisions: ProjectionRevision[];
   unknownOutcomeObservedAt: Date | null;
   cause?: CorpusIndexError | undefined;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["stage"]);
+  }
+}
 
 const invalidAppend = (
   code: Exclude<CorpusProjectionAppendError["code"], "append_unknown">,

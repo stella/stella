@@ -67,6 +67,7 @@ import {
 } from "@/lib/pdf/pdf-color-mode";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import type { SearchMatchSummary } from "@/lib/search-match-navigation";
 import { MAX_SEARCH_PREVIEW_MATCHES } from "@/lib/search-match-navigation";
@@ -143,6 +144,13 @@ type PeekPdfViewerProps = {
    * identity for as long as the viewer is mounted.
    */
   docxPlugins?: readonly Plugin[] | undefined;
+  /**
+   * Extra marks over each rendered PDF page, after the viewer's own
+   * overlays, positioned against the page box like any `PDFPage` overlay.
+   */
+  pdfPageOverlay?: ((pageId: string) => ReactNode) | undefined;
+  /** Which pages a PDF shows: its own, or the PDFs a portfolio attaches. */
+  pdfPageSource: PDFPageSource;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
   colorMode?: PDFColorMode | undefined;
@@ -192,6 +200,8 @@ const PeekPdfViewerContent = ({
   onWheelZoom,
   docxFitMode = "text-area",
   docxPlugins,
+  pdfPageOverlay,
+  pdfPageSource,
   colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
@@ -209,17 +219,28 @@ const PeekPdfViewerContent = ({
 
   const renderPageOverlay = useCallback(
     (pageId: string) => (
-      <PeekPageOverlays
-        activePropertyId={activePropertyId}
-        entityId={entityId}
-        fieldId={fieldId}
-        onPeekNavigate={onPeekNavigate}
-        pageId={pageId}
-        viewId={viewId}
-        workspaceId={workspaceId}
-      />
+      <>
+        <PeekPageOverlays
+          activePropertyId={activePropertyId}
+          entityId={entityId}
+          fieldId={fieldId}
+          onPeekNavigate={onPeekNavigate}
+          pageId={pageId}
+          viewId={viewId}
+          workspaceId={workspaceId}
+        />
+        {pdfPageOverlay?.(pageId)}
+      </>
     ),
-    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
+    [
+      activePropertyId,
+      entityId,
+      fieldId,
+      onPeekNavigate,
+      pdfPageOverlay,
+      viewId,
+      workspaceId,
+    ],
   );
 
   if (fileQuery.isError) {
@@ -263,6 +284,7 @@ const PeekPdfViewerContent = ({
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
         fileId={fieldId}
+        pageSource={pdfPageSource}
         invertColors={resolvePDFInvertColors({
           colorMode,
           isImageOrigin,
@@ -600,7 +622,13 @@ const PeekDocxViewer = ({
         fetchPrintPdf({ workspaceId, fieldId })
           .then(printPdfBuffer)
           .catch((error: unknown) => {
-            analytics.captureError(error);
+            analytics.captureError(error, {
+              fingerprintKey: "PeekDocxViewer.print:failure",
+              scope: {
+                type: "handler",
+                handlerId: "PeekDocxViewer.print:failure",
+              },
+            });
           }),
         "peek-pdf-viewer.fetch-print-pdf",
       );

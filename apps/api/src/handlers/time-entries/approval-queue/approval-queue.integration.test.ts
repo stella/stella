@@ -26,6 +26,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
@@ -167,7 +168,7 @@ const context = (actor = ids.userA2, role: "member" | "owner" = "member") => {
     });
   return {
     request,
-    route: "/time-entries/approval-queue",
+    route: "/v1/time-entries/approval-queue" satisfies ApiRoutePath,
     session: { activeOrganizationId: ids.orgA },
     user: { id: actor },
     memberRole: sessionMemberRole(role),

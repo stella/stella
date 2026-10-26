@@ -129,7 +129,7 @@ export const FIELD_CONTENT_TYPES =
     typeof fieldContentTypes
   >;
 
-export type WorkspaceFieldContent = FieldContent;
+export type WorkspaceFieldContent = FieldContent & { truncated?: true };
 
 /**
  * Minimal structural bound the display layer needs from a property: the cell

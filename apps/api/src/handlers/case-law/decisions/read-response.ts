@@ -1,6 +1,5 @@
-import type { TSchema } from "@sinclair/typebox";
 import { panic } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
@@ -19,7 +18,7 @@ import {
 
 import type { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DECISION_SECTION_TYPES } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
 import { responseByteBound } from "@/api/lib/search/response-byte-bound";
@@ -81,96 +80,97 @@ const METADATA_DEPTH = 4;
 const METADATA_NODES = 32;
 const JUDGES_MAX = 128;
 
-const metadataScalarSchema = t.Union([
+const metadataScalarSchema = v.union([
   boundedString(PROSE_BYTES),
-  t.Number(),
-  t.Boolean(),
-  t.Null(),
+  v.number(),
+  v.boolean(),
+  v.null(),
 ]);
 
-const metadataValueSchema = (depth: number): TSchema => {
+const metadataValueSchema = (depth: number): v.GenericSchema => {
   if (depth === 0) {
     return metadataScalarSchema;
   }
   const child = metadataValueSchema(depth - 1);
-  return t.Union([
+  return v.union([
     metadataScalarSchema,
-    t.Array(child, { maxItems: METADATA_NODES }),
-    t.Record(boundedString(METADATA_KEY_BYTES), child, {
-      maxProperties: METADATA_NODES,
-      propertyNames: boundedString(METADATA_KEY_BYTES),
-    }),
+    v.pipe(v.array(child), v.maxLength(METADATA_NODES)),
+    v.pipe(
+      v.record(boundedString(METADATA_KEY_BYTES), child),
+      v.maxEntries(METADATA_NODES),
+    ),
   ]);
 };
 
 // The stored metadata contract is open; this finite wire schema bounds every
 // nested value without exposing recursive references to the response guard.
-const metadataSchema = t.Record(
-  boundedString(METADATA_KEY_BYTES),
-  metadataValueSchema(METADATA_DEPTH),
-  {
-    maxProperties: METADATA_NODES,
-    propertyNames: boundedString(METADATA_KEY_BYTES),
-  },
+const metadataSchema = v.pipe(
+  v.record(
+    boundedString(METADATA_KEY_BYTES),
+    metadataValueSchema(METADATA_DEPTH),
+  ),
+  v.maxEntries(METADATA_NODES),
 );
 
-const textFieldSchema = t.Union([
-  t.Object({
-    type: t.Literal(TEXT_FIELD_TYPE.PRESENT),
+const textFieldSchema = v.union([
+  v.object({
+    type: v.literal(TEXT_FIELD_TYPE.PRESENT),
     text: boundedString(PROSE_BYTES),
   }),
-  t.Object({
-    type: t.Literal(TEXT_FIELD_TYPE.ABSENT),
-    reason: t.UnionEnum([...TEXT_ABSENCE_REASONS]),
+  v.object({
+    type: v.literal(TEXT_FIELD_TYPE.ABSENT),
+    reason: v.picklist([...TEXT_ABSENCE_REASONS]),
   }),
 ]);
 
-const languageAlternateSchema = t.Object({
+const languageAlternateSchema = v.object({
   id: boundedString(36),
   caseNumber: boundedString(DECISION_READER_TEXT_BYTES.caseNumber),
   country: boundedString(DECISION_READER_TEXT_BYTES.country),
   court: boundedString(DECISION_READER_TEXT_BYTES.court),
-
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   language: boundedString(DECISION_READER_TEXT_BYTES.language),
   slug: nullableBoundedString(DECISION_READER_TEXT_BYTES.slug),
-  hasDocument: t.Boolean(),
+  hasDocument: v.boolean(),
 } satisfies Record<
   keyof ReadableDecision["languageAlternates"][number],
-  TSchema
+  v.GenericSchema
 >);
 
-export const readDecisionSuccessResponseSchema = t.Object({
-  documentPending: t.Boolean(),
-  hasDocument: t.Boolean(),
-  documentReadFailed: t.Boolean(),
-  documentUnavailable: t.Boolean(),
-  id: tSafeId("caseLawDecision"),
-  resolution: t.Union([
-    t.Object({ type: t.Literal(DECISION_READ_RESOLUTION.DIRECT) }),
-    t.Object({
-      type: t.Literal(DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT),
-      absorbedDecisionId: tSafeId("caseLawDecision"),
+export const readDecisionSuccessResponseSchema = v.object({
+  documentPending: v.boolean(),
+  hasDocument: v.boolean(),
+  documentReadFailed: v.boolean(),
+  documentUnavailable: v.boolean(),
+  id: resourceIdSchema("caseLawDecision"),
+  resolution: v.union([
+    v.object({ type: v.literal(DECISION_READ_RESOLUTION.DIRECT) }),
+    v.object({
+      type: v.literal(DECISION_READ_RESOLUTION.ABSORBED_SUPPLEMENT),
+      absorbedDecisionId: resourceIdSchema("caseLawDecision"),
       anchorPrefix: boundedString(LABEL_BYTES),
     }),
   ]),
   caseNumber: boundedString(DECISION_READER_TEXT_BYTES.caseNumber),
-  caseNumberType: t.UnionEnum([...DECISION_PRIMARY_REFERENCE_TYPES]),
+  caseNumberType: v.picklist([...DECISION_PRIMARY_REFERENCE_TYPES]),
   slug: nullableBoundedString(DECISION_READER_TEXT_BYTES.slug),
   ecli: nullableBoundedString(DECISION_READER_TEXT_BYTES.ecli),
-  identifiers: t.Array(
-    t.Object({
-      type: t.Enum(DECISION_IDENTIFIER_TYPES),
-      value: boundedString(DECISION_IDENTIFIER_MAX_LENGTH * 4),
-    }),
-    { minItems: 1, maxItems: DECISION_IDENTIFIER_MAX_COUNT },
+  identifiers: v.pipe(
+    v.array(
+      v.object({
+        type: v.enum(DECISION_IDENTIFIER_TYPES),
+        value: boundedString(DECISION_IDENTIFIER_MAX_LENGTH * 4),
+      }),
+    ),
+    v.minLength(1),
+    v.maxLength(DECISION_IDENTIFIER_MAX_COUNT),
   ),
   court: boundedString(DECISION_READER_TEXT_BYTES.court),
   courtId: nullableBoundedString(DECISION_READER_TEXT_BYTES.courtId),
   courtAbbreviation: nullableBoundedString(
     DECISION_READER_TEXT_BYTES.courtAbbreviation,
   ),
-  courtTier: t.UnionEnum([...COURT_TIER_LABELS]),
+  courtTier: v.picklist([...COURT_TIER_LABELS]),
   country: boundedString(DECISION_READER_TEXT_BYTES.country),
   language: boundedString(DECISION_READER_TEXT_BYTES.language),
   languageGroupKey: nullableBoundedString(
@@ -178,24 +178,20 @@ export const readDecisionSuccessResponseSchema = t.Object({
   ),
   decisionDate: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionDate),
   decisionType: nullableBoundedString(DECISION_READER_TEXT_BYTES.decisionType),
-  // Whole official decision text is intentional. These and `sections[].text`
-  // are the only fields exempted by the public-response ledger; a windowed
-  // reader is separate.
-  documentAst: t.Unknown(),
-  fulltext: t.Nullable(t.String()),
+  citationCount: v.number(),
+  documentAst: v.unknown(),
+  fulltext: v.nullable(v.string()),
   projectionDigest: nullableBoundedString(
     DECISION_READER_TEXT_BYTES.projectionDigest,
   ),
-  documentAstSource: t.Union([t.Literal("store"), t.Literal("row"), t.Null()]),
-  // Sections split the whole official text and citations address them by
-  // index, so neither the list nor a section's text is cut.
-  sections: t.Nullable(
-    t.Array(
-      t.Object({
-        index: t.Number(),
-        type: t.UnionEnum([...DECISION_SECTION_TYPES]),
+  documentAstSource: v.union([v.literal("store"), v.literal("row"), v.null()]),
+  sections: v.nullable(
+    v.array(
+      v.object({
+        index: v.number(),
+        type: v.picklist([...DECISION_SECTION_TYPES]),
         title: nullableBoundedString(LABEL_BYTES),
-        text: t.String(),
+        text: v.string(),
       }),
     ),
   ),
@@ -206,7 +202,7 @@ export const readDecisionSuccessResponseSchema = t.Object({
   documentUrl: nullableBoundedString(DECISION_READER_TEXT_BYTES.documentUrl),
   metadata: metadataSchema,
   headnote: textFieldSchema,
-  textFields: t.Object({
+  textFields: v.object({
     abstract: textFieldSchema,
     headnote: textFieldSchema,
     legalSentence: textFieldSchema,
@@ -214,49 +210,56 @@ export const readDecisionSuccessResponseSchema = t.Object({
   }),
   createdAt: boundedString(32),
   updatedAt: boundedString(32),
-  source: t.Object({
-    id: tSafeId("caseLawSource"),
+  source: v.object({
+    id: resourceIdSchema("caseLawSource"),
     name: boundedString(256 * 4),
     adapterKey: boundedString(64 * 4),
-    allowsDerivedAi: t.Boolean(),
+    allowsDerivedAi: v.boolean(),
   }),
-  judges: t.Array(
-    t.Object({
-      role: t.UnionEnum([...DECISION_JUDGE_ROLES]),
-      name: boundedString(LABEL_BYTES),
-      judgeId: t.Nullable(tSafeId("caseLawJudge")),
-      portrait: t.Nullable(
-        t.Object({
-          url: boundedString(URL_BYTES),
-          attribution: boundedString(LABEL_BYTES),
-        }),
-      ),
-    }),
-    { maxItems: JUDGES_MAX },
+  judges: v.pipe(
+    v.array(
+      v.object({
+        role: v.picklist([...DECISION_JUDGE_ROLES]),
+        name: boundedString(LABEL_BYTES),
+        judgeId: v.nullable(resourceIdSchema("caseLawJudge")),
+        portrait: v.nullable(
+          v.object({
+            url: boundedString(URL_BYTES),
+            attribution: boundedString(LABEL_BYTES),
+          }),
+        ),
+      }),
+    ),
+    v.maxLength(JUDGES_MAX),
   ),
-  citationsFrom: t.Array(
-    t.Object({
-      id: tSafeId("caseLawCitation"),
-      citationText: boundedString(PROSE_BYTES),
-      citedDecisionId: t.Nullable(tSafeId("caseLawDecision")),
-      sectionIndex: t.Nullable(t.Number()),
-    }),
-    { maxItems: LIMITS.caseLawDecisionCitationPageSize },
+  citationsFrom: v.pipe(
+    v.array(
+      v.object({
+        id: resourceIdSchema("caseLawCitation"),
+        citationText: boundedString(PROSE_BYTES),
+        citedDecisionId: v.nullable(resourceIdSchema("caseLawDecision")),
+        sectionIndex: v.nullable(v.number()),
+      }),
+    ),
+    v.maxLength(LIMITS.caseLawDecisionCitationPageSize),
   ),
-  citationsTo: t.Array(
-    t.Object({
-      id: tSafeId("caseLawCitation"),
-      citationText: boundedString(PROSE_BYTES),
-      citingDecisionId: tSafeId("caseLawDecision"),
-      sectionIndex: t.Nullable(t.Number()),
-    }),
-    { maxItems: LIMITS.caseLawDecisionCitationPageSize },
+  citationsTo: v.pipe(
+    v.array(
+      v.object({
+        id: resourceIdSchema("caseLawCitation"),
+        citationText: boundedString(PROSE_BYTES),
+        citingDecisionId: resourceIdSchema("caseLawDecision"),
+        sectionIndex: v.nullable(v.number()),
+      }),
+    ),
+    v.maxLength(LIMITS.caseLawDecisionCitationPageSize),
   ),
   citationsNextCursor: nullableBoundedString(CURSOR_BYTES),
-  languageAlternates: t.Array(languageAlternateSchema, {
-    maxItems: LIMITS.caseLawLanguageAlternatesPerGroupMax,
-  }),
-} satisfies Record<keyof ReadableDecision, TSchema>);
+  languageAlternates: v.pipe(
+    v.array(languageAlternateSchema),
+    v.maxLength(LIMITS.caseLawLanguageAlternatesPerGroupMax),
+  ),
+} satisfies Record<keyof ReadableDecision, v.GenericSchema>);
 
 export const readDecisionResponseSchema =
   safePublicHandlerResponseSchemasWithStatusText(
@@ -265,7 +268,7 @@ export const readDecisionResponseSchema =
 
 // Whole-document fields have their own intentional ingestion boundary.
 export const DECISION_READER_NON_DOCUMENT_MAX_BYTES = responseByteBound(
-  t.Omit(readDecisionSuccessResponseSchema, [
+  v.omit(readDecisionSuccessResponseSchema, [
     "documentAst",
     "fulltext",
     "sections",
@@ -394,6 +397,7 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ),
     decisionDate: nullableText(decision.decisionDate, text.decisionDate),
     decisionType: nullableText(decision.decisionType, text.decisionType),
+    citationCount: decision.citationCount,
     projectionDigest: nullableText(
       decision.projectionDigest,
       text.projectionDigest,

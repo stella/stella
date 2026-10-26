@@ -273,7 +273,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
       ).toHaveCount(0);
 
       // 4. The member starts a private skill from a blueprint; the gallery
-      //    offers no team visibility, and the draft is listed for them.
+      //    defaults to private visibility, and the draft is listed for them.
       await memberPage.goto("/knowledge/tools?kind=skill", {
         waitUntil: "commit",
       });
@@ -292,7 +292,7 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
       await expect(answerFromSources).toBeVisible();
       await expect(
         memberGallery.getByRole("combobox", { name: "Visibility" }),
-      ).toHaveCount(0);
+      ).toContainText("Only me");
       await answerFromSources.click();
       await expect(memberPage).toHaveURL(SKILL_URL_PATTERN, {
         timeout: 30_000,
@@ -304,7 +304,13 @@ test("a team skill is authored, used in chat, read by members, and removed", asy
         exact: true,
       });
       await expect(privateName).toBeEditable({ timeout: 30_000 });
-      await expect(memberPage.getByText("Only me")).toBeVisible();
+      // The visibility badge and the availability summary both say "Only me"
+      // for a private, unbound skill; assert the summary itself.
+      await expect(
+        memberPage
+          .getByText("Available in", { exact: true })
+          .locator("xpath=following-sibling::div[1]"),
+      ).toContainText("Only me");
       await commitSkillField({
         field: privateName,
         page: memberPage,

@@ -360,15 +360,36 @@ export type ProcessMemoryReport = {
   rssBytes: number;
   heapUsedBytes: number;
   arrayBuffersBytes: number;
-  uploadFinalizeInFlightBytes: number;
+  workPools: Record<
+    string,
+    {
+      inFlight: number;
+      queued: number;
+      bytesInFlight: number;
+      refusedBusy: number;
+      refusedMemory: number;
+      deadlineCancelled: number;
+    }
+  >;
 };
 
 /** Log-only: memory diagnostics must not create billable custom metrics. */
 export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  const poolFields = Object.fromEntries(
+    Object.entries(memory.workPools).flatMap(([pool, metrics]) =>
+      Object.entries(metrics).map(([field, value]) => [
+        `work_pool.${pool}.${field}`,
+        value,
+      ]),
+    ),
+  );
   writeMetricLine({
     severity: "INFO",
     message: "runtime.process_memory",
-    ...memory,
+    rssBytes: memory.rssBytes,
+    heapUsedBytes: memory.heapUsedBytes,
+    arrayBuffersBytes: memory.arrayBuffersBytes,
+    ...poolFields,
   });
 };
 

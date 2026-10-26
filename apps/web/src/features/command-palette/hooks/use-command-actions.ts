@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { Hotkey } from "@tanstack/react-hotkeys";
+import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { panic } from "better-result";
@@ -27,7 +27,7 @@ import type { CommandAction, CommandActionContext } from "../lib/types";
 
 export type ResolvedCommandAction = CommandAction & {
   title: string;
-  hotkey?: Hotkey;
+  hotkey?: HotkeyChord;
 };
 
 type UploadRequest =
@@ -63,7 +63,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
   const entityCountView = useQueryView(entityCountQuery);
-  useQueryViewError(entityCountView);
+  useQueryViewError(entityCountView, "useCommandActions:query");
   const entityCount =
     entityCountView.type === "items" ? entityCountView.items : undefined;
   const workflowQuery = useQuery({
@@ -71,7 +71,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     enabled: open && workspaceId !== undefined && canCreateEntity,
   });
   const workflowView = useQueryView(workflowQuery);
-  useQueryViewError(workflowView);
+  useQueryViewError(workflowView, "useCommandActions:query-2");
   const workflow =
     workflowView.type === "items" ? workflowView.items : undefined;
   const canCreateTask =
@@ -130,7 +130,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   );
 
   const effectiveHotkeys = useMemo(() => {
-    const hotkeys = new Map<CommandAction["shortcutId"], Hotkey>();
+    const hotkeys = new Map<CommandAction["shortcutId"], HotkeyChord>();
     for (const group of shortcutGroups) {
       for (const shortcut of group.shortcuts) {
         if (shortcut.binding.type === "hotkey") {

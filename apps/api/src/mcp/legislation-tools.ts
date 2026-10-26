@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT,
   LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE,
@@ -82,7 +83,6 @@ import {
   FILTER_NORMALIZATION,
   handlerStatusOf,
   invalidCursorResult,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
   legalCitationLinkFields,
   mapValibotIssues,
@@ -101,6 +101,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /**
  * The stella legislation corpus as agent-facing tools: find a statute, read
@@ -169,7 +170,7 @@ const anchorInputSchema = v.pipe(
 );
 
 const asOfInputSchema = v.pipe(
-  ISO_DATE_SCHEMA,
+  apiDateSchema,
   v.maxLength(10),
   v.description(
     "Read the consolidation in force on this ISO date (YYYY-MM-DD); omit it " +
@@ -225,7 +226,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Filter statutes effective from this ISO date (YYYY-MM-DD)",
@@ -234,7 +235,7 @@ const searchLegislationArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        ISO_DATE_SCHEMA,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Filter statutes effective up to this ISO date (YYYY-MM-DD)",
@@ -399,6 +400,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       as_of: { kind: AGENT_INPUT_NORMALIZATION_KIND.date, bound: "start" },
     },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
@@ -431,6 +433,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -465,6 +468,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       },
     },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
@@ -492,6 +496,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    permissions: openMcpRead("public legislation corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",

@@ -76,6 +76,7 @@ jobs:
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
@@ -127,11 +128,28 @@ jobs:
             fi
           fi
 
+      # The tag takes a merge-group receipt in place of main/heavy and
+      # main/pr-depth only when the receipt covers the release history. This
+      # push already runs heavy; pr-depth is dispatched below when it does not.
+      - name: Check the version commit's merge-group receipt
+        id: receipt
+        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
+        working-directory: .release-proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if bash scripts/check-release-receipt-coverage.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA"; then
+            echo "covered=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "covered=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Dispatch release PR-depth checks
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && steps.reuse.outputs.run != 'false' }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && steps.reuse.outputs.run != 'false') || steps.receipt.outputs.covered == 'false' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          SHA: ${{ inputs.sha }}
+          SHA: ${{ inputs.sha || github.sha }}
         with:
           retries: 2
           script: |
@@ -140,6 +158,47 @@ jobs:
               workflow_id: "main-pr-depth.yml",
               ref: "main",
               inputs: { sha: process.env.SHA },
+            });
+
+      - name: Dispatch version commit staging
+        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          retries: 2
+          script: |
+            const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              ...context.repo,
+              commit_sha: context.sha,
+              per_page: 100,
+            });
+            const releasePull = pulls.find(pull => pull.merged_at
+              && pull.merge_commit_sha === context.sha
+              && pull.title.startsWith("chore: release v")
+              && pull.head.repo?.full_name === `${context.repo.owner}/${context.repo.repo}`);
+            const headSha = releasePull?.head.sha;
+            let reuse = false;
+            if (headSha) {
+              const [{ data: head }, { data: version }, { data: statuses }] = await Promise.all([
+                github.rest.git.getCommit({ ...context.repo, commit_sha: headSha }),
+                github.rest.git.getCommit({ ...context.repo, commit_sha: context.sha }),
+                github.rest.repos.listCommitStatusesForRef({
+                  ...context.repo,
+                  ref: headSha,
+                  per_page: 100,
+                }),
+              ]);
+              const staging = statuses.find(status => status.context === "staging/verified");
+              reuse = head.tree.sha === version.tree.sha
+                && staging?.creator?.login === "github-actions[bot]"
+                && staging.state === "success";
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo,
+              workflow_id: "deploy-staging.yml",
+              ref: "main",
+              inputs: reuse
+                ? { proof_sha: headSha, sha: context.sha }
+                : { release_candidate: "true", sha: context.sha },
             });
 
       - name: Select untested heavy SHA
@@ -201,6 +260,7 @@ jobs:
           echo "::add-mask::$auth"
           git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Verify main ancestry
