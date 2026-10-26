@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { spawnSync } from "node:child_process";
 
 import {
   QUICKWIT_V09_BUILD_VERSION,
   QUICKWIT_V09_RUNTIME,
 } from "@/api/lib/legal-search/corpus-index-engine-version";
 
+import { listedPaths } from "../packages/scripts/src/listed-paths";
 import { serviceVolumeMountViolations } from "./check-railway-template-draft";
 import images from "./ci-service-images.json" with { type: "json" };
 
@@ -61,34 +61,23 @@ const LOOPBACK_HOST = "127.0.0.1";
 // dependency/build trees. Include untracked files for local authoring as well.
 const deploymentTemplates = async () => {
   const templates = [];
-  const inventory = spawnSync(
-    "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
-    {
-      cwd: new URL("..", import.meta.url),
-      encoding: "utf-8",
-    },
-  );
-  if (inventory.status !== 0) {
-    throw new TypeError(
-      "Deployment template inventory requires a Git checkout",
-    );
-  }
   const candidates = new Set(
-    inventory.stdout
-      .split("\0")
-      .filter(
-        (candidate) =>
-          /\.(?:json|ya?ml)$/u.test(candidate) &&
-          !candidate.startsWith(".github/") &&
-          (!/^(?:apps|packages)\//u.test(candidate) ||
-            /compose|deploy|selfhost|template|railway|render/iu.test(
-              candidate,
-            )) &&
-          !/(?:^|\/)(?:node_modules|fixtures|__fixtures__|dist|build)\//u.test(
+    listedPaths(new URL("..", import.meta.url), [
+      "--cached",
+      "--others",
+      "--exclude-standard",
+    ]).filter(
+      (candidate) =>
+        /\.(?:json|ya?ml)$/u.test(candidate) &&
+        !candidate.startsWith(".github/") &&
+        (!/^(?:apps|packages)\//u.test(candidate) ||
+          /compose|deploy|selfhost|template|railway|render/iu.test(
             candidate,
-          ),
-      ),
+          )) &&
+        !/(?:^|\/)(?:node_modules|fixtures|__fixtures__|dist|build)\//u.test(
+          candidate,
+        ),
+    ),
   );
   for (const candidate of candidates) {
     const contents = await Bun.file(

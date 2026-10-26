@@ -7,10 +7,11 @@
  * fixture repository the test creates is allowed with a stated reason.
  */
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
+
+import { listedPaths } from "../packages/scripts/src/listed-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // Every test convention a CI runner picks up, script and shell tests included.
@@ -221,12 +222,9 @@ export const findHistoryWalks = (
 };
 
 const trackedTests = (): Map<string, string> => {
-  const files = execFileSync("git", ["ls-files", "-z"], {
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-  })
-    .split("\0")
-    .filter((file) => SCRIPT_TEST_FILE.test(file) || isShellTest(file));
+  const files = listedPaths(REPO_ROOT).filter(
+    (file) => SCRIPT_TEST_FILE.test(file) || isShellTest(file),
+  );
   return new Map(
     files.map((file) => [
       file,

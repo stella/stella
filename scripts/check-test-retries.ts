@@ -1,10 +1,11 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript6";
+
+import { listedPaths } from "../packages/scripts/src/listed-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;
@@ -776,19 +777,14 @@ export const findTestRetryViolations = (
 };
 
 const trackedSources = (): Map<string, string> => {
-  const files = execFileSync("git", ["ls-files", "-z"], {
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-  })
-    .split("\0")
-    .filter(
-      (file) =>
-        isPlaywrightConfig(file) ||
-        isSourceFile(file) ||
-        file.endsWith(".sh") ||
-        PACKAGE_FILE.test(file) ||
-        WORKFLOW_FILE.test(file),
-    );
+  const files = listedPaths(REPO_ROOT).filter(
+    (file) =>
+      isPlaywrightConfig(file) ||
+      isSourceFile(file) ||
+      file.endsWith(".sh") ||
+      PACKAGE_FILE.test(file) ||
+      WORKFLOW_FILE.test(file),
+  );
   const sources = new Map<string, string>();
   for (const file of files) {
     const source = readFileSync(path.join(REPO_ROOT, file), "utf-8");

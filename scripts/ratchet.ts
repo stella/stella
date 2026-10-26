@@ -1115,6 +1115,20 @@ const importedLocalBindings = ({
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
+// Node's sync child_process calls capture at most 1 MiB by default, which the
+// repository's path list outgrew; listings go through `listedPaths`
+// (packages/scripts/src/listed-paths.ts), which Bun captures whole.
+const NODE_CHILD_PROCESS_PATH_LISTING =
+  /\b(?:execFileSync|spawnSync)\(\s*["'`]git["'`]\s*,\s*\[\s*["'`]ls-files["'`]|\bexecSync\(\s*["'`]git ls-files\b/gu;
+
+const countNodeChildProcessPathListings: FileCounter = (content, { file }) =>
+  countCodeMatches({
+    content,
+    file,
+    pattern: NODE_CHILD_PROCESS_PATH_LISTING,
+    required: /ls-files/u,
+  });
+
 // Fuzzy supersets for narrow shared-helper/component bans. These counters are
 // intentionally lexical: the AST rules reject the exact known-bad shapes,
 // while the ratchets keep nearby aliases and new spellings visible in review.
@@ -3265,6 +3279,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countSuperLinearRegexes,
+  },
+  {
+    scope: "file",
+    id: "node-child-process-path-listings",
+    description:
+      "`git ls-files` through Node's sync child_process, whose 1 MiB default buffer the repository's path list outgrew; use listedPaths from packages/scripts/src/listed-paths.ts; at 0 — keep it there",
+    include: ALL_SOURCE_GLOBS,
+    exclude: isExcludedTestInclusiveSource,
+    count: countNodeChildProcessPathListings,
   },
   {
     scope: "file",
