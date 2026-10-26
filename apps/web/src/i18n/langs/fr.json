@@ -6432,6 +6432,7 @@
       "promoteCta": "Promouvoir au client",
       "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
       "promotedSuccess": "Dossier promu",
+      "recentClients": "Clients récents",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",

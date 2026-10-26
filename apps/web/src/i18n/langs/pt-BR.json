@@ -6432,6 +6432,7 @@
       "promoteCta": "Promover para cliente",
       "promoteDescription": "Associe um cliente para compartilhar este caso com a equipe. Esta ação é unidirecional; casos promovidos não podem voltar a ser pessoais.",
       "promotedSuccess": "Caso promovido",
+      "recentClients": "Clientes recentes",
       "removeClient": "Remover cliente",
       "removeParty": "Remover parte",
       "removePartyConfirm": "Tem certeza de que deseja remover esta parte do caso?",
