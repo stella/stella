@@ -11,11 +11,16 @@ import {
 
 import { caseLawSources } from "@/api/db/schema";
 import {
+  admitsDecisionDateBand,
   listDecisionsPageQuery,
   type listDecisionsQuerySchema,
 } from "@/api/handlers/case-law/decisions/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import {
+  DECISION_DATE_BANDS,
+  type DecisionDateBand,
+} from "@/api/lib/case-law/decision-date-order";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { planLines } from "@/api/tests/helpers/explain-plan";
 import {
@@ -54,7 +59,7 @@ beforeAll(
         CASE WHEN i % 10 = 3 THEN 'en' ELSE 'cs' END,
         CASE WHEN i % 4 = 1 THEN NULL ELSE 'group:' || (i / 3)::text END,
         CASE WHEN i % 3 = 0 THEN 'rozsudek' ELSE 'usnesení' END,
-        DATE '2020-01-01' + (i % 97),
+        CASE WHEN i % 5 = 4 THEN NULL ELSE DATE '2020-01-01' + (i % 97) END,
         TIMESTAMPTZ '2020-01-01' + (i || ' seconds')::interval
       FROM generate_series(1, ${DECISIONS}::int) AS i
     `);
@@ -79,18 +84,24 @@ const WALK_SCAN_NODE = {
 } as const satisfies Record<DecisionListSort, string>;
 
 /**
- * Where the walk starts. Oldest first skips the undated band as the start of
- * the index range, not as a filter over the rows the range returns.
+ * The range each band is. Both bands bound the index range itself, not a
+ * filter over the rows the range returns: the dated band starts above the
+ * undated one, which is the single key `-infinity`.
  */
-const DATED_BAND_COND = {
-  newest: "\\)?\\n",
-  oldest:
+const BAND_COND = {
+  dated:
     " AND \\(COALESCE\\(decision_date, '-infinity'::date\\) > '-infinity'::date\\)\\)\\n",
-} as const satisfies Record<DecisionListSort, string>;
+  undated:
+    " AND \\(COALESCE\\(decision_date, '-infinity'::date\\) = '-infinity'::date\\)\\)\\n",
+} as const satisfies Record<DecisionDateBand, string>;
 
-test.each(DECISION_LIST_SORTS)(
-  "the %s-first decision list keeps its index path with grouped and ungrouped rows",
-  async (sort) => {
+const ORDERS_BY_BAND = DECISION_LIST_SORTS.flatMap((sort) =>
+  DECISION_DATE_BANDS.map((band) => [sort, band] as const),
+);
+
+test.each(ORDERS_BY_BAND)(
+  "the %s-first decision list keeps its index path in the %s band with grouped and ungrouped rows",
+  async (sort, band) => {
     const plans = await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
@@ -98,8 +109,9 @@ test.each(DECISION_LIST_SORTS)(
       const query = listDecisionsPageQuery({
         query: { country: "CZE" },
         sort,
-        limit: 50,
-        cursor: undefined,
+        band,
+        take: 51,
+        position: undefined,
         tx,
       });
       const natural = planLines(
@@ -115,7 +127,7 @@ test.each(DECISION_LIST_SORTS)(
 
     const scan = WALK_SCAN_NODE[sort];
     const indexedDecisionScan = new RegExp(
-      `${scan} using case_law_decisions_country_date_published_idx on case_law_decisions\\n\\s+Index Cond: \\(+\\(country\\)::text = 'CZE'::text\\)${DATED_BAND_COND[sort]}`,
+      `${scan} using case_law_decisions_country_date_published_idx on case_law_decisions\\n\\s+Index Cond: \\(+\\(country\\)::text = 'CZE'::text\\)${BAND_COND[band]}`,
       "u",
     );
     expect(plans.natural).toMatch(indexedDecisionScan);
@@ -138,6 +150,12 @@ test.each(DECISION_LIST_SORTS)(
       expect(plan).toMatch(/Index Cond: .*language_group_key/u);
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
     }
+    expect(plans.rows).toHaveLength(51);
+    expect(
+      plans.rows.every(
+        (row) => (row.decisionDate === null) === (band === "undated"),
+      ),
+    ).toBe(true);
     expect(plans.rows.some((row) => row.languageGroupKey === null)).toBe(true);
     const groupKeys = plans.rows.flatMap((row) =>
       row.languageGroupKey === null ? [] : [row.languageGroupKey],
@@ -228,7 +246,33 @@ const FILTER_ACCESS = {
   },
 } as const satisfies Record<BrowseFilter, FilterAccess>;
 
-const explainWalk = async (query: BrowseQuery, sort: DecisionListSort) =>
+/**
+ * The access paths per band. The undated band is a single key of the walk
+ * index, so a filter no index holds may read the band's own range as a
+ * bitmap and sort what survives: the sort is bounded by the band, and the
+ * planner prefers the ordered walk once the band outgrows the page.
+ */
+const FILTER_ACCESS_BY_BAND = {
+  dated: FILTER_ACCESS,
+  undated: {
+    ...FILTER_ACCESS,
+    decisionType: {
+      type: "index-probe",
+      query: FILTER_ACCESS.decisionType.query,
+      indexCond:
+        /COALESCE\(decision_date, '-infinity'::date\) = '-infinity'::date/u,
+    },
+  },
+} as const satisfies Record<
+  DecisionDateBand,
+  Record<BrowseFilter, FilterAccess>
+>;
+
+const explainWalk = async (
+  query: BrowseQuery,
+  sort: DecisionListSort,
+  band: DecisionDateBand,
+) =>
   await withPublicLawReaderRole(db, async (roleTx) => {
     // SAFETY: the role transaction supplies the select surface the read uses.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
@@ -236,8 +280,9 @@ const explainWalk = async (query: BrowseQuery, sort: DecisionListSort) =>
     const page = listDecisionsPageQuery({
       query,
       sort,
-      limit: 50,
-      cursor: undefined,
+      band,
+      take: 51,
+      position: undefined,
       tx,
     });
     const natural = planLines(
@@ -262,16 +307,18 @@ const orderedWalk = (plan: string, sort: DecisionListSort) => {
   return walk;
 };
 
+// Every band a request with the filter reads; a date bound reads no undated
+// band, so it has no plan there to declare.
 test.each(
-  DECISION_LIST_SORTS.flatMap((sort) =>
-    Object.entries(FILTER_ACCESS).map(
-      ([filter, access]) => [sort, filter, access] as const,
-    ),
+  ORDERS_BY_BAND.flatMap(([sort, band]) =>
+    Object.entries(FILTER_ACCESS_BY_BAND[band])
+      .filter(([, access]) => admitsDecisionDateBand(access.query, band))
+      .map(([filter, access]) => [sort, band, filter, access] as const),
   ),
 )(
-  "the %s-first browse walk reads its %s filter through the access path it declares",
-  async (sort, _filter, access) => {
-    for (const plan of await explainWalk(access.query, sort)) {
+  "the %s-first browse walk's %s band reads its %s filter through the access path it declares",
+  async (sort, band, _filter, access) => {
+    for (const plan of await explainWalk(access.query, sort, band)) {
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
       switch (access.type) {
         case "walk-range":

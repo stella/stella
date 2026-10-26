@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
+  DECISION_LIST_SORTS,
   type DecisionListSort,
   DEFAULT_DECISION_LIST_SORT,
 } from "@stll/api-contract/search";
@@ -28,9 +29,11 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 /**
- * The browse walk is newest decision first, one row per multilingual
- * decision, with a keyset cursor that neither repeats nor skips a row across
- * pages. The second line of a row is derived from what the publisher stored.
+ * The browse walk orders by decision date either way, one row per
+ * multilingual decision, with undated decisions listed last in both
+ * directions and a keyset cursor that neither repeats nor skips a row across
+ * pages, the boundary between dated and undated decisions included. The
+ * second line of a row is derived from what the publisher stored.
  */
 
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -50,7 +53,10 @@ type Seed = {
 
 const day = (offset: number) => new Date(2026, 0, 1, 12, 0, offset);
 
-/** Ten dated decisions, one undated, and a CJEU judgment in three languages. */
+/**
+ * Ten dated decisions, three undated, a CJEU judgment in three languages, and
+ * a judgment whose first version is undated and whose later one is dated.
+ */
 const seeds: Seed[] = [
   ...Array.from({ length: 10 }, (_, i) => ({
     caseNumber: `${i + 1} Cdo ${i + 1}/2024`,
@@ -67,14 +73,27 @@ const seeds: Seed[] = [
           }
         : { keywords: ["smlouva"] },
   })),
-  {
-    caseNumber: "undated",
+  ...["undated", "undated 2", "undated 3"].map((caseNumber, i) => ({
+    caseNumber,
     court: "Nejvyšší soud",
-    createdAt: day(20),
+    createdAt: day(20 + i),
     decisionDate: null,
     language: "cs",
     languageGroupKey: null,
-  },
+  })),
+  // The undated version is the judgment's first, so it is the one listed, in
+  // the undated band, and the dated version it represents is not listed apart.
+  ...[
+    { language: "cs", decisionDate: null },
+    { language: "en", decisionDate: "2024-03-07" },
+  ].map(({ language, decisionDate }, i) => ({
+    caseNumber: "T-7/20",
+    court: "General Court",
+    createdAt: day(60 + i),
+    decisionDate,
+    language,
+    languageGroupKey: "ECLI:EU:T:2021:7",
+  })),
   ...["cs", "en", "fr"].map((language, i) => ({
     caseNumber: "C-131/12",
     court: "Court of Justice",
@@ -200,18 +219,69 @@ const walk = async (
   return items;
 };
 
-test(
-  "browse pages walk newest first, undated last, one row per multilingual decision, without repeats or gaps",
-  async () => {
-    const all = await walk(3);
-    const dates = all.map((item) => item.decisionDate);
+/** The walk paged by number instead of by cursor. */
+const walkByOffset = async (limit: number, sort: DecisionListSort) => {
+  const items = [];
+  for (let offset = 0; offset < 40; offset += limit) {
+    const result = await listDecisionsHandler(
+      { country: "CZE", limit, offset, sort },
+      caseLawDb,
+      async () => courtWeightMapFromSeed(),
+    );
+    if (!("items" in result)) {
+      throw new Error("list failed");
+    }
+    items.push(...result.items);
+    if (result.items.length < limit) {
+      break;
+    }
+  }
+  return items;
+};
 
-    // Twelve rows: ten dated, the CJEU judgment once, the undated one last.
-    expect(all).toHaveLength(12);
-    expect(new Set(all.map((item) => item.id)).size).toBe(12);
-    expect(dates.at(-1)).toBeNull();
-    const dated = dates.slice(0, -1).map((date) => date ?? "");
-    expect(dated).toEqual([...dated].toSorted().toReversed());
+type ListedItem = Awaited<ReturnType<typeof walk>>[number];
+
+/**
+ * The date order, stated without SQL: dated decisions by date in the order's
+ * direction, then undated ones, each tie broken by id in the same direction.
+ */
+const inDateOrder = (items: readonly ListedItem[], sort: DecisionListSort) => {
+  const sign = sort === "newest" ? -1 : 1;
+  const compare = (a: string, b: string) => Number(a > b) - Number(a < b);
+  return items.toSorted((a, b) => {
+    if ((a.decisionDate === null) !== (b.decisionDate === null)) {
+      return a.decisionDate === null ? 1 : -1;
+    }
+    return (
+      sign * compare(a.decisionDate ?? "", b.decisionDate ?? "") ||
+      sign * compare(a.id, b.id)
+    );
+  });
+};
+
+/** Fifteen judgments, four of them listed undated. */
+const LISTED = 15;
+const UNDATED = 4;
+
+// timeout: each read runs through the embedded Postgres under the reader role.
+test.each(DECISION_LIST_SORTS)(
+  "%s first lists every judgment once, dated in order and undated last, without repeats or gaps",
+  async (sort) => {
+    const all = await walk(50, sort);
+
+    expect(all).toHaveLength(LISTED);
+    expect(new Set(all.map((item) => item.id)).size).toBe(LISTED);
+    expect(all.map((item) => item.id)).toEqual(
+      inDateOrder(all, sort).map((item) => item.id),
+    );
+    expect(
+      all.slice(-UNDATED).every((item) => item.decisionDate === null),
+    ).toBe(true);
+    // The fixture holds a tie the order must break by id: the Czech decision
+    // and the CJEU judgment share 2024-03-05.
+    expect(
+      all.filter((item) => item.decisionDate === "2024-03-05"),
+    ).toHaveLength(2);
     const judgment = all.filter((item) => item.caseNumber === "C-131/12");
     expect(judgment).toHaveLength(1);
     expect(judgment[0]?.languageAlternates.map((a) => a.language)).toEqual([
@@ -219,50 +289,77 @@ test(
       "en",
       "fr",
     ]);
-    // The same walk in one page agrees with the paged walk.
-    expect((await walk(50)).map((item) => item.id)).toEqual(
-      all.map((item) => item.id),
-    );
+    // A judgment first published undated is listed once, as that version, in
+    // the undated band of either order: never hidden behind its dated version.
+    const firstUndated = all.filter((item) => item.caseNumber === "T-7/20");
+    expect(firstUndated.map((item) => item.decisionDate)).toEqual([null]);
   },
   DB_TEST_TIMEOUT_MS,
 );
 
-test("oldest first walks the dated decisions in exactly the reverse of newest first, ties included, across pages", async () => {
+test("oldest first is newest first with each band reversed, the undated band staying last", async () => {
   const newest = await walk(50, "newest");
-  const oldest = await walk(1, "oldest");
-  const dates = oldest.map((item) => item.decisionDate ?? "");
+  const oldest = await walk(50, "oldest");
+  const reversedBands = [
+    ...newest.filter((item) => item.decisionDate !== null).toReversed(),
+    ...newest.filter((item) => item.decisionDate === null).toReversed(),
+  ];
 
-  // The fixture holds a tie the walk must cross a page boundary inside: the
-  // Czech decision and the CJEU judgment share 2024-03-05.
-  expect(dates.filter((date) => date === "2024-03-05")).toHaveLength(2);
-  expect(dates).toEqual(dates.toSorted());
-  expect(new Set(oldest.map((item) => item.id)).size).toBe(oldest.length);
-  // A decision the source never dated is not the oldest: the undated band
-  // newest first ends with is left out, and nothing else is.
-  expect(oldest.some((item) => item.decisionDate === null)).toBe(false);
   expect(oldest.map((item) => item.id)).toEqual(
-    newest
-      .filter((item) => item.decisionDate !== null)
-      .map((item) => item.id)
-      .toReversed(),
+    reversedBands.map((item) => item.id),
   );
-  // Paged by number, the walk is the same rows in the same order.
-  const byOffset = [];
-  for (let offset = 0; offset < oldest.length; offset += 4) {
-    const result = await listDecisionsHandler(
-      { country: "CZE", limit: 4, offset, sort: "oldest" },
+});
+
+// Every page size puts the page boundary at a different place, so together
+// they cross the dated/undated boundary at every offset: as the last row of a
+// page, the first, and inside one, by cursor and by page number alike.
+// timeout: about a hundred page reads per order on the embedded Postgres.
+test.each(DECISION_LIST_SORTS)(
+  "%s first pages to the same walk at every page size, across the dated/undated boundary",
+  async (sort) => {
+    const expected = (await walk(50, sort)).map((item) => item.id);
+    for (let limit = 1; limit <= LISTED; limit += 1) {
+      expect((await walk(limit, sort)).map((item) => item.id)).toEqual(
+        expected,
+      );
+      expect((await walkByOffset(limit, sort)).map((item) => item.id)).toEqual(
+        expected,
+      );
+    }
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// timeout: each read runs through the embedded Postgres under the reader role.
+test.each(DECISION_LIST_SORTS)(
+  "a %s-first page that ends on the last dated decision continues with the first undated one",
+  async (sort) => {
+    const all = await walk(50, sort);
+    const datedCount = LISTED - UNDATED;
+    const first = await listDecisionsHandler(
+      { country: "CZE", limit: datedCount, sort },
       caseLawDb,
       async () => courtWeightMapFromSeed(),
     );
-    if (!("items" in result)) {
+    if (!("items" in first) || first.nextCursor === null) {
       throw new Error("list failed");
     }
-    byOffset.push(...result.items);
-  }
-  expect(byOffset.map((item) => item.id)).toEqual(
-    oldest.map((item) => item.id),
-  );
-});
+    expect(first.items.at(-1)?.decisionDate).not.toBeNull();
+    const next = await listDecisionsHandler(
+      { country: "CZE", limit: 1, sort, cursor: first.nextCursor },
+      caseLawDb,
+      async () => courtWeightMapFromSeed(),
+    );
+    if (!("items" in next)) {
+      throw new Error("list failed");
+    }
+    expect(next.items.map((item) => item.id)).toEqual([
+      all[datedCount]?.id ?? "",
+    ]);
+    expect(next.items[0]?.decisionDate).toBeNull();
+  },
+  DB_TEST_TIMEOUT_MS,
+);
 
 test("a cursor resumes only the order that issued it", async () => {
   const page = async (sort: DecisionListSort, cursor?: string) =>
@@ -354,27 +451,32 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
-test("oldest first lists a dated version whose undated sibling it excludes", async () => {
-  const result = await listDecisionsHandler(
-    {
-      country: "SVK",
-      court: "Okresný súd Košice I",
-      limit: 10,
-      sort: "oldest",
-    },
-    caseLawDb,
-    async () => courtWeightMapFromSeed(),
-  );
-  if (!("items" in result)) {
-    throw new Error("list failed");
+// The group's first-stored version represents it in both orders, so an
+// undated first version lists the group once, with the undated, rather than
+// hiding it from the order that ends with them.
+test("a language group whose first version is undated lists once in either order", async () => {
+  for (const sort of ["newest", "oldest"] as const) {
+    const result = await listDecisionsHandler(
+      {
+        country: "SVK",
+        court: "Okresný súd Košice I",
+        limit: 10,
+        sort,
+      },
+      caseLawDb,
+      async () => courtWeightMapFromSeed(),
+    );
+    if (!("items" in result)) {
+      throw new Error("list failed");
+    }
+    expect(
+      result.items.map(({ caseNumber, decisionDate, language }) => [
+        caseNumber,
+        decisionDate,
+        language,
+      ]),
+    ).toEqual([["5 C 1/2024", null, "sk"]]);
   }
-  expect(
-    result.items.map(({ caseNumber, decisionDate, language }) => [
-      caseNumber,
-      decisionDate,
-      language,
-    ]),
-  ).toEqual([["5 C 1/2024", "2024-05-02", "en"]]);
 });
 
 test(
