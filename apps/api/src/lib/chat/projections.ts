@@ -468,10 +468,10 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("clip"),
       url: v.string(),
-      snippet: v.optional(v.string()),
-      citation: v.optional(v.string()),
-      jurisdiction: v.optional(v.string()),
-      sourceType: v.optional(v.string()),
+      snippet: v.exactOptional(v.string()),
+      citation: v.exactOptional(v.string()),
+      jurisdiction: v.exactOptional(v.string()),
+      sourceType: v.exactOptional(v.string()),
     }),
   ),
 ]);
@@ -1420,7 +1420,7 @@ const decisionIdentifiersProjection = v.optional(
 );
 
 /** Coverage keeps grouped court rows explicit when the public data has no names. */
-export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
+const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
   v.strictObject({
     asOf: v.string(),
     countries: v.array(
@@ -1517,6 +1517,16 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
     ),
   }),
 );
+
+/**
+ * case_law_coverage. A requested public country the corpus records nothing
+ * for answers with its admission state, the same refusal search_case_law
+ * returns, so every country the input advertises has a typed answer.
+ */
+export const CASE_LAW_COVERAGE_PROJECTION = v.union([
+  projectionBranch(publicCountryUnavailableSchema),
+  CASE_LAW_COVERAGE_COUNTRIES_PROJECTION,
+]);
 
 // Publisher-authored summaries, only those the publisher published: an
 // absent field is left out rather than spelled as an absence block.

@@ -20,6 +20,47 @@ export const emailSchema = () =>
 export const optionalSearchStringSchema = () =>
   v.optional(v.pipe(v.string(), v.trim(), v.transform(toUndefinedIfEmpty)));
 
+/**
+ * A whole number in the URL. A load reads it as the URL's text and an in-app
+ * navigation hands over the number it was given, so both are read; a value
+ * that is not one in range is dropped rather than failing the page.
+ */
+export const optionalIntegerSearchSchema = ({
+  min,
+  max = Number.MAX_SAFE_INTEGER,
+}: {
+  min: number;
+  max?: number;
+}) =>
+  v.fallback(
+    v.optional(
+      v.pipe(
+        v.union([
+          v.number(),
+          v.pipe(v.string(), v.trim(), v.nonEmpty(), v.transform(Number)),
+        ]),
+        v.integer(),
+        v.minValue(min),
+        v.maxValue(max),
+      ),
+    ),
+    undefined,
+  );
+
+/**
+ * A yes/no flag in the URL, as text from a load or as the boolean an in-app
+ * navigation passed. Any other value is dropped rather than failing the page.
+ */
+export const optionalFlagSearchSchema = v.fallback(
+  v.optional(
+    v.pipe(
+      v.union([v.boolean(), v.picklist(["true", "false"])]),
+      v.transform((value) => value === true || value === "true"),
+    ),
+  ),
+  undefined,
+);
+
 export const optionalUuidSearchSchema = v.fallback(
   v.optional(v.pipe(v.string(), v.length(36), v.check(isUuid))),
   undefined,

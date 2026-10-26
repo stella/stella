@@ -77,6 +77,34 @@ test("preserves other algorithms, keyed HMAC, dynamic CMS and shadowed locals", 
   ).toEqual([]);
 });
 
+test("unifies HMAC on Bun's keyed hasher only in an enrolled runtime", async () => {
+  const hmacSource = [
+    'import { createHmac, createHmac as hmac } from "node:crypto";',
+    'import * as nodeCrypto from "node:crypto";',
+    'createHmac("sha256", key);',
+    'hmac("sha512", key);',
+    'nodeCrypto.createHmac("sha1", key);',
+    'new Bun.CryptoHasher("sha256", key);',
+  ].join("\n");
+  expect(await lintSingleRule("no-raw-sha256", hmacSource)).toEqual([]);
+  expect(
+    await lintSingleRule("no-raw-sha256", hmacSource, {
+      ruleOptions: { hmacTarget: "bun" },
+    }),
+  ).toEqual([3, 4, 5]);
+});
+
+test("HMAC export acquisition retains the runtime decision", async () => {
+  const exportSource =
+    'import { createHmac } from "node:crypto";\nexport const sign = createHmac;';
+  expect(await lintSingleRule("no-raw-sha256", exportSource)).toEqual([]);
+  expect(
+    await lintSingleRule("no-raw-sha256", exportSource, {
+      ruleOptions: { hmacTarget: "bun" },
+    }),
+  ).toEqual([2]);
+});
+
 test("resolves constant algorithms and default module aliases", async () => {
   expect(
     await lintSingleRule(

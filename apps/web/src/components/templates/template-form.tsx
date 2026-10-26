@@ -19,11 +19,13 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import {
   AiActionIcon,
   AlertTriangleIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   LandmarkIcon,
   PencilIcon,
   PlusIcon,
@@ -1274,7 +1276,7 @@ const RegistryAutofillControl = ({
     const seq = lookupSeq.current;
     setLoading(true);
     // A timeout, dropped connection, or DNS failure throws instead of
-    // resolving to an Eden `.error` response, which would otherwise leave
+    // resolving to an API client `.error` response, which would otherwise leave
     // `loading` stuck forever (see runDownload's own catch below for the
     // same class of bug on the fill/download path).
     let response: Awaited<
@@ -1291,7 +1293,13 @@ const RegistryAutofillControl = ({
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "RegistryAutofillControl.handleLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegistryAutofillControl.handleLookup:failure",
+        },
+      });
       return;
     }
     const { data, error } = response;
@@ -1465,6 +1473,7 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
+  const [structureWarningsOpen, setStructureWarningsOpen] = useState(false);
   const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -1934,7 +1943,10 @@ export const TemplateForm = ({
 
       const aiFieldPaths = readAiFieldErrorPaths(response.response.headers);
       if (Result.isError(aiFieldPaths)) {
-        getAnalytics().captureError(aiFieldPaths.error);
+        getAnalytics().captureError(aiFieldPaths.error, {
+          fingerprintKey: "TemplateForm:failure",
+          scope: { type: "handler", handlerId: "TemplateForm:failure" },
+        });
         stellaToast.add({
           type: "warning",
           title: t("common.unexpectedError"),
@@ -1952,7 +1964,10 @@ export const TemplateForm = ({
         response.response.headers,
       );
       if (Result.isError(undecidedLabels)) {
-        getAnalytics().captureError(undecidedLabels.error);
+        getAnalytics().captureError(undecidedLabels.error, {
+          fingerprintKey: "TemplateForm:failure-2",
+          scope: { type: "handler", handlerId: "TemplateForm:failure-2" },
+        });
         stellaToast.add({
           type: "warning",
           title: t("common.unexpectedError"),
@@ -1968,7 +1983,10 @@ export const TemplateForm = ({
 
       const clauseWarnings = readClauseWarnings(response.response.headers);
       if (clauseWarnings.isErr()) {
-        getAnalytics().captureError(clauseWarnings.error);
+        getAnalytics().captureError(clauseWarnings.error, {
+          fingerprintKey: "TemplateForm:failure-3",
+          scope: { type: "handler", handlerId: "TemplateForm:failure-3" },
+        });
         stellaToast.add({
           type: "warning",
           title: t("common.unexpectedError"),
@@ -1999,7 +2017,7 @@ export const TemplateForm = ({
   );
 
   // Run a download and surface a thrown fill/convert failure as a toast.
-  // handleDownload's own error-toast only covers Eden `.error` responses; a
+  // handleDownload's own error-toast only covers API client `.error` responses; a
   // timeout, dropped connection, or blob-read failure throws instead, which
   // would otherwise be swallowed into a silent no-op that also leaves the
   // button stuck on its "generating" label.
@@ -2020,7 +2038,10 @@ export const TemplateForm = ({
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         },
       );
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateForm.runDownload:failure",
+        scope: { type: "handler", handlerId: `template-export.${format}` },
+      });
     });
   };
 
@@ -2143,7 +2164,13 @@ export const TemplateForm = ({
         }),
       );
       if (Result.isError(destinationResult)) {
-        getAnalytics().captureError(destinationResult.error);
+        getAnalytics().captureError(destinationResult.error, {
+          fingerprintKey: "TemplateForm.performFillToMatter:failure",
+          scope: {
+            type: "handler",
+            handlerId: "TemplateForm.performFillToMatter:failure",
+          },
+        });
       }
       const destination = Result.isError(destinationResult)
         ? null
@@ -2351,7 +2378,13 @@ export const TemplateForm = ({
           )}
 
           {structureErrors.length > 0 && (
-            <details className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3">
+            <details
+              className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3"
+              onToggle={(event) =>
+                setStructureWarningsOpen(event.currentTarget.open)
+              }
+              open={structureWarningsOpen}
+            >
               <summary className="text-warning-foreground flex cursor-pointer list-none items-start gap-2 text-sm [&::-webkit-details-marker]:hidden">
                 <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
                 <span className="flex-1">
@@ -2359,7 +2392,11 @@ export const TemplateForm = ({
                     count: structureErrors.length,
                   })}
                 </span>
-                <ChevronDownIcon className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-180" />
+                <DirectionalIcon
+                  className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-90"
+                  flip={!structureWarningsOpen}
+                  icon={ChevronRightIcon}
+                />
               </summary>
               <ul className="mt-3 grid gap-2 ps-6">
                 {structureErrors.map((error, index) => (

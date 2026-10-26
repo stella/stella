@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ACCOUNT_ACCESS,
@@ -7,15 +7,15 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { loadClauseVersionDiffSources } from "../version-diff";
 
-const clauseVersionSummarizeParamsSchema = t.Object({
-  clauseId: tSafeId("clause"),
-  versionId: tSafeId("clauseVersion"),
+const clauseVersionSummarizeParamsSchema = v.object({
+  clauseId: resourceIdSchema("clause"),
+  versionId: resourceIdSchema("clauseVersion"),
 });
 
 const config = {

@@ -19,7 +19,7 @@ const setup = () => {
   const errors: { context: unknown; error: unknown }[] = [];
   const events: RouteErrorLifecycleProperties[] = [];
   const analytics = {
-    captureError: mock((error, context) => {
+    captureError: mock((error, { context }) => {
       errors.push({ context, error });
     }),
     captureRouteErrorLifecycle: mock(async (properties) => {

@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -17,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   answerSchemaForContent,
   answerShapeHint,
@@ -387,14 +387,16 @@ export const buildAnswerJustification = (
  * as the union's own error arm, never handed to the client as an unknown shape.
  */
 export const parseStoredAnswerContent = (value: unknown): FieldContent => {
-  if (Value.Check(fieldContentSchema, value)) {
+  if (v.is(fieldContentSchema, value)) {
     return value;
   }
   captureError(
     new DatabaseError({
       message: "Stored research answer is not field content",
     }),
-    { source: "case-law-research-answers" },
+    handlerErrorContext("caselaw.parseStoredAnswerContent", {
+      source: "case-law-research-answers",
+    }),
   );
   return { version: 1, type: "error" };
 };

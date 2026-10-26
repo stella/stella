@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 
 import type { InstalledSkillResourceTab } from "@/components/inspector/inspector-store-types";
 import messages from "@/i18n/langs/en.json";
@@ -11,7 +11,7 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: originalFetch.preconnect,
 });
 const { stellaToast } = await import("@stll/ui/toast");
-const { cleanup, render, screen, fireEvent, waitFor, act } =
+const { cleanup, render, fireEvent, waitFor, act } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -25,6 +25,11 @@ const { toAPIError } = await import("@/lib/errors/api");
 const { SkillResourcePanel } = await import("./skill-resource-panel");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  if (!GlobalRegistrator.isRegistered) {
+    GlobalRegistrator.register({ url: "http://localhost:3000" });
+  }
+});
 afterEach(async () => {
   await act(async () => cleanup());
   for (const client of clients) {
@@ -73,13 +78,15 @@ const mount = () => {
       contentHash: "hash",
       enabled: true,
       invocation: "auto",
+      boundClientId: null,
+      boundWorkspaceId: null,
       body: "Instructions",
       command: null,
       createdAt: "2026-01-01T00:00:00.000Z",
       resources: [],
     },
   );
-  render(
+  return render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages}>
         <AuthenticatedUserProvider
@@ -125,13 +132,13 @@ test.each([403, 404, 409, 500])(
     );
     const toast = spyOn(stellaToast, "add").mockReturnValue("failure");
     try {
-      mount();
+      const view = mount();
       await act(async () =>
         fireEvent.click(
-          screen.getByRole("button", { name: messages.common.edit }),
+          view.getByRole("button", { name: messages.common.edit }),
         ),
       );
-      const editor = screen.getByRole("textbox", {
+      const editor = view.getByRole("textbox", {
         name: messages.common.edit,
       });
       await act(async () =>
@@ -139,7 +146,7 @@ test.each([403, 404, 409, 500])(
       );
       await act(async () =>
         fireEvent.click(
-          screen.getByRole("button", { name: messages.common.save }),
+          view.getByRole("button", { name: messages.common.save }),
         ),
       );
       await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
@@ -160,7 +167,7 @@ test.each([403, 404, 409, 500])(
         "Updated notes",
       );
       expect(
-        screen
+        view
           .getByRole("button", { name: messages.common.save })
           .hasAttribute("disabled"),
       ).toBe(false);

@@ -34,7 +34,7 @@ import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workfl
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
@@ -187,7 +187,7 @@ const InlineEditor = ({
           entityId: toSafeId<"entity">(entityId),
           content: newContent,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(

@@ -17,7 +17,11 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 import type { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
-import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
+import type {
+  AuthorizedMcpRequestContext,
+  McpReadToolPermissions,
+  McpWriteToolPermissions,
+} from "@/api/mcp/write-tool-authority";
 
 /**
  * v2 types `Tool["inputSchema"]` as an arbitrary JSON value, which loses the
@@ -27,11 +31,9 @@ import type { McpWriteToolPermissions } from "@/api/mcp/write-tool-authority";
 export type JsonSchema = JsonSchemaType;
 
 /**
- * Every MCP tool accepts one named-argument object, never a scalar root. The
- * authoring type also accepts TypeBox/Elysia's runtime schemas, which carry
- * non-enumerable symbols beyond their JSON fields. Wire projections rebuild
- * and validate the enumerable JSON recursively, so those symbols never enter
- * the protocol payload.
+ * Every MCP tool accepts one named-argument object, never a scalar root. Wire
+ * projections rebuild and validate the enumerable JSON recursively, so only
+ * JSON fields enter the protocol payload.
  */
 export type McpToolInputSchema = {
   type: "object";
@@ -185,6 +187,12 @@ export type McpToolAccessBranch =
       access: "read";
       readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
+      /**
+       * The member authority required before a permission-gated read can reach
+       * its handler, or an explicit reason the read is open to every caller
+       * admitted by its scope.
+       */
+      permissions: McpReadToolPermissions;
     }
   | {
       access: "write";
@@ -597,7 +605,7 @@ export type McpToolHandler<TData = unknown> = ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => McpToolResponse<TData> | Promise<McpToolResponse<TData>>;
 
 type TypedMcpToolHandlerResult<TData> =
@@ -605,7 +613,7 @@ type TypedMcpToolHandlerResult<TData> =
 
 export type TypedMcpToolHandler<TData> = (options: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => TypedMcpToolHandlerResult<TData>;
 
 type TypedHandlerData<THandler> =

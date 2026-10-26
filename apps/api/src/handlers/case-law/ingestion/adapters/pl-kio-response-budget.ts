@@ -1,8 +1,11 @@
+// parser-output-unchanged: registers telemetry fingerprint dimensions without changing error payloads or parser results.
 import { panic, Result, TaggedError } from "better-result";
 import * as cheerio from "cheerio";
 import { isText } from "domhandler";
 import { Buffer } from "node:buffer";
 import { adapter } from "parse5-htmlparser2-tree-adapter";
+
+import { declareFingerprintFields } from "@stll/errors";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
 
@@ -22,7 +25,11 @@ export const PL_KIO_DOCUMENT_REJECTION = {
 export class PlKioHtmlBudgetError extends TaggedError("PlKioHtmlBudgetError")<{
   message: string;
   reason: (typeof PL_KIO_DOCUMENT_REJECTION)[keyof typeof PL_KIO_DOCUMENT_REJECTION];
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const rejectPlKioHtmlBudget = (message: string): never => {
   // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- parser callbacks cannot return a Result; assemblePlKioDecision converts this typed refusal to Result.err

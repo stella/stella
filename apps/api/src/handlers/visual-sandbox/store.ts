@@ -6,6 +6,7 @@ import { TEXT_PLAIN_MIME_TYPE } from "@/api/handlers/chat/attachment-validation"
 import { uploadUserFile } from "@/api/handlers/chat/upload-files";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 import { VISUAL_INNER_POLICY } from "./document";
 import runtime from "./generated/runtime.js.txt" with { type: "text" };
@@ -53,7 +54,12 @@ export const createVisualStore =
       },
     });
     if (stored.isErr()) {
-      captureError(stored.error, { source: "show_visual" });
+      captureError(
+        stored.error,
+        handlerErrorContext("visualsandbox.createVisualStore.stored_error", {
+          source: "show_visual",
+        }),
+      );
       return Result.err(
         new ChatToolError({
           kind: "server-defect",

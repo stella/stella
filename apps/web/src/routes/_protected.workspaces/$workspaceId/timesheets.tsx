@@ -1,7 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -16,6 +16,7 @@ import {
 import { toISODate } from "@/components/workspaces/entity-utils";
 import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { useFormatter } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import {

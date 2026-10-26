@@ -1,3 +1,4 @@
+import type { RouteEntry } from "@/api/http/route";
 import type { BudgetObservation } from "@/api/lib/rate-limit/budget-observability";
 
 type MaybePromise<T> = T | Promise<T>;
@@ -44,7 +45,7 @@ export type RateLimitGenerator = (
  * serialized as JSON, so a route whose clients parse every response into a
  * protocol envelope (JSON-RPC) can answer in that envelope instead of prose.
  */
-export type RateLimitErrorResponse = string | object;
+type RateLimitErrorResponse = string | object;
 
 export type RateLimitOptions = {
   context: RateLimitContext;
@@ -57,7 +58,11 @@ export type RateLimitOptions = {
   ) => MaybePromise<readonly RateLimitBudget[]>;
   budget?: BudgetObservation | ((key: string) => BudgetObservation);
   onLimit?: (limited: { key: string; duration: number }) => void;
-  skip?: (request: Request) => MaybePromise<boolean>;
+  /** Leave the request uncharged; it sees the matched route, if any. */
+  skip?: (
+    request: Request,
+    entry: RouteEntry | undefined,
+  ) => MaybePromise<boolean>;
 };
 
 export type RateLimitBudget = {

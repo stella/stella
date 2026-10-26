@@ -26,7 +26,7 @@ import {
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import {
   createSanctionsIndexCache,
@@ -886,7 +886,7 @@ test("a startup failure remains tied to its edition while a replacement warms", 
     (await readSanctionsFreshness({ db: requestDb, now: FRESH_NOW })).find(
       ({ source }) => source === "eu",
     )?.edition ?? panic("Missing EU fixture edition");
-  const replacement = { ...original, id: Bun.randomUUIDv7() };
+  const replacement = { ...original, id: createSafeId<"sanctionsEdition">() };
   const reading = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
   const loaded: string[] = [];
