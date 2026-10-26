@@ -17,6 +17,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
 import {
@@ -118,10 +119,21 @@ const createDocumentAnnotation = createSafeHandler(
   }) {
     const organizationId = session.activeOrganizationId;
     const field = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await readMarkedDocumentField({ entityId, fieldId, tx, workspaceId }),
-      ),
+      safeDb(async (tx) => {
+        // Holds the matter while its file is read, as a claim comment does.
+        await withAggregateLock({
+          aggregate: "workspace",
+          id: { id: workspaceId, organizationId },
+          mode: "key share",
+          tx,
+        });
+        return await readMarkedDocumentField({
+          entityId,
+          fieldId,
+          tx,
+          workspaceId,
+        });
+      }),
     );
     if (field === undefined) {
       return Result.err(documentFileNotFound());
@@ -164,7 +176,7 @@ const createDocumentAnnotation = createSafeHandler(
 
 declareAggregateMutation(createDocumentAnnotation, {
   type: "aggregate",
-  aggregates: ["readerAnnotation"],
+  aggregates: ["workspace"],
 });
 
 export default createDocumentAnnotation;
