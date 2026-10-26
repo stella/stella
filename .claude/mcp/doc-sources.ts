@@ -1,4 +1,4 @@
-export type DocSource = {
+type DocSourceBase = {
   dependencies: readonly [string, ...string[]];
   markdownPages?: {
     pathIncludes: string;
@@ -6,6 +6,9 @@ export type DocSource = {
   };
   url: string;
 };
+
+export type DocSource = DocSourceBase &
+  ({ indexKind?: "llms-txt" } | { indexKind: "reviewed-markdown" });
 
 export type NoLlmsTxtExclusion = {
   checkedAt: string;
@@ -179,6 +182,7 @@ export const DOC_SOURCES = {
       "@aws-sdk/client-s3",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
+      "@aws-sdk/client-ssm",
       "@aws-sdk/client-sts",
       "@aws-sdk/s3-request-presigner",
       "@smithy/fetch-http-handler",
@@ -277,6 +281,22 @@ export const DOC_SOURCES = {
       "@opentelemetry/sdk-logs",
     ],
     url: "https://opentelemetry.io/llms.txt",
+  },
+  CLDR: {
+    dependencies: ["cldr-misc-full"],
+    indexKind: "reviewed-markdown",
+    // The LDML Markdown index links to the canonical source pages by relative URL.
+    url: "https://raw.githubusercontent.com/unicode-org/cldr/main/docs/ldml/tr35.md",
+  },
+  ASN1js: {
+    dependencies: ["asn1js"],
+    indexKind: "reviewed-markdown",
+    url: "https://raw.githubusercontent.com/PeculiarVentures/ASN1.js/master/website/docs/examples/index.md",
+  },
+  PKIjs: {
+    dependencies: ["pkijs"],
+    indexKind: "reviewed-markdown",
+    url: "https://raw.githubusercontent.com/PeculiarVentures/PKI.js/master/website/docs/examples/index.mdx",
   },
   GeminiAPI: {
     dependencies: ["@google/genai"],
@@ -910,30 +930,6 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     dependency: "fast-xml-parser",
     explanation:
       "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
-    expiresAt: "2026-11-25T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-26T00:00:00.000Z",
-    dependency: "cldr-misc-full",
-    explanation:
-      "https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt returns no llms.txt. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
-    expiresAt: "2026-11-25T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-26T00:00:00.000Z",
-    dependency: "asn1js",
-    explanation:
-      "https://asn1js.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/PeculiarVentures/asn1.js and the typed API in its package directly.",
-    expiresAt: "2026-11-25T00:00:00.000Z",
-    reason: "no-llms-txt",
-  },
-  {
-    checkedAt: "2026-10-26T00:00:00.000Z",
-    dependency: "pkijs",
-    explanation:
-      "https://pkijs.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the documentation at https://pkijs.org/docs/ and the typed API in its package directly.",
     expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },

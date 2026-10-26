@@ -211,6 +211,9 @@
         "scripts/*.ts"
       ]
     },
+    "packages/parameter-store": {
+      "entry": ["src/read-parameter.ts", "src/**/*.test.ts"]
+    },
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
