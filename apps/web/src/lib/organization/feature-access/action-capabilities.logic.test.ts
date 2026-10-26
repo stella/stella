@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import {
@@ -37,11 +38,19 @@ const observedDesktop = (enabled: boolean | undefined) => {
   }
   return enabled ? ("current" as const) : ("none" as const);
 };
+const observedOcr = (enabled: boolean | undefined) => {
+  if (enabled === undefined) {
+    return undefined;
+  }
+  return enabled
+    ? DOCUMENT_OCR_AVAILABILITY.live
+    : DOCUMENT_OCR_AVAILABILITY.unconfigured;
+};
 const observations = (enabled: boolean | undefined) => ({
   role: "member",
   ai: enabled,
   deepl: enabled,
-  ocr: enabled,
+  ocr: observedOcr(enabled),
   desktop: observedDesktop(enabled),
   settings:
     enabled === undefined
@@ -127,6 +136,29 @@ test("translation accepts either configured provider but never assumes an unknow
       }
     }
   }
+});
+
+test("OCR admits live and batched deployments and keeps the status for the action", () => {
+  for (const status of Object.values(DOCUMENT_OCR_AVAILABILITY)) {
+    const resolved = resolveActionCapabilities({
+      ...observations(false),
+      ocr: status,
+    });
+    expect(resolved.documentOcr).toBe(status);
+    expect(resolved.capabilities.ocr).toEqual(
+      status === DOCUMENT_OCR_AVAILABILITY.unconfigured
+        ? {
+            type: "unavailable",
+            reason: "ocrUnavailable",
+            settingsLink: "/admin/ai",
+          }
+        : { type: "available" },
+    );
+  }
+  expect(
+    resolveActionCapabilities({ ...observations(false), ocr: undefined })
+      .documentOcr,
+  ).toBeUndefined();
 });
 
 test("every observed desktop state reaches the owning recovery gate", () => {

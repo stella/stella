@@ -372,6 +372,7 @@ const verifyFile = async (
 
 export const resolveProductMediaCacheDir = (rootDir: string): string => {
   const result = spawnSync("git", ["rev-parse", "--git-common-dir"], {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -637,6 +638,7 @@ const publishProductMedia = async (rootDir = ROOT_DIR): Promise<void> => {
 
 const runAws = (args: readonly string[]): SpawnResult => {
   const result = spawnSync("aws", [...args], {
+    maxBuffer: 2 ** 30,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
   });

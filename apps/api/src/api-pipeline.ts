@@ -42,6 +42,7 @@ import {
   requestCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithHttpRequestScope } from "@/api/lib/observability/request-scope";
+import { multipartAdmission } from "@/api/lib/rate-limit/multipart-admission";
 import { tenantActionAdmission } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { securityCanary } from "@/api/lib/security-canary";
 import {
@@ -179,6 +180,7 @@ export const apiPipeline: readonly Middleware[] = [
   clientTooOld,
   browserOriginGuard,
   securityCanary,
+  multipartAdmission,
   tenantActionAdmission(),
   capabilityRequestGuard(loadCapabilityEndpoints),
 ];
