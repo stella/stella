@@ -319,7 +319,7 @@ const addExplicitOptOuts = (
           file,
           code,
           functionLocation(sourceFile, node),
-          `explicit opt-out: ${String(directive.expression.value)}`,
+          `explicit opt-out: ${directive.expression.value}`,
         );
       }
     }
