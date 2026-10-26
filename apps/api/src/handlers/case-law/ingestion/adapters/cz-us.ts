@@ -105,6 +105,7 @@ import type {
   PrintedDecisionJudge,
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { reflowPrintedText } from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -486,17 +487,18 @@ const fieldAboveAbstractMinimum = (field: TextField): TextField => {
 /**
  * Project one publisher cell to text without erasing its block breaks. NALUS
  * separates abstract paragraphs and headings with paired `<br>` elements;
- * Cheerio's `.text()` drops both and welds the blocks together.
+ * Cheerio's `.text()` drops both and welds the blocks together. The legal
+ * sentence of a typewriter-era decision has a `<br>` at every printed line,
+ * and those lines are joined back into its paragraphs.
  */
 const supplementText = ($: cheerio.CheerioAPI, selector: string): string => {
   const cells: string[] = [];
   $(selector).each((_, element) => {
     const cell = $(element).clone();
     cell.find("br").replaceWith("\n");
-    const text = visibleHtmlText(cell)
-      .replaceAll(/\r\n?/gu, "\n")
-      .split("\n")
-      .map((line) => line.trim())
+    const text = reflowPrintedText(
+      visibleHtmlText(cell).replaceAll(/\r\n?/gu, "\n").split("\n"),
+    )
       .join("\n")
       .replaceAll(/\n{3,}/gu, "\n\n")
       .trim();

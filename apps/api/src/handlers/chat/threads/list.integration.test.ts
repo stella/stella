@@ -18,6 +18,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMention } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -214,7 +215,7 @@ const listThreads = async (
       memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
       request: new Request("http://localhost/v1/chat/threads"),
-      route: "/v1/chat/threads",
+      route: "/v1/chat/threads" satisfies ApiRoutePath,
       safeDb: scopedTo(workspaceIds),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -525,7 +526,7 @@ describe("chat thread list matter filter", () => {
           ...(cursor === undefined ? {} : { cursor }),
         },
         request: new Request("http://localhost/v1/chat/threads"),
-        route: "/v1/chat/threads",
+        route: "/v1/chat/threads" satisfies ApiRoutePath,
         safeDb: scopedTo(workspaceIds),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },

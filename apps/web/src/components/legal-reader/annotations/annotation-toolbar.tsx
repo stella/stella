@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 
@@ -86,6 +86,9 @@ type AnnotationToolbarProps = {
    * affordance that leads nowhere. */
   onCompose?: ((spans: SelectionAnchor[]) => void) | undefined;
   onExplain?: ((spans: SelectionAnchor[]) => void) | undefined;
+  /** Why Explain cannot take these spans, or `undefined` when it can. */
+  explainRefusal?:
+    ((spans: SelectionAnchor[]) => string | undefined) | undefined;
   scrollContainerRef: RefObject<HTMLElement | null>;
   /** The document being marked: the only thing that differs by corpus. */
   target: ReaderAnnotationTarget;
@@ -139,10 +142,12 @@ export const AnnotationToolbar = ({
   onClearActive,
   onCompose,
   onExplain,
+  explainRefusal,
   scrollContainerRef,
   target,
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
+  const explainReasonId = useId();
   const barRef = useRef<HTMLDivElement | null>(null);
   const copyMenuRef = useRef<HTMLDivElement | null>(null);
   const attachBar = (node: HTMLDivElement | null) => {
@@ -707,6 +712,7 @@ export const AnnotationToolbar = ({
     }
   } else if (selected !== null) {
     const spans = selected.spans;
+    const explainRefusalReason = explainRefusal?.(spans);
     content = (
       <div className="flex flex-wrap items-center gap-1">
         <div className="relative">
@@ -839,7 +845,11 @@ export const AnnotationToolbar = ({
               doc.body,
             )}
         </div>
-        {mode === "authenticated" && (
+        {/* AI actions take the document's own words only: a selection with no
+            anchored text (AI notes, reader chrome) is not offered to them,
+            and the passage sent is the anchored words, never the chrome or
+            generated text a drag also crossed. */}
+        {mode === "authenticated" && spans.length > 0 && (
           <>
             <CapabilityActionChrome action={{ capability: "ai" }}>
               <span className="bg-border mx-1 h-4 w-px" />
@@ -848,7 +858,10 @@ export const AnnotationToolbar = ({
               {(capabilityProps) => (
                 <Button
                   onClick={() => {
-                    askAboutPassage(selected.text, selected.locator);
+                    askAboutPassage(
+                      spans.map(({ quote }) => quote).join(" "),
+                      selected.locator,
+                    );
                     clearSelection();
                   }}
                   size="sm"
@@ -860,24 +873,46 @@ export const AnnotationToolbar = ({
                 </Button>
               )}
             </CapabilityAction>
-            {onExplain !== undefined && (
-              <CapabilityAction action={{ capability: "ai" }} surface="control">
-                {(capabilityProps) => (
+            {onExplain !== undefined &&
+              (explainRefusalReason === undefined ? (
+                <CapabilityAction
+                  action={{ capability: "ai" }}
+                  surface="control"
+                >
+                  {(capabilityProps) => (
+                    <Button
+                      onClick={() => {
+                        onExplain(spans);
+                        clearSelection();
+                      }}
+                      size="sm"
+                      variant="ghost"
+                      {...capabilityProps}
+                    >
+                      <SparklesIcon className="size-3.5" />
+                      {t("readerAnswers.explain")}
+                    </Button>
+                  )}
+                </CapabilityAction>
+              ) : (
+                <>
                   <Button
-                    onClick={() => {
-                      onExplain(spans);
-                      clearSelection();
-                    }}
+                    aria-describedby={explainReasonId}
+                    disabled
                     size="sm"
                     variant="ghost"
-                    {...capabilityProps}
                   >
                     <SparklesIcon className="size-3.5" />
                     {t("readerAnswers.explain")}
                   </Button>
-                )}
-              </CapabilityAction>
-            )}
+                  <span
+                    className="text-muted-foreground px-2 text-xs"
+                    id={explainReasonId}
+                  >
+                    {explainRefusalReason}
+                  </span>
+                </>
+              ))}
           </>
         )}
         {spans.length > 0 && (
