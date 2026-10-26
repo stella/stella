@@ -414,11 +414,16 @@ export const cpuSeconds = (value: string) => {
     );
 };
 
+// `-S` adds each process's reaped children to its CPU time (Linux and macOS),
+// so work done by a child that already exited still counts for its parent.
 const processTable = (): ProcessRow[] => {
-  const listed = Bun.spawnSync(["ps", "-A", "-o", "pid=,ppid=,pgid=,time="], {
-    stdout: "pipe",
-    stderr: "ignore",
-  });
+  const listed = Bun.spawnSync(
+    ["ps", "-A", "-S", "-o", "pid=,ppid=,pgid=,time="],
+    {
+      stdout: "pipe",
+      stderr: "ignore",
+    },
+  );
   return listed.stdout
     .toString()
     .split("\n")
@@ -474,7 +479,22 @@ const processDump = (pids: readonly number[]) => {
 };
 
 /** A sample of what a running check has done so far. */
-export type Progress = { outputBytes: number; cpuSeconds: number };
+export type Progress = {
+  outputBytes: number;
+  /** CPU seconds per live process of the check, reaped children included. */
+  cpuByPid: ReadonlyMap<number, number>;
+};
+
+/**
+ * Whether a check did anything between two samples: it wrote output, a
+ * process used more CPU, or a new process has used some. Compared per
+ * process, so a busy child that exits never hides later work.
+ */
+export const madeProgress = (previous: Progress, now: Progress) =>
+  now.outputBytes > previous.outputBytes ||
+  [...now.cpuByPid].some(
+    ([pid, cpu]) => cpu > (previous.cpuByPid.get(pid) ?? 0),
+  );
 
 type ProcessLauncherOptions = {
   root: string;
@@ -539,25 +559,21 @@ export const processLauncher =
     };
     const sample = (): Progress => ({
       outputBytes: fstatSync(log).size,
-      cpuSeconds: processTree(processTable(), child.pid).reduce(
-        (total, { cpu }) => total + cpu,
-        0,
+      cpuByPid: new Map(
+        processTree(processTable(), child.pid).map(({ pid, cpu }) => [
+          pid,
+          cpu,
+        ]),
       ),
     });
     let last = sample();
     let progressedAt = performance.now();
     const watch = setInterval(() => {
       const now = sample();
-      if (
-        now.outputBytes > last.outputBytes ||
-        now.cpuSeconds > last.cpuSeconds
-      ) {
+      if (madeProgress(last, now)) {
         progressedAt = performance.now();
       }
-      last = {
-        outputBytes: Math.max(now.outputBytes, last.outputBytes),
-        cpuSeconds: Math.max(now.cpuSeconds, last.cpuSeconds),
-      };
+      last = now;
       if (performance.now() - progressedAt >= stuckAfterMs) {
         stop({
           reason: "stuck",
@@ -1041,6 +1057,9 @@ const poolStopper = (
       writeOut(
         `::group::Processes of running checks\n${processDump(running)}::endgroup::\n`,
       );
+    }
+    for (const pid of running) {
+      killPid(pid);
     }
     for (const pid of active) {
       killGroup(pid);

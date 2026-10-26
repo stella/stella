@@ -27,6 +27,7 @@ import {
   jobStartedAt,
   jobTimeout,
   type Launched,
+  madeProgress,
   partitionChecks,
   planChecks,
   type PlannedCheck,
@@ -542,6 +543,63 @@ test("a silent check that keeps using CPU is never stopped", async () => {
   expect(launched).toMatchObject({ exitCode: 0, stopped: undefined });
 }, 15_000);
 
+test("progress compares each process, so a finished busy child hides nothing", () => {
+  const sample = (outputBytes: number, cpu: [number, number][]) => ({
+    outputBytes,
+    cpuByPid: new Map(cpu),
+  });
+  // A heavy child (pid 11, 300 s) exited; a lighter one (pid 12) works on.
+  expect(
+    madeProgress(
+      sample(10, [
+        [10, 1],
+        [11, 300],
+      ]),
+      sample(10, [
+        [10, 1],
+        [12, 2],
+      ]),
+    ),
+  ).toBe(true);
+  expect(
+    madeProgress(
+      sample(10, [
+        [10, 1],
+        [12, 2],
+      ]),
+      sample(10, [
+        [10, 1],
+        [12, 3],
+      ]),
+    ),
+  ).toBe(true);
+  expect(madeProgress(sample(10, [[10, 1]]), sample(11, [[10, 1]]))).toBe(true);
+  // Nothing grew, and a new process that has used no CPU is no work.
+  expect(
+    madeProgress(
+      sample(10, [
+        [10, 1],
+        [11, 300],
+      ]),
+      sample(10, [
+        [10, 1],
+        [13, 0],
+      ]),
+    ),
+  ).toBe(false);
+});
+
+// timeout: one 3 s busy child, then three 2 s ones, all silent.
+test("silent busy children, each lighter than the first, are never stuck", async () => {
+  const busy = (secondsBusy: number) =>
+    `(end=$((SECONDS + ${secondsBusy})); while (( SECONDS < end )); do :; done)`;
+  const { launched } = await launchIn(
+    [busy(3), busy(2), busy(2), busy(2)].join("\n"),
+    { stuckAfterMs: 2500 },
+  );
+  expect(launched).toMatchObject({ exitCode: 0, stopped: undefined });
+}, 30_000);
+
 test("a silent, idle check is stopped as stuck with its process tree", async () => {
   const started = performance.now();
   const { launched, log } = await launchIn("echo started\nsleep 600", {
@@ -910,7 +968,14 @@ test("the pool stops before its job's timeout and names the check still running"
       checks: [
         {
           name: "Hung check",
-          run: 'for i in $(seq 1 50); do echo "hung line $i"; done\nsleep 600',
+          // A child in its own session leaves the check's process group.
+          run: [
+            `perl -MPOSIX -e 'POSIX::setsid(); sleep 600' &`,
+            'echo $! > "$FIXTURE_DETACHED_PID"',
+            'for i in $(seq 1 50); do echo "hung line $i"; done',
+            "sleep 600",
+          ].join("\n"),
+          env: { FIXTURE_DETACHED_PID: path.join(directory, "detached.pid") },
         },
         { name: "Quick check", run: "echo quick" },
       ].map((entry) => ({ ...entry, if: "true" })),
@@ -987,6 +1052,14 @@ test("the pool stops before its job's timeout and names the check still running"
     expect(output).toMatch(/^\| hung line 11$/mu);
     expect(output).not.toMatch(/^\| hung line 10$/mu);
     expect(output).not.toContain("| Check | Result |");
+    const detached = readFileSync(
+      path.join(directory, "detached.pid"),
+      "utf-8",
+    ).trim();
+    expect(detached).toMatch(/^[1-9]\d*$/u);
+    const state = Bun.spawnSync(["ps", "-o", "stat=", "-p", detached]);
+    // Linux may retain an already-killed orphan briefly as a zombie.
+    expect(new TextDecoder().decode(state.stdout).trim()).toMatch(/^Z.*$|^$/u);
   } finally {
     if (child.exitCode === null) {
       child.kill("SIGKILL");
