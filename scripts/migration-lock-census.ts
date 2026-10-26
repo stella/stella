@@ -715,7 +715,7 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     migration: "20261025130100_hosted_customer_erasures",
     form: "create-policy",
     reason:
-      "The deny-all policy installs on the erasure intent table created by this migration without reading any application relation, with lock acquisition bounded by 1s.",
+      "The owner-access and stella deny-all policies install on the erasure intent table created by this migration without reading any application relation, with lock acquisition bounded by 1s.",
   },
   {
     migration: "20261022120000_case_law_batch_slots",

@@ -1178,6 +1178,12 @@ export const hostedCustomerErasures = p.pgTable(
       "hosted_customer_erasures_attempts_nonnegative",
       sql`attempts >= 0`,
     ),
+    p.pgPolicy("hosted_customer_erasures_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass)`,
+    }),
     p.pgPolicy("hosted_customer_erasures_no_stella_access", {
       for: "all",
       to: stella,

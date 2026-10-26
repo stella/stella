@@ -19,6 +19,10 @@ ALTER TABLE "hosted_customer_erasures" ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
 ALTER TABLE "hosted_customer_erasures" FORCE ROW LEVEL SECURITY;
 --> statement-breakpoint
+CREATE POLICY "hosted_customer_erasures_owner_access" ON "hosted_customer_erasures" AS PERMISSIVE FOR ALL TO public
+  USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass))
+  WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass));
+--> statement-breakpoint
 CREATE POLICY "hosted_customer_erasures_no_stella_access" ON "hosted_customer_erasures" FOR ALL TO stella USING (false) WITH CHECK (false);
 --> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "hosted_customer_erasures" FROM stella;
