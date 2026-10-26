@@ -39,9 +39,9 @@ import type {
 import { isChatHistorySnapshotCurrentOnTx } from "@/api/handlers/chat/history-window";
 import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import type {
-  ChatTurnTiming,
-  ChatTurnOutcome,
   ChatMessageRole,
+  ChatTurnOutcome,
+  ChatTurnTiming,
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
@@ -946,8 +946,7 @@ export const readChatTurnView = async ({
 export type ChatTurnExecutionClaim = {
   acceptedTurnId: SafeId<"chatTurn"> | null;
   continuationInteraction?:
-    | { toolCallId: string; type: ChatTurnInteractionType }
-    | undefined;
+    { toolCallId: string; type: ChatTurnInteractionType } | undefined;
   incomingMessageId: SafeId<"chatMessage">;
   incomingMessageRole: ChatMessageRole;
   organizationId: SafeId<"organization">;

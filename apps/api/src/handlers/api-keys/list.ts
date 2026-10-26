@@ -1,10 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { toMachineApiKeySummary } from "@/api/handlers/api-keys/mint";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_KEY_KIND } from "@/api/lib/machine-api-key-config";
 import type { MachineApiKeyScope } from "@/api/lib/machine-api-key-config";
@@ -19,11 +21,18 @@ import type { McpMode } from "@/api/mcp/constants";
 const MACHINE_API_KEY_PAGE_SIZE_DEFAULT = 50;
 const MACHINE_API_KEY_PAGE_SIZE_MAX = 200;
 
-const listMachineApiKeysQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: MACHINE_API_KEY_PAGE_SIZE_MAX }),
+const listMachineApiKeysQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MACHINE_API_KEY_PAGE_SIZE_MAX),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const config = {

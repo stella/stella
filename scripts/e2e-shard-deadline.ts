@@ -6,8 +6,12 @@ import configuredBudgets from "./code-quality-task-budgets.json" with { type: "j
 const CLEANUP_MARGIN_SECONDS = 30;
 
 export const measuredShardBudget = (shard: number) => {
+  // The four-way plan subdivides each measured two-way lane. Until the timing
+  // cache accumulates direct samples, inherit the parent lane's conservative
+  // ceiling rather than inventing a shorter watchdog.
+  const measuredParentShard = Math.ceil(shard / 2);
   const samples = configuredBudgets.e2eProductionShards.samples
-    .filter((sample) => sample.shard === shard)
+    .filter((sample) => sample.shard === measuredParentShard)
     .map((sample) => sample.seconds)
     .toSorted((left, right) => left - right);
   const p50 = samples.at(Math.ceil(samples.length * 0.5) - 1);

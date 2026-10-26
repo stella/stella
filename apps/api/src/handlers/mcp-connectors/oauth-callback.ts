@@ -1,14 +1,14 @@
 import { panic, Result } from "better-result";
 import { eq, lt } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
+  MCP_RESPONSE_DISPOSITION,
   mcpOAuthState,
   mcpUserConnections,
-  MCP_RESPONSE_DISPOSITION,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -31,14 +31,14 @@ import {
   encryptMcpSecret,
 } from "@/api/lib/mcp-upstream/crypto";
 import {
-  MCP_OAUTH_BINDING_FAILURE_CODE,
-  discoverOAuthMetadataForApproval,
   bindDiscoveredMetadata,
-  getOAuthEndpointOrigins,
-  validateApprovedOAuthIssuer,
+  discoverOAuthMetadataForApproval,
   exchangeAuthorizationCode,
+  getOAuthEndpointOrigins,
+  MCP_OAUTH_BINDING_FAILURE_CODE,
   observeAuthorizationResponseBinding,
   tokenExpiresAt,
+  validateApprovedOAuthIssuer,
 } from "@/api/lib/mcp-upstream/oauth";
 import type {
   ApprovedMcpIssuerBinding,
@@ -49,14 +49,15 @@ import type {
 } from "@/api/lib/mcp-upstream/oauth";
 import { mcpResourceMatchesConnector } from "@/api/lib/mcp-upstream/url-safety";
 import { logger } from "@/api/lib/observability/logger";
+import { requireRequestExceptionScope } from "@/api/lib/observability/request-context";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
-const requestQuery = t.Object({
-  code: t.Optional(t.String()),
-  state: t.Optional(t.String()),
-  iss: t.Optional(t.String({ maxLength: 2048 })),
+const requestQuery = v.object({
+  code: v.optional(v.string()),
+  state: v.optional(v.string()),
+  iss: v.optional(v.pipe(v.string(), v.maxLength(2048))),
 });
 
 const config = {
@@ -68,8 +69,7 @@ const config = {
 } satisfies HandlerConfig;
 
 type CallbackRedirectInput =
-  | { status: "connected"; slug: string }
-  | { status: "error"; reason: string };
+  { status: "connected"; slug: string } | { status: "error"; reason: string };
 
 // The popup lands on a SPA route that does the postMessage + close.
 // Returning HTML with an inline <script> from api.stll.app is blocked
@@ -504,6 +504,7 @@ export const createMcpOAuthCallbackHandler = (
           redirect({
             status: "error",
             reason: oauthCallbackFailureReason(error, {
+              scope: requireRequestExceptionScope(request),
               operation: "mcp_oauth_callback",
               organizationId: session.activeOrganizationId,
               request,

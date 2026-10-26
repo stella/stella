@@ -2,22 +2,25 @@ import type { SchemaClient } from "@better-auth/oauth-provider";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
+import {
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OAUTH_PROTOCOL_SCOPES,
+} from "@stll/api-contract";
 
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
   OAUTH_ENDPOINT_POLICY,
   OAUTH_SCOPE_POLICY_PATHS,
-  OPEN_REGISTRATION_SCOPES,
-  OAUTH_REGISTRATION_SCOPE_POLICY,
 } from "@/api/lib/auth/oauth-registration-policy";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
-import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/db/oauth-scope-policy";
+import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
+import { getMcpResourceUrl, MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
@@ -25,8 +28,8 @@ import {
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import {
   OAUTH_CLIENT_REGISTRATION_FIXTURES,
-  OAUTH_REQUIRED_CALLBACK_FIXTURES,
   OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES,
+  OAUTH_REQUIRED_CALLBACK_FIXTURES,
 } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 import {
   authorizeOAuthClient,
@@ -166,7 +169,7 @@ describe("OAuth dynamic client registration", () => {
     );
     expect(await details.json()).toEqual({
       client_name: "Example connector",
-      redirectHosts: ["connector.example"],
+      redirectTargets: ["connector.example"],
       clientIdHost: null,
       unverified: true,
       verifiedBrand: null,
@@ -445,6 +448,136 @@ describe("OAuth dynamic client registration", () => {
     expect(response.status).toBe(400);
     const refused = v.parse(registrationErrorSchema, await response.json());
     expect(refused.error).toBe(fixture.error);
+  });
+});
+
+const registeredClientSchema = v.looseObject({
+  client_id: v.string(),
+  application_type: v.string(),
+  scope: v.string(),
+});
+
+/** Register, sign in, and start authorization with `redirectUri` and `scope`. */
+const startAuthorization = async (
+  body: Record<string, unknown>,
+  { redirectUri, scope }: { redirectUri: string; scope: string },
+) => {
+  const response = await registerClient(body);
+  expect(response.status).toBe(201);
+  const registered = v.parse(registeredClientSchema, await response.json());
+  const browser = await signInHuman(
+    `interop-${String(registrationsIssued)}@example.test`,
+  );
+  const organization = await getAuth().api.createOrganization({
+    body: { name: "Interop", slug: `interop-${Bun.randomUUIDv7()}` },
+    headers: browser.headers(),
+  });
+  await browser.setActiveOrganization(organization.id);
+  const query = new URLSearchParams({
+    client_id: registered.client_id,
+    code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    code_challenge_method: "S256",
+    redirect_uri: redirectUri,
+    resource: getMcpResourceUrl(),
+    response_type: "code",
+    scope,
+  });
+  const authorized = await getAuth().handler(
+    new Request(
+      `${getAuthEndpointUrl("oauth2/authorize")}?${query.toString()}`,
+      {
+        headers: { cookie: browser.cookieHeader() },
+      },
+    ),
+  );
+  expect(authorized.status).toBe(302);
+  const location = new URL(
+    v.parse(v.string(), authorized.headers.get("location")),
+  );
+  return {
+    browser,
+    registered,
+    location,
+    signed: new URLSearchParams(readSignedQuery(location)),
+  };
+};
+
+/** RFC 7636 appendix B: the verifier of the fixed challenge above. */
+const CODE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
+describe("OAuth client interoperability", () => {
+  test("registers Cursor as a native client and asks for consent at its private-use callback", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.cursorDesktop;
+    const { registered, location, signed } = await startAuthorization(body, {
+      redirectUri: "cursor://anysphere.cursor-mcp/oauth/callback",
+      scope: "openid stella:read",
+    });
+
+    expect(registered.application_type).toBe("native");
+    expect(location.pathname).toBe("/consent");
+    expect(signed.get("redirect_uri")).toBe(
+      "cursor://anysphere.cursor-mcp/oauth/callback",
+    );
+    expect(signed.get("prompt")?.split(" ")).toContain("consent");
+    expect(signed.get("code_challenge_method")).toBe("S256");
+  });
+
+  test("an https-only public client stays a web client", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.chatgptConnector;
+    const response = await registerClient(body);
+
+    expect(response.status).toBe(201);
+    const registered = v.parse(registeredClientSchema, await response.json());
+    expect(registered.application_type).toBe("web");
+  });
+
+  test("a client asking only for unoffered scopes is granted its own list", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.cursorAgentLegacyScope;
+    const redirectUri = "http://localhost:8787/callback";
+    const { browser, registered, location, signed } = await startAuthorization(
+      body,
+      { redirectUri, scope: "mcp:tools" },
+    );
+
+    const open = OPEN_REGISTRATION_SCOPES.toSorted();
+    expect(registered.scope.split(" ").toSorted()).toEqual(open);
+    expect(signed.get("scope")?.split(" ").toSorted()).toEqual(open);
+    const grant = await consentAndExchange({
+      browser,
+      client: { clientId: registered.client_id },
+      codeVerifier: CODE_VERIFIER,
+      consentPage: location,
+      redirectUri,
+    });
+    // The token narrows further to what the MCP resource allows.
+    const resourceScopes =
+      getBetterAuthOAuthResources().find(
+        (resource) => resource.identifier === getMcpResourceUrl(),
+      )?.allowedScopes ?? [];
+    expect(grant.scope.split(" ").toSorted()).toEqual(
+      open.filter(
+        (scope) =>
+          resourceScopes.some((allowed) => allowed === scope) ||
+          MCP_OAUTH_PROTOCOL_SCOPES.some((protocol) => protocol === scope),
+      ),
+    );
+  });
+
+  test("unoffered identity scopes are dropped at registration and authorization", async () => {
+    const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.identityScopeClient;
+    const { registered, signed } = await startAuthorization(body, {
+      redirectUri: "https://assistant.example.com/oauth/callback",
+      scope: "openid profile email name picture offline_access",
+    });
+
+    const granted = ["openid", "profile", "email", "offline_access"];
+    const registeredScopes = registered.scope.split(" ");
+    expect(registeredScopes).toEqual(expect.arrayContaining(granted));
+    expect(registeredScopes).not.toContain("name");
+    expect(registeredScopes).not.toContain("picture");
+    expect(signed.get("scope")?.split(" ").toSorted()).toEqual(
+      granted.toSorted(),
+    );
   });
 });
 

@@ -40,7 +40,8 @@
 //
 // no-unmanaged-database-client
 //   Flagged: constructing a database client, called or with `new`, through
-//            its import: `SQL` from `bun` (and `Bun.SQL`), `drizzle(url)` or
+//            its import: `SQL` from `bun` (and `Bun.SQL`), `createSqlClient`
+//            from `apps/api/src/db/sql-client.ts`, `drizzle(url)` or
 //            `drizzle({ connection })` from a network drizzle driver,
 //            `postgres` from `postgres`, `Pool` and `Client` from `pg`.
 //   Allowed: `drizzle({ client })`, which wraps a client opened elsewhere.
@@ -58,11 +59,12 @@ import {
   isIdentifierReference,
   isStringLiteral,
   memberPropertyName,
+  resolveImport,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
-import type { AstNode, ScopeContext } from "./utils.ts";
+import type { AstNode, FilenameContext, ScopeContext } from "./utils.ts";
 
 const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
@@ -469,7 +471,13 @@ const DRIZZLE_NETWORK_DRIVERS = new Set([
   "drizzle-orm/postgres-js",
 ]);
 
-const CLIENT_CONSTRUCTOR_HINT = /\bSQL\b|drizzle|postgres|\bpg\b/u;
+// The repository owner every Bun SQL client is built through; its factory
+// opens a pool exactly like `new SQL`.
+const SQL_CLIENT_OWNER = "apps/api/src/db/sql-client";
+const SQL_CLIENT_FACTORY = "createSqlClient";
+
+const CLIENT_CONSTRUCTOR_HINT =
+  /\bSQL\b|drizzle|postgres|\bpg\b|createSqlClient/u;
 
 // `Bun.SQL`, with `Bun` the runtime global rather than a local binding.
 const isGlobalBunSql = (context: ScopeContext, callee: AstNode): boolean => {
@@ -512,7 +520,7 @@ const wrapsProvidedClient = (argument: unknown): boolean => {
 // The client a call or `new` expression constructs, named for the report, or
 // null when it constructs none.
 const constructedClient = (
-  context: ScopeContext,
+  context: ScopeContext & FilenameContext,
   node: unknown,
 ): string | null => {
   if (!isAstNode(node)) {
@@ -524,6 +532,13 @@ const constructedClient = (
   }
   if (isGlobalBunSql(context, callee)) {
     return "Bun.SQL";
+  }
+  const owned = resolveImport(context, callee);
+  if (
+    owned?.moduleId === SQL_CLIENT_OWNER &&
+    owned.imported === SQL_CLIENT_FACTORY
+  ) {
+    return SQL_CLIENT_FACTORY;
   }
   const binding = resolveImportedExpressionForEnforcement(context, callee);
   if (binding === null) {

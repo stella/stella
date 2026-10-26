@@ -202,6 +202,10 @@ export const KanbanColumn = ({
   });
 
   const { isDropTarget, isInnerActive } = useExternalFileDrop({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "KanbanColumn.useExternalFileDrop",
+    },
     externalRef: columnRef,
     enabled: !!onFileUpload,
     onDrop: (files) => onFileUpload?.(files),

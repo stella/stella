@@ -1,3 +1,4 @@
+// parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -24,11 +25,17 @@
 // parser-output-unchanged: optional clause provenance affects template refusals only; adapter stop kinds and parsed records are unchanged.
 // parser-output-unchanged: adapter stop kinds and TimeoutError reexport preserve successful parsed records.
 // parser-output-unchanged: AdapterFetchError is declared before its first use; the class and its stop kinds are identical.
+// parser-output-unchanged: declared failure grades and refusal stop kinds affect failed operations only, preserving parsed records.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
-import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
+import {
+  declareFailureClass,
+  declareFingerprintFields,
+  type FailureReason,
+  FetchBoundaryError,
+} from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 import {
@@ -141,7 +148,12 @@ export type HandlerErrorValidationIssue = {
   message: string;
 };
 
-export type HandlerErrorProps<
+// parser-output-unchanged: retry advice only shapes HTTP and capability error responses.
+type HandlerErrorRetryAdvice =
+  | { retryable: true; retryAfterMs: number }
+  | { retryable?: boolean | undefined; retryAfterMs?: undefined };
+
+type HandlerErrorBaseProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
   code?: HandlerErrorCode | undefined;
@@ -153,7 +165,6 @@ export type HandlerErrorProps<
     | { slotKey: string; id?: string | undefined; name?: string | undefined }
     | undefined;
   contactUrl?: ActionAdmissionRefusal["contactUrl"];
-  retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
@@ -176,20 +187,27 @@ export type HandlerErrorProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  retryable?: boolean | undefined;
+  retryAfterMs?: number | undefined;
 };
+
+export type HandlerErrorProps<
+  TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
+> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows
 // `status` back down for callers.
 export class HandlerError<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> extends TaggedError("HandlerError")<HandlerErrorProps> {
+> extends TaggedError("HandlerError")<HandlerErrorBaseProps> {
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare hint?: string | undefined;
   declare clause?: HandlerErrorProps["clause"];
   declare contactUrl?: string | undefined;
   declare retryable?: boolean | undefined;
+  declare retryAfterMs?: number | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
@@ -206,6 +224,7 @@ export class HandlerError<
     this.clause = props.clause;
     this.contactUrl = props.contactUrl;
     this.retryable = props.retryable;
+    this.retryAfterMs = props.retryAfterMs;
     this.usage = props.usage;
     this.confirmation = props.confirmation;
     this.error = props.error;
@@ -255,6 +274,8 @@ export class ConfigurationError extends TaggedError("ConfigurationError")<{
 }> {}
 
 export class TelemetryError extends TaggedError("TelemetryError")<{
+  /** Stable outcome code; it becomes `error.code`, so it splits the issue. */
+  code?: string | undefined;
   message: string;
   cause?: unknown;
 }> {}
@@ -275,7 +296,11 @@ export class UsageLimitExceededError extends TaggedError(
   required: number;
   available: number;
   reason: UsageLimitExceededReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 export class HealthCheckError extends TaggedError("HealthCheckError")<{
   message: string;
@@ -485,8 +510,7 @@ export class ChatLoopDetectedError extends TaggedError(
  * `isAnticipatedAIFailure`.
  */
 export type ChatTerminalError =
-  | ChatEmptyCompletionError
-  | ChatLoopDetectedError;
+  ChatEmptyCompletionError | ChatLoopDetectedError;
 
 /**
  * A text generation ended because the abort signal its caller passed fired:
@@ -531,7 +555,11 @@ export class SandboxError extends TaggedError("SandboxError")<{
    */
   logs?: readonly string[];
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 /** Integration-layer errors: AI failures, parse failures, external I/O. */
 export class WorkflowIntegrationError extends TaggedError(
@@ -596,7 +624,8 @@ const ingestionFailureStopKind = (
       return failure.stopKind;
     case "publisher-response": {
       const { httpStatus } = failure;
-      if (httpStatus >= 500 || httpStatus === 408) {
+      // A successful HTTP response rejected at the fetch boundary supplied no data.
+      if (httpStatus >= 500 || httpStatus === 408 || httpStatus < 300) {
         return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
       }
       if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429) {
@@ -618,10 +647,25 @@ const ingestionFailureStopKind = (
   }
 };
 
+const INGESTION_FAILURE_REASON = {
+  source_unreachable: "upstream_unavailable",
+  publisher_refusal: "publisher_refused",
+  adapter_error: "tagged_failure",
+  deadline: "timeout_unbounded",
+  internal_error: "tagged_failure",
+} as const satisfies Record<IngestionStopKind, FailureReason>;
+
 /** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
 export class AdapterFetchError extends TaggedError(
   "AdapterFetchError",
 )<AdapterFetchErrorOptions> {
+  static {
+    declareFailureClass(
+      this,
+      ({ stopKind }) => INGESTION_FAILURE_REASON[stopKind],
+    );
+  }
+
   override readonly stopKind: IngestionStopKind;
 
   constructor(options: AdapterFetchErrorOptions) {
@@ -635,6 +679,7 @@ const ingestionFailureOf = (
   fallback: "adapter" | "internal",
 ): IngestionFailure => {
   const visited = new Set<unknown>();
+  let fetchBoundary = false;
   let current = cause;
   while (current instanceof Error && !visited.has(current)) {
     visited.add(current);
@@ -651,11 +696,11 @@ const ingestionFailureOf = (
       return { type: "deadline" };
     }
     if (fallback === "adapter") {
-      if (
-        current instanceof FetchBoundaryError &&
-        current.status !== undefined
-      ) {
-        return { type: "publisher-response", httpStatus: current.status };
+      if (current instanceof FetchBoundaryError) {
+        if (current.status !== undefined) {
+          return { type: "publisher-response", httpStatus: current.status };
+        }
+        fetchBoundary = true;
       }
       if (isConnectionFailure(current)) {
         return { type: "connection" };
@@ -663,7 +708,7 @@ const ingestionFailureOf = (
     }
     current = current.cause;
   }
-  return { type: fallback };
+  return { type: fetchBoundary ? "connection" : fallback };
 };
 
 /** Ingestion entry points classify operational exceptions without changing their identity. */
@@ -722,7 +767,11 @@ export class SubprocessError extends TaggedError("SubprocessError")<{
   exitCode: number | null;
   termination: SubprocessTermination | null;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 export type ExtractionWorkerTermination = {
   reason: SubprocessTerminationReason;
@@ -769,7 +818,13 @@ export class ExtractionWorkerError extends TaggedError(
   mimeType: string;
   sizeBytes: number;
   termination: ExtractionWorkerTermination | null;
-}> {}
+  /** Parser error class recovered from worker stderr; null for termination. */
+  workerErrorClass: string | null;
+}> {
+  static {
+    declareFingerprintFields(this, ["termination.reason"]);
+  }
+}
 
 /**
  * A scheduler job exceeded its per-job execution ceiling. The task promise

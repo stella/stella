@@ -34,8 +34,7 @@ export type ProvisionBackfillSession = {
 };
 
 export type ProvisionBackfillCompletion =
-  | { reason: string; type: "incomplete" }
-  | { type: "complete" };
+  { reason: string; type: "incomplete" } | { type: "complete" };
 
 /**
  * How much of a run one unit may take: a keyset page (many per run, until the

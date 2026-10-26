@@ -24,12 +24,14 @@ import {
   entityVersions,
   fields,
   pendingUploads,
+  searchProjectionRepairQueue,
   workspaces,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -45,6 +47,7 @@ import {
 import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
+import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-access";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
@@ -63,6 +66,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
 
+const enqueueSearchRepairsMock = mock(enqueueEntitySearchRepairs);
+const flushSearchRepairsMock = mock(async () => ({ failed: 0, repaired: 0 }));
 const processExtractionMock = mock(async () => {});
 const enqueueImageThumbnailOrMarkFailedMock = mock(async () => {});
 const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
@@ -79,6 +84,8 @@ const createEntityFromBufferDependencies = {
   enqueuePdfDerivativeOrMarkFailed: enqueuePdfDerivativeOrMarkFailedMock,
   processExtraction: processExtractionMock,
   requestNativeExtractionRun: mock(async () => null),
+  enqueueEntitySearchRepairs: enqueueSearchRepairsMock,
+  flushEntitySearchRepairs: flushSearchRepairsMock,
 } satisfies CreateEntityFromBufferDependencies;
 
 const createEntityFromBufferForTest = async (
@@ -193,6 +200,9 @@ describe("createEntityFromBuffer", () => {
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
     broadcastMock.mockClear();
     intentStatuses = [];
+    enqueueSearchRepairsMock.mockClear();
+    enqueueSearchRepairsMock.mockImplementation(async () => undefined);
+    flushSearchRepairsMock.mockClear();
   });
 
   afterEach(() => {
@@ -332,12 +342,15 @@ describe("createEntityFromBuffer", () => {
     const { scopedDb } = createScopedDbMock(withIntentPersistence(tx));
 
     const recordedAuditEvents: unknown[] = [];
+    let auditTransaction: Parameters<AuditRecorder>[0] | undefined;
     const result = await createEntityFromBufferForTest({
       scopedDb,
       organizationId,
       workspaceId,
       userId,
-      recordAuditEvent: async (_tx, event) => {
+      recordAuditEvent: async (transaction, event) => {
+        auditTransaction = transaction;
+        expect(flushSearchRepairsMock).not.toHaveBeenCalled();
         recordedAuditEvents.push(event);
       },
       buffer: new TextEncoder().encode("pdf bytes"),
@@ -358,6 +371,12 @@ describe("createEntityFromBuffer", () => {
     expect(result).toMatchObject({
       value: { fileName: "Encrypted Agreement.pdf", renamed: false },
     });
+    expect(enqueueSearchRepairsMock).toHaveBeenCalledWith(auditTransaction, [
+      expect.any(String),
+    ]);
+    expect(flushSearchRepairsMock).toHaveBeenCalledWith(
+      enqueueSearchRepairsMock.mock.calls.at(0)?.at(1),
+    );
     expect(recordedAuditEvents).toHaveLength(1);
     expect(recordedAuditEvents.at(0)).toEqual({
       action: "create",
@@ -692,6 +711,8 @@ describe("createEntityFromBuffer", () => {
       requestKeys("PUT").map((key) => `${envBase.S3_BUCKET}/${key}`),
     );
     expect(processExtractionMock).not.toHaveBeenCalled();
+    expect(enqueueSearchRepairsMock).toHaveBeenCalledTimes(1);
+    expect(flushSearchRepairsMock).not.toHaveBeenCalled();
     expect(broadcastMock).not.toHaveBeenCalled();
   });
 });
@@ -773,6 +794,9 @@ describe("service-owned buffer publication in the database", () => {
   });
 
   beforeEach(() => {
+    enqueueSearchRepairsMock.mockClear();
+    enqueueSearchRepairsMock.mockImplementation(enqueueEntitySearchRepairs);
+    flushSearchRepairsMock.mockClear();
     fake = startFakeS3();
     enqueueImageThumbnailOrMarkFailedMock.mockClear();
     enqueuePdfDerivativeOrMarkFailedMock.mockClear();
@@ -848,6 +872,11 @@ describe("service-owned buffer publication in the database", () => {
       expect.objectContaining({ renamed: true }),
     ]);
     for (const result of results) {
+      const marks = await db
+        .select({ sourceId: searchProjectionRepairQueue.sourceId })
+        .from(searchProjectionRepairQueue)
+        .where(eq(searchProjectionRepairQueue.sourceId, result.entityId));
+      expect(marks).toEqual([{ sourceId: result.entityId }]);
       const entity = await db.query.entities.findFirst({
         where: { id: { eq: result.entityId } },
       });

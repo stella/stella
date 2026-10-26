@@ -14,8 +14,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  serializeCoverageDoc,
   type CoverageDocEntry,
+  serializeCoverageDoc,
 } from "../apps/api/scripts/lib/capability-catalog";
 import { readCapabilityCatalog } from "../packages/cli/src/capability-catalog-data";
 import { parseCapabilityCatalog } from "../packages/cli/src/capability-catalog-load";
@@ -149,18 +149,11 @@ const writeOutputs = (repo: string) => {
   }
   // Exercise the same formatter configuration as codegen/autofix, including
   // its scoped exclusions; a return to table padding must break the merge.
-  const formatted = Bun.spawnSync(
-    [
-      process.execPath,
-      "--bun",
-      "oxfmt",
-      "-c",
-      ".oxfmtrc.json",
-      "--no-error-on-unmatched-pattern",
-      ...outputs,
-    ],
-    { cwd: repo, stdout: "pipe", stderr: "pipe" },
-  );
+  const formatted = Bun.spawnSync([process.execPath, "fmt", ...outputs], {
+    cwd: repo,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   expect(formatted.exitCode, new TextDecoder().decode(formatted.stderr)).toBe(
     0,
   );
@@ -176,23 +169,17 @@ const mergeScenario = ({ scratch, padding }: MergeScenarioOptions) => {
   const repo = path.join(scratch, "clone");
   mkdirSync(seed);
   checkedGit(seed, ["init", "--initial-branch=base"]);
-  copyFileSync(
-    path.join(root, ".oxfmtrc.json"),
-    path.join(seed, ".oxfmtrc.json"),
-  );
+  copyFileSync(path.join(root, "bunfig.toml"), path.join(seed, "bunfig.toml"));
   if (padding === "enabled") {
-    const config: { ignorePatterns: string[] } = JSON.parse(
-      readFileSync(path.join(seed, ".oxfmtrc.json"), "utf-8"),
-    );
+    let config = readFileSync(path.join(seed, "bunfig.toml"), "utf-8");
     // The negative control changes only formatter ownership of these outputs.
     // Both patterns must exist, so this mutation cannot silently become a no-op.
     for (const output of outputs) {
-      expect(config.ignorePatterns).toContain(output);
+      const entry = `  ${JSON.stringify(output)},\n`;
+      expect(config).toContain(entry);
+      config = config.replace(entry, "");
     }
-    config.ignorePatterns = config.ignorePatterns.filter(
-      (pattern) => !outputs.some((output) => output === pattern),
-    );
-    writeFileSync(path.join(seed, ".oxfmtrc.json"), JSON.stringify(config));
+    writeFileSync(path.join(seed, "bunfig.toml"), config);
   }
   writeFileSync(path.join(seed, ".gitignore"), "node_modules\n");
   mkdirSync(path.join(seed, "inputs"));

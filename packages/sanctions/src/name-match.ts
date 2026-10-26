@@ -2,22 +2,22 @@ import { panic } from "better-result";
 
 import {
   distance,
-  EntityIndexBuilder,
   type EntityIndex,
+  EntityIndexBuilder,
   type EntitySearchResult,
 } from "@stll/fuzzy-search";
 
 import {
   NumberColumn,
   ObjectColumn,
-  StringMap,
-  stringIdsSteps,
-  spellingColumnSteps,
   type SpellingColumn,
+  spellingColumnSteps,
+  stringIdsSteps,
+  StringMap,
 } from "./compact-storage";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
 import { nameReading } from "./normalise";
-import type { NameToken, NameReading } from "./normalise";
+import type { NameReading, NameToken } from "./normalise";
 
 export type ScreeningWorkBudget = { remaining: number; exhausted: boolean };
 export const spendScreeningWork = (

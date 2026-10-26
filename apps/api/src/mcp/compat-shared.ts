@@ -18,19 +18,19 @@ import {
 } from "@/api/lib/rate-limit/action-size-limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import {
+  type CompatCorpusCursors,
+  type CorpusSubCursors,
   EMPTY_CORPUS_CURSORS,
   readCompatDecision,
   readCompatStatute,
-  type CompatCorpusCursors,
-  type CorpusSubCursors,
 } from "@/api/mcp/compat-corpus";
-import { encodeCompatId, type CompatCorpusId } from "@/api/mcp/compat-ids";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { type CompatCorpusId, encodeCompatId } from "@/api/mcp/compat-ids";
+import type { McpRequestResources } from "@/api/mcp/context";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import {
-  invalidCursorResult,
   FEATURE_DISABLED_MESSAGE,
   featureDisabledHint,
+  invalidCursorResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   structuredErrorResult,
@@ -175,7 +175,7 @@ export const compatCorpusFetchResponse = async <TData>({
   cursor,
 }: {
   compatId: CompatCorpusId;
-  context: McpRequestContext;
+  context: McpRequestResources;
   cursor: string | undefined;
 }): Promise<McpToolResponse<TData>> => {
   const read = await (compatId.kind === "decision"

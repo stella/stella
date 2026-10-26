@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { and, eq, or } from "drizzle-orm";
 
 import {
-  isGrantableChatTool,
   type ChatToolGrantScope,
+  isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
 
 import type { Transaction } from "@/api/db/root";
@@ -207,9 +207,12 @@ const withoutApprovalGate = (toolDefinition: ChatTool): ChatTool => {
 };
 
 /**
- * The approval decision for this turn: an approval-gated tool runs without a
- * prompt only when a stored grant covers it and its grant policy allows a
- * grant. Everything else keeps the gate it was registered with.
+ * The approval decision for this request: an approval-gated tool runs without
+ * a prompt only when a stored grant covers it and its grant policy allows a
+ * grant. Everything else keeps the gate it was registered with, and so does a
+ * tool named in `answeredApprovalToolNames`: the engine resumes an answered
+ * approval only for a tool that still asks, so a grant stored while its card
+ * waited covers that tool's calls from the next request on.
  *
  * Built-in tools are replaced by ungated clones so a shared definition is
  * never changed. External connector tools are created for this request and
@@ -217,10 +220,13 @@ const withoutApprovalGate = (toolDefinition: ChatTool): ChatTool => {
  * removed in place; a clone would leave the executing object gated.
  */
 export const applyChatToolGrants = ({
+  answeredApprovalToolNames,
   externalConnectors,
   grants,
   tools,
 }: {
+  /** Tools whose awaited approvals this request answers. */
+  answeredApprovalToolNames: ReadonlySet<string>;
   externalConnectors: readonly LoadedExternalMcpConnector[];
   grants: readonly StoredChatToolGrant[];
   tools: ChatToolMap;
@@ -231,7 +237,7 @@ export const applyChatToolGrants = ({
   return Object.fromEntries(
     Object.entries(tools).map(([name, toolDefinition]) => [
       name,
-      toolDefinition === undefined
+      toolDefinition === undefined || answeredApprovalToolNames.has(name)
         ? toolDefinition
         : withGrantDecision({
             externalConnectors,

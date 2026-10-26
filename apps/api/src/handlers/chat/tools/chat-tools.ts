@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import {
-  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
+  BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type ChatSourceScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
@@ -14,9 +14,9 @@ import type { UsageEventLane } from "@/api/db/schema";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import {
   CHAT_EDIT_APPLY_MODE,
+  type ChatEditApplyMode,
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
-  type ChatEditApplyMode,
   type DocxEditRepresentation,
 } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -95,6 +95,8 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -122,8 +124,8 @@ import type {
 } from "@/api/lib/entities/authorize-document-write";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
-  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   AI_MEMORY_FEATURE_ID,
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
   FEATURE_REGISTRY,
   type FeatureRegistry,
 } from "@/api/lib/feature-access/registry";
@@ -131,6 +133,10 @@ import { FIELD_VALUE_WRITE_PERMISSIONS } from "@/api/lib/fields/write-field";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
@@ -155,6 +161,12 @@ export const isWebSearchAvailable = ({
     disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
   return webSearchProviderAvailable && !webSearchOrgDisabled;
 };
+
+/** Registry name search may use web candidates only when web research is available on this turn. */
+const registryWebSearchProvider = (
+  webResearchAvailable: boolean,
+  webSearchProviders: ResolvedWebSearchProviders,
+) => (webResearchAvailable ? webSearchProviders.webSearchProvider : null);
 
 type WebResearchToolsRegisteredProps = {
   webSearchEnabled: boolean;
@@ -228,8 +240,7 @@ type ResolveRegisteredDocxEditModeOptions = {
   requestWorkspaceId: SafeId<"workspace"> | null;
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
   workspaceStatusById:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
 };
 
 type ChatRequestWorkspaceOptions = Pick<
@@ -412,8 +423,7 @@ export type ChatBuiltinApprovalToolName = Exclude<
 >;
 
 type BuiltInChatToolPolicyName =
-  | keyof BuiltInChatTools
-  | CurrentSkillEditToolName;
+  keyof BuiltInChatTools | CurrentSkillEditToolName;
 
 export type GetChatToolsProps = {
   /** Only the owning chat turn can issue and store displayed visual resources. */
@@ -575,6 +585,11 @@ export type GetChatToolsProps = {
   externalConnectors?: readonly ScopedExternalConnector[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
+  /**
+   * Where the turn may use a bound skill. Absent (validation and tool-name
+   * sets, which never run a skill read) means unbound skills only.
+   */
+  skillBindingScope?: SkillBindingScope | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   /** Records reads that run without an approval, such as `load-skill`. */
@@ -585,8 +600,7 @@ export type GetChatToolsProps = {
    * registered by tools or subagents before the memory write.
    */
   resolveMemorySourceWorkspaceIds?:
-    | (() => readonly SafeId<"workspace">[])
-    | undefined;
+    (() => readonly SafeId<"workspace">[]) | undefined;
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
    * into the projected write tools' MCP context so their `ensureActiveWorkspace`
@@ -596,8 +610,7 @@ export type GetChatToolsProps = {
    * from `accessibleWorkspaces`.
    */
   workspaceStatusById?:
-    | ReadonlyMap<string, AccessibleWorkspace["status"]>
-    | undefined;
+    ReadonlyMap<string, AccessibleWorkspace["status"]> | undefined;
   /**
    * Current delegation depth; 0 at top level. Subagent toolsets are
    * built by re-invoking `getChatTools` with `depth + 1` (see
@@ -840,6 +853,16 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
+// An organization can switch off each native public-source tool by slug.
+const nativeSourceTools = (
+  disabledNativeToolSlugs: readonly string[] | undefined,
+) => ({
+  boeTools: disabledNativeToolSlugs?.includes("boe") ? {} : createBoeTools(),
+  infosoudTools: disabledNativeToolSlugs?.includes("infosoud")
+    ? {}
+    : createInfosoudTools(),
+});
+
 const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -887,6 +910,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     externalConnectors = [],
     registryDispatch,
     skillMetadata,
+    skillBindingScope = NO_SKILL_BINDING_SCOPE,
     activeSkillContext,
     recordAuditEvent,
     recordReadAuditEvent,
@@ -976,6 +1000,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
   const skillTools = createSkillTools({
     activeSkillContext,
+    bindingScope: skillBindingScope,
     organizationId,
     purpose,
     recordAuditEvent,
@@ -1001,6 +1026,10 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const businessRegistryTools = createBusinessRegistryTools({
     organizationId,
     enabledHandlers: businessRegistryHandlers,
+    webSearchProvider: registryWebSearchProvider(
+      webResearchAvailable,
+      webSearchProviders,
+    ),
     scopeCall: businessRegistryCallScope(registryScope),
   });
   // Findings name natural persons with birth dates and identifiers, which the
@@ -1009,18 +1038,23 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     thirdPartyBoundary.type === "raw"
       ? createCounterpartyCheckTools({ scopedDb, organizationId })
       : {};
-  const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
-  const boeTools = boeDisabled ? {} : createBoeTools();
+  const { boeTools, infosoudTools } = nativeSourceTools(
+    disabledNativeToolSlugs,
+  );
   const browserControlTools = browserClient ? createBrowserControlTool() : {};
-  const infosoudDisabled =
-    disabledNativeToolSlugs?.includes("infosoud") ?? false;
-  const infosoudTools = infosoudDisabled ? {} : createInfosoudTools();
   const { webSearchProvider, urlFetcher } = webSearchProviders;
   // The `webSearchProvider !== null` re-check narrows the type for
   // createWebSearchTools; it is implied by `webResearchAvailable`.
   const webSearchTools =
     webResearchAvailable && webSearchProvider !== null
-      ? createWebSearchTools({ webSearchProvider, urlFetcher })
+      ? createWebSearchTools({
+          webSearchProvider,
+          urlFetcher,
+          observeWebSearch: actionRequestObserver(
+            organizationId,
+            ACTION_COST_CALL_KIND.webSearchRequest,
+          ).onRequest,
+        })
       : {};
   // `editApplyMode === "auto"` also requires the client-executed manual
   // tool to stay OFF: the two review modes are mutually exclusive tool

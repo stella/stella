@@ -4,9 +4,9 @@ import { readTauriPairs } from "./check-tauri-package-alignment";
 import {
   latestEligibleTauriPatch,
   planTauriRepairs,
+  readTauriRegistryVersions,
   repairTauriCargoManifest,
   repairTauriNpmManifest,
-  readTauriRegistryVersions,
   TauriAutofixError,
 } from "./fix-tauri-package-alignment";
 

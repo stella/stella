@@ -6,9 +6,9 @@ import { SparklesIcon } from "@stll/ui/icons";
 
 import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import {
+  type AnalysisErrorMessage,
   analysisErrorMessage,
   analysisRetryAt,
-  type AnalysisErrorMessage,
 } from "@/features/case-law/components/case-viewer/analysis/analysis-error.logic";
 import { analysisRetryOf } from "@/features/case-law/components/case-viewer/analysis/use-decision-analysis";
 import type { AnalysisError } from "@/features/case-law/queries/decision-analysis";

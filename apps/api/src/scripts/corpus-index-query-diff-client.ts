@@ -1,7 +1,7 @@
 import { corpusIndexClusterForGeneration } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
-  getCorpusIndexClient,
   type CorpusIndexClient,
+  getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 
 /**

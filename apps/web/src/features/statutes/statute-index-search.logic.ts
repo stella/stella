@@ -14,6 +14,7 @@ import {
   publicLawPageSearchSchema,
   publicLawPageSizeSearchSchema,
 } from "@/components/public-law-table/public-law-pagination.logic";
+import { routeSearchSchema } from "@/route-search-params";
 
 export const STATUTE_MAX_QUERY_LENGTH = 256;
 
@@ -27,7 +28,7 @@ const optionalStringSchema = (maxLength: number) =>
     ),
   );
 
-export const statutesIndexSearchSchema = v.object({
+export const statutesIndexSearchSchema = routeSearchSchema({
   page: publicLawPageSearchSchema,
   pageSize: publicLawPageSizeSearchSchema,
   q: optionalStringSchema(STATUTE_MAX_QUERY_LENGTH),

@@ -17,8 +17,8 @@ import {
 } from "@/api/tests/helpers/chat-prompt-prefix";
 import type { PromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
-  ScriptedProviderError,
   scriptedAdapterBase,
+  ScriptedProviderError,
   scriptedTurnChunks,
 } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
@@ -295,19 +295,28 @@ const adapter: AnyTextAdapter = {
 
 let registered = false;
 
+type ScriptedProviderOptions = {
+  textAdapterFactory?: ((modelId: string) => AnyTextAdapter) | undefined;
+};
+let activeTextAdapterFactory: ScriptedProviderOptions["textAdapterFactory"];
+
 /**
  * Serves every chat model call from scripts until `restore`. The mock-model
  * flag is the switch the model seam reads, so restoring it hands resolution
  * back to the configured providers.
  */
-export const installScriptedProvider = () => {
+export const installScriptedProvider = ({
+  textAdapterFactory,
+}: ScriptedProviderOptions = {}) => {
   if (!registered) {
-    registerTanStackMockTextAdapterFactory((modelId) => ({
-      ...adapter,
-      model: modelId,
-    }));
+    registerTanStackMockTextAdapterFactory(
+      (modelId) =>
+        activeTextAdapterFactory?.(modelId) ?? { ...adapter, model: modelId },
+    );
     registered = true;
   }
+  const previousTextAdapterFactory = activeTextAdapterFactory;
+  activeTextAdapterFactory = textAdapterFactory;
   const previousMockAI = env.USE_MOCK_AI;
   // "force": the scripts answer even a request made with an organization key.
   env.USE_MOCK_AI = "force";
@@ -362,6 +371,7 @@ export const installScriptedProvider = () => {
       };
     },
     restore: () => {
+      activeTextAdapterFactory = previousTextAdapterFactory;
       env.USE_MOCK_AI = previousMockAI;
       for (const threadId of owned) {
         threads.delete(threadId);

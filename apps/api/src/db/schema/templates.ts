@@ -22,29 +22,29 @@ import {
   deletionCleanupRetryColumns,
 } from "./cleanup-ledgers";
 import {
-  ENTITY_KINDS,
-  SEARCH_PROJECTION_KINDS,
-  TEMPLATE_DELETION_CLEANUP_STATUSES,
   bytea,
+  ENTITY_KINDS,
   jsonb,
+  organization,
   organizationCheck,
   orgPolicies,
   orgReadOnlyPolicies,
-  organization,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  SEARCH_PROJECTION_KINDS,
   stella,
   storedFileScanState,
   storedFileScanStateCheck,
+  TEMPLATE_DELETION_CLEANUP_STATUSES,
+  timestamptz,
   tsvector,
   user,
   userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
-  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,
@@ -54,7 +54,7 @@ import type {
   TemplateManifest,
 } from "./common";
 import { contacts, workspaces } from "./contacts";
-import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
+import { entities, entityVersions, fields, TEMPLATE_KINDS } from "./entities";
 
 export const LOOKUP_FORMAT_PREFERENCE = {
   SAVED: "saved",

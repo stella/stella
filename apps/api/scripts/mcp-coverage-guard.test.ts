@@ -265,6 +265,7 @@ describe("classifyCoverage", () => {
 
   test("passes when every tool is referenced and every reference is valid", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "read.ts", exposure: { type: "tool", name: "read_contact" } },
         { id: "other.ts", exposure: { type: "pending" } },
@@ -296,6 +297,7 @@ describe("classifyCoverage", () => {
 
   test("flags an orphan tool that no endpoint references and no waiver covers", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "read.ts", exposure: { type: "tool", name: "read_contact" } },
       ],
@@ -307,6 +309,7 @@ describe("classifyCoverage", () => {
 
   test("flags a tool/covered reference that is not in the registry", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "a.ts", exposure: { type: "tool", name: "ghost" } },
         { id: "b.ts", exposure: { type: "covered", by: "phantom" } },
@@ -322,6 +325,7 @@ describe("classifyCoverage", () => {
 
   test("flags a stale waiver naming a tool no longer in the registry", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "a.ts", exposure: { type: "tool", name: "search" } },
         { id: "b.ts", exposure: { type: "tool", name: "read_contact" } },
@@ -334,6 +338,7 @@ describe("classifyCoverage", () => {
 
   test("separates a missing mcp field from a malformed one", () => {
     const issues = classifyCoverage({
+      appTools: [],
       endpoints: [
         { id: "missing.ts", exposure: { type: "invalid", raw: undefined } },
         { id: "malformed.ts", exposure: { type: "invalid", raw: { x: 1 } } },
@@ -343,5 +348,28 @@ describe("classifyCoverage", () => {
     });
     expect(issues.missingMcp).toEqual(["missing.ts"]);
     expect(issues.invalidExposure).toEqual(["malformed.ts"]);
+  });
+
+  test("an MCP App callable tool is a concrete registry reference", () => {
+    const issues = classifyCoverage({
+      appTools: [{ app: "presentation", name: "open_reader" }],
+      endpoints: [],
+      registryToolNames: ["open_reader"],
+      waivers: {},
+    });
+    expect(issues.orphanTools).toEqual([]);
+    expect(issues.unknownToolNames).toEqual([]);
+  });
+
+  test("an MCP App manifest cannot reference an unknown tool", () => {
+    const issues = classifyCoverage({
+      appTools: [{ app: "presentation", name: "missing_reader" }],
+      endpoints: [],
+      registryToolNames: [],
+      waivers: {},
+    });
+    expect(issues.unknownToolNames).toEqual([
+      { id: "app:presentation", name: "missing_reader" },
+    ]);
   });
 });

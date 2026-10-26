@@ -8,9 +8,9 @@ import { sha256Hex as hashContent } from "@stll/sha256/node";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
-  caseLawDecisionSourceIdentities,
   caseLawDecisionAliases,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawSources,
 } from "@/api/db/schema";
 import { createCaseLawDecisionSlugCandidate } from "@/api/handlers/case-law/decisions/slug";
@@ -22,10 +22,10 @@ import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/deci
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   presentTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";

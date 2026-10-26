@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { parseContractDomainLedger } from "./contract-domain-ledger.ts";
-import { runLedgerMembershipGuard } from "./ledger-membership.ts";
+import { ledgerGitEnv, runLedgerMembershipGuard } from "./ledger-membership.ts";
 
 const LEDGER_REL = "scripts/contract-domain-ledger.json";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -30,7 +30,7 @@ export const relocateContractDomainEntries = ({
       baseCommit,
       "--",
     ],
-    { cwd: repoRoot, stderr: "pipe" },
+    { cwd: repoRoot, env: ledgerGitEnv(), stderr: "pipe" },
   );
   if (diff.exitCode !== 0) {
     return panic(

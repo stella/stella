@@ -17,10 +17,37 @@ const MAX_MERGE_QUEUE_BATCH_SIZE = 4;
 const RUNS_PER_PAGE = 100;
 const MAX_DISPATCH_RUN_PAGES = 20;
 const ROOT_DIR = nodePath.resolve(import.meta.dirname, "..");
-const MERGE_QUEUE_TIMELINE_QUERY = `
-  query MergeQueueTimeline($owner: String!, $name: String!, $number: Int!) {
-    repository(owner: $owner, name: $name) {
-      pullRequest(number: $number) {
+// One GraphQL query answers a whole slice of the release history: for every
+// commit, the pull requests GitHub associates with it (the REST
+// commits/{sha}/pulls answer), each one's merge queue timeline, and the
+// commit's GitHub Actions check suites, which hold its merge-group CI run.
+// Per-commit and per-pull-request reads made a release cut wait minutes.
+// Sized against GitHub's GraphQL timeout: 50 commits with 100 suites each
+// answered HTTP 504, 25 commits with 50 suites each answer in about 5 s, and a
+// typical commit has fewer than 50 Actions suites.
+const COMMIT_BATCH_SIZE = 25;
+const ASSOCIATED_PULL_REQUEST_LIMIT = 10;
+const CHECK_SUITE_PAGE_SIZE = 50;
+const MAX_CHECK_SUITE_PAGES = 20;
+// The GitHub Actions app on github.com; its check suites carry workflow runs.
+const GITHUB_ACTIONS_APP_ID = 15_368;
+const CI_WORKFLOW_PATH = ".github/workflows/ci.yml";
+const FULL_SHA = /^[0-9a-f]{40}$/u;
+const CHECK_SUITE_FIELDS = `
+  pageInfo { hasNextPage endCursor }
+  nodes { conclusion workflowRun { event file { path } } }
+`;
+const RELEASE_COMMIT_FRAGMENT = `
+  fragment ReleaseCommit on Commit {
+    oid
+    associatedPullRequests(first: ${String(ASSOCIATED_PULL_REQUEST_LIMIT)}) {
+      pageInfo { hasNextPage }
+      nodes {
+        number
+        title
+        url
+        mergedAt
+        mergeCommit { oid }
         timelineItems(
           last: 100
           itemTypes: [
@@ -31,6 +58,30 @@ const MERGE_QUEUE_TIMELINE_QUERY = `
         ) {
           pageInfo { hasPreviousPage }
           nodes { __typename }
+        }
+      }
+    }
+    checkSuites(
+      first: ${String(CHECK_SUITE_PAGE_SIZE)}
+      filterBy: { appId: ${String(GITHUB_ACTIONS_APP_ID)} }
+    ) {${CHECK_SUITE_FIELDS}}
+  }
+`;
+const CHECK_SUITES_QUERY = `
+  query ReleaseCommitCheckSuites(
+    $owner: String!
+    $name: String!
+    $oid: GitObjectID!
+    $after: String!
+  ) {
+    repository(owner: $owner, name: $name) {
+      object(oid: $oid) {
+        ... on Commit {
+          checkSuites(
+            first: ${String(CHECK_SUITE_PAGE_SIZE)}
+            after: $after
+            filterBy: { appId: ${String(GITHUB_ACTIONS_APP_ID)} }
+          ) {${CHECK_SUITE_FIELDS}}
         }
       }
     }
@@ -77,6 +128,30 @@ export class ReleaseQueueHistoryError extends Error {
     this.name = "ReleaseQueueHistoryError";
   }
 }
+
+/** Commit SHAs are inlined as aliases, so only full lowercase SHAs pass. */
+export const releaseCommitHistoryQuery = (shas: readonly string[]): string => {
+  for (const sha of shas) {
+    if (!FULL_SHA.test(sha)) {
+      throw new ReleaseQueueHistoryError(
+        `Release history commit ${sha} is not a full SHA`,
+      );
+    }
+  }
+  const aliases = shas
+    .map(
+      (sha, index) =>
+        `c${String(index)}: object(oid: "${sha}") { ...ReleaseCommit }`,
+    )
+    .join("\n      ");
+  return `
+  query ReleaseCommitHistory {
+    repository(owner: "${REPOSITORY_OWNER}", name: "${REPOSITORY_NAME}") {
+      ${aliases}
+    }
+  }
+${RELEASE_COMMIT_FRAGMENT}`;
+};
 
 /**
  * The previous release is the nearest release tag the base's parent reaches,
@@ -128,15 +203,6 @@ const parseJson = (value: string, source: string): unknown => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const isPullRequest = (value: unknown): value is PullRequest =>
-  isRecord(value) &&
-  typeof value["html_url"] === "string" &&
-  (typeof value["merge_commit_sha"] === "string" ||
-    value["merge_commit_sha"] === null) &&
-  (typeof value["merged_at"] === "string" || value["merged_at"] === null) &&
-  typeof value["number"] === "number" &&
-  typeof value["title"] === "string";
-
 const isMergedAtCommit = (
   pullRequest: PullRequest,
   sha: string,
@@ -153,36 +219,161 @@ const apiJson = (
     path,
   );
 
-const wasMergedThroughQueue = (
-  pullRequest: MergedPullRequest,
+const graphqlData = (
+  args: readonly string[],
+  source: string,
   command: CommandRunner,
   ghRetryScript: string,
-): boolean => {
+): Record<string, unknown> => {
   const payload = parseJson(
-    command([
-      "bash",
-      ghRetryScript,
-      "api",
-      "graphql",
-      "-f",
-      `query=${MERGE_QUEUE_TIMELINE_QUERY}`,
-      "-f",
-      `owner=${REPOSITORY_OWNER}`,
-      "-f",
-      `name=${REPOSITORY_NAME}`,
-      "-F",
-      `number=${String(pullRequest.number)}`,
-    ]),
-    `Timeline for pull request #${String(pullRequest.number)}`,
+    command(["bash", ghRetryScript, "api", "graphql", ...args]),
+    source,
   );
+  // A partial answer is no answer: errors beside data fail the read.
   const data = isRecord(payload) ? payload["data"] : undefined;
-  const repository = isRecord(data) ? data["repository"] : undefined;
-  const pullRequestPayload = isRecord(repository)
-    ? repository["pullRequest"]
-    : undefined;
-  const timelineItems = isRecord(pullRequestPayload)
-    ? pullRequestPayload["timelineItems"]
-    : undefined;
+  if (!isRecord(data) || (isRecord(payload) && "errors" in payload)) {
+    throw new ReleaseQueueHistoryError(
+      `${source} returned an unexpected payload`,
+    );
+  }
+  return data;
+};
+
+/** What the history check needs to know about one first-parent commit. */
+type CommitHistory = {
+  /** Pull requests GitHub lists for the commit, as the REST pulls listing. */
+  pullRequests: PullRequest[];
+  /** Raw merge queue timeline of each listed pull request, by number. */
+  timelines: Map<number, unknown>;
+  /** Check suites read so far, and the cursor of the next page if any. */
+  checkSuites: unknown[];
+  checkSuitesCursor: string | null;
+};
+
+const unexpectedPullRequests = (sha: string) =>
+  new ReleaseQueueHistoryError(
+    `Pull requests for ${sha} returned an unexpected payload`,
+  );
+
+const unexpectedCheckSuites = (sha: string) =>
+  new ReleaseQueueHistoryError(
+    `Check suites for ${sha} returned an unexpected payload`,
+  );
+
+type CheckSuitePage = { nodes: unknown[]; cursor: string | null };
+
+const readCheckSuitePage = (value: unknown, sha: string): CheckSuitePage => {
+  const pageInfo = isRecord(value) ? value["pageInfo"] : undefined;
+  const nodes = isRecord(value) ? value["nodes"] : undefined;
+  if (!isRecord(pageInfo) || !Array.isArray(nodes)) {
+    throw unexpectedCheckSuites(sha);
+  }
+  if (pageInfo["hasNextPage"] === false) {
+    return { nodes, cursor: null };
+  }
+  const cursor = pageInfo["endCursor"];
+  if (pageInfo["hasNextPage"] !== true || typeof cursor !== "string") {
+    throw unexpectedCheckSuites(sha);
+  }
+  return { nodes, cursor };
+};
+
+const readPullRequestNode = (
+  node: unknown,
+  sha: string,
+): { pullRequest: PullRequest; timeline: unknown } => {
+  if (!isRecord(node)) {
+    throw unexpectedPullRequests(sha);
+  }
+  const { number, title, url, mergedAt, mergeCommit } = node;
+  const mergeCommitSha = isRecord(mergeCommit) ? mergeCommit["oid"] : null;
+  if (
+    typeof number !== "number" ||
+    typeof title !== "string" ||
+    typeof url !== "string" ||
+    (typeof mergedAt !== "string" && mergedAt !== null) ||
+    (mergeCommit !== null && typeof mergeCommitSha !== "string")
+  ) {
+    throw unexpectedPullRequests(sha);
+  }
+  return {
+    pullRequest: {
+      html_url: url,
+      merge_commit_sha:
+        typeof mergeCommitSha === "string" ? mergeCommitSha : null,
+      merged_at: mergedAt,
+      number,
+      title,
+    },
+    timeline: node["timelineItems"],
+  };
+};
+
+const readCommitHistory = (value: unknown, sha: string): CommitHistory => {
+  if (!isRecord(value) || value["oid"] !== sha) {
+    throw unexpectedPullRequests(sha);
+  }
+  const associated = value["associatedPullRequests"];
+  const pageInfo = isRecord(associated) ? associated["pageInfo"] : undefined;
+  const nodes = isRecord(associated) ? associated["nodes"] : undefined;
+  // More associated pull requests than one page holds: the listing is cut.
+  if (
+    !isRecord(pageInfo) ||
+    pageInfo["hasNextPage"] !== false ||
+    !Array.isArray(nodes)
+  ) {
+    throw unexpectedPullRequests(sha);
+  }
+  const pullRequests: PullRequest[] = [];
+  const timelines = new Map<number, unknown>();
+  for (const node of nodes) {
+    const { pullRequest, timeline } = readPullRequestNode(node, sha);
+    pullRequests.push(pullRequest);
+    timelines.set(pullRequest.number, timeline);
+  }
+  const checkSuites = readCheckSuitePage(value["checkSuites"], sha);
+  return {
+    pullRequests,
+    timelines,
+    checkSuites: checkSuites.nodes,
+    checkSuitesCursor: checkSuites.cursor,
+  };
+};
+
+/**
+ * Reads every commit's pull requests, their merge queue timelines and the
+ * first page of its check suites in COMMIT_BATCH_SIZE commits per query.
+ * Anything missing or cut short throws: unknown history is never validated.
+ */
+const readCommitHistories = (
+  commits: readonly string[],
+  command: CommandRunner,
+  ghRetryScript: string,
+): Map<string, CommitHistory> => {
+  const histories = new Map<string, CommitHistory>();
+  for (let start = 0; start < commits.length; start += COMMIT_BATCH_SIZE) {
+    const batch = commits.slice(start, start + COMMIT_BATCH_SIZE);
+    const data = graphqlData(
+      ["-f", `query=${releaseCommitHistoryQuery(batch)}`],
+      `Release history for ${batch[0] ?? ""}..${batch.at(-1) ?? ""}`,
+      command,
+      ghRetryScript,
+    );
+    const repository = data["repository"];
+    for (const [index, sha] of batch.entries()) {
+      const commit = isRecord(repository)
+        ? repository[`c${String(index)}`]
+        : undefined;
+      histories.set(sha, readCommitHistory(commit, sha));
+    }
+  }
+  return histories;
+};
+
+const wasMergedThroughQueue = (
+  pullRequest: MergedPullRequest,
+  timelineItems: unknown,
+): boolean => {
   const pageInfo = isRecord(timelineItems)
     ? timelineItems["pageInfo"]
     : undefined;
@@ -222,6 +413,88 @@ const wasMergedThroughQueue = (
   throw new ReleaseQueueHistoryError(
     `Timeline for merged pull request #${String(pullRequest.number)} did not include a merge event`,
   );
+};
+
+// A successful ci.yml run for the merge_group event whose head is the commit:
+// the check suite GitHub attaches to that commit, as the REST runs listing
+// filtered by head_sha, event=merge_group and status=success answers it.
+const isSuccessfulMergeGroupSuite = (suite: unknown, sha: string): boolean => {
+  if (!isRecord(suite)) {
+    throw unexpectedCheckSuites(sha);
+  }
+  const { conclusion, workflowRun } = suite;
+  if (typeof conclusion !== "string" && conclusion !== null) {
+    throw unexpectedCheckSuites(sha);
+  }
+  if (workflowRun === null) {
+    return false;
+  }
+  const file = isRecord(workflowRun) ? workflowRun["file"] : undefined;
+  if (
+    !isRecord(workflowRun) ||
+    typeof workflowRun["event"] !== "string" ||
+    (file !== null && (!isRecord(file) || typeof file["path"] !== "string"))
+  ) {
+    throw unexpectedCheckSuites(sha);
+  }
+  return (
+    conclusion === "SUCCESS" &&
+    workflowRun["event"] === "merge_group" &&
+    isRecord(file) &&
+    file["path"] === CI_WORKFLOW_PATH
+  );
+};
+
+/**
+ * Pages through the commit's check suites only while no successful
+ * merge-group run has been seen; most commits answer from the batched page.
+ */
+const hasSuccessfulMergeGroupSuite = (
+  sha: string,
+  history: CommitHistory,
+  command: CommandRunner,
+  ghRetryScript: string,
+): boolean => {
+  let suites = history.checkSuites;
+  let cursor = history.checkSuitesCursor;
+  for (let page = 1; ; page += 1) {
+    if (suites.some((suite) => isSuccessfulMergeGroupSuite(suite, sha))) {
+      return true;
+    }
+    if (cursor === null) {
+      return false;
+    }
+    if (page >= MAX_CHECK_SUITE_PAGES) {
+      throw new ReleaseQueueHistoryError(
+        `Check suites for ${sha} exceed ${String(MAX_CHECK_SUITE_PAGES)} pages of ${String(CHECK_SUITE_PAGE_SIZE)}`,
+      );
+    }
+    const data = graphqlData(
+      [
+        "-f",
+        `query=${CHECK_SUITES_QUERY}`,
+        "-f",
+        `owner=${REPOSITORY_OWNER}`,
+        "-f",
+        `name=${REPOSITORY_NAME}`,
+        "-f",
+        `oid=${sha}`,
+        "-f",
+        `after=${cursor}`,
+      ],
+      `Check suites for ${sha}`,
+      command,
+      ghRetryScript,
+    );
+    const repository = data["repository"];
+    const object = isRecord(repository) ? repository["object"] : undefined;
+    const next = readCheckSuitePage(
+      isRecord(object) ? object["checkSuites"] : undefined,
+      sha,
+    );
+    suites = next.nodes;
+    cursor = next.cursor;
+  }
 };
 
 type RunsPageOptions = {
@@ -366,19 +639,17 @@ export const assertReleaseQueueHistory = ({
   const mergedPullRequests: MergedPullRequest[] = [];
   const commitsWithoutPullRequests: string[] = [];
   const pullRequestByCommit = new Map<string, MergedPullRequest>();
+  const histories = readCommitHistories(commits, command, ghRetryScript);
+  const historyOf = (sha: string): CommitHistory => {
+    const history = histories.get(sha);
+    if (history === undefined) {
+      throw unexpectedPullRequests(sha);
+    }
+    return history;
+  };
 
   for (const sha of commits) {
-    const payload = apiJson(
-      `commits/${sha}/pulls?per_page=100`,
-      command,
-      ghRetryScript,
-    );
-    if (!Array.isArray(payload) || !payload.every(isPullRequest)) {
-      throw new ReleaseQueueHistoryError(
-        `Pull requests for ${sha} returned an unexpected payload`,
-      );
-    }
-    const pullRequests = payload.filter((candidate) =>
+    const pullRequests = historyOf(sha).pullRequests.filter((candidate) =>
       isMergedAtCommit(candidate, sha),
     );
     if (pullRequests.length === 0) {
@@ -394,8 +665,14 @@ export const assertReleaseQueueHistory = ({
 
   const queueCandidates = new Set<string>();
   for (const pullRequest of mergedPullRequests) {
-    if (wasMergedThroughQueue(pullRequest, command, ghRetryScript)) {
-      queueCandidates.add(pullRequest.merge_commit_sha);
+    const sha = pullRequest.merge_commit_sha;
+    if (
+      wasMergedThroughQueue(
+        pullRequest,
+        historyOf(sha).timelines.get(pullRequest.number),
+      )
+    ) {
+      queueCandidates.add(sha);
     }
   }
   const mergeGroupValidated = new Map<string, boolean>();
@@ -404,13 +681,12 @@ export const assertReleaseQueueHistory = ({
     if (known !== undefined) {
       return known;
     }
-    const found = hasSuccessfulRunOnCommit({
-      workflow: "ci.yml",
-      event: "merge_group",
+    const found = hasSuccessfulMergeGroupSuite(
       sha,
+      historyOf(sha),
       command,
       ghRetryScript,
-    });
+    );
     mergeGroupValidated.set(sha, found);
     return found;
   };
@@ -471,7 +747,7 @@ export const formatReleaseQueueHistoryNotice = (
     ...report.commitsWithoutPullRequest.map(
       (commit) => `  ${commit} (no associated merged pull request)`,
     ),
-    "A merge-group receipt on the release commit does not cover them; run the heavy suites on it:",
+    "A merge-group receipt on the release commit does not cover them; run the release-candidate gate, which starts heavy, PR-depth, and staging checks:",
     "  gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -f release_candidate=true",
   ].join("\n");
 

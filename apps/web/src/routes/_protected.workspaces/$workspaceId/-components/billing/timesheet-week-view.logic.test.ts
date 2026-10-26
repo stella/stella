@@ -5,8 +5,8 @@ import { cents } from "@stll/money";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
-  summarizeBillableAmountByMatterAndCurrency,
   summarizeBillableAmountByCurrency,
+  summarizeBillableAmountByMatterAndCurrency,
   type TimesheetTotalEntry,
 } from "./timesheet-week-view.logic";
 

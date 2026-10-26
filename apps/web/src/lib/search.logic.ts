@@ -313,8 +313,7 @@ type SearchPreviewTarget = {
 };
 
 export type SearchPreviewDate =
-  | { type: "calendar-date"; value: string }
-  | { type: "instant"; value: string };
+  { type: "calendar-date"; value: string } | { type: "instant"; value: string };
 
 export const getSearchPreviewDate = (
   hit: GlobalSearchHit,

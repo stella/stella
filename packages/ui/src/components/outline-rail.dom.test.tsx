@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 
-import { OutlineRail, type OutlineItem } from "./outline-rail";
+import { type OutlineItem, OutlineRail } from "./outline-rail";
 
 const items = [
   { id: "introduction", label: "Introduction", level: 1 },

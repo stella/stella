@@ -11,9 +11,9 @@ import {
   TITLE_MAX_OUTPUT_TOKENS,
 } from "@/api/handlers/chat/thread-title-prompt";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -23,6 +23,7 @@ import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
@@ -150,7 +151,13 @@ const generateAdmittedThreadTitle = async ({
   if (Result.isError(generated)) {
     aiAnalytics.captureError(generated.error);
     if (isUnanticipatedAIFailure(generated.error)) {
-      captureError(generated.error, { threadId });
+      captureError(
+        generated.error,
+        handlerErrorContext(
+          "chat.generateAdmittedThreadTitle.generated_error",
+          { threadId },
+        ),
+      );
     }
     return;
   }
@@ -227,7 +234,13 @@ const generateAdmittedThreadTitle = async ({
   });
 
   if (Result.isError(updateResult)) {
-    captureError(updateResult.error, { threadId });
+    captureError(
+      updateResult.error,
+      handlerErrorContext(
+        "chat.generateAdmittedThreadTitle.updateResult_error",
+        { threadId },
+      ),
+    );
     return;
   }
 
@@ -235,7 +248,11 @@ const generateAdmittedThreadTitle = async ({
   // a failure is reported, never thrown. Awaited, so whoever waits for
   // this title (the turn's follow-ups) waits for its indexing too.
   if (updateResult.value) {
-    await indexThread(threadId).catch(captureError);
+    await indexThread(threadId).catch(
+      createErrorCapture(
+        handlerErrorContext("generateAdmittedThreadTitle.indexThread"),
+      ),
+    );
   }
 };
 

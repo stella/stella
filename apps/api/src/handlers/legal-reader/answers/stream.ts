@@ -3,8 +3,8 @@ import { and, eq, exists, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type {
-  ReaderAnswerErrorCode,
   ReaderAnswerCitation,
+  ReaderAnswerErrorCode,
   ReaderAnswerStreamEvent,
   ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
@@ -16,7 +16,6 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
 import { runReaderAnswerModel } from "@/api/handlers/legal-reader/answers/model";
 import type { ReaderAnswerModelRunner } from "@/api/handlers/legal-reader/answers/model";
 import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";
@@ -25,6 +24,11 @@ import {
   buildReaderAnswerPrompt,
   validateReaderAnswerCitations,
 } from "@/api/handlers/legal-reader/answers/prompt";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+  SSE_MEDIA_TYPE,
+} from "@/api/http/cache";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -34,14 +38,10 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { AnnotationAuthorScope } from "@/api/lib/legal-search/reader-annotations/target";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-  SSE_MEDIA_TYPE,
-} from "@/api/lib/security-headers";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -368,7 +368,7 @@ export const streamReaderAnswer = ({
                               signal: runSignal,
                               answerId: prepared.answer.id,
                               decisionId: prepared.decision.decisionId,
-                              paragraphId: prepared.anchor.paragraphId,
+                              paragraphId: prepared.anchor[0].paragraphId,
                               system: prompt.system,
                               messages: [
                                 { role: "user", content: prompt.context },

@@ -12,7 +12,11 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { APIError, shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import {
+  APIError,
+  shouldRetryAPIRequest,
+  unwrapApiResponse,
+} from "@/lib/errors/api";
 import { shareFileData } from "@/lib/files/array-buffer-utils";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { EmailBodyFold } from "@/lib/files/email-preview";
@@ -20,9 +24,9 @@ import {
   documentPropertiesQueryKey,
   fileContentByFieldQueryRoot,
   fileContentQueryKey,
+  type FileMetadataQueryKey,
   fileMetadataQueryKey,
   filesQueryRoot,
-  type FileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 import { fetchStorageArrayBuffer } from "@/lib/files/storage-fetch";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -120,7 +124,7 @@ export const fileOptions = (props: FileOptionsProps) =>
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
         signal,
@@ -174,7 +178,7 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         ["email-html"]({ fieldId: props.fieldId })
         .get({ fetch: { signal } });
 
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       return {
         subject: data.subject,
@@ -217,7 +221,7 @@ export const officeCitationOptions = ({
           fieldId: toSafeId<"field">(fieldId),
         })({ blockId })
         .get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     retry: shouldRetryAPIRequest,
   });
@@ -403,7 +407,7 @@ export const textFileOptions = (props: FileOptionsProps) =>
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
         signal,

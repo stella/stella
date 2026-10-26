@@ -302,36 +302,54 @@ describe("audit directive placement", () => {
   });
 
   test("a directive above another call or value leaves subsequent mutations checked", async () => {
-    for (const expression of ["read()", "1"]) {
-      expect(
-        await lintDirective(
-          [
-            "export const write = () => [",
-            "  // audit: skip - scheduler reconciliation records its own event",
-            `  ${expression},`,
-            "  tx.insert(rows)",
-            "];",
-          ].join("\n"),
-        ),
-      ).toEqual([7]);
-    }
+    const results = await Promise.all(
+      ["read()", "1"].map(async (lintCase, index) => {
+        const expression = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintDirective(
+            [
+              "export const write = () => [",
+              "  // audit: skip - scheduler reconciliation records its own event",
+              `  ${expression},`,
+              "  tx.insert(rows)",
+              "];",
+            ].join("\n"),
+          ),
+          expected: [7],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("a gap or an unjustified reason leaves the mutation checked", async () => {
-    for (const before of [
-      "  // audit: skip - scheduler reconciliation records its own event\n",
-      "  // audit: skip - scheduler",
-      "",
-    ]) {
-      const directiveSource = [
-        "export const write = () =>",
-        before,
-        "  tx.insert(rows);",
-      ].join("\n");
-      expect(await lintDirective(directiveSource)).toEqual([
-        directiveSource.split("\n").length + 3,
-      ]);
-    }
+    const results = await Promise.all(
+      [
+        "  // audit: skip - scheduler reconciliation records its own event\n",
+        "  // audit: skip - scheduler",
+        "",
+      ].map(async (lintCase, index) => {
+        const before = lintCase;
+        const directiveSource = [
+          "export const write = () =>",
+          before,
+          "  tx.insert(rows);",
+        ].join("\n");
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lintDirective(directiveSource),
+          expected: [directiveSource.split("\n").length + 3],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("an adjacent directive on a nested arrow leaves the parent mutation checked", async () => {
@@ -378,30 +396,35 @@ test("directive placement leaves ledger write counts identical", async () => {
       "  tx.insert(rows);",
     ],
   ];
-  for (const placement of placements) {
-    const directiveSource = [
-      "declare const tx: { insert: (row: unknown) => void; delete: (row: unknown) => void };",
-      "declare const rows: unknown;",
-      ...placement,
-      "export const counted = () => tx.delete(rows);",
-    ].join("\n");
-    const countedLine = directiveSource.split("\n").length;
-    expect(
-      await lintSingleRule(RULE, directiveSource, {
+  const results = await Promise.all(
+    placements.map(async (placement, index) => {
+      const directiveSource = [
+        "declare const tx: { insert: (row: unknown) => void; delete: (row: unknown) => void };",
+        "declare const rows: unknown;",
+        ...placement,
+        "export const counted = () => tx.delete(rows);",
+      ].join("\n");
+      const census = await lintSingleRule(RULE, directiveSource, {
         sourcePath: SOURCE_PATH,
         ruleOptionsForRoot: (root) => ({ root, census: true }),
-      }),
-    ).toEqual([countedLine]);
-    expect(
-      await lintSingleRule(RULE, directiveSource, {
+      });
+      const budgeted = await lintSingleRule(RULE, directiveSource, {
         sourcePath: SOURCE_PATH,
         ruleOptionsForRoot: (root) => ({
           root,
           budgets: { [`${SOURCE_PATH}::counted`]: { "delete:rows": 1 } },
         }),
-      }),
-    ).toEqual([]);
-  }
+      });
+      return { label: `placement ${index + 1}`, census, budgeted };
+    }),
+  );
+  expect(results).toEqual(
+    placements.map((_, index) => ({
+      label: `placement ${index + 1}`,
+      census: [index === 0 ? 7 : 6],
+      budgeted: [],
+    })),
+  );
 });
 
 test("the recorder owns audit insertion while other writes still require an event", async () => {

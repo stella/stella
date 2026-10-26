@@ -2,11 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import { shouldRetryAPIRequest } from "@/lib/errors/api";
 import {
+  type EmailCitationSource,
+  type EmailCitationTarget,
   isVerifiedEmailCitationTarget,
   parseEmailCitationHref,
   useKnownEmailCitationTarget,
-  type EmailCitationSource,
-  type EmailCitationTarget,
 } from "@/lib/files/email-citations";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 

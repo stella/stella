@@ -11,13 +11,13 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 import {
-  withImmediatePublisherSlot,
   reservePublisherSlot,
+  withImmediatePublisherSlot,
 } from "../ingestion/adapters/publisher-policy";
 import { fetchPublisher } from "../ingestion/adapters/retry";
 import {
-  readThroughDeferredDocument,
   type OnDemandDocumentDeps,
+  readThroughDeferredDocument,
 } from "./document-on-demand";
 
 const decision = (): PendingDocument => ({

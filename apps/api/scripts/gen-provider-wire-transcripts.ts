@@ -39,9 +39,10 @@ const recorded = childExitStatus(recording);
 if (recorded !== 0) {
   process.exit(recorded);
 }
-const formatting = Bun.spawn(
-  ["bun", "scripts/run-oxfmt.ts", PROVIDER_WIRE_TRANSCRIPT_DIR],
-  { cwd: REPO_ROOT, stderr: "inherit", stdout: "inherit" },
-);
+const formatting = Bun.spawn(["bun", "fmt", PROVIDER_WIRE_TRANSCRIPT_DIR], {
+  cwd: REPO_ROOT,
+  stderr: "inherit",
+  stdout: "inherit",
+});
 await formatting.exited;
 process.exit(childExitStatus(formatting));

@@ -6,17 +6,21 @@ import { ReviewAuthorAvatar } from "@stll/ui/review-author-avatar";
 
 import {
   DECISION_JUDGE_ROLE_LABELS,
-  decisionJudgeKey,
+  decisionBenchSeats,
   portraitAttributions,
 } from "@/features/case-law/decision-judges";
-import type { DecisionJudge } from "@/features/case-law/decision-judges";
+import type {
+  DecisionBenchSeat,
+  DecisionJudge,
+} from "@/features/case-law/decision-judges";
 import { browserApiRootUrl } from "@/lib/api-origins";
 
 /**
- * The bench of a decision: who reported it and who wrote separately, each
- * with the face the court publishes where there is one. A judge the roster
- * holds no portrait for keeps their initials rather than a dimmed
- * placeholder — the roster not knowing a face says nothing about the judge.
+ * The bench of a decision: who sat, who reported it and who wrote
+ * separately, one tile per person captioned with each part they played, with
+ * the face the court publishes where there is one. A judge the roster holds
+ * no portrait for keeps their initials rather than a dimmed placeholder — the
+ * roster not knowing a face says nothing about the judge.
  *
  * The row wraps, so a pane at a phone's width stacks the bench instead of
  * clipping it.
@@ -32,21 +36,26 @@ export const DecisionJudges = ({
   return (
     <div className="flex flex-col gap-2">
       <ul className="flex flex-wrap items-start gap-x-3 gap-y-3">
-        {judges.map((judge) => (
+        {decisionBenchSeats(judges).map((seat) => (
           <li
             className="flex w-20 flex-col items-center gap-1 text-center"
-            key={decisionJudgeKey(judge)}
+            key={seat.key}
           >
-            <JudgePortrait judge={judge} />
+            <JudgePortrait seat={seat} />
             <BidiText
               as="span"
               className="text-foreground-strong-muted leading-tight font-medium"
             >
-              {judge.name}
+              {seat.name}
             </BidiText>
-            <span className="text-foreground-disabled text-2xs leading-tight">
-              {t(DECISION_JUDGE_ROLE_LABELS[judge.role])}
-            </span>
+            {seat.roles.map((role) => (
+              <span
+                className="text-foreground-disabled text-2xs leading-tight"
+                key={role}
+              >
+                {t(DECISION_JUDGE_ROLE_LABELS[role])}
+              </span>
+            ))}
           </li>
         ))}
       </ul>
@@ -87,12 +96,10 @@ export const judgePortraitSrc = (path: string): string =>
  * to a user must not be reused for one. The renderer is shared, which is
  * what keeps the initials fallback from being rebuilt here.
  */
-const JudgePortrait = ({ judge }: { judge: DecisionJudge }) => (
+const JudgePortrait = ({ seat }: { seat: DecisionBenchSeat }) => (
   <ReviewAuthorAvatar
     className="size-9"
-    image={
-      judge.portrait === null ? null : judgePortraitSrc(judge.portrait.url)
-    }
-    name={judge.name}
+    image={seat.portrait === null ? null : judgePortraitSrc(seat.portrait.url)}
+    name={seat.name}
   />
 );

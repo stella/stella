@@ -7,8 +7,7 @@ type BoundedReadQuery<TRow> = {
 };
 
 export type BoundedReadResult<TRow> =
-  | { type: "complete"; rows: TRow[] }
-  | { type: "overflow"; cap: number };
+  { type: "complete"; rows: TRow[] } | { type: "overflow"; cap: number };
 
 /** Reads one extra row to distinguish a complete export from a truncated one. */
 export const readBounded = async <TRow>(

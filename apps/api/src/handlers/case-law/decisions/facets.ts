@@ -1,12 +1,12 @@
 import { Result } from "better-result";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
+import { status } from "@/api/http/status";
 import {
   type NonRedistributableSourcesError,
   readNonRedistributableCaseLawSourceIds,
@@ -31,11 +31,13 @@ import { logger } from "@/api/lib/observability/logger";
  * without still answers from Postgres.
  */
 
-export const listDecisionFacetsQuerySchema = t.Object({
+export const listDecisionFacetsQuerySchema = v.object({
   country: tPublicLawCountry,
 });
 
-type ListDecisionFacetsQuery = Static<typeof listDecisionFacetsQuerySchema>;
+type ListDecisionFacetsQuery = v.InferOutput<
+  typeof listDecisionFacetsQuerySchema
+>;
 
 const FACETS_CACHE_TTL_MS = 5 * 60 * 1000;
 const FACETS_CACHE_MAX_ENTRIES = 32;
@@ -72,8 +74,7 @@ export const listDecisionFacetsHandler = async ({
 };
 
 type BrowseFacetsReadError =
-  | LegalBrowseFacetsError
-  | NonRedistributableSourcesError;
+  LegalBrowseFacetsError | NonRedistributableSourcesError;
 
 export type BrowseFacetsUnderPolicyRead = {
   country: string;

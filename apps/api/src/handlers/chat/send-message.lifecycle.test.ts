@@ -10,6 +10,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { HELD_TEST_STREAM_BINDING } from "@/api/tests/helpers/sse-stream-binding";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -96,6 +97,7 @@ describe("send lifecycle checkpoint indexing", () => {
           await run.settle(async () => ({ type: "not-owned" }));
         })(),
         memoryStream({ runId: Bun.randomUUIDv7() }),
+        HELD_TEST_STREAM_BINDING,
       );
       await response.text();
       await lifecycle.cleanup();

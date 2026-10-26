@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import type { CzRegionalApiItem } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
 import type { CzRegionalListingIdentity } from "@/api/scripts/cz-regional-repair-plan";
 import {
+  checkRepairRange,
   CZ_REGIONAL_FEED_START,
   CZ_REGIONAL_LANGUAGE,
-  checkRepairRange,
   czRegionalListingIdentity,
   czRegionalListingKeys,
   diffCzRegionalListing,

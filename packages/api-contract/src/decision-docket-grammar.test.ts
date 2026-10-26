@@ -74,6 +74,25 @@ const canonicalDocketArbitraries = {
           appeal ? " P" : ""
         }`,
     ),
+  GBR: fc
+    .tuple(
+      fc.integer({ min: 1600, max: 2099 }),
+      fc.constantFrom(
+        "UKSC",
+        "UKPC",
+        "UKHL",
+        "EWCA Civ",
+        "EWCA Crim",
+        "EWHC",
+        "UKUT",
+        "UKFTT",
+        "EAT",
+        "EWFC",
+        "EWCOP",
+      ),
+      fc.integer({ min: 1, max: 999_999 }),
+    )
+    .map(([year, court, number]) => `[${year}] ${court} ${number}`),
   HUN: fc.oneof(
     fc
       .tuple(
@@ -367,6 +386,43 @@ describe("declared decision docket grammars", () => {
       }
     });
   }
+});
+
+describe("British neutral citations", () => {
+  test("court-specific divisions reject malformed and foreign citations", () => {
+    for (const raw of [
+      "2024 UKSC 12",
+      "[24] UKSC 12",
+      "[2024] UKSC 0",
+      "[2024] UKSC -12",
+      "[2024] UKSC 12 (KB)",
+      "[2024] EWCA 12",
+      "[2024] EWCA Admin 12",
+      "[2024] EWHC 123 (IAC)",
+      "[2024] EWHC 123 (Unknown)",
+      "[2024] EWHC 123 KB",
+      "[2024] EWHC 123 (KB) extra",
+      "[2024] CSIH 12",
+      "[2024] NICA 12",
+      "[2024] UKSC 12/13",
+    ]) {
+      expect(DECISION_DOCKET_GRAMMARS.GBR.parse(raw), raw).toBeNull();
+    }
+  });
+
+  test("EWHC division metadata remains formatted but leaves the identity key", () => {
+    const citations = DECISION_DOCKET_GRAMMAR_FIXTURES.GBR.filter(
+      ({ canonical }) => canonical === "[2024] EWHC 123",
+    ).flatMap(({ variants }) => variants);
+    expect(citations.length).toBe(14);
+    for (const citation of citations) {
+      expect(DECISION_DOCKET_GRAMMARS.GBR.parse(citation)).toEqual({
+        jurisdiction: "GBR",
+        formatted: citation,
+        canonical: "[2024]ewhc123",
+      });
+    }
+  });
 });
 
 describe("Slovak Constitutional Court dockets", () => {

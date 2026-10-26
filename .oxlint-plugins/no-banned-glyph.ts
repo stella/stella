@@ -37,8 +37,8 @@ import type { Ranged } from "@oxlint/plugins";
 
 import {
   canonicalModuleId,
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   getPropertyName,
   isAstNode,
   isIdentifier,

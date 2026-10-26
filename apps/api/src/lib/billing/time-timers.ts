@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -13,17 +13,17 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
-export const timerParams = t.Object({ id: tSafeId("timeTimer") });
-export const timerDetails = t.Object({
-  matterId: t.Optional(t.Nullable(tSafeId("workspace"))),
-  description: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+export const timerParams = v.object({ id: resourceIdSchema("timeTimer") });
+export const timerDetails = v.object({
+  matterId: v.optional(v.nullable(resourceIdSchema("workspace"))),
+  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
 });
 
 export type TimerOwner = {

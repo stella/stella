@@ -22,8 +22,7 @@ import type { ChatThreadId } from "@/lib/chat-thread-ref";
 
 /** What the owner knows about a document. At most one thread, ever. */
 export type LegalDocumentChatThreadLookup =
-  | { status: "none" }
-  | { status: "thread"; threadId: ChatThreadId };
+  { status: "none" } | { status: "thread"; threadId: ChatThreadId };
 
 type LegalDocumentChatThreadsState = {
   /** Document key → the thread its conversation lives in. */

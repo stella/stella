@@ -1,7 +1,7 @@
 import { chat, EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk, ContentPart } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
@@ -215,7 +215,7 @@ const adapter = new InspectableOpenRouterAdapter(
 
 describe("OpenRouter document transport", () => {
   test("serializes inline PDF bytes as file_data instead of a URL or text", () => {
-    const base64 = Buffer.from("%PDF-1.4\nsynthetic").toString("base64");
+    const base64 = Buffer.from("%PDF-1.4\nsynthetic").toBase64();
 
     expect(
       adapter.convertForRequest({
@@ -277,7 +277,7 @@ describe("OpenRouter document transport", () => {
     });
 
     try {
-      const base64 = Buffer.from("%PDF-1.4\nwire").toString("base64");
+      const base64 = Buffer.from("%PDF-1.4\nwire").toBase64();
       const wireAdapter = new StellaOpenRouterTextAdapter(
         { apiKey: "test-openrouter-key" },
         "google/gemini-2.5-flash",

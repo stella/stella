@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import type { ReactElement, ReactNode, Ref } from "react";
 
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import type { DecisionCaption } from "@stll/legal-ast/decision-caption";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -32,7 +33,6 @@ import {
   footnoteParts,
   resolveDecisionLinkOverlaps,
   topMatterBlocks,
-  visibleDecisionBlocks,
   wrappedParagraphRuns,
 } from "./decision-text.logic";
 import type {
@@ -47,8 +47,8 @@ import {
   FulltextFallback,
   HighlightedText,
   InlineContent,
-  WrappedParagraphRun,
   rangesForPiece,
+  WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
 import { locateExternalCjeuCitations } from "./fallback-legal-anchors";
@@ -66,8 +66,8 @@ import type {
   CitationAnchorSource,
   CitedProvisionTarget,
   DecisionProvisionAnchor,
-  ExternalDecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
+  ExternalDecisionProvisionAnchor,
   ReaderDecision,
 } from "./reader-types";
 import { sanitizeHref } from "./sanitize-href";
@@ -745,8 +745,7 @@ export type PrepareDecisionTextPlacementsOptions = {
   citationAnchors: readonly CitationAnchorSource[];
   provisionAnchors: readonly DecisionProvisionAnchor[];
   externalProvisionAnchors?:
-    | readonly ExternalDecisionProvisionAnchor[]
-    | undefined;
+    readonly ExternalDecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors: readonly DecisionStatuteCitationAnchor[];
 };
 

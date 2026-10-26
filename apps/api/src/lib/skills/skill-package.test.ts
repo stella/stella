@@ -9,8 +9,8 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
-  SafeOutboundFetchResponse,
   safeOutboundFetchBytes,
+  SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 

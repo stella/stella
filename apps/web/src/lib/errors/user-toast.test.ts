@@ -14,6 +14,30 @@ import {
 
 const FAILURE = "That did not work";
 
+/**
+ * The reports this module makes. Other work in the process may report through
+ * the same analytics singleton, so assertions count only user-visible reports.
+ */
+const userVisibleReports = (capture: {
+  mock: { calls: readonly (readonly unknown[])[] };
+}) =>
+  capture.mock.calls.filter(([, options]) => {
+    if (
+      typeof options !== "object" ||
+      options === null ||
+      !("context" in options)
+    ) {
+      return false;
+    }
+    const { context } = options;
+    return (
+      typeof context === "object" &&
+      context !== null &&
+      "type" in context &&
+      context.type === "user-visible"
+    );
+  });
+
 /** Let the detached rejection handler run. */
 const settle = async () => {
   await sleep(0);
@@ -39,9 +63,13 @@ describe("detachedUserAction", () => {
     await settle();
 
     expect(capture).toHaveBeenCalledWith(failure, {
-      feature: "web",
-      routeTemplate: "unknown",
-      type: "user-visible",
+      fingerprintKey: "reportUserVisibleError:failure",
+      scope: { type: "request", method: "GET", routeTemplate: "unknown" },
+      context: {
+        feature: "web",
+        routeTemplate: "unknown",
+        type: "user-visible",
+      },
     });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls.at(0)?.[0]).toMatchObject({ type: "error" });
@@ -59,7 +87,7 @@ describe("detachedUserAction", () => {
     });
     await settle();
 
-    expect(capture).not.toHaveBeenCalled();
+    expect(userVisibleReports(capture)).toEqual([]);
     expect(add).not.toHaveBeenCalled();
   });
 });
@@ -74,7 +102,7 @@ describe("notifyUserError", () => {
     notifyUserError(undefined, "First notice");
     notifyUserError(undefined, "Second notice");
 
-    expect(capture).toHaveBeenCalledTimes(2);
+    expect(userVisibleReports(capture)).toHaveLength(2);
   });
 
   test("reports the same notice without an error once", () => {
@@ -86,7 +114,7 @@ describe("notifyUserError", () => {
     notifyUserError(undefined, FAILURE);
     notifyUserError(undefined, FAILURE);
 
-    expect(capture).toHaveBeenCalledTimes(1);
+    expect(userVisibleReports(capture)).toHaveLength(1);
   });
 
   test("reports the same notice once per occurrence", () => {
@@ -99,7 +127,7 @@ describe("notifyUserError", () => {
     notifyUserError(undefined, FAILURE, { occurrence: "first" });
     notifyUserError(undefined, FAILURE, { occurrence: "second" });
 
-    expect(capture).toHaveBeenCalledTimes(2);
+    expect(userVisibleReports(capture)).toHaveLength(2);
   });
 
   test("does not report a boundary error again at the root", () => {
@@ -107,12 +135,18 @@ describe("notifyUserError", () => {
       () => undefined,
     );
     const failure = new Error("render failed");
-    const report = (error: unknown) => capture(error);
+    const report = (error: unknown) =>
+      capture(error, {
+        fingerprintKey: "notifyUserError:boundary",
+        scope: { type: "handler", handlerId: "notifyUserError:boundary" },
+      });
 
     reportErrorOnce(failure, report);
     reportErrorOnce(failure, report);
 
-    expect(capture).toHaveBeenCalledTimes(1);
+    expect(
+      capture.mock.calls.filter(([reported]) => reported === failure),
+    ).toHaveLength(1);
   });
 
   test("reports a visible error once with explicit route metadata", () => {
@@ -131,11 +165,15 @@ describe("notifyUserError", () => {
       routeTemplate: "/auth/error",
     });
 
-    expect(capture).toHaveBeenCalledTimes(1);
+    expect(userVisibleReports(capture)).toHaveLength(1);
     expect(capture).toHaveBeenCalledWith(failure, {
-      feature: "auth",
-      routeTemplate: "/auth/error",
-      type: "user-visible",
+      fingerprintKey: "reportUserVisibleError:failure",
+      scope: { type: "request", method: "GET", routeTemplate: "/auth/error" },
+      context: {
+        feature: "auth",
+        routeTemplate: "/auth/error",
+        type: "user-visible",
+      },
     });
   });
 
@@ -151,7 +189,7 @@ describe("notifyUserError", () => {
 
     expect(notifyUserError(refusal, FAILURE)).toBe(false);
 
-    expect(capture).toHaveBeenCalledTimes(1);
+    expect(userVisibleReports(capture)).toHaveLength(1);
     expect(add.mock.calls.at(0)?.at(0)).toMatchObject({
       id: "action_not_enabled",
       type: "info",

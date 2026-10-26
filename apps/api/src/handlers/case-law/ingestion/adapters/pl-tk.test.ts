@@ -29,8 +29,8 @@ import {
   assemblePlTkDecision,
   buildPlTkDecision,
   createPlTkPageCache,
-  createPlTkSessionCooldown,
   createPlTkPublisherSessionCooldown,
+  createPlTkSessionCooldown,
   encodePlTkCursor,
   parsePlTkCursor,
   parsePlTkListingPage,
@@ -38,9 +38,9 @@ import {
   PL_TK_QUARANTINE_PREFIX,
   PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
   plTkAdapter,
-  plTkSessionCooldown,
   plTkBatchWindow,
   plTkRawPartsOf,
+  plTkSessionCooldown,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type {
   PlTkListingRow,

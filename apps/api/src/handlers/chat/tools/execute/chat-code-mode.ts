@@ -1,15 +1,15 @@
 import {
   renderLazyCatalogEntry,
-  toolDefinition,
   type SchemaInput,
   type ServerTool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
+  type CodeModeTool,
   createCodeMode,
+  type CreateCodeModeResult,
   generateTypeStubs,
   toolsToBindings,
-  type CodeModeTool,
-  type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
 

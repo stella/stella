@@ -32,8 +32,8 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readS3ObjectBounded, writeS3ObjectWithRetry } from "@/api/lib/s3";
 import type {
-  S3ObjectWriteOwnership,
   S3ObjectWriteCertainty,
+  S3ObjectWriteOwnership,
 } from "@/api/lib/s3";
 
 const UNSCANNED_READ_TIMEOUT_MS = 30_000;
@@ -46,8 +46,7 @@ const SCAN_STATE_RECORD_FAILED_SINK = failureSink({
 export type ScannedObject = { scanState: "scanned"; key: FileKey };
 
 export type StoredObject =
-  | ScannedObject
-  | { scanState: "unscanned"; key: string };
+  ScannedObject | { scanState: "unscanned"; key: string };
 
 type StoredObjectRow = { key: string; scanState: StoredFileScanState };
 

@@ -14,8 +14,8 @@ import {
   decide,
   landingBuildRootInputs,
   landingClosure,
-  parseLockfile,
   type Lockfile,
+  parseLockfile,
   type Revision,
 } from "./landing-deploy-scope";
 

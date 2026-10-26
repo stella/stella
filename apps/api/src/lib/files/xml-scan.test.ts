@@ -10,8 +10,8 @@ import {
   removeXmlElements,
   replaceXmlElementContent,
   replaceXmlElements,
-  XmlScanError,
   xmlElementText,
+  XmlScanError,
 } from "./xml-scan";
 
 type XmlOracleEvent =

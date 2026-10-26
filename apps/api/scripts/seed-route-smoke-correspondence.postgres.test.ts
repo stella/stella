@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { organization, member, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import {
   correspondence,
   correspondenceFilers,

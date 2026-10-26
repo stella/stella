@@ -13,16 +13,21 @@ import { eq } from "drizzle-orm";
 import { session } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { createHttpApp } from "@/api/http/app";
+import { setResponseHeaders } from "@/api/http/headers";
+import type { Middleware } from "@/api/http/route";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { createHumanSession } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 /**
  * The composer menus ask for skill availability on every chat page, and the
@@ -31,12 +36,13 @@ import {
  * and the same for each of several calls in flight at once.
  *
  * Sign-in leaves the signed session snapshot cookie, so auth reads no session
- * row: member role and AI settings (2). The handler reads the caller's skills,
- * then the chat tool inputs a built-in skill's required tools are decided
- * over: tool overrides, matters, web-search keys and registry credentials,
- * each in its own scoped transaction (5 x 2).
+ * row: member role and AI settings (2), then the AI gate confirms the caller
+ * is still a member (1). The handler reads the caller's skills, then the chat
+ * tool inputs a built-in skill's required tools are decided over: tool
+ * overrides, matters, web-search keys and registry credentials, each in its
+ * own scoped transaction (5 x 2).
  */
-const WITH_SESSION_SNAPSHOT = 12;
+const WITH_SESSION_SNAPSHOT = 13;
 /**
  * Without the snapshot cookie auth checks the live session row and reads its
  * user (2). The first such call also records the session's activity; later
@@ -52,20 +58,44 @@ beforeAll(async () => {
   await initAgentAuthTestDb({ logger: queryCountLogger });
 });
 
+const QUERY_COUNT_HEADER = "x-test-request-queries";
+
+/**
+ * Counts the statements one request issues, from its first stage to its
+ * answer, the way the API's request scope opens one counter per request. The
+ * count leaves on the answer, so concurrent calls never share a counter.
+ */
+const countRequestQueries: Middleware = async (_ctx, inner) =>
+  await runWithQueryCounter(async (counter) => {
+    const response = await inner();
+    return setResponseHeaders(
+      response,
+      { [QUERY_COUNT_HEADER]: String(counter.count) },
+      { overwrite: true },
+    );
+  });
+
+const server = serveForTest(
+  createHttpApp({
+    routes: chatRoute,
+    middleware: [countRequestQueries, errorBoundary],
+  }),
+);
+
 afterAll(async () => {
+  await server.stop();
   await releaseAgentAuthTestDb();
 });
 
-const countQueries = async (headers: Record<string, string>) =>
-  await runWithQueryCounter(async (counter) => {
-    const response = await chatRoute.handle(
-      new Request("http://localhost/chat/skill-availability", {
-        headers,
-      }),
-    );
-    expect(response.status).toBe(200);
-    return counter.count;
-  });
+const countQueries = async (headers: Record<string, string>) => {
+  const response = await server.fetch(
+    new Request("http://localhost/chat/skill-availability", {
+      headers,
+    }),
+  );
+  expect(response.status).toBe(200);
+  return Number(response.headers.get(QUERY_COUNT_HEADER));
+};
 
 const requireNextRequestToRecordActivity = async (userId: string) => {
   await rootDb
@@ -110,6 +140,11 @@ describe("skill availability runs a fixed query plan", () => {
       orgName: "Skill queries",
       orgSlugPrefix: "skill-queries",
     });
+    // Session setup can record activity before the measured request.
+    await rootDb
+      .update(session)
+      .set({ lastSeenAt: null })
+      .where(eq(session.userId, userId));
     const withoutSnapshot = cookieHeader
       .split("; ")
       .filter((pair) => !pair.includes("session_data="))
@@ -134,6 +169,11 @@ describe("skill availability runs a fixed query plan", () => {
       orgName: "Skill queries",
       orgSlugPrefix: "skill-queries",
     });
+    // Session setup can record activity before the measured request.
+    await rootDb
+      .update(session)
+      .set({ lastSeenAt: null })
+      .where(eq(session.userId, userId));
     const credential =
       // The app names its cookies with its own prefix, not better-auth's default.
       getSessionCookie(new Headers({ cookie: cookieHeader }), {

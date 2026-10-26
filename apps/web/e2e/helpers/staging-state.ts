@@ -58,8 +58,7 @@ export const parseStagingState = (raw: string | undefined): StagingState => {
 };
 
 export type StagingCheckDisposition =
-  | { mode: "gating" }
-  | { mode: "report-only"; reason: string };
+  { mode: "gating" } | { mode: "report-only"; reason: string };
 
 export const stagingCheckDisposition = (
   state: StagingState,

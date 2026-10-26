@@ -19,10 +19,10 @@ import { drawPropertySamples } from "@stll/property-testing";
 
 import { markdownReaders } from "./ci-package-scope";
 import {
-  computeChangedFileScope,
-  DEFAULT_DETECTORS,
   type ChangedFileScopeDetectors,
   type ChangedFileScopeInput,
+  computeChangedFileScope,
+  DEFAULT_DETECTORS,
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { sourceImportClosure } from "./detect-route-smoke-changes";
@@ -38,6 +38,7 @@ type SelectorCase = {
   e2eLandingRequired?: string;
   event?: string;
   title?: string;
+  armed?: boolean;
 };
 const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
   cases.map((item) => {
@@ -50,6 +51,7 @@ const planSelector = <C extends SelectorCase>(cases: readonly C[]) =>
         suiteDepth: item.suiteDepth ?? "fast",
         heavyOnly: false,
         prTitle: item.title ?? "",
+        armed: item.armed ?? false,
       },
       {
         ...DEFAULT_DETECTORS,
@@ -141,6 +143,21 @@ test("documentation and landing detector failures widen their workflow scopes", 
     expect(deploy.e2e_landing_required).toBe("true");
     expect(deploy.landing_build_required).toBe("false");
   }
+});
+
+test("an armed pull request builds the landing at merge-group scope", () => {
+  const scope = (armed: boolean) =>
+    computeChangedFileScope(
+      {
+        ...detectorInput("pull_request"),
+        // A landing input outside e2e-landing, which builds the landing itself.
+        changedFiles: ["docs/changelog/v1.md"],
+        armed,
+      },
+      detectors({ landingBuild: () => false, landingDeploy: () => false }),
+    ).landing_build_required;
+  expect(scope(false)).toBe("false");
+  expect(scope(true)).toBe("true");
 });
 
 // The path list covers the landing's own tree; the deploy scope adds every
@@ -444,6 +461,110 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
   ).toEqual(["true"]);
 });
 
+test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
+  const dependencyInputs = [
+    "scripts/dependency-audit.ts",
+    "scripts/check-trusted-dependencies.ts",
+    "scripts/retry.sh",
+    "bun.lock",
+    "package.json",
+    "apps/web/package.json",
+    "bunfig.toml",
+    "patches/example.patch",
+    "Cargo.lock",
+    "apps/desktop/Cargo.toml",
+    "pyproject.toml",
+    "uv.lock",
+    "requirements.txt",
+    ".github/workflows/ci.yml",
+    ".github/actions/example/action.yml",
+    "action.yml",
+    "action.yaml",
+  ];
+  const cases = [
+    ...dependencyInputs.map((file) => ({ files: [file], expected: "true" })),
+    { files: ["apps/web/src/example.ts"], expected: "false" },
+  ];
+  for (const { item, plan } of planSelector(
+    cases.map(({ files }) => ({
+      files,
+      outputs: ["dependency_changes_required"] as const,
+    })),
+  )) {
+    const expected = cases.find(({ files }) => files[0] === item.files[0]);
+    if (!expected) {
+      throw new TypeError(
+        `Missing dependency selector case: ${String(item.files[0])}`,
+      );
+    }
+    expect(plan, item.files[0]).toEqual([expected.expected]);
+  }
+});
+
+test("wide scopes plan dependency checks only for events that run them", () => {
+  const wide = (eventName: string) =>
+    computeChangedFileScope({
+      changedFiles: [],
+      comparisonBase: "",
+      scopeUnknown: true,
+      eventName,
+      suiteDepth: "fast",
+      heavyOnly: false,
+      prTitle: "",
+    })["dependency_changes_required"];
+  expect(wide("workflow_dispatch")).toBe("false");
+  for (const eventName of ["pull_request", "merge_group"]) {
+    expect(wide(eventName), eventName).toBe("true");
+  }
+});
+
+test("migration checks follow migration inputs and skip unrelated changes", () => {
+  for (const file of [
+    "apps/api/drizzle/0001_example.sql",
+    "apps/api/src/db/schema.ts",
+    "scripts/check-migrations.sh",
+    "docker/postgres/init.sql",
+    ".github/workflows/ci.yml",
+  ]) {
+    expect(runSelector([file], ["database_migrations_required"]), file).toEqual(
+      ["true"],
+    );
+  }
+  expect(
+    runSelector(["apps/web/src/example.ts"], ["database_migrations_required"]),
+  ).toEqual(["false"]);
+});
+
+test("migration detector skips only on a successful explicit false answer", () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "migration-detector-"));
+  mkdirSync(nodePath.join(root, "scripts"));
+  try {
+    for (const { answer, exitCode, expected } of [
+      { answer: "false", exitCode: 0, expected: "false" },
+      { answer: "true", exitCode: 0, expected: "true" },
+      { answer: "false", exitCode: 1, expected: "true" },
+      { answer: "unknown", exitCode: 0, expected: "true" },
+      { answer: "", exitCode: 0, expected: "true" },
+    ]) {
+      writeFileSync(
+        nodePath.join(root, "scripts/detect-security-workflow-changes.sh"),
+        `printf '%s\n' '${answer}'\nexit ${exitCode}\n`,
+      );
+      const scope = computeChangedFileScope({
+        ...detectorInput("pull_request"),
+        changedFiles: ["README.md"],
+        root,
+      });
+      expect(
+        scope["database_migrations_required"],
+        `${answer}/${exitCode}`,
+      ).toBe(expected);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("the lockfile release-age guard follows every tracked lockfile", () => {
   for (const file of [
     "bun.lock",
@@ -472,6 +593,7 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
 test("desktop Windows dry run follows release inputs and skips unrelated changes", () => {
   const output = "desktop_windows_dry_run_required";
   for (const file of [
+    "VERSION",
     ".github/workflows/release-desktop.yml",
     ".github/actions/desktop-windows-build/action.yml",
     "scripts/desktop-release-step.ts",
@@ -489,9 +611,57 @@ test("desktop Windows dry run follows release inputs and skips unrelated changes
   for (const file of [
     "scripts/ci-windows-dry-run-result.ts",
     "scripts/wasm-toolchain.sh",
-    "scripts/run-oxfmt.ts",
   ]) {
     expect(runSelector([file], [output]), file).toEqual(["true"]);
+  }
+});
+
+test("desktop Windows dry run scopes merge groups but stays fail closed elsewhere", () => {
+  const output = ["desktop_windows_dry_run_required"] as const;
+  expect(
+    runSelector(
+      ["apps/desktop/src/mainview/app.ts"],
+      output,
+      "full",
+      "false",
+      "merge_group",
+    ),
+  ).toEqual(["true"]);
+  expect(
+    runSelector(
+      ["apps/api/src/server.ts"],
+      output,
+      "full",
+      "false",
+      "merge_group",
+    ),
+  ).toEqual(["false"]);
+
+  const unknown = computeChangedFileScope(
+    {
+      ...detectorInput("merge_group"),
+      changedFiles: [],
+      scopeUnknown: true,
+      suiteDepth: "full",
+    },
+    detectors(),
+  );
+  expect(unknown.desktop_windows_dry_run_required).toBe("true");
+
+  for (const input of [
+    { event: "push", heavyOnly: false },
+    { event: "schedule", heavyOnly: true },
+  ]) {
+    const scope = computeChangedFileScope(
+      {
+        ...detectorInput(input.event),
+        changedFiles: ["apps/api/src/server.ts"],
+        suiteDepth: "full",
+        heavyOnly: input.heavyOnly,
+      },
+      detectors(),
+    );
+    expect(scope.desktop_windows_dry_run_required, input.event).toBe("true");
   }
 });
 
@@ -536,7 +706,7 @@ test("a fix pull request that changes an API test plans the fix-tests-on-base ch
 
 const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
-test("a pull request builds the API image for arm64 unless it releases", () => {
+test("a pull request builds the API image for arm64 unless it releases or is armed", () => {
   const outputs = ["api_image_platforms"] as const;
   const expectations = drawPropertySamples(apiSourceSiblings, {
     numRuns: 10,
@@ -555,6 +725,15 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
         files,
         outputs,
         suiteDepth: "full",
+        platforms: ["linux/amd64", "linux/arm64"],
+        label,
+      },
+      // An armed pull request proves the image at merge-group scope.
+      {
+        files,
+        outputs,
+        suiteDepth: "fast",
+        armed: true,
         platforms: ["linux/amd64", "linux/arm64"],
         label,
       },

@@ -12,6 +12,7 @@ import { apikey, member, organization, user } from "@/api/db/auth-schema";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -151,6 +152,15 @@ beforeAll(async () => {
       { createdAt: new Date(), id: ORG_B, name: "Org B", slug: ORG_B },
     ])
     .onConflictDoNothing();
+  await Promise.all(
+    [ORG_A, ORG_B].map(
+      async (id) =>
+        await recordNewOrganizationAccessState(testDb, {
+          organizationId: toSafeId<"organization">(id),
+          now: new Date(),
+        }),
+    ),
+  );
 
   await testDb
     .insert(user)

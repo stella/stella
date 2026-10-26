@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -12,16 +14,22 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
-const readInvoicesQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.invoicesPageSizeMax,
-      description: "Max invoices to return",
-    }),
+const readInvoicesQuerySchema = v.object({
+  limit: v.optional(
+    v.pipe(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.invoicesPageSizeMax),
+        ),
+      ),
+      v.description("Max invoices to return"),
+    ),
   ),
-  cursor: t.Optional(
-    tPaginationCursor({
+  cursor: v.optional(
+    paginationCursorSchema({
       description:
         "Opaque cursor from a previous list_invoices call to fetch the next page",
     }),
@@ -38,7 +46,7 @@ const readInvoices = createSafeHandler(
     contract: "patch",
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
-      "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
+      "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
       "and total, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
@@ -87,6 +95,7 @@ const readInvoices = createSafeHandler(
             invoiceDate: invoices.invoiceDate,
             dueDate: invoices.dueDate,
             currency: invoices.currency,
+            language: invoices.language,
             totalAmount: invoices.totalAmount,
             billingMode: invoices.billingMode,
             flatFeeAmount: invoices.flatFeeAmount,
@@ -120,6 +129,7 @@ const readInvoices = createSafeHandler(
         invoiceDate: row.invoiceDate,
         dueDate: row.dueDate,
         currency: row.currency,
+        language: row.language,
         totalAmount: row.totalAmount,
         billingMode: row.billingMode,
         flatFeeAmount: row.flatFeeAmount,

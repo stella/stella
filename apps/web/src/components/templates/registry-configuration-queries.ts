@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const businessRegistryConfigurationKeys = {
@@ -20,7 +20,7 @@ export const businessRegistryConfigurationOptions = ({
     queryKey: businessRegistryConfigurationKeys.scoped(organizationId),
     enabled,
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["business-registry-credentials"].get(
           {
             fetch: { signal },

@@ -40,6 +40,7 @@ import type {
   ExtractionRunStore,
 } from "@/api/lib/extraction-runs/store";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { markPropertiesFresh } from "@/api/lib/properties/property-status";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
@@ -61,20 +62,15 @@ import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtim
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
 import {
-  brandPersistedExtractionRunId,
   brandPersistedEntityId,
+  brandPersistedExtractionRunId,
   brandPersistedOrganizationId,
   brandPersistedPropertyId,
   brandPersistedUserId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { broadcast } from "@/api/lib/sse";
-import {
-  collectFullWorkflowTargetIds,
-  fetchExplicitWorkflowTargetRows,
-  readFullWorkflowSnapshotCursor,
-} from "@/api/lib/workflow-target-queries";
-import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
+import { collectWorkflowTargetIds } from "@/api/lib/workflow-target-queries";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
   AIJustification,
@@ -100,10 +96,10 @@ import type { OrphanCellsDatabase } from "@/api/lib/workflow/orphan-cells";
 import { reconcilePendingCells } from "@/api/lib/workflow/orphan-recovery";
 import { settle } from "@/api/lib/workflow/owned-state";
 import {
-  workflowQueueClassForServiceTier,
   WORKFLOW_QUEUE_NAMES,
   WORKFLOW_WORKER_SPECS,
   type WorkflowQueueClass,
+  workflowQueueClassForServiceTier,
   type WorkflowWorkerSpec,
 } from "@/api/lib/workflow/queue-topology";
 import { getRootWorkflowRunStateStore } from "@/api/lib/workflow/root-run-state-store";
@@ -442,7 +438,12 @@ const removeQueuedWorkflowJobs = async (
         try {
           await q.remove(jobId);
         } catch (error: unknown) {
-          captureError(error, { workflowJobId: jobId });
+          captureError(
+            error,
+            handlerErrorContext("lib.removeQueuedWorkflowJobs", {
+              workflowJobId: jobId,
+            }),
+          );
         }
       }),
     );
@@ -592,7 +593,12 @@ const planAndEnqueueWorkflow = async (
     if (!hasWork) {
       await extractionRunStore
         .skip(runKey)
-        .catch((error: unknown) => captureError(error, { workspaceId }));
+        .catch((error: unknown) =>
+          captureError(
+            error,
+            handlerErrorContext("workflowPlan.skipNoWork", { workspaceId }),
+          ),
+        );
       await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
@@ -602,40 +608,23 @@ const planAndEnqueueWorkflow = async (
     );
     await runStateStore.extendPlanningLease({ runLockTtlSec, workspaceId });
 
-    const isExplicitRun =
-      inputEntityIds !== undefined && inputEntityIds.length > 0;
-    const fullWorkflowCreatedAtCutoff = isExplicitRun
-      ? null
-      : await readFullWorkflowSnapshotCursor({ scopedDb });
-    const explicitEntityIds = isExplicitRun
-      ? resolveWorkflowTargetEntityIds({
-          entityRows: await fetchExplicitWorkflowTargetRows({
-            inputEntityIds,
-            scopedDb,
-            workspaceId,
-          }),
-          inputEntityIds,
-          inputOrder,
-        })
-      : [];
-    const fullWorkflowEntityIds = isExplicitRun
-      ? []
-      : await collectFullWorkflowTargetIds({
-          createdAtCutoff:
-            fullWorkflowCreatedAtCutoff ??
-            panic("Full workflow target collection requires a snapshot cursor"),
-          scopedDb,
-          workspaceId,
-        });
-    const targetEntityIds = isExplicitRun
-      ? explicitEntityIds
-      : fullWorkflowEntityIds;
+    const targetEntityIds = await collectWorkflowTargetIds({
+      inputEntityIds,
+      inputOrder,
+      scopedDb,
+      workspaceId,
+    });
     const targetCount = targetEntityIds.length;
 
     if (targetCount === 0) {
       await extractionRunStore
         .skip(runKey)
-        .catch((error: unknown) => captureError(error, { workspaceId }));
+        .catch((error: unknown) =>
+          captureError(
+            error,
+            handlerErrorContext("workflowPlan.skipNoTargets", { workspaceId }),
+          ),
+        );
       await runStateStore.clear(workspaceId);
       return { status: "skipped" };
     }
@@ -666,7 +655,12 @@ const planAndEnqueueWorkflow = async (
 
     await extractionRunStore
       .start({ ...runKey, total: targetCount })
-      .catch((error: unknown) => captureError(error, { workspaceId }));
+      .catch((error: unknown) =>
+        captureError(
+          error,
+          handlerErrorContext("workflowPlan.startRun", { workspaceId }),
+        ),
+      );
 
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId);
@@ -714,10 +708,20 @@ const planAndEnqueueWorkflow = async (
   } catch (error: unknown) {
     await extractionRunStore
       .fail({ ...runKey, errorCode: errorTag(error) })
-      .catch((runError: unknown) => captureError(runError, { workspaceId }));
+      .catch((runError: unknown) =>
+        captureError(
+          runError,
+          handlerErrorContext("lib.planAndEnqueueWorkflow.runError", {
+            workspaceId,
+          }),
+        ),
+      );
     await runStateStore.clear(workspaceId);
     broadcastWorkflowStatus(workspaceId);
-    captureError(error, { workspaceId });
+    captureError(
+      error,
+      handlerErrorContext("workflowPlan.enqueue", { workspaceId }),
+    );
     return { status: "failed" };
   }
 };
@@ -768,9 +772,17 @@ export const startWorkflow = async ({
     await runStateStore
       .releaseClaim({ requestId, workspaceId })
       .catch((releaseError: unknown) =>
-        captureError(releaseError, { workspaceId }),
+        captureError(
+          releaseError,
+          handlerErrorContext("lib.releaseClaimAndFail.releaseError", {
+            workspaceId,
+          }),
+        ),
       );
-    captureError(cause, { workspaceId });
+    captureError(
+      cause,
+      handlerErrorContext("lib.releaseClaimAndFail.cause", { workspaceId }),
+    );
     return { status: "failed" };
   };
 
@@ -1005,10 +1017,13 @@ const handleWorkflowJobFailed = (
         extractionRuns,
       });
     })().catch((completionError: unknown) => {
-      captureError(completionError, {
-        workspaceId: data.workspaceId,
-        entityId: data.entityId,
-      });
+      captureError(
+        completionError,
+        handlerErrorContext("lib.handleWorkflowJobFailed.completionError", {
+          workspaceId: data.workspaceId,
+          entityId: data.entityId,
+        }),
+      );
     }),
   );
 };
@@ -1100,7 +1115,10 @@ export const handleWorkflowReconcileFailure = (error: unknown): void => {
     });
     return;
   }
-  captureError(error);
+  captureError(
+    error,
+    handlerErrorContext("lib.handleWorkflowReconcileFailure"),
+  );
   logger.error("workflow.reconcile_failed", errorSystemFields(error));
 };
 
@@ -1166,7 +1184,10 @@ export const initWorkflowWorkers = ({ db }: BullMqWorkerContext) => {
       );
       for (const result of closeResults) {
         if (result.status === "rejected") {
-          captureError(result.reason);
+          captureError(
+            result.reason,
+            handlerErrorContext("lib.initWorkflowWorkers.result_reason"),
+          );
         }
       }
       await Promise.allSettled([...pendingFailedJobFinalizations]);
@@ -1257,10 +1278,13 @@ const failEntity = async ({
 }: FailEntityOptions): Promise<void> => {
   await markPendingPlannedFieldsErrored(actor, data).catch(
     (pendingFieldsError: unknown) => {
-      captureError(pendingFieldsError, {
-        workspaceId: data.workspaceId,
-        entityId: data.entityId,
-      });
+      captureError(
+        pendingFieldsError,
+        handlerErrorContext("lib.failEntity.pendingFieldsError", {
+          workspaceId: data.workspaceId,
+          entityId: data.entityId,
+        }),
+      );
     },
   );
   await extractionRuns
@@ -1271,10 +1295,13 @@ const failEntity = async ({
       errorCode,
     })
     .catch((runError: unknown) =>
-      captureError(runError, {
-        workspaceId: data.workspaceId,
-        entityId: data.entityId,
-      }),
+      captureError(
+        runError,
+        handlerErrorContext("lib.failEntity.runError", {
+          workspaceId: data.workspaceId,
+          entityId: data.entityId,
+        }),
+      ),
     );
   await onEntityCompleted({
     actor,
@@ -1674,28 +1701,34 @@ const processOneBatch = async ({
             onPartialAnswer: previewPublisher.publish,
           }),
         onRetryError: (error, attempt) => {
-          captureError(error, {
-            workspaceId,
-            entityId,
-            batchId: batch.id,
-            level: String(level),
-            requestId,
-            attempt: String(attempt),
-            retry: "true",
-          });
+          captureError(
+            error,
+            handlerErrorContext("lib.batchResult", {
+              workspaceId,
+              entityId,
+              batchId: batch.id,
+              level: String(level),
+              requestId,
+              attempt: String(attempt),
+              retry: "true",
+            }),
+          );
         },
         sleep,
         throwIfAborted: () => signal.throwIfAborted(),
       });
 
       if (Result.isError(batchResult)) {
-        captureError(batchResult.error, {
-          workspaceId,
-          entityId,
-          batchId: batch.id,
-          level: String(level),
-          requestId,
-        });
+        captureError(
+          batchResult.error,
+          handlerErrorContext("lib.processOneBatch.batchResult_error", {
+            workspaceId,
+            entityId,
+            batchId: batch.id,
+            level: String(level),
+            requestId,
+          }),
+        );
         erroredProperties.push(...aiModelProperties);
       } else {
         aiResults.push(...batchResult.value.aiResults);
@@ -1778,12 +1811,15 @@ const processOneBatch = async ({
         catch: (cause) => cause,
       });
       if (Result.isError(recorded)) {
-        captureError(recorded.error, {
-          workspaceId,
-          entityId,
-          batchId: batch.id,
-          operation: "document_review_run.table_findings",
-        });
+        captureError(
+          recorded.error,
+          handlerErrorContext("lib.processOneBatch.recorded_error", {
+            workspaceId,
+            entityId,
+            batchId: batch.id,
+            operation: "document_review_run.table_findings",
+          }),
+        );
       } else if (recorded.value.type === "failed") {
         logger.warn("document_review_run.table_run_failed", {
           entityId,
@@ -1995,7 +2031,12 @@ const onEntityCompleted = async ({
       total: result.total,
       workspaceId,
     })
-    .catch((error: unknown) => captureError(error, { workspaceId }));
+    .catch((error: unknown) =>
+      captureError(
+        error,
+        handlerErrorContext("lib.onEntityCompleted", { workspaceId }),
+      ),
+    );
 
   if (result.completed >= result.total) {
     await finishWorkflow(actor, extractionRuns);
@@ -2076,7 +2117,12 @@ const failRunBeforeFinalizing = async (
       workspaceId,
       errorCode,
     })
-    .catch((error: unknown) => captureError(error, { workspaceId }));
+    .catch((error: unknown) =>
+      captureError(
+        error,
+        handlerErrorContext("lib.failRunBeforeFinalizing", { workspaceId }),
+      ),
+    );
   await getRootWorkflowRunStateStore().clear(workspaceId);
   broadcastWorkflowStatus(workspaceId);
   broadcastWorkspaceResourceSetUpdated(workspaceId, RESOURCE_TYPE.PROPERTY);
@@ -2118,7 +2164,12 @@ const finishWorkflow = async (
   if (Result.isError(finalizationResult)) {
     // A transient Redis failure leaves the run intact so BullMQ can retry it.
     // It must never be reinterpreted as an empty or workspace-wide snapshot.
-    captureError(finalizationResult.error, { workspaceId });
+    captureError(
+      finalizationResult.error,
+      handlerErrorContext("lib.finishWorkflow.finalizationResult_error", {
+        workspaceId,
+      }),
+    );
     throw finalizationResult.error;
   }
   const manifestResult = requireWorkflowFinalizationManifest({
@@ -2127,7 +2178,12 @@ const finishWorkflow = async (
   });
   if (Result.isError(manifestResult)) {
     const invalidStateError = manifestResult.error;
-    captureError(invalidStateError, { workspaceId });
+    captureError(
+      invalidStateError,
+      handlerErrorContext("lib.finishWorkflow.invalidStateError", {
+        workspaceId,
+      }),
+    );
     await failRunBeforeFinalizing(
       actor,
       extractionRuns,
@@ -2158,7 +2214,10 @@ const finishWorkflow = async (
         });
       });
     } catch (error: unknown) {
-      captureError(error, { workspaceId });
+      captureError(
+        error,
+        handlerErrorContext("workflowFinish.flushSearch", { workspaceId }),
+      );
     }
   }
 
@@ -2168,7 +2227,12 @@ const finishWorkflow = async (
       organizationId,
       workspaceId,
     })
-    .catch((error: unknown) => captureError(error, { workspaceId }));
+    .catch((error: unknown) =>
+      captureError(
+        error,
+        handlerErrorContext("workflowFinish.completeRun", { workspaceId }),
+      ),
+    );
 
   // Clean up Redis state
   await runStateStore.clear(workspaceId);
@@ -2187,7 +2251,12 @@ const finishWorkflow = async (
     actor,
     planPropertyIds,
     startSuccessorWorkflow,
-  }).catch((error: unknown) => captureError(error, { workspaceId }));
+  }).catch((error: unknown) =>
+    captureError(
+      error,
+      handlerErrorContext("workflowFinish.routeDocuments", { workspaceId }),
+    ),
+  );
 
   // Grade whatever the workspace still owes: columns created mid-run, and the
   // columns of any start this run answered `already-running`. Unconditional by

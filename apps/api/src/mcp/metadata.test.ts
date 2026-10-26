@@ -5,6 +5,8 @@ import path from "node:path";
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  getMcpProtectedResourceMetadataUrl,
+  getMcpResourceUrl,
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -12,8 +14,6 @@ import {
   MCP_LAW_RESOURCE_SCOPES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
-  getMcpProtectedResourceMetadataUrl,
-  getMcpResourceUrl,
   STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
@@ -26,8 +26,8 @@ import {
   getMcpLogoUri,
   getMcpProtectedResourceMetadata,
   getMcpServerIcons,
-  MCP_LOGO_PATH,
   getMcpWwwAuthenticateHeader,
+  MCP_LOGO_PATH,
 } from "@/api/mcp/metadata";
 
 describe("MCP protected resource metadata", () => {

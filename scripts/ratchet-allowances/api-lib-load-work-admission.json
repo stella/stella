@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/load is the single owner of per-process work admission (work budget, pool table, admission proof). It replaces the upload finalize byte limiter and the Office evidence counter and is where later consumers (HTTP, queues, scheduler, heavy primitives) register, so it does not belong under either former owner's directory."
+}

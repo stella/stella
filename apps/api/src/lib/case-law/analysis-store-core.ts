@@ -14,9 +14,9 @@ import {
   and,
   eq,
   or,
+  type SQL,
   sql,
   TransactionRollbackError,
-  type SQL,
 } from "drizzle-orm";
 
 import type {
@@ -37,9 +37,9 @@ import {
 } from "./analysis-failure";
 import {
   analysisSentinel,
+  type AnalysisStoreKey,
   claimableAnalysisRowFor,
   storedAnalysisFingerprintFor,
-  type AnalysisStoreKey,
 } from "./stored-analysis";
 
 /**
@@ -78,25 +78,27 @@ type GuardedAnalysisClaim = AnalysisClaim & {
   unlessFailed: FailureClaimGuard;
 };
 
+type AnalysisOwnership =
+  | { type: "generation"; sentinel: AnalysisGenerating }
+  | { type: "revision"; expected: DecisionAnalysis };
+
 type AnalysisSave = {
   decisionId: SafeId<"caseLawDecision">;
   analysis: DecisionAnalysis;
-  /** The row's `contentHash` when the run was claimed. */
+  /** The row's content hash when the input was read. */
   contentHash: string | null;
-  /**
-   * The `analysis` value this run read, when the write must replace that
-   * exact value and no other. The fingerprint fence alone cannot separate
-   * two runs over the same document, so a writer that computed from
-   * something beside the document (the citation graph) passes what it saw
-   * and loses the race rather than overwriting a fresher result.
-   */
-  expected?: unknown;
+  /** A streaming claim uses run identity; a revision replaces the exact finished value. */
+  ownership: AnalysisOwnership;
 };
 
 type AnalysisRelease = {
   decisionId: SafeId<"caseLawDecision">;
   /** The sentinel `claim` returned to this run. */
   sentinel: AnalysisGenerating;
+};
+
+type AnalysisPartialSave = AnalysisRelease & {
+  partialTree: DecisionAnalysis["tree"];
 };
 
 type AnalysisFailureKey = {
@@ -145,6 +147,8 @@ export type AnalysisStore = {
    * moved between the claim and the save is a silent no-op otherwise.
    */
   save: (save: AnalysisSave) => Promise<boolean>;
+  /** Publishes complete streamed sections while this run still owns the row. */
+  savePartial: (save: AnalysisPartialSave) => Promise<boolean>;
   /**
    * Releases this run's sentinel, and only this run's: the exact value
    * `claim` wrote. A replacement run that took over this one's stale
@@ -199,7 +203,9 @@ const releaseRun = async (
         and(
           eq(caseLawDecisions.id, decisionId),
           // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
-          sql`${caseLawDecisions.analysis} = ${JSON.stringify(sentinel)}::text::jsonb`,
+          sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
+          sql`${caseLawDecisions.analysis}->>'runId' = ${sentinel.runId}`,
+          sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${sentinel.inputFingerprint}`,
         ),
       );
     return;
@@ -211,7 +217,9 @@ const releaseRun = async (
     WITH released AS (
       UPDATE "case_law_decisions" SET "analysis" = NULL
       WHERE "id" = ${decisionId}::uuid
-        AND "analysis" = ${JSON.stringify(sentinel)}::text::jsonb
+        AND "analysis"->>'status' = 'generating'
+        AND "analysis"->>'runId' = ${sentinel.runId}
+        AND "analysis"->>'inputFingerprint' = ${sentinel.inputFingerprint}
       RETURNING "id"
     )
     INSERT INTO "case_law_analysis_failures"
@@ -270,18 +278,82 @@ const swapAnalysisRow = async (
   return updated === undefined ? null : sentinel;
 };
 
-/**
- * The row-backed store. Its claim, save and release touch one column of one
- * table, which is exactly what the restricted analysis-writer role is
- * granted; only a failed run's record reaches a second table, which only the
- * owner connection that runs the analysis may write.
- */
 /** Test seams; never set outside tests. */
 type AnalysisStoreHooks = {
   /** Runs inside a plain claim, after its swap took the row lock and before the failure read. */
   afterClaimLock?: ((tx: AnalysisRowWriter) => Promise<void>) | undefined;
 };
 
+const ownedGenerationRow = (sentinel: AnalysisGenerating) =>
+  and(
+    sql`${caseLawDecisions.analysis}->>'status' = 'generating'`,
+    sql`${caseLawDecisions.analysis}->>'runId' = ${sentinel.runId}`,
+    sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${sentinel.inputFingerprint}`,
+  );
+
+type AnalysisWrite =
+  | { type: "complete"; save: AnalysisSave }
+  | { type: "partial"; save: AnalysisPartialSave };
+
+const writeAnalysisRow = async (
+  db: AnalysisRowWriter,
+  write: AnalysisWrite,
+) => {
+  const update = (() => {
+    switch (write.type) {
+      case "partial":
+        return {
+          analysis: {
+            ...write.save.sentinel,
+            partialTree: write.save.partialTree,
+          },
+          conditions: [ownedGenerationRow(write.save.sentinel)],
+        };
+      case "complete": {
+        const { analysis, contentHash, ownership } = write.save;
+        const owner = (() => {
+          switch (ownership.type) {
+            case "generation":
+              return ownedGenerationRow(ownership.sentinel);
+            case "revision":
+              // text-to-jsonb keeps parameter inference identical to claimableAnalysisRow.
+              return sql`${caseLawDecisions.analysis} = ${JSON.stringify(ownership.expected)}::text::jsonb`;
+            default:
+              ownership satisfies never;
+              return panic("Unknown analysis write ownership");
+          }
+        })();
+        return {
+          analysis,
+          conditions: [
+            sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${analysis.inputFingerprint}`,
+            sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${contentHash}`,
+            owner,
+          ],
+        };
+      }
+      default:
+        write satisfies never;
+        return panic("Unknown analysis write phase");
+    }
+  })();
+  // audit: skip - callers audit completed analyses; partial rows are ephemeral progress
+  const written = await db
+    .update(caseLawDecisions)
+    .set({ analysis: update.analysis })
+    .where(
+      and(eq(caseLawDecisions.id, write.save.decisionId), ...update.conditions),
+    )
+    .returning({ id: caseLawDecisions.id });
+  return written.length > 0;
+};
+
+/**
+ * The row-backed store. Its claim, save and release touch one column of one
+ * table, which is exactly what the restricted analysis-writer role is
+ * granted; only a failed run's record reaches a second table, which only the
+ * owner connection that runs the analysis may write.
+ */
 export const createDbAnalysisStore = (
   db: AnalysisClaimWriter,
   hooks: AnalysisStoreHooks = {},
@@ -358,27 +430,9 @@ export const createDbAnalysisStore = (
     }
     return outcome;
   },
-  save: async ({ analysis, contentHash, decisionId, expected }) => {
-    // audit: skip — the caller audits the analysis it saves
-    const written = await db
-      .update(caseLawDecisions)
-      .set({ analysis })
-      .where(
-        and(
-          eq(caseLawDecisions.id, decisionId),
-          sql`${storedAnalysisFingerprintFor(caseLawDecisions)} = ${analysis.inputFingerprint}`,
-          sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${contentHash}`,
-          ...(expected === undefined
-            ? []
-            : // `::text::jsonb`, never a bare `::jsonb` (see `claimableAnalysisRow`).
-              [
-                sql`${caseLawDecisions.analysis} = ${JSON.stringify(expected)}::text::jsonb`,
-              ]),
-        ),
-      )
-      .returning({ id: caseLawDecisions.id });
-    return written.length > 0;
-  },
+  save: async (save) => await writeAnalysisRow(db, { type: "complete", save }),
+  savePartial: async (save) =>
+    await writeAnalysisRow(db, { type: "partial", save }),
   clear: async ({ decisionId, sentinel }) => {
     await releaseRun(db, { decisionId, sentinel });
   },

@@ -13,16 +13,16 @@ import {
 import {
   corpusIndexContractDigest,
   corpusIndexIdFromManifest,
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
+  type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
   corpusIndexStemFields,
-  type CorpusIndexManifest,
-  type CorpusIndexPublisherFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { EMPTY_CORPUS_CONTENT_HASHES } from "@/api/lib/legal-search/corpus-storage";
 import {
-  typedLegislationClassification,
   type LegislationExpressionClassification,
+  typedLegislationClassification,
 } from "@/api/lib/legal-search/legislation-expression-classification";
 import { documentMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { morphologyKey } from "@/api/lib/legal-search/morphology/stem";
@@ -92,8 +92,7 @@ export type LegislationV2ProjectionInput = ProjectionInputBase &
   };
 
 export type CorpusIndexProjectionInput =
-  | CaseLawProjectionInput
-  | LegislationV2ProjectionInput;
+  CaseLawProjectionInput | LegislationV2ProjectionInput;
 
 export type CorpusIndexProjectionDescriptor =
   | { action: "erase" }

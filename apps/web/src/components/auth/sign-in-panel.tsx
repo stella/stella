@@ -31,7 +31,7 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
 
 import {
@@ -47,6 +47,8 @@ import {
   SecretCredentialField,
 } from "./password-sign-in-form";
 import { PasswordSignInOption } from "./password-sign-in-option";
+import { SIGN_IN_MODE } from "./sign-in-mode";
+import type { SignInMode } from "./sign-in-mode";
 import {
   resolveLastUsedSignInMethod,
   resolveSignInOptions,
@@ -56,10 +58,15 @@ import {
 import type { AuthCapabilities, SignInMethod } from "./sign-in-panel.logic";
 
 type SignInPanelProps = {
+  mode?: SignInMode;
   className?: string;
   redirectTo: string;
   showHeading?: boolean;
-  onOtpSent?: (payload: { email: string; redirectTo: string }) => void;
+  onOtpSent?: (payload: {
+    email: string;
+    redirectTo: string;
+    mode: SignInMode;
+  }) => void;
 };
 
 const formSchema = v.strictObject({
@@ -93,6 +100,7 @@ const SignInOptionsPanel = ({
   className,
   redirectTo,
   showHeading = true,
+  mode = SIGN_IN_MODE.signIn,
   onOtpSent,
   authCapabilities,
 }: SignInPanelProps & { authCapabilities: AuthCapabilities }) => {
@@ -127,13 +135,13 @@ const SignInOptionsPanel = ({
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
-      onOtpSent({ email, redirectTo });
+      onOtpSent({ email, redirectTo, mode });
       return;
     }
 
     await navigate({
       to: "/auth/otp",
-      search: { email, redirectTo },
+      search: { email, redirectTo, mode },
     });
   };
 
@@ -161,7 +169,13 @@ const SignInOptionsPanel = ({
       return;
     }
 
-    analytics.captureError(toAuthClientError(error));
+    analytics.captureError(toAuthClientError(error), {
+      fingerprintKey: "SignInOptionsPanel.handleSocialSignIn:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SignInOptionsPanel.handleSocialSignIn:failure",
+      },
+    });
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
       notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
     }
@@ -180,7 +194,13 @@ const SignInOptionsPanel = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "SignInOptionsPanel.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SignInOptionsPanel.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
@@ -227,6 +247,13 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure",
+                      },
+                    },
                   );
                 });
               }}
@@ -245,6 +272,13 @@ const SignInOptionsPanel = ({
                   setSocialLoading(null);
                   analytics.captureError(
                     error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure-2",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure-2",
+                      },
+                    },
                   );
                 });
               }}
@@ -370,7 +404,13 @@ const BootstrapSignUpForm = ({
         });
 
         if (error) {
-          analytics.captureError(toAuthClientError(error));
+          analytics.captureError(toAuthClientError(error), {
+            fingerprintKey: "BootstrapSignUpForm.onSubmit:failure",
+            scope: {
+              type: "handler",
+              handlerId: "BootstrapSignUpForm.onSubmit:failure",
+            },
+          });
           if (error.status !== HTTP_TOO_MANY_REQUESTS) {
             notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
           }
