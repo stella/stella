@@ -331,6 +331,24 @@ describe("clusterActivitySignals", () => {
     ).toBe(true);
   });
 
+  test("duration-only coverage marks candidates only when it fits them all", () => {
+    const clusters = clusterActivitySignals({
+      date: DATE,
+      signals: [signalAt(0, "a"), signalAt(120, "b")],
+      mergeGapMinutes: 15,
+      tailMinutes: 5,
+    });
+    expect(clusters).toHaveLength(2);
+    const coveredWith = (minutes: number) =>
+      subtractRecordedTime(clusters, [
+        { durationMinutes: minutes, startedAt: null, endedAt: null },
+      ]).map(({ alreadyCovered }) => alreadyCovered);
+
+    // Five logged minutes cannot cover two separate five-minute candidates.
+    expect(coveredWith(5)).toEqual([false, false]);
+    expect(coveredWith(10)).toEqual([true, true]);
+  });
+
   test("folds repeated resource actions and backfills a missing name", () => {
     const [only] = clusterActivitySignals({
       date: DATE,
