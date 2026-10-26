@@ -188,6 +188,11 @@ export const appTokenProblems = (request: AppTokenRequest): string[] => {
     ];
   }
   return requested.flatMap(([name, access]) => {
+    if (access !== "read" && access !== "write") {
+      return [
+        `${request.job}: permission-${name}: ${access} is not an access level; use read or write`,
+      ];
+    }
     const granted = grants[name];
     if (granted === undefined || (access === "write" && granted === "read")) {
       return [
@@ -243,12 +248,19 @@ test("the census refuses an ungranted, unused or implicit permission", () => {
   expect(
     appTokenProblems(
       request(
-        { contents: "write", "pull-requests": "write", issues: "write" },
-        publish,
+        { contents: "write", "pull-requests": "write", actions: "write" },
+        `${publish}\ngh workflow run deploy.yml`,
       ),
     ),
   ).toEqual([
-    'w.yml#heal: permission-issues: write is not granted to the installation (it grants {"contents":"write","pull-requests":"write"}); drop it or grant it first',
+    'w.yml#heal: permission-actions: write is not granted to the installation (it grants {"contents":"write","issues":"write","pull-requests":"write"}); drop it or grant it first',
+  ]);
+  expect(
+    appTokenProblems(
+      request({ contents: "write", "pull-requests": "wrtie" }, publish),
+    ),
+  ).toEqual([
+    "w.yml#heal: permission-pull-requests: wrtie is not an access level; use read or write",
   ]);
   expect(
     appTokenProblems(
