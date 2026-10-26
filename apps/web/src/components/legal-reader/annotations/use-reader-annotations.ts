@@ -90,6 +90,18 @@ const captureGuestMigrationFailure = (
   });
 };
 
+/** The tab could not claim the guest marks for the signed-in account. */
+const captureGuestClaimFailure = (error: Error): void => {
+  getAnalytics().captureError(error, {
+    fingerprintKey: "useReaderAnnotations.claim:failure",
+    scope: { type: "handler", handlerId: "reader-annotations.guest.claim" },
+    context: {
+      operation: "legal-reader.guest-annotation.migrate",
+      type: "detached",
+    },
+  });
+};
+
 type ReaderAnnotations = {
   annotations: readonly ReaderAnnotation[];
   controller: ReaderAnnotationController;
@@ -171,10 +183,7 @@ export const useReaderAnnotations = (
     // rest waiting for its next sign-in in this tab.
     const claimed = claimGuestAnnotations(storage, migrationOwner);
     if (Result.isError(claimed)) {
-      getAnalytics().captureError(claimed.error, {
-        operation: "legal-reader.guest-annotation.migrate",
-        type: "detached",
-      });
+      captureGuestClaimFailure(claimed.error);
       notifyUserError(
         claimed.error,
         t("legalReader.annotations.guestMigrationFailed"),

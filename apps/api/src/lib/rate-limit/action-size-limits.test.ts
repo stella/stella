@@ -68,13 +68,13 @@ describe("tenant action size boundaries", () => {
       64,
     );
     if (Result.isError(first)) {
-      return panic("The first boundary must admit the body");
+      panic("The first boundary must admit the body");
     }
     const bounded = first.value.request;
 
     const second = await boundActionRequest(bounded, 64);
     if (Result.isError(second)) {
-      return panic("The nested boundary must admit the measured body");
+      panic("The nested boundary must admit the measured body");
     }
     // The nested boundary reuses the measurement instead of reading again.
     expect(second.value.request).toBe(bounded);
