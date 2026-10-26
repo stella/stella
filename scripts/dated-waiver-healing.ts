@@ -33,13 +33,21 @@ import {
   type PublishedRemoval,
   publishRemoval,
   type RemovalProposal,
+  RENEWAL_BRANCH,
   retireRemoval,
   validateRemovalModules,
 } from "./dated-waiver-publish";
+import {
+  planDocRenewal,
+  renderRenewalEvidence,
+  type RenewalPlan,
+  type RenewalRecord,
+} from "./dated-waiver-renewal";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import {
   type DatedWaiver,
   DAY_MS,
+  DOC_SOURCE_FILE,
   dueWaivers,
   expiryInstant,
   loadWaivers,
@@ -57,7 +65,9 @@ export type HealingEntry = {
   outcome:
     | { status: "expired" | "unavailable" }
     | {
-        status: "green" | "red";
+        // absent: a documentation waiver whose every sample confirmed that
+        // its llms.txt is still missing, so the waiver can be renewed.
+        status: "green" | "red" | "absent";
         evidence: FixEvidence;
         files: Record<string, string>;
         baseFiles: Record<string, string>;
@@ -105,10 +115,13 @@ const FAILURE_STAGES = {
   openRemoval: "openRemoval",
   resolveFixTask: "resolveFixTask",
   armRemoval: "armRemoval",
+  renewal: "renewal",
 } as const satisfies Record<
-  keyof HealingActions | "probe" | "evidence",
+  keyof HealingActions | "probe" | "evidence" | "renewal",
   string
 >;
+// Renewal is one proposal per run, so its failures carry one fixed key.
+export const RENEWAL_FAILURE_KEY = "evidence-renewal";
 export type HealingFailure = {
   key: string;
   stage: keyof typeof FAILURE_STAGES;
@@ -163,6 +176,14 @@ const healEntry = async ({
         outcome.evidence.attempts !== entry.probe.attempts)
     ) {
       panic("Removal requires all declared probes to pass");
+    }
+    if (
+      outcome.status === "absent" &&
+      (entry.kind !== "no-llms-txt" ||
+        outcome.evidence.passed !== 0 ||
+        outcome.evidence.attempts !== entry.probe.attempts)
+    ) {
+      panic("Renewal requires every declared probe to confirm absence");
     }
     return at;
   });
@@ -248,6 +269,10 @@ const healEntry = async ({
       await findAndAlert();
       await effect("retireRemoval", async () => actions.retireRemoval(entry));
       return;
+    // The run's single renewal proposal carries this entry; see applyHealing.
+    case "absent":
+      await effect("retireRemoval", async () => actions.retireRemoval(entry));
+      return;
     case "expired":
       return;
     default:
@@ -264,12 +289,66 @@ type ApplyHealingOptions = {
     discover: () => Promise<readonly RemovalProposal[]>;
     retire: (proposal: RemovalProposal) => Promise<void>;
   };
+  renewal?: {
+    publish: (
+      records: readonly RenewalRecord[],
+      now: Date,
+    ) => Promise<PublishedRemoval | undefined>;
+    retire: () => Promise<void>;
+  };
+};
+
+// Entries the run may renew: confirmed absent on every sample, valid
+// evidence, and not yet lapsed when publication starts.
+export const renewalRecords = (
+  entries: readonly HealingEntry[],
+  now: Date,
+): RenewalRecord[] =>
+  entries.flatMap(({ entry, outcome }) =>
+    outcome.status === "absent" &&
+    entry.kind === "no-llms-txt" &&
+    outcome.evidence.passed === 0 &&
+    outcome.evidence.attempts === entry.probe.attempts &&
+    now.getTime() < Date.parse(expiryInstant(entry.expiresAt))
+      ? [{ entry, evidence: outcome.evidence }]
+      : [],
+  );
+
+// Documentation waivers and their dependencies are public owner data, so the
+// signal names them; it never carries captured probe output.
+export const renewalSignal = ({
+  dates,
+  renewed,
+  held,
+}: Pick<RenewalPlan, "dates" | "renewed" | "held">) => ({
+  signal: "dated-waiver-renewal",
+  expiresAt: dates.expiresAt,
+  renew: renewed.map(({ id }) => id),
+  held: held.map(({ id }) => id),
+});
+
+// What publication would renew, printed by the read-only probe phase so a
+// dispatched dry run shows the planned change without a write token.
+const renewalPreview = (entries: readonly HealingEntry[], now: Date) => {
+  const records = renewalRecords(entries, now);
+  if (records.length === 0) {
+    return { renew: [], held: [] };
+  }
+  const plan = Result.try(() =>
+    planDocRenewal({
+      source: readFileSync(path.join(root, DOC_SOURCE_FILE), "utf-8"),
+      absent: records.map(({ entry }) => entry),
+      now,
+    }),
+  );
+  return Result.isOk(plan) ? renewalSignal(plan.value) : "unavailable";
 };
 export const applyHealing = async ({
   report,
   actions,
   now,
   reconciliation,
+  renewal,
 }: ApplyHealingOptions): Promise<void> => {
   const failures: HealingFailure[] = report.failures.map((failure) => ({
     ...failure,
@@ -286,6 +365,7 @@ export const applyHealing = async ({
       case "expired":
       case "unavailable":
       case "red":
+      case "absent":
         pending.push(record);
         break;
       case "green":
@@ -307,6 +387,44 @@ export const applyHealing = async ({
         stage: "evidence",
         cause: completed.error,
       });
+    }
+  }
+  if (renewal) {
+    const renewable = renewalRecords(report.entries, now);
+    // With nothing to renew, an earlier renewal proposal is superseded.
+    const published = await Result.tryPromise(async () => {
+      if (renewable.length > 0) {
+        return renewal.publish(renewable, now);
+      }
+      await renewal.retire();
+      return undefined;
+    });
+    if (Result.isError(published)) {
+      failures.push({
+        key: RENEWAL_FAILURE_KEY,
+        stage: "renewal",
+        cause: published.error,
+      });
+    } else if (published.value !== undefined) {
+      const proposal = published.value;
+      const armed = await Result.tryPromise(async () =>
+        actions.armRemoval(proposal),
+      );
+      if (Result.isError(armed)) {
+        failures.push({
+          key: RENEWAL_FAILURE_KEY,
+          stage: "armRemoval",
+          cause: armed.error,
+        });
+        const retired = await Result.tryPromise(renewal.retire);
+        if (Result.isError(retired)) {
+          failures.push({
+            key: RENEWAL_FAILURE_KEY,
+            stage: "renewal",
+            cause: retired.error,
+          });
+        }
+      }
     }
   }
   if (reconciliation) {
@@ -689,7 +807,7 @@ export const readReport = async (
         v.variant("status", [
           v.object({ status: v.picklist(["expired", "unavailable"]) }),
           v.object({
-            status: v.picklist(["green", "red"]),
+            status: v.picklist(["green", "red", "absent"]),
             evidence: v.object({
               attempts: v.number(),
               passed: v.number(),
@@ -713,6 +831,7 @@ export const readReport = async (
           return { entry: owner, outcome: result };
         case "green":
         case "red":
+        case "absent":
           break;
         default:
           result satisfies never;
@@ -953,6 +1072,7 @@ const main = async (): Promise<void> => {
       JSON.stringify({
         signal: "dated-waiver-probed",
         entries: report.entries.length,
+        renewal: renewalPreview(report.entries, now),
       }),
     );
     return;
@@ -984,9 +1104,45 @@ const main = async (): Promise<void> => {
     repo: privateRepo,
     request: githubRequest,
   });
+  const retireRenewal = async () =>
+    retireRemoval({
+      branch: RENEWAL_BRANCH,
+      repo: "stella/stella",
+      request: githubRequest,
+      disarm: disarmRemoval,
+    });
   await applyHealing({
     report,
     now: new Date(),
+    renewal: {
+      publish: async (records, now) => {
+        const plan = planDocRenewal({
+          source: readFileSync(path.join(root, DOC_SOURCE_FILE), "utf-8"),
+          absent: records.map(({ entry }) => entry),
+          now,
+        });
+        console.log(JSON.stringify(renewalSignal(plan)));
+        if (plan.renewed.length === 0) {
+          await retireRenewal();
+          return undefined;
+        }
+        const renewed = new Set(plan.renewed);
+        return publishRemoval({
+          branch: RENEWAL_BRANCH,
+          baseSha: report.sha,
+          baseFiles: plan.baseFiles,
+          files: plan.files,
+          body: renderRenewalEvidence(
+            records.filter(({ entry }) => renewed.has(entry)),
+            plan.dates,
+          ),
+          repo: process.env["GITHUB_REPOSITORY"],
+          request: githubRequest,
+          disarmExisting: disarmRemoval,
+        });
+      },
+      retire: retireRenewal,
+    },
     reconciliation: {
       discover: async () =>
         await (Result.isError(discovered)

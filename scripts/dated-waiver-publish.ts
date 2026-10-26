@@ -8,9 +8,15 @@ import { waiverKey } from "./dated-waiver-fix-task";
 import type { DatedWaiver } from "./dated-waivers";
 
 export const REMOVAL_TITLE = "chore: remove verified dated waiver";
+// One reserved branch carries every documentation-waiver renewal of a run.
+export const RENEWAL_BRANCH = "chore/dated-waiver-renewal";
+export const RENEWAL_TITLE = "chore: renew rechecked documentation waivers";
+const proposalTitle = (branch: string): string =>
+  branch === RENEWAL_BRANCH ? RENEWAL_TITLE : REMOVAL_TITLE;
 type RemovalPr = { number: number; body: string; title: string };
 type ReconcileRemovalOptions = {
   body: string;
+  title?: string;
   github: {
     list: () => Promise<RemovalPr[]>;
     create: (body: string) => Promise<number>;
@@ -19,6 +25,7 @@ type ReconcileRemovalOptions = {
 };
 export const reconcileRemovalPr = async ({
   body,
+  title = REMOVAL_TITLE,
   github,
 }: ReconcileRemovalOptions): Promise<number> => {
   const open = await github.list();
@@ -29,7 +36,7 @@ export const reconcileRemovalPr = async ({
   if (!existing) {
     return github.create(body);
   }
-  if (existing.body !== body || existing.title !== REMOVAL_TITLE) {
+  if (existing.body !== body || existing.title !== title) {
     await github.update(existing.number, body);
   }
   return existing.number;
@@ -209,7 +216,7 @@ const removalLocation = ({
   branch,
   repo,
 }: Pick<RemovalBranchOptions, "branch" | "repo">) => {
-  if (!REMOVAL_BRANCH.test(branch)) {
+  if (!REMOVAL_BRANCH.test(branch) && branch !== RENEWAL_BRANCH) {
     panic("Invalid removal branch");
   }
   const repository = requireRemovalRepository(repo);
@@ -366,6 +373,7 @@ export const publishRemoval = async ({
 }: PublishRemovalOptions): Promise<PublishedRemoval | undefined> => {
   await validateRemovalModules(files);
   const { api } = removalLocation({ branch, repo });
+  const title = proposalTitle(branch);
   const setRef = async (refBranch: string, sha: string): Promise<void> => {
     const refs = v.parse(
       REF_LIST,
@@ -391,7 +399,7 @@ export const publishRemoval = async ({
         await request([`${api}/pulls`, "--method", "POST", "--input", "-"], {
           head: branch,
           base: "main",
-          title: REMOVAL_TITLE,
+          title,
           body: prBody,
           draft: false,
         }),
@@ -399,7 +407,7 @@ export const publishRemoval = async ({
     update: async (number: number, prBody: string): Promise<void> => {
       await request(
         [`${api}/pulls/${number}`, "--method", "PATCH", "--input", "-"],
-        { title: REMOVAL_TITLE, body: prBody },
+        { title, body: prBody },
       );
     },
   };
@@ -455,7 +463,7 @@ export const publishRemoval = async ({
         input: {
           branch: { repositoryNameWithOwner: repo, branchName: buildBranch },
           expectedHeadOid: base,
-          message: { headline: REMOVAL_TITLE },
+          message: { headline: title },
           fileChanges: {
             additions: Object.entries(files).map(([file, contents]) => ({
               path: file,
@@ -491,7 +499,7 @@ export const publishRemoval = async ({
   }
   await request([`${api}/git/refs/heads/${buildBranch}`, "--method", "DELETE"]);
   return {
-    number: await reconcileRemovalPr({ body, github }),
+    number: await reconcileRemovalPr({ body, title, github }),
     headSha: pushed,
   };
 };

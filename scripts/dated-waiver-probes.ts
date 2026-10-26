@@ -72,57 +72,188 @@ const removeNode = (
   return source.slice(0, node.getStart(ast)) + source.slice(end);
 };
 
-const removeDocumentation = (source: string, entry: DatedWaiver): string => {
-  const ast = parseOwner(source, DOC_SOURCE_FILE);
-  let owner: ts.VariableDeclaration | undefined;
-  let registry: ts.ObjectLiteralExpression | undefined;
-  const visit = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node)) {
-      if (node.name.getText(ast) === "DOC_SOURCE_EXCLUSIONS") {
-        owner = node;
-      }
-      if (node.name.getText(ast) === "DOC_SOURCES" && node.initializer) {
-        let value = node.initializer;
-        while (ts.isSatisfiesExpression(value) || ts.isAsExpression(value)) {
-          value = value.expression;
-        }
-        if (ts.isObjectLiteralExpression(value)) {
-          registry = value;
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
-  if (!owner || !registry) {
-    panic("Documentation waiver owner missing");
+const unwrap = (node: ts.Expression): ts.Expression => {
+  let value = node;
+  while (
+    ts.isParenthesizedExpression(value) ||
+    ts.isSatisfiesExpression(value) ||
+    ts.isAsExpression(value) ||
+    ts.isNonNullExpression(value)
+  ) {
+    value = value.expression;
   }
-  const matches: ts.Node[] = [];
-  const find = (node: ts.Node): void => {
-    if (
-      ts.isObjectLiteralExpression(node) &&
-      node.properties.some(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          property.name.getText(ast) === "dependency" &&
-          ts.isStringLiteral(property.initializer) &&
-          property.initializer.text === entry.id,
-      )
-    ) {
-      matches.push(node);
-      return;
+  return value;
+};
+
+/**
+ * One documentation waiver as its owner declares it: the element a removal
+ * deletes, and the string literals its checkedAt and expiresAt come from.
+ * Entries built from one shared date constant share those literal nodes.
+ */
+export type DocumentationSite = {
+  dependency: string;
+  node: ts.Node;
+  checkedAt: ts.StringLiteral | undefined;
+  expiresAt: ts.StringLiteral | undefined;
+};
+
+type DocumentationOwner = {
+  ast: ts.SourceFile;
+  registry: ts.ObjectLiteralExpression;
+  sites: DocumentationSite[];
+};
+
+// Reads the declaration shapes the owner uses: inline objects, `.concat`,
+// spreads, and `.map` over dependency names or `[name, urls]` tuples, with
+// dates from literals or top-level string constants. Any other shape fails
+// closed rather than being skipped.
+export const readDocumentationOwner = (source: string): DocumentationOwner => {
+  const ast = parseOwner(source, DOC_SOURCE_FILE);
+  const declarations = new Map<string, ts.Expression>();
+  for (const statement of ast.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
     }
-    if (ts.isArrayLiteralExpression(node)) {
-      for (const element of node.elements) {
-        if (ts.isStringLiteral(element) && element.text === entry.id) {
-          matches.push(element);
-        }
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+        declarations.set(declaration.name.text, declaration.initializer);
       }
     }
-    ts.forEachChild(node, find);
+  }
+  const resolve = (node: ts.Expression, depth = 0): ts.Expression => {
+    const value = unwrap(node);
+    if (!ts.isIdentifier(value)) {
+      return value;
+    }
+    const declared = declarations.get(value.text);
+    if (declared === undefined || depth > 8) {
+      return panic(
+        `Documentation waiver reference is not a top-level constant: ${value.text}`,
+      );
+    }
+    return resolve(declared, depth + 1);
   };
-  find(owner);
-  const target = matches.at(0);
+  const owner = declarations.get("DOC_SOURCE_EXCLUSIONS");
+  const registry = declarations.get("DOC_SOURCES");
+  const registryObject = registry === undefined ? undefined : unwrap(registry);
+  if (
+    owner === undefined ||
+    registryObject === undefined ||
+    !ts.isObjectLiteralExpression(registryObject)
+  ) {
+    return panic("Documentation waiver owner missing");
+  }
+  const property = (
+    object: ts.ObjectLiteralExpression,
+    name: string,
+  ): ts.Expression | undefined => {
+    for (const member of object.properties) {
+      if (
+        ts.isPropertyAssignment(member) &&
+        member.name.getText(ast) === name
+      ) {
+        return member.initializer;
+      }
+      if (
+        ts.isShorthandPropertyAssignment(member) &&
+        member.name.text === name
+      ) {
+        return member.name;
+      }
+    }
+    return undefined;
+  };
+  const dateSlot = (
+    object: ts.ObjectLiteralExpression,
+    name: "checkedAt" | "expiresAt",
+  ): ts.StringLiteral | undefined => {
+    const initializer = property(object, name);
+    if (initializer === undefined) {
+      return undefined;
+    }
+    const value = resolve(initializer);
+    return ts.isStringLiteral(value)
+      ? value
+      : panic(`Documentation waiver ${name} is not a string literal`);
+  };
+  const dateSlots = (object: ts.ObjectLiteralExpression) => ({
+    checkedAt: dateSlot(object, "checkedAt"),
+    expiresAt: dateSlot(object, "expiresAt"),
+  });
+  const mapped = (
+    call: ts.CallExpression,
+    receiver: ts.Expression,
+  ): DocumentationSite[] => {
+    const items = resolve(receiver);
+    const callback = call.arguments.at(0);
+    if (!ts.isArrayLiteralExpression(items) || callback === undefined) {
+      return panic("Documentation waiver map has no literal dependency list");
+    }
+    const fn = resolve(callback);
+    const object =
+      (ts.isArrowFunction(fn) || ts.isFunctionExpression(fn)) &&
+      !ts.isBlock(fn.body)
+        ? unwrap(fn.body)
+        : undefined;
+    if (object === undefined || !ts.isObjectLiteralExpression(object)) {
+      return panic("Documentation waiver map callback must return an object");
+    }
+    return items.elements.map((item) => {
+      const name = ts.isArrayLiteralExpression(item)
+        ? item.elements.at(0)
+        : item;
+      if (name === undefined || !ts.isStringLiteral(name)) {
+        return panic("Documentation waiver map item has no dependency name");
+      }
+      return { dependency: name.text, node: item, ...dateSlots(object) };
+    });
+  };
+  const collect = (node: ts.Expression): DocumentationSite[] => {
+    const value = resolve(node);
+    if (ts.isObjectLiteralExpression(value)) {
+      const dependency = property(value, "dependency");
+      if (dependency === undefined || !ts.isStringLiteral(dependency)) {
+        return panic("Documentation waiver object has no literal dependency");
+      }
+      return [
+        { dependency: dependency.text, node: value, ...dateSlots(value) },
+      ];
+    }
+    if (ts.isArrayLiteralExpression(value)) {
+      return value.elements.flatMap((element) =>
+        collect(ts.isSpreadElement(element) ? element.expression : element),
+      );
+    }
+    if (
+      ts.isCallExpression(value) &&
+      ts.isPropertyAccessExpression(value.expression)
+    ) {
+      const receiver = value.expression.expression;
+      switch (value.expression.name.text) {
+        case "concat":
+          return [
+            ...collect(receiver),
+            ...value.arguments.flatMap((argument) =>
+              collect(
+                ts.isSpreadElement(argument) ? argument.expression : argument,
+              ),
+            ),
+          ];
+        case "map":
+          return mapped(value, receiver);
+        default:
+          break;
+      }
+    }
+    return panic("Unsupported documentation waiver declaration shape");
+  };
+  return { ast, registry: registryObject, sites: collect(owner) };
+};
+
+const removeDocumentation = (source: string, entry: DatedWaiver): string => {
+  const { ast, registry, sites } = readDocumentationOwner(source);
+  const matches = sites.filter(({ dependency }) => dependency === entry.id);
+  const target = matches.at(0)?.node;
   if (matches.length !== 1 || !target) {
     panic(`Documentation waiver anchor is not unique: ${entry.id}`);
   }
@@ -396,6 +527,17 @@ export const removeWaiver = (
 
 export type ProbeResult = { passed: boolean; output: string };
 
+// 404 and 410 confirm the llms.txt is still absent. Network failures, redirects,
+// rate limits and server errors say nothing about it.
+const DOC_ABSENT_STATUSES: ReadonlySet<number> = new Set([404, 410]);
+const docEndpointReceipt = (status: number): string =>
+  `Documentation endpoint returned HTTP ${status}.`;
+/** Whether one probe sample's whole output is an absence receipt. */
+export const isDocAbsentReceipt = (output: string): boolean =>
+  [...DOC_ABSENT_STATUSES].some(
+    (status) => output.trim() === docEndpointReceipt(status),
+  );
+
 export const PROBE_PHASE_BUDGET_MS = 45 * 60_000;
 export const PROBE_TIMEOUT_MS = 10 * 60_000;
 const BUDGET_EXHAUSTED_OUTPUT =
@@ -518,9 +660,23 @@ export const runWaiverProbe = async (
     });
   }
   const passed = results.filter((result) => result.passed).length;
+  // Only a documentation waiver can confirm its own premise, and only when
+  // every sample got the exact absence receipt: an error, timeout or any
+  // other status stays red, so it reports instead of renewing.
+  const absent =
+    entry.kind === "no-llms-txt" &&
+    results.length === entry.probe.attempts &&
+    results.every(
+      (result) => !result.passed && isDocAbsentReceipt(result.output),
+    );
+  let status: "green" | "absent" | "red" = "red";
+  if (passed === entry.probe.attempts) {
+    status = "green";
+  } else if (absent) {
+    status = "absent";
+  }
   return {
-    status:
-      passed === entry.probe.attempts ? ("green" as const) : ("red" as const),
+    status,
     attempts: entry.probe.attempts,
     passed,
     command: entry.probe.command,
@@ -550,7 +706,7 @@ export const probeDocUrl = async (
   await result.value.body?.cancel();
   return {
     passed: result.value.status === 200,
-    output: `Documentation endpoint returned HTTP ${result.value.status}.`,
+    output: docEndpointReceipt(result.value.status),
   };
 };
 

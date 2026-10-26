@@ -73,7 +73,8 @@ test("package and probe execution precede conditional write credential minting",
   const token = requiredStep("Mint app token");
   const probe = requiredStep("Probe dated entries");
   const publish = requiredStep("Publish healing results");
-  const condition = "steps.probe.outputs.write_needed == 'true'";
+  const condition =
+    "steps.probe.outputs.write_needed == 'true' && inputs.dry_run != true";
   expect(steps.indexOf(requiredStep("Install dependencies"))).toBeLessThan(
     steps.indexOf(probe),
   );
@@ -152,8 +153,42 @@ test("the shared probe deadline preserves a separate publication budget", () => 
     expect(requiredStep(name)["timeout-minutes"]).toBeGreaterThan(0);
   }
   expect(requiredStep("Publish healing results").if).toBe(
-    "steps.probe.outputs.write_needed == 'true'",
+    "steps.probe.outputs.write_needed == 'true' && inputs.dry_run != true",
   );
+});
+
+test("a dispatched dry run probes and checks but never mints a write token", () => {
+  const writeSteps = [
+    "Validate private task configuration",
+    "Mint app token",
+    "Publish healing results",
+  ].map(requiredStep);
+  const runs = (inputs: Record<string, boolean>) =>
+    writeSteps.map(({ if: condition }) =>
+      evaluate(condition ?? "true", {
+        values: {
+          "steps.probe.outputs.write_needed": "true",
+          ...Object.fromEntries(
+            Object.entries(inputs).map(([key, value]) => [
+              `inputs.${key}`,
+              value,
+            ]),
+          ),
+        },
+        fallback: (name) => (name.startsWith("inputs.") ? null : undefined),
+      }),
+    );
+  // A schedule has no inputs; a plain dispatch publishes like the schedule.
+  expect(runs({})).toEqual([true, true, true]);
+  expect(runs({ dry_run: false })).toEqual([true, true, true]);
+  expect(runs({ dry_run: true })).toEqual([false, false, false]);
+  expect(requiredStep("Probe dated entries").if).toBeUndefined();
+  expect(
+    requiredStep("Check every dated waiver on the default branch").if,
+  ).toBe(`\${{ !cancelled() }}`);
+  expect(workflow.on.workflow_dispatch).toMatchObject({
+    inputs: { dry_run: { type: "boolean", default: false } },
+  });
 });
 
 test("every healing job has an explicit main event policy", () => {
