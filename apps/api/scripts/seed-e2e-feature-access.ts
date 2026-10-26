@@ -1,5 +1,12 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
+
+import {
+  e2eFeatureAccessFixtureSchema,
+  routeSmokeScaleEmail,
+  type RouteSmokeScaleSize,
+} from "@stll/scripts/src/e2e-feature-access-fixture";
 
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -22,14 +29,48 @@ const userId = await ensureUserExists({
 await ensureOrganizationExists(organizationId);
 await ensureMembershipExists({ organizationId, userId, role: "owner" });
 
+const seedScaleOwner = async (size: RouteSmokeScaleSize) => {
+  const scaleOrganizationId = Bun.randomUUIDv7();
+  const scaleEmail = routeSmokeScaleEmail(size, scaleOrganizationId);
+  const scaleUserId = await ensureUserExists({
+    id: Bun.randomUUIDv7(),
+    name: `Route smoke ${size}`,
+    email: scaleEmail,
+  });
+  await ensureOrganizationExists(scaleOrganizationId);
+  await ensureMembershipExists({
+    organizationId: scaleOrganizationId,
+    userId: scaleUserId,
+    role: "owner",
+  });
+  return { organizationId: scaleOrganizationId, email: scaleEmail };
+};
+const routeSmokeScale = {
+  small: await seedScaleOwner("small"),
+  large: await seedScaleOwner("large"),
+};
+
 const grants = {
-  [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
+  [LEGAL_LISTS_FEATURE_ID]: [
+    { type: "organization", organizationId },
+    ...Object.values(routeSmokeScale).map(({ organizationId: id }) => ({
+      type: "organization" as const,
+      organizationId: id,
+    })),
+  ],
 } as const satisfies FeatureAccessGrants;
 const directory = path.resolve(import.meta.dirname, "../../../.playwright");
 await mkdir(directory, { recursive: true });
 await writeFile(
   path.join(directory, "feature-access.json"),
-  JSON.stringify({ organizationId, email, grants }),
+  JSON.stringify(
+    v.parse(e2eFeatureAccessFixtureSchema, {
+      organizationId,
+      email,
+      grants,
+      routeSmokeScale,
+    }),
+  ),
   { mode: 0o600 },
 );
 process.exit(0);

@@ -5,6 +5,7 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   mkdir,
+  open,
   readdir,
   readFile,
   rename,
@@ -15,6 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { e2eFeatureAccessFixtureSchema } from "@stll/scripts/src/e2e-feature-access-fixture";
 import { sha256Hex } from "@stll/sha256/node";
 
 import { apiPut, E2E_API_ORIGIN } from "./api";
@@ -30,6 +32,14 @@ const CLEANUP_DIRECTORY = "route-smoke-scale-cleanup";
 const WORLDS_FILE = "worlds.json";
 const CLEANUP_RECORD_SUFFIX = ".cleanup.json";
 const API_ROOT = path.resolve(import.meta.dirname, "../../../api");
+const FEATURE_ACCESS_FIXTURE = path.resolve(
+  import.meta.dirname,
+  "../../../../.playwright/feature-access.json",
+);
+const SCALE_CLAIM_PATH = path.join(
+  path.dirname(FEATURE_ACCESS_FIXTURE),
+  "route-smoke-scale.claim",
+);
 
 const cardinalitiesSchema = v.object({
   entities: v.number(),
@@ -104,8 +114,58 @@ const worldsSchema = v.object({ small: worldSchema, large: worldSchema });
 
 // Sessions stay outside Playwright's uploaded artifacts. The run identifier
 // comes from the coordinator process and survives worker replacement.
-export const smokeWorldDirectory = (outputDirectory: string): string => {
+type SmokeWorldScope = { runId?: string };
+
+const isFileCode = (error: unknown, code: string) =>
+  error instanceof Error && "code" in error && error.code === code;
+
+// The fixed, pregranted tenants belong to exactly one Playwright invocation.
+// A crashed run leaves its claim in place, so the next run fails visibly.
+export const claimRouteSmokeScale = async ({
+  claimPath,
+  runId,
+}: {
+  claimPath: string;
+  runId: string;
+}): Promise<void> => {
+  const claimed = await Result.tryPromise(async () => {
+    const file = await open(claimPath, "wx", 0o600);
+    try {
+      await file.writeFile(runId);
+    } finally {
+      await file.close();
+    }
+  });
+  if (Result.isOk(claimed)) {
+    return;
+  }
+  if (!isFileCode(claimed.error.cause, "EEXIST")) {
+    throw claimed.error;
+  }
+  if ((await readFile(claimPath, "utf-8")) !== runId) {
+    panic("Route smoke scale tenants are claimed by another invocation");
+  }
+};
+
+const scaleClaimOwner = async (): Promise<string | null> => {
+  const owner = await Result.tryPromise(
+    async () => await readFile(SCALE_CLAIM_PATH, "utf-8"),
+  );
+  if (Result.isOk(owner)) {
+    return owner.value;
+  }
+  if (isFileCode(owner.error.cause, "ENOENT")) {
+    return null;
+  }
+  throw owner.error;
+};
+
+export const smokeWorldDirectory = (
+  outputDirectory: string,
+  scope: SmokeWorldScope = {},
+): string => {
   const runId =
+    scope.runId ??
     e2eEnv.routeSmokeRunId ??
     panic("Route smoke run identifier was not initialized");
   const key = sha256Hex(`${runId}\0${path.resolve(outputDirectory)}`);
@@ -134,10 +194,20 @@ const assertResponse = async (
   }
 };
 
-const seedWorld = async (
-  outputDirectory: string,
-  count: 100 | 1000,
-): Promise<SmokeScaleWorld> => {
+const seedWorld = async ({
+  outputDirectory,
+  count,
+  scope,
+}: {
+  outputDirectory: string;
+  count: 100 | 1000;
+  scope: SmokeWorldScope;
+}): Promise<SmokeScaleWorld> => {
+  const runId =
+    scope.runId ??
+    e2eEnv.routeSmokeRunId ??
+    panic("Route smoke run identifier was not initialized");
+  await claimRouteSmokeScale({ claimPath: SCALE_CLAIM_PATH, runId });
   const request = await apiRequestFactory.newContext({
     extraHTTPHeaders: {
       origin: e2eEnv.webOrigin,
@@ -145,20 +215,36 @@ const seedWorld = async (
   });
   try {
     const token = randomUUID();
-    const email = `route-smoke-scale-${token}@stella.dev`;
+    const fixture = v.parse(
+      e2eFeatureAccessFixtureSchema,
+      JSON.parse(await readFile(FEATURE_ACCESS_FIXTURE, "utf-8")),
+    );
+    const size = count === SMOKE_WORLD_COUNTS.small ? "small" : "large";
+    const { email, organizationId } = fixture.routeSmokeScale[size];
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "bun",
+        ["scripts/restore-e2e-route-smoke-owner.ts", size],
+        {
+          cwd: API_ROOT,
+          env: e2eEnv.seedEnvironment,
+          timeout: 20_000,
+        },
+        (error, _stdout, stderr) => {
+          if (error !== null) {
+            reject(
+              new Error(`Scale fixture owner restore failed: ${stderr}`, {
+                cause: error,
+              }),
+            );
+            return;
+          }
+          resolve();
+        },
+      );
+    });
     await signInWithEmailOtp(request, email);
-    const organizationResponse = await request.post(
-      `${E2E_API_ORIGIN}/api/auth/organization/create`,
-      {
-        data: { name: "Route smoke scale", slug: `route-smoke-scale-${token}` },
-      },
-    );
-    await assertResponse(organizationResponse);
-    const { id: organizationId } = v.parse(
-      v.object({ id: v.string() }),
-      await organizationResponse.json(),
-    );
-    const directory = smokeWorldDirectory(outputDirectory);
+    const directory = smokeWorldDirectory(outputDirectory, scope);
     const recordPath = path.join(directory, `${token}${CLEANUP_RECORD_SUFFIX}`);
     const publication = await Result.tryPromise(async () => {
       const activation = await request.post(
@@ -249,7 +335,11 @@ const seedWorld = async (
           ],
           {
             cwd: API_ROOT,
-            env: e2eEnv.seedEnvironment,
+            env: {
+              ...e2eEnv.seedEnvironment,
+              API_FEATURE_ACCESS_GRANTS: JSON.stringify(fixture.grants),
+              FEATURE_LEGAL_LISTS: "true",
+            },
             timeout: 60_000,
           },
           (error, stdout, stderr) => {
@@ -301,21 +391,30 @@ let worldsPromise: Promise<SmokeWorlds> | undefined;
 // seed operation, while each route still opens fresh browser contexts.
 export const getSmokeWorlds = async (
   outputDirectory: string,
+  scope: SmokeWorldScope = {},
 ): Promise<SmokeWorlds> => {
   worldsPromise ??= (async () => {
-    const persisted = await readSmokeWorlds(outputDirectory);
+    const persisted = await readSmokeWorlds(outputDirectory, scope);
     if (persisted !== null) {
       return persisted;
     }
-    const small = await seedWorld(outputDirectory, SMOKE_WORLD_COUNTS.small);
-    const large = await seedWorld(outputDirectory, SMOKE_WORLD_COUNTS.large);
+    const small = await seedWorld({
+      outputDirectory,
+      count: SMOKE_WORLD_COUNTS.small,
+      scope,
+    });
+    const large = await seedWorld({
+      outputDirectory,
+      count: SMOKE_WORLD_COUNTS.large,
+      scope,
+    });
     assertTenfoldSmokeWorlds({
       small: small.cardinalities,
       large: large.cardinalities,
     });
     const worlds = { small, large };
     const worldsPath = path.join(
-      smokeWorldDirectory(outputDirectory),
+      smokeWorldDirectory(outputDirectory, scope),
       WORLDS_FILE,
     );
     await writeFile(`${worldsPath}.tmp`, JSON.stringify(worlds), {
@@ -332,11 +431,12 @@ export const getSmokeWorlds = async (
 // pair after verifying both its shape and every tenfold cardinality.
 export const readSmokeWorlds = async (
   outputDirectory: string,
+  scope: SmokeWorldScope = {},
 ): Promise<SmokeWorlds | null> => {
   const saved = await Result.tryPromise(
     async () =>
       await readFile(
-        path.join(smokeWorldDirectory(outputDirectory), WORLDS_FILE),
+        path.join(smokeWorldDirectory(outputDirectory, scope), WORLDS_FILE),
         "utf-8",
       ),
   );
@@ -358,10 +458,23 @@ export const readSmokeWorlds = async (
 export const cleanupSmokeWorlds = async (
   outputDirectory: string,
 ): Promise<void> => {
-  if (e2eEnv.routeSmokeRunId === undefined) {
+  const runId = e2eEnv.routeSmokeRunId;
+  if (runId === undefined) {
     return;
   }
   const directory = smokeWorldDirectory(outputDirectory);
+  if ((await scaleClaimOwner()) !== runId) {
+    const orphaned = await Result.tryPromise(
+      async () => await readdir(directory),
+    );
+    if (Result.isOk(orphaned)) {
+      panic("Route smoke cleanup journal exists without its invocation claim");
+    }
+    if (!isFileCode(orphaned.error.cause, "ENOENT")) {
+      throw orphaned.error;
+    }
+    return;
+  }
   const listing = await Result.tryPromise(async () => await readdir(directory));
   if (Result.isError(listing)) {
     const error = listing.error.cause;
@@ -371,6 +484,9 @@ export const cleanupSmokeWorlds = async (
     throw listing.error;
   }
   const records = listing.value;
+  if (!records.some((name) => name.endsWith(CLEANUP_RECORD_SUFFIX))) {
+    panic("Route smoke invocation claim has no cleanup records");
+  }
   const failures: unknown[] = [];
   for (const fileName of records) {
     if (!fileName.endsWith(CLEANUP_RECORD_SUFFIX)) {
@@ -407,4 +523,5 @@ export const cleanupSmokeWorlds = async (
     throw new AggregateError(failures, "Scale smoke fixture cleanup failed");
   }
   await rm(directory, { recursive: true, force: true });
+  await rm(SCALE_CLAIM_PATH);
 };

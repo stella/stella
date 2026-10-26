@@ -32,7 +32,7 @@
     "test": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun scripts/run-tests.ts",
     "test:timings": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && mkdir -p .cache && bun test --parallel=2 --timings=.cache/e2e-unit-timings.json --update-timings e2e/unit",
     "test:property": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
-    "test:e2e": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.config.ts",
+    "test:e2e": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && E2E_ROUTE_SMOKE_RUN_ID=\"$(bun -p 'crypto.randomUUID()')\" playwright test --config e2e/playwright.config.ts",
     "test:e2e:soak": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.soak.config.ts",
     "test:e2e:anonymized-export": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.anonymized-export.config.ts",
     "test:e2e:stack-redaction": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.stack-redaction.config.ts",
@@ -43,7 +43,7 @@
     "test:e2e:marketing:update": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.marketing.config.ts --project app --update-snapshots=all",
     "capture:product-story": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && bun e2e/marketing/record-product-story.ts",
     "test:e2e:staging": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.staging.config.ts",
-    "test:e2e:ui": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.config.ts --ui",
+    "test:e2e:ui": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && E2E_ROUTE_SMOKE_RUN_ID=\"$(bun -p 'crypto.randomUUID()')\" playwright test --config e2e/playwright.config.ts --ui",
     "generate:api-types": "bun ../api/scripts/generate-web-api-types.ts",
     "test:e2e:journeys": "([ -n \"$TURBO_HASH\" ] || bun run generate:web-sources) && playwright test --config e2e/playwright.journeys.config.ts"
   },

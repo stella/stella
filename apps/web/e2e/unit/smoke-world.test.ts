@@ -6,9 +6,9 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { createTestState } from "../../../api/src/tests/helpers/test-state";
 import {
   assertTenfoldSmokeWorlds,
+  claimRouteSmokeScale,
   getSmokeWorlds,
   readSmokeWorlds,
   SMOKE_WORLD_COUNTS,
@@ -17,8 +17,6 @@ import {
   type SmokeScaleWorld,
   smokeWorldDirectory,
 } from "../helpers/smoke-world";
-
-const state = createTestState({ file: import.meta.path, config: {} });
 
 const small = {
   entities: 200,
@@ -70,15 +68,15 @@ describe("smoke world cardinality", () => {
 });
 
 test("replacement workers reuse the completed worlds outside the artifact directory", async () => {
-  state.setEnv("E2E_ROUTE_SMOKE_RUN_ID", randomUUID());
+  const scope = { runId: randomUUID() };
   const outputDirectory = path.join(
     tmpdir(),
     `smoke-artifacts-${randomUUID()}`,
   );
-  const directory = smokeWorldDirectory(outputDirectory);
+  const directory = smokeWorldDirectory(outputDirectory, scope);
   try {
     expect(directory.startsWith(`${outputDirectory}${path.sep}`)).toBe(false);
-    expect(await readSmokeWorlds(outputDirectory)).toBeNull();
+    expect(await readSmokeWorlds(outputDirectory, scope)).toBeNull();
     const world = {
       workspace: {
         id: "workspace",
@@ -95,23 +93,46 @@ test("replacement workers reuse the completed worlds outside the artifact direct
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const snapshotPath = path.join(directory, "worlds.json");
     await writeFile(snapshotPath, JSON.stringify(worlds), { mode: 0o600 });
-    expect(await readSmokeWorlds(outputDirectory)).toEqual(worlds);
-    expect(await getSmokeWorlds(outputDirectory)).toEqual(worlds);
+    expect(await readSmokeWorlds(outputDirectory, scope)).toEqual(worlds);
+    expect(await getSmokeWorlds(outputDirectory, scope)).toEqual(worlds);
     await rm(snapshotPath);
     // The same worker keeps its promise; a replacement reads the same pair
     // from the on-disk snapshot, as exercised by the uncached reader above.
-    expect(await getSmokeWorlds(outputDirectory)).toEqual(worlds);
+    expect(await getSmokeWorlds(outputDirectory, scope)).toEqual(worlds);
     await writeFile(snapshotPath, JSON.stringify({ ...worlds, large: world }), {
       mode: 0o600,
     });
-    expect(await rejectionOf(readSmokeWorlds(outputDirectory))).toMatchObject({
+    expect(
+      await rejectionOf(readSmokeWorlds(outputDirectory, scope)),
+    ).toMatchObject({
       message: expect.stringContaining("expected positive tenfold fixtures"),
     });
     await writeFile(snapshotPath, "{", { mode: 0o600 });
-    expect(await rejectionOf(readSmokeWorlds(outputDirectory))).toBeInstanceOf(
-      SyntaxError,
-    );
+    expect(
+      await rejectionOf(readSmokeWorlds(outputDirectory, scope)),
+    ).toBeInstanceOf(SyntaxError);
     expect(await readFile(snapshotPath, "utf-8")).toBe("{");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("fixed pregranted tenants reject a competing invocation and a stale claim", async () => {
+  const directory = path.join(tmpdir(), `smoke-claim-${randomUUID()}`);
+  const claimPath = path.join(directory, "route-smoke-scale.claim");
+  const ownerRunId = randomUUID();
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  try {
+    await claimRouteSmokeScale({ claimPath, runId: ownerRunId });
+    await claimRouteSmokeScale({ claimPath, runId: ownerRunId });
+    expect(
+      await rejectionOf(
+        claimRouteSmokeScale({ claimPath, runId: randomUUID() }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("claimed by another invocation"),
+    });
+    expect(await readFile(claimPath, "utf-8")).toBe(ownerRunId);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

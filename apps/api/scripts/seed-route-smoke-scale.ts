@@ -4,6 +4,10 @@ import * as v from "valibot";
 
 import { LIST_ITEM_TYPE, TASK_STATUS } from "@stll/api-contract/entity-options";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import {
+  routeSmokeScaleEmail,
+  seededOrganizationSlug,
+} from "@stll/scripts/src/e2e-feature-access-fixture";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -138,10 +142,11 @@ await runScriptWithErrorOutput(async () => {
         .limit(1)
     ).at(0),
   );
+  const size = input.count === 100 ? "small" : "large";
   if (
     principal === undefined ||
-    !/^route-smoke-scale-[\da-f-]+@stella\.dev$/u.test(principal.email) ||
-    !principal.slug.startsWith("route-smoke-scale-")
+    principal.email !== routeSmokeScaleEmail(size, organizationId) ||
+    principal.slug !== seededOrganizationSlug(organizationId)
   ) {
     panic("Scale fixture requires an isolated route smoke owner and matter");
   }
