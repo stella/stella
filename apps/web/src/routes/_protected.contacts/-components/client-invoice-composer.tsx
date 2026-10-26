@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   Select,
@@ -21,7 +22,11 @@ import {
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { InvoiceComposer } from "@/components/billing/invoice-composer";
+import {
+  InvoiceComposer,
+  IssuedState,
+} from "@/components/billing/invoice-composer";
+import type { SavedInvoice } from "@/components/billing/invoice-composer";
 import { billableCurrencies } from "@/components/billing/invoice-composer.logic";
 import { ContactReadError } from "@/components/contact-read-error";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -64,6 +69,9 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
   const [periodStart, setPeriodStart] = useState<string | null>(null);
   const [periodEnd, setPeriodEnd] = useState<string | null>(null);
   const [chosenCurrency, setChosenCurrency] = useState<string | null>(null);
+  // Saving refreshes the prefill below, which may then offer other work or
+  // none, so the confirmation lives above everything the prefill decides.
+  const [saved, setSaved] = useState<SavedInvoice | null>(null);
   const query = useQuery(
     clientInvoicePrefillOptions(clientId, { periodStart, periodEnd }),
   );
@@ -129,6 +137,7 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
     content = (
       <InvoiceComposer
         key={`${clientId}:${periodStart ?? ""}:${periodEnd ?? ""}:${currency}`}
+        onSaved={setSaved}
         workspaceId={first.workspaceId}
         client={{ clientId, matters: currencyMatters }}
         prefill={{
@@ -143,6 +152,20 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
             (matter) => matter.prefill.expenses,
           ),
         }}
+      />
+    );
+  }
+  if (saved !== null) {
+    return (
+      <IssuedState
+        actions={
+          <Button onClick={() => setSaved(null)} variant="outline">
+            {t("billing.invoices.createInvoice")}
+          </Button>
+        }
+        buyerName={saved.buyerName}
+        invoice={saved.invoice}
+        workspaceId={saved.invoice.workspaceId}
       />
     );
   }

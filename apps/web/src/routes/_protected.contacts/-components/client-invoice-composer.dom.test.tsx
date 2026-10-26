@@ -441,28 +441,70 @@ test("work in two currencies bills only the chosen currency's matters", async ()
   });
 });
 
-test("a saved invoice's work is no longer offered by the client's prefill", async () => {
-  served = mixedCurrencyData;
-  servedAfterSave = euroBilledData;
-  await mount();
-  const currency = await screen.findByRole("combobox", {
-    name: messages.common.currency,
-  });
-  expect(currency.textContent).toBe("EUR");
-  expect(screen.getByRole("heading", { name: FIRST_NAME })).toBeDefined();
-  expect(prefillReads).toBe(1);
-  await click(messages.billing.invoiceComposer.continueToDetails);
-  await click(messages.billing.invoiceComposer.continueToIssue);
-  await click(messages.billing.invoiceComposer.saveDraft);
-  await waitFor(() => expect(requests).toHaveLength(1));
-  expect(requests.at(0)).toMatchObject({ currency: "EUR" });
-  // Saving invalidates the client's prefill, which no longer offers the
-  // billed euro work: only koruna work remains, so no currency is left to
-  // choose and the euro matter is gone.
-  await waitFor(() => expect(prefillReads).toBe(2));
-  await screen.findByRole("heading", { name: LATER_NAME });
-  expect(screen.queryByRole("heading", { name: FIRST_NAME })).toBeNull();
-  expect(
-    screen.queryByRole("combobox", { name: messages.common.currency }),
-  ).toBeNull();
-});
+// Every matter's work after its invoice was saved: nothing is left to bill.
+const allBilledData = {
+  ...data,
+  matters: data.matters.map((matter) => ({
+    ...matter,
+    prefill: { ...matter.prefill, timeEntries: [] },
+  })),
+} satisfies ClientInvoicePrefill;
+
+test.each([
+  {
+    name: "mixed currencies",
+    before: mixedCurrencyData,
+    after: euroBilledData,
+    expectNext: async () => {
+      // Only koruna work remains: no currency is left to choose.
+      await screen.findByRole("heading", { name: LATER_NAME });
+      expect(screen.queryByRole("heading", { name: FIRST_NAME })).toBeNull();
+      expect(
+        screen.queryByRole("combobox", { name: messages.common.currency }),
+      ).toBeNull();
+    },
+  },
+  {
+    name: "one currency, fully billed",
+    before: data,
+    after: allBilledData,
+    expectNext: async () => {
+      await screen.findByText(messages.billing.invoiceComposer.nothingToBill);
+      expect(screen.queryByRole("heading", { name: FIRST_NAME })).toBeNull();
+    },
+  },
+])(
+  "the saved confirmation outlasts the refreshed prefill: $name",
+  async ({ before, after, expectNext }) => {
+    served = before;
+    servedAfterSave = after;
+    await mount();
+    await screen.findByRole("heading", { name: FIRST_NAME });
+    expect(prefillReads).toBe(1);
+    await click(messages.billing.invoiceComposer.continueToDetails);
+    await click(messages.billing.invoiceComposer.continueToIssue);
+    await click(messages.billing.invoiceComposer.saveDraft);
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests.at(0)).toMatchObject({ currency: "EUR" });
+    // Saving invalidates the client's prefill; wait until the refetch that
+    // no longer offers the billed work has landed.
+    await waitFor(() => expect(prefillReads).toBe(2));
+    await waitFor(() => expect(clients.at(0)?.isFetching()).toBe(0));
+    expect(
+      screen.getByRole("heading", {
+        name: messages.billing.invoiceComposer.draftSavedTitle,
+      }),
+    ).toBeDefined();
+    expect(
+      screen
+        .getByRole("link", {
+          name: messages.billing.invoiceComposer.openInvoice,
+        })
+        .getAttribute("href"),
+    ).toBe(`/workspaces/${FIRST_MATTER_ID}/invoices/${INVOICE_ID}`);
+    expect(screen.queryByRole("heading", { name: FIRST_NAME })).toBeNull();
+    // The next invoice starts from what the refreshed prefill offers.
+    await click(messages.billing.invoices.createInvoice);
+    await expectNext();
+  },
+);

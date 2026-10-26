@@ -130,7 +130,7 @@ const VAT_REASON_LABELS = {
 type PrefillEntry = InvoicePrefill["timeEntries"][number];
 type PrefillExpense = InvoicePrefill["expenses"][number];
 
-type IssuedInvoice = {
+export type IssuedInvoice = {
   id: string;
   /** The matter the invoice was saved under, fixed when it was submitted. */
   workspaceId: string;
@@ -178,10 +178,22 @@ type ClientComposer = {
   matters: readonly ClientComposerMatter[];
 };
 
+/** A saved invoice and the buyer it was composed for. */
+export type SavedInvoice = {
+  invoice: IssuedInvoice;
+  buyerName: string | null;
+};
+
 type InvoiceComposerProps = {
   client?: ClientComposer;
   workspaceId: string;
   prefill: InvoicePrefill;
+  /**
+   * Hands the saved invoice to a parent that shows its confirmation. Saving
+   * refreshes the prefill this composer is built from, so a parent whose
+   * prefill can change (a client's matters) must own the confirmation.
+   */
+  onSaved?: (saved: SavedInvoice) => void;
 };
 
 /**
@@ -194,6 +206,7 @@ export const InvoiceComposer = ({
   workspaceId,
   prefill,
   client,
+  onSaved,
 }: InvoiceComposerProps) => {
   const t = useTranslations();
   const currency = prefill.currency;
@@ -249,7 +262,13 @@ export const InvoiceComposer = ({
   const submit = useComposerSubmit({
     workspaceId: invoiceWorkspaceId,
     ...(client === undefined ? {} : { client }),
-    onDone: setIssued,
+    onDone: (invoice) => {
+      if (onSaved === undefined) {
+        setIssued(invoice);
+      } else {
+        onSaved({ invoice, buyerName: prefill.buyer.buyerName });
+      }
+    },
   });
 
   if (issued !== null) {
@@ -1348,9 +1367,16 @@ type IssuedStateProps = {
   workspaceId: string;
   invoice: IssuedInvoice;
   buyerName: string | null;
+  /** Further actions beside opening the invoice. */
+  actions?: ReactNode;
 };
 
-const IssuedState = ({ workspaceId, invoice, buyerName }: IssuedStateProps) => {
+export const IssuedState = ({
+  workspaceId,
+  invoice,
+  buyerName,
+  actions,
+}: IssuedStateProps) => {
   const t = useTranslations();
   const format = useFormatter();
   const summary = [
@@ -1390,6 +1416,7 @@ const IssuedState = ({ workspaceId, invoice, buyerName }: IssuedStateProps) => {
         >
           <Button>{t("billing.invoiceComposer.openInvoice")}</Button>
         </Link>
+        {actions}
       </div>
     </div>
   );
