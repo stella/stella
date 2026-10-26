@@ -21,6 +21,7 @@
     "agent:down": "bun packages/scripts/src/agent-session.ts down",
     "agent:reset": "bun packages/scripts/src/agent-session.ts reset",
     "agent:status": "bun packages/scripts/src/agent-session.ts status",
+    "mobile:sim": "bun apps/mobile/scripts/sim.ts",
     "agent:env": "bun packages/scripts/src/agent-session.ts env",
     "agent:cli": "bun packages/scripts/src/agent-session.ts cli",
     "agent:drive": "bun packages/scripts/src/agent-session.ts drive",
