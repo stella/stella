@@ -328,6 +328,28 @@ describe("the hard invariants of a numbering", () => {
     ).toEqual([1, 2, null, null, null, 3]);
   });
 
+  test("a quoted decision's paragraph numbers are not the court's", () => {
+    const read = (quoted: string) =>
+      extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Osmý senát uvedl:",
+          `${quoted}[117] Citovaný soud rozhodl takto.`,
+          "[118] Citace pokračuje a končí.“",
+          "[3] Soud dále uvážil.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+    const numbers = (numbering: ReturnType<typeof read>) =>
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      );
+    // The quotation the court opened before "[117]" is still open at
+    // "[118]": that number is the quoted decision's.
+    expect(numbers(read("„"))).toEqual([1, 2, null, null, 3]);
+    // Without the quotation, "[118]" is a marker nothing explains.
+    expect(read("").type).toBe("rejected");
+  });
+
   test("consecutive lists that could own the court's next number reject the decision", () => {
     // Court 1, 2; list 1-3; list 1-2; court 3, 4, 5; list 1-2; court 6. The
     // first list's 3 could be the court's 3 with the second list following

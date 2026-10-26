@@ -166,6 +166,11 @@ type Candidate = {
   readonly number: number;
   /** The first paragraph of a separate opinion, which may count from 1. */
   readonly opensOpinion: boolean;
+  /**
+   * The paragraph opens inside a quotation an earlier paragraph began: a
+   * passage the court quotes, whose markers are the quoted decision's.
+   */
+  readonly quoted: boolean;
 };
 
 /**
@@ -190,7 +195,26 @@ type Body = {
   readonly paragraphs: readonly number[];
   /** Body positions where a separate opinion begins. */
   readonly opinionStarts: ReadonlySet<number>;
+  /** Body positions that open inside a quotation begun before them. */
+  readonly quotedStarts: ReadonlySet<number>;
 };
+
+/**
+ * Quotation marks that open and close a quotation in Czech and Slovak text:
+ * „…“ and »…«. The English “…” pair only ever reads as closing here, so a
+ * text quoting the English way never opens a quotation.
+ */
+const OPENING_QUOTE_RE = /[„»]/gu;
+const CLOSING_QUOTE_RE = /[“”«]/gu;
+
+/** Quotations a paragraph leaves open, from the depth it opens at. */
+const quoteDepthAfter = (depth: number, text: string): number =>
+  Math.max(
+    0,
+    depth +
+      (text.match(OPENING_QUOTE_RE)?.length ?? 0) -
+      (text.match(CLOSING_QUOTE_RE)?.length ?? 0),
+  );
 
 /**
  * The body paragraphs, and where each separate opinion printed after the
@@ -200,12 +224,17 @@ type Body = {
 const bodyOf = (blocks: readonly Block[]): Body => {
   const paragraphs: number[] = [];
   const opinionStarts = new Set<number>();
+  const quotedStarts = new Set<number>();
+  // A heading closes whatever quotation the text left open, so a quotation
+  // the court never closed reaches no further than its section.
+  let quoteDepth = 0;
   let headingSinceBody = false;
   let inDissent = false;
   let inInstruction = false;
   for (const [index, block] of blocks.entries()) {
     if (block.type === "heading") {
       headingSinceBody = true;
+      quoteDepth = 0;
       inInstruction ||= INSTRUCTION_RE.test(block.plainText);
       continue;
     }
@@ -225,12 +254,17 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     inInstruction = false;
     if (dissent && (!inDissent || headingSinceBody)) {
       opinionStarts.add(paragraphs.length);
+      quoteDepth = 0;
     }
+    if (quoteDepth > 0) {
+      quotedStarts.add(paragraphs.length);
+    }
+    quoteDepth = quoteDepthAfter(quoteDepth, block.plainText);
     inDissent = dissent;
     headingSinceBody = false;
     paragraphs.push(index);
   }
-  return { paragraphs, opinionStarts };
+  return { paragraphs, opinionStarts, quotedStarts };
 };
 
 /**
@@ -278,8 +312,10 @@ type Walk = {
  * Read a style's candidates as the court's run beside nested lists. A
  * nested list starts at 1 after a court paragraph and counts up; a separate
  * opinion may start the run again at 1; a forward skip of a few numbers is
- * the court's own. Everything else is left unassigned, and an unassigned
- * marker rejects the reading.
+ * the court's own. A marker that fits none of these inside a quotation is
+ * the quoted decision's paragraph number ("[118] …" continuing a passage
+ * quoted from paragraph 117), and is neither. Everything else is left
+ * unassigned, and an unassigned marker rejects the reading.
  */
 const walk = (candidates: readonly Candidate[]): Walk => {
   const accepted: Candidate[] = [];
@@ -330,6 +366,9 @@ const walk = (candidates: readonly Candidate[]): Walk => {
       nestedNext = null;
       continue;
     }
+    if (candidate.quoted) {
+      continue;
+    }
     unassigned.push(candidate);
   }
   return { accepted, skips, unassigned };
@@ -373,6 +412,7 @@ const candidatesOf = (
             blockIndex,
             number,
             opensOpinion: body.opinionStarts.has(bodyIndex),
+            quoted: body.quotedStarts.has(bodyIndex),
           },
         ];
   });

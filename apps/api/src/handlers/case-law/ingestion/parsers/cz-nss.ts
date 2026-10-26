@@ -39,11 +39,18 @@ import type {
   Block,
   DecisionDocumentAst,
   Inline,
+  ParagraphBlock,
 } from "@stll/legal-ast/document-ast";
 import { normalizeInlineLine } from "@stll/legal-ast/inline-line";
-import { collapseSpacedLetters, normalizeUnicode } from "@stll/text-normalize";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
+import {
+  continuesAcrossPageBreak,
+  CZ_RUNNING_HEADER_SOURCE,
+  withoutSoftHyphens,
+} from "@/api/lib/legal-search/parsers/page-furniture";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
@@ -142,8 +149,13 @@ type PChunk = {
   bold: boolean;
   letterSpacing: boolean;
   fontSize: number;
-  /** Set when the chunk comes from an <ol type="I"><li>. */
+  /** Set when the chunk comes from an <ol><li>. */
   listItemIndex: number | null;
+  /**
+   * The list numbers its items with Arabic numerals (`<ol type="1">`, the
+   * default), which the court's document prints as "1.".
+   */
+  decimalList: boolean;
   footnote: { anchorId: string; label: string } | null;
 };
 
@@ -280,14 +292,21 @@ const normalizeNssInlines = (
       continue;
     }
 
+    const previous = merged.at(-1);
     const spacedBoldRun = collectSpacedBoldRun(source, index);
     if (spacedBoldRun !== null) {
-      merged.push({ type: "bold", children: spacedBoldRun.children });
+      // The run goes on the bold it follows, like any adjacent bold: a word
+      // whose first letter has a wrapper of its own ("P ", then "o u č e n
+      // í :") is still one spaced word.
+      if (previous?.type === "bold") {
+        previous.children.push(...spacedBoldRun.children);
+      } else {
+        merged.push({ type: "bold", children: spacedBoldRun.children });
+      }
       index = spacedBoldRun.endIndex;
       continue;
     }
 
-    const previous = merged.at(-1);
     if (node.type === "text" && previous?.type === "text") {
       previous.text += node.text;
       continue;
@@ -311,21 +330,29 @@ const normalizeNssInlines = (
     merged.push(node);
   }
 
-  return merged.map((node): Inline => {
+  const normalized = merged.map((node): Inline => {
     if (node.type === "line-break") {
       return node;
     }
     if (node.type === "text") {
-      const whitespaceNormalized = node.text.replace(/\s/gu, " ");
+      const whitespaceNormalized = withoutSoftHyphens(node.text).replace(
+        /\s/gu,
+        " ",
+      );
       const trimmed = whitespaceNormalized.trim();
+      // The gap around a spaced word is the word boundary: "n e j s o u"
+      // and the spaces after it read as "nejsou ", not "nejsou".
       const text =
         spacedEmphasis && SPACED_EMPHASIS_RE.test(trimmed)
-          ? trimmed
+          ? `${whitespaceNormalized.startsWith(" ") ? " " : ""}${trimmed
               .replace(/ {2,}/gu, () => MULTI_SPACE_MARKER)
               .replace(/(?<=\p{L}) (?=\p{L})/gu, "")
               .replaceAll(MULTI_SPACE_MARKER, " ")
-              .replace(/(?<=\p{L}) +(?=[,:;.!?])/gu, "")
-          : collapseSpacedLetters(whitespaceNormalized);
+              .replace(
+                /(?<=\p{L}) +(?=[,:;.!?])/gu,
+                "",
+              )}${whitespaceNormalized.endsWith(" ") ? " " : ""}`
+          : collapseLetterSpacing(whitespaceNormalized).replace(/ {2,}/gu, " ");
       return node.anonymized === true
         ? { type: "text", text, anonymized: true }
         : { type: "text", text };
@@ -351,6 +378,20 @@ const normalizeNssInlines = (
     }
     return node;
   });
+
+  // A spaced word keeps the gap after it, so a text that follows with a gap
+  // of its own would double it.
+  for (const [index, node] of normalized.entries()) {
+    const before = normalized[index - 1];
+    if (
+      node.type === "text" &&
+      before !== undefined &&
+      inlinesToPlainText([before]).endsWith(" ")
+    ) {
+      node.text = node.text.replace(/^ +/u, "");
+    }
+  }
+  return normalized;
 };
 
 /** Convert a 1-based index to a Roman numeral. */
@@ -402,6 +443,7 @@ const styledBlockChunk = (
       $el.find("span[style*='letter-spacing']").length > 0,
     fontSize: parseFontSize(style),
     listItemIndex: null,
+    decimalList: false,
     footnote: footnoteOf($el),
   };
 };
@@ -477,6 +519,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: null,
+          decimalList: false,
           footnote: null,
         });
       }
@@ -490,17 +533,30 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           chunks.push(chunk);
         }
       });
+      // A table whose every row is one cell lays the page out rather than
+      // tabulating anything: some courts set the whole reasoning in one.
+      // Its cells are read as the body is, paragraph by paragraph.
+      const rows = ownTableRows($el);
+      if (
+        rows.length > 0 &&
+        rows.toArray().every((row) => $(row).children("td, th").length === 1)
+      ) {
+        rows.each((_tr, trEl) => {
+          visitContents($(trEl).children("td, th").first());
+        });
+        return;
+      }
       // Extract each row as a paragraph. Cell values are
       // joined with " | " to preserve tabular structure
       // in plain text (e.g., cost breakdowns, fee summaries).
-      ownTableRows($el).each((_tr, trEl) => {
+      rows.each((_tr, trEl) => {
         const cells: string[] = [];
         const cellInlines: Inline[] = [];
 
         $(trEl)
           .children("td, th")
           .each((_td, tdEl) => {
-            const cellText = visibleHtmlText($(tdEl)).trim();
+            const cellText = tableCellText($(tdEl));
             if (cellText) {
               cells.push(cellText);
               if (cellInlines.length > 0) {
@@ -540,6 +596,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
       // carry no number, so they stay unnumbered chunks rather
       // than acquiring a Roman prefix the document never had.
       const ordered = tag === "ol";
+      const decimalList = ordered && ($el.attr("type") ?? "1") === "1";
       const startAttr = $el.attr("start");
       let listStart = startAttr ? Number.parseInt(startAttr, 10) : 1;
 
@@ -565,6 +622,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: ordered ? listStart : null,
+          decimalList,
           footnote: footnoteOf($li),
         });
         listStart++;
@@ -583,6 +641,21 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
   return chunks;
 };
 
+const CELL_BLOCK_SELECTOR = "p, div, li, br, h1, h2, h3, h4, h5, h6";
+
+/**
+ * The text of one table cell. The paragraphs a cell holds ("U. H.",
+ * "doručovací adresa X") are words apart, as the page shows them, not run
+ * together.
+ */
+const tableCellText = ($cell: cheerio.Cheerio<AnyNode>): string => {
+  const $copy = $cell.clone();
+  $copy.find(CELL_BLOCK_SELECTOR).after(" ");
+  return withoutSoftHyphens(visibleHtmlText($copy))
+    .replace(/\s+/gu, " ")
+    .trim();
+};
+
 const parseFontSize = (style: string): number => {
   const match = /font-size:\s*(?<size>\d+)pt/u.exec(style);
   return match ? Number(match.groups?.["size"]) : 12;
@@ -592,21 +665,18 @@ const parseFontSize = (style: string): number => {
 
 /**
  * Page furniture Aspose repeats at the top of every page: image placeholders
- * for the court emblem, then the running header "pokračování <page> <case
- * number>" on every page after the first.
+ * for the court emblem, then the running header ("pokračování 2 1 As
+ * 23/2012-45", "pokračování -2- 52A 35/2012") on every page after the first.
  *
- * It is glued to the first paragraph of the page's body rather than set as
- * its own paragraph, so the furniture is peeled off the chunk instead of the
- * chunk being dropped for starting with it. Every part is optional, so an
+ * It is often glued to the first paragraph of the page's body rather than set
+ * as its own paragraph, so the furniture is peeled off the chunk instead of
+ * the chunk being dropped for starting with it. Every part is optional, so an
  * ordinary paragraph matches the empty string and is left alone.
- *
- * The docket's leading panel number is optional because the letter-first
- * registers have none: `Konf 4/2011`, `Nad 224/2014`. Same shape the citation
- * extractor accepts, and the `pokračování` literal is what keeps the optional
- * digits from reaching ordinary prose.
  */
-const PAGE_FURNITURE_RE =
-  /^(?:\[OBRÁZEK\]\s*)*(?:pokračování\s+\d+\s+(?:\d+\s*)?\p{Lu}\p{L}*\s+\d+\/\d{4}(?:\s*-\s*\d+)?)?\s*/u;
+const PAGE_FURNITURE_RE = new RegExp(
+  String.raw`^(?:\[OBRÁZEK\]\s*)*(?:${CZ_RUNNING_HEADER_SOURCE})?\s*`,
+  "u",
+);
 
 /** Decorative lines carrying no content once the furniture is peeled. */
 const DECORATIVE_LINE_RE = /^(?:pokračování|ČESKÁ REPUBLIKA)$/u;
@@ -688,6 +758,28 @@ const RULING_ITEM_RE = /^(?:X{0,3}(?:IX|IV|V?I{0,3}))\.\s+(?:.+)/u;
 const SECTION_HEADING_RE =
   /^(?:X{0,3}(?:IX|IV|V?I{0,3}))\.\s*(?:[A-Z]\s+)?[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/u;
 
+/**
+ * Subsection heading in Odůvodnění: the section's Roman numeral with an
+ * Arabic or a letter subsection, then a capitalised title ("IV.1 Rozhodná
+ * právní úprava", "IV. 2. Judikatura", "III. a) Právní názor osmého senátu").
+ */
+const SUBSECTION_HEADING_RE =
+  /^(?=[IVX])(?:X{0,3}(?:IX|IV|V?I{0,3}))\.\s*(?:\d{1,2}\.?|\p{Ll}\))\s*\p{Lu}/u;
+
+/**
+ * The heading of a separate opinion printed after the decision ("Odlišné
+ * stanovisko soudce …"). A title, so it does not end the way a sentence
+ * reporting the opinions does ("Odlišná stanoviska … uplatnili soudci …").
+ */
+const SEPARATE_OPINION_HEADING_RE =
+  /^(?:Odlišné\s+stanovisko|Stanovisko\s+menšiny)(?:\s|:|$)/iu;
+const SEPARATE_OPINION_HEADING_MAX_CHARS = 300;
+
+const isSeparateOpinionHeading = (plainText: string): boolean =>
+  plainText.length <= SEPARATE_OPINION_HEADING_MAX_CHARS &&
+  SEPARATE_OPINION_HEADING_RE.test(plainText) &&
+  !plainText.endsWith(".");
+
 /** Numbered paragraph: [1], [2], ... */
 const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
 
@@ -696,9 +788,24 @@ const DOCUMENT_PHASE = {
   HOLDING: "holding",
   REASONING: "reasoning",
   INSTRUCTION: "instruction",
+  /** A separate opinion, after the decision's closing and signatures. */
+  SEPARATE_OPINION: "separate-opinion",
 } as const;
 
 type DocumentPhase = (typeof DOCUMENT_PHASE)[keyof typeof DOCUMENT_PHASE];
+
+/**
+ * The role of an ordinary paragraph by where it stands: the introduction
+ * names the court and the parties, a separate opinion is the dissenting
+ * judge's. Neither is the court's reasoning, which the court numbers.
+ */
+const PHASE_PARAGRAPH_ROLE = {
+  [DOCUMENT_PHASE.PREAMBLE]: "intro",
+  [DOCUMENT_PHASE.HOLDING]: undefined,
+  [DOCUMENT_PHASE.REASONING]: undefined,
+  [DOCUMENT_PHASE.INSTRUCTION]: undefined,
+  [DOCUMENT_PHASE.SEPARATE_OPINION]: "dissent",
+} as const satisfies Record<DocumentPhase, ParagraphBlock["role"]>;
 
 /**
  * Closing line: "V Brně dne ...", "Praha 10. březen 2026",
@@ -708,6 +815,78 @@ type DocumentPhase = (typeof DOCUMENT_PHASE)[keyof typeof DOCUMENT_PHASE];
 
 const makeAnchorId = (prefix: string, index: number): string =>
   `${prefix}-${index}`;
+
+/** The phases whose ordinary paragraphs are reasoning, the court's or a judge's. */
+const REASONING_PHASES: ReadonlySet<DocumentPhase> = new Set([
+  DOCUMENT_PHASE.REASONING,
+  DOCUMENT_PHASE.SEPARATE_OPINION,
+]);
+
+const HEADING_MAX_CHARS = 120;
+
+/**
+ * The level of a heading in the reasoning: a Roman-numbered section (3) or
+ * one of its subsections ("IV.1 Rozhodná právní úprava", 4). A subsection
+ * is a title, so it never ends the way a sentence does.
+ */
+const reasoningHeadingLevel = (plainText: string): 3 | 4 | null => {
+  if (plainText.length >= HEADING_MAX_CHARS) {
+    return null;
+  }
+  if (SECTION_HEADING_RE.test(plainText)) {
+    return 3;
+  }
+  return SUBSECTION_HEADING_RE.test(plainText) && !plainText.endsWith(".")
+    ? 4
+    : null;
+};
+
+const phaseRole = (
+  phase: DocumentPhase,
+): Pick<ParagraphBlock, "role"> | Record<string, never> => {
+  const role = PHASE_PARAGRAPH_ROLE[phase];
+  return role === undefined ? {} : { role };
+};
+
+/**
+ * A list item's text with the number Word prints before it: in the
+ * reasoning it is the paragraph's number ("1. Napadeným …").
+ */
+const withListMarker = (
+  chunk: PChunk,
+  { inlines, plainText }: ChunkContent,
+): { inlines: Inline[]; plainText: string } => {
+  if (!chunk.decimalList || chunk.listItemIndex === null) {
+    return { inlines, plainText };
+  }
+  const marker = `${String(chunk.listItemIndex)}. `;
+  return {
+    inlines: [{ type: "text", text: marker }, ...inlines],
+    plainText: `${marker}${plainText}`,
+  };
+};
+
+/**
+ * Append a chunk to the reasoning paragraph a page break cut, when the chunk
+ * is the rest of its sentence. Reports whether it did.
+ */
+const finishesCutParagraph = (
+  cut: ParagraphBlock | null,
+  chunk: PChunk,
+  { inlines, plainText }: ChunkContent,
+): boolean => {
+  if (
+    cut === null ||
+    chunk.footnote !== null ||
+    chunk.listItemIndex !== null ||
+    !continuesAcrossPageBreak(cut.plainText, plainText)
+  ) {
+    return false;
+  }
+  cut.inlines.push({ type: "text", text: " " }, ...inlines);
+  cut.plainText = `${cut.plainText} ${plainText}`;
+  return true;
+};
 
 /**
  * Strip a character-counted prefix from inlines.
@@ -728,6 +907,12 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   const footnoteOccurrences = new Map<string, number>();
   let sawCaseNumber = false;
   let sawTitle = false;
+  let sawClosing = false;
+  /**
+   * The reasoning paragraph just emitted, which the next chunk may finish:
+   * a page break cuts a paragraph in two, sometimes behind a running header.
+   */
+  let cutParagraph: ParagraphBlock | null = null;
 
   for (const chunk of chunks) {
     const { centered, bold, letterSpacing: _letterSpacing } = chunk;
@@ -737,6 +922,13 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
     const { plainText, inlines } = content;
+    const continuing = cutParagraph;
+    cutParagraph = null;
+
+    if (finishesCutParagraph(continuing, chunk, content)) {
+      cutParagraph = continuing;
+      continue;
+    }
 
     if (chunk.footnote !== null) {
       // A footnote the publisher set over several paragraphs arrives as
@@ -834,6 +1026,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
         id: makeBlockId(),
         anchorId: makeAnchorId("p", blockIndex),
         type: "paragraph",
+        role: "intro",
         inlines,
         plainText,
       });
@@ -910,8 +1103,26 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // would leave a gap in the court's numbering.
     const courtNumbered = opensWithCourtParagraphMarker(plainText);
 
+    // A separate opinion follows the decision's closing; its paragraphs are
+    // the dissenting judge's, numbered from 1 again.
+    if (sawClosing && isSeparateOpinionHeading(plainText)) {
+      phase = DOCUMENT_PHASE.SEPARATE_OPINION;
+      blockIndex += 1;
+      blocks.push({
+        id: makeBlockId(),
+        anchorId: makeAnchorId("h", blockIndex),
+        type: "heading",
+        level: 2,
+        role: "section-heading",
+        inlines,
+        plainText,
+      });
+      continue;
+    }
+
     // Closing: "V Brně dne ..."
     if (!courtNumbered && CLOSING_RE.test(plainText)) {
+      sawClosing = true;
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
@@ -991,8 +1202,8 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
           id: makeBlockId(),
           anchorId: makeAnchorId("p", blockIndex),
           type: "paragraph",
-          inlines,
-          plainText,
+          ...phaseRole(phase),
+          ...withListMarker(chunk, content),
         });
       }
       continue;
@@ -1036,19 +1247,16 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       continue;
     }
 
-    // Section headings in Odůvodnění (centered or bold,
-    // short, matching Roman numeral pattern)
-    if (
-      phase === DOCUMENT_PHASE.REASONING &&
-      SECTION_HEADING_RE.test(plainText) &&
-      plainText.length < 120
-    ) {
+    const reasoning = REASONING_PHASES.has(phase);
+
+    const headingLevel = reasoning ? reasoningHeadingLevel(plainText) : null;
+    if (headingLevel !== null) {
       blockIndex += 1;
       blocks.push({
         id: makeBlockId(),
         anchorId: makeAnchorId("h", blockIndex),
         type: "heading",
-        level: 3,
+        level: headingLevel,
         inlines,
         plainText,
       });
@@ -1060,13 +1268,18 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     // `courtParagraphNumbers` once every block is classified.
     // Default: paragraph
     blockIndex += 1;
-    blocks.push({
+    const paragraph: ParagraphBlock = {
       id: makeBlockId(),
       anchorId: makeAnchorId("p", blockIndex),
       type: "paragraph",
+      ...phaseRole(phase),
       inlines,
       plainText,
-    });
+    };
+    blocks.push(paragraph);
+    if (reasoning) {
+      cutParagraph = paragraph;
+    }
   }
 
   return blocks;

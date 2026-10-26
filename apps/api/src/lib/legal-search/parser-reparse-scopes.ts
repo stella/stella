@@ -109,35 +109,35 @@ export const storedFeaturesForParserReparseScope = <
 
 export const PARSER_VERSION_SCOPES = {
   [ADAPTER_KEYS.CZ_REGIONAL]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, soft hyphens, misplaced opening quotes, title lines and paragraph numbers are recomputed from the stored decision, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "running headers, page numbers, soft hyphens, captions and paragraph numbers are recomputed from the stored print page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_NSS]: {
-    version: 21,
+    version: 22,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "page furniture, page-break cuts, letter-spaced words, layout tables, list numbers, subsection headings, separate opinions and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 28,
+    version: 29,
     scope: {
       type: "all",
       reason:
-        "paragraph text, ruling roles, separate-opinion headings and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
+        "letter-spaced words and paragraph numbers are recomputed from the stored page, and neither has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -149,11 +149,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_US]: {
-    version: 12,
+    version: 13,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
@@ -329,11 +329,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers are recomputed from the stored document and have no feature storage of their own",
     },
   },
 } as const satisfies ParserVersionScopes<

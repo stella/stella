@@ -27,8 +27,14 @@ import type {
   ParagraphBlock,
   TableCell,
 } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/inline";
 
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
+import {
+  isPageNumberLine,
+  isRunningHeaderLine,
+  withoutSoftHyphens,
+} from "@/api/lib/legal-search/parsers/page-furniture";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 
@@ -398,10 +404,21 @@ type RawChunk =
   | { kind: "inlines"; inlines: Inline[]; centered: boolean }
   | { kind: "table"; rows: TableCell[][] };
 
+const withoutSoftHyphensIn = (inlines: readonly Inline[]): Inline[] =>
+  inlines.map((node) => {
+    if (node.type === "text") {
+      return { ...node, text: withoutSoftHyphens(node.text) };
+    }
+    return hasInlineChildren(node)
+      ? { ...node, children: withoutSoftHyphensIn(node.children) }
+      : node;
+  });
+
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-): Inline[] => walkInlinesShared($, el, { sanitizeHref: sanitizeUrl });
+): Inline[] =>
+  withoutSoftHyphensIn(walkInlinesShared($, el, { sanitizeHref: sanitizeUrl }));
 
 const isCentered = (el: cheerio.Cheerio<AnyNode>): boolean => {
   if (el.attr("align") === "center") {
@@ -758,6 +775,25 @@ const embeddedCaption = (text: string): EmbeddedCaption | null => {
   };
 };
 
+/**
+ * The paragraph holding the caption: the first one, or the one after it
+ * where the court's name stands above the caption on a line of its own
+ * ("NEJVYŠŠÍ SOUD", then "ČESKÉ REPUBLIKY 25 Cdo 803/2003 ČESKÁ REPUBLIKA
+ * ROZSUDEK JMÉNEM REPUBLIKY").
+ */
+const captionParagraphIndex = (blocks: readonly Block[]): number => {
+  const first = blocks.findIndex((block) => block.type === "paragraph");
+  const firstBlock = blocks[first];
+  const next = blocks[first + 1];
+  return firstBlock?.type === "paragraph" &&
+    embeddedCaption(firstBlock.plainText) === null &&
+    CAPTION_TITLE_RE.test(firstBlock.plainText) &&
+    next?.type === "paragraph" &&
+    embeddedCaption(next.plainText) !== null
+    ? first + 1
+    : first;
+};
+
 const mergeBlocks = (
   rawBlocks: Block[],
   makeBlockId: () => string,
@@ -810,7 +846,7 @@ const mergeBlocks = (
   // REPUBLIKA ROZSUDEK JMÉNEM REPUBLIKY"): the court preamble
   // before the case number, the case number, and the capitals
   // after it as the title. Every character stays in a block.
-  const firstParaIdx = merged.findIndex((b) => b.type === "paragraph");
+  const firstParaIdx = captionParagraphIndex(merged);
   if (firstParaIdx !== -1) {
     const firstPara = merged.at(firstParaIdx);
     if (!firstPara) {
@@ -953,7 +989,14 @@ const classifyBlocks = (
     const { inlines, centered } = chunk;
     const plainText = inlinesToPlainText(inlines).trim();
 
-    if (!plainText) {
+    // The print page keeps every page's running header and page number
+    // where the page broke. Without them, the merge pass below joins the
+    // sentence they cut.
+    if (
+      !plainText ||
+      isRunningHeaderLine(plainText) ||
+      isPageNumberLine(plainText)
+    ) {
       continue;
     }
 

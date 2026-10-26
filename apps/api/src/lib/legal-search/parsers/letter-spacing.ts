@@ -9,8 +9,10 @@
  *
  * A run of single letters joined by single spaces is a spaced word when it
  * is long enough that no sentence produces it, four letters at least. A
- * shorter run (`s e`) is a spaced word only beside one, across a wide gap.
- * Punctuation spaced after the last letter belongs to the word.
+ * shorter run (`s e`) is a spaced word only beside one, across a wide gap,
+ * or set apart by wide gaps on both sides in a text that spaces its words
+ * (`a věc   s e   mu   v r a c í`). Punctuation spaced after the last letter
+ * belongs to the word.
  */
 
 type Token = {
@@ -87,9 +89,25 @@ const runsOf = (tokens: readonly Token[]): Run[] => {
   return runs;
 };
 
-/** The runs that are spaced words: long ones, and short ones beside them. */
-const spacedRunsOf = (runs: readonly Run[]): Run[] => {
-  const spaced = runs.map((run) => run.letters >= STRONG_RUN_LETTERS);
+const isWideGap = (gap: string | undefined): boolean =>
+  gap !== undefined && gap.length > 1;
+
+/**
+ * The runs that are spaced words: long ones, short ones beside them, and
+ * short ones the wide word gaps of a spaced text set apart.
+ */
+const spacedRunsOf = (
+  runs: readonly Run[],
+  tokens: readonly Token[],
+): Run[] => {
+  const spacesWords = runs.some((run) => run.letters >= STRONG_RUN_LETTERS);
+  const spaced = runs.map(
+    (run) =>
+      run.letters >= STRONG_RUN_LETTERS ||
+      (spacesWords &&
+        isWideGap(tokens[run.start]?.gap) &&
+        isWideGap(tokens[run.end]?.gap)),
+  );
   let changed = true;
   while (changed) {
     changed = false;
@@ -117,7 +135,7 @@ const spacedRunsOf = (runs: readonly Run[]): Run[] => {
 
 export const collapseLetterSpacing = (text: string): string => {
   const { tokens, tail } = tokensOf(text);
-  const spaced = spacedRunsOf(runsOf(tokens));
+  const spaced = spacedRunsOf(runsOf(tokens), tokens);
   if (spaced.length === 0) {
     return text;
   }

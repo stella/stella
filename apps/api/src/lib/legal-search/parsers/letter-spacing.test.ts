@@ -34,6 +34,15 @@ describe("letter-spaced emphasis", () => {
     ["t a k t o:", "takto:"],
     ["z těchto d ů v o d ů:", "z těchto důvodů:"],
     ["O d ů v o d n ě n í :", "Odůvodnění:"],
+    // Verbatim from NSS 2 Afs 180/2004 and 2 Afs 154/2005.
+    [
+      "sp. zn. 31 Ca 51/2004, s e   z r u š u j e   a věc   s e   mu   v r a c í   k dalšímu řízení.",
+      "sp. zn. 31 Ca 51/2004, se zrušuje a věc se mu vrací k dalšímu řízení.",
+    ],
+    [
+      "P o u č e n í : Proti tomuto rozsudku   n e j s o u   opravné prostředky přípustné.",
+      "Poučení: Proti tomuto rozsudku nejsou opravné prostředky přípustné.",
+    ],
   ])("reads %j as %j", (spaced, words) => {
     expect(collapseLetterSpacing(spaced)).toBe(words);
   });
