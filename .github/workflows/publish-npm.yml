@@ -241,6 +241,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/network-retry"
           cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
 
       - name: Resolve trusted source
         id: source
@@ -293,7 +294,7 @@ jobs:
           MANUAL_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          bash "$RUNNER_TEMP/network-retry/retry.sh" git fetch --no-tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin main:refs/remotes/origin/main
 
           source_sha="$(git rev-parse HEAD)"
           if [[ "$source_sha" != "$MANUAL_SOURCE_SHA" ]]; then
@@ -405,11 +406,11 @@ jobs:
             exit 1
           fi
 
-          if RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$RUNNER_TEMP/network-retry/retry.sh" git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
+          if RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$NETWORK_RETRY_SCRIPT" git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
             echo "::error::A branch named ${release_ref} exists alongside the release tag; refusing ambiguous publication." >&2
             exit 1
           fi
-          bash "$RUNNER_TEMP/network-retry/retry.sh" git fetch --no-tags origin \
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin \
             "refs/tags/${release_ref}:refs/tags/${release_ref}" \
             main:refs/remotes/origin/main
 

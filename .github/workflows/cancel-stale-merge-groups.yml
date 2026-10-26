@@ -72,6 +72,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/network-retry"
           cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
 
       - name: Cancel merge_group runs whose branch no longer exists
         timeout-minutes: 5
@@ -91,7 +92,7 @@ jobs:
             # ls-remote exits 2 only when the ref is absent; any other
             # failure leaves the run alone.
             set +e
-            RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$RUNNER_TEMP/network-retry/retry.sh" git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
+            RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$NETWORK_RETRY_SCRIPT" git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
             code=$?
             set -e
             if (( code != 2 )); then

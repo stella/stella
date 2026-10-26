@@ -94,11 +94,14 @@ jobs:
           sparse-checkout-cone-mode: false
 
       # The workflow's own helper: this job fetches before, or without, a
-      # checkout of this revision into the workspace.
+      # checkout of this revision into the workspace. These two steps run
+      # only workflow-revision tooling; no candidate code runs before
+      # "Check release candidate".
       - name: Stage network retry helper
         run: |
           mkdir -p "$RUNNER_TEMP/network-retry"
           cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"
 
       - name: Check release candidate
         timeout-minutes: 5
@@ -119,13 +122,13 @@ jobs:
           git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          bash "$RUNNER_TEMP/network-retry/retry.sh" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
           git -C "$directory" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
-          bash "$RUNNER_TEMP/network-retry/retry.sh" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
+          bash "$NETWORK_RETRY_SCRIPT" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
           bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
 
