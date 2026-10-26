@@ -79,7 +79,9 @@ const renderReader = (landingParagraphId?: string) => {
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <Harness
         landingParagraphId={landingParagraphId}
-        onRender={(margin) => renders.push(margin)}
+        onRender={(margin) => {
+          renders.push(margin);
+        }}
       />
     </IntlProvider>,
   );
