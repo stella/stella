@@ -35,6 +35,7 @@ import {
   poolDeadline,
   processLauncher,
   processTree,
+  procStatRow,
   psSeconds,
   resolveEnv,
   runChecks,
@@ -633,6 +634,20 @@ test("a stopped check reports its stop as the failure cause", () => {
   expect(
     failedCheckCause({ detail }, "(fail) earlier test\nerror: unrelated\n"),
   ).toBe("stuck: no output and no CPU progress for 10 min");
+});
+
+test("a /proc stat line counts own and reaped children's CPU", () => {
+  // pid (comm) state ppid pgrp session tty tpgid flags minflt cminflt majflt
+  // cmajflt utime stime cutime cstime ...
+  const stat =
+    "4242 (bun test (x) y) S 4200 4100 4100 0 -1 4194304 10 0 0 0 150 50 700 100 20 0 1 0";
+  expect(procStatRow(stat)).toEqual({
+    pid: 4242,
+    ppid: 4200,
+    pgid: 4100,
+    cpu: 1000,
+  });
+  expect(procStatRow("garbage")).toBeUndefined();
 });
 
 test("ps CPU times parse on Linux and macOS", () => {

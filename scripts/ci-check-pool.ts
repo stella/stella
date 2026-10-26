@@ -23,9 +23,11 @@
 import {
   appendFileSync,
   closeSync,
+  existsSync,
   fstatSync,
   mkdirSync,
   openSync,
+  readdirSync,
   readFileSync,
   readSync,
   writeFileSync,
@@ -414,16 +416,67 @@ export const psSeconds = (value: string) => {
     );
 };
 
-// `-S` adds each process's reaped children to its CPU time (Linux and macOS),
-// so work done by a child that already exited still counts for its parent.
+/**
+ * One `/proc/<pid>/stat` line as a process row. CPU is user plus system time
+ * of the process and of its reaped children, in clock ticks: only its growth
+ * matters, so the unit does.
+ */
+export const procStatRow = (stat: string): ProcessRow | undefined => {
+  const pid = Number(/^(\d+) /u.exec(stat)?.[1]);
+  // Fields after the parenthesised command, which may hold spaces.
+  const fields = stat
+    .slice(stat.lastIndexOf(")") + 2)
+    .trim()
+    .split(/\s+/u);
+  const ticks = fields.slice(11, 15).map(Number);
+  if (
+    !Number.isInteger(pid) ||
+    ticks.length !== 4 ||
+    ticks.some(Number.isNaN)
+  ) {
+    return undefined;
+  }
+  return {
+    pid,
+    ppid: Number(fields[1]),
+    pgid: Number(fields[2]),
+    cpu: ticks.reduce((total, value) => total + value, 0),
+  };
+};
+
+const isGone = (error: unknown) =>
+  error instanceof Error &&
+  "code" in error &&
+  (error.code === "ENOENT" || error.code === "ESRCH");
+
+// Linux reports CPU per tick in /proc; macOS has no /proc, and its `ps -S`
+// adds reaped children to their parent's time the same way. Either way work
+// done by a child that already exited still counts for its parent.
 const processTable = (): ProcessRow[] => {
+  if (existsSync("/proc/self/stat")) {
+    return readdirSync("/proc").flatMap((entry) => {
+      if (!/^\d+$/u.test(entry)) {
+        return [];
+      }
+      try {
+        const row = procStatRow(readFileSync(`/proc/${entry}/stat`, "utf-8"));
+        return row === undefined ? [] : [row];
+      } catch (error) {
+        // A process that exited after the listing has nothing left to count.
+        if (isGone(error)) {
+          return [];
+        }
+        throw error;
+      }
+    });
+  }
   const listed = Bun.spawnSync(
     ["ps", "-A", "-S", "-o", "pid=,ppid=,pgid=,time="],
-    {
-      stdout: "pipe",
-      stderr: "ignore",
-    },
+    { stdout: "pipe", stderr: "pipe" },
   );
+  if (listed.exitCode !== 0) {
+    throw new CheckPoolError(`ps failed: ${listed.stderr.toString()}`);
+  }
   return listed.stdout
     .toString()
     .split("\n")

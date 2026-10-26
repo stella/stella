@@ -1416,6 +1416,8 @@ test("code-quality pool preserves every moved check exactly once", () => {
   ];
   const withoutPoolMetadata = (step: Record<string, unknown>) => {
     const normalized = { ...step };
+    // An expanded pooled check carries its generated budget as its timeout.
+    delete normalized["timeout-minutes"];
     // An ordinary step's implicit success() is `!cancelled()` in the pool.
     if (normalized["if"] === ["$", "{{ !cancelled() }}"].join("")) {
       delete normalized["if"];
