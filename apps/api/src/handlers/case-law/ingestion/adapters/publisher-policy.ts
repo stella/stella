@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 // parser-output-unchanged: gate definitions share their owner and immediate request-boundary checks share publisher pacing; response parsing and stored output are unchanged.
@@ -60,6 +61,7 @@ export const ADAPTER_PUBLISHER_GATES = {
   [ADAPTER_KEYS.CZ_NSS]: "nssoud-cz",
   [ADAPTER_KEYS.CZ_REGIONAL]: "justice-cz",
   [ADAPTER_KEYS.CZ_UOHS]: "uohs-cz",
+  [ADAPTER_KEYS.BR_TST]: "tst-jus-br",
   [ADAPTER_KEYS.SK_COURTS]: "justice-sk",
   [ADAPTER_KEYS.SK_US]: "ustavnysud-sk",
   [ADAPTER_KEYS.PL_COURTS]: "saos-pl",

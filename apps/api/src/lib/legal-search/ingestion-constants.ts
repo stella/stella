@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
@@ -6,6 +7,7 @@ export const ADAPTER_KEYS = {
   CZ_NSS: "cz-nss",
   CZ_US: "cz-us",
   CZ_UOHS: "cz-uohs",
+  BR_TST: "br-tst",
   SK_COURTS: "sk-courts",
   SK_US: "sk-us",
   PL_COURTS: "pl-courts",
@@ -34,6 +36,13 @@ export const ADAPTER_KEYS = {
 } as const;
 
 export type AdapterKey = (typeof ADAPTER_KEYS)[keyof typeof ADAPTER_KEYS];
+
+/**
+ * The TST reconciliation slice of its súmulas, OJs and precedentes
+ * normativos, listed whole by number: some carry no publication date, so no
+ * day slice holds them. It sorts before every day, first in walk order.
+ */
+export const BR_TST_PRECEDENTS_SLICE = "0-precedentes";
 
 /** Import discovery is owned by callers, never the crawl scheduler. */
 export const IMPORT_SOURCE_KEYS = {
@@ -81,6 +90,7 @@ export const PARSER_VERSIONS = {
   [ADAPTER_KEYS.PL_KIS]: 9,
   [ADAPTER_KEYS.PL_UODO]: 13,
   [ADAPTER_KEYS.PL_UOKIK]: 11,
+  [ADAPTER_KEYS.BR_TST]: 1,
 } as const satisfies Record<AdapterKey, number>;
 
 // parser-output-unchanged: adds the source fingerprint versions; no parser reads them, so parser output is unchanged.
@@ -126,6 +136,7 @@ export const SOURCE_FINGERPRINT_VERSIONS = {
   [ADAPTER_KEYS.PL_KIS]: 0,
   [ADAPTER_KEYS.PL_UODO]: 0,
   [ADAPTER_KEYS.PL_UOKIK]: 0,
+  [ADAPTER_KEYS.BR_TST]: 0,
 } as const satisfies Record<AdapterKey | ImportSourceKey, number>;
 
 /**

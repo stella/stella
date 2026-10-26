@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 // parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.
@@ -683,6 +684,22 @@ export const ADAPTER_MANIFESTS = {
       through: OPEN_RANGE,
     },
   },
+  [ADAPTER_KEYS.BR_TST]: {
+    key: ADAPTER_KEYS.BR_TST,
+    documentStage: "inline",
+    name: "Brazilian Superior Labour Court (TST)",
+    publisher: "Tribunal Superior do Trabalho",
+    publicHomeUrl: "https://jurisprudencia.tst.jus.br",
+    ...ADAPTER_JURISDICTIONS.BRA,
+    ecliCourtCodes: NO_DECLARED_ECLI_COURT_CODES,
+    statedEcliIdentity: STATED_ECLI_IDENTITY.NONE,
+    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    dateRange: {
+      type: "publication-date",
+      fromInclusive: "1985-01-01",
+      through: OPEN_RANGE,
+    },
+  },
   [ADAPTER_KEYS.EU_ECJ]: {
     key: ADAPTER_KEYS.EU_ECJ,
     documentStage: "inline",
@@ -786,6 +803,7 @@ export const SOURCE_APP_READER_TEXT = {
   [ADAPTER_KEYS.PL_UODO]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.PL_UOKIK]: APP_READER_TEXT.FULL,
   [ADAPTER_KEYS.CZ_UOHS]: APP_READER_TEXT.FULL,
+  [ADAPTER_KEYS.BR_TST]: APP_READER_TEXT.FULL,
   [IMPORT_SOURCE_KEYS.COURTLISTENER]: APP_READER_TEXT.FULL,
   ...FIXTURE_SOURCE_APP_READER_TEXT,
 } as const satisfies Record<

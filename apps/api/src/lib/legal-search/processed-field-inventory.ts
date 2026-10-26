@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
@@ -376,6 +377,17 @@ export const PROCESSED_FIELD_INVENTORY = {
       recordedEvidence(
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
         "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.BR_TST]: {
+    "court-paragraph-numbers": skippedField(
+      PROCESSED_FIELD_SKIP_REASONS.SOURCE_LACKS,
+      "TST decisions print no citable paragraph numbers: an acórdão is cited by its docket, and the numerals it prints open headnote items and lists, not paragraphs",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-acordao-2024.json",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-acordao-1985.json",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/br-tst-despacho-2020.json",
       ),
     ),
   },

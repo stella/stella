@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "cdfccdc46dd1f9297456e8103be671bb7201d1db8bea1203894f1747c7cada5b",
+  "sourceUrl": "https://jurisprudencia-backend2.tst.jus.br/rest/pesquisa-textual/1/2 (POST tipos=[DESPACHO], publicacao 2020-01-01..2020-01-31, ordenacao=data)",
+  "capturedAt": "2026-10-25T02:15:02.000Z",
+  "note": "two despachos whose text is an HTML fragment in a literal CDATA wrapper; the publisher's text drops the letter after an accented one (funço, Brasíia), which its signed PDF does not. Each codCPFSignatario value (a signatory's personal tax id) was replaced by 00000000000 before commit; every other byte is as served."
+}

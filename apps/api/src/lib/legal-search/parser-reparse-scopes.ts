@@ -337,6 +337,13 @@ export const PARSER_VERSION_SCOPES = {
         "Revalidate document AST identities across the complete parser output.",
     },
   },
+  [ADAPTER_KEYS.BR_TST]: {
+    version: 1,
+    scope: {
+      type: "all",
+      reason: "the source's first parser; there are no stored rows to narrow",
+    },
+  },
 } as const satisfies ParserVersionScopes<
   Pick<typeof PARSER_VERSIONS, AdapterKey>
 >;

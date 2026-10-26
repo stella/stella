@@ -1,3 +1,4 @@
+// parser-output-unchanged: the TST adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /**
  * A decision per enrolled case-law adapter, built from payloads shaped like
  * the ones its publisher serves.
@@ -18,8 +19,10 @@
  * an `afterEach`.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
+
+import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -60,6 +63,11 @@ import { AT_UVS_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-uvs
 import { AT_VERG_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-verg";
 import { AT_VFGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vfgh";
 import { AT_VWGH_SOURCE } from "@/api/handlers/case-law/ingestion/adapters/at-vwgh";
+import {
+  brTstFetchPage,
+  buildBrTstDecision,
+  encodeBrTstCursor,
+} from "@/api/handlers/case-law/ingestion/adapters/br-tst";
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { buildCzNsDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
@@ -2806,6 +2814,121 @@ export const czUohsFixture = (): EnrolledAdapterFixture => ({
   },
 });
 
+// ── BR TST fixture ───────────────────────────────────────
+
+const BR_TST_FIXTURES = new URL(
+  "../../handlers/case-law/ingestion/adapters/__fixtures__/",
+  import.meta.url,
+);
+
+/** The recorded search responses: one or two records of every type. */
+export const BR_TST_RECORDINGS = [
+  "br-tst-acordao-2024.json",
+  "br-tst-acordao-1985.json",
+  "br-tst-despacho-2020.json",
+  "br-tst-despacho-2024.json",
+  "br-tst-sumula.json",
+  "br-tst-orientacao.json",
+  "br-tst-orientacao-transitoria.json",
+  "br-tst-orientacao-precedentes-externos.json",
+  "br-tst-precedente-normativo.json",
+] as const;
+
+/** The records of one recorded search response, as the search served them. */
+export const brTstRecordedRecords = async (
+  name: (typeof BR_TST_RECORDINGS)[number],
+): Promise<Record<string, unknown>[]> => {
+  const parsed: unknown = JSON.parse(
+    await Bun.file(new URL(name, BR_TST_FIXTURES)).text(),
+  );
+  const items = isRecord(parsed) ? parsed["registros"] : undefined;
+  return Array.isArray(items)
+    ? items.flatMap((item: unknown) =>
+        isRecord(item) && isRecord(item["registro"]) ? [item["registro"]] : [],
+      )
+    : panic(`${name} is not a TST search response`);
+};
+
+const brTstRecordedAcordao = async (): Promise<Record<string, unknown>> =>
+  (await brTstRecordedRecords("br-tst-acordao-2024.json")).at(0) ??
+  panic("the TST acórdão recording lost its record");
+
+/** The recorded modern acórdão, built as the crawl builds it. */
+export const brTstAcordaoFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () =>
+    buildBrTstDecision(await brTstRecordedAcordao()).decision,
+});
+
+/** A recorded value that states something: not null, not empty. */
+const statesValue = (value: unknown): boolean =>
+  value !== null &&
+  value !== "" &&
+  !(Array.isArray(value) && value.length === 0);
+
+/**
+ * One acórdão stating every field the search states for any record type: the
+ * recorded acórdão, plus each field only another type's recordings state, at
+ * the first recorded value that states something. The registry suites take
+ * one decision per source while the inventory is total over all six types;
+ * `br-tst.test.ts` certifies each type against its own recordings.
+ */
+export const brTstFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const union: Record<string, unknown> = {};
+    for (const name of BR_TST_RECORDINGS) {
+      for (const record of await brTstRecordedRecords(name)) {
+        for (const [key, value] of Object.entries(record)) {
+          if (!Object.hasOwn(union, key) || !statesValue(union[key])) {
+            union[key] = value;
+          }
+        }
+      }
+    }
+    return buildBrTstDecision({ ...union, ...(await brTstRecordedAcordao()) })
+      .decision;
+  },
+});
+
+/**
+ * The recorded acórdão as one crawl page serves it, so a publisher read is
+ * what builds the decision: a failed or refused read fails the page.
+ */
+export const brTstCrawlFixture = (): EnrolledAdapterFixture => ({
+  buildDecision: async () => {
+    const record = await brTstRecordedAcordao();
+    globalThis.fetch = asFetchMock(
+      async () =>
+        await Promise.resolve(
+          new Response(
+            JSON.stringify({
+              tempoGasto: 1,
+              totalRegistros: 1,
+              registros: [{ registro: record, destaques: {} }],
+              agregacoes: [],
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          ),
+        ),
+    );
+    const page = await brTstFetchPage(
+      encodeBrTstCursor({
+        phase: "walk",
+        regime: "sweep",
+        window: { type: "day", day: "2024-03-15", part: "all" },
+        offset: 0,
+      }),
+      { now: Temporal.Instant.from("2026-10-25T12:00:00Z") },
+    );
+    if (Result.isError(page)) {
+      throw page.error;
+    }
+    return (
+      page.value.decisions.at(0) ??
+      panic("the TST crawl fixture built no decision")
+    );
+  },
+});
+
 /** Total fixture coverage shared by field inventory and publication invariants. */
 export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
@@ -2814,6 +2937,7 @@ export const CASE_LAW_CONFORMANCE_FIXTURES = {
   [ADAPTER_KEYS.CZ_US]: czUsFixture,
   [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
   [ADAPTER_KEYS.CZ_UOHS]: czUohsFixture,
+  [ADAPTER_KEYS.BR_TST]: brTstFixture,
   [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
   [ADAPTER_KEYS.SK_US]: skUsFixture,
   [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,

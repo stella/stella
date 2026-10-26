@@ -47,6 +47,10 @@
     "fingerprint": "a90a9f5ee054351283f7e8e0a6a45dd32a697c18c7f5b620a3974153f2325667",
     "version": 8
   },
+  "br-tst": {
+    "fingerprint": "aa778201277cb3a059925a4f3cbb9be8435b2c76ff01ff86cd28f21a7148f899",
+    "version": 1
+  },
   "cz-ns": {
     "fingerprint": "cb487990b5c0f433bb1b0340492d22caae59ad3749b2ae6e7f9b0f2764ab23fd",
     "version": 19
