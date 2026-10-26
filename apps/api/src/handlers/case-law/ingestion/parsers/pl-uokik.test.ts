@@ -594,6 +594,20 @@ describe("the lines the letterhead reading drops", () => {
     expect(body.some((line) => line.includes("Second row"))).toBe(true);
   });
 
+  test("a thousands group the text layer reads as a line of its own stays in the amount", async () => {
+    // Raised 3pt, past the 2pt within which the text layer keeps a span on
+    // its line, so the group arrives as a small-type line of digits above.
+    const { body, superscripts } = await readBuilt([
+      [
+        { text: "Fine 10", x: 72, y: 700, size: 12 },
+        { text: "000", x: 118, y: 703, size: 7 },
+        { text: " PLN", x: 130, y: 700, size: 12 },
+      ],
+    ]);
+    expect(superscripts).toEqual([]);
+    expect(body).toContain("Fine 10 000 PLN");
+  });
+
   /** A page with note 1 at its foot, referenced from a word. */
   const NOTE_ONE_PAGE: readonly Drawn[] = [
     { text: "A claim needing a source", x: 72, y: 700, size: 12 },

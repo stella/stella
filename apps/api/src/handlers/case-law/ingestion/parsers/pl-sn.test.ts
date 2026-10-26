@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import type { DocumentAst, Inline } from "@stll/legal-ast/document-ast";
@@ -183,6 +184,81 @@ describe("raised reference markers", () => {
       bbox: { x: 0, y: 100 },
     };
     expect(withoutRaisedReferenceMarkers(line, 10, new Set()).text).toBe("m2");
+  });
+});
+
+type Drawn = { text: string; x: number; y: number; size: number };
+
+/**
+ * A Supreme Court page read the way the court sets it: three lines of
+ * running text in `bodySize` type, plus `extra`.
+ */
+const readSupremeCourtPage = async (
+  bodySize: number,
+  extra: readonly Drawn[],
+) => {
+  const pdf = PDF.create();
+  const page = pdf.addPage({ size: "letter" });
+  for (const index of [0, 1, 2]) {
+    page.drawText("Running text sets the ordinary body type of the page.", {
+      x: 72,
+      y: 600 - index * bodySize * 1.25,
+      size: bodySize,
+    });
+  }
+  for (const { text, x, y, size } of extra) {
+    page.drawText(text, { x, y, size });
+  }
+  const paragraphs = assemblePlSnParagraphs(
+    await extractPlSnLines(await pdf.save(), PL_PDF_PARAGRAPH_START.INDENT, {
+      supremeCourt: { docket: "I CSK 1/26" },
+    }),
+  );
+  return {
+    texts: plainText(paragraphs),
+    superscripts: paragraphs.flatMap((runs) =>
+      runs.flatMap(({ superscript, text }) =>
+        superscript === true ? [text] : [],
+      ),
+    ),
+  };
+};
+
+describe("small digits the text layer prints as a line of their own", () => {
+  test("a thousands group stays in its amount", async () => {
+    const { texts, superscripts } = await readSupremeCourtPage(12, [
+      { text: "Kara 10", x: 72, y: 700, size: 12 },
+      { text: "000", x: 118, y: 703, size: 7 },
+      { text: " PLN", x: 130, y: 700, size: 12 },
+    ]);
+    expect(superscripts).toEqual([]);
+    expect(texts.some((text) => /^Kara 10 000 PLN(?: |$)/u.test(text))).toBe(
+      true,
+    );
+  });
+
+  test("a digit raised less than an index is set stays on its line", async () => {
+    // 2.2pt over 16pt type: past the 2pt the text layer keeps on a line,
+    // short of the 2.4pt an index is raised at least.
+    const { texts, superscripts } = await readSupremeCourtPage(16, [
+      { text: "Tekst", x: 72, y: 700, size: 16 },
+      { text: "1", x: 111.5, y: 702.2, size: 7 },
+      { text: " follows", x: 116, y: 700, size: 16 },
+    ]);
+    expect(superscripts).toEqual([]);
+    expect(texts.some((text) => /^Tekst1 follows(?: |$)/u.test(text))).toBe(
+      true,
+    );
+  });
+
+  test("an article's index raised as an index is set stays a superscript", async () => {
+    const { texts, superscripts } = await readSupremeCourtPage(16, [
+      { text: "art. 394", x: 72, y: 700, size: 16 },
+      { text: "1", x: 132, y: 705, size: 7 },
+      { text: " k.p.c.", x: 137, y: 700, size: 16 },
+    ]);
+    expect(superscripts).toEqual(["1"]);
+    expect(texts.some((text) => text.startsWith("art. 3941"))).toBe(true);
   });
 });
 

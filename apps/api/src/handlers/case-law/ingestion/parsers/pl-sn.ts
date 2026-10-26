@@ -140,8 +140,11 @@ type ExtractedLine = {
   readonly x: number;
   /** Where the line ends; read only where block continuation is asked for. */
   readonly right?: number | undefined;
-  /** Superscripts the text layer printed as a line of their own above it. */
-  readonly superscripts?: readonly SuperscriptMark[] | undefined;
+  /**
+   * Small digits the text layer printed apart from the line's own text,
+   * placed back into it.
+   */
+  readonly marks?: readonly LineMark[] | undefined;
   /** The line's height up the page; read only where spacing is asked for. */
   readonly y?: number | undefined;
   /**
@@ -152,11 +155,30 @@ type ExtractedLine = {
 };
 
 /**
- * One superscript, placed by how many of its line's printed characters
- * (whitespace aside) stand before it: counting printed characters survives
- * the spacing the line's text is normalised with.
+ * Digits set back into their line, placed by how many of its printed
+ * characters (whitespace aside) stand before them: counting printed
+ * characters survives the spacing the line's text is normalised with.
+ *
+ * - `superscript`: raised as an index or a reference (`394¹`);
+ * - `on-line`: small digits the text layer read apart from the line that are
+ *   still its text, a number's next group (`10 000`) or digits not raised
+ *   enough to be an index. `spaced` where the type sets them a space apart
+ *   from what precedes them.
  */
-type SuperscriptMark = { readonly after: number; readonly text: string };
+type LineMark =
+  | {
+      readonly type: "superscript";
+      readonly after: number;
+      readonly text: string;
+    }
+  | {
+      readonly type: "on-line";
+      readonly after: number;
+      readonly text: string;
+      readonly spaced: boolean;
+    };
+
+type SuperscriptMark = Extract<LineMark, { type: "superscript" }>;
 
 type PageFurnitureSpan = PdfSpan & {
   readonly bbox: PdfSpan["bbox"] & { readonly y: number };
@@ -303,19 +325,30 @@ const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
     const text = collapseSpacedLetters(line.text.slice(range.start, range.end));
     return text.length === 0 ? [] : [{ text, bold: range.bold }];
   });
-  return line.superscripts === undefined
-    ? runs
-    : withSuperscripts(runs, line.superscripts);
+  return line.marks === undefined ? runs : withMarks(runs, line.marks);
+};
+
+const runOfMark = (mark: LineMark, bold: boolean): PlSnRun => {
+  switch (mark.type) {
+    case "superscript":
+      return { text: mark.text, bold, superscript: true };
+    case "on-line":
+      return { text: mark.spaced ? ` ${mark.text}` : mark.text, bold };
+    default: {
+      mark satisfies never;
+      return panic(`Unhandled line mark: ${JSON.stringify(mark)}`);
+    }
+  }
 };
 
 /**
- * The runs with each superscript set in after the printed character it
- * follows. Collapsing letter spacing removes only whitespace, so the count
- * of printed characters still finds the place.
+ * The runs with each mark set in after the printed character it follows.
+ * Collapsing letter spacing removes only whitespace, so the count of printed
+ * characters still finds the place.
  */
-const withSuperscripts = (
+const withMarks = (
   runs: readonly PlSnRun[],
-  marks: readonly SuperscriptMark[],
+  marks: readonly LineMark[],
 ): PlSnRun[] => {
   const pending = marks.toSorted((left, right) => left.after - right.after);
   const out: PlSnRun[] = [];
@@ -324,7 +357,7 @@ const withSuperscripts = (
     while (pending.length > 0 && (pending.at(0)?.after ?? 0) <= printed) {
       const mark = pending.shift();
       if (mark !== undefined) {
-        out.push({ text: mark.text, bold, superscript: true });
+        out.push(runOfMark(mark, bold));
       }
     }
   };
@@ -946,7 +979,7 @@ type PdfTextLine = PdfTextPage["lines"][number];
 
 const extractedLineOf = (
   line: PdfTextLine,
-  superscripts?: readonly SuperscriptMark[],
+  marks?: readonly LineMark[],
 ): ExtractedLine => ({
   spans: line.spans,
   text: normalizeSpanText(line.text),
@@ -954,9 +987,7 @@ const extractedLineOf = (
   right: line.bbox.x + line.bbox.width,
   y: line.bbox.y,
   printedX: printedCharactersOf(line).at(0)?.bbox.x,
-  ...(superscripts === undefined || superscripts.length === 0
-    ? {}
-    : { superscripts }),
+  ...(marks === undefined || marks.length === 0 ? {} : { marks }),
 });
 
 /** The printed (non-whitespace) characters of a line, in order. */
@@ -966,8 +997,24 @@ const printedCharactersOf = (line: PdfTextLine) =>
     .filter(({ char }) => char.trim().length > 0);
 
 /**
- * The page's lines with every superscript line folded into the line it is
- * printed over.
+ * The baseline a line's own type sits on: its body-type characters', or,
+ * where it is all small type, its characters'. Read off the characters
+ * rather than the boxes, since a box's bottom also moves with the type's
+ * descent.
+ */
+const baselineOf = (line: PdfTextLine, bodySize: number): number => {
+  const printed = printedCharactersOf(line);
+  const body = printed.filter(
+    ({ fontSize }) => fontSize > bodySize * SMALL_TYPE_RATIO,
+  );
+  return Math.min(
+    ...(body.length > 0 ? body : printed).map(({ baseline }) => baseline),
+  );
+};
+
+/**
+ * The page's lines with every line of small digits folded into the line it
+ * is printed over.
  *
  * The text layer gives a raised small-type index its own line, read before
  * the line it belongs to: `art. 394¹ § 1¹` arrives as `1 1` above
@@ -975,6 +1022,11 @@ const printedCharactersOf = (line: PdfTextLine) =>
  * type, sits within a body line's height above the next line, and every
  * mark lies over that line; each mark then follows the characters printed
  * left of it. Anything else stays the line it was.
+ *
+ * A mark is a superscript on the same evidence as one the text layer kept
+ * inside its line: its baseline raised by `SUPERSCRIPT_RAISE_RATIO` of the
+ * body size at least, and no number's next group (`10 000`). Otherwise its
+ * digits are the line's own text, set back where they are printed.
  */
 const liftSuperscripts = (
   lines: readonly PdfTextLine[],
@@ -989,16 +1041,21 @@ const liftSuperscripts = (
   const marksOver = (
     raised: PdfTextLine,
     base: PdfTextLine | undefined,
-  ): SuperscriptMark[] | undefined => {
+  ): LineMark[] | undefined => {
     const characters = printedCharactersOf(raised);
     if (
       base === undefined ||
       characters.length === 0 ||
       !/^[\p{N}\s]+$/u.test(raised.text) ||
       !smallType(raised) ||
-      smallType(base) ||
-      raised.bbox.y <= base.bbox.y ||
-      raised.bbox.y - base.bbox.y >= bodySize ||
+      smallType(base)
+    ) {
+      return undefined;
+    }
+    const raise = baselineOf(raised, bodySize) - baselineOf(base, bodySize);
+    if (
+      raise <= 0 ||
+      raise >= bodySize ||
       // An index after the line's last word starts past its box; one body
       // size of room keeps `art. 398⁹` at a line's end over its line.
       characters.some(
@@ -1026,17 +1083,37 @@ const liftSuperscripts = (
       }
     }
     const printed = printedCharactersOf(base);
-    return groups.map((group) => {
+    const raisedEnough = raise >= bodySize * SUPERSCRIPT_RAISE_RATIO;
+    return groups.map((group): LineMark => {
       const x = group.at(0)?.bbox.x ?? 0;
-      return {
-        after: printed.filter(({ bbox }) => bbox.x + bbox.width / 2 < x).length,
-        text: group.map(({ char }) => char).join(""),
-      };
+      const after = printed.filter(
+        ({ bbox }) => bbox.x + bbox.width / 2 < x,
+      ).length;
+      const text = group.map(({ char }) => char).join("");
+      const previous = printed.at(after - 1);
+      const gap =
+        previous === undefined || after === 0
+          ? Number.POSITIVE_INFINITY
+          : x - (previous.bbox.x + previous.bbox.width);
+      // A number's next group follows it within a space's width.
+      const nextGroup =
+        previous !== undefined &&
+        gap <= bodySize / 2 &&
+        continuesNumber(previous.char, text);
+      return raisedEnough && !nextGroup
+        ? { type: "superscript", after, text }
+        : {
+            type: "on-line",
+            after,
+            text,
+            spaced:
+              Number.isFinite(gap) && gap >= (previous?.bbox.width ?? 0) / 2,
+          };
     });
   };
 
   const out: ExtractedLine[] = [];
-  let pending: SuperscriptMark[] = [];
+  let pending: LineMark[] = [];
   for (const [index, line] of lines.entries()) {
     const marks = marksOver(line, lines[index + 1]);
     if (marks !== undefined) {
@@ -1055,15 +1132,15 @@ const liftSuperscripts = (
 };
 
 /**
- * How far above its line's baseline a superscript the text layer kept on the
- * line sits at least, as a share of the body size. The text layer keeps a
- * span on its line only within 2pt of the line's baseline, so a superscript
- * raised the usual third of the type gets a line of its own; of what stays,
- * only a span raised most of that way (from 1.8pt over 12pt type) reads as
- * one, where a small digit group set barely higher is still on the line.
- * Measured between baselines, since a box's bottom also moves with the
- * type's descent: a 7pt span's box sits 1pt above a 12pt line's on the same
- * baseline.
+ * How far above its line's baseline a superscript's baseline sits at least,
+ * as a share of the body size, whether the text layer kept it on the line or
+ * gave it a line of its own. The text layer keeps a span on its line only
+ * within 2pt of the line's baseline, so a superscript raised the usual third
+ * of the type gets a line of its own; of what stays, only a span raised most
+ * of that way (from 1.8pt over 12pt type) reads as one, where a small digit
+ * group set barely higher is still on the line. Measured between baselines,
+ * since a box's bottom also moves with the type's descent: a 7pt span's box
+ * sits 1pt above a 12pt line's on the same baseline.
  */
 const SUPERSCRIPT_RAISE_RATIO = 0.15;
 
@@ -1123,7 +1200,11 @@ const withoutInlineMarks = (
       raisedSmall(span) &&
       !continuesNumber(line.text.slice(0, at), span.text.trim())
     ) {
-      marks.push({ after: printed, text: span.text.trim() });
+      marks.push({
+        type: "superscript",
+        after: printed,
+        text: span.text.trim(),
+      });
     } else {
       kept.push(span);
       text += span.text;
@@ -1450,15 +1531,12 @@ const noteOpeningOf = (
   bodySize: number,
 ): NoteOpening | undefined => {
   const [first] = printedSpansOf(line);
-  const leading = line.superscripts?.at(0);
-  if (leading?.after === 0) {
+  const leading = line.marks?.at(0);
+  if (leading?.type === "superscript" && leading.after === 0) {
     return /^\d{1,3}$/u.test(leading.text)
       ? {
           label: leading.text,
-          runs: runsOfLine({
-            ...line,
-            superscripts: line.superscripts?.slice(1),
-          }),
+          runs: runsOfLine({ ...line, marks: line.marks?.slice(1) }),
         }
       : undefined;
   }
@@ -1507,7 +1585,10 @@ const EXPONENT_UNIT = /(?:^|[^\p{L}])(?:mm|cm|dm|m|km|ha)$/u;
 const noteReferencesOf = (
   line: ExtractedLine,
 ): { text: string; plain: boolean }[] =>
-  (line.superscripts ?? []).map(({ after, text }) => {
+  (line.marks ?? []).flatMap(({ after, text, type }) => {
+    if (type !== "superscript") {
+      return [];
+    }
     let printed = 0;
     let end = 0;
     while (end < line.text.length && printed < after) {
@@ -1517,10 +1598,12 @@ const noteReferencesOf = (
       end += 1;
     }
     const before = line.text.slice(0, end);
-    return {
-      text,
-      plain: !/\d$/u.test(before) && !EXPONENT_UNIT.test(before),
-    };
+    return [
+      {
+        text,
+        plain: !/\d$/u.test(before) && !EXPONENT_UNIT.test(before),
+      },
+    ];
   });
 
 /**
