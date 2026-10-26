@@ -1612,7 +1612,11 @@ test("the provision filter reads links through an index, never by scanning them"
     const options = {
       body: {
         ...SEARCH_BODY,
-        provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
+        provision: {
+          work: "262/2006 Sb.",
+          anchor: "par_316-odst_2",
+          subsection: "2",
+        },
       },
       generation: GENERATION,
       ids: [czechId, slovakId],
@@ -1639,7 +1643,9 @@ test("every decision citing a provision is read from the provision's own anchor 
       await tx.execute(
         sql`EXPLAIN (COSTS OFF) ${citingDecisionIdsSubquery(tx, {
           jurisdiction: "CZE",
-          provision: { work: "89/2012 Sb.", anchor: "par_2910" },
+          // § 2910 písm. a): a level below a gap is compared within the
+          // seek, never in place of it.
+          provision: { work: "89/2012 Sb.", anchor: "par_2910", letter: "a" },
         }).getSQL()}`,
       ),
     );
@@ -1647,7 +1653,8 @@ test("every decision citing a provision is read from the provision's own anchor 
       "Index Scan using case_law_provision_citations_work_subtree_idx",
     );
     // The anchor bounds are the seek, not a filter over the act's links.
-    expect(plan).toMatch(/Index Cond: [^"]*anchor[^"]*>=/u);
+    // One plan row per object: `[^}]` keeps the match inside the row.
+    expect(plan).toMatch(/Index Cond: [^}]*anchor[^}]*>=/u);
     expect(plan).not.toContain("case_law_provision_citations_work_idx");
   });
 });

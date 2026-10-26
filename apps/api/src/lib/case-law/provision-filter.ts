@@ -10,28 +10,43 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
+import {
+  provisionAnchorSeparator,
+  provisionAnchorSubtreeSql,
+} from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
+const pathValueSchema = v.optional(
+  v.pipe(v.string(), v.minLength(1), v.maxLength(8)),
+);
+
 /**
  * A provision a search is narrowed to: the decisions whose recorded provision
- * links cite it or anything under it. The provision is named by its anchor,
- * as the citation resolver mints it and links store it (`par_316-odst_2`,
- * `cl_10`, `art_6-par_1`), so `par_316` matches a link to `par_316-odst_2`
- * while `par_316-odst_2` does not match `par_316-odst_1`, and `par_31` does
- * not reach `par_316`.
+ * links cite it or anything under it. Each level the caller names narrows,
+ * and a level left out matches every value of it: `§ 316` matches a link to
+ * `§ 316 odst. 2`, `§ 316 odst. 2` does not match `§ 316 odst. 1`, and
+ * `§ 265b písm. g)` matches `§ 265b odst. 1 písm. g)` as well as
+ * `§ 265b písm. g)`.
  *
- * The anchor is the only provision key a read compares: its subtree is one
+ * Two parts, one per job. `anchor` is the seek: the anchor of the levels
+ * named from the section down without a gap (`par_265b` for
+ * `§ 265b písm. g)`, `par_316-odst_2` for `§ 316 odst. 2`). Its subtree is one
  * byte-ordered range of the links' work-subtree index
- * ({@link provisionAnchorSubtreeSql}), so a read of a provision seeks its own
- * links. Structured path columns would leave the index only the work to seek
- * on, and a heavily cited act (a civil code) would be read whole.
+ * ({@link provisionAnchorSubtreeSql}), so every read seeks the provision's
+ * own links, never every link of its act; a civil code has millions. The
+ * named levels below the section are then compared by column within that
+ * range, which is what lets an omitted level stay a wildcard.
+ *
+ * Built by {@link caseLawProvisionFilterOf} from a resolved citation.
  */
 export const caseLawProvisionFilterSchema = v.object({
   jurisdiction: v.optional(v.literal("EU")),
   work: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   anchor: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  subsection: pathValueSchema,
+  letter: pathValueSchema,
+  point: pathValueSchema,
 });
 
 export type CaseLawProvisionFilter = v.InferOutput<
@@ -51,10 +66,67 @@ const linkJurisdictionOf = ({
 }: ProvisionScopeOptions): string => provision.jurisdiction ?? jurisdiction;
 
 /**
+ * The filter for a resolved citation. `anchor` is the anchor the citation
+ * grammar minted for the whole path, one segment per named level from the
+ * section down; the seek keeps the segments up to the first level the
+ * citation leaves out, so a gap never narrows the range past the links
+ * stored with the level filled in.
+ */
+export const caseLawProvisionFilterOf = ({
+  citingJurisdiction,
+  jurisdiction,
+  work,
+  anchor,
+  subsection,
+  letter,
+  point,
+}: {
+  /** The citing decisions' country. */
+  citingJurisdiction: string;
+  jurisdiction?: "EU";
+  work: string;
+  anchor: string;
+  subsection: string | null;
+  letter: string | null;
+  point: string | null;
+}): CaseLawProvisionFilter => {
+  // The subtree read's own separator, so the cut and the range agree.
+  const separator = provisionAnchorSeparator(
+    jurisdiction ?? citingJurisdiction,
+  );
+  const levels = [subsection, letter, point];
+  const contiguous = levels.indexOf(null);
+  const named = contiguous === -1 ? levels.length : contiguous;
+  return {
+    ...(jurisdiction === undefined ? {} : { jurisdiction }),
+    work,
+    // A jurisdiction without a separator mints whole anchors: no level can
+    // be cut off, and its anchors are compared whole.
+    anchor:
+      separator === null
+        ? anchor
+        : anchor
+            .split(separator)
+            .slice(0, 1 + named)
+            .join(separator),
+    ...(subsection === null ? {} : { subsection }),
+    ...(letter === null ? {} : { letter }),
+    ...(point === null ? {} : { point }),
+  };
+};
+
+/**
+ * A path value as links store it: lowercase, no leading zeros, the form the
+ * citation resolver mints. A caller spelling `G` or `02` reads the same link.
+ */
+const canonicalPathValue = (value: string) =>
+  value.toLowerCase().replace(/^0+(?=\d)/u, "");
+
+/**
  * The link rows that cite the provision or one under it. The jurisdiction,
  * the work and the anchor range are the work-subtree index's whole key, so
  * every read of a provision's citing decisions seeks that provision's own
- * links.
+ * links; the named levels are compared within them.
  */
 const provisionLinkConditions = (scope: ProvisionScopeOptions): SQL[] => {
   const link = caseLawProvisionCitations;
@@ -68,6 +140,21 @@ const provisionLinkConditions = (scope: ProvisionScopeOptions): SQL[] => {
       anchor: provision.anchor,
     }),
   ];
+  if (provision.subsection !== undefined) {
+    conditions.push(
+      sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
+    );
+  }
+  if (provision.letter !== undefined) {
+    conditions.push(
+      sql`${link.letter} = ${canonicalPathValue(provision.letter)}`,
+    );
+  }
+  if (provision.point !== undefined) {
+    conditions.push(
+      sql`${link.point} = ${canonicalPathValue(provision.point)}`,
+    );
+  }
   if (provision.jurisdiction === "EU") {
     // EU target identity does not name the citing country. Keep an id set and
     // its broad-set warning within the requested country's published corpus.

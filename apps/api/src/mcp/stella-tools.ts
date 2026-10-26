@@ -87,6 +87,7 @@ import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabular
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
+  caseLawProvisionFilterOf,
   type CaseLawProvisionScope,
   readCaseLawProvisionScope,
   readProvisionWorkLinked,
@@ -2246,13 +2247,18 @@ const resolveSearchProvision = (
         'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
       );
     }
+    const { reference } = euCitation;
     return {
       type: "resolved",
-      provision: {
+      provision: caseLawProvisionFilterOf({
+        citingJurisdiction: country,
         jurisdiction: "EU",
         work: euCitation.act.celex,
-        anchor: euProvisionAnchor(euCitation.reference),
-      },
+        anchor: euProvisionAnchor(reference),
+        subsection: reference.subsection,
+        letter: reference.letter,
+        point: reference.point,
+      }),
     };
   }
   const profile = provisionCitationProfileFor(country);
@@ -2271,7 +2277,14 @@ const resolveSearchProvision = (
     case "resolved":
       return {
         type: "resolved",
-        provision: { work: read.workIdentifier, anchor: read.anchor },
+        provision: caseLawProvisionFilterOf({
+          citingJurisdiction: country,
+          work: read.workIdentifier,
+          anchor: read.anchor,
+          subsection: read.subsection,
+          letter: read.letter,
+          point: read.point,
+        }),
       };
     case "no_provision":
       return provisionRefusal(

@@ -5651,17 +5651,43 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     );
 
+    // The anchor is the seek: the levels named from the section down without
+    // a gap. A level named below a gap is matched by column, so the level
+    // left out stays a wildcard (`§ 265b písm. g)` also reaches
+    // `§ 265b odst. 1 písm. g)`).
     test.each([
-      ["§ 316 odst. 2 ZP", { work: "262/2006 Sb.", anchor: "par_316-odst_2" }],
+      [
+        "§ 316 odst. 2 ZP",
+        { work: "262/2006 Sb.", anchor: "par_316-odst_2", subsection: "2" },
+      ],
       [
         "§ 52 písm. g) zákoníku práce",
-        { work: "262/2006 Sb.", anchor: "par_52-pism_g" },
+        { work: "262/2006 Sb.", anchor: "par_52", letter: "g" },
+      ],
+      [
+        "§ 265b písm. g) trestního řádu",
+        { work: "141/1961 Sb.", anchor: "par_265b", letter: "g" },
       ],
       ["§ 2910 OZ", { work: "89/2012 Sb.", anchor: "par_2910" }],
-      ["čl. 10 Listiny", { anchor: "cl_10" }],
+      ["čl. 10 Listiny", { work: "2/1993 Sb.", anchor: "cl_10" }],
       [
         "Article 6(1)(a) GDPR",
-        { jurisdiction: "EU", work: "32016R0679", anchor: "art_6-par_1-pt_a" },
+        {
+          jurisdiction: "EU",
+          work: "32016R0679",
+          anchor: "art_6-par_1-pt_a",
+          subsection: "1",
+          letter: "a",
+        },
+      ],
+      [
+        "Article 6(a) GDPR",
+        {
+          jurisdiction: "EU",
+          work: "32016R0679",
+          anchor: "art_6",
+          letter: "a",
+        },
       ],
     ])(
       "reads the provision %s onto every phrasing's search",
@@ -5678,7 +5704,8 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(result.isError).toBeUndefined();
         expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(2);
         for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
-          expect(body.provision).toMatchObject(expected);
+          // Exact: a level the caller left out is absent, so it matches any.
+          expect(body.provision).toEqual(expected);
         }
       },
     );
@@ -5825,7 +5852,11 @@ describe("OpenAI-compatible MCP tools", () => {
         sort: "newest",
         // The list's own cursor is passed through, not split per phrasing.
         cursor: listCursor,
-        provision: { work: "262/2006 Sb.", anchor: "par_316-odst_2" },
+        provision: {
+          work: "262/2006 Sb.",
+          anchor: "par_316-odst_2",
+          subsection: "2",
+        },
       });
       expect(parseToolPayload(result)).toMatchObject({
         total: { type: "exact", count: 21 },
