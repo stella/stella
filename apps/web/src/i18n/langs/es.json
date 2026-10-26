@@ -507,6 +507,24 @@
     "addEntry": "Añadir entrada",
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
+    "approval": {
+      "approveSelected": "Aprobar {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
+      "empty": "No hay nada pendiente de aprobación en este asunto.",
+      "failed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
+      "myTime": "Mi tiempo",
+      "refusals": {
+        "invalidEntry": "Añada una descripción y revise la fecha de trabajo; después apruebe el registro.",
+        "notApprover": "Solo el aprobador asignado o un administrador puede aprobar este registro.",
+        "notFound": "Este registro ya no existe. Actualice la lista.",
+        "runningTimer": "Detenga el temporizador en curso antes de aprobar este registro.",
+        "unpriced": "Este registro no tiene tarifa. Configure una tarifa para este asunto y después apruébelo.",
+        "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
+      },
+      "returnComment": "Motivo de devolución",
+      "selectEntry": "Seleccionar registro",
+      "timeEntries": "Registros de tiempo",
+      "title": "Aprobaciones"
+    },
     "approve": "Aprobar",
     "approveSelected": "Aprobar seleccionados",
     "batchActions": "Acciones en lote",
@@ -594,6 +612,7 @@
       "openInvoice": "Abrir factura",
       "otherCurrency": "{count, plural, one {# concepto está registrado} other {# conceptos están registrados}} en una moneda distinta de {currency} y quedan pendientes para otra factura.",
       "outsideScope": "Fuera del ámbito del IVA, 0 %",
+      "pendingApprovals": "{count, plural, one {Hay # elemento pendiente} other {Hay # elementos pendientes}} de aprobación. Revisar aprobaciones.",
       "rate": "Tarifa",
       "readyDescription": "Al emitirla, la factura recibe el siguiente número de su serie y queda bloqueada. Un borrador se puede seguir editando.",
       "readyTitle": "Lista para emitir",

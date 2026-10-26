@@ -507,6 +507,24 @@
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
+    "approval": {
+      "approveSelected": "Zatwierdź {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
+      "empty": "W tej sprawie nic nie czeka na zatwierdzenie.",
+      "failed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "myTime": "Mój czas",
+      "refusals": {
+        "invalidEntry": "Dodaj opis i sprawdź datę pracy, a potem zatwierdź wpis.",
+        "notApprover": "Ten wpis może zatwierdzić tylko przypisany zatwierdzający lub administrator.",
+        "notFound": "Ten wpis już nie istnieje. Odśwież listę.",
+        "runningTimer": "Zatrzymaj działający stoper przed zatwierdzeniem wpisu.",
+        "unpriced": "Ten wpis nie ma stawki. Ustaw stawkę dla tej sprawy, a potem zatwierdź wpis.",
+        "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
+      },
+      "returnComment": "Powód zwrotu",
+      "selectEntry": "Wybierz wpis",
+      "timeEntries": "Wpisy czasu",
+      "title": "Zatwierdzenia"
+    },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
     "batchActions": "Działania zbiorcze",
@@ -594,6 +612,7 @@
       "openInvoice": "Otwórz fakturę",
       "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
       "outsideScope": "Niepodlegające opodatkowaniu VAT w kraju, 0 %",
+      "pendingApprovals": "{count, plural, one {# pozycja czeka} few {# pozycje czekają} many {# pozycji czeka} other {# pozycji czeka}} na zatwierdzenie. Przejrzyj zatwierdzenia.",
       "rate": "Stawka",
       "readyDescription": "Wystawienie nadaje fakturze kolejny numer z serii i blokuje ją. Szkic można dalej edytować.",
       "readyTitle": "Gotowa do wystawienia",
