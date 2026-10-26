@@ -350,7 +350,11 @@ const commitSideMerge = (
  * Squash-merges the release branch into main as a person, as the protected
  * main branch does, and verifies that version commit against the branch head.
  */
-type SquashMerge = { mutate?: (directory: string) => void };
+type SquashMerge = {
+  mutate?: (directory: string) => void;
+  /** Main gains a commit after the branch diverged, before the squash. */
+  advanceMain?: boolean;
+};
 
 /** A release range shaped like the bots' own release branches. */
 const withReleaseRange = (
@@ -413,6 +417,19 @@ const withReleaseRange = (
     const args = [main, candidate, "stella/stella"];
     if (squash !== undefined) {
       git(directory, "checkout", "--quiet", "main");
+      if (squash.advanceMain === true) {
+        writeFileSync(path.join(directory, "main-only.md"), "main\n");
+        git(directory, "add", "-A");
+        commitAs(
+          directory,
+          { author: PERSON, committer: GITHUB },
+          "commit",
+          "--quiet",
+          "--message",
+          "main moves on",
+        );
+      }
+      const versionParent = git(directory, "rev-parse", "HEAD");
       git(directory, "merge", "--quiet", "--squash", "release");
       squash.mutate?.(directory);
       git(directory, "add", "-A");
@@ -427,7 +444,7 @@ const withReleaseRange = (
       args.splice(
         0,
         3,
-        main,
+        versionParent,
         git(directory, "rev-parse", "HEAD"),
         "stella/stella",
         "--release-pr-head",
@@ -525,6 +542,27 @@ test("refuses a squash-merged version commit whose tree differs from its pull re
     {
       mutate: (directory) => {
         writeFileSync(path.join(directory, "VERSION"), "1.2.5\n");
+      },
+    },
+  ));
+
+test("refuses a squash that holds the head's tree but reverts what main gained after the branch diverged", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "candidate does not contain the current main commit",
+      );
+    },
+    {
+      advanceMain: true,
+      // Resolved to exactly the release head, dropping main's newer file.
+      mutate: (directory) => {
+        rmSync(path.join(directory, "main-only.md"));
       },
     },
   ));

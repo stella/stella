@@ -121,8 +121,8 @@ const compareCodeUnit = (left, right) =>
  * The range to verify. Main is squash-only, so a merged version commit carries
  * every release-branch commit under the merger's name. Given the merged release
  * pull request head, the version commit must hold exactly that head's tree, and
- * the head's own range is verified, where each generated file still names the
- * bot that wrote it.
+ * the range from the version commit's parent to the head is verified, where
+ * each generated file still names the bot that wrote it.
  * @returns {[string, string]} Main and candidate commits of the verified range.
  */
 const verifiedRange = () => {
@@ -136,7 +136,10 @@ const verifiedRange = () => {
       `version commit ${givenCandidateSha} does not hold the tree of its release pull request head ${releasePrHead}`,
     );
   }
-  return [git("merge-base", releasePrHead, givenMainSha).trim(), releasePrHead];
+  // The head must already contain the version commit's parent (checked below
+  // as for any candidate): otherwise a squash holding the head's tree would
+  // silently revert what main gained after the branch last merged it.
+  return [givenMainSha, releasePrHead];
 };
 const [mainSha, candidateSha] = verifiedRange();
 

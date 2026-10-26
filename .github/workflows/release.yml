@@ -185,7 +185,8 @@ jobs:
           # Main is squash-only: the version commit carries the release
           # branch's bot-generated files under the merger's name. The verifier
           # requires the version commit to hold the pull request head's exact
-          # tree and checks the head's own range, where the bots' commits are.
+          # tree and checks the range from the version commit's parent to the
+          # head, where the bots' commits are.
           release_pr_number="$(jq -r '.number' <<<"$release_pull")"
           release_pr_head="$(jq -r '.head' <<<"$release_pull")"
           git fetch --no-tags origin "+refs/pull/${release_pr_number}/head:refs/remotes/origin/release-pr-head"
