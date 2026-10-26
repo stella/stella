@@ -108,7 +108,7 @@ const isPathname = (value: unknown): boolean => {
 /** Whether `call` reads or tests a URL path. */
 const readsPath = (call: AstNode): boolean => {
   const callee = unwrapExpression(call.callee);
-  if (callee === null || callee.type !== "MemberExpression") {
+  if (callee?.type !== "MemberExpression") {
     return false;
   }
   const method = memberPropertyName(callee);

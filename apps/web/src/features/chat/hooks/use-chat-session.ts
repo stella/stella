@@ -267,6 +267,22 @@ const prepareCreateDocumentDraft = async (
   }
 };
 
+const downloadCreateDocumentDraft = async (
+  toolCallId: string,
+  input: CreateDocumentInput,
+) =>
+  Result.tryPromise(async () => {
+    const draft = await prepareCreateDocumentDraft(toolCallId, input);
+    if (draft === null) {
+      return { status: "invalid-source" } as const;
+    }
+    downloadFile(
+      new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
+      draft.fileName,
+    );
+    return { status: "downloaded", fileName: draft.fileName } as const;
+  });
+
 const openCreatedDocumentInInspector = async (
   output: CreateDocumentMatterSuccess,
   documentOnScreen: CurrentWorkspaceDocument,
@@ -1365,33 +1381,24 @@ export const useChatSession = ({
       input: CreateDocumentInput,
     ) => {
       if (destination.type === "download") {
-        const downloadResult = await Result.tryPromise(async () => {
-          const draft = await prepareCreateDocumentDraft(toolCallId, input);
-          if (draft === null) {
-            return { status: "invalid-source" } as const;
-          }
-          downloadFile(
-            new Blob([new Uint8Array(draft.buffer)], { type: DOCX_MIME }),
-            draft.fileName,
-          );
-          return { status: "downloaded", fileName: draft.fileName } as const;
-        });
-
+        const downloadResult = await downloadCreateDocumentDraft(
+          toolCallId,
+          input,
+        );
+        if (Result.isError(downloadResult)) {
+          getAnalytics().captureError(downloadResult.error, {
+            fingerprintKey: "useChatSession:failure-3",
+            scope: { type: "handler", handlerId: exceptionHandlerId },
+          });
+        }
         if (
           Result.isError(downloadResult) ||
           downloadResult.value.status === "invalid-source"
         ) {
-          if (Result.isError(downloadResult)) {
-            getAnalytics().captureError(downloadResult.error, {
-              fingerprintKey: "useChatSession:failure-3",
-              scope: { type: "handler", handlerId: exceptionHandlerId },
-            });
-          }
           notifyUserError(
             Result.isError(downloadResult) ? downloadResult.error : undefined,
             t("chat.createDocument.failedHeader"),
           );
-          return;
         }
         return;
       }

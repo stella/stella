@@ -14,7 +14,7 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 export const TEST_MATTER_ID = "019a0000-0000-7000-8000-000000000501";
 export const TEST_FILES_VIEW_ID = "019a0000-0000-7000-8000-000000000502";
-export const TEST_OTHER_FILES_VIEW_ID = "019a0000-0000-7000-8000-000000000503";
+const TEST_OTHER_FILES_VIEW_ID = "019a0000-0000-7000-8000-000000000503";
 export const TEST_FOLDER_ID = "019a0000-0000-7000-8000-000000000504";
 
 const fileTree = (id: string, name: string, position: number) =>
