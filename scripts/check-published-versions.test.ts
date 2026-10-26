@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import {
@@ -22,266 +25,247 @@ import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const NOW = 2_000_000_000;
 const SENTINEL = "registry-private-response";
-const BUMP_COMMIT = "a".repeat(40);
-const DEPLOYED_COMMIT = "b".repeat(40);
-
-const journeyGit =
-  ({
-    deployedContainsBump = false,
-    tag = "v1.2.3",
-    recent = false,
-    shallow = "false",
-  }: {
-    deployedContainsBump?: boolean;
-    tag?: string;
-    recent?: boolean;
-    shallow?: string;
-  } = {}): GitRunner =>
-  (args) => {
-    const command = args.join(" ");
-    if (command === "rev-parse --is-shallow-repository") {
-      return { exitCode: 0, stdout: `${shallow}\n` };
-    }
-    if (args.at(0) === "show" && args.at(1)?.includes(":packages/")) {
-      const directory =
-        args.at(1)?.split(":packages/").at(1)?.split("/").at(0) ?? "unknown";
-      return {
-        exitCode: 0,
-        stdout: JSON.stringify({
-          name: `@stll/${directory}`,
-          version: "1.2.3",
-        }),
-      };
-    }
-    if (args.at(0) === "log" && args.includes("--format=journey-commit %ct")) {
-      return {
-        exitCode: 0,
-        stdout: recent
-          ? `journey-commit ${NOW - 60}\n- "version": "1.2.2"\n+ "version": "1.2.3"`
-          : "",
-      };
-    }
-    if (args.at(0) === "log" && args.includes("--format=%H")) {
-      return { exitCode: 0, stdout: `${BUMP_COMMIT}\n` };
-    }
-    if (args.at(0) === "cat-file") {
-      return { exitCode: 0, stdout: "" };
-    }
-    if (args.at(0) === "merge-base") {
-      return { exitCode: deployedContainsBump ? 0 : 1, stdout: "" };
-    }
-    if (args.at(0) === "tag") {
-      return { exitCode: 0, stdout: `${tag}\n` };
-    }
-    if (command === `show ${BUMP_COMMIT}:VERSION`) {
-      return { exitCode: 0, stdout: "1.2.4\n" };
-    }
-    return { exitCode: 2, stdout: "" };
-  };
+const releaseEntry = (publishedAt: number, tag = "v1.0.0") => ({
+  tag_name: tag,
+  draft: false,
+  prerelease: false,
+  published_at: new Date(publishedAt * 1000).toISOString(),
+});
 
 const runJourney = async ({
-  gitRunner = journeyGit(),
-  healthFetch = async () => Response.json({ commit: DEPLOYED_COMMIT }),
-  registryVersion = "1.2.2",
-  directories = ["cli"],
+  mainVersion = "1.2.3",
+  promotedVersion = "1.0.0",
+  registryVersion = "1.0.0",
+  promotedAt = NOW - 10 * 86_400,
+  now = NOW,
+  bumpedAt = now - 1,
+  releases = [releaseEntry(promotedAt)],
+  promotionFetch = async () => Response.json(releases),
+  missingTag = false,
+  releaseVersions = {},
 }: {
-  gitRunner?: GitRunner;
-  healthFetch?: RegistryFetch;
+  mainVersion?: string;
+  promotedVersion?: string;
   registryVersion?: string;
-  directories?: readonly (typeof ALL_PACKAGE_ORDER)[number][];
+  promotedAt?: number;
+  now?: number;
+  bumpedAt?: number;
+  releases?: unknown;
+  promotionFetch?: RegistryFetch;
+  missingTag?: boolean;
+  releaseVersions?: Record<string, string>;
 } = {}) => {
   const lines: string[] = [];
-  let healthRequests = 0;
+  const reads: string[] = [];
+  const gitRunner: GitRunner = (args) => {
+    reads.push(args.join(" "));
+    if (args.at(0) === "log") {
+      return {
+        exitCode: 0,
+        stdout: `journey-commit ${bumpedAt}\n- "version": "0.0.0"\n+ "version": "${mainVersion}"`,
+      };
+    }
+    if (args.at(0) !== "show" || (missingTag && args.at(1)?.startsWith("v"))) {
+      return { exitCode: 1, stdout: "" };
+    }
+    return {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        name: "@stll/cli",
+        version: args.at(1)?.startsWith("main:")
+          ? mainVersion
+          : (releaseVersions[args.at(1)?.split(":").at(0) ?? ""] ??
+            promotedVersion),
+      }),
+    };
+  };
   const failed = await checkPublishedVersions({
     ref: "main",
     registry: "https://registry.invalid",
-    cliUrl: "https://api.invalid",
     timeoutMs: 50,
-    now: NOW,
-    directories,
+    now,
+    directories: ["cli"],
     gitRunner,
-    healthFetch: async (...args) => {
-      healthRequests += 1;
-      return healthFetch(...args);
-    },
+    promotionFetch,
     registryFetch: async () => Response.json({ version: registryVersion }),
     log: (line) => {
       lines.push(line);
     },
   });
-  return { failed, lines, healthRequests };
+  return { failed, lines, reads };
 };
 
-describe("release promotion diagnosis", () => {
-  test("names the oldest stable release containing an undeployed bump", async () => {
-    const result = await runJourney();
-    expect(result).toEqual({
-      failed: true,
-      healthRequests: 1,
-      lines: [
-        "journey registry-@stll/cli failed publish_awaits_promote",
-        "journey-detail registry-@stll/cli awaits v1.2.3",
-      ],
-    });
+describe("promoted CLI publication", () => {
+  test("CLI main bumps cannot reset promotion grace", async () => {
+    await assertProperty(
+      "CLI main bumps cannot reset promotion grace",
+      fc.asyncProperty(
+        fc.array(fc.integer({ min: 1, max: 200_000 }), {
+          minLength: 1,
+          maxLength: 25,
+        }),
+        async (intervals) => {
+          let now = NOW;
+          for (const [index, interval] of intervals.entries()) {
+            now += interval;
+            const mainVersion = `2.${index}.0`;
+            // No new promotion: arbitrarily old/new main bumps remain pending.
+            const pending = await runJourney({
+              mainVersion,
+              now: now + 86_400,
+              bumpedAt: now,
+            });
+            expect(pending.failed).toBe(false);
+            // A promotion promises a new CLI; later bumps never change its deadline.
+            const promoted = await runJourney({
+              mainVersion,
+              promotedVersion: "1.1.0",
+              promotedAt: NOW,
+              now,
+              releases: [releaseEntry(NOW), releaseEntry(now, "v2.0.0")],
+            });
+            expect(promoted.failed).toBe(now - NOW >= 86_400);
+            // Publishing the promoted CLI fulfills the promise despite further bumps.
+            const published = await runJourney({
+              mainVersion,
+              promotedVersion: "1.1.0",
+              registryVersion: "1.1.0",
+              promotedAt: NOW,
+              now,
+            });
+            expect(published.failed).toBe(false);
+          }
+        },
+      ),
+    );
   });
 
-  test("names the earliest stable version despite reversed annotated-tag creation dates", async () => {
-    const directory = await mkdtemp(
-      path.join(tmpdir(), "journey-release-tags-"),
+  test("unpromoted main stays pending without consulting bump history", async () => {
+    const pending = await runJourney();
+    expect(pending.lines).toContain(
+      "journey registry-@stll/cli skipped pending_release",
     );
-    const runGit = (args: readonly string[], date = "2026-01-01T00:00:00Z") => {
-      const result = Bun.spawnSync(
-        [
-          "git",
-          "-C",
-          directory,
-          "-c",
-          "user.name=Fixture",
-          "-c",
-          "user.email=fixture@example.invalid",
-          ...args,
-        ],
-        {
-          env: {
-            ...process.env,
-            GIT_CONFIG_GLOBAL: "/dev/null",
-            GIT_CONFIG_NOSYSTEM: "1",
-            GIT_COMMITTER_DATE: date,
-            GIT_AUTHOR_DATE: date,
-          },
-          stdout: "pipe",
-          stderr: "pipe",
-        },
-      );
-      expect(result.exitCode).toBe(0);
-      return {
-        exitCode: result.exitCode,
-        stdout: new TextDecoder().decode(result.stdout),
-      };
-    };
-    try {
-      runGit(["init", "--quiet"]);
-      runGit(["commit", "--allow-empty", "-qm", "fixture"]);
-      const commit = runGit(["rev-parse", "HEAD"]).stdout.trim();
-      runGit(["tag", "-a", "v1.2.5-rc.1", "-m", "prerelease"]);
-      runGit(
-        ["tag", "-a", "v1.2.4", "-m", "later version"],
-        "2026-01-02T00:00:00Z",
-      );
-      runGit(
-        ["tag", "-a", "v1.2.3", "-m", "earlier version"],
-        "2026-01-03T00:00:00Z",
-      );
+    expect(pending.reads).toEqual([
+      "show main:packages/cli/package.json",
+      "show v1.0.0:packages/cli/package.json",
+    ]);
+  });
+
+  test("publication is green at the promoted version and grace expires exactly once", async () => {
+    const published = await runJourney({ mainVersion: "1.0.0" });
+    expect(published.lines).toContain(
+      "journey registry-@stll/cli passed published",
+    );
+    for (const age of [0, 86_399, 86_400, 86_401]) {
       expect(
-        runGit(["tag", "--contains", commit, "--sort=creatordate"])
-          .stdout.trim()
-          .split("\n"),
-      ).toEqual(["v1.2.5-rc.1", "v1.2.4", "v1.2.3"]);
-      const base = journeyGit();
-      const gitRunner: GitRunner = (args) =>
-        args.at(0) === "tag"
-          ? runGit(args.map((arg) => (arg === BUMP_COMMIT ? commit : arg)))
-          : base(args);
-      const { lines } = await runJourney({ gitRunner });
-      expect(lines).toContain(
-        "journey-detail registry-@stll/cli awaits v1.2.3",
-      );
-    } finally {
-      await rm(directory, { recursive: true, force: true });
+        (await runJourney({ promotedVersion: "1.1.0", promotedAt: NOW - age }))
+          .failed,
+      ).toBe(age >= 86_400);
     }
   });
 
-  test("names an untagged bump from its VERSION file", async () => {
-    const { lines } = await runJourney({
-      gitRunner: journeyGit({ tag: "preview" }),
+  test("re-promoting an unpublished CLI never renews its grace", async () => {
+    const result = await runJourney({
+      promotedVersion: "1.1.0",
+      releases: [releaseEntry(NOW - 1, "v2.0.0"), releaseEntry(NOW - 86_400)],
     });
-    expect(lines).toContain(
-      "journey-detail registry-@stll/cli awaits v1.2.4 (untagged)",
+    expect(result.failed).toBe(true);
+    expect(result.lines).toContain(
+      "journey registry-@stll/cli failed publish_lagging",
     );
   });
 
-  test("keeps a registry ahead of main as a mismatch without fetching health", async () => {
-    const { lines, healthRequests } = await runJourney({
-      registryVersion: "1.2.4",
+  test("an older promotion of another CLI version does not consume the grace", async () => {
+    const result = await runJourney({
+      promotedVersion: "1.1.0",
+      releases: [releaseEntry(NOW - 1, "v2.0.0"), releaseEntry(NOW - 86_400)],
+      releaseVersions: { "v1.0.0": "1.0.0" },
     });
-    expect(healthRequests).toBe(0);
-    expect(lines).toEqual([
-      "journey registry-@stll/cli failed version_mismatch",
-    ]);
+    expect(result.failed).toBe(false);
+    expect(result.lines).toContain(
+      "journey registry-@stll/cli skipped publish_pending",
+    );
   });
 
-  test("keeps a deployed bump as a registry mismatch", async () => {
-    const { lines } = await runJourney({
-      gitRunner: journeyGit({ deployedContainsBump: true }),
+  test("selects promotion time rather than tag order or an unpromoted release", async () => {
+    const result = await runJourney({
+      releases: [
+        releaseEntry(NOW - 100, "v1.0.1"),
+        { ...releaseEntry(NOW, "v9.0.0"), draft: true },
+        { ...releaseEntry(NOW, "v9.0.0-rc.1"), prerelease: true },
+        releaseEntry(NOW - 200, "v2.0.0"),
+      ],
     });
-    expect(lines).toEqual([
-      "journey registry-@stll/cli failed version_mismatch",
-    ]);
+    expect(result.failed).toBe(false);
+    expect(result.reads).toContain("show v1.0.1:packages/cli/package.json");
   });
 
   test.each([
+    ["no promotion", []],
     [
-      "times out",
-      async () => {
-        throw new DOMException("timed out", "TimeoutError");
-      },
+      "invalid timestamp",
+      [
+        releaseEntry(NOW),
+        { ...releaseEntry(NOW, "v2.0.0"), published_at: "invalid" },
+      ],
     ],
-    ["returns non-JSON", async () => new Response("not json")],
-    ["omits commit", async () => Response.json({ status: "ok" })],
-  ] as const)("fails closed when health %s", async (_, healthFetch) => {
-    const { lines } = await runJourney({ healthFetch });
-    expect(lines).toEqual([
-      "journey registry-@stll/cli failed version_mismatch",
-    ]);
+    ["ambiguous promotion", [releaseEntry(NOW), releaseEntry(NOW, "v2.0.0")]],
+    ["invalid listing", {}],
+    ["invalid entry", [null]],
+    ["future promotion", [releaseEntry(NOW + 1)]],
+  ])("fails closed for %s", async (_, releases) => {
+    const result = await runJourney({ releases });
+    expect(result.failed).toBe(true);
+    expect(result.lines).toContain(
+      "journey registry-@stll/cli failed contract_error",
+    );
   });
 
-  test.each([
-    ["is shallow", journeyGit({ shallow: "true" })],
-    [
-      "cannot report its depth",
+  test("fails closed when promotion metadata or its tag is unavailable", async () => {
+    expect((await runJourney({ missingTag: true })).failed).toBe(true);
+    const unavailable = await runJourney({
+      promotionFetch: async () => new Response(null, { status: 503 }),
+    });
+    expect(unavailable.failed).toBe(true);
+    expect(unavailable.lines).toContain(
+      "journey registry-@stll/cli failed promotion_unavailable",
+    );
+    expect(
       (
-        (base: GitRunner): GitRunner =>
-        (args) =>
-          args.at(0) === "rev-parse"
-            ? { exitCode: 128, stdout: "" }
-            : base(args)
-      )(journeyGit()),
-    ],
-  ] as const)(
-    "fails closed without fetching health when history %s",
-    async (_, gitRunner) => {
-      const { lines, healthRequests } = await runJourney({ gitRunner });
-      expect(healthRequests).toBe(0);
-      expect(lines).toEqual([
-        "journey registry-@stll/cli failed version_mismatch",
-      ]);
-    },
-  );
-
-  test("fails closed when the deployed commit is absent locally", async () => {
-    const base = journeyGit();
-    const gitRunner: GitRunner = (args) =>
-      args.at(0) === "cat-file" ? { exitCode: 1, stdout: "" } : base(args);
-    const { lines } = await runJourney({ gitRunner });
-    expect(lines).toEqual([
-      "journey registry-@stll/cli failed version_mismatch",
-    ]);
+        await runJourney({
+          promotionFetch: async () => {
+            throw new DOMException("timeout", "TimeoutError");
+          },
+        })
+      ).failed,
+    ).toBe(true);
   });
 
-  test.each([
-    ["matching npm version", { registryVersion: "1.2.3" }],
-    ["recent bump", { gitRunner: journeyGit({ recent: true }) }],
-  ] as const)("does not fetch health for a %s", async (_, options) => {
-    const { healthRequests, lines } = await runJourney(options);
-    expect(healthRequests).toBe(0);
-    expect(lines.at(0)).toMatch(/ (passed ok|skipped publish_pending)$/u);
-  });
-
-  test("fetches health once for several lagging packages", async () => {
-    const { healthRequests } = await runJourney({
-      directories: ["cli", "chat", "ui"],
+  test("paginates release history with a fixed request budget", async () => {
+    let requests = 0;
+    const older = Array.from({ length: 100 }, (_, index) =>
+      releaseEntry(NOW - 1000 - index, `v1.0.${index}`),
+    );
+    const result = await runJourney({
+      promotionFetch: async (url) => {
+        requests += 1;
+        expect(String(url)).toContain(`page=${requests}`);
+        return Response.json(
+          requests === 1 ? older : [releaseEntry(NOW - 1, "v2.0.0")],
+        );
+      },
     });
-    expect(healthRequests).toBe(1);
+    expect(result.reads).toContain("show v2.0.0:packages/cli/package.json");
+    expect(requests).toBe(2);
+    requests = 0;
+    const exhausted = await runJourney({
+      promotionFetch: async () => {
+        requests += 1;
+        return Response.json(older);
+      },
+    });
+    expect(exhausted.failed).toBe(true);
+    expect(requests).toBe(10);
   });
 });
 
@@ -472,55 +456,31 @@ describe("published registry versions", () => {
   ])(
     "reports exact fixed-code lines for $label",
     async ({ body, httpStatus, bump, status, reason, exit: expectedExit }) => {
-      const directory = await mkdtemp(path.join(tmpdir(), "registry-journey-"));
-      const server = Bun.serve({
-        port: 0,
-        fetch() {
-          return new Response(body, { status: httpStatus });
+      const lines: string[] = [];
+      const history = bump
+        ? `journey-commit ${NOW - 60}\n- "version": "1.2.2"\n+ "version": "1.2.3"`
+        : "";
+      const failed = await checkPublishedVersions({
+        ref: "main",
+        registry: "https://registry.invalid",
+        timeoutMs: 50,
+        now: NOW,
+        directories: ["ui"],
+        gitRunner: (args) => ({
+          exitCode: 0,
+          stdout:
+            args.at(0) === "show"
+              ? JSON.stringify({ name: "@stll/ui", version: "1.2.3" })
+              : history,
+        }),
+        registryFetch: async () => new Response(body, { status: httpStatus }),
+        log: (line) => {
+          lines.push(line);
         },
       });
-      try {
-        const fakeGit = path.join(directory, "git");
-        const history = bump
-          ? `journey-commit ${Math.floor(Date.now() / 1000) - 60}\n- "version": "1.2.2"\n+ "version": "1.2.3"`
-          : "";
-        await Bun.write(
-          fakeGit,
-          `#!${process.execPath}\nconsole.error(${JSON.stringify(SENTINEL)});\nif (Bun.argv[2] === "show") { const directory = Bun.argv[3].split(":")[1].split("/")[1]; console.log(JSON.stringify({name:"@stll/"+directory, version:"1.2.3"})); } else console.log(${JSON.stringify(history)});\n`,
-        );
-        await chmod(fakeGit, 0o755);
-        const child = Bun.spawn(
-          [
-            process.execPath,
-            new URL("check-published-versions.ts", import.meta.url).pathname,
-          ],
-          {
-            env: {
-              ...process.env,
-              PATH: `${directory}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
-              JOURNEY_NPM_REGISTRY_URL: server.url.toString(),
-            },
-            stdout: "pipe",
-            stderr: "pipe",
-          },
-        );
-        const [stdout, stderr, exit] = await Promise.all([
-          new Response(child.stdout).text(),
-          new Response(child.stderr).text(),
-          child.exited,
-        ]);
-        expect(exit).toBe(expectedExit);
-        expect(stderr).toBe("");
-        expect(stdout).not.toContain(SENTINEL);
-        expect(stdout.trim().split("\n").toSorted(compareCodeUnit)).toEqual(
-          ALL_PACKAGE_ORDER.map(
-            (name) => `journey registry-@stll/${name} ${status} ${reason}`,
-          ).toSorted(compareCodeUnit),
-        );
-      } finally {
-        await server.stop(true);
-        await rm(directory, { recursive: true, force: true });
-      }
+      expect(failed).toBe(expectedExit === 1);
+      expect(lines).toEqual([`journey registry-@stll/ui ${status} ${reason}`]);
+      expect(lines.join("\n")).not.toContain(SENTINEL);
     },
   );
 });

@@ -35,7 +35,7 @@ import path from "node:path";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
-const STABLE_TAG = /^v\d+\.\d+\.\d+$/u;
+export const STABLE_RELEASE_TAG = /^v\d+\.\d+\.\d+$/u;
 
 class NpmPublishLagError extends Error {
   readonly _tag = "NpmPublishLagError";
@@ -53,7 +53,7 @@ const fail = (message: string): never => {
 export const DAY_SECONDS = 24 * 60 * 60;
 const SEMVER = /^\d+\.\d+\.\d+(?:-[\da-zA-Z.-]+)?(?:\+[\da-zA-Z.-]+)?$/u;
 
-export type RegistryResult =
+type RegistryCheckResult =
   | { status: "passed"; reason: "ok" }
   | { status: "passed"; reason: "published_from_declared_repository" }
   | { status: "skipped"; reason: "publish_pending" }
@@ -62,11 +62,7 @@ export type RegistryResult =
   | {
       status: "failed";
       reason:
-        | "http_status"
-        | "timeout"
-        | "contract_error"
-        | "publish_awaits_promote"
-        | "unattested_publish";
+        "http_status" | "timeout" | "contract_error" | "unattested_publish";
     };
 
 type RepositoryField = string | { url: string };
@@ -375,7 +371,7 @@ export const checkRegistry = async ({
   movedRepository,
   npmRunner = runNpm,
   fetchImpl = fetch,
-}: CheckRegistryOptions): Promise<RegistryResult> => {
+}: CheckRegistryOptions): Promise<RegistryCheckResult> => {
   try {
     const response = await fetchImpl(
       `${registry.replace(/\/$/u, "")}/${encodeURIComponent(name)}/latest`,
@@ -449,6 +445,76 @@ export const checkRegistry = async ({
           ? "timeout"
           : "contract_error",
     };
+  }
+};
+
+// A release target carries its promotion time, never a main bump timestamp.
+type PromotedPackage = {
+  version: string;
+  promotedAt: number;
+};
+
+export type RegistryResult =
+  | RegistryCheckResult
+  | PromotedRegistryResult
+  | { status: "failed"; reason: "promotion_unavailable" };
+
+type PromotedRegistryResult =
+  | { status: "passed"; reason: "published" }
+  | { status: "skipped"; reason: "pending_release" }
+  | { status: "skipped"; reason: "publish_pending" }
+  | { status: "failed"; reason: "publish_lagging"; latest: string };
+
+type CheckPromotedRegistryOptions = Omit<
+  CheckRegistryOptions,
+  "version" | "bumpedAt" | "movedRepository"
+> & {
+  mainVersion: string;
+  promotion: PromotedPackage;
+};
+
+export const checkPromotedRegistry = async ({
+  mainVersion,
+  promotion,
+  ...options
+}: CheckPromotedRegistryOptions): Promise<RegistryResult> => {
+  const result = await checkRegistry({
+    ...options,
+    version: promotion.version,
+    bumpedAt: undefined,
+    movedRepository: undefined,
+  });
+  switch (result.reason) {
+    case "ok":
+      return Bun.semver.order(mainVersion, promotion.version) > 0
+        ? { status: "skipped", reason: "pending_release" }
+        : { status: "passed", reason: "published" };
+    case "version_mismatch":
+      // A newer published release also fulfills the promoted minimum.
+      if (Bun.semver.order(result.latest, promotion.version) > 0) {
+        return Bun.semver.order(mainVersion, promotion.version) > 0
+          ? { status: "skipped", reason: "pending_release" }
+          : { status: "passed", reason: "published" };
+      }
+      return promotion.promotedAt <= options.now &&
+        options.now - promotion.promotedAt < DAY_SECONDS
+        ? { status: "skipped", reason: "publish_pending" }
+        : {
+            status: "failed",
+            reason: "publish_lagging",
+            latest: result.latest,
+          };
+    case "http_status":
+    case "timeout":
+    case "contract_error":
+    case "unattested_publish":
+    case "published_from_declared_repository":
+    case "publish_pending":
+      return result;
+    default: {
+      result satisfies never;
+      throw new NpmPublishLagError("Unhandled promoted registry assessment");
+    }
   }
 };
 
@@ -627,7 +693,7 @@ export const readPublishablePackages = ({
 
 /** The newest stable `vX.Y.Z` tag among those listed, newest first. */
 export const newestStableTag = (tags: readonly string[]): string | undefined =>
-  tags.find((tag) => STABLE_TAG.test(tag));
+  tags.find((tag) => STABLE_RELEASE_TAG.test(tag));
 
 type Attempt = {
   readonly attempts: number;
@@ -708,6 +774,143 @@ const npmRegistryFetcher: RegistryFetcher = async (name) => {
     latest: typeof latest === "string" ? latest : undefined,
     // npm prints a lone version as a string rather than a one-item array.
     versions: typeof versions === "string" ? [versions] : asStrings(versions),
+  };
+};
+
+const RFC_3339_DATE_TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-](\d{2}):(\d{2}))$/u;
+
+type PromotedRelease = { ref: string; promotedAt: number };
+
+type PromotionSelection =
+  | {
+      status: "resolved";
+      ref: string;
+      promotedAt: number;
+      promotions: readonly PromotedRelease[];
+    }
+  | { status: "invalid"; message: string }
+  | { status: "missing"; message: string }
+  | { status: "ambiguous"; message: string };
+
+const parsePublicationTime = (value: string): number | null => {
+  const match = RFC_3339_DATE_TIME_PATTERN.exec(value);
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day, hour, minute, second, offsetHour, offsetMinute] =
+    match;
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined
+  ) {
+    return null;
+  }
+  if (
+    (offsetHour !== undefined && Number(offsetHour) > 23) ||
+    (offsetMinute !== undefined && Number(offsetMinute) > 59)
+  ) {
+    return null;
+  }
+
+  const calendarTime = new Date(0);
+  calendarTime.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
+  calendarTime.setUTCHours(Number(hour), Number(minute), Number(second), 0);
+  if (
+    calendarTime.toISOString().slice(0, 19) !==
+    `${year}-${month}-${day}T${hour}:${minute}:${second}`
+  ) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+// Shared by the offline release resolver and the live registry journey.
+export const selectPromotedRelease = (
+  manifest: unknown,
+): PromotionSelection => {
+  if (!isRecord(manifest)) {
+    return {
+      status: "invalid",
+      message: "The release publication manifest must be an object.",
+    };
+  }
+
+  const promoted: {
+    ref: string;
+    publishedAt: string;
+    publishedAtMs: number;
+  }[] = [];
+  for (const [ref, publishedAt] of Object.entries(manifest)) {
+    if (ref === "_note") {
+      continue;
+    }
+    if (!STABLE_RELEASE_TAG.test(ref)) {
+      return {
+        status: "invalid",
+        message: `The release publication manifest contains an invalid stable release ref: ${ref}.`,
+      };
+    }
+    if (publishedAt === null) {
+      continue;
+    }
+    if (typeof publishedAt !== "string") {
+      return {
+        status: "invalid",
+        message: `The release publication manifest contains an invalid publication time for ${ref}.`,
+      };
+    }
+    const publishedAtMs = parsePublicationTime(publishedAt);
+    if (publishedAtMs === null) {
+      return {
+        status: "invalid",
+        message: `The release publication manifest contains an invalid publication time for ${ref}.`,
+      };
+    }
+    promoted.push({ ref, publishedAt, publishedAtMs });
+  }
+
+  if (promoted.length === 0) {
+    return {
+      status: "missing",
+      message: "The release publication manifest records no promoted release.",
+    };
+  }
+
+  const ordered = promoted.toSorted(
+    (left, right) => right.publishedAtMs - left.publishedAtMs,
+  );
+  const latest = ordered.at(0);
+  if (!latest) {
+    return {
+      status: "missing",
+      message: "The release publication manifest records no promoted release.",
+    };
+  }
+  const candidates = ordered.filter(
+    ({ publishedAtMs }) => publishedAtMs === latest.publishedAtMs,
+  );
+  if (candidates.length !== 1) {
+    return {
+      status: "ambiguous",
+      message: `The release publication manifest records multiple releases at ${latest.publishedAt}: ${candidates.map(({ ref }) => ref).join(", ")}.`,
+    };
+  }
+
+  return {
+    status: "resolved",
+    ref: latest.ref,
+    promotedAt: latest.publishedAtMs / 1000,
+    promotions: ordered.map(({ ref, publishedAtMs }) => ({
+      ref,
+      promotedAt: publishedAtMs / 1000,
+    })),
   };
 };
 
