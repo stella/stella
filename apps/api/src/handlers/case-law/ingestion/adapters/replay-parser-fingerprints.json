@@ -64,8 +64,8 @@
     "version": 3
   },
   "cz-us": {
-    "version": 27,
-    "fingerprint": "7dda1f69eff2fd800fe34b889bea8f49bf9f0ef4f2114330ab0314e5bffb0e96"
+    "version": 28,
+    "fingerprint": "4e55ef31785ecc33332f67072513e6f3eaf6ddf71e7d8751af1670f9584156f3"
   },
   "eu-ecj": {
     "fingerprint": "61450e51d3e557020dcd2582475995536fdc764b4c37f6994fce57ecac6e5646",
@@ -76,35 +76,35 @@
     "version": 20
   },
   "pl-courts": {
-    "fingerprint": "0b437b804baa7e146bb0107290f26508ecbe32cc9bfd116c12b8b1114554f26b",
+    "fingerprint": "5240ca57f80f5e2397069c7538e44ba3d18369e68f388884416fca54cf2027c7",
     "version": 15
   },
   "pl-kio": {
     "version": 9,
-    "fingerprint": "404e701b7c147b9f86912b2c007ccfbc2c9d6826594a6560276c1b3162d5cf01"
+    "fingerprint": "37583b9c704dc7755ac939c9b2f310bedf301dfdda341e337427a1af6175a04c"
   },
   "pl-kis": {
-    "fingerprint": "af057a5e881b143acd50b38c5f6c37fed4f9c6d650bd2aba141faed7b968a25e",
+    "fingerprint": "7a42a36aef7fb209efd9b1747dde933f903107bac46a7c767a8bf5d39e46372c",
     "version": 10
   },
   "pl-ncourt": {
-    "fingerprint": "7b242ba23afc943b67a6886976d1e31e96b3584c10d468feb5fe31515b3758f4",
+    "fingerprint": "077abba50de1b65434b53cf4f1ed88f698eb782c9a6c13bae3421ac1e3db0fcf",
     "version": 14
   },
   "pl-nsa": {
-    "fingerprint": "feede37ed209e1b14e1490ca7d8b2521ab2a0b29d7f7b3da2e2b51e8d06b3ac1",
-    "version": 8
+    "fingerprint": "8dcbef222593b25cbc1efd42df780568226b5d2aa44866e15d7302ae7c5a19cb",
+    "version": 9
   },
   "pl-sn": {
-    "fingerprint": "ea6c30eb3a025b55312e899aa93051d8763747c6a7326586e4601b4f83cd573c",
-    "version": 8
+    "fingerprint": "37ee41dce95062d554c6423f96f62f287feec466530b517fde8e6834a4705353",
+    "version": 9
   },
   "pl-tk": {
     "fingerprint": "4eed7ece5a881d701ba9dfcbc9c2ddc053053181b2a3b25f46c96610152ff0bb",
     "version": 8
   },
   "pl-uodo": {
-    "fingerprint": "9d573a4efd65e07c3d5ca29351b4ffc60cab29d7851342510e2367597684c7f1",
+    "fingerprint": "7e643859c580ba94797f91d868315f6855d5366ccf20829b5c89b98ccf8758b0",
     "version": 14
   },
   "pl-uokik": {
