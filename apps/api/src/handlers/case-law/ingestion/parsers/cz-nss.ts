@@ -150,15 +150,17 @@ type PChunk = {
   bold: boolean;
   letterSpacing: boolean;
   fontSize: number;
-  /** Set when the chunk comes from an <ol><li>. */
-  listItemIndex: number | null;
-  /**
-   * The list numbers its items with Arabic numerals (`<ol type="1">`, the
-   * default), which the court's document prints as "1.".
-   */
-  decimalList: boolean;
   footnote: { anchorId: string; label: string } | null;
-};
+} & (
+  | { kind: "paragraph" | "table-row"; listItemIndex: null; decimalList: false }
+  | {
+      kind: "list-item";
+      /** The index of an ordered item; null for a bullet. */
+      listItemIndex: number | null;
+      /** Whether its list prints Arabic numerals. */
+      decimalList: boolean;
+    }
+);
 
 const FOOTNOTE_CONTAINER_SELECTOR = "div[id^='_ftn']";
 const FOOTNOTE_ID_RE = /^_ftn(?<label>\d+)$/u;
@@ -443,6 +445,7 @@ const styledBlockChunk = (
       style.includes("letter-spacing") ||
       $el.find("span[style*='letter-spacing']").length > 0,
     fontSize: parseFontSize(style),
+    kind: "paragraph",
     listItemIndex: null,
     decimalList: false,
     footnote: footnoteOf($el),
@@ -519,6 +522,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
+          kind: "paragraph",
           listItemIndex: null,
           decimalList: false,
           footnote: null,
@@ -585,6 +589,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
+          kind: "table-row",
           listItemIndex: null,
           decimalList: false,
           footnote: footnoteOf($el),
@@ -623,6 +628,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
+          kind: "list-item",
           listItemIndex: ordered ? listStart : null,
           decimalList,
           footnote: footnoteOf($li),
@@ -883,7 +889,7 @@ const finishesCutParagraph = (
   if (
     cut === null ||
     chunk.footnote !== null ||
-    chunk.listItemIndex !== null ||
+    chunk.kind !== "paragraph" ||
     !continuesAcrossPageBreak(cut.plainText, plainText)
   ) {
     return false;
@@ -1282,7 +1288,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
       plainText,
     };
     blocks.push(paragraph);
-    if (reasoning) {
+    if (reasoning && chunk.kind === "paragraph") {
       cutParagraph = paragraph;
     }
   }

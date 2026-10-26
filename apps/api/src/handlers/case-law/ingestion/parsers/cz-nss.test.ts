@@ -431,6 +431,36 @@ describe("parseNssDecisionHtml", () => {
   });
 
   describe("unordered list content", () => {
+    test.each(["list", "table"])(
+      "%s boundaries keep adjacent unfinished reasoning paragraphs apart",
+      (kind) => {
+        const before =
+          "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+        const item =
+          "náklady řízení účelně vynaložené na zastoupení a na opatření všech podkladů";
+        const after =
+          "následující vyjádření soudu pokračuje samostatným odstavcem.";
+        const structural =
+          kind === "list"
+            ? `<ul><li>${item}</li></ul>`
+            : `<table><tr><td>${item}</td><td>Hodnota</td></tr></table>`;
+        const expectedItem = kind === "list" ? item : `${item} | Hodnota`;
+        const { documentAst } = parseNssDecisionHtml(
+          baseInput(
+            `<body>${bold("Odůvodnění:")}<p>${before}</p>${structural}<p>${after}</p></body>`,
+          ),
+        );
+        const paragraphs = documentAst.blocks.filter(
+          (block) => block.type === "paragraph",
+        );
+        expect(paragraphs.map((block) => block.plainText)).toEqual([
+          before,
+          expectedItem,
+          after,
+        ]);
+      },
+    );
+
     /**
      * Aspose renders enumerations in the reasoning (case-file
      * inventories, evidence lists) as <ul type="disc">. The chunk
