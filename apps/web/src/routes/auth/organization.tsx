@@ -53,7 +53,9 @@ import {
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 import { organizationListOptions } from "@/lib/organization/queries";
@@ -178,6 +180,17 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
   const isOauthPostLogin =
     isOauthPostLoginFromSearch ||
     (hydrated && getSignedOauthQueryFromHash(window.location.hash) !== null);
+  // A client asking for account selection gets this step even for a single
+  // membership, so the account can still be switched before consent.
+  const isAccountSelection =
+    hydrated &&
+    hasOauthPrompt(
+      getSignedOauthQuery({
+        hash: window.location.hash,
+        searchStr: window.location.search,
+      }),
+      "select_account",
+    );
 
   if (hydrated && organizationView.type === "empty" && !isOauthPostLogin) {
     return <Navigate {...onboardingNavigation(redirectTo)} />;
@@ -205,6 +218,7 @@ const OrganizationFlow = ({ hydrated }: { hydrated: boolean }) => {
       <QueryViewFeedback view={organizationView} />
       {organizationView.type === "items" ? (
         <OrganizationList
+          isAccountSelection={isAccountSelection}
           isOauthPostLogin={isOauthPostLogin}
           organizations={organizationView.items}
         />
@@ -252,6 +266,7 @@ const SignedInAccount = ({ disabled }: { disabled: boolean }) => {
 };
 
 type OrganizationListProps = {
+  isAccountSelection: boolean;
   isOauthPostLogin: boolean;
   organizations: { id: string; name: string; slug: string }[];
 };
@@ -296,6 +311,7 @@ const completeOrganizationFlow = async ({
 };
 
 const OrganizationList = ({
+  isAccountSelection,
   isOauthPostLogin,
   organizations,
 }: OrganizationListProps) => {
@@ -332,8 +348,10 @@ const OrganizationList = ({
     },
   });
 
-  // Auto-select when there's only one organization
-  const singleOrg = organizations.length === 1 ? organizations[0] : null;
+  // Auto-select when there is only one organization, unless the client asked
+  // for account selection.
+  const singleOrg =
+    organizations.length === 1 && !isAccountSelection ? organizations[0] : null;
   const autoSelected = useRef(false);
   useExternalSyncEffect(() => {
     if (singleOrg && !autoSelected.current && !isSelectPending) {
