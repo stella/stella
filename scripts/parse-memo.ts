@@ -7,12 +7,9 @@
 // The memo keeps only the most recent texts: the scan visits one file at a
 // time, so a small window catches every repeat without holding the whole
 // tree's syntax in memory.
-import {
-  type ParsedSource,
-  parseSource as parseSyntaxSource,
-} from "../packages/scripts/src/syntax-tree";
+import ts from "typescript6";
 
-type ParseDialect = "ts" | "tsx";
+type ParseDialect = ts.ScriptKind.TS | ts.ScriptKind.TSX;
 
 const RECENT_TEXTS_PER_DIALECT = 2;
 const DECLARATION_FILE_NAME = /\.d\.[^/]*$/u;
@@ -42,21 +39,22 @@ export const memoizeRecent = <V>(capacity: number): RecentMemo<V> => {
 };
 
 const RECENT_PARSES = {
-  ts: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  tsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-} as const satisfies Record<ParseDialect, RecentMemo<ParsedSource>>;
+  [ts.ScriptKind.TS]: memoizeRecent<ts.SourceFile>(RECENT_TEXTS_PER_DIALECT),
+  [ts.ScriptKind.TSX]: memoizeRecent<ts.SourceFile>(RECENT_TEXTS_PER_DIALECT),
+} as const satisfies Record<ParseDialect, RecentMemo<ts.SourceFile>>;
 
 export const sourceDialect = (fileName: string): ParseDialect =>
-  fileName.endsWith(".tsx") ? "tsx" : "ts";
+  fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
 
 type ParseSourceOptions = { fileName: string; text: string };
 
 export const parseSource = ({
   fileName,
   text,
-}: ParseSourceOptions): ParsedSource => {
+}: ParseSourceOptions): ts.SourceFile => {
   const dialect = sourceDialect(fileName);
-  const parse = () => parseSyntaxSource(fileName, text);
+  const parse = () =>
+    ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, dialect);
   return DECLARATION_FILE_NAME.test(fileName)
     ? parse()
     : RECENT_PARSES[dialect](text, parse);

@@ -3,9 +3,9 @@ import path from "node:path";
 import {
   type Node,
   type ParsedSource,
+  parseSource,
   walk,
 } from "../packages/scripts/src/syntax-tree";
-import { parseSource } from "./parse-memo";
 
 type Identifier = Extract<Node, { type: "Identifier" }>;
 
@@ -396,7 +396,7 @@ const createToastTruncationDetector = ({
 };
 
 export const inspectToastSource = (text: string, fileName = "source.tsx") => {
-  const parsed = parseSource({ text, fileName });
+  const parsed = parseSource(fileName, text);
   const parents = new Map<Node, Node>();
   walk(parsed.program, (node, ancestors) => {
     const parent = ancestors.at(-1);
