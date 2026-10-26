@@ -2,6 +2,7 @@
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
 // parser-output-unchanged: the `superscripts` input is opt-in and only the Supreme Court reader passes it; every other caller parses `<sup>` as before.
+// parser-output-unchanged: [pl-sn] the reader's HTML is generated from single-spaced PDF lines and holds no ordered list, so collapsing markup whitespace and numbering list items leave it as it was; every captured Supreme Court PDF parses to an identical AST.
 // parser-output-unchanged: [cz-uohs] uses only the PDF line assembly of pl-sn and never calls this HTML reader, so its output is unchanged.
 /**
  * Polish Courts (SAOS) parser.

@@ -165,7 +165,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 9,
+    version: 8,
     scope: {
       type: "all",
       reason:
