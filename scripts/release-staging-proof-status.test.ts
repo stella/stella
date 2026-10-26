@@ -63,11 +63,11 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
+const responsePath = (endpoint: string) =>
+  path.join(responses, endpoint.replaceAll(/[/?&=]/gu, "_"));
+
 const respond = (endpoint: string, body: unknown) => {
-  writeFileSync(
-    path.join(responses, endpoint.replaceAll(/[/?&=]/gu, "_")),
-    JSON.stringify(body),
-  );
+  writeFileSync(responsePath(endpoint), JSON.stringify(body));
 };
 
 type PullOverrides = {
@@ -314,6 +314,50 @@ describe("pull request heads", () => {
     });
   });
 
+  for (const state of ["success", "failure", "pending"]) {
+    test(`a reconciliation selected before a newer run posts ${state} leaves it last`, () => {
+      respond(`repos/${repository}/pulls/7`, pull());
+      statuses(head, [recordedResult]);
+      runs([stagingRun("completed", "success")]);
+      const newerResult = {
+        ...recordedResult,
+        state,
+        target_url: `https://github.com/${repository}/actions/runs/${runId + 1}`,
+      };
+      const statusEndpoint = `repos/${repository}/commits/${head}/statuses?per_page=100`;
+      // A's result is selected once; B posts before reconciliation resumes.
+      respond(`${statusEndpoint}.then`, [[newerResult, recordedResult]]);
+      const result = run(["pull-request", "7"]);
+      expect(result.exitCode).toBe(0);
+      expect(result.posted).toEqual([]);
+      expect(readFileSync(responsePath(statusEndpoint), "utf-8")).toBe(
+        JSON.stringify([[newerResult, recordedResult]]),
+      );
+    });
+  }
+
+  test("a newer run taking ownership prevents an older pending write", () => {
+    respond(`repos/${repository}/pulls/7`, pull());
+    statuses(head, []);
+    runs([stagingRun("in_progress")]);
+    const endpoint = `repos/${repository}/actions/workflows/deploy-staging.yml/runs?event=workflow_dispatch&branch=main&per_page=100`;
+    writeFileSync(
+      path.join(responses, `${endpoint.replaceAll(/[/?&=]/gu, "_")}.then`),
+      JSON.stringify({
+        workflow_runs: [
+          {
+            ...stagingRun("in_progress"),
+            id: runId + 1,
+            html_url: `https://github.com/${repository}/actions/runs/${runId + 1}`,
+          },
+        ],
+      }),
+    );
+    const result = run(["pull-request", "7"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.posted).toEqual([]);
+  });
+
   test("a pending write for a newer run keeps that run pending", () => {
     respond(`repos/${repository}/pulls/7`, pull());
     statuses(head, [
@@ -391,10 +435,7 @@ describe("pull request heads", () => {
     );
     const result = run(["pull-request", "7"], { PROOF_DISPATCHED: "true" });
     expect(result.exitCode).toBe(0);
-    expect(result.posted.map(({ state }) => state)).toEqual([
-      "pending",
-      "success",
-    ]);
+    expect(result.posted.map(({ state }) => state)).toEqual(["success"]);
     expect(result.posted.at(-1)).toEqual({
       sha: head,
       state: "success",

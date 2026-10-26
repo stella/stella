@@ -60,15 +60,16 @@ latest_proof() {
 
 # Write back the result a proof run already recorded on the head, if any.
 # Writers of one head are not serialized, so a pending write for a run can
-# land after that run's result; writing the result back after it keeps the
-# result last in every interleaving. Fails when the run recorded none.
+# land after that run's result. Revalidate ownership before restoring it so
+# reconciliation cannot put an older run back over a newer one. Fails when
+# the run recorded none.
 write_back() {
   local head="$1" url="$2" result
   result=$(api --paginate --slurp "repos/$repo/commits/$head/statuses?per_page=100" | jq -c --arg context "$context" --arg url "$url" '
     [.[][] | select(.context == $context and .target_url == $url and .creator.login == "github-actions[bot]" and
       (.state == "success" or .state == "failure" or .state == "error"))][0] // empty')
   [[ -n "$result" ]] || return 1
-  post "$head" "$(jq -r '.state' <<< "$result")" "$(jq -r '.description' <<< "$result")" "$url"
+  post_release_head "$head" "$(jq -r '.state' <<< "$result")" "$(jq -r '.description' <<< "$result")" "$url"
 }
 
 # The newest deploy-staging proof run for a head, or {}.
@@ -77,6 +78,25 @@ newest_run() {
     jq -c --arg repo "$repo" --arg title "Staging release proof $1" '
       [.workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
         .path == ".github/workflows/deploy-staging.yml" and .display_title == $title)][0] // {}'
+}
+
+# A reconciliation may have selected its run before another run took over.
+# Re-read both the run and status ownership immediately before each write;
+# the status check also covers a run listing that trails a newer result.
+post_release_head() {
+  local head="$1" state="$2" description="$3" url="${4:-}" current_url owner prefix owner_id run_id
+  current_url=$(newest_run "$head" | jq -r '.html_url // ""')
+  [[ "$current_url" == "$url" ]] || return 0
+  owner=$(api --paginate --slurp "repos/$repo/commits/$head/statuses?per_page=100" | jq -r --arg context "$context" '
+    [.[][] | select(.context == $context and .creator.login == "github-actions[bot]")][0].target_url // ""')
+  prefix="$server/$repo/actions/runs/"
+  if [[ "$owner" == "$prefix"* ]]; then
+    owner_id="${owner#"$prefix"}"
+    run_id="${url#"$prefix"}"
+    [[ "$run_id" =~ ^[1-9][0-9]*$ ]] || return 0
+    if [[ "$owner_id" =~ ^[1-9][0-9]*$ ]] && (( owner_id > run_id )); then return 0; fi
+  fi
+  post "$head" "$state" "$description" "$url"
 }
 
 # Reconcile a release head. It never derives a result from a run: a run's
@@ -92,17 +112,17 @@ release_head() {
   if [[ -z "$run_id" && "${PROOF_DISPATCHED:-}" == true ]]; then
     # The run listing can trail a dispatch that just succeeded; once listed,
     # the run's recorded result goes back on top of this pending write.
-    post "$head" pending "Staging proof dispatched; waiting for its run to start"
+    post_release_head "$head" pending "Staging proof dispatched; waiting for its run to start"
     url=$(newest_run "$head" | jq -r '.html_url // ""')
     if [[ -n "$url" ]]; then write_back "$head" "$url" || true; fi
   elif [[ -z "$run_id" ]]; then
-    post "$head" failure "${NO_PROOF_REASON:-No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=$head}"
+    post_release_head "$head" failure "${NO_PROOF_REASON:-No staging proof for this head; dispatch deploy-staging.yml release_candidate=true sha=$head}"
   elif [[ "$(jq -r '.status' <<< "$run")" != completed ]]; then
-    post "$head" pending "Staging proof running: run $run_id" "$url"
+    post_release_head "$head" pending "Staging proof running: run $run_id" "$url"
     write_back "$head" "$url" || true
   else
     write_back "$head" "$url" ||
-      post "$head" failure "Proof run $run_id recorded no result; dispatch deploy-staging.yml release_candidate=true sha=$head" "$url"
+      post_release_head "$head" failure "Proof run $run_id recorded no result; dispatch deploy-staging.yml release_candidate=true sha=$head" "$url"
   fi
 }
 
