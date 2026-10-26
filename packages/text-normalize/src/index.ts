@@ -13,6 +13,11 @@ export { stripDiacritics, stripDiacriticsForSlug } from "./diacritics.js";
 export { escapeRegExp } from "./escape-regexp.js";
 export { arabicNormalize } from "./normalize.js";
 export {
+  findPostgresSearchFoldRanges,
+  foldLikePostgresSearch,
+  foldLikePostgresSearchWithOffsets,
+} from "./postgres-search-fold.js";
+export {
   findSearchMatchRanges,
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
@@ -30,3 +35,4 @@ export {
   UNICODE_NORMALIZATION_FORMS,
 } from "./unicode.js";
 export type { UnicodeMarkClass, UnicodeNormalizationForm } from "./unicode.js";
+export { POSTGRES_UNACCENT_RULES } from "./unaccent-rules.js";

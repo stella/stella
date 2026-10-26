@@ -20,6 +20,7 @@ import {
   pruneIncomplete,
   type RefOperand,
 } from "@stll/conditions";
+import { foldLikePostgresSearch } from "@stll/text-normalize/postgres-search-fold";
 
 import { member, user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
@@ -29,7 +30,8 @@ import {
   type EntityQueryScope,
   entityQueryScopeCondition,
 } from "@/api/lib/entities/query-scope";
-import { escapeLike } from "@/api/lib/escape-like";
+import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
+import { searchFold } from "@/api/lib/search/search-fold";
 import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --
@@ -773,9 +775,10 @@ export const FIELD_FIND_SUPPORT = {
 } as const satisfies Record<FieldContent["type"], "searchable" | "excluded">;
 
 /**
- * The cell types a find reaches, in declaration order. The partial index
- * `fields_find_text_trgm_idx` and the `field_find_text` function name the same
- * list by hand; `fields-find-text-index.test.ts` holds the three together.
+ * The cell types a find reaches, in declaration order. The partial indexes
+ * `fields_find_text_trgm_idx` and `fields_find_text_fold_trgm_idx` and the
+ * `field_find_text` function name the same list by hand;
+ * `fields-find-text-index.test.ts` holds them together.
  */
 export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
   FIELD_FIND_SUPPORT,
@@ -784,7 +787,7 @@ export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
   .map(([type]) => type);
 
 /**
- * The type gate as the partial index `fields_find_text_trgm_idx` spells it:
+ * The type gate as the partial index `fields_find_text_fold_trgm_idx` spells it:
  * inline literals, not a bound array. The planner proves a query clause
  * implies an index predicate only when it can see both, and a parameter it
  * cannot see would leave the index unusable for every find. The literals are
@@ -803,6 +806,15 @@ const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
   )})`;
 })();
 
+/**
+ * Whether `value` contains `term` as a find compares them: both folded
+ * through `search_fold`, the term as literal text. Every half of the find
+ * predicate (the index condition, the recheck, the name) is this expression,
+ * so the trigram indexes over `search_fold(...)` can answer each of them.
+ */
+export const findTermMatches = (value: SQL, term: string): SQL =>
+  sql`${searchFold(value)} LIKE ('%' || ${escapeLikeSql(searchFold(term))} || '%')`;
+
 type BuildFindConditionsOptions = {
   find: EntityFind | undefined;
   /** Bounds the candidate cell scan without correlating it to each entity. */
@@ -816,23 +828,32 @@ type BuildFindConditionsOptions = {
  * counts — because counts that disagree with rows is the failure this shares
  * one expression to prevent.
  *
+ * Both sides are folded through `search_fold`, so case and accents never
+ * decide a match: `dvorak` finds `Dvořák`, `muller` finds `Müller`. The
+ * highlighter marks through the same fold (`foldLikePostgresSearch`), which
+ * is why it is `search_fold` and not a broader client-side fold.
+ *
  * The column half is an uncorrelated subquery over `fields`, not an EXISTS
  * per entity: the planner runs it once, reading candidates off the trigram
- * index `fields_find_text_trgm_idx` through the same `field_find_text`
- * expression and the same type gate the index is built over. A correlated
- * form would probe the index once per candidate row instead. The index only
- * proposes: `fieldValueMatches` stays inside as the recheck, so a multi-select
- * whose joined text matches across an element boundary is still rejected, and
- * what a find returns is defined by the recheck alone.
+ * index `fields_find_text_fold_trgm_idx` through the same
+ * `search_fold(field_find_text(...))` expression and the same type gate the
+ * index is built over. A correlated form would probe the index once per
+ * candidate row instead. The index only proposes: `fieldValueMatches` stays
+ * inside as the recheck, so a multi-select whose joined text matches across
+ * an element boundary is still rejected, and what a find returns is defined
+ * by the recheck alone.
  *
  * The name half reads `entities.name`, the string the grid's name column
  * renders, not `display_name`: its fallbacks (a file name, a text value, an
  * English "Untitled") would return rows the highlighter has nothing to mark
  * in, and a reader typing their own locale's placeholder would find nothing.
+ * Alone (no columns searched) it reads `entities_name_fold_trgm_idx`.
  *
  * A find term is literal text, not a pattern: a typed `%` or `_` has to match
- * itself, or the server would return rows the highlighter cannot mark.
- * `contains` filters keep their pass-through behaviour; find is stricter.
+ * itself, or the server would return rows the highlighter cannot mark. The
+ * term is escaped after it is folded, because the fold turns full-width `％`
+ * and `＿` into the ASCII wildcards. `contains` filters keep their
+ * pass-through behaviour; find is stricter.
  *
  * Property ids need no ownership check: like `fieldIds`, they are only used
  * inside a subquery already scoped to the authorized workspace, so a foreign
@@ -847,15 +868,15 @@ export const buildFindConditions = ({
   }
   // The floor over the string the pattern is built from, not the one that
   // arrived: the wire schema rejects a short term padded or bare, and this is
-  // what makes an ILIKE the trigram index cannot answer unreachable for every
-  // caller, wire or not.
+  // what makes a LIKE the trigram index cannot answer unreachable for every
+  // caller, wire or not. The fold deletes combining marks, so the floor reads
+  // the folded length.
   const term = find.term.trim();
-  if (term.length < ENTITY_FIND_TERM_MIN_LENGTH) {
+  if (foldLikePostgresSearch(term).length < ENTITY_FIND_TERM_MIN_LENGTH) {
     return [];
   }
 
-  const pattern = `%${escapeLike(term)}%`;
-  const matchesPattern = (valueExpr: SQL) => sql`${valueExpr} ILIKE ${pattern}`;
+  const matchesPattern = (valueExpr: SQL) => findTermMatches(valueExpr, term);
   const { propertyIds } = find.scope;
   const columnsMatch =
     propertyIds.length === 0
@@ -865,7 +886,7 @@ export const buildFindConditions = ({
           WHERE ${entityQueryScopeCondition(scope, fields.workspaceId)}
             AND ${fields.propertyId} = ANY(${typedPgArray(propertyIds, "uuid")})
             AND ${FINDABLE_FIELD_TYPES_PREDICATE_SQL}
-            AND field_find_text(${fields.content}) ILIKE ${pattern}
+            AND ${matchesPattern(sql`field_find_text(${fields.content})`)}
             AND ${fieldValueMatches(matchesPattern, matchesPattern)}
         )`;
 

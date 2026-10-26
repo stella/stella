@@ -143,7 +143,7 @@ test("a find reads candidate cells off the trigram index, not every cell", async
   // The subquery is uncorrelated, so the index is probed once for the whole
   // find rather than once per entity.
   expect(plan).toMatch(
-    /Bitmap Index Scan on fields_find_text_trgm_idx .*loops=1\)/u,
+    /Bitmap Index Scan on fields_find_text_fold_trgm_idx .*loops=1\)/u,
   );
 });
 

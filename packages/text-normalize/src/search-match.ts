@@ -98,6 +98,58 @@ export const foldSearchMatchTextWithOffsets = (
   return { text: loweredParts.join(""), originalRanges };
 };
 
+type FindFoldedRangesOptions = {
+  content: FoldedSearchText;
+  maxMatches: number;
+  /** Already folded by the same fold as `content`. */
+  query: string;
+};
+
+/**
+ * Non-overlapping occurrences of a folded query in folded content, as ranges
+ * into the original string. Shared by every fold that carries
+ * `originalRanges`, so they agree on what "non-overlapping" means.
+ */
+export const findFoldedRanges = ({
+  content,
+  maxMatches,
+  query,
+}: FindFoldedRangesOptions): SearchMatchRange[] => {
+  if (maxMatches <= 0 || query.length === 0) {
+    return [];
+  }
+
+  const matches: SearchMatchRange[] = [];
+  let searchFrom = 0;
+  while (searchFrom <= content.text.length - query.length) {
+    const foldedStart = content.text.indexOf(query, searchFrom);
+    if (foldedStart === -1) {
+      break;
+    }
+    const foldedEnd = foldedStart + query.length;
+    const firstRange = content.originalRanges.at(foldedStart);
+    const lastRange = content.originalRanges.at(foldedEnd - 1);
+    if (!firstRange || !lastRange) {
+      break;
+    }
+    matches.push({ start: firstRange.start, end: lastRange.end });
+    if (matches.length >= maxMatches) {
+      break;
+    }
+    // An expanding fold (ß → ss) maps several folded units to one original
+    // character; resume after the last unit inside the matched characters so
+    // that character is reported once and the budget reaches later hits.
+    searchFrom = foldedEnd;
+    while (
+      (content.originalRanges.at(searchFrom)?.start ?? Infinity) < lastRange.end
+    ) {
+      searchFrom += 1;
+    }
+  }
+
+  return matches;
+};
+
 type FindSearchMatchRangesOptions = {
   maxMatches?: number;
 };
@@ -120,43 +172,12 @@ export const findSearchMatchRanges = (
     return [];
   }
 
-  const foldedContent =
-    typeof content === "string"
-      ? foldSearchMatchTextWithOffsets(content)
-      : content;
-  const foldedQuery = foldSearchMatchText(query.trim());
-  if (foldedQuery.length === 0) {
-    return [];
-  }
-
-  const matches: SearchMatchRange[] = [];
-  let searchFrom = 0;
-  while (searchFrom <= foldedContent.text.length - foldedQuery.length) {
-    const foldedStart = foldedContent.text.indexOf(foldedQuery, searchFrom);
-    if (foldedStart === -1) {
-      break;
-    }
-    const foldedEnd = foldedStart + foldedQuery.length;
-    const firstRange = foldedContent.originalRanges.at(foldedStart);
-    const lastRange = foldedContent.originalRanges.at(foldedEnd - 1);
-    if (!firstRange || !lastRange) {
-      break;
-    }
-    matches.push({ start: firstRange.start, end: lastRange.end });
-    if (matches.length >= maxMatches) {
-      break;
-    }
-    // An expanding fold (ß → ss) maps several folded units to one original
-    // character; resume after the last unit inside the matched characters so
-    // that character is reported once and the budget reaches later hits.
-    searchFrom = foldedEnd;
-    while (
-      (foldedContent.originalRanges.at(searchFrom)?.start ?? Infinity) <
-      lastRange.end
-    ) {
-      searchFrom += 1;
-    }
-  }
-
-  return matches;
+  return findFoldedRanges({
+    content:
+      typeof content === "string"
+        ? foldSearchMatchTextWithOffsets(content)
+        : content,
+    maxMatches,
+    query: foldSearchMatchText(query.trim()),
+  });
 };
