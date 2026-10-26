@@ -139,7 +139,11 @@ export const parseSource = (
     comments: result.comments,
     locate: locator(sourceText),
     module: result.module,
-    program: result.program,
+    // Deserializing the tree costs more than parsing; readers of the module
+    // record alone never build it.
+    get program() {
+      return result.program;
+    },
     sourceText,
   };
 };
