@@ -328,6 +328,23 @@ describe("the hard invariants of a numbering", () => {
     ).toEqual([1, 2, null, null, null, 3]);
   });
 
+  test("earlier English quotes cannot cancel a later Czech quotation", () => {
+    const numbering = extractCourtParagraphNumbers(
+      [
+        "[1] Výraz “pojem” soud vysvětlil: „Citace začíná.",
+        "[117] Citace končí.“",
+        "[2] Soud dále uvážil.",
+        "[3] Soud uzavřel.",
+      ].map((text, index) => paragraph(index, text)),
+    );
+    expect(numbering.type).toBe("numbered");
+    expect(
+      numbering.blocks.map((block) =>
+        block.type === "paragraph" ? (block.number ?? null) : null,
+      ),
+    ).toEqual([1, null, 2, 3]);
+  });
+
   test.each([1, 2, 3, 4, 117, 118])(
     "a quoted paragraph %i cannot advance the court's sequence",
     (quotedNumber) => {

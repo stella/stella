@@ -200,20 +200,28 @@ type Body = {
  * neither, and the English “…” never opens one here.
  */
 const QUOTE_PAIRS = [
-  { opening: /„/gu, closing: /[“”]/gu },
-  { opening: /»/gu, closing: /«/gu },
+  { opening: "„", closing: new Set(["“", "”"]) },
+  { opening: "»", closing: new Set(["«"]) },
 ] as const;
 
 /** Quotations of each pair a paragraph leaves open, from those it opens at. */
-const openQuotesAfter = (open: readonly number[], text: string): number[] =>
-  QUOTE_PAIRS.map(({ opening, closing }, pair) =>
-    Math.max(
-      0,
-      (open[pair] ?? 0) +
-        (text.match(opening)?.length ?? 0) -
-        (text.match(closing)?.length ?? 0),
-    ),
-  );
+const openQuotesAfter = (open: readonly number[], text: string): number[] => {
+  const states = QUOTE_PAIRS.map(({ opening, closing }, pair) => ({
+    opening,
+    closing,
+    count: open[pair] ?? 0,
+  }));
+  for (const character of text) {
+    for (const state of states) {
+      if (character === state.opening) {
+        state.count += 1;
+      } else if (state.count > 0 && state.closing.has(character)) {
+        state.count -= 1;
+      }
+    }
+  }
+  return states.map(({ count }) => count);
+};
 
 /**
  * Most paragraphs a quotation may run on past the one that opens it. A
