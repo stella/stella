@@ -172,6 +172,7 @@ type ParserState = {
   markup: PlDecisionMarkup | undefined;
   /** A list item's marker, waiting to open the item's first paragraph. */
   pendingMarker: Inline[] | undefined;
+  listMarkers: WeakMap<Element, WeakMap<Element, string | null>>;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -224,6 +225,7 @@ const createState = (
   superscripts,
   markup,
   pendingMarker: undefined,
+  listMarkers: new WeakMap(),
 });
 
 const nextBlockId = (state: ParserState): string => {
@@ -531,10 +533,21 @@ const integerAttribute = (value: string | undefined): number | undefined => {
  * `list-style-type` says otherwise. A list item outside an ordered list, or
  * styled to print no number, prints none.
  */
-const orderedListMarker = (item: Element): string | undefined => {
+const orderedListMarker = (
+  state: ParserState,
+  item: Element,
+): string | undefined => {
   const list = item.parent;
   if (list === null || !isTag(list) || list.tagName.toLowerCase() !== "ol") {
     return undefined;
+  }
+  const cached = state.listMarkers.get(list);
+  if (cached !== undefined) {
+    const marker = cached.get(item);
+    if (marker === undefined) {
+      return panic("Ordered list item is missing its computed marker");
+    }
+    return marker ?? undefined;
   }
   const items = list.children.filter(
     (child): child is Element =>
@@ -544,13 +557,6 @@ const orderedListMarker = (item: Element): string | undefined => {
   const step = reversed ? -1 : 1;
   let ordinal =
     integerAttribute(list.attribs["start"]) ?? (reversed ? items.length : 1);
-  for (const sibling of items) {
-    ordinal = integerAttribute(sibling.attribs["value"]) ?? ordinal;
-    if (sibling === item) {
-      break;
-    }
-    ordinal += step;
-  }
   // An inline style outranks the `type` attribute, the item's its list's.
   // (`null`, no number, is a statement and must not fall through.)
   const typeAttribute = list.attribs["type"] ?? "1";
@@ -560,10 +566,27 @@ const orderedListMarker = (item: Element): string | undefined => {
   )
     ? typeAttribute
     : "1";
-  const itemStyle = cssListStyleOf(item);
-  const stated = itemStyle === undefined ? cssListStyleOf(list) : itemStyle;
-  const type = stated === undefined ? attributeType : stated;
-  return type === null ? undefined : `${counterText(type, ordinal)}.`;
+  const listStyle = cssListStyleOf(list);
+  const markers = new WeakMap<Element, string | null>();
+  // One walk per list: finding each item's preceding counters separately
+  // makes a long publisher list quadratic in its number of items.
+  for (const sibling of items) {
+    ordinal = integerAttribute(sibling.attribs["value"]) ?? ordinal;
+    const itemStyle = cssListStyleOf(sibling);
+    const stated = itemStyle === undefined ? listStyle : itemStyle;
+    const type = stated === undefined ? attributeType : stated;
+    markers.set(
+      sibling,
+      type === null ? null : `${counterText(type, ordinal)}.`,
+    );
+    ordinal += step;
+  }
+  state.listMarkers.set(list, markers);
+  const marker = markers.get(item);
+  if (marker === undefined) {
+    return panic("Ordered list item is missing its computed marker");
+  }
+  return marker ?? undefined;
 };
 
 const inferParagraphRole = (
@@ -793,7 +816,7 @@ const parseListItem = (
   state: ParserState,
   item: Element,
 ): void => {
-  let marker = orderedListMarker(item);
+  let marker = orderedListMarker(state, item);
   const children = item.children;
   if (!children.some(isListItemBlock)) {
     parseParagraphElement($, state, $(item), marker);
