@@ -120,8 +120,9 @@ test("the retry workflow agrees with retryDecision", async () => {
   }
 });
 
-// A completion with nothing to retry starts no job at all.
-test("only a first failed pull request attempt of CI Checks starts the retry job", () => {
+// The job also reconciles metadata mirrors, which must follow every attempt's
+// outcome, so the retry conditions stay on the retry step.
+test("every pull request completion of CI Checks starts the job", () => {
   const source: unknown = Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/ci-runner-loss-retry.yml", import.meta.url),
@@ -153,8 +154,11 @@ test("only a first failed pull request attempt of CI Checks starts the retry job
         },
       },
     });
-  expect(starts("failure", 1)).toBe(true);
-  expect(starts("success", 1)).toBe(false);
-  expect(starts("cancelled", 1)).toBe(false);
-  expect(starts("failure", 2)).toBe(false);
+  for (const conclusion of ["failure", "success", "cancelled"]) {
+    for (const attempt of [1, 2]) {
+      expect(starts(conclusion, attempt), `${conclusion}/${attempt}`).toBe(
+        true,
+      );
+    }
+  }
 });
