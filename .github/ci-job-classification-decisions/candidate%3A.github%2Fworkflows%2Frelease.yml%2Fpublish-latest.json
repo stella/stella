@@ -1,0 +1,5 @@
+{
+  "kind": "priority",
+  "qualifier": "Advances the latest image tags to the promoted release digests.",
+  "reviewedDigest": "73726ba8e1d3997cdf763ec09f1f3392ac3e29651b1c4d8ceb93ce925206d493"
+}
