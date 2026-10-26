@@ -23,6 +23,7 @@ import {
   budgetViolations,
   measureOwnerStatement,
   measureQueryPerf,
+  type QueryPerfMetrics,
   scaleViolations,
   shapeViolations,
 } from "./measurement";
@@ -55,14 +56,12 @@ const profileBudgets = (profile: "corpus" | "tenant") =>
  * budget must stay over it: once a change brings it under, the marker has to
  * go, so the budget is enforced again.
  */
-const budgetProblem = (
+const pageBudgetProblem = (
   id: ReadBudgetId,
   sharedBlocks: number,
 ): string | undefined => {
   const budget = READ_BUDGETS[id];
-  const over =
-    budgetViolations({ sharedBlocks, executionTimeMs: 0 }, budget.pages)
-      .length > 0;
+  const over = sharedBlocks > budget.pages;
   if ("overBudget" in budget) {
     return over
       ? undefined
@@ -72,6 +71,53 @@ const budgetProblem = (
     ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
     : undefined;
 };
+
+const budgetProblem = (id: ReadBudgetId, measured: QueryPerfMetrics) => {
+  const hang = budgetViolations(measured, READ_BUDGETS[id].pages).find(
+    (violation) => violation.kind === "execution-time-hang-guard",
+  );
+  return hang === undefined
+    ? pageBudgetProblem(id, measured.sharedBlocks)
+    : `${id}: ${hang.message}`;
+};
+
+test("corpus execution guard applies even when pages fit or carry an over-budget marker", () => {
+  for (const id of [
+    "statement.documents.searchHits",
+    "statement.legislation.candidateRows",
+  ] as const) {
+    for (const sharedBlocks of [
+      READ_BUDGETS[id].pages,
+      READ_BUDGETS[id].pages + 1,
+    ]) {
+      expect(
+        budgetProblem(id, { sharedBlocks, executionTimeMs: 10_001 }),
+      ).toContain("execution time");
+    }
+  }
+});
+
+test("corpus page markers still reflect pages within the execution guard", () => {
+  const id = "statement.legislation.candidateRows";
+  expect(
+    budgetProblem(id, {
+      sharedBlocks: READ_BUDGETS[id].pages,
+      executionTimeMs: 10_000,
+    }),
+  ).toContain("remove its overBudget marker");
+  expect(
+    budgetProblem(id, {
+      sharedBlocks: READ_BUDGETS[id].pages + 1,
+      executionTimeMs: 10_000,
+    }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem("statement.documents.searchHits", {
+      sharedBlocks: READ_BUDGETS["statement.documents.searchHits"].pages,
+      executionTimeMs: 10_000,
+    }),
+  ).toBeUndefined();
+});
 
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
   test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
@@ -228,7 +274,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               ? undefined
               : `${id}: ${String(result.plan.Plan["Actual Rows"])} rows, expected ${String(entry.expectedRows)}`,
           );
-          note(budgetProblem(budgetId, result.metrics.sharedBlocks));
+          note(budgetProblem(budgetId, result.metrics));
         }
 
         const runPages = async (
@@ -275,7 +321,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               async () =>
                 await runPages(jobId, measurement.task, scenario.size),
             );
-            note(budgetProblem(budgetId, size));
+            note(pageBudgetProblem(budgetId, size));
             const twin = scenario.double;
             if (twin === undefined) {
               continue;
@@ -285,7 +331,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               `run ${jobId} on ${describeServed(twin)}`,
               async () => await runPages(jobId, measurement.task, twin),
             );
-            note(budgetProblem(budgetId, double));
+            note(pageBudgetProblem(budgetId, double));
             for (const violation of scaleViolations({ size, double })) {
               note(`${jobId} on ${label}: ${violation}`);
             }
