@@ -512,6 +512,19 @@ describe("the lines the letterhead reading drops", () => {
     expect(body).toContain("1");
   });
 
+  test("a centred cell closer to the line above than the body's line spacing stays", async () => {
+    // Further from the row above than the type is tall (13pt under 12pt
+    // type), nearer than the body's lines are to each other (16pt), and
+    // printed nowhere a page number sits on another page.
+    const { body } = await readBuilt([
+      [
+        { text: "Complaints received in the year", x: 72, y: 113, size: 12 },
+        { text: "1", x: 300, y: 100, size: 12 },
+      ],
+    ]);
+    expect(body).toContain("1");
+  });
+
   test("a footnote's number at the foot is the note's label, not a page number", async () => {
     const { notes, superscripts } = await readBuilt([
       [
@@ -526,11 +539,12 @@ describe("the lines the letterhead reading drops", () => {
   });
 
   test("a reference raised inside its line is read as one", async () => {
-    // The text layer keeps the raised number on the claim's own line.
+    // The text layer keeps a span on its line within 2pt of the line's
+    // baseline, so the number raised 1.9pt stays on the claim's own line.
     const { notes, superscripts } = await readBuilt([
       [
         { text: "Tekst", x: 72, y: 700, size: 12 },
-        { text: "1", x: 102, y: 703, size: 7 },
+        { text: "1", x: 102, y: 701.9, size: 7 },
         { text: " continues on the same line.", x: 106, y: 700, size: 12 },
         { text: "1", x: 72, y: 105, size: 7 },
         { text: "The note the claim refers to.", x: 76, y: 100, size: 9 },
@@ -541,6 +555,29 @@ describe("the lines the letterhead reading drops", () => {
       { label: "1", text: "The note the claim refers to." },
     ]);
   });
+
+  test.each([
+    // The type's own descent puts a small group's box 1pt higher than the
+    // line's even where its baseline is barely raised.
+    ["a group set barely higher", "Fine 10", "000", " PLN", 1.5],
+    ["a thousands group after a number", "Fine 10", "000", " PLN", 1.9],
+    ["a digit set barely higher after a word", "Tekst", "1", " follows", 1.5],
+  ])(
+    "%s in small type stays in its line",
+    async (_, before, digits, after, raise) => {
+      const { body, superscripts } = await readBuilt([
+        [
+          { text: before, x: 72, y: 700, size: 12 },
+          { text: digits, x: 118, y: 700 + raise, size: 7 },
+          { text: after, x: 130, y: 700, size: 12 },
+        ],
+      ]);
+      expect(superscripts).toEqual([]);
+      expect(
+        body.some((line) => line.replace(/\s+/gu, " ").includes(digits)),
+      ).toBe(true);
+    },
+  );
 
   test("an exponent over a unit makes no table row a footnote", async () => {
     const { body, notes } = await readBuilt([
@@ -555,6 +592,75 @@ describe("the lines the letterhead reading drops", () => {
     ]);
     expect(notes).toEqual([]);
     expect(body.some((line) => line.includes("Second row"))).toBe(true);
+  });
+
+  /** A page with note 1 at its foot, referenced from a word. */
+  const NOTE_ONE_PAGE: readonly Drawn[] = [
+    { text: "A claim needing a source", x: 72, y: 700, size: 12 },
+    { text: "1", x: 215, y: 705, size: 7 },
+    { text: "1", x: 72, y: 105, size: 7 },
+    { text: "Source for the claim.", x: 76, y: 100, size: 9 },
+  ];
+
+  test.each([
+    ["an exponent over a unit", "A flat of 20 m", 150],
+    ["a reference after a word", "A claim needing more", 197],
+  ])(
+    "%s makes no row of a numbered table the next note",
+    async (_, claim, markX) => {
+      // Note 1 is read on the page before, so row 2 carries the number the
+      // next note would; row 1 above it in the same column shows the table.
+      const { body, notes } = await readBuilt([
+        NOTE_ONE_PAGE,
+        [
+          { text: claim, x: 72, y: 700, size: 12 },
+          { text: "2", x: markX, y: 705, size: 7 },
+          { text: "1", x: 72, y: 125, size: 7 },
+          { text: "First row of a small table.", x: 80, y: 120, size: 9 },
+          { text: "2", x: 72, y: 110, size: 7 },
+          { text: "Second row of a small table.", x: 80, y: 105, size: 9 },
+        ],
+      ]);
+      expect(notes).toEqual([{ label: "1", text: "Source for the claim." }]);
+      expect(body.some((line) => line.includes("First row"))).toBe(true);
+      expect(body.some((line) => line.includes("Second row"))).toBe(true);
+    },
+  );
+
+  test("an exponent makes no line set unlike the notes the next note", async () => {
+    // Row 2 matches the next note's number, but nothing else shows a note:
+    // no note opened on its page, and its number is set larger than note 1's.
+    const { body, notes } = await readBuilt([
+      NOTE_ONE_PAGE,
+      [
+        { text: "A flat of 20 m", x: 72, y: 700, size: 12 },
+        { text: "2", x: 150, y: 705, size: 7 },
+        { text: "2", x: 72, y: 105, size: 9 },
+        { text: "rooms and a kitchen.", x: 80, y: 105, size: 8 },
+      ],
+    ]);
+    expect(notes).toEqual([{ label: "1", text: "Source for the claim." }]);
+    expect(body.some((line) => line.includes("rooms and a kitchen"))).toBe(
+      true,
+    );
+  });
+
+  test("an article's index refers to the next note printed where notes are", async () => {
+    // `art. 25²` after note 1: the index alone could be an article's, so the
+    // note's number set in the type note 1's was is what makes it note 2.
+    const { notes } = await readBuilt([
+      NOTE_ONE_PAGE,
+      [
+        { text: "Na podstawie art. 25", x: 72, y: 700, size: 12 },
+        { text: "2", x: 190, y: 705, size: 7 },
+        { text: "2", x: 72, y: 105, size: 7 },
+        { text: "Source for the article.", x: 76, y: 100, size: 9 },
+      ],
+    ]);
+    expect(notes).toEqual([
+      { label: "1", text: "Source for the claim." },
+      { label: "2", text: "Source for the article." },
+    ]);
   });
 });
 

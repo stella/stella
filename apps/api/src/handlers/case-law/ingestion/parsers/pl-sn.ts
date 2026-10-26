@@ -1055,36 +1055,61 @@ const liftSuperscripts = (
 };
 
 /**
+ * How far above its line's baseline a superscript the text layer kept on the
+ * line sits at least, as a share of the body size. The text layer keeps a
+ * span on its line only within 2pt of the line's baseline, so a superscript
+ * raised the usual third of the type gets a line of its own; of what stays,
+ * only a span raised most of that way (from 1.8pt over 12pt type) reads as
+ * one, where a small digit group set barely higher is still on the line.
+ * Measured between baselines, since a box's bottom also moves with the
+ * type's descent: a 7pt span's box sits 1pt above a 12pt line's on the same
+ * baseline.
+ */
+const SUPERSCRIPT_RAISE_RATIO = 0.15;
+
+/**
+ * Three digits right after a number are its next group (`10 000`), however
+ * the typesetter set them, never an index or a reference.
+ */
+const continuesNumber = (before: string, digits: string): boolean =>
+  /^\d{3}$/u.test(digits) && /\d\s*$/u.test(before);
+
+/**
  * A line without the superscripts the text layer kept on it, and those
- * superscripts as marks: a span of digits alone, set in small type and raised
- * above the line's body-type characters (`Tekst¹`). The text loses only the
- * marks, each found from where the span before it ended, so equal digits
- * earlier in the line stay.
+ * superscripts as marks: a span of digits alone, set in small type, its
+ * baseline raised well above the line's body-type characters (`Tekst¹`),
+ * that does not carry on a number before it. The text loses only the marks,
+ * each found from where the span before it ended, so equal digits earlier in
+ * the line stay.
  */
 const withoutInlineMarks = (
   line: PdfTextLine,
   bodySize: number,
 ): { line: PdfTextLine; marks: SuperscriptMark[] } => {
-  const body = line.spans.filter(
-    ({ fontSize, text }) =>
-      text.trim().length > 0 && fontSize > bodySize * SMALL_TYPE_RATIO,
+  const body = printedCharactersOf(line).filter(
+    ({ fontSize }) => fontSize > bodySize * SMALL_TYPE_RATIO,
   );
   if (body.length === 0) {
     return { line, marks: [] };
   }
-  const baseline = Math.min(...body.map(({ bbox }) => bbox.y));
-  const raised = new Set(
-    line.spans.filter(
-      ({ bbox, fontSize, text }) =>
-        /^\d{1,3}$/u.test(text.trim()) &&
-        fontSize <= bodySize * SMALL_TYPE_RATIO &&
-        bbox.y > baseline + bodySize * 0.2,
-    ),
-  );
-  if (raised.size === 0) {
+  const baseline = Math.min(...body.map((character) => character.baseline));
+  const raisedSmall = ({
+    chars,
+    fontSize,
+    text,
+  }: PdfTextLine["spans"][number]) =>
+    /^\d{1,3}$/u.test(text.trim()) &&
+    fontSize <= bodySize * SMALL_TYPE_RATIO &&
+    chars.every(
+      (character) =>
+        character.char.trim().length === 0 ||
+        character.baseline - baseline >= bodySize * SUPERSCRIPT_RAISE_RATIO,
+    );
+  if (!line.spans.some(raisedSmall)) {
     return { line, marks: [] };
   }
   const marks: SuperscriptMark[] = [];
+  const kept: PdfTextLine["spans"] = [];
   let text = "";
   let cursor = 0;
   let printed = 0;
@@ -1094,23 +1119,22 @@ const withoutInlineMarks = (
       return { line, marks: [] };
     }
     text += line.text.slice(cursor, at);
-    if (raised.has(span)) {
+    if (
+      raisedSmall(span) &&
+      !continuesNumber(line.text.slice(0, at), span.text.trim())
+    ) {
       marks.push({ after: printed, text: span.text.trim() });
     } else {
+      kept.push(span);
       text += span.text;
       printed += span.text.replace(/\s/gu, "").length;
     }
     cursor = at + span.text.length;
   }
   text += line.text.slice(cursor);
-  return {
-    line: {
-      ...line,
-      spans: line.spans.filter((span) => !raised.has(span)),
-      text,
-    },
-    marks,
-  };
+  return marks.length === 0
+    ? { line, marks }
+    : { line: { ...line, spans: kept, text }, marks };
 };
 
 /** Every line of every page, in reading order. */
@@ -1253,11 +1277,14 @@ const setSmall = (line: PdfTextLine, bodySize: number): boolean => {
  * A page number is the page's own number alone or in its usual wording
  * (`3`, `- 3 -`, `3/16`, `Strona 3 z 16`), printed as the page's first or
  * last line once the letterhead is gone, centred or toward the margin, in
- * type no larger than the body's. A footnote's number has the note's text
- * below or beside it, and a list point's or a table cell's sits at the
- * body's left margin, so neither reads as one. Each line is judged on its
- * own, never by where it sits against the footer, because a page number
- * printed down the margin sits beside the text, not below it.
+ * type no larger than the body's. It sits at least the body's line spacing
+ * away from every other line, or, closer but still clear of the type, at the
+ * height another page prints its own number. A footnote's number has the
+ * note's text below or beside it, a list point's or a table cell's sits at
+ * the body's left margin, and a centred cell sits within the line spacing of
+ * its row, so none reads as one. A line is never judged by where it sits
+ * against the footer, because a page number printed down the margin sits
+ * beside the text, not below it.
  */
 const withoutRepeatedFurniture = (
   pages: readonly PdfTextPage[],
@@ -1313,23 +1340,33 @@ const withoutRepeatedFurniture = (
     return pieces >= 2 && rest.trim().length === 0;
   };
 
-  return pages.map(({ height, width, lines }, page) => {
-    const kept = lines.filter((line) => {
+  const keptPages = pages.map(({ height, lines }) =>
+    lines.filter((line) => {
       if (!letterheadCandidate(line, height)) {
         return true;
       }
       const key = keyOf(line);
       return !(repeatedAt(key, line.bbox.y) || isMergedFooter(key));
-    });
-    const printedLines = kept.filter(
+    }),
+  );
+  const linePitch =
+    linePitchOf(
+      keptPages.map((lines) => lines.map((line) => extractedLineOf(line))),
+    ) ?? bodySize;
+
+  // Each page's own number as printed, with how far it sits from the
+  // nearest other line, before deciding how far is far enough.
+  const numbers = pages.map(({ height, width }, page) => {
+    const printedLines = (keptPages[page] ?? []).filter(
       (line) => printedCharactersOf(line).length > 0,
     );
     const byHeight = printedLines.toSorted(
       (left, right) => left.bbox.y - right.bbox.y,
     );
-    const lowest = byHeight.at(0);
-    const highest = byHeight.at(-1);
-    const isPageNumberLine = (line: PdfTextLine): boolean => {
+    return [byHeight.at(0), byHeight.at(-1)].flatMap((line) => {
+      if (line === undefined) {
+        return [];
+      }
       const printed = printedCharactersOf(line);
       const left = printed.at(0)?.bbox.x ?? 0;
       const lastCharacter = printed.at(-1);
@@ -1337,24 +1374,52 @@ const withoutRepeatedFurniture = (
         lastCharacter === undefined
           ? left
           : lastCharacter.bbox.x + lastCharacter.bbox.width;
-      // Set apart from the text by more than a line: a raised reference or
-      // index sits within a line's height of the line it belongs to.
-      const apart = printedLines.every(
-        (other) =>
-          other === line || Math.abs(other.bbox.y - line.bbox.y) >= bodySize,
-      );
-      return (
-        (line === lowest || line === highest) &&
-        apart &&
-        inEdgeZone(line, height) &&
+      return inEdgeZone(line, height) &&
         (left + right) / 2 >= width * PAGE_NUMBER_MIDDLE_RATIO &&
         printed.every(
           ({ fontSize }) => fontSize <= bodySize * PAGE_NUMBER_TYPE_RATIO,
         ) &&
         isPageNumber(normalizeSpanText(line.text), page + 1)
-      );
-    };
-    return kept.filter((line) => !isPageNumberLine(line));
+        ? [
+            {
+              line,
+              gap: Math.min(
+                ...printedLines
+                  .filter((other) => other !== line)
+                  .map((other) => Math.abs(other.bbox.y - line.bbox.y)),
+              ),
+            },
+          ]
+        : [];
+    });
+  });
+  // Set apart from the text by a body line: a raised reference or index sits
+  // within a line's height of the line it belongs to, and a table's cell
+  // within the body's line spacing of the row above. A number printed closer
+  // than the line spacing, though still clear of the type, is the page's
+  // number only where another page prints its own at the same height.
+  const clear = numbers.map((candidates) =>
+    candidates.filter(({ gap }) => gap >= bodySize),
+  );
+  const numberedAtSamePlace = (page: number, line: PdfTextLine): boolean =>
+    clear.some(
+      (candidates, other) =>
+        other !== page &&
+        candidates.some(
+          (candidate) =>
+            Math.abs(candidate.line.bbox.y - line.bbox.y) <= SAME_PLACE_PT,
+        ),
+    );
+  return keptPages.map((lines, page) => {
+    const pageNumbers = new Set(
+      (clear[page] ?? [])
+        .filter(
+          ({ gap, line }) =>
+            gap >= linePitch || numberedAtSamePlace(page, line),
+        )
+        .map(({ line }) => line),
+    );
+    return lines.filter((line) => !pageNumbers.has(line));
   });
 };
 
@@ -1368,6 +1433,13 @@ const NOTE_TYPE_RATIO = 0.95;
 const printedSpansOf = (line: ExtractedLine): readonly PdfSpan[] =>
   line.spans.filter(({ text }) => text.trim().length > 0);
 
+type NoteOpening = {
+  readonly label: string;
+  readonly runs: PlSnRun[];
+  /** The size the number is set in, where the text layer kept it a span. */
+  readonly labelSize?: number | undefined;
+};
+
 /**
  * The number a footnote opens with, and the note's runs without it: a line
  * of the number alone in small type, the number raised over the note's
@@ -1376,7 +1448,7 @@ const printedSpansOf = (line: ExtractedLine): readonly PdfSpan[] =>
 const noteOpeningOf = (
   line: ExtractedLine,
   bodySize: number,
-): { label: string; runs: PlSnRun[] } | undefined => {
+): NoteOpening | undefined => {
   const [first] = printedSpansOf(line);
   const leading = line.superscripts?.at(0);
   if (leading?.after === 0) {
@@ -1407,6 +1479,7 @@ const noteOpeningOf = (
   return {
     label,
     runs: rest.length === 0 ? tail : [{ ...head, text: rest }, ...tail],
+    labelSize: first.fontSize,
   };
 };
 
@@ -1414,11 +1487,9 @@ type PageNotes = {
   /** The page's lines down to its first footnote. */
   readonly body: readonly ExtractedLine[];
   /** Each note's opening and the lines it runs on to. */
-  readonly notes: readonly {
-    readonly label: string;
-    readonly runs: readonly PlSnRun[];
+  readonly notes: readonly (NoteOpening & {
     readonly lines: readonly ExtractedLine[];
-  }[];
+  })[];
 };
 
 /**
@@ -1462,6 +1533,14 @@ const noteReferencesOf = (
  * its rows numbered, in the body, also where an exponent above it (`m²`)
  * prints a row's number.
  *
+ * A reference that could as well be an exponent or an index (`m²`, `10⁶`,
+ * `art. 25¹¹`) counts only for the very next note's number, and only where
+ * something besides the number shows a note: another note opened above it on
+ * the page, or its number set in the size the notes before it were. Neither
+ * kind of reference makes a row of a numbered table a note: a line whose
+ * number continues a column of numbered lines above it at the foot, none of
+ * them a note, is the next row, however its number matches.
+ *
  * A page whose foot opens no such note keeps every line, and so do lines set
  * small above the first note (an evidence citation, or a note carried over
  * from the page before): left in the body they interrupt a paragraph, where
@@ -1470,8 +1549,7 @@ const noteReferencesOf = (
 const pageNotesOf = (
   lines: readonly ExtractedLine[],
   bodySize: number,
-  /** The number of the last note read before this page. */
-  lastLabel: number,
+  before: NotesRead,
 ): PageNotes => {
   let start = lines.length;
   while (
@@ -1483,7 +1561,8 @@ const pageNotesOf = (
     start -= 1;
   }
   const references = lines.slice(0, start).flatMap(noteReferencesOf);
-  let last = lastLabel;
+  let last = before.label;
+  let openedOnPage = false;
   const referencedOpening = (line: ExtractedLine) => {
     const opening = noteOpeningOf(line, bodySize);
     if (opening === undefined) {
@@ -1491,25 +1570,44 @@ const pageNotesOf = (
     }
     const label = Number(opening.label);
     const referred = references.filter(({ text }) => text === opening.label);
-    // A reference that could be an exponent or an index counts only for the
-    // very next note's number.
-    return label > last &&
-      referred.some(({ plain }) => plain || label === last + 1)
-      ? opening
-      : undefined;
+    if (label <= last || referred.length === 0) {
+      return undefined;
+    }
+    if (referred.some(({ plain }) => plain)) {
+      return opening;
+    }
+    const setAsNotes =
+      openedOnPage ||
+      (before.labelSize !== undefined &&
+        opening.labelSize !== undefined &&
+        Math.abs(opening.labelSize - before.labelSize) <= SAME_NOTE_TYPE_PT);
+    return label === last + 1 && setAsNotes ? opening : undefined;
   };
+  // Lines above the first note open none, so any numbered one in the same
+  // column is a row the candidate continues.
+  const continuesNumberedColumn = (line: ExtractedLine, index: number) =>
+    lines
+      .slice(start, index)
+      .some(
+        (above) =>
+          Math.abs(above.x - line.x) <= SAME_PLACE_PT &&
+          noteOpeningOf(above, bodySize) !== undefined,
+      );
   const first = lines.findIndex(
-    (line, index) => index >= start && referencedOpening(line) !== undefined,
+    (line, index) =>
+      index >= start &&
+      referencedOpening(line) !== undefined &&
+      !continuesNumberedColumn(line, index),
   );
   if (first === -1) {
     return { body: lines, notes: [] };
   }
-  const notes: { label: string; runs: PlSnRun[]; lines: ExtractedLine[] }[] =
-    [];
+  const notes: (NoteOpening & { lines: ExtractedLine[] })[] = [];
   for (const line of lines.slice(first)) {
     const opening = referencedOpening(line);
     if (opening !== undefined) {
       last = Number(opening.label);
+      openedOnPage = true;
       notes.push({ ...opening, lines: [] });
     } else if (line.text.length > 0) {
       notes.at(-1)?.lines.push(line);
@@ -1517,6 +1615,20 @@ const pageNotesOf = (
   }
   return { body: lines.slice(0, first), notes };
 };
+
+/** What the notes read before a page state about the next one. */
+type NotesRead = {
+  /** The number of the last note read. */
+  readonly label: number;
+  /** The size the last note whose number is a span of its own set it in. */
+  readonly labelSize?: number | undefined;
+};
+
+/**
+ * How far apart two notes' numbers may be set and still be in the notes'
+ * size: a decision sets some notes half a point apart (6pt and 6.5pt).
+ */
+const SAME_NOTE_TYPE_PT = 0.5;
 
 /**
  * Lines of set pages, their furniture already dropped, read as the body and,
@@ -1543,7 +1655,7 @@ const readSetPages = (
 ): PlPdfSeparatedContent => {
   const bodySize = bodyFontSizeOf(textPages.flatMap(({ lines }) => lines));
   const notes: PlSnLine[] = [];
-  let lastLabel = 0;
+  let read: NotesRead = { label: 0 };
 
   const bodyPages = pages.map((pageLines) => {
     const lifted = liftSuperscripts(
@@ -1557,11 +1669,14 @@ const readSetPages = (
     );
     let lines: readonly ExtractedLine[] = lifted;
     if (reading.separateNotes) {
-      const page = pageNotesOf(lifted, bodySize, lastLabel);
+      const page = pageNotesOf(lifted, bodySize, read);
       lines = page.body;
       for (const note of page.notes) {
         // Note numbers only rise, so each names one note.
-        lastLabel = Number(note.label);
+        read = {
+          label: Number(note.label),
+          labelSize: note.labelSize ?? read.labelSize,
+        };
         const footnote = {
           label: note.label,
           noteId: `footnote-${note.label}`,
