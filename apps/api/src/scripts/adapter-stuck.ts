@@ -1,4 +1,29 @@
-import type { AdapterEdition } from "@/api/lib/legal-search/adapter-manifest";
+import { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-cursor";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+
+export const SOURCE_SYNC_PROGRESS = {
+  COMPLETE: "complete",
+  ONGOING: "ongoing",
+} as const;
+
+type SourceSyncProgressOptions = {
+  adapterKey: string;
+  syncCursor: string | null;
+};
+
+export const sourceSyncProgress = ({
+  adapterKey,
+  syncCursor,
+}: SourceSyncProgressOptions) =>
+  adapterKey === ADAPTER_KEYS.PL_NSA &&
+  syncCursor ===
+    encodePlNsaCursor(
+      { shard: PL_NSA_SNAPSHOT.shards.length, row: 0 },
+      PL_NSA_SNAPSHOT,
+    )
+    ? SOURCE_SYNC_PROGRESS.COMPLETE
+    : SOURCE_SYNC_PROGRESS.ONGOING;
 
 /** Adapter is "stuck" if no growth in this many hours. */
 const STUCK_THRESHOLD_HOURS = 12;
@@ -8,8 +33,7 @@ export const STUCK_PREFIX = "Stuck:" as const;
 
 type StuckSyncRead = {
   enabled: boolean;
-  /** The adapter's declared edition; null for a key no manifest names. */
-  edition: AdapterEdition | null;
+  progress: ReturnType<typeof sourceSyncProgress>;
   /** Hours since the publisher last answered a sync; null before the first. */
   hoursSinceSync: number | null;
 };
@@ -20,13 +44,13 @@ type StuckSyncRead = {
  * its finished state, not a stall.
  */
 export const stuckSyncIssue = ({
-  edition,
+  progress,
   enabled,
   hoursSinceSync,
 }: StuckSyncRead): string | null => {
   if (
     !enabled ||
-    edition?.type === "snapshot" ||
+    progress === SOURCE_SYNC_PROGRESS.COMPLETE ||
     hoursSinceSync === null ||
     hoursSinceSync <= STUCK_THRESHOLD_HOURS
   ) {

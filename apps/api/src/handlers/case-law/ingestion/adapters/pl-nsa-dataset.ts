@@ -35,6 +35,10 @@ import type { Sha256Hasher } from "@stll/sha256/types";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import {
+  PUBLISHER_REQUEST,
+  type PublisherRequest,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -704,12 +708,16 @@ export const readPlNsaListing = async ({
  * How the adapter reaches a shard. Production downloads from the dataset
  * repository; tests hand in a recorded file.
  */
+export type LocalShardBuffer = AsyncBuffer & {
+  publisherRequest: Exclude<PublisherRequest, typeof PUBLISHER_REQUEST.FAILED>;
+};
+
 export type PlNsaShardSource = {
   /** The whole shard, local and verified, for reading rows. */
   readonly local: (
     shard: PlNsaShard,
     signal?: AbortSignal,
-  ) => Promise<DatasetResult<AsyncBuffer>>;
+  ) => Promise<DatasetResult<LocalShardBuffer>>;
   /** Ranged reads against the repository, for narrow columns. */
   readonly remote: (
     shard: PlNsaShard,
@@ -727,7 +735,13 @@ const fileBuffer = (path: string): AsyncBuffer => {
 
 /** A recorded file standing in for every shard, for tests and replays. */
 export const localFileShardSource = (path: string): PlNsaShardSource => ({
-  local: async () => await Promise.resolve(Result.ok(fileBuffer(path))),
+  local: async () =>
+    await Promise.resolve(
+      Result.ok({
+        ...fileBuffer(path),
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      }),
+    ),
   remote: async () => await Promise.resolve(Result.ok(fileBuffer(path))),
 });
 
@@ -1159,19 +1173,27 @@ export const huggingFaceShardSource = ({
     return await turn;
   };
 
+  type LocalShardRead = {
+    path: string;
+    publisherRequest: LocalShardBuffer["publisherRequest"];
+  };
+
   const ensureLocal = async (
     target: PlNsaShard,
     signal?: AbortSignal,
-  ): Promise<DatasetResult<string>> =>
+  ): Promise<DatasetResult<LocalShardRead>> =>
     await serialised(async () => await ensureLocalNow(target, signal));
 
   const ensureLocalNow = async (
     target: PlNsaShard,
     signal?: AbortSignal,
-  ): Promise<DatasetResult<string>> => {
+  ): Promise<DatasetResult<LocalShardRead>> => {
     const known = verified.get(target.index);
     if (known !== undefined && (await sizeOf(known)) === target.bytes) {
-      return Result.ok(known);
+      return Result.ok({
+        path: known,
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      });
     }
     await mkdir(directory, { recursive: true });
     await evictOthers(target);
@@ -1182,7 +1204,10 @@ export const huggingFaceShardSource = ({
       await hashFile(finalPath, hasher);
       if (hasher.digest("hex") === target.sha256) {
         verified.set(target.index, finalPath);
-        return Result.ok(finalPath);
+        return Result.ok({
+          path: finalPath,
+          publisherRequest: PUBLISHER_REQUEST.NONE,
+        });
       }
       await rm(finalPath, { force: true });
     }
@@ -1196,13 +1221,21 @@ export const huggingFaceShardSource = ({
     if (Result.isOk(downloaded)) {
       verified.set(target.index, downloaded.value);
     }
-    return downloaded;
+    return downloaded.map((path) => ({
+      path,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+    }));
   };
 
   return {
     local: async (target, signal) =>
       await remembering(target, async () =>
-        Result.map(await ensureLocal(target, signal), fileBuffer),
+        (await ensureLocal(target, signal)).map(
+          ({ path, publisherRequest }) => ({
+            ...fileBuffer(path),
+            publisherRequest,
+          }),
+        ),
       ),
     remote: async (target, signal) =>
       await remembering(target, async () => {

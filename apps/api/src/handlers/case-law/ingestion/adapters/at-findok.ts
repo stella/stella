@@ -409,7 +409,10 @@ export const parseFindokManifest = (
 type ManifestLoader = (
   collection: FindokCollection,
   signal?: AbortSignal,
-) => Promise<FindokManifest>;
+) => Promise<{
+  manifest: FindokManifest;
+  publisherRequest: SyncPage["publisherRequest"];
+}>;
 
 /** A cursor the crawl cannot read a page from. */
 const findokCursorError = (
@@ -421,14 +424,6 @@ const findokCursorError = (
     adapterKey: ADAPTER_KEYS.AT_FINDOK,
     cursor,
   });
-
-/**
- * Every Findok page reads the publisher's manifest first (cached for at most
- * `MANIFEST_CACHE_MS`), so every page the adapter returns was answered.
- */
-const answeredFindokPage = (
-  page: Omit<SyncPage, "publisherRequest">,
-): SyncPage => ({ ...page, publisherRequest: PUBLISHER_REQUEST.ANSWERED });
 
 const createManifestLoader = (
   dependencies: AtFindokDependencies,
@@ -443,7 +438,10 @@ const createManifestLoader = (
       cached !== undefined &&
       dependencies.now().getTime() - cached.checkedAt < MANIFEST_CACHE_MS
     ) {
-      return cached.manifest;
+      return {
+        manifest: cached.manifest,
+        publisherRequest: PUBLISHER_REQUEST.NONE,
+      };
     }
     const response = await dependencies.request(
       COLLECTIONS[collection].manifestUrl,
@@ -506,7 +504,7 @@ const createManifestLoader = (
       checkedAt: dependencies.now().getTime(),
       manifest,
     });
-    return manifest;
+    return { manifest, publisherRequest: PUBLISHER_REQUEST.ANSWERED };
   };
 };
 
@@ -1006,7 +1004,7 @@ const listReconciliationPage = async (
       cursor: slice,
     });
   }
-  const manifest = await loadManifest(parts.collection, signal);
+  const { manifest } = await loadManifest(parts.collection, signal);
   const items = itemsForSlice(manifest, parts.year);
   const start = page * RECONCILIATION_PAGE_SIZE;
   return {
@@ -1437,6 +1435,152 @@ const findokListingRevision = (payload: unknown) => {
   };
 };
 
+const createFindokPageFetcher =
+  (
+    dependencies: AtFindokDependencies,
+    loadManifest: ManifestLoader,
+  ): SourceAdapter["fetchPage"] =>
+  async (cursor, _config, signal) => {
+    let publisherRequest: SyncPage["publisherRequest"] = PUBLISHER_REQUEST.NONE;
+    return (
+      await Result.tryPromise({
+        try: async () => {
+          const state = decodeCursor(cursor, dependencies.now());
+          if (state === undefined) {
+            throw findokCursorError(
+              `Invalid Findok cursor: ${cursor ?? "(none)"}`,
+              cursor,
+            );
+          }
+          const parts = sliceParts(state.slice);
+          if (parts === undefined) {
+            panic("validated Findok cursor has an invalid slice");
+          }
+          const manifestRead = await loadManifest(parts.collection, signal);
+          const { manifest } = manifestRead;
+          publisherRequest = manifestRead.publisherRequest;
+          const pageDependencies = {
+            ...dependencies,
+            request: async (
+              ...args: Parameters<AtFindokDependencies["request"]>
+            ) => {
+              if (publisherRequest !== PUBLISHER_REQUEST.ANSWERED) {
+                publisherRequest = PUBLISHER_REQUEST.FAILED;
+              }
+              const response = await dependencies.request(...args);
+              publisherRequest = PUBLISHER_REQUEST.ANSWERED;
+              return response;
+            },
+          };
+          if (
+            state.snapshotId !== null &&
+            state.snapshotId !== manifest.snapshotId
+          ) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(cursorForSlice(state.slice)),
+            };
+          }
+          const allItems = itemsForSlice(manifest, parts.year);
+          const expectedTotal = state.total ?? allItems.length;
+          if (expectedTotal !== allItems.length) {
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(cursorForSlice(state.slice)),
+            };
+          }
+          if (allItems.length === 0) {
+            const next = atFindokNextSlice(state.slice, dependencies.now());
+            const nextState = cursorForSlice(
+              next ?? tipSlice(dependencies.now()),
+            );
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(nextState),
+            };
+          }
+          const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
+          if (state.page >= totalPages) {
+            throw findokCursorError(
+              "Findok cursor points past the manifest's last page",
+              cursor,
+            );
+          }
+          const pageItems = allItems.slice(
+            state.page * CRAWL_PAGE_SIZE,
+            (state.page + 1) * CRAWL_PAGE_SIZE,
+          );
+          const digest = listingDigest(state.digest, pageItems);
+          if (state.phase === CURSOR_PHASE.VERIFY) {
+            if (state.page + 1 < totalPages) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor({
+                  ...state,
+                  digest,
+                  page: state.page + 1,
+                  snapshotId: manifest.snapshotId,
+                  total: expectedTotal,
+                }),
+              };
+            }
+            if (digest !== state.expectedDigest) {
+              return {
+                decisions: [],
+                nextCursor: encodeCursor(cursorForSlice(state.slice)),
+              };
+            }
+            const next = atFindokNextSlice(state.slice, dependencies.now());
+            return {
+              decisions: [],
+              nextCursor: encodeCursor(
+                cursorForSlice(next ?? tipSlice(dependencies.now())),
+              ),
+            };
+          }
+
+          const { decisions, itemBuildFailures } = await buildFindokPageItems({
+            collection: parts.collection,
+            cursor,
+            dependencies: pageDependencies,
+            pageItems,
+            signal,
+          });
+          const collected = state.collected + decisions.length;
+          if (state.page + 1 < totalPages) {
+            return {
+              decisions,
+              itemBuildFailures,
+              nextCursor: encodeCursor({
+                ...state,
+                collected,
+                digest,
+                page: state.page + 1,
+                snapshotId: manifest.snapshotId,
+                total: expectedTotal,
+              }),
+            };
+          }
+          return {
+            decisions,
+            itemBuildFailures,
+            nextCursor: encodeCursor({
+              collected,
+              digest: START_DIGEST,
+              expectedDigest: digest,
+              page: 0,
+              phase: CURSOR_PHASE.VERIFY,
+              slice: state.slice,
+              snapshotId: manifest.snapshotId,
+              total: expectedTotal,
+            }),
+          };
+        },
+        catch: adapterCatch(ADAPTER_KEYS.AT_FINDOK, cursor),
+      })
+    ).map((page) => ({ ...page, publisherRequest }));
+  };
+
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
 ): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
@@ -1506,139 +1650,15 @@ export const createAtFindokAdapter = (
 
     async getTotalCount(signal) {
       try {
-        const ufs = await loadManifest("ufs", signal);
-        const bfg = await loadManifest("bfg", signal);
+        const { manifest: ufs } = await loadManifest("ufs", signal);
+        const { manifest: bfg } = await loadManifest("bfg", signal);
         return sourceTotalRead(ufs.items.length + bfg.items.length);
       } catch (error) {
         return { type: "probe-failed", errorTag: errorTag(error) };
       }
     },
 
-    fetchPage: async (cursor, _config, signal) =>
-      (
-        await Result.tryPromise({
-          try: async () => {
-            const state = decodeCursor(cursor, dependencies.now());
-            if (state === undefined) {
-              throw findokCursorError(
-                `Invalid Findok cursor: ${cursor ?? "(none)"}`,
-                cursor,
-              );
-            }
-            const parts = sliceParts(state.slice);
-            if (parts === undefined) {
-              panic("validated Findok cursor has an invalid slice");
-            }
-            const manifest = await loadManifest(parts.collection, signal);
-            if (
-              state.snapshotId !== null &&
-              state.snapshotId !== manifest.snapshotId
-            ) {
-              return {
-                decisions: [],
-                nextCursor: encodeCursor(cursorForSlice(state.slice)),
-              };
-            }
-            const allItems = itemsForSlice(manifest, parts.year);
-            const expectedTotal = state.total ?? allItems.length;
-            if (expectedTotal !== allItems.length) {
-              return {
-                decisions: [],
-                nextCursor: encodeCursor(cursorForSlice(state.slice)),
-              };
-            }
-            if (allItems.length === 0) {
-              const next = atFindokNextSlice(state.slice, dependencies.now());
-              const nextState = cursorForSlice(
-                next ?? tipSlice(dependencies.now()),
-              );
-              return {
-                decisions: [],
-                nextCursor: encodeCursor(nextState),
-              };
-            }
-            const totalPages = Math.ceil(allItems.length / CRAWL_PAGE_SIZE);
-            if (state.page >= totalPages) {
-              throw findokCursorError(
-                "Findok cursor points past the manifest's last page",
-                cursor,
-              );
-            }
-            const pageItems = allItems.slice(
-              state.page * CRAWL_PAGE_SIZE,
-              (state.page + 1) * CRAWL_PAGE_SIZE,
-            );
-            const digest = listingDigest(state.digest, pageItems);
-            if (state.phase === CURSOR_PHASE.VERIFY) {
-              if (state.page + 1 < totalPages) {
-                return {
-                  decisions: [],
-                  nextCursor: encodeCursor({
-                    ...state,
-                    digest,
-                    page: state.page + 1,
-                    snapshotId: manifest.snapshotId,
-                    total: expectedTotal,
-                  }),
-                };
-              }
-              if (digest !== state.expectedDigest) {
-                return {
-                  decisions: [],
-                  nextCursor: encodeCursor(cursorForSlice(state.slice)),
-                };
-              }
-              const next = atFindokNextSlice(state.slice, dependencies.now());
-              return {
-                decisions: [],
-                nextCursor: encodeCursor(
-                  cursorForSlice(next ?? tipSlice(dependencies.now())),
-                ),
-              };
-            }
-
-            const { decisions, itemBuildFailures } = await buildFindokPageItems(
-              {
-                collection: parts.collection,
-                cursor,
-                dependencies,
-                pageItems,
-                signal,
-              },
-            );
-            const collected = state.collected + decisions.length;
-            if (state.page + 1 < totalPages) {
-              return {
-                decisions,
-                itemBuildFailures,
-                nextCursor: encodeCursor({
-                  ...state,
-                  collected,
-                  digest,
-                  page: state.page + 1,
-                  snapshotId: manifest.snapshotId,
-                  total: expectedTotal,
-                }),
-              };
-            }
-            return {
-              decisions,
-              itemBuildFailures,
-              nextCursor: encodeCursor({
-                collected,
-                digest: START_DIGEST,
-                expectedDigest: digest,
-                page: 0,
-                phase: CURSOR_PHASE.VERIFY,
-                slice: state.slice,
-                snapshotId: manifest.snapshotId,
-                total: expectedTotal,
-              }),
-            };
-          },
-          catch: adapterCatch(ADAPTER_KEYS.AT_FINDOK, cursor),
-        })
-      ).map(answeredFindokPage),
+    fetchPage: createFindokPageFetcher(dependencies, loadManifest),
   });
 };
 

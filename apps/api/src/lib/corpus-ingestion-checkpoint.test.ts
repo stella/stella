@@ -584,14 +584,16 @@ describe("case-law last sync", () => {
  */
 describe("a parked adapter run keeps the last sync", () => {
   const previousSync = new Date("2026-01-01T00:00:00.000Z");
-  const today = Temporal.Now.plainDateISO("UTC").toString();
+  const parkedUntil = Temporal.Now.plainDateISO("UTC")
+    .add({ days: 1 })
+    .toString();
   const parked = [
     {
       adapterKey: ADAPTER_KEYS.PL_UODO,
       cursor: encodePlUodoCursor({
         mtimeMs: 1,
         afterId: undefined,
-        parkedOn: today,
+        parkedOn: parkedUntil,
       }),
     },
     {
@@ -601,7 +603,7 @@ describe("a parked adapter run keeps the last sync", () => {
         read: 1,
         total: 1,
         anchor: undefined,
-        parkedOn: today,
+        parkedOn: parkedUntil,
       }),
     },
     {

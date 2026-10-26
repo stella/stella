@@ -63,6 +63,10 @@ import type {
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import {
+  encodePlNsaCursor,
+  type PlNsaCursor,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-cursor";
+import {
   huggingFaceShardSource,
   PL_NSA_SNAPSHOT,
   plNsaShardUrl,
@@ -71,6 +75,7 @@ import {
   readPlNsaRows,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
 import type {
+  LocalShardBuffer,
   PlNsaDatasetRow,
   PlNsaShard,
   PlNsaShardSource,
@@ -105,6 +110,8 @@ import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
+
+export { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-cursor";
 
 const PL_NSA_LANGUAGE = "pl";
 
@@ -1403,9 +1410,6 @@ const PL_NSA_SOURCE_SURFACES = {
 
 // ── Cursor ───────────────────────────────────────────────
 
-/** A position in the pinned revision; `shard === shards.length` is the end. */
-type PlNsaCursor = { shard: number; row: number };
-
 const CURSOR_PATTERN =
   /^(?<revision>[0-9a-f]{40}):(?<shard>\d{1,4}):(?<row>\d{1,9})$/u;
 
@@ -1423,11 +1427,6 @@ export const parsePlNsaCursor = (
   const shard = Math.min(Number(groups["shard"]), snapshot.shards.length);
   return { shard, row: Number(groups["row"]) };
 };
-
-export const encodePlNsaCursor = (
-  { row, shard }: PlNsaCursor,
-  snapshot: PlNsaSnapshot,
-): string => `${snapshot.revision}:${shard}:${row}`;
 
 /** The first row at or after `cursor` that exists, or the end. */
 const settle = (cursor: PlNsaCursor, snapshot: PlNsaSnapshot): PlNsaCursor => {
@@ -1495,7 +1494,12 @@ const sliceIndex = (slice: string): number | null => {
   return Number.isSafeInteger(index) ? index : null;
 };
 
-type Window = { shard: number; start: number; rows: PlNsaDatasetRow[] };
+type Window = {
+  shard: number;
+  start: number;
+  rows: PlNsaDatasetRow[];
+  publisherRequest: LocalShardBuffer["publisherRequest"];
+};
 
 export const createPlNsaCrawler = ({
   pageRows = DEFAULT_PAGE_ROWS,
@@ -1535,7 +1539,7 @@ export const createPlNsaCrawler = ({
   ): Promise<Result<Window, AdapterFetchError>> => {
     const start = row - (row % windowRows);
     if (cached?.shard === target.index && cached.start === start) {
-      return Result.ok(cached);
+      return Result.ok({ ...cached, publisherRequest: PUBLISHER_REQUEST.NONE });
     }
     cached = null;
     const file = await source.local(target, signal);
@@ -1551,7 +1555,12 @@ export const createPlNsaCrawler = ({
     if (Result.isError(rows)) {
       return rows;
     }
-    cached = { shard: target.index, start, rows: rows.value };
+    cached = {
+      shard: target.index,
+      start,
+      rows: rows.value,
+      publisherRequest: file.value.publisherRequest,
+    };
     return Result.ok(cached);
   };
 
@@ -1621,16 +1630,15 @@ export const createPlNsaCrawler = ({
     );
     return Result.ok({
       decisions,
-      ...(itemBuildFailures === 0
-        ? {}
-        : {
-            itemBuildFailures: {
+      itemBuildFailures:
+        itemBuildFailures === 0
+          ? undefined
+          : {
               type: "item_build_failed" as const,
               count: itemBuildFailures,
             },
-          }),
       sourceUrl: plNsaShardUrl(snapshot, target),
-      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      publisherRequest: window.value.publisherRequest,
       nextCursor: encodePlNsaCursor(next, snapshot),
     });
   };

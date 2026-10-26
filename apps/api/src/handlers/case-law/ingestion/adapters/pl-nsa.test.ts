@@ -645,6 +645,25 @@ describe("the cursor", () => {
     expect(local).not.toHaveBeenCalled();
   });
 
+  test("local shard and cached window pages report no publisher answer", async () => {
+    const counted = { ...source };
+    const local = spyOn(counted, "local");
+    const crawler = createPlNsaCrawler({
+      snapshot,
+      source: counted,
+      pageRows: 1,
+      windowRows: 2,
+    });
+    const first = (await crawler.fetchPage(null)).unwrap();
+    expect(first.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    const second = (await crawler.fetchPage(first.nextCursor)).unwrap();
+    expect(second.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(1);
+    const third = (await crawler.fetchPage(second.nextCursor)).unwrap();
+    expect(third.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(2);
+  });
+
   test("resumes mid-shard where it stopped, across the shard boundary", async () => {
     const full = await walk(source, snapshot, null);
     // Row 13 of the first shard: inside the second window, off a page edge.
@@ -1273,8 +1292,10 @@ describe("shard download failures", () => {
     const crawler = createPlNsaCrawler({ snapshot, source });
     const page = (await crawler.fetchPage(null)).unwrap();
     expect(page.decisions).toHaveLength(28);
+    expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.ANSWERED);
     const before = requests.length;
-    (await source.local(shardOf(sha256()))).unwrap();
+    const cached = (await source.local(shardOf(sha256()))).unwrap();
+    expect(cached.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
     expect(requests.length).toBe(before);
   });
 

@@ -24,7 +24,6 @@ import { caseLawSources } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { boundedAll } from "@/api/lib/db/bounded-all";
-import { adapterEditionOf } from "@/api/lib/legal-search/adapter-manifest";
 import {
   CASE_LAW_SOURCE_ROWS_BOUND,
   CASE_LAW_SOURCE_ROWS_INVARIANT,
@@ -39,7 +38,11 @@ import {
   CHECKED_FIELDS,
   readAdapterHealthMetrics,
 } from "@/api/scripts/adapter-health-query";
-import { STUCK_PREFIX, stuckSyncIssue } from "@/api/scripts/adapter-stuck";
+import {
+  sourceSyncProgress,
+  STUCK_PREFIX,
+  stuckSyncIssue,
+} from "@/api/scripts/adapter-stuck";
 
 // This tool only reads; the read-only session makes that a property of every
 // transaction rather than a promise, and takes no maintenance lane.
@@ -349,11 +352,13 @@ const buildReport = async (
     // Detect issues
     const issues: string[] = [];
 
-    // Stuck detection uses lastSyncAt exclusively: a live adapter that
-    // hasn't synced in STUCK_THRESHOLD_HOURS is stuck regardless of what the
-    // growth window shows.
+    // A completed fixed snapshot is parked; every other source is judged
+    // from the last publisher answer, regardless of the growth window.
     const stuck = stuckSyncIssue({
-      edition: adapterEditionOf(source.adapterKey),
+      progress: sourceSyncProgress({
+        adapterKey: source.adapterKey,
+        syncCursor: source.syncCursor,
+      }),
       enabled: source.enabled,
       hoursSinceSync,
     });
