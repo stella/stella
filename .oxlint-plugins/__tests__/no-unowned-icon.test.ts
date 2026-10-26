@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
+import { parseSource } from "../../packages/scripts/src/syntax-tree.ts";
 import {
   ICON_MODULE_PATH,
   parseIconEntries,
@@ -32,31 +32,19 @@ const importsFromIconModule = (
   name: string,
 ): boolean => {
   const iconModule = ICON_MODULE_PATH.replace(/\.ts$/u, "");
-  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
-  return sourceFile.statements.some((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-    ) {
-      return false;
-    }
-    const specifier = statement.moduleSpecifier.text;
+  return parseSource(file, source).module.staticImports.some((statement) => {
+    const specifier = statement.moduleRequest.value;
     const fromIconModule =
       specifier === "@stll/ui/icons" ||
       (specifier.startsWith(".") &&
         path.posix
           .join(path.posix.dirname(file), specifier)
           .replace(/\.ts$/u, "") === iconModule);
-    const bindings = statement.importClause?.namedBindings;
     return (
       fromIconModule &&
-      bindings !== undefined &&
-      ts.isNamedImports(bindings) &&
-      bindings.elements.some(
-        (element) =>
-          !element.isTypeOnly &&
-          (element.propertyName ?? element.name).text === name,
+      statement.entries.some(
+        // A named import records the exported name it binds.
+        ({ importName, isType }) => !isType && importName.name === name,
       )
     );
   });

@@ -1,7 +1,12 @@
 import { panic, Result } from "better-result";
-import ts from "typescript6";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import {
+  type Expression,
+  type Node,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 import rssData from "./test-peak-rss.json";
@@ -572,64 +577,62 @@ const DB_TEST_MARKERS = [
 ] as const;
 const DB_TEST_PATH_RE = /\.(?:integration|db)\.test\.tsx?$/u;
 
-const isProcessEnvExpression = (expression: ts.Expression): boolean =>
-  ts.isPropertyAccessExpression(expression) &&
-  ts.isIdentifier(expression.expression) &&
-  expression.expression.text === "process" &&
-  expression.name.text === "env";
+const isProcessEnvExpression = (expression: Node): boolean =>
+  expression.type === "MemberExpression" &&
+  !expression.computed &&
+  expression.object.type === "Identifier" &&
+  expression.object.name === "process" &&
+  expression.property.type === "Identifier" &&
+  expression.property.name === "env";
 
-const isProcessEnvMember = (expression: ts.Expression): boolean =>
-  (ts.isElementAccessExpression(expression) ||
-    ts.isPropertyAccessExpression(expression)) &&
-  isProcessEnvExpression(expression.expression);
+const isProcessEnvMember = (expression: Node): boolean =>
+  expression.type === "MemberExpression" &&
+  isProcessEnvExpression(expression.object);
 
-const isDeferredFunction = (node: ts.Node): boolean =>
-  ts.isArrowFunction(node) ||
-  ts.isConstructorDeclaration(node) ||
-  ts.isFunctionDeclaration(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isGetAccessorDeclaration(node) ||
-  ts.isMethodDeclaration(node) ||
-  ts.isSetAccessorDeclaration(node);
+// Methods, accessors and constructors hold their body in a FunctionExpression.
+const isDeferredFunction = (node: Node): boolean =>
+  node.type === "ArrowFunctionExpression" ||
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "MethodDefinition";
 
-const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
-  ts.isParenthesizedExpression(expression)
+const unwrapParentheses = (expression: Expression): Expression =>
+  expression.type === "ParenthesizedExpression"
     ? unwrapParentheses(expression.expression)
     : expression;
 
-const immediatelyInvokedBody = (node: ts.Node): ts.ConciseBody | null => {
-  if (!ts.isCallExpression(node)) {
+const immediatelyInvokedBody = (node: Node): Node | null => {
+  if (node.type !== "CallExpression" || node.callee.type === "Super") {
     return null;
   }
-  const callee = unwrapParentheses(node.expression);
-  return ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)
+  const callee = unwrapParentheses(node.callee);
+  return callee.type === "ArrowFunctionExpression" ||
+    callee.type === "FunctionExpression"
     ? callee.body
     : null;
 };
 
-const isAssignmentOperator = (kind: ts.SyntaxKind): boolean =>
-  kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
-
-const hasEvaluatedProcessEnvMutation = (node: ts.Node): boolean => {
-  const invokedBody = immediatelyInvokedBody(node);
-  if (invokedBody !== null && hasEvaluatedProcessEnvMutation(invokedBody)) {
-    return true;
-  }
-  if (isDeferredFunction(node)) {
-    return false;
-  }
-  if (
-    ts.isBinaryExpression(node) &&
-    isAssignmentOperator(node.operatorToken.kind) &&
-    isProcessEnvMember(node.left)
-  ) {
-    return true;
-  }
-  return (
-    ts.forEachChild(node, (child) =>
-      hasEvaluatedProcessEnvMutation(child) ? true : undefined,
-    ) === true
-  );
+const hasEvaluatedProcessEnvMutation = (root: Node): boolean => {
+  let found = false;
+  walk(root, (node) => {
+    if (found) {
+      return "skip-children";
+    }
+    const invokedBody = immediatelyInvokedBody(node);
+    if (invokedBody !== null && hasEvaluatedProcessEnvMutation(invokedBody)) {
+      found = true;
+      return "skip-children";
+    }
+    if (isDeferredFunction(node)) {
+      return "skip-children";
+    }
+    if (node.type === "AssignmentExpression" && isProcessEnvMember(node.left)) {
+      found = true;
+      return "skip-children";
+    }
+    return undefined;
+  });
+  return found;
 };
 
 /**
@@ -640,59 +643,19 @@ const hasEvaluatedProcessEnvMutation = (node: ts.Node): boolean => {
 export const hasModuleScopeProcessEnvMutation = (
   testPath: string,
   source: string,
-): boolean => {
-  const sourceFile = ts.createSourceFile(
-    testPath,
-    source,
-    ts.ScriptTarget.Latest,
-    false,
-    testPath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  return sourceFile.statements.some(hasEvaluatedProcessEnvMutation);
-};
-
-const isRuntimeImport = (statement: ts.ImportDeclaration) => {
-  const { importClause } = statement;
-  if (importClause === undefined) {
-    return true;
-  }
-  if (importClause.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-    return false;
-  }
-  if (importClause.name !== undefined) {
-    return true;
-  }
-  const { namedBindings } = importClause;
-  if (namedBindings === undefined || ts.isNamespaceImport(namedBindings)) {
-    return true;
-  }
-  return (
-    namedBindings.elements.length === 0 ||
-    namedBindings.elements.some((element) => !element.isTypeOnly)
-  );
-};
+): boolean =>
+  hasEvaluatedProcessEnvMutation(parseSource(testPath, source).program);
 
 /** Detect tests that create or acquire the embedded PGlite database. */
 export const isDbTest = (testPath: string, source: string) => {
   if (DB_TEST_PATH_RE.test(testPath)) {
     return true;
   }
-  const sourceFile = ts.createSourceFile(
-    testPath,
-    source,
-    ts.ScriptTarget.Latest,
-    false,
-    testPath.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  return parseSource(testPath, source).module.staticImports.some(
+    ({ entries, moduleRequest }) =>
+      // A bare or empty import runs the module; an import of only types does
+      // not.
+      (entries.length === 0 || entries.some(({ isType }) => !isType)) &&
+      DB_TEST_MARKERS.some((marker) => moduleRequest.value.includes(marker)),
   );
-  return sourceFile.statements.some((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !isRuntimeImport(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
-      return false;
-    }
-    const moduleSpecifier = statement.moduleSpecifier.text;
-    return DB_TEST_MARKERS.some((marker) => moduleSpecifier.includes(marker));
-  });
 };

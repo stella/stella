@@ -43,11 +43,15 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
+import {
+  parseSource,
+  type StaticExport,
+  type StaticImport,
+} from "../packages/scripts/src/syntax-tree.ts";
 import {
   type AstNode,
   canonicalModuleId,
@@ -182,28 +186,19 @@ const moduleReexportsSchema = (
   if (source === null) {
     return false;
   }
-  const file = ts.createSourceFile(
-    source.filename,
-    source.source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  return file.statements.some((statement) => {
-    if (
-      !ts.isExportDeclaration(statement) ||
-      statement.isTypeOnly ||
-      statement.moduleSpecifier === undefined ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      (statement.exportClause !== undefined &&
-        ts.isNamedExports(statement.exportClause) &&
-        statement.exportClause.elements.every((element) => element.isTypeOnly))
-    ) {
-      return false;
-    }
-    return moduleReexportsSchema(
-      canonicalModuleId(statement.moduleSpecifier.text, moduleId),
-      { readSource, seen },
-    );
+  const { module } = parseSource(source.filename, source.source);
+  return module.staticExports.some((statement) => {
+    // One declaration re-exports from one module; type-only entries carry no
+    // runtime value.
+    const request = statement.entries.find(
+      (entry) => entry.moduleRequest !== null && !entry.isType,
+    )?.moduleRequest;
+    return request
+      ? moduleReexportsSchema(canonicalModuleId(request.value, moduleId), {
+          readSource,
+          seen,
+        })
+      : false;
   });
 };
 
@@ -241,90 +236,63 @@ const includeSchemaDependency = (
   }
 };
 
+type ModuleStatement =
+  | { readonly kind: "import"; readonly statement: StaticImport }
+  | { readonly kind: "export"; readonly statement: StaticExport };
+
 const addImportedSchemaReads = (
-  statement: ts.ImportDeclaration,
+  statement: StaticImport,
   moduleId: string,
   options: SchemaReadCollectionOptions,
 ): void => {
-  const clause = statement.importClause;
-  if (
-    clause === undefined ||
-    clause.phaseModifier === ts.SyntaxKind.TypeKeyword ||
-    !ts.isStringLiteral(statement.moduleSpecifier)
-  ) {
+  const entries = statement.entries.filter((entry) => !entry.isType);
+  if (entries.length === 0) {
     return;
   }
-  const dependency = canonicalModuleId(
-    statement.moduleSpecifier.text,
-    moduleId,
-  );
+  const dependency = canonicalModuleId(statement.moduleRequest.value, moduleId);
   if (!moduleReexportsSchema(dependency, { readSource: options.readSource })) {
     return;
   }
-  const bindings = clause.namedBindings;
-  if (clause.name !== undefined) {
-    includeSchemaDependency(
-      dependency,
-      options,
-      isSchemaModule(dependency) ? undefined : "default",
-    );
-  }
-  if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-    includeSchemaDependency(dependency, options);
-  } else if (bindings !== undefined && ts.isNamedImports(bindings)) {
-    for (const element of bindings.elements) {
-      if (element.isTypeOnly) {
-        continue;
-      }
+  for (const { importName } of entries) {
+    // oxc-parser declares the kind as an ambient const enum of strings.
+    const kind: string = importName.kind;
+    if (kind === "Default") {
       includeSchemaDependency(
         dependency,
         options,
-        element.propertyName?.text ?? element.name.text,
+        isSchemaModule(dependency) ? undefined : "default",
       );
+    } else if (kind === "NamespaceObject") {
+      includeSchemaDependency(dependency, options);
+    } else if (importName.name !== null) {
+      includeSchemaDependency(dependency, options, importName.name);
     }
   }
 };
 
 const addReexportedSchemaReads = (
-  statement: ts.ExportDeclaration,
+  statement: StaticExport,
   moduleId: string,
   options: SchemaReadCollectionOptions,
 ): void => {
-  if (
-    statement.isTypeOnly ||
-    statement.moduleSpecifier === undefined ||
-    !ts.isStringLiteral(statement.moduleSpecifier)
-  ) {
-    return;
-  }
-  const dependency = canonicalModuleId(
-    statement.moduleSpecifier.text,
-    moduleId,
-  );
-  const clause = statement.exportClause;
-  if (clause === undefined) {
-    includeSchemaDependency(dependency, options, options.exportName);
-  } else if (ts.isNamespaceExport(clause)) {
-    if (
-      options.exportName === undefined ||
-      clause.name.text === options.exportName
-    ) {
-      includeSchemaDependency(dependency, options);
+  for (const entry of statement.entries) {
+    if (entry.moduleRequest === null || entry.isType) {
+      continue;
     }
-  } else {
-    for (const element of clause.elements) {
-      if (
-        element.isTypeOnly ||
-        (options.exportName !== undefined &&
-          element.name.text !== options.exportName)
-      ) {
-        continue;
-      }
-      includeSchemaDependency(
-        dependency,
-        options,
-        element.propertyName?.text ?? element.name.text,
-      );
+    const dependency = canonicalModuleId(entry.moduleRequest.value, moduleId);
+    // oxc-parser declares the kind as an ambient const enum of strings.
+    const kind: string = entry.importName.kind;
+    if (kind === "AllButDefault") {
+      includeSchemaDependency(dependency, options, options.exportName);
+    } else if (
+      options.exportName !== undefined &&
+      entry.exportName.name !== options.exportName
+    ) {
+      continue;
+    } else if (kind === "All") {
+      includeSchemaDependency(dependency, options);
+    } else if (entry.importName.name !== null) {
+      includeSchemaDependency(dependency, options, entry.importName.name);
     }
   }
 };
@@ -363,24 +331,27 @@ export const moduleRestrictedSchemaReadsFromSources = (
   if (sourceFile === null) {
     return identities;
   }
-  const file = ts.createSourceFile(
-    sourceFile.filename,
-    sourceFile.source,
-    ts.ScriptTarget.Latest,
-    true,
-    sourceFile.filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-  for (const statement of file.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      addImportedSchemaReads(statement, moduleId, {
+  const { module } = parseSource(sourceFile.filename, sourceFile.source);
+  // Imports and re-exports in source order.
+  const statements = [
+    ...module.staticImports.map((statement): ModuleStatement => ({
+      kind: "import",
+      statement,
+    })),
+    ...module.staticExports.map((statement): ModuleStatement => ({
+      kind: "export",
+      statement,
+    })),
+  ].toSorted((left, right) => left.statement.start - right.statement.start);
+  for (const entry of statements) {
+    if (entry.kind === "import") {
+      addImportedSchemaReads(entry.statement, moduleId, {
         identities,
         readSource,
         seen,
       });
-      continue;
-    }
-    if (ts.isExportDeclaration(statement)) {
-      addReexportedSchemaReads(statement, moduleId, {
+    } else {
+      addReexportedSchemaReads(entry.statement, moduleId, {
         identities,
         readSource,
         seen,

@@ -1,5 +1,9 @@
-import ts from "typescript6";
-
+import {
+  type Node,
+  parseSource,
+  type TemplateLiteral,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 import { sha256Hex } from "../packages/sha256/src/node.ts";
 
 export const AGGREGATE_LOCK_OWNER = "apps/api/src/lib/db/aggregate-lock.ts";
@@ -77,17 +81,21 @@ const sqlLocks = (text: string, context: "sql" | "unknown" = "unknown") => {
 };
 const fingerprint = (primitive: string, text: string) =>
   sha256Hex(`${primitive}:${text.replace(/\s+/gu, " ").trim()}`);
-const staticText = (node: ts.Expression): string | undefined => {
-  if (ts.isStringLiteralLike(node)) {
-    return node.text;
+// The cooked text of a template without substitutions, like TypeScript's
+// `text` of a string literal.
+const templateText = (node: TemplateLiteral) =>
+  node.quasis.map((quasi) => quasi.value.cooked ?? quasi.value.raw);
+const staticText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
-  if (ts.isParenthesizedExpression(node)) {
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return templateText(node).join("");
+  }
+  if (node.type === "ParenthesizedExpression") {
     return staticText(node.expression);
   }
-  if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.PlusToken
-  ) {
+  if (node.type === "BinaryExpression" && node.operator === "+") {
     const left = staticText(node.left);
     const right = staticText(node.right);
     if (left !== undefined && right !== undefined) {
@@ -96,42 +104,59 @@ const staticText = (node: ts.Expression): string | undefined => {
   }
   return undefined;
 };
+/** The name of a non-computed member, spelled as TypeScript's `name.text`. */
+const memberName = (node: Node) => {
+  if (node.type !== "MemberExpression" || node.computed) {
+    return undefined;
+  }
+  return node.property.type === "PrivateIdentifier"
+    ? `#${node.property.name}`
+    : node.property.name;
+};
 type AddAggregateLockSiteOptions = {
   primitive: string;
   text: string;
   offset: number;
 };
 type SqlFragmentContextOptions = {
-  node: ts.Node;
-  ast: ts.SourceFile;
+  ancestors: readonly Node[];
+  source: string;
   text: string;
 };
+// Every operator TypeScript parses as one binary expression.
+const BINARY_TYPES: ReadonlySet<string> = new Set([
+  "AssignmentExpression",
+  "BinaryExpression",
+  "LogicalExpression",
+  "SequenceExpression",
+]);
 const isSqlFragmentContext = ({
-  node,
-  ast,
+  ancestors,
+  source,
   text,
 }: SqlFragmentContextOptions) => {
-  let fragment = node;
-  while (
-    ts.isBinaryExpression(fragment.parent) ||
-    ts.isParenthesizedExpression(fragment.parent)
-  ) {
-    fragment = fragment.parent;
-  }
-  const parent = fragment.parent;
+  // The fragment's context is its nearest ancestor that does not combine it
+  // into a larger expression.
+  const parent = ancestors.findLast(
+    (ancestor) =>
+      !BINARY_TYPES.has(ancestor.type) &&
+      ancestor.type !== "ParenthesizedExpression",
+  );
+  const textOf = (node: Node) => source.slice(node.start, node.end);
   const taggedSql =
-    ts.isTaggedTemplateExpression(parent) && parent.tag.getText(ast) === "sql";
+    parent?.type === "TaggedTemplateExpression" && textOf(parent.tag) === "sql";
   const rawSql =
-    ts.isCallExpression(parent) &&
-    ts.isPropertyAccessExpression(parent.expression) &&
-    parent.expression.name.text === "raw" &&
-    parent.expression.expression.getText(ast) === "sql";
+    parent?.type === "CallExpression" &&
+    memberName(parent.callee) === "raw" &&
+    parent.callee.type === "MemberExpression" &&
+    textOf(parent.callee.object) === "sql";
   const executionSql =
-    ts.isCallExpression(parent) &&
-    (ts.isIdentifier(parent.expression)
-      ? ["execute", "query", "unsafe"].includes(parent.expression.text)
-      : ts.isPropertyAccessExpression(parent.expression) &&
-        ["execute", "query", "unsafe"].includes(parent.expression.name.text));
+    parent?.type === "CallExpression" &&
+    ["execute", "query", "unsafe"].includes(
+      (parent.callee.type === "Identifier"
+        ? parent.callee.name
+        : memberName(parent.callee)) ?? "",
+    );
   const statement = text.trimStart();
   const sqlStatement =
     /^SELECT\b/iu.test(statement) ||
@@ -165,9 +190,14 @@ export const aggregateLockSites = (
     }
     return sites;
   }
-  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
-  const addFragmentedSites = (node: ts.Node, text: string) => {
-    if (!isSqlFragmentContext({ node, ast, text })) {
+  const { program } = parseSource(file, source);
+  const textOf = (node: Node) => source.slice(node.start, node.end);
+  const addFragmentedSites = (
+    node: Node,
+    ancestors: readonly Node[],
+    text: string,
+  ) => {
+    if (!isSqlFragmentContext({ ancestors, source, text })) {
       return;
     }
     const complete = sqlLocks(text, "sql");
@@ -182,36 +212,34 @@ export const aggregateLockSites = (
         primitive: fragment[0].toLowerCase().startsWith("for")
           ? "fragmented-row-lock"
           : "fragmented-advisory-lock",
-        text: node.getText(ast),
-        offset: node.getStart(ast),
+        text: textOf(node),
+        offset: node.start,
       });
     }
   };
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const expression = node.expression;
-      const method = ts.isPropertyAccessExpression(expression)
-        ? expression.name.text
-        : ts.isElementAccessExpression(expression)
-          ? staticText(expression.argumentExpression)
-          : undefined;
+  walk(program, (node, ancestors) => {
+    if (node.type === "CallExpression") {
+      const { callee } = node;
+      const method =
+        callee.type !== "MemberExpression"
+          ? undefined
+          : callee.computed
+            ? staticText(callee.property)
+            : memberName(callee);
       const receiver =
-        ts.isPropertyAccessExpression(expression) ||
-        ts.isElementAccessExpression(expression)
-          ? expression.expression.getText(ast)
-          : "";
+        callee.type === "MemberExpression" ? textOf(callee.object) : "";
       if (method === "for" && receiver !== "Symbol") {
         add({
           primitive: "builder-for",
-          text: node.getText(ast),
-          offset: node.getStart(ast),
+          text: textOf(node),
+          offset: node.start,
         });
       }
       if (method === "transaction" && file.startsWith("apps/api/")) {
         add({
           primitive: "transaction-boundary",
-          text: node.getText(ast),
-          offset: node.getStart(ast),
+          text: textOf(node),
+          offset: node.start,
         });
       }
       if (method === "raw" && receiver === "sql") {
@@ -225,58 +253,41 @@ export const aggregateLockSites = (
         ) {
           add({
             primitive: "raw-advisory-name",
-            text: node.getText(ast),
-            offset: node.getStart(ast),
+            text: textOf(node),
+            offset: node.start,
           });
-          return;
+          return "skip-children";
         }
       }
     }
-    if (ts.isBinaryExpression(node)) {
-      const text = staticText(node);
-      if (text !== undefined) {
-        for (const match of sqlLocks(
-          text,
-          isSqlFragmentContext({ node, ast, text }) ? "sql" : "unknown",
-        )) {
-          add({
-            primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
-            text: node.getText(ast),
-            offset: node.getStart(ast),
-          });
-        }
-        addFragmentedSites(node, text);
-        return;
-      }
+    const literal =
+      (node.type === "Literal" && typeof node.value === "string") ||
+      node.type === "TemplateLiteral";
+    let text: string | undefined;
+    if (node.type === "TemplateLiteral") {
+      // Each substitution reads as a placeholder between the static parts.
+      text = templateText(node).join(` \${expression} `);
+    } else if (node.type === "BinaryExpression" || literal) {
+      text = staticText(node);
     }
-    if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) {
-      const text = ts.isTemplateExpression(node)
-        ? node.head.text +
-          node.templateSpans
-            .map((span) => ` \${expression} ${span.literal.text}`)
-            .join("")
-        : node.text;
-      for (const match of sqlLocks(
-        text,
-        isSqlFragmentContext({ node, ast, text }) ? "sql" : "unknown",
-      )) {
-        add({
-          primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
-          text: node.getText(ast),
-          offset: node.getStart(ast),
-        });
-      }
-      addFragmentedSites(node, text);
-      if (ts.isTemplateExpression(node)) {
-        for (const span of node.templateSpans) {
-          visit(span.expression);
-        }
-      }
-      return;
+    if (text === undefined) {
+      return undefined;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+    for (const match of sqlLocks(
+      text,
+      isSqlFragmentContext({ ancestors, source, text }) ? "sql" : "unknown",
+    )) {
+      add({
+        primitive: match[0].toLowerCase().replace(/\s+/gu, " "),
+        text: textOf(node),
+        offset: node.start,
+      });
+    }
+    addFragmentedSites(node, ancestors, text);
+    // A template's substitutions are read on their own; a concatenation of
+    // static text has nothing left to read.
+    return node.type === "TemplateLiteral" ? undefined : "skip-children";
+  });
   return sites;
 };
 export const aggregateLockBaseline = (

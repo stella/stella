@@ -217,7 +217,6 @@
         "pdfjs-dist": "^6.4.299",
         "saxes": "catalog:",
         "tsrs": "catalog:",
-        "typescript6": "catalog:",
       },
     },
     "apps/collab": {

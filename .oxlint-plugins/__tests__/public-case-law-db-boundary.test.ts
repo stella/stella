@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
+import {
+  isObjectLiteralProperty,
+  parseSource,
+  walk,
+} from "../../packages/scripts/src/syntax-tree.ts";
 import {
   isCaseLawPublicReadModule,
   moduleRestrictedSchemaReads,
@@ -175,41 +179,41 @@ describe.serial("public-law relation scan", () => {
   test("decision-surface config covers each mixed public-law module", () => {
     const configPath = path.resolve(import.meta.dir, "../../oxlint.config.ts");
     const configSource = readFileSync(configPath, "utf-8");
-    const config = ts.createSourceFile(
-      configPath,
-      configSource,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const config = parseSource(configPath, configSource);
     let mixedModuleListReferences = 0;
     let decisionSurfaceOption = false;
-    const visit = (node: ts.Node) => {
-      if (ts.isPropertyAssignment(node)) {
-        const name = node.name.getText(config);
-        if (
-          (name === "files" || name === "excludeFiles") &&
-          ts.isArrayLiteralExpression(node.initializer) &&
-          node.initializer.elements.some(
-            (element) =>
-              ts.isSpreadElement(element) &&
-              ts.isIdentifier(element.expression) &&
-              element.expression.text === "PUBLIC_LAW_MIXED_MODULES",
-          )
-        ) {
-          mixedModuleListReferences += 1;
-        }
-        if (
-          name === "scope" &&
-          ts.isStringLiteral(node.initializer) &&
-          node.initializer.text === "decision-surface"
-        ) {
-          decisionSurfaceOption = true;
-        }
+    walk(config.program, (node, ancestors) => {
+      if (
+        !isObjectLiteralProperty(node, ancestors.at(-1)) ||
+        node.computed ||
+        node.shorthand ||
+        node.method ||
+        node.kind !== "init"
+      ) {
+        return;
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(config);
+      const name = configSource.slice(node.key.start, node.key.end);
+      const { value } = node;
+      if (
+        (name === "files" || name === "excludeFiles") &&
+        value.type === "ArrayExpression" &&
+        value.elements.some(
+          (element) =>
+            element?.type === "SpreadElement" &&
+            element.argument.type === "Identifier" &&
+            element.argument.name === "PUBLIC_LAW_MIXED_MODULES",
+        )
+      ) {
+        mixedModuleListReferences += 1;
+      }
+      if (
+        name === "scope" &&
+        value.type === "Literal" &&
+        value.value === "decision-surface"
+      ) {
+        decisionSurfaceOption = true;
+      }
+    });
 
     expect(PUBLIC_LAW_MIXED_MODULES).toHaveLength(7);
     expect(new Set(PUBLIC_LAW_MIXED_MODULES).size).toBe(
@@ -484,35 +488,27 @@ describe.serial("public-law relation scan", () => {
         continue;
       }
       const sourcePath = `apps/api/src/${filename}`;
-      const sourceFile = ts.createSourceFile(
+      const { module } = parseSource(
         sourcePath,
         readFileSync(path.join(apiRoot, filename), "utf-8"),
-        ts.ScriptTarget.Latest,
-        true,
-        filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
       );
       const importedModules = new Set<string>();
+      for (const { entries } of module.staticExports) {
+        for (const { moduleRequest } of entries) {
+          if (moduleRequest !== null) {
+            importedModules.add(
+              canonicalModuleId(moduleRequest.value, sourcePath),
+            );
+          }
+        }
+      }
       let importsReadSurface = false;
-      for (const statement of sourceFile.statements) {
-        const moduleSpecifier =
-          ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
-            ? statement.moduleSpecifier
-            : undefined;
-        if (!moduleSpecifier || !ts.isStringLiteral(moduleSpecifier)) {
-          continue;
-        }
-        const moduleId = canonicalModuleId(moduleSpecifier.text, sourcePath);
+      for (const { entries, moduleRequest } of module.staticImports) {
+        const moduleId = canonicalModuleId(moduleRequest.value, sourcePath);
         importedModules.add(moduleId);
-        const namedBindings =
-          ts.isImportDeclaration(statement) && statement.importClause
-            ? statement.importClause.namedBindings
-            : undefined;
-        if (!namedBindings || !ts.isNamedImports(namedBindings)) {
-          continue;
-        }
         const importedNames = new Set(
-          namedBindings.elements.map(
-            ({ propertyName, name }) => propertyName?.text ?? name.text,
+          entries.flatMap(({ importName }) =>
+            importName.name === null ? [] : [importName.name],
           ),
         );
         if (
