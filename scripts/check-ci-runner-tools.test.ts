@@ -749,6 +749,23 @@ test("a variable-selected fallback runner receives its own installation contract
   }
 });
 
+test("a step guarded by the other variable branch is not checked against this runner", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": `\${{ vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04' }}`,
+          // jq runs only on the hosted branch, which provides it.
+          steps: [
+            { if: "vars.DEPLOY_RUNNER != 'fallback'", run: "jq --version" },
+          ],
+        },
+      },
+    },
+    (root) => expect(problems(root)).toHaveLength(0),
+  );
+});
+
 test("a variable choice nested inside an event choice resolves every runner", () => {
   withFixture(
     {
