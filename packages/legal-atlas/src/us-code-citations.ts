@@ -635,9 +635,6 @@ const codeOfSection = (section: string): UsCode | null => {
   return USC_SECTION.test(section) ? "usc" : null;
 };
 
-/** The separator between the levels of a US anchor. */
-export const US_CODE_ANCHOR_SEPARATOR = US_CODE_ANCHORS.segmentSeparator;
-
 /**
  * The anchor a reference lands on in the section's statute text:
  * `s1983/a/1/A`. Relative to the section, as every anchor is relative to
@@ -645,11 +642,11 @@ export const US_CODE_ANCHOR_SEPARATOR = US_CODE_ANCHORS.segmentSeparator;
  */
 export const usCodeAnchor = (reference: ProvisionReference): string =>
   [`s${sectionOf(reference)}`, ...pathLabels(reference.subsection ?? "")].join(
-    US_CODE_ANCHOR_SEPARATOR,
+    US_CODE_ANCHORS.segmentSeparator,
   );
 
 export const parseUsCodeAnchor = (raw: string): ProvisionReference | null => {
-  const [head, ...labels] = raw.split(US_CODE_ANCHOR_SEPARATOR);
+  const [head, ...labels] = raw.split(US_CODE_ANCHORS.segmentSeparator);
   const section = head?.startsWith("s") === true ? head.slice(1) : null;
   const code = section === null ? null : codeOfSection(section);
   if (

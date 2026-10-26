@@ -14,7 +14,9 @@ import {
 import {
   E_SBIRKA_ANCHORS,
   SLOV_LEX_ANCHORS,
+  statuteAnchorNesting,
   US_CODE_ANCHORS,
+  wholeStatuteAnchors,
 } from "./statute-anchor-scheme.js";
 import type { StatuteAnchorScheme } from "./statute-anchor-scheme.js";
 
@@ -153,21 +155,36 @@ describe("provisionBlocks", () => {
 });
 
 describe("provisionHeadingAnchor", () => {
+  const eSbirka = statuteAnchorNesting(E_SBIRKA_ANCHORS);
+  const usCode = statuteAnchorNesting(US_CODE_ANCHORS);
+
   test("files a cited subdivision under its provision", () => {
-    expect(provisionHeadingAnchor("par_90-odst_5", "-")).toBe("par_90");
-    expect(provisionHeadingAnchor("paragraf-5.odsek-1", ".")).toBe(
-      "paragraf-5",
-    );
-    expect(provisionHeadingAnchor("s1983/a/1", "/")).toBe("s1983");
+    expect(provisionHeadingAnchor("par_90-odst_5", eSbirka)).toBe("par_90");
+    expect(
+      provisionHeadingAnchor(
+        "paragraf-5.odsek-1",
+        statuteAnchorNesting(SLOV_LEX_ANCHORS),
+      ),
+    ).toBe("paragraf-5");
+    expect(provisionHeadingAnchor("s1983/a/1", usCode)).toBe("s1983");
   });
 
   test("keeps a separator the section number itself carries", () => {
-    expect(provisionHeadingAnchor("s2000e-2/a", "/")).toBe("s2000e-2");
+    expect(provisionHeadingAnchor("s2000e-2/a", usCode)).toBe("s2000e-2");
   });
 
-  test("leaves a provision-level anchor, and one with no separator, alone", () => {
-    expect(provisionHeadingAnchor("par_90", "-")).toBe("par_90");
-    expect(provisionHeadingAnchor("par_90-odst_5", null)).toBe("par_90-odst_5");
+  test("leaves a provision-level anchor alone", () => {
+    expect(provisionHeadingAnchor("par_90", eSbirka)).toBe("par_90");
+  });
+
+  test("files every anchor of a flat scheme under itself", () => {
+    const flat = statuteAnchorNesting(
+      wholeStatuteAnchors("Read whole in this test."),
+    );
+    expect(flat).toEqual({ type: "flat" });
+    // The same anchor a nested scheme cuts, so the flat reading is no accident.
+    expect(provisionHeadingAnchor("par_90-odst_5", eSbirka)).toBe("par_90");
+    expect(provisionHeadingAnchor("par_90-odst_5", flat)).toBe("par_90-odst_5");
   });
 });
 

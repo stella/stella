@@ -10,6 +10,7 @@ import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "./legislation-publication";
 import { PUBLIC_COUNTRIES } from "./public-country-capability";
 import {
   STATUTE_ANCHOR_SCHEMES,
+  statuteAnchorNestingFor,
   statuteAnchorSchemeFor,
 } from "./statute-anchor-schemes";
 
@@ -39,5 +40,28 @@ describe("statute anchor schemes", () => {
     expect(() => statuteAnchorSchemeFor("cz")).toThrow(
       'No statute anchor scheme for country "cz".',
     );
+    expect(() => statuteAnchorNestingFor("ZZZ")).toThrow(
+      'No statute anchor scheme for country "ZZZ".',
+    );
+  });
+
+  test("a country nests its anchors on its publisher's separator, or declares them flat", () => {
+    expect(
+      Object.fromEntries(
+        PUBLIC_COUNTRIES.map((country) => [
+          country,
+          statuteAnchorNestingFor(country),
+        ]),
+      ),
+    ).toEqual({
+      AUT: { type: "flat" },
+      CZE: { type: "nested", separator: "-" },
+      EU: { type: "nested", separator: "-" },
+      GBR: { type: "flat" },
+      HUN: { type: "flat" },
+      POL: { type: "flat" },
+      SVK: { type: "nested", separator: "." },
+      USA: { type: "nested", separator: "/" },
+    });
   });
 });

@@ -8,44 +8,54 @@
  * answers "which decisions cite this provision" or counts them asks for the
  * provision's whole subtree, never only the rows stored at its exact anchor.
  *
- * The separator is part of the test, or `par_5` would reach `par_51`. A
- * jurisdiction without a supported grammar mints no anchors, so its stored
- * anchors are read as opaque: each sits under nothing but itself.
+ * The separator is part of the test, or `par_5` would reach `par_51`, and it
+ * is the citing country's statute anchor scheme's. A jurisdiction without a
+ * supported grammar mints no anchors, so its stored anchors are read as
+ * opaque: each sits under nothing but itself.
  *
  * The stored projection repeats this rule in SQL
  * (`case_law_provision_anchor_lineage` in the
  * `20261022230000_provision_citation_anchor_lineage` migration and the later
- * ones that redefine it);
- * `provision-anchor-lineage.db.test.ts` holds the two to the same answers.
+ * ones that redefine it); `provision-anchor-lineage.db.test.ts` holds the two
+ * to the same answers, and `provision-anchor-lineage.test.ts` holds the
+ * migration's separators to the schemes.
  */
 
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
+import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import type { StatuteAnchorNesting } from "@stll/legal-ast/statute-anchor-scheme";
 import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 
-const ANCHOR_SEPARATORS = new Map<string, string>();
-for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
-  if (grammar.status !== "supported") {
-    continue;
-  }
-  // The subtree read bounds its range by the code point after the separator.
-  const codePoint = grammar.anchorSeparator.codePointAt(0);
-  if (
-    codePoint === undefined ||
-    String.fromCodePoint(codePoint) !== grammar.anchorSeparator
-  ) {
-    panic(
-      `The ${grammar.jurisdiction} anchor separator must be one code point`,
-    );
-  }
-  ANCHOR_SEPARATORS.set(grammar.jurisdiction, grammar.anchorSeparator);
-}
+const isOneCodePoint = (text: string): boolean => {
+  const codePoint = text.codePointAt(0);
+  return codePoint !== undefined && String.fromCodePoint(codePoint) === text;
+};
 
-/** The separator between the levels of an anchor, or null when none is minted. */
-const provisionAnchorSeparator = (jurisdiction: string): string | null =>
-  ANCHOR_SEPARATORS.get(jurisdiction) ?? null;
+/**
+ * How a jurisdiction's stored citation anchors nest: on its scheme's
+ * separator where a supported grammar mints them, flat where none does. A
+ * jurisdiction outside the case-law list is a bug.
+ */
+export const provisionAnchorNesting = (
+  jurisdiction: string,
+): StatuteAnchorNesting => {
+  if (!isCaseLawJurisdiction(jurisdiction)) {
+    return panic(`No provision citation grammar for "${jurisdiction}".`);
+  }
+  if (PROVISION_CITATION_GRAMMARS[jurisdiction].status !== "supported") {
+    return { type: "flat" };
+  }
+  const nesting = statuteAnchorNestingFor(jurisdiction);
+  // The subtree read bounds its range by the code point after the separator.
+  if (nesting.type === "nested" && !isOneCodePoint(nesting.separator)) {
+    return panic(`The ${jurisdiction} anchor separator must be one code point`);
+  }
+  return nesting;
+};
 
 type ProvisionAnchorTarget = {
   jurisdiction: string;
@@ -63,12 +73,21 @@ export const provisionAnchorLineage = ({
   if (anchor === "") {
     return [];
   }
-  const separator = provisionAnchorSeparator(jurisdiction);
-  if (separator === null) {
-    return [anchor];
+  const nesting = provisionAnchorNesting(jurisdiction);
+  switch (nesting.type) {
+    case "flat":
+      return [anchor];
+    case "nested": {
+      const { separator } = nesting;
+      const parts = anchor.split(separator);
+      return parts.map((_part, index) =>
+        parts.slice(0, index + 1).join(separator),
+      );
+    }
+    default:
+      nesting satisfies never;
+      return panic("Unhandled statute anchor nesting");
   }
-  const parts = anchor.split(separator);
-  return parts.map((_part, index) => parts.slice(0, index + 1).join(separator));
 };
 
 /**
@@ -86,14 +105,22 @@ export const provisionAnchorSubtreeSql = (
   { jurisdiction, anchor }: ProvisionAnchorTarget,
 ): SQL => {
   const bytes = sql`(${column} COLLATE "C")`;
-  const separator = provisionAnchorSeparator(jurisdiction);
-  if (separator === null) {
-    return sql`${bytes} = ${anchor}`;
+  const nesting = provisionAnchorNesting(jurisdiction);
+  switch (nesting.type) {
+    case "flat":
+      return sql`${bytes} = ${anchor}`;
+    case "nested": {
+      const { separator } = nesting;
+      const next = String.fromCodePoint(
+        (separator.codePointAt(0) ?? panic("The separator is one code point")) +
+          1,
+      );
+      return sql`(${bytes} >= ${anchor} AND ${bytes} < ${`${anchor}${next}`} AND (${bytes} = ${anchor} OR ${bytes} >= ${`${anchor}${separator}`}))`;
+    }
+    default:
+      nesting satisfies never;
+      return panic("Unhandled statute anchor nesting");
   }
-  const next = String.fromCodePoint(
-    (separator.codePointAt(0) ?? panic("The separator is one code point")) + 1,
-  );
-  return sql`(${bytes} >= ${anchor} AND ${bytes} < ${`${anchor}${next}`} AND (${bytes} = ${anchor} OR ${bytes} >= ${`${anchor}${separator}`}))`;
 };
 
 /**

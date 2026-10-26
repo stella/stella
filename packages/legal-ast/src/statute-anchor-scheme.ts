@@ -16,16 +16,24 @@ import { panic } from "better-result";
 
 import type { ParagraphListDepth } from "./document-ast.js";
 
+/** The provision levels a publisher names in an anchor segment's kind. */
+export type StatuteAnchorLevel =
+  "section" | "article" | "subsection" | "letter" | "point";
+
+/** The kind each level's segment opens with (`par`, `pismeno`). */
+type StatuteAnchorKinds = Readonly<Record<StatuteAnchorLevel, string>>;
+
 /**
  * How a publisher's anchors state their path, or why they state none.
  *
  * - `listed`: an anchor is segments joined by `segmentSeparator`; a segment
  *   is a kind and a value joined by `kindSeparator` (`pism_a`,
- *   `pismeno-a`). `listKinds` names the kinds that are list items, each
- *   with the shallowest depth it is drawn at; an item nested in another
- *   sits one level under it (`pism_b-pism_aa`, `bod-1.bod-1a`).
- *   `restatementSuffix` marks a segment that restates its subdivision
- *   (e-Sbírka's `~2`), or is null where the publisher marks none.
+ *   `pismeno-a`), and `kinds` names the kind of each provision level.
+ *   `listKinds` names the kinds that are list items, each with the
+ *   shallowest depth it is drawn at; an item nested in another sits one
+ *   level under it (`pism_b-pism_aa`, `bod-1.bod-1a`). `restatementSuffix`
+ *   marks a segment that restates its subdivision (e-Sbírka's `~2`), or is
+ *   null where the publisher marks none.
  * - `path`: anchors nest on `segmentSeparator`, but their segments name no
  *   list the reader can draw; `reason` says why.
  * - `whole`: anchors are read whole, so none nests under another; `reason`
@@ -34,6 +42,7 @@ import type { ParagraphListDepth } from "./document-ast.js";
 export type StatuteAnchorScheme =
   | {
       type: "listed";
+      kinds: StatuteAnchorKinds;
       kindSeparator: string;
       listKinds: Readonly<Record<string, ParagraphListDepth>>;
       restatementSuffix: RegExp | null;
@@ -42,7 +51,18 @@ export type StatuteAnchorScheme =
   | { type: "path"; reason: string; segmentSeparator: string }
   | { type: "whole"; reason: string };
 
-type ListedAnchorScheme = Extract<StatuteAnchorScheme, { type: "listed" }>;
+export type ListedAnchorScheme = Extract<
+  StatuteAnchorScheme,
+  { type: "listed" }
+>;
+
+const E_SBIRKA_KINDS = {
+  section: "par",
+  article: "cl",
+  subsection: "odst",
+  letter: "pism",
+  point: "bod",
+} as const satisfies StatuteAnchorKinds;
 
 /**
  * e-Sbírka (Czechia): `par_72a-odst_1-pism_a-bod_1`, a duplicate `pism_c~2`.
@@ -50,19 +70,49 @@ type ListedAnchorScheme = Extract<StatuteAnchorScheme, { type: "listed" }>;
  */
 export const E_SBIRKA_ANCHORS = {
   type: "listed",
+  kinds: E_SBIRKA_KINDS,
   kindSeparator: "_",
-  listKinds: { pism: 1, bod: 2 },
+  listKinds: { [E_SBIRKA_KINDS.letter]: 1, [E_SBIRKA_KINDS.point]: 2 },
   restatementSuffix: /~\d+$/u,
   segmentSeparator: "-",
 } as const satisfies StatuteAnchorScheme;
 
+const SLOV_LEX_KINDS = {
+  section: "paragraf",
+  article: "clanok",
+  subsection: "odsek",
+  letter: "pismeno",
+  point: "bod",
+} as const satisfies StatuteAnchorKinds;
+
 /** Slov-Lex (Slovakia): `paragraf-19.odsek-2.pismeno-l.bod-1.bod-1a`. */
 export const SLOV_LEX_ANCHORS = {
   type: "listed",
+  kinds: SLOV_LEX_KINDS,
   kindSeparator: "-",
-  listKinds: { pismeno: 1, bod: 1 },
+  listKinds: { [SLOV_LEX_KINDS.letter]: 1, [SLOV_LEX_KINDS.point]: 1 },
   restatementSuffix: null,
   segmentSeparator: ".",
+} as const satisfies StatuteAnchorScheme;
+
+/**
+ * The prefix a segment of `level` opens with (`pism_`, `pismeno-`): its
+ * kind and the kind separator. A value follows it.
+ */
+export const statuteAnchorKindPrefix = (
+  scheme: ListedAnchorScheme,
+  level: StatuteAnchorLevel,
+): string => `${scheme.kinds[level]}${scheme.kindSeparator}`;
+
+/**
+ * The EU: the citation identity minted for an EU provision
+ * (`art_5-par_1-pt_a-num_1`), since EUR-Lex links stop at the article.
+ */
+export const EU_CITATION_ANCHORS = {
+  type: "path",
+  reason:
+    "EU acts open at EUR-Lex, not in the statute reader; only citations name EU subdivisions.",
+  segmentSeparator: "-",
 } as const satisfies StatuteAnchorScheme;
 
 /** The US Code: `s1983/a/1`, where a section number may carry `-` (`s2000e-2`). */
@@ -86,14 +136,23 @@ export type StatuteBlocks<TBlock extends { anchorId: string }> = {
 export const wholeStatuteAnchors = (reason: string) =>
   ({ type: "whole", reason }) as const satisfies StatuteAnchorScheme;
 
-/** The separator a scheme's anchors nest on, or null when they nest on none. */
-const segmentSeparatorOf = (scheme: StatuteAnchorScheme): string | null => {
+/**
+ * Whether a scheme's anchors nest, and on which separator: a flat scheme is
+ * a declared decision that every anchor is read whole.
+ */
+export type StatuteAnchorNesting =
+  { type: "nested"; separator: string } | { type: "flat" };
+
+/** How a scheme's anchors nest. */
+export const statuteAnchorNesting = (
+  scheme: StatuteAnchorScheme,
+): StatuteAnchorNesting => {
   switch (scheme.type) {
     case "listed":
     case "path":
-      return scheme.segmentSeparator;
+      return { type: "nested", separator: scheme.segmentSeparator };
     case "whole":
-      return null;
+      return { type: "flat" };
     default:
       scheme satisfies never;
       return panic("Unhandled statute anchor scheme");
@@ -112,8 +171,11 @@ export const anchorWithin = (
   scheme: StatuteAnchorScheme,
   { ancestor, anchor }: AnchorWithinOptions,
 ): boolean => {
-  const separator = segmentSeparatorOf(scheme);
-  return separator !== null && anchor.startsWith(`${ancestor}${separator}`);
+  const nesting = statuteAnchorNesting(scheme);
+  return (
+    nesting.type === "nested" &&
+    anchor.startsWith(`${ancestor}${nesting.separator}`)
+  );
 };
 
 type AnchorEndsWithPathOptions = { anchor: string; tail: string };
@@ -127,8 +189,10 @@ export const anchorEndsWithPath = (
   scheme: StatuteAnchorScheme,
   { anchor, tail }: AnchorEndsWithPathOptions,
 ): boolean => {
-  const separator = segmentSeparatorOf(scheme);
-  return separator !== null && anchor.endsWith(`${separator}${tail}`);
+  const nesting = statuteAnchorNesting(scheme);
+  return (
+    nesting.type === "nested" && anchor.endsWith(`${nesting.separator}${tail}`)
+  );
 };
 
 type ListSegment = { kind: string; value: string };

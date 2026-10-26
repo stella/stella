@@ -26,8 +26,8 @@ beforeAll(async () => {
 }, 120_000);
 afterAll(async () => await client.close());
 
-/** Every grammar's jurisdiction, and one no grammar knows. */
-const JURISDICTIONS = [...Object.keys(PROVISION_CITATION_GRAMMARS), "ZZZ"];
+/** Every grammar's jurisdiction; one outside them is a bug the owner panics on. */
+const JURISDICTIONS = Object.keys(PROVISION_CITATION_GRAMMARS);
 
 /**
  * Anchors over every separator a grammar uses, characters either side of

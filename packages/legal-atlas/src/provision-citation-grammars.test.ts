@@ -4,6 +4,10 @@ import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdiction
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
+import { E_SBIRKA_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
+import type { StatuteAnchorScheme } from "@stll/legal-ast/statute-anchor-scheme";
 
 import {
   createProvisionCitationGrammar,
@@ -54,7 +58,7 @@ const testGrammar = (
       canonicalAbbreviation: "test.",
       ...entry,
     })),
-    anchorSeparator: "-",
+    anchors: E_SBIRKA_ANCHORS,
     connectors: [","],
     gazette: {
       eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -67,13 +71,27 @@ const testGrammar = (
         key: "section",
         marker: "§",
         value: String.raw`\d+`,
-        anchorMarker: "par_",
       },
     ],
     unit: "section",
   });
 
 /** An article-based style, to show the chain shape is not the Czech one. */
+const ARTICLE_ANCHORS = {
+  type: "listed",
+  kinds: {
+    section: "par",
+    article: "art",
+    subsection: "ust",
+    letter: "lit",
+    point: "pkt",
+  },
+  kindSeparator: "_",
+  listKinds: {},
+  restatementSuffix: null,
+  segmentSeparator: "-",
+} as const satisfies StatuteAnchorScheme;
+
 const articleGrammar = createProvisionCitationGrammar({
   abbreviations: [
     {
@@ -82,7 +100,7 @@ const articleGrammar = createProvisionCitationGrammar({
       patternSource: String.raw`k\.p\.c\.`,
     },
   ],
-  anchorSeparator: "-",
+  anchors: ARTICLE_ANCHORS,
   connectors: [",", String.raw`i(?=\s)`, String.raw`oraz(?=\s)`],
   gazette: {
     eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -95,19 +113,16 @@ const articleGrammar = createProvisionCitationGrammar({
       key: "section",
       marker: String.raw`art\.`,
       value: String.raw`\d+[a-z]?`,
-      anchorMarker: "art_",
     },
     {
       key: "subsection",
       marker: String.raw`ust\.`,
       value: String.raw`\d+`,
-      anchorMarker: "ust_",
     },
     {
       key: "point",
       marker: "pkt",
       value: String.raw`\d+`,
-      anchorMarker: "pkt_",
     },
   ],
   unit: "article",
@@ -145,6 +160,43 @@ describe("provision citation grammars", () => {
       ).toEqual([...fixture.gazette]);
     },
   );
+
+  test("a minted anchor nests on its country's scheme, under its section's anchor", () => {
+    const cut: string[] = [];
+    for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+      const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+      const fixture = FIXTURES[jurisdiction];
+      if (grammar.status === "unsupported" || fixture === null) {
+        continue;
+      }
+      const nesting = statuteAnchorNestingFor(jurisdiction);
+      for (const { anchor, reference } of grammar.locateAbbreviatedProvisions(
+        fixture.text,
+      )) {
+        const heading = provisionHeadingAnchor(anchor, nesting);
+        expect({ anchor, heading }).toEqual({
+          anchor,
+          heading: grammar.anchor({
+            ...reference,
+            letter: null,
+            point: null,
+            subsection: null,
+          }),
+        });
+        if (heading !== anchor) {
+          cut.push(jurisdiction);
+        }
+      }
+    }
+    // Every grammar's fixture cites a subdivision, so each scheme is exercised.
+    expect(new Set(cut)).toEqual(
+      new Set(
+        CASE_LAW_JURISDICTIONS.filter(
+          (jurisdiction) => FIXTURES[jurisdiction] !== null,
+        ),
+      ),
+    );
+  });
 
   test("a decision readers can open links only to legislation they can open", () => {
     for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {

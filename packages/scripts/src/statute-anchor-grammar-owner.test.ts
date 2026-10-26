@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
+import { STATUTE_ANCHOR_SCHEMES } from "@stll/api-contract/statute-anchor-schemes";
+
 /**
  * Statute anchor grammar has one owner: the publisher scheme in
  * `packages/legal-ast/src/statute-anchor-scheme.ts`. Every other reading of
@@ -27,12 +29,18 @@ import ts from "typescript6";
  * is how every anchor value in these trees is named. A template that joins
  * an anchor into a key or an id (`` `${anchor}-${start}` ``) reads no path,
  * so it passes.
+ *
+ * It also fails where a legal-atlas source writes a segment kind prefix a
+ * scheme declares (`par_`, `pismeno-`) in a string, a template or a regular
+ * expression: citation profiles and grammars mint anchors through the
+ * scheme's kinds, so they cannot disagree with it.
  */
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../../..");
 
 const SCANNED_ROOTS = [
   "packages/legal-ast/src",
+  "packages/legal-atlas/src",
   "packages/decision-reader/src",
   "packages/mcp-apps/src",
   "apps/api/src",
@@ -264,6 +272,89 @@ const productionSources = (): string[] =>
     ].filter((file) => file !== OWNER && isProductionSource(file)),
   ).toSorted();
 
+/**
+ * Every segment kind prefix a publisher scheme declares (`par_`,
+ * `pismeno-`), read off the schemes so a new publisher is guarded too.
+ */
+const KIND_PREFIXES = [
+  ...new Set(
+    Object.values(STATUTE_ANCHOR_SCHEMES).flatMap((scheme) =>
+      scheme.type === "listed"
+        ? Object.values(scheme.kinds).map(
+            (kind) => `${kind}${scheme.kindSeparator}`,
+          )
+        : [],
+    ),
+  ),
+];
+
+/** A kind prefix opening a token: `par_1`, not `spar_1`. */
+const KIND_PREFIX = new RegExp(
+  `(?<![\\p{L}\\p{N}_])(?:${KIND_PREFIXES.map((prefix) => RegExp.escape(prefix)).join("|")})`,
+  "u",
+);
+
+/**
+ * Sources that mint a citation identity of their own, not a publisher's
+ * anchor, whose kinds may coincide with a publisher's.
+ */
+const OWN_CITATION_IDENTITY_SOURCES = {
+  "packages/legal-atlas/src/eu-provision-citations.ts":
+    "EU citation identities (`art_5-par_1-pt_a`) are minted here; EUR-Lex links stop at the article.",
+} as const satisfies Record<string, string>;
+
+const isOwnCitationIdentitySource = (file: string): boolean =>
+  Object.hasOwn(OWN_CITATION_IDENTITY_SOURCES, file);
+
+const KIND_PREFIX_ROOT = "packages/legal-atlas/src";
+
+/** Each string, template part or regular expression that opens with a kind prefix. */
+const kindPrefixFindings = (file: string, text: string): Finding[] => {
+  const source = ts.createSourceFile(
+    file,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const findings: Finding[] = [];
+  const literalTexts = (node: ts.Node): string[] => {
+    if (ts.isTemplateExpression(node)) {
+      return templateTexts(node);
+    }
+    if (isPlainString(node) || ts.isRegularExpressionLiteral(node)) {
+      return [node.text];
+    }
+    return [];
+  };
+  const visit = (node: ts.Node) => {
+    if (literalTexts(node).some((part) => KIND_PREFIX.test(part))) {
+      const { line } = source.getLineAndCharacterOfPosition(
+        node.getStart(source),
+      );
+      findings.push({
+        file,
+        line: line + 1,
+        text: node.getText(source).split("\n").at(0) ?? "",
+      });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return findings;
+};
+
+const kindPrefixSources = (): string[] =>
+  [
+    ...new Bun.Glob(`${KIND_PREFIX_ROOT}/**/*.ts`).scanSync({
+      cwd: repositoryRoot,
+    }),
+  ]
+    .filter(
+      (file) => isProductionSource(file) && !isOwnCitationIdentitySource(file),
+    )
+    .toSorted();
+
 describe("statute anchor grammar", () => {
   // timeout: parses every production source of five trees that names an anchor.
   test("is stated only by the publisher scheme", () => {
@@ -302,6 +393,53 @@ describe("statute anchor grammar", () => {
           `const key = \`\${row.anchor}-\${String(row.spanStart)}\`;`,
           "const parts = anchor.split(separator);",
           'const hint = "Pick an anchor from the outline. " + "-";',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("its segment kinds are stated in legal-atlas only through the scheme", () => {
+    const findings = kindPrefixSources().flatMap((file) =>
+      kindPrefixFindings(
+        file,
+        readFileSync(path.join(repositoryRoot, file), "utf-8"),
+      ),
+    );
+    expect(findings).toEqual([]);
+    // Each exemption still states a prefix, or it has to go.
+    for (const file of Object.keys(OWN_CITATION_IDENTITY_SOURCES)) {
+      expect({
+        file,
+        statesPrefix:
+          kindPrefixFindings(
+            file,
+            readFileSync(path.join(repositoryRoot, file), "utf-8"),
+          ).length > 0,
+      }).toEqual({ file, statesPrefix: true });
+    }
+  });
+
+  test("the kind-prefix guard reaches every hand-coded shape it bans", () => {
+    // The shapes the profiles and the Czech grammar wrote before the scheme.
+    const banned = [
+      `const section = (value) => \`par_\${value}\`;`,
+      `const letter = (value) => \`pismeno-\${value}\`;`,
+      'const level = { anchorMarker: "odst_" };',
+      "const parse = /^paragraf-(?<section>\\d+)$/u;",
+    ];
+    expect(
+      banned.map(
+        (line) => kindPrefixFindings("probe.ts", line).length > 0 && line,
+      ),
+    ).toEqual(banned);
+    // A kind word in prose or a citation marker is no anchor segment.
+    expect(
+      kindPrefixFindings(
+        "probe.ts",
+        [
+          "const marker = String.raw`bod(?![\\p{L}])`;",
+          'const term = "odst.";',
+          'const word = "spar_1";',
         ].join("\n"),
       ),
     ).toEqual([]);

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
 import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -462,25 +463,19 @@ const renderCitation = (
  * segment per named level, the same anchor a resolved citation carries.
  */
 export const renderProvisionAnchor = (
-  profile: JurisdictionProfile,
+  { anchor: scheme }: JurisdictionProfile,
   resolved: ProvisionPath,
 ): string => {
-  const { render, join } = profile.anchor;
   const segments = [
-    render[resolved.unit](
-      `${String(resolved.section)}${resolved.sectionSuffix ?? ""}`,
-    ),
+    `${statuteAnchorKindPrefix(scheme, resolved.unit)}${String(resolved.section)}${resolved.sectionSuffix ?? ""}`,
   ];
-  if (resolved.subsection !== null) {
-    segments.push(render.subsection(resolved.subsection));
+  for (const level of ANCHORED_SUBDIVISION_LEVELS) {
+    const value = resolved[level];
+    if (value !== null) {
+      segments.push(`${statuteAnchorKindPrefix(scheme, level)}${value}`);
+    }
   }
-  if (resolved.letter !== null) {
-    segments.push(render.letter(resolved.letter));
-  }
-  if (resolved.point !== null) {
-    segments.push(render.point(resolved.point));
-  }
-  return segments.join(join);
+  return segments.join(scheme.segmentSeparator);
 };
 
 const SECTION_DESIGNATOR = /^(?<number>\d+)(?<suffix>\p{Ll}*)$/u;
@@ -494,23 +489,23 @@ const parseAnchor = (
   profile: JurisdictionProfile,
   anchor: string,
 ): ProvisionPath | null => {
-  const { render, join } = profile.anchor;
-  const [head, ...rest] = anchor.split(join);
+  const scheme = profile.anchor;
+  const [head, ...rest] = anchor.split(scheme.segmentSeparator);
   const unit = SECTION_UNITS.find((candidate) =>
-    head?.startsWith(render[candidate]("")),
+    head?.startsWith(statuteAnchorKindPrefix(scheme, candidate)),
   );
   if (head === undefined || unit === undefined) {
     return null;
   }
   const designator = SECTION_DESIGNATOR.exec(
-    head.slice(render[unit]("").length),
+    head.slice(statuteAnchorKindPrefix(scheme, unit).length),
   )?.groups;
   if (designator?.["number"] === undefined) {
     return null;
   }
   const subdivisions = Object.fromEntries(
     ANCHORED_SUBDIVISION_LEVELS.map((level) => {
-      const prefix = render[level]("");
+      const prefix = statuteAnchorKindPrefix(scheme, level);
       const segment = rest.find((part) => part.startsWith(prefix));
       return [level, segment?.slice(prefix.length) ?? null] as const;
     }),

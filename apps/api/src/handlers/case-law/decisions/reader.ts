@@ -1,12 +1,12 @@
 import { panic, TaggedError } from "better-result";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionPieces } from "@stll/legal-ast/projection-digest";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
-import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 
 import { listDecisionProvisionsHandler } from "@/api/handlers/case-law/provisions/list-for-decision";
 import { attachDecisionProvisionPreviews } from "@/api/handlers/case-law/provisions/previews-for-decision";
@@ -169,7 +169,7 @@ const locateProvisionAnchors = async ({
         document_id: preview.documentId,
         anchor: provisionHeadingAnchor(
           row.anchor,
-          provisionAnchorSeparatorFor(row.jurisdiction),
+          statuteAnchorNestingFor(row.jurisdiction),
         ),
         cited_anchor: row.anchor,
       },

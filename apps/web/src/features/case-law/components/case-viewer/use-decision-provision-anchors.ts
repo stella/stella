@@ -7,6 +7,7 @@ import {
   DECISION_DATE_VERSION_BASIS,
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -21,10 +22,7 @@ import type {
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
-import {
-  PROVISION_CITATION_GRAMMARS,
-  provisionAnchorSeparatorFor,
-} from "@stll/legal-atlas/provision-citation-grammars";
+import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import type { SupportedProvisionCitationGrammar } from "@stll/legal-atlas/provision-citation-grammars";
 
 import type { ProvisionRow } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
@@ -386,7 +384,7 @@ export const useDecisionProvisionAnchors = ({
               : { court, caseNumber, appliedDocumentId: document.id },
           anchorId: provisionHeadingAnchor(
             row.anchor,
-            provisionAnchorSeparatorFor(row.jurisdiction),
+            statuteAnchorNestingFor(row.jurisdiction),
           ),
           highlightAnchorId: row.anchor,
           documentId: document.id,
@@ -446,7 +444,7 @@ export const useDecisionProvisionAnchors = ({
               : { court, caseNumber, appliedDocumentId: document.id },
           anchorId: provisionHeadingAnchor(
             reference.anchor,
-            provisionAnchorSeparatorFor(reference.jurisdiction),
+            statuteAnchorNestingFor(reference.jurisdiction),
           ),
           highlightAnchorId: reference.anchor,
           documentId: document.id,

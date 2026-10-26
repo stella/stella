@@ -4,13 +4,13 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
+import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import {
   pickVersionAt,
   referencesOutsideVersion,
   versionCoversDate,
 } from "@stll/api-contract/statute-version";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
-import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 import {
   Accordion,
   AccordionItem,
@@ -390,9 +390,7 @@ const WorkReferences = ({
                   provision,
                   renderPart,
                 )}
-                anchorSeparator={provisionAnchorSeparatorFor(
-                  group.jurisdiction,
-                )}
+                anchorNesting={statuteAnchorNestingFor(group.jurisdiction)}
                 provision={provision}
                 versionMarker={
                   exceptions.has(provision.key) ? "exception" : "group"

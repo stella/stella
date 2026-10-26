@@ -401,14 +401,5 @@ export const SK_PROFILE = {
   earliestYear: 1918,
   maxActGapChars: 60,
 
-  anchor: {
-    join: SLOV_LEX_ANCHORS.segmentSeparator,
-    render: {
-      section: (value) => `paragraf-${value}`,
-      article: (value) => `clanok-${value}`,
-      subsection: (value) => `odsek-${value}`,
-      letter: (value) => `pismeno-${value}`,
-      point: (value) => `bod-${value}`,
-    },
-  },
+  anchor: SLOV_LEX_ANCHORS,
 } as const satisfies JurisdictionProfile;
