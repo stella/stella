@@ -282,6 +282,15 @@ const main = async (): Promise<number> => {
     await stop();
     return fail("Metro did not start; its output above says why.");
   }
+  // A build launches the client at Expo's default bundler address, whose
+  // failure page would stay over the app; it starts afresh on this Metro.
+  await run([
+    "xcrun",
+    "simctl",
+    "terminate",
+    simulator.udid,
+    DEVELOPMENT_IDENTIFIER,
+  ]);
   const opened = await run([
     "xcrun",
     "simctl",
