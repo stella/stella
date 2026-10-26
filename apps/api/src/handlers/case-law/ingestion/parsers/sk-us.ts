@@ -657,8 +657,14 @@ const titleEnd = (
 ): number | undefined => {
   let end = from;
   let chars = 0;
+  let titleLines = 0;
+  let last = "";
   while (end < lines.length) {
     const text = lines[end]?.text ?? "";
+    if (PAGE_NUMBER_PATTERN.test(text)) {
+      end += 1;
+      continue;
+    }
     const opensSomethingElse =
       end > from &&
       (openings[end] !== undefined ||
@@ -668,15 +674,17 @@ const titleEnd = (
       break;
     }
     chars += text.length + 1;
+    titleLines += 1;
+    last = text;
     end += 1;
     if (kind === "outline" && text.endsWith(":")) {
       break;
     }
-    if (end - from > TITLE_LIMITS.maxLines || chars > TITLE_LIMITS.maxChars) {
+    if (titleLines > TITLE_LIMITS.maxLines || chars > TITLE_LIMITS.maxChars) {
       return undefined;
     }
   }
-  if (end === from) {
+  if (titleLines === 0) {
     return undefined;
   }
   if (kind === "outline") {
@@ -684,7 +692,6 @@ const titleEnd = (
   }
   // A part title ends with its line; at the foot of a page, the next page
   // must not go on with the sentence (`… v znení` / `neskorších …`).
-  const last = lines[end - 1]?.text ?? "";
   const next = nextTextLine(lines, end);
   const cutByPage =
     lines[end]?.pageBreak === true && /^\p{Ll}/u.test(next?.text ?? "");
@@ -713,6 +720,9 @@ const joinRange = (
 ): MarkupLine | undefined => {
   let joined: MarkupLine | undefined;
   for (const line of lines.slice(from, to)) {
+    if (PAGE_NUMBER_PATTERN.test(line.text)) {
+      continue;
+    }
     joined = joined === undefined ? line : joinLines(joined, line);
   }
   return joined;
@@ -979,7 +989,10 @@ const readPartHeading = (
   }
   flushParagraph(builder);
   let titleFrom = index + 1;
-  while (lines[titleFrom]?.text === "") {
+  while (
+    lines[titleFrom]?.text === "" ||
+    PAGE_NUMBER_PATTERN.test(lines[titleFrom]?.text ?? "")
+  ) {
     titleFrom += 1;
   }
   const first = lines[titleFrom]?.text ?? "";

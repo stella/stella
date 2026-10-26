@@ -445,6 +445,30 @@ describe("page numbers the markup keeps", () => {
     }
   });
 
+  test("a standalone footer after a part title stays out of the heading", () => {
+    const blocks = markup([
+      "Odôvodnenie:",
+      "",
+      "I.",
+      ...page("Prvá strana"),
+      "Predchádzajúca časť skončila.",
+      "",
+      "II.",
+      "Argumentácia",
+      "2",
+      "",
+      "1. Nový odsek.",
+      ...page("Druhá strana"),
+      "",
+      "3",
+    ]);
+    const headings = blocks.flatMap((block) =>
+      block.type === "heading" ? [block.plainText] : [],
+    );
+    expect(headings).toContain("II. Argumentácia");
+    expect(headings).not.toContain("II. Argumentácia 2");
+  });
+
   test("a page number on a line of its own does not join a part heading to the page before", () => {
     const blocks = markup([
       "O d ô v o d n e n i e :",
