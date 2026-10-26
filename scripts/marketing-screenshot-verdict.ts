@@ -24,35 +24,44 @@ const SPEC = v.looseObject({
   title: v.string(),
   tests: v.optional(v.array(TEST), []),
 });
-type Suite = {
-  specs?: v.InferOutput<typeof SPEC>[];
-  suites?: Suite[];
-};
-const SUITE: v.GenericSchema<Suite> = v.looseObject({
-  specs: v.optional(v.array(SPEC)),
-  suites: v.optional(v.array(v.lazy(() => SUITE))),
+type Spec = v.InferOutput<typeof SPEC>;
+const SUITE = v.looseObject({
+  specs: v.optional(v.array(SPEC), []),
+  suites: v.optional(v.array(v.unknown()), []),
 });
 const REPORT = v.looseObject({
-  suites: v.optional(v.array(SUITE), []),
+  suites: v.optional(v.array(v.unknown()), []),
   errors: v.optional(v.array(ERROR), []),
 });
 
-// Evidence of a real baseline difference: a pixel difference or a size
+// Evidence of a real baseline difference: Playwright's pixel or size
 // mismatch against the committed image. A bare `toHaveScreenshot` failure
 // (a page that never stabilised, a capture error) is not one.
-const SCREENSHOT_MISMATCH =
-  /\d+ pixels \(ratio [\d.]+ of all image pixels\) are different|Expected an image \d+px by \d+px, received \d+px by \d+px/u;
+const isBaselineDifference = (message: string) =>
+  message.includes("of all image pixels) are different") ||
+  (message.includes("Expected an image ") && message.includes(", received "));
 
 export type Verdict =
   | { kind: "pass" }
   | { kind: "screenshots-differ"; specs: string[] }
   | { kind: "fail"; reason: string };
 
-const specsOf = (suites: readonly Suite[]): v.InferOutput<typeof SPEC>[] =>
-  suites.flatMap((suite) => [
-    ...(suite.specs ?? []),
-    ...specsOf(suite.suites ?? []),
-  ]);
+/** Every spec in the suite tree, or undefined when any suite is malformed. */
+const specsOf = (suites: readonly unknown[]): Spec[] | undefined => {
+  const specs: Spec[] = [];
+  for (const suite of suites) {
+    const parsed = v.safeParse(SUITE, suite);
+    if (!parsed.success) {
+      return undefined;
+    }
+    const nested = specsOf(parsed.output.suites);
+    if (nested === undefined) {
+      return undefined;
+    }
+    specs.push(...parsed.output.specs, ...nested);
+  }
+  return specs;
+};
 
 /** The verdict for a Playwright JSON report and the run's exit code. */
 export const verdictOf = (report: unknown, exitCode: number): Verdict => {
@@ -67,8 +76,12 @@ export const verdictOf = (report: unknown, exitCode: number): Verdict => {
   if (parsed.output.errors.length > 0) {
     return { kind: "fail", reason: "Playwright reported a global error" };
   }
+  const specs = specsOf(parsed.output.suites);
+  if (specs === undefined) {
+    return { kind: "fail", reason: "the Playwright report is unreadable" };
+  }
   const differing: string[] = [];
-  for (const spec of specsOf(parsed.output.suites)) {
+  for (const spec of specs) {
     // Playwright's own outcome per test: "unexpected" covers a failure and an
     // expected failure that passed. Reports without it fall back to results.
     const unexpected = spec.tests.filter((test) =>
@@ -103,7 +116,7 @@ export const verdictOf = (report: unknown, exitCode: number): Verdict => {
     if (
       failed.some((result) => result.status !== "failed") ||
       messages.length === 0 ||
-      !messages.every((message) => SCREENSHOT_MISMATCH.test(message))
+      !messages.every(isBaselineDifference)
     ) {
       return {
         kind: "fail",
