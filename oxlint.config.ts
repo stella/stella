@@ -4337,12 +4337,14 @@ const config = defineConfig({
       },
     },
     {
-      // The citation chip owner, and the chip's own test: the modules that
-      // import the chips it dispatches to. Every other apps/web import
-      // restriction still applies, so they are restated here.
+      // The citation chip owner, and the tests that render the decision chip
+      // itself: the modules that import the chips it dispatches to. Every
+      // other apps/web import restriction still applies, so they are restated
+      // here.
       files: [
         "apps/web/src/components/references/citation-chip.tsx",
         "apps/web/src/components/references/decision-citation-chip.dom.test.tsx",
+        "apps/web/src/components/legal-reader/annotations/selection-anchor-contract.dom.test.tsx",
       ],
       rules: {
         "no-restricted-imports": [
@@ -4354,6 +4356,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
