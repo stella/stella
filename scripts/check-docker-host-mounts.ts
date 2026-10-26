@@ -1,8 +1,55 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { parseSync } from "oxc-parser";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import {
+  type ArrayExpression,
+  type ArrayExpressionElement,
+  type CallExpression,
+  isObjectLiteralProperty,
+  type Node,
+  type ObjectProperty,
+  type ObjectPropertyKind,
+  type Program,
+  type TemplateLiteral,
+  type TSTupleType,
+  type TSType,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
+
+type Identifier = Extract<Node, { type: "Identifier" }>;
+
+// The parsed helper: its validated-name helper imports and parent links
+// (oxc nodes carry none).
+type HelperTree = {
+  helpers: ReadonlySet<string>;
+  parents: ReadonlyMap<Node, Node>;
+  sourceText: string;
+};
+
+// A string literal or a template without substitutions (TypeScript's
+// StringLiteralLike), read as its cooked text.
+const stringLiteralText = (
+  node: Node | null | undefined,
+): string | undefined => {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+
+// A `key: value` object literal entry (TypeScript's PropertyAssignment).
+const isPropertyAssignment = (
+  property: ObjectPropertyKind,
+): property is ObjectProperty =>
+  property.type === "Property" &&
+  !property.shorthand &&
+  !property.method &&
+  property.kind === "init";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -14,20 +61,18 @@ const safeDriverOptions = new Set(["size"]);
 const isSafeDriverOptionKey = (key: string | undefined): boolean =>
   key !== undefined && safeDriverOptions.has(key.toLowerCase());
 
-const staticPropertyName = (name: ts.PropertyName): string | undefined => {
-  if (ts.isComputedPropertyName(name)) {
-    return ts.isStringLiteralLike(name.expression)
-      ? name.expression.text
-      : undefined;
+const staticPropertyName = (property: ObjectProperty): string | undefined => {
+  const key = property.key;
+  if (property.computed) {
+    return stringLiteralText(key);
   }
-  if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteralLike(name) ||
-    ts.isNumericLiteral(name)
-  ) {
-    return name.text;
+  if (key.type === "Identifier") {
+    return key.name;
   }
-  return undefined;
+  if (key.type === "Literal" && typeof key.value === "number") {
+    return String(key.value);
+  }
+  return stringLiteralText(key);
 };
 
 const isContainerVolumeMount = (mount: unknown): boolean => {
@@ -206,43 +251,50 @@ const NAME_HELPERS: ReadonlySet<string> = new Set([
 ]);
 
 // Local name under which the file imports the validated-name helper.
-const importedNameHelpers = (tree: ts.SourceFile): ReadonlySet<string> => {
+const importedNameHelpers = (program: Program): ReadonlySet<string> => {
   const local = new Set<string>();
-  for (const statement of tree.statements) {
-    const bindings =
-      ts.isImportDeclaration(statement) &&
-      statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    for (const specifier of bindings.elements) {
-      if (NAME_HELPERS.has((specifier.propertyName ?? specifier.name).text)) {
-        local.add(specifier.name.text);
+    for (const specifier of statement.specifiers) {
+      if (specifier.type !== "ImportSpecifier") {
+        continue;
+      }
+      const imported =
+        specifier.imported.type === "Identifier"
+          ? specifier.imported.name
+          : specifier.imported.value;
+      if (NAME_HELPERS.has(imported)) {
+        local.add(specifier.local.name);
       }
     }
   }
   return local;
 };
 
+// Cooked text of the template part after substitution `index`.
+const templateTail = (template: TemplateLiteral, index: number): string =>
+  template.quasis.at(index + 1)?.value.cooked ?? "";
+
 // A mount string template is checkable only when every interpolation is a
 // call to the imported helper; each is replaced by a placeholder volume name.
 // Any other interpolation stays as raw `${` text, which inspectMountOptions
 // rejects.
 const mountTemplateText = (
-  template: ts.TemplateExpression,
-  tree: ts.SourceFile,
-  helpers: ReadonlySet<string>,
+  template: TemplateLiteral,
+  tree: HelperTree,
 ): string => {
-  const calls = template.templateSpans.every(({ expression }) =>
-    isVolumeNameHelperCall(expression, helpers),
+  const calls = template.expressions.every((expression) =>
+    isVolumeNameHelperCall(expression, tree),
   );
   if (!calls) {
-    return template.getText(tree).slice(1, -1);
+    return tree.sourceText.slice(template.start, template.end).slice(1, -1);
   }
   return (
-    template.head.text +
-    template.templateSpans
-      .map(({ literal }) => `volume-name${literal.text}`)
+    (template.quasis.at(0)?.value.cooked ?? "") +
+    template.expressions
+      .map((_, index) => `volume-name${templateTail(template, index)}`)
       .join("")
   );
 };
@@ -289,41 +341,39 @@ const inspectMountOptions = (mount: string): boolean => {
   );
 };
 
-const hasSafeApiDriverConfig = (volumeOptions: ts.Expression): boolean => {
-  if (!ts.isObjectLiteralExpression(volumeOptions)) {
+const hasSafeApiDriverConfig = (volumeOptions: Node): boolean => {
+  if (volumeOptions.type !== "ObjectExpression") {
     return false;
   }
   return volumeOptions.properties.every((property) => {
-    if (!ts.isPropertyAssignment(property)) {
+    if (!isPropertyAssignment(property)) {
       return false;
     }
-    if (staticPropertyName(property.name) !== "DriverConfig") {
-      return staticPropertyName(property.name) !== undefined;
+    if (staticPropertyName(property) !== "DriverConfig") {
+      return staticPropertyName(property) !== undefined;
     }
-    if (!ts.isObjectLiteralExpression(property.initializer)) {
+    if (property.value.type !== "ObjectExpression") {
       return false;
     }
-    const driverConfig = property.initializer;
+    const driverConfig = property.value;
     return driverConfig.properties.every((driverProperty) => {
-      if (!ts.isPropertyAssignment(driverProperty)) {
+      if (!isPropertyAssignment(driverProperty)) {
         return false;
       }
-      const driverPropertyName = staticPropertyName(driverProperty.name);
+      const driverPropertyName = staticPropertyName(driverProperty);
       if (driverPropertyName === "Name") {
-        return (
-          ts.isStringLiteralLike(driverProperty.initializer) &&
-          !isUnsafeDriverName(driverProperty.initializer.text)
-        );
+        const name = stringLiteralText(driverProperty.value);
+        return name !== undefined && !isUnsafeDriverName(name);
       }
       if (driverPropertyName !== "Options") {
         return false;
       }
       return (
-        ts.isObjectLiteralExpression(driverProperty.initializer) &&
-        driverProperty.initializer.properties.every(
+        driverProperty.value.type === "ObjectExpression" &&
+        driverProperty.value.properties.every(
           (option) =>
-            ts.isPropertyAssignment(option) &&
-            isSafeDriverOptionKey(staticPropertyName(option.name)),
+            isPropertyAssignment(option) &&
+            isSafeDriverOptionKey(staticPropertyName(option)),
         )
       );
     });
@@ -403,19 +453,13 @@ export const inspectComposeMounts = (source: string): string[] => {
 };
 
 const staticArgument = (
-  element: ts.Expression | undefined,
-): string | undefined =>
-  element !== undefined && ts.isStringLiteralLike(element)
-    ? element.text
-    : undefined;
+  element: ArrayExpressionElement | undefined,
+): string | undefined => stringLiteralText(element);
 
-const isVolumeNameHelperCall = (
-  expression: ts.Expression,
-  helpers: ReadonlySet<string>,
-): boolean =>
-  ts.isCallExpression(expression) &&
-  ts.isIdentifier(expression.expression) &&
-  helpers.has(expression.expression.text);
+const isVolumeNameHelperCall = (expression: Node, tree: HelperTree): boolean =>
+  expression.type === "CallExpression" &&
+  expression.callee.type === "Identifier" &&
+  tree.helpers.has(expression.callee.name);
 
 const RUN_OPTIONS_MESSAGE =
   "Docker run options must be allowlisted, resolved flags (--volumes-from is not allowed)";
@@ -486,28 +530,31 @@ const hasResolvedRunOptions = (
 };
 
 const resolvedRunArgument = (
-  element: ts.Expression,
-  helpers: ReadonlySet<string>,
+  element: ArrayExpressionElement,
+  tree: HelperTree,
 ): string | undefined => {
+  if (element === null) {
+    return undefined;
+  }
   if (
-    ts.isSpreadElement(element) &&
-    isNonMountingCommandSpread(element.expression)
+    element.type === "SpreadElement" &&
+    isNonMountingCommandSpread(element.argument, tree)
   ) {
     return "non-mounting-command";
   }
   const literal = staticArgument(element);
-  if (isVolumeNameHelperCall(element, helpers)) {
+  if (isVolumeNameHelperCall(element, tree)) {
     return "name";
   }
-  if (literal !== undefined || !ts.isTemplateExpression(element)) {
+  if (literal !== undefined || element.type !== "TemplateLiteral") {
     return literal;
   }
-  return element.templateSpans.every(({ expression }) =>
-    isVolumeNameHelperCall(expression, helpers),
+  return element.expressions.every((expression) =>
+    isVolumeNameHelperCall(expression, tree),
   )
-    ? element.head.text +
-        element.templateSpans
-          .map(({ literal: text }) => `volume${text.text}`)
+    ? (element.quasis.at(0)?.value.cooked ?? "") +
+        element.expressions
+          .map((_, index) => `volume${templateTail(element, index)}`)
           .join("")
     : undefined;
 };
@@ -601,51 +648,54 @@ const parseDockerCommand = (args: (string | undefined)[]): DockerCommand => {
 };
 
 type NonMountingTypeOptions = {
-  type: ts.TypeNode;
-  source: ts.SourceFile;
-  seen?: Set<ts.TypeNode>;
+  type: TSType;
+  tree: HelperTree;
+  seen?: Set<TSType>;
 };
 
-const ownsCommandTypeName = (
-  statement: ts.Statement,
-  name: string,
-): boolean => {
-  if (
-    ts.isTypeAliasDeclaration(statement) ||
-    ts.isInterfaceDeclaration(statement) ||
-    ts.isClassDeclaration(statement) ||
-    ts.isEnumDeclaration(statement)
+// The declaration in `statement` that binds the type `name`, if any.
+const commandTypeOwner = (statement: Node, name: string): Node | undefined => {
+  let declaration = statement;
+  if (statement.type === "ExportDefaultDeclaration") {
+    declaration = statement.declaration;
+  } else if (
+    statement.type === "ExportNamedDeclaration" &&
+    statement.declaration !== null
   ) {
-    return statement.name?.text === name;
+    declaration = statement.declaration;
   }
-  if (ts.isImportEqualsDeclaration(statement)) {
-    return statement.name.text === name;
+  if (
+    declaration.type === "TSTypeAliasDeclaration" ||
+    declaration.type === "TSInterfaceDeclaration" ||
+    declaration.type === "TSEnumDeclaration" ||
+    declaration.type === "TSImportEqualsDeclaration"
+  ) {
+    return declaration.id.name === name ? declaration : undefined;
   }
-  if (!ts.isImportDeclaration(statement)) {
-    return false;
+  if (declaration.type === "ClassDeclaration") {
+    return declaration.id?.name === name ? declaration : undefined;
   }
-  if (statement.importClause?.name?.text === name) {
-    return true;
+  if (declaration.type === "ImportDeclaration") {
+    return declaration.specifiers.some(
+      (specifier) => specifier.local.name === name,
+    )
+      ? declaration
+      : undefined;
   }
-  const bindings = statement.importClause?.namedBindings;
-  if (bindings === undefined) {
-    return false;
-  }
-  return ts.isNamespaceImport(bindings)
-    ? bindings.name.text === name
-    : bindings.elements.some((element) => element.name.text === name);
+  return undefined;
 };
 
-const isNonMountingTuple = (type: ts.TupleTypeNode): boolean => {
+const isNonMountingTuple = (type: TSTupleType): boolean => {
   const prefix: string[] = [];
-  for (const element of type.elements) {
+  for (const element of type.elementTypes) {
     if (
-      !ts.isLiteralTypeNode(element) ||
-      !ts.isStringLiteral(element.literal)
+      element.type !== "TSLiteralType" ||
+      element.literal.type !== "Literal" ||
+      typeof element.literal.value !== "string"
     ) {
       break;
     }
-    prefix.push(element.literal.text);
+    prefix.push(element.literal.value);
   }
   if (
     prefix.length === 0 ||
@@ -657,183 +707,276 @@ const isNonMountingTuple = (type: ts.TupleTypeNode): boolean => {
   return parseDockerCommand(prefix) === undefined;
 };
 
+// Declarations whose type parameters shadow an outer type name (TypeScript's
+// function-like nodes, classes, interfaces and type aliases).
+const TYPE_PARAMETER_SCOPES: ReadonlySet<string> = new Set([
+  "ArrowFunctionExpression",
+  "ClassDeclaration",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "TSCallSignatureDeclaration",
+  "TSConstructSignatureDeclaration",
+  "TSConstructorType",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+  "TSFunctionType",
+  "TSInterfaceDeclaration",
+  "TSMethodSignature",
+  "TSTypeAliasDeclaration",
+]);
+
+const declaresTypeParameter = (scope: Node, name: string): boolean =>
+  TYPE_PARAMETER_SCOPES.has(scope.type) &&
+  "typeParameters" in scope &&
+  (scope.typeParameters?.params.some(
+    (parameter) => parameter.name.name === name,
+  ) ??
+    false);
+
 const isNonMountingCommandType = ({
   type,
-  source,
-  seen = new Set<ts.TypeNode>(),
+  tree,
+  seen = new Set<TSType>(),
 }: NonMountingTypeOptions): boolean => {
   if (seen.has(type)) {
     return false;
   }
   seen.add(type);
-  if (
-    ts.isTypeOperatorNode(type) &&
-    type.operator === ts.SyntaxKind.ReadonlyKeyword
-  ) {
-    return isNonMountingCommandType({ type: type.type, source, seen });
+  if (type.type === "TSTypeOperator" && type.operator === "readonly") {
+    return isNonMountingCommandType({ type: type.typeAnnotation, tree, seen });
   }
-  if (ts.isUnionTypeNode(type)) {
+  if (type.type === "TSUnionType") {
     return type.types.every((branch) =>
-      isNonMountingCommandType({ type: branch, source, seen: new Set(seen) }),
+      isNonMountingCommandType({ type: branch, tree, seen: new Set(seen) }),
     );
   }
   if (
-    ts.isTypeReferenceNode(type) &&
-    ts.isIdentifier(type.typeName) &&
-    !type.typeArguments?.length
+    type.type === "TSTypeReference" &&
+    type.typeName.type === "Identifier" &&
+    !type.typeArguments?.params.length
   ) {
-    const name = type.typeName.text;
-    for (let scope = type.parent; ; scope = scope.parent) {
-      if (
-        (ts.isFunctionLike(scope) ||
-          ts.isClassDeclaration(scope) ||
-          ts.isInterfaceDeclaration(scope) ||
-          ts.isTypeAliasDeclaration(scope)) &&
-        scope.typeParameters?.some((parameter) => parameter.name.text === name)
-      ) {
+    const name = type.typeName.name;
+    for (
+      let scope = tree.parents.get(type);
+      scope !== undefined;
+      scope = tree.parents.get(scope)
+    ) {
+      if (declaresTypeParameter(scope, name)) {
         return false;
       }
-      if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
+      if (scope.type !== "BlockStatement" && scope.type !== "Program") {
         continue;
       }
-      const alias = scope.statements.find((statement) =>
-        ownsCommandTypeName(statement, name),
-      );
+      let alias: Node | undefined;
+      for (const statement of scope.body) {
+        alias ??= commandTypeOwner(statement, name);
+      }
       if (alias !== undefined) {
         return (
-          ts.isTypeAliasDeclaration(alias) &&
-          !alias.typeParameters?.length &&
-          isNonMountingCommandType({ type: alias.type, source, seen })
+          alias.type === "TSTypeAliasDeclaration" &&
+          !alias.typeParameters?.params.length &&
+          isNonMountingCommandType({ type: alias.typeAnnotation, tree, seen })
         );
       }
-      if (ts.isSourceFile(scope)) {
-        return false;
-      }
     }
+    return false;
   }
-  if (!ts.isTupleTypeNode(type)) {
+  if (type.type !== "TSTupleType") {
     return false;
   }
   return isNonMountingTuple(type);
 };
 
-const bindingNamesCommand = (binding: ts.BindingName, name: string): boolean =>
-  ts.isIdentifier(binding)
-    ? binding.text === name
-    : binding.elements.some(
-        (element) =>
-          ts.isBindingElement(element) &&
-          bindingNamesCommand(element.name, name),
-      );
+const bindingNamesCommand = (binding: Node, name: string): boolean => {
+  if (binding.type === "Identifier") {
+    return binding.name === name;
+  }
+  // A default value or rest marker wraps the bound name.
+  if (binding.type === "AssignmentPattern") {
+    return bindingNamesCommand(binding.left, name);
+  }
+  if (binding.type === "RestElement") {
+    return bindingNamesCommand(binding.argument, name);
+  }
+  if (binding.type === "TSParameterProperty") {
+    return bindingNamesCommand(binding.parameter, name);
+  }
+  if (binding.type === "ObjectPattern") {
+    return binding.properties.some((property) =>
+      bindingNamesCommand(
+        property.type === "RestElement" ? property : property.value,
+        name,
+      ),
+    );
+  }
+  if (binding.type === "ArrayPattern") {
+    return binding.elements.some(
+      (element) => element !== null && bindingNamesCommand(element, name),
+    );
+  }
+  return false;
+};
+
+// A parameter bound to a plain name, and its declared type.
+const namedParameterType = (
+  parameter: Node,
+): { named: boolean; type: TSType | undefined } => {
+  if (parameter.type === "Identifier") {
+    return {
+      named: true,
+      type: parameter.typeAnnotation?.typeAnnotation,
+    };
+  }
+  if (parameter.type === "AssignmentPattern") {
+    return parameter.left.type === "Identifier"
+      ? {
+          named: true,
+          type: parameter.left.typeAnnotation?.typeAnnotation,
+        }
+      : { named: false, type: undefined };
+  }
+  if (parameter.type === "RestElement") {
+    return {
+      named: parameter.argument.type === "Identifier",
+      type: parameter.typeAnnotation?.typeAnnotation,
+    };
+  }
+  if (parameter.type === "TSParameterProperty") {
+    return namedParameterType(parameter.parameter);
+  }
+  return { named: false, type: undefined };
+};
 
 type BlockCommandDomainOptions = {
-  scope: ts.Block | ts.SourceFile;
-  reference: ts.Identifier;
-  seen: Set<ts.Expression>;
+  statements: readonly Node[];
+  reference: Identifier;
+  seen: Set<Node>;
+  tree: HelperTree;
 };
 
 const blockCommandDomain = ({
-  scope,
+  statements,
   reference,
   seen,
+  tree,
 }: BlockCommandDomainOptions): boolean | undefined => {
-  for (const statement of scope.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  for (const entry of statements) {
+    let statement = entry;
+    if (entry.type === "ExportDefaultDeclaration") {
+      statement = entry.declaration;
+    } else if (
+      entry.type === "ExportNamedDeclaration" &&
+      entry.declaration !== null
+    ) {
+      statement = entry.declaration;
+    }
+    if (statement.type !== "VariableDeclaration") {
       if (
-        (ts.isFunctionDeclaration(statement) ||
-          ts.isClassDeclaration(statement)) &&
-        statement.name?.text === reference.text
+        (statement.type === "FunctionDeclaration" ||
+          statement.type === "TSDeclareFunction" ||
+          statement.type === "ClassDeclaration") &&
+        statement.id?.name === reference.name
       ) {
         return false;
       }
       continue;
     }
-    const declaration = statement.declarationList.declarations.find(
-      ({ name }) => bindingNamesCommand(name, reference.text),
+    const declaration = statement.declarations.find(({ id }) =>
+      bindingNamesCommand(id, reference.name),
     );
     if (declaration === undefined) {
       continue;
     }
-    if (!ts.isIdentifier(declaration.name)) {
+    if (declaration.id.type !== "Identifier") {
       return false;
     }
-    if (declaration.type !== undefined) {
-      return isNonMountingCommandType({
-        type: declaration.type,
-        source: reference.getSourceFile(),
-      });
+    const type = declaration.id.typeAnnotation?.typeAnnotation;
+    if (type !== undefined) {
+      return isNonMountingCommandType({ type, tree });
     }
     return (
-      statement.declarationList.getFirstToken()?.kind ===
-        ts.SyntaxKind.ConstKeyword &&
-      declaration.initializer !== undefined &&
-      isNonMountingCommandSpread(declaration.initializer, seen)
+      statement.kind === "const" &&
+      declaration.init !== null &&
+      isNonMountingCommandSpread(declaration.init, tree, seen)
     );
   }
   return undefined;
 };
 
 const isNonMountingCommandSpread = (
-  expression: ts.Expression,
-  seen = new Set<ts.Expression>(),
+  expression: Node,
+  tree: HelperTree,
+  seen = new Set<Node>(),
 ): boolean => {
-  if (!ts.isIdentifier(expression) || seen.has(expression)) {
+  if (expression.type !== "Identifier" || seen.has(expression)) {
     return false;
   }
   seen.add(expression);
-  for (let node = expression.parent; ; node = node.parent) {
-    if (ts.isBlock(node) || ts.isSourceFile(node)) {
+  const name = expression.name;
+  for (
+    let node = tree.parents.get(expression);
+    node !== undefined;
+    node = tree.parents.get(node)
+  ) {
+    if (node.type === "BlockStatement" || node.type === "Program") {
       const proof = blockCommandDomain({
-        scope: node,
+        statements: node.body,
         reference: expression,
         seen,
+        tree,
       });
       if (proof !== undefined) {
         return proof;
       }
     }
-    if (ts.isSourceFile(node)) {
+    if (node.type === "Program") {
       return false;
     }
     if (
-      ts.isCatchClause(node) &&
-      node.variableDeclaration !== undefined &&
-      bindingNamesCommand(node.variableDeclaration.name, expression.text)
+      node.type === "CatchClause" &&
+      node.param !== null &&
+      bindingNamesCommand(node.param, name)
     ) {
       return false;
     }
+    let loopDeclaration: Node | null = null;
+    if (node.type === "ForStatement") {
+      loopDeclaration = node.init;
+    } else if (
+      node.type === "ForOfStatement" ||
+      node.type === "ForInStatement"
+    ) {
+      loopDeclaration = node.left;
+    }
     if (
-      (ts.isForStatement(node) ||
-        ts.isForOfStatement(node) ||
-        ts.isForInStatement(node)) &&
-      node.initializer !== undefined &&
-      ts.isVariableDeclarationList(node.initializer) &&
-      node.initializer.declarations.some(({ name }) =>
-        bindingNamesCommand(name, expression.text),
+      loopDeclaration?.type === "VariableDeclaration" &&
+      loopDeclaration.declarations.some(({ id }) =>
+        bindingNamesCommand(id, name),
       )
     ) {
       return false;
     }
-    if (!ts.isFunctionLike(node)) {
+    if (
+      node.type !== "ArrowFunctionExpression" &&
+      node.type !== "FunctionDeclaration" &&
+      node.type !== "FunctionExpression"
+    ) {
       continue;
     }
-    if (ts.isFunctionExpression(node) && node.name?.text === expression.text) {
+    if (node.type === "FunctionExpression" && node.id?.name === name) {
       return false;
     }
-    const parameter = node.parameters.find(({ name }) =>
-      bindingNamesCommand(name, expression.text),
+    const parameter = node.params.find((entry) =>
+      bindingNamesCommand(entry, name),
     );
     if (parameter !== undefined) {
+      const { named, type } = namedParameterType(parameter);
       return (
-        ts.isIdentifier(parameter.name) &&
-        parameter.type !== undefined &&
-        isNonMountingCommandType({
-          type: parameter.type,
-          source: expression.getSourceFile(),
-        })
+        named && type !== undefined && isNonMountingCommandType({ type, tree })
       );
     }
   }
+  return false;
 };
 
 const dockerSubcommands = new Set(["run", "create", "volume", "container"]);
@@ -841,11 +984,11 @@ const dockerSubcommands = new Set(["run", "create", "volume", "container"]);
 // ["docker", ...globals, "volume", "create", ...] or, when the command is a
 // separate spawn argument, an array that starts at the globals or subcommand.
 const arrayDockerCommand = (
-  array: ts.ArrayLiteralExpression,
-  helpers: ReadonlySet<string>,
+  array: ArrayExpression,
+  tree: HelperTree,
 ): DockerCommand => {
   const resolved = array.elements.map((element) =>
-    resolvedRunArgument(element, helpers),
+    resolvedRunArgument(element, tree),
   );
   const docker = resolved.indexOf("docker");
   if (docker !== -1) {
@@ -867,11 +1010,11 @@ const volumeCreateFailures = (
     : ["Docker volume driver options cannot configure host binds"];
 
 const volumeCreateArrayFailures = (
-  array: ts.ArrayLiteralExpression,
-  helpers: ReadonlySet<string>,
+  array: ArrayExpression,
+  tree: HelperTree,
 ): string[] => {
   const failures: string[] = [];
-  const command = arrayDockerCommand(array, helpers);
+  const command = arrayDockerCommand(array, tree);
   if (command === "unresolved") {
     failures.push("Docker command options must be statically resolvable");
   } else if (command?.kind === "volume-create") {
@@ -950,37 +1093,35 @@ const allowedHostConfigKeys = new Set([
 ]);
 const mountCarryingCreateKeys = new Set(["Volumes", "VolumesFrom", "Devices"]);
 
-const hasOnlyKnownHostConfigKeys = (hostConfig: ts.Expression): boolean =>
-  ts.isObjectLiteralExpression(hostConfig) &&
+const hasOnlyKnownHostConfigKeys = (hostConfig: Node): boolean =>
+  hostConfig.type === "ObjectExpression" &&
   hostConfig.properties.every(
     (property) =>
-      ts.isPropertyAssignment(property) &&
-      allowedHostConfigKeys.has(staticPropertyName(property.name) ?? ""),
+      isPropertyAssignment(property) &&
+      allowedHostConfigKeys.has(staticPropertyName(property) ?? ""),
   );
 
 // Container create bodies (objects with an Image or HostConfig property).
-const apiCreateConfigFailures = (node: ts.Node): string[] => {
-  if (!ts.isObjectLiteralExpression(node)) {
+const apiCreateConfigFailures = (node: Node): string[] => {
+  if (node.type !== "ObjectExpression") {
     return [];
   }
-  const named = node.properties.flatMap((property) =>
-    ts.isPropertyAssignment(property) ? [property] : [],
-  );
-  const names = named.map(({ name }) => staticPropertyName(name));
+  const named = node.properties.filter(isPropertyAssignment);
+  const names = named.map(staticPropertyName);
   if (!names.includes("Image") && !names.includes("HostConfig")) {
     return [];
   }
   const failures: string[] = [];
   const hostConfig = named.find(
-    ({ name }) => staticPropertyName(name) === "HostConfig",
+    (property) => staticPropertyName(property) === "HostConfig",
   );
-  if (hostConfig && !hasOnlyKnownHostConfigKeys(hostConfig.initializer)) {
+  if (hostConfig && !hasOnlyKnownHostConfigKeys(hostConfig.value)) {
     failures.push("Docker API HostConfig allows only known fields");
   }
   const unresolved = node.properties.some(
     (property) =>
-      !ts.isPropertyAssignment(property) ||
-      staticPropertyName(property.name) === undefined,
+      !isPropertyAssignment(property) ||
+      staticPropertyName(property) === undefined,
   );
   if (
     unresolved ||
@@ -991,35 +1132,35 @@ const apiCreateConfigFailures = (node: ts.Node): string[] => {
   return failures;
 };
 
-const calleeName = (call: ts.CallExpression): string | undefined => {
-  if (ts.isIdentifier(call.expression)) {
-    return call.expression.text;
+const calleeName = (call: CallExpression): string | undefined => {
+  if (call.callee.type === "Identifier") {
+    return call.callee.name;
   }
-  return ts.isPropertyAccessExpression(call.expression)
-    ? call.expression.name.text
+  return call.callee.type === "MemberExpression" &&
+    !call.callee.computed &&
+    call.callee.property.type === "Identifier"
+    ? call.callee.property.name
     : undefined;
 };
 
-const hasSafeApiVolumeCreateBody = (body: ts.Expression): boolean =>
-  ts.isObjectLiteralExpression(body) &&
+const hasSafeApiVolumeCreateBody = (body: Node): boolean =>
+  body.type === "ObjectExpression" &&
   body.properties.every((property) => {
-    if (!ts.isPropertyAssignment(property)) {
+    if (!isPropertyAssignment(property)) {
       return false;
     }
-    const name = staticPropertyName(property.name);
+    const name = staticPropertyName(property);
     if (name === "Driver") {
-      return (
-        ts.isStringLiteralLike(property.initializer) &&
-        !isUnsafeDriverName(property.initializer.text)
-      );
+      const driver = stringLiteralText(property.value);
+      return driver !== undefined && !isUnsafeDriverName(driver);
     }
     if (name === "DriverOpts") {
       return (
-        ts.isObjectLiteralExpression(property.initializer) &&
-        property.initializer.properties.every(
+        property.value.type === "ObjectExpression" &&
+        property.value.properties.every(
           (option) =>
-            ts.isPropertyAssignment(option) &&
-            isSafeDriverOptionKey(staticPropertyName(option.name)),
+            isPropertyAssignment(option) &&
+            isSafeDriverOptionKey(staticPropertyName(option)),
         )
       );
     }
@@ -1028,19 +1169,17 @@ const hasSafeApiVolumeCreateBody = (body: ts.Expression): boolean =>
 
 // Docker API volume creation: createVolume(...) bodies and any object with
 // Driver/DriverOpts next to a Name. Same driver predicates as every other path.
-const apiVolumeCreateFailures = (node: ts.Node): string[] => {
+const apiVolumeCreateFailures = (node: Node): string[] => {
   const failures: string[] = [];
-  if (ts.isCallExpression(node) && calleeName(node) === "createVolume") {
+  if (node.type === "CallExpression" && calleeName(node) === "createVolume") {
     const body = node.arguments.at(-1);
     if (!body || !hasSafeApiVolumeCreateBody(body)) {
       failures.push("Docker API volume creation allows only the local driver");
     }
   }
-  if (ts.isObjectLiteralExpression(node)) {
+  if (node.type === "ObjectExpression") {
     const names = node.properties.map((property) =>
-      ts.isPropertyAssignment(property)
-        ? staticPropertyName(property.name)
-        : undefined,
+      isPropertyAssignment(property) ? staticPropertyName(property) : undefined,
     );
     if (
       (names.includes("DriverOpts") ||
@@ -1052,6 +1191,36 @@ const apiVolumeCreateFailures = (node: ts.Node): string[] => {
   }
   return failures;
 };
+
+// A string a helper spells out: any mount it names must be explicit.
+const literalFailures = (value: string): string[] => {
+  const failures: string[] = [];
+  if (
+    value.startsWith("--mount=") &&
+    !inspectMountOptions(value.slice("--mount=".length))
+  ) {
+    failures.push("--mount requires explicit type=volume or type=tmpfs");
+  }
+  if (
+    /\btype\s*=\s*bind\b/iu.test(value) ||
+    /\bType["']?\s*:\s*["']bind\b/iu.test(value)
+  ) {
+    failures.push("Docker bind mount is forbidden");
+  }
+  if (
+    value.startsWith("-v") ||
+    /^(?:--volume)(?:=|$)/u.test(value) ||
+    /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(value)
+  ) {
+    failures.push(
+      "Use explicit --mount type=volume instead of ambiguous -v/--volume",
+    );
+  }
+  return failures;
+};
+
+// A quoted string on one line, by its opening quote.
+const QUOTED_TEXT = /(["'`])((?:\\.|(?!\1)[^\\\n])*)\1/gu;
 
 export const inspectDockerHelper = (source: string): string[] => {
   const failures: string[] = [];
@@ -1067,83 +1236,83 @@ export const inspectDockerHelper = (source: string): string[] => {
   ) {
     failures.push("Docker API bind configuration is forbidden");
   }
-  const tree = ts.createSourceFile(
-    "helper.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const helpers = importedNameHelpers(tree);
-  const visit = (node: ts.Node) => {
-    if (ts.isStringLiteralLike(node) || ts.isTemplateExpression(node)) {
-      const value = ts.isTemplateExpression(node)
-        ? node.getText(tree)
-        : node.text;
-      if (
-        value.startsWith("--mount=") &&
-        !inspectMountOptions(value.slice("--mount=".length))
-      ) {
-        failures.push("--mount requires explicit type=volume or type=tmpfs");
-      }
-      if (
-        /\btype\s*=\s*bind\b/iu.test(value) ||
-        /\bType["']?\s*:\s*["']bind\b/iu.test(value)
-      ) {
-        failures.push("Docker bind mount is forbidden");
-      }
-      if (
-        value.startsWith("-v") ||
-        /^(?:--volume)(?:=|$)/u.test(value) ||
-        /(?:^|[\s"'`])(?:-v[^\s]*|--volume(?:\s|=))/u.test(value)
-      ) {
-        failures.push(
-          "Use explicit --mount type=volume instead of ambiguous -v/--volume",
-        );
-      }
+  const parsed = parseSync("helper.ts", source);
+  if (
+    parsed.errors.some((error) => {
+      // oxc-parser declares Severity as an ambient const enum of strings.
+      const severity: string = error.severity;
+      return severity === "Error";
+    })
+  ) {
+    // Shell and Python helpers are not TypeScript: their command lines are
+    // checked as text above, and their quoted strings are read as the
+    // literals they would be in a script.
+    for (const match of source.matchAll(QUOTED_TEXT)) {
+      failures.push(...literalFailures(match[2] ?? ""));
     }
+    return failures;
+  }
+  const { program } = parsed;
+  const parents = new Map<Node, Node>();
+  walk(program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
+    }
+  });
+  const tree: HelperTree = {
+    helpers: importedNameHelpers(program),
+    parents,
+    sourceText: source,
+  };
+  walk(program, (node) => {
+    const value =
+      node.type === "TemplateLiteral" && node.expressions.length > 0
+        ? source.slice(node.start, node.end)
+        : stringLiteralText(node);
+    if (value !== undefined) {
+      failures.push(...literalFailures(value));
+    }
+    const parent = parents.get(node);
+    const property =
+      isObjectLiteralProperty(node, parent) && isPropertyAssignment(node)
+        ? node
+        : undefined;
     if (
-      ts.isPropertyAssignment(node) &&
-      staticPropertyName(node.name)?.toLowerCase() === "type" &&
-      ts.isStringLiteralLike(node.initializer) &&
-      node.initializer.text.toLowerCase() === "bind"
+      property !== undefined &&
+      staticPropertyName(property)?.toLowerCase() === "type" &&
+      stringLiteralText(property.value)?.toLowerCase() === "bind"
     ) {
       failures.push("Docker API bind Mounts are forbidden");
     }
-    if (
-      ts.isPropertyAssignment(node) &&
-      staticPropertyName(node.name) === "Mounts"
-    ) {
-      const mounts = node.initializer;
+    if (property !== undefined && staticPropertyName(property) === "Mounts") {
+      const mounts = property.value;
       const safe =
-        ts.isArrayLiteralExpression(mounts) &&
+        mounts.type === "ArrayExpression" &&
         mounts.elements.every(
           (mount) =>
-            ts.isObjectLiteralExpression(mount) &&
-            mount.properties.every((property) => {
-              if (!ts.isPropertyAssignment(property)) {
+            mount?.type === "ObjectExpression" &&
+            mount.properties.every((entry) => {
+              if (!isPropertyAssignment(entry)) {
                 return false;
               }
-              const name = staticPropertyName(property.name);
+              const name = staticPropertyName(entry);
               if (name === undefined) {
                 return false;
               }
               if (name === "Type") {
-                return (
-                  ts.isStringLiteralLike(property.initializer) &&
-                  safeMountTypes.has(property.initializer.text)
-                );
+                return safeMountTypes.has(stringLiteralText(entry.value) ?? "");
               }
               if (name === "VolumeOptions") {
-                return hasSafeApiDriverConfig(property.initializer);
+                return hasSafeApiDriverConfig(entry.value);
               }
               return true;
             }) &&
             mount.properties.some(
-              (property) =>
-                ts.isPropertyAssignment(property) &&
-                staticPropertyName(property.name) === "Type" &&
-                ts.isStringLiteralLike(property.initializer) &&
-                safeMountTypes.has(property.initializer.text),
+              (entry) =>
+                isPropertyAssignment(entry) &&
+                staticPropertyName(entry) === "Type" &&
+                safeMountTypes.has(stringLiteralText(entry.value) ?? ""),
             ),
         );
       if (!safe) {
@@ -1156,27 +1325,23 @@ export const inspectDockerHelper = (source: string): string[] => {
       ...apiCreateConfigFailures(node),
       ...apiVolumeCreateFailures(node),
     );
-    if (ts.isArrayLiteralExpression(node)) {
-      failures.push(...volumeCreateArrayFailures(node, helpers));
+    if (node.type === "ArrayExpression") {
+      failures.push(...volumeCreateArrayFailures(node, tree));
       for (const [index, element] of node.elements.entries()) {
-        if (!ts.isStringLiteralLike(element) || element.text !== "--mount") {
+        if (stringLiteralText(element) !== "--mount") {
           continue;
         }
         const argument = node.elements[index + 1];
-        let mount: string | undefined;
-        if (argument && ts.isStringLiteralLike(argument)) {
-          mount = argument.text;
-        } else if (argument && ts.isTemplateExpression(argument)) {
-          mount = mountTemplateText(argument, tree, helpers);
+        let mount = stringLiteralText(argument);
+        if (argument?.type === "TemplateLiteral" && mount === undefined) {
+          mount = mountTemplateText(argument, tree);
         }
         if (!mount || !inspectMountOptions(mount)) {
           failures.push("--mount requires explicit type=volume or type=tmpfs");
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return failures;
 };
 
