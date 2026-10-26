@@ -107,12 +107,11 @@ const runChatCensus = async ({ page, measureAction }: DriveScriptContext) => {
       ).toHaveCount(exchanges + 1, { timeout: 60_000 });
     }
   } finally {
-    if (threadPath !== undefined && /^\/chat\/[0-9a-f-]+$/u.test(threadPath)) {
+    const threadId = threadPath?.match(/^\/chat\/(?<id>[0-9a-f-]+)$/u)
+      ?.groups?.["id"];
+    if (threadId !== undefined) {
       await page.goto("/workspaces", { waitUntil: "domcontentloaded" });
-      await apiDelete(
-        page.request,
-        `/chat/threads/${threadPath.split("/").at(-1)}`,
-      );
+      await apiDelete(page.request, `/chat/threads/${threadId}`);
     }
   }
 };

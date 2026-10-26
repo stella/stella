@@ -176,9 +176,11 @@ createRoot(host).render(<RenderCensusDelayed />);
     expect(idle.commits).toBe(0);
     expect(idle.wallMs).toBe(0);
   } finally {
-    await page.close().finally(async () => {
+    try {
+      await page.close();
+    } finally {
       await rm(directory, { recursive: true, force: true });
-    });
+    }
   }
 });
 
@@ -252,8 +254,10 @@ createRoot(host).render(<RenderCensusHmr />);
     expect(navigations).toBe(0);
   } finally {
     page.off("framenavigated", onNavigation);
-    await page.close().finally(async () => {
+    try {
+      await page.close();
+    } finally {
       await rm(directory, { recursive: true, force: true });
-    });
+    }
   }
 });

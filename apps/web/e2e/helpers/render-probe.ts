@@ -1,7 +1,6 @@
 /// <reference lib="dom" />
 import type { BrowserContext, Page, Request, Response } from "@playwright/test";
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { RenderSnapshot } from "@stll/render-probe";
@@ -85,16 +84,26 @@ const trackContextNetwork = (context: BrowserContext) => {
   });
 };
 
-const buildProbe = async () => {
-  // Playwright's test workers use Node; the agent driver uses Bun. Keep the
-  // bundler in Bun in both cases, with one cached build per caller process.
-  const result = await promisify(execFile)(
-    "bun",
-    [new URL("../../scripts/render-probe-bundle.ts", import.meta.url).pathname],
-    { maxBuffer: 4 * 1024 * 1024 },
-  );
-  return result.stdout;
-};
+// Playwright's test workers use Node; the agent driver uses Bun. Keep the
+// bundler in Bun in both cases, with one cached build per caller process.
+const buildProbe = (): Promise<string> =>
+  new Promise((resolve, reject) => {
+    execFile(
+      "bun",
+      [
+        new URL("../../scripts/render-probe-bundle.ts", import.meta.url)
+          .pathname,
+      ],
+      { maxBuffer: 4 * 1024 * 1024, encoding: "utf-8" },
+      (error, stdout) => {
+        if (error !== null) {
+          reject(error);
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+  });
 
 /** Install before creating the first page, so React and Refresh see the hook. */
 export const installRenderProbe = async (context: BrowserContext) => {

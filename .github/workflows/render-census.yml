@@ -27,6 +27,15 @@ defaults:
 
 permissions: {}
 
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
 concurrency:
   group: render-census-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
@@ -37,7 +46,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
+      packages: read
     env:
+      CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
       NODE_ENV: development
       STELLA_LOCAL_DEV: "1"
       USE_MOCK_AI: "true"
@@ -144,6 +155,16 @@ jobs:
               --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
               "$endpoint" > /dev/null
           done
+
+      - name: Login to GitHub Container Registry for browser images
+        timeout-minutes: 2
+        if: github.event.pull_request.head.repo.fork != true && github.token != ''
+        continue-on-error: true
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Prepare pinned Playwright browser image
         timeout-minutes: 2
