@@ -232,6 +232,8 @@ const jobTools = (
 // computed/self-hosted runner shares a hosted image's installed programs.
 // Normalize an event-name or variable comparison so the same condition is
 // spelled the same way in step guards and in runner choices.
+// GitHub Actions compares strings case-insensitively, so values are folded
+// to one case.
 const eventOperand = (operand: string) => {
   const match =
     /^(github\.event_name|vars\.[A-Za-z_][A-Za-z0-9_]*)\s*(==|!=)\s*(['"])([\w-]+)\3$/u.exec(
@@ -246,7 +248,7 @@ const eventOperand = (operand: string) => {
   if (subject === undefined || operator === undefined || value === undefined) {
     return operand;
   }
-  return `${subject} ${operator} '${value}'`;
+  return `${subject} ${operator} '${value.toLowerCase()}'`;
 };
 const operands = (condition: unknown) =>
   conditionOperands(condition).map(eventOperand);
@@ -306,9 +308,11 @@ const parseRunnerChoice = (source: string): RunnerLeaf[] | undefined => {
     ) {
       return undefined;
     }
+    // GitHub compares strings case-insensitively; match its spelling.
+    const folded = value.toLowerCase();
     return {
-      holds: `${name} ${operator} '${value}'`,
-      fails: `${name} ${flip(operator)} '${value}'`,
+      holds: `${name} ${operator} '${folded}'`,
+      fails: `${name} ${flip(operator)} '${folded}'`,
     };
   };
   const value = (depth: number): RunnerLeaf[] | undefined => {

@@ -749,6 +749,23 @@ test("a variable-selected fallback runner receives its own installation contract
   }
 });
 
+test("variable values compare case-insensitively, as GitHub compares them", () => {
+  withFixture(
+    {
+      jobs: {
+        check: {
+          "runs-on": `\${{ vars.DEPLOY_RUNNER == 'fallback' && fromJSON('["self-hosted","custom"]') || 'ubuntu-24.04' }}`,
+          // 'FALLBACK' selects the self-hosted branch too, which lacks jq.
+          steps: [
+            { if: "vars.DEPLOY_RUNNER == 'FALLBACK'", run: "jq --version" },
+          ],
+        },
+      },
+    },
+    (root) => expect(problems(root)).toHaveLength(1),
+  );
+});
+
 test("a step guarded by the other variable branch is not checked against this runner", () => {
   withFixture(
     {
