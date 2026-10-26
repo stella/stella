@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/handlers/time-entries/batch/update.ts",
+    "from": "09bcd29cc83236c3d3328814cac960bbefd73faba4e76a0ab41ab04a5a3e8846",
+    "to": "346bd9b55bab3e0715a8fc4e86e894077a66bb6786254329115c80e6f96fbcc7",
+    "reason": "Batch approval locks the same rows, now selected as submitted entries or the caller's own drafts instead of every draft."
+  }
+]

@@ -38,6 +38,7 @@ const entry = (id: string, overrides: Partial<TimeEntry> = {}): TimeEntry =>
     narrativeLanguage: null,
     noCharge: false,
     rateAtEntry: 300_000,
+    returnComment: null,
     taskCode: null,
     timerStartedAt: null,
     timerStoppedAt: null,

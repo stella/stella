@@ -329,6 +329,8 @@ export const LIMITS = {
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
   timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  /** Ceiling of the approval queue's pending count; the badge shows more as "999+". */
+  timeApprovalPendingCountMax: 1000,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,

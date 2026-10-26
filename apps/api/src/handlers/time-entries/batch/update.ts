@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
@@ -152,6 +152,8 @@ const batchUpdate = createSafeHandler(
     description:
       "Apply one action to up to 200 time entries in a matter at once: " +
       "approve, revert_to_draft, mark_billable, or mark_non_billable. " +
+      "approve takes submitted entries, and drafts only when they are the " +
+      "caller's own. " +
       "Entries that are not in the action's starting state are skipped and " +
       "only the number of changed rows is returned. Approval is refused " +
       "while any selected entry has a running timer or a billable entry has " +
@@ -191,6 +193,16 @@ const batchUpdate = createSafeHandler(
       inArray(timeEntries.id, ids),
     );
 
+    // Submitted entries are approvable; a draft only by its own timekeeper,
+    // who approves their own work in one step. Others' drafts are skipped.
+    const approvable = or(
+      eq(timeEntries.status, BILLING_STATUS.SUBMITTED),
+      and(
+        eq(timeEntries.status, BILLING_STATUS.DRAFT),
+        eq(timeEntries.userId, user.id),
+      ),
+    );
+
     switch (action) {
       case "approve": {
         const rows = yield* Result.await(
@@ -214,9 +226,7 @@ const batchUpdate = createSafeHandler(
                 running: timeEntryIsRunning(),
               })
               .from(timeEntries)
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
-              )
+              .where(and(condition, approvable))
               .limit(ids.length)
               .for("update");
             const violation = getBatchPolicyViolation({
@@ -251,9 +261,7 @@ const batchUpdate = createSafeHandler(
                 returnComment: null,
                 updatedAt: now,
               })
-              .where(
-                and(condition, eq(timeEntries.status, BILLING_STATUS.DRAFT)),
-              )
+              .where(and(condition, approvable))
               .returning({ id: timeEntries.id });
             await recordAuditEvent(tx, buildBatchEvents(updated, action));
             await recordBillingCapCrossings(tx, {

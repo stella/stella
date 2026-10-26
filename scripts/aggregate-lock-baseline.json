@@ -1819,9 +1819,9 @@
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
-    "fingerprint": "09bcd29cc83236c3d3328814cac960bbefd73faba4e76a0ab41ab04a5a3e8846",
+    "fingerprint": "346bd9b55bab3e0715a8fc4e86e894077a66bb6786254329115c80e6f96fbcc7",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/batch/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Batch approval locks the same rows, now selected as submitted entries or the caller's own drafts instead of every draft."
   },
   {
     "file": "apps/api/src/handlers/time-entries/batch/update.ts",
