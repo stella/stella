@@ -14,34 +14,35 @@ search_history_entries.organization_id  safeOrganizationId  fk,not null       se
 search_history_entries.user_id          text                fk,not null       search-history.ts:39
 search_history_entries.kind             text                not null          search-history.ts:43
 search_history_entries.country          text                null              search-history.ts:49  The jurisdiction the entry belongs to: the one a query was typed under, or the one an opened page's path names.
-search_history_entries.court_id         varchar             null              search-history.ts:50
-search_history_entries.lookup_key       varchar             not null          search-history.ts:51
-search_history_entries.ciphertext       bytea               not null          search-history.ts:52
-search_history_entries.iv               bytea               not null          search-history.ts:53
-search_history_entries.first_used_at    timestamptz         default,not null  search-history.ts:54
-search_history_entries.last_used_at     timestamptz         default,not null  search-history.ts:55
-search_history_entries.use_count        integer             default,not null  search-history.ts:56
+search_history_entries.country_used_at  timestamptz         null              search-history.ts:51  When the latest use naming `country` happened; it decides refiling.
+search_history_entries.court_id         varchar             null              search-history.ts:52
+search_history_entries.lookup_key       varchar             not null          search-history.ts:53
+search_history_entries.ciphertext       bytea               not null          search-history.ts:54
+search_history_entries.iv               bytea               not null          search-history.ts:55
+search_history_entries.first_used_at    timestamptz         default,not null  search-history.ts:56
+search_history_entries.last_used_at     timestamptz         default,not null  search-history.ts:57
+search_history_entries.use_count        integer             default,not null  search-history.ts:58
 ```
 
-## search_history_owners · `searchHistoryOwners` · search-history.ts:113 · rls
+## search_history_owners · `searchHistoryOwners` · search-history.ts:115 · rls
 
 Serializes one owner's writes and retains the cutoff from their last clear.
 
 ```text
-search_history_owners.organization_id      safeOrganizationId  fk,not null  search-history.ts:116
-search_history_owners.user_id              text                fk,not null  search-history.ts:119
-search_history_owners.cleared_at           timestamptz         null         search-history.ts:123
-search_history_owners.tombstone_cutoff_at  timestamptz         null         search-history.ts:125  Oldest imports excluded after bounded tombstone compaction.
+search_history_owners.organization_id      safeOrganizationId  fk,not null  search-history.ts:118
+search_history_owners.user_id              text                fk,not null  search-history.ts:121
+search_history_owners.cleared_at           timestamptz         null         search-history.ts:125
+search_history_owners.tombstone_cutoff_at  timestamptz         null         search-history.ts:127  Oldest imports excluded after bounded tombstone compaction.
 ```
 
-## search_history_tombstones · `searchHistoryTombstones` · search-history.ts:140 · rls
+## search_history_tombstones · `searchHistoryTombstones` · search-history.ts:142 · rls
 
 A deleted identity's keyed hash and cutoff prevent stale imports restoring it.
 
 ```text
-search_history_tombstones.organization_id  safeOrganizationId  fk,not null  search-history.ts:143
-search_history_tombstones.user_id          text                fk,not null  search-history.ts:146
-search_history_tombstones.kind             text                not null     search-history.ts:150
-search_history_tombstones.lookup_key       varchar             not null     search-history.ts:151
-search_history_tombstones.deleted_at       timestamptz         not null     search-history.ts:152
+search_history_tombstones.organization_id  safeOrganizationId  fk,not null  search-history.ts:145
+search_history_tombstones.user_id          text                fk,not null  search-history.ts:148
+search_history_tombstones.kind             text                not null     search-history.ts:152
+search_history_tombstones.lookup_key       varchar             not null     search-history.ts:153
+search_history_tombstones.deleted_at       timestamptz         not null     search-history.ts:154
 ```
