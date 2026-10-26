@@ -474,7 +474,7 @@ const SourceHealth = ({ source }: { source: CaseLawCoverageSource }) => {
     case "snapshot": {
       const taken = parseDeterministicDate(edition.snapshotDate);
       return (
-        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+        <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <HealthSignal health={source.health} />
           <time
             className="text-muted-foreground text-xs"
