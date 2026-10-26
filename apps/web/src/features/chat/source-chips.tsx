@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { isEntityKind } from "@stll/api-contract";
@@ -247,9 +247,7 @@ const SourceChip = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const resolvedWorkspaceId =
     workspaceId ?? sourceDocument.workspaceId ?? undefined;
 
@@ -270,7 +268,7 @@ const SourceChip = ({
           await navigateToWorkspaceFolder({
             folderId: result.entityId,
             navigate,
-            pathname,
+            router,
             queryClient,
             targetWorkspaceId: result.workspaceId,
           });

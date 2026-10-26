@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { createContext, Fragment, isValidElement, use } from "react";
 
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import {
@@ -300,9 +300,7 @@ const ReferenceChipView = ({
 export const useReferenceActivation = (reference: ChatReference) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const { open: openDecision } = useOpenDecisionTab();
 
   switch (reference.type) {
@@ -323,7 +321,7 @@ export const useReferenceActivation = (reference: ChatReference) => {
               await navigateToWorkspaceFolder({
                 folderId: result.entityId,
                 navigate,
-                pathname,
+                router,
                 queryClient,
                 targetWorkspaceId: result.workspaceId,
               });

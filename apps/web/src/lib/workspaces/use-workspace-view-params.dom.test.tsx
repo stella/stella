@@ -6,76 +6,59 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
 const { act, cleanup, render } = await import("@testing-library/react");
+const { RouterProvider, useRouter } = await import("@tanstack/react-router");
 const {
-  createMemoryHistory,
-  createRootRoute,
-  createRoute,
-  createRouter,
-  Outlet,
-  RouterProvider,
-} = await import("@tanstack/react-router");
-const { useWorkspaceViewParams } =
-  await import("@/lib/workspaces/use-workspace-view-params");
+  getCurrentWorkspaceView,
+  useCurrentWorkspaceView,
+  useWorkspaceViewParams,
+} = await import("@/lib/workspaces/use-workspace-view-params");
 const { DEFAULT_WORKSPACE_VIEW_ID } =
   await import("@/lib/workspaces/view-params.logic");
+const {
+  createMatterViewTestRouter,
+  TEST_FILES_VIEW_ID: filesViewId,
+  TEST_MATTER_ID: matterA,
+} = await import("@/lib/workspaces/matter-view-test-router");
 
-const matterA = "019a0000-0000-7000-8000-000000000301";
 const matterB = "019a0000-0000-7000-8000-000000000302";
-const filesViewId = "019a0000-0000-7000-8000-000000000303";
 
-/** Renders the params a navigation into each matter would open under. */
+/** Renders the params a navigation into each matter would open under, and
+ * the view on screen as the hook and the router snapshot each read it. */
 const Probe = () => {
   const intoA = useWorkspaceViewParams(matterA);
   const intoB = useWorkspaceViewParams(matterB);
+  const subscribed = useCurrentWorkspaceView();
+  const router = useRouter();
   return (
-    <output data-testid="params">{JSON.stringify({ intoA, intoB })}</output>
+    <>
+      <output data-testid="params">{JSON.stringify({ intoA, intoB })}</output>
+      <output data-testid="current">
+        {JSON.stringify({
+          subscribed: subscribed ?? null,
+          snapshot: getCurrentWorkspaceView(router) ?? null,
+        })}
+      </output>
+    </>
   );
 };
 
-const mountAt = async (initialEntry: string) => {
-  const root = createRootRoute({
-    component: () => (
-      <>
-        <Probe />
-        <Outlet />
-      </>
-    ),
-  });
-  const protectedRoute = createRoute({
-    getParentRoute: () => root,
-    id: "_protected",
-    component: Outlet,
-  });
-  const workspace = createRoute({
-    getParentRoute: () => protectedRoute,
-    path: "workspaces/$workspaceId",
-    component: Outlet,
-  });
-  const view = createRoute({
-    getParentRoute: () => workspace,
-    path: "$viewId",
-    component: Outlet,
-  });
-  const documentRoute = createRoute({
-    getParentRoute: () => view,
-    path: "document",
-  });
-  const chat = createRoute({
-    getParentRoute: () => protectedRoute,
-    path: "chat",
-  });
-  const router = createRouter({
-    routeTree: root.addChildren([
-      protectedRoute.addChildren([
-        workspace.addChildren([view.addChildren([documentRoute])]),
-        chat,
-      ]),
-    ]),
-    history: createMemoryHistory({ initialEntries: [initialEntry] }),
-  });
-  await router.load();
-  const mounted = render(<RouterProvider router={router} />);
-  return (await mounted.findByTestId("params")).textContent;
+const mount = async (initialEntry: string) =>
+  render(
+    <RouterProvider
+      router={await createMatterViewTestRouter(initialEntry, Probe)}
+    />,
+  );
+
+const mountAt = async (initialEntry: string) =>
+  (await (await mount(initialEntry)).findByTestId("params")).textContent;
+
+const currentViewAt = async (initialEntry: string) => {
+  const mounted = await mount(initialEntry);
+  const current: unknown = JSON.parse(
+    (await mounted.findByTestId("current")).textContent,
+  );
+  await act(async () => cleanup());
+  return current;
 };
 
 afterEach(async () => {
@@ -108,5 +91,34 @@ describe("the view a matter navigation opens under", () => {
         intoB: { workspaceId: matterB, viewId: DEFAULT_WORKSPACE_VIEW_ID },
       }),
     );
+  });
+});
+
+describe("the view on screen", () => {
+  const filesView = { workspaceId: matterA, viewId: filesViewId };
+
+  test("is the matched view under a view and its document, read alike by the hook and the router", async () => {
+    for (const path of [
+      `/workspaces/${matterA}/${filesViewId}`,
+      `/workspaces/${matterA}/${filesViewId}/document?entity=e`,
+    ]) {
+      expect(await currentViewAt(path)).toEqual({
+        subscribed: filesView,
+        snapshot: filesView,
+      });
+    }
+  });
+
+  test("is none on a matter page that is not a view, or outside any matter", async () => {
+    for (const path of [
+      `/workspaces/${matterA}/reports/export_1`,
+      `/workspaces/${matterA}/correspondence/thread_1`,
+      "/chat",
+    ]) {
+      expect(await currentViewAt(path)).toEqual({
+        subscribed: null,
+        snapshot: null,
+      });
+    }
   });
 });
