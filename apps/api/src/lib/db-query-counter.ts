@@ -241,24 +241,51 @@ const sqlControlType = (
 export const instrumentQueryOrigins = <TTarget extends object>(
   owner: TTarget,
 ): TTarget => {
+  const instrumented = new WeakSet<object>();
   const wrap = <TValue extends object>(
     value: TValue,
     origin?: string,
-  ): TValue =>
-    new Proxy(value, {
-      get(target, property) {
-        const member: unknown = Reflect.get(target, property, target);
-        if (typeof member !== "function") {
-          return member !== null &&
-            typeof member === "object" &&
-            (property === "query" ||
-              property === "api" ||
-              "findMany" in member ||
-              "findFirst" in member)
-            ? wrap(member, origin)
-            : member;
+  ): TValue => {
+    if (instrumented.has(value)) {
+      return value;
+    }
+    instrumented.add(value);
+    const properties = new Set<PropertyKey>();
+    let prototype: object | null = value;
+    while (prototype !== null && prototype !== Object.prototype) {
+      for (const property of Reflect.ownKeys(prototype)) {
+        properties.add(property);
+      }
+      prototype = Reflect.getPrototypeOf(prototype);
+    }
+    for (const property of properties) {
+      if (property === "constructor" || property === "$client") {
+        continue;
+      }
+      const member: unknown = Reflect.get(value, property, value);
+      if (typeof member !== "function") {
+        if (
+          member !== null &&
+          typeof member === "object" &&
+          (property === "query" || property === "api")
+        ) {
+          wrap(member, origin);
+          for (const nested of Object.values(member)) {
+            if (
+              nested !== null &&
+              typeof nested === "object" &&
+              ("findMany" in nested || "findFirst" in nested)
+            ) {
+              wrap(nested, origin);
+            }
+          }
         }
-        return (...args: unknown[]) => {
+        continue;
+      }
+      // Keep the actual database/provider object, including native clients and
+      // ordinary method replacement. A function proxy retains endpoint metadata.
+      const wrapped = new Proxy(member, {
+        apply(method, _receiver, args: unknown[]) {
           const source =
             origin ??
             ([queryOriginStore.getStore(), queryCallsite()]
@@ -281,7 +308,7 @@ export const instrumentQueryOrigins = <TTarget extends object>(
                 )
               : args;
           const result: unknown = queryOriginStore.run(source, () => {
-            const returned: unknown = Reflect.apply(member, target, parameters);
+            const returned: unknown = Reflect.apply(method, value, parameters);
             return returned;
           });
           if (
@@ -292,9 +319,18 @@ export const instrumentQueryOrigins = <TTarget extends object>(
             return result;
           }
           return wrap(result, source);
-        };
-      },
-    });
+        },
+      });
+      const descriptor = Reflect.getOwnPropertyDescriptor(value, property);
+      Object.defineProperty(value, property, {
+        configurable: true,
+        enumerable: descriptor?.enumerable ?? false,
+        writable: true,
+        value: wrapped,
+      });
+    }
+    return value;
+  };
   return wrap(owner);
 };
 

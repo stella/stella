@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import type { BunRequest } from "bun";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { QueryPromise } from "drizzle-orm/query-promise";
 import { Script } from "node:vm";
 
@@ -154,6 +154,39 @@ describe("db query counter logger", () => {
       expect(counter.count).toBe(1);
       expect(counter.transactions).toBe(2);
     });
+  });
+
+  test("origin instrumentation preserves provider metadata, clients and method replacement", async () => {
+    const options = { metadata: { SERVER_ONLY: true } };
+    const endpoint = Object.assign(async (request: Request) => request.method, {
+      path: "/sign-in/email",
+      options,
+    });
+    const client = Object.assign(() => "native transport", {
+      close: async () => undefined,
+    });
+    const session = { findMany: async () => ["original"] };
+    const owner = { api: { endpoint }, query: { session }, $client: client };
+    const instrumented = instrumentQueryOrigins(owner);
+    expect(instrumented).toBe(owner);
+    expect(instrumented.api.endpoint.path).toBe(endpoint.path);
+    expect(instrumented.api.endpoint.options).toBe(options);
+    expect(instrumented.api.endpoint.length).toBe(endpoint.length);
+    expect(instrumented.$client).toBe(client);
+    expect(instrumented.$client.close).toBe(client.close);
+    expect(instrumented.query.session).toBe(session);
+    const replacement = spyOn(
+      instrumented.query.session,
+      "findMany",
+    ).mockResolvedValue(["replacement"]);
+    try {
+      expect(await instrumented.query.session.findMany()).toEqual([
+        "replacement",
+      ]);
+      expect(replacement).toHaveBeenCalledTimes(1);
+    } finally {
+      replacement.mockRestore();
+    }
   });
 
   test("pooled lazy queries retain their constructors across sequential awaits", async () => {
