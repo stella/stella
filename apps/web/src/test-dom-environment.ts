@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-import { drainReactScheduler } from "@/lib/react-scheduler-drain";
+// Relative, so suites outside `src` (e2e unit tests) can import this helper
+// without the `@/` path alias.
+import { drainReactScheduler } from "./lib/react-scheduler-drain";
 
 /**
  * Remove the happy-dom globals only after React has run every scheduled task,
