@@ -10,7 +10,7 @@ import {
 } from "./search-query-matcher.js";
 
 const SCRIPT_CHARACTERS = [
-  ..."abzAZ áčěŘšůžłøđßæœﬁİıΣσςمحمدًٌَ٢0-😀",
+  ...Array.from("abzAZ áčěŘšůžłøđßæœﬁİıΣσςمحمدًٌَ٢0-😀"),
   "e\u0301",
   "\ud800",
   "\udc00",
@@ -91,14 +91,14 @@ describe("createSearchQueryMatcher", () => {
    */
   test("finds every slice of a text, in either case", () => {
     assertProperty(
-      "search query matcher finds every slice of its text",
+      "finds every slice of a text, in either case",
       fc.property(
         text,
         fc.nat(),
         fc.nat(),
         fc.boolean(),
         (value, from, to, upper) => {
-          const characters = [...value];
+          const characters = Array.from(value);
           const start = from % (characters.length + 1);
           const end = start + (to % (characters.length - start + 1));
           const slice = characters.slice(start, end).join("");
@@ -114,7 +114,7 @@ describe("candidate key cache", () => {
   /** Cached or not, a verdict is the folded containment the contract names. */
   test("agrees with folding both sides on every call", () => {
     assertProperty(
-      "search query matcher agrees with folded containment",
+      "agrees with folding both sides on every call",
       fc.property(text, text, (candidate, query) => {
         const expected = foldSearchMatchText(candidate.toWellFormed()).includes(
           foldSearchMatchText(query.trim().toWellFormed()),
@@ -148,15 +148,15 @@ describe("filterBySearchQuery", () => {
         items: people,
         query: "NOVAK",
         fields: ({ email, name }) => [name, email],
-      }),
-    ).toEqual([people[1]]);
+      }).map(({ name }) => name),
+    ).toEqual(["Jana Nováková"]);
     expect(
       filterBySearchQuery({
         items: people,
         query: "example",
         fields: ({ email, name }) => [name, email],
-      }),
-    ).toEqual([people[0], people[2]]);
+      }).map(({ name }) => name),
+    ).toEqual(["Antonín Dvořák", "Élise Dupré"]);
   });
 
   test("keeps every item for a blank query", () => {
