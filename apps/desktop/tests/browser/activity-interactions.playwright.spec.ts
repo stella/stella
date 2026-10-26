@@ -364,9 +364,11 @@ const installNativeBoundary = async ({
       }),
     ).toBeVisible();
   } else {
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
-      timeout: firstRenderTimeoutMs,
-    });
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible(
+      firstRenderTimeoutMs === undefined
+        ? {}
+        : { timeout: firstRenderTimeoutMs },
+    );
   }
   if (
     (snapshot.recordingStatus !== "off" ||
