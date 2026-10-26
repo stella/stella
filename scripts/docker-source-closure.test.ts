@@ -1434,7 +1434,7 @@ describe("Docker source closure", () => {
     { rootIgnore: "", specificIgnore: "entry.ts", available: false },
     { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
     { rootIgnore: "", specificIgnore: undefined, available: true },
-  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
+  ])("Dockerfile ignore rules replace the root rules: %j", async (fixture) => {
     const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
     writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
     writeFileSync(
@@ -1459,7 +1459,7 @@ describe("Docker source closure", () => {
         Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
       ).toBe(0);
     }
-    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
+    expect(await checkRepositoryDockerSources(fixtureRoot)).toEqual(
       fixture.available
         ? []
         : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
@@ -1467,9 +1467,9 @@ describe("Docker source closure", () => {
   });
 
   // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
-  test("every tracked Dockerfile passes the full hydrated repository check", () => {
+  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
     expect(
-      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
   }, 40_000);
 

@@ -522,6 +522,7 @@
     "Test route smoke change detector": [
       "@stll/web",
       ".github/actions/**",
+      "apps/api/scripts/seed-local-scripts.ts",
       "scripts/**"
     ],
     "Test changed e2e shard selection": [
@@ -556,6 +557,7 @@
     "Test CI workflow invariants": [
       ".github/**",
       "scripts/**",
+      "apps/api/scripts/seed-local-scripts.ts",
       "apps/web/e2e/network-budgets/**",
       "@stll/sha256",
       "@stll/web"
