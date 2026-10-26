@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -45,7 +45,7 @@ type BatchAction =
 
 const buildBatchEvents = (
   rows: { id: SafeId<"timeEntry"> }[],
-  action: BatchAction,
+  action: UniformBatchAction,
   rateChanges?: ReadonlyMap<
     SafeId<"timeEntry">,
     {
@@ -83,17 +83,12 @@ const buildBatchEvents = (
   return events;
 };
 
+// Approval records each entry's own previous status, read under its lock.
+type UniformBatchAction = Exclude<BatchAction, "approve">;
+
 const batchChangesFor = (
-  action: BatchAction,
+  action: UniformBatchAction,
 ): Record<string, { old: unknown; new: unknown }> => {
-  if (action === "approve") {
-    return {
-      status: {
-        old: BILLING_STATUS.DRAFT,
-        new: BILLING_STATUS.APPROVED,
-      },
-    };
-  }
   if (action === "revert_to_draft") {
     return {
       status: {
@@ -218,6 +213,8 @@ const batchUpdate = createSafeHandler(
             }
             const blockers = await tx
               .select({
+                id: timeEntries.id,
+                status: timeEntries.status,
                 billable: timeEntries.billable,
                 currency: timeEntries.currency,
                 dateWorked: timeEntries.dateWorked,
@@ -263,7 +260,27 @@ const batchUpdate = createSafeHandler(
               })
               .where(and(condition, approvable))
               .returning({ id: timeEntries.id });
-            await recordAuditEvent(tx, buildBatchEvents(updated, action));
+            // The rows were locked when read, so each one's status then is
+            // the status the approval moved it from.
+            const previousStatus = new Map(
+              blockers.map(({ id, status }) => [id, status]),
+            );
+            await recordAuditEvent(
+              tx,
+              updated.map(({ id }) => ({
+                action: AUDIT_ACTION.UPDATE,
+                resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+                resourceId: id,
+                changes: {
+                  status: {
+                    old:
+                      previousStatus.get(id) ??
+                      panic("An approved entry was not among the locked rows"),
+                    new: BILLING_STATUS.APPROVED,
+                  },
+                },
+              })),
+            );
             await recordBillingCapCrossings(tx, {
               workspaceId,
               recordAuditEvent,
