@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
-import { parseSource } from "@stll/scripts/src/syntax-tree.ts";
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 const SCRIPT_EXTENSION = /\.[cm]?[jt]sx?$/u;
 const CANDIDATE_SUFFIXES = [

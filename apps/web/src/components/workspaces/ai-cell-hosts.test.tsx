@@ -13,7 +13,7 @@ import {
   type Node,
   parseSource,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {

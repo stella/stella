@@ -20,7 +20,7 @@ import {
   type Statement,
   type StaticImportEntry,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 // These boundaries install the first frame; their descendants already have one.
 export const FIRST_FRAME_OWNERS = [

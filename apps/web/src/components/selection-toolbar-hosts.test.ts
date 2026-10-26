@@ -7,7 +7,7 @@ import {
   type ParsedSource,
   parseSource,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 const primitive = path.join(sourceRoot, "components/selection-toolbar.tsx");

@@ -10,7 +10,7 @@ import {
   type ParamPattern,
   parseSource,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 const SOURCE_INVENTORY_TIMEOUT_MS = 30_000;
 

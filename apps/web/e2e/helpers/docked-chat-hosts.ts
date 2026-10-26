@@ -13,7 +13,7 @@ import {
   type StringLiteral,
   type TSInterfaceDeclaration,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 import type { AppFrameScope } from "../../src/routes/-app-frame-scope";
 import { APP_FRAME_SCOPE } from "../../src/routes/-app-frame-scope";
