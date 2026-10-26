@@ -1789,6 +1789,48 @@ describe("extractCitations", () => {
     }
   });
 
+  test("extracts the dotted spelling of a seated administrative register", () => {
+    const cases: [text: string, expected: string[]][] = [
+      [
+        "wyrok NSA z 2002 r., sygn. akt II S.A./Po 1234/01, dalej",
+        ["sygn. akt II S.A./Po 1234/01"],
+      ],
+      [
+        "wyrok WSA, sygn. akt. I S.A./Wr 123/2003.",
+        ["sygn. akt. I S.A./Wr 123/2003"],
+      ],
+      [
+        "por. S.A./Kr 55/99 oraz III S. A. / Gd 7/02",
+        ["S.A./Kr 55/99", "III S. A. / Gd 7/02"],
+      ],
+      // No administrative court sits at `Xy`, and none has a ninth division.
+      ["sprawa S.A./Xy 12/20", []],
+      ["sprawa IX S.A./Wa 1/05", []],
+    ];
+    for (const [text, expected] of cases) {
+      expect(
+        extractCitations([{ index: 0, text }]).map((c) => c.citationText),
+      ).toEqual(expected);
+    }
+  });
+
+  test("keys a dotted administrative register as its undotted spelling", () => {
+    expect(bareCitationKey("sygn. akt II S.A./Po 1234/01")).toBe(
+      bareCitationKey("II SA/Po 1234/01"),
+    );
+    expect(bareCitationKey("III S. A. / Gd 7/02")).toBe(
+      bareCitationKey("III SA/Gd 7/02"),
+    );
+    expect(
+      extractCitations([
+        {
+          index: 0,
+          text: "sygn. akt II S.A./Po 1234/01 oraz II SA/Po 1234/01",
+        },
+      ]),
+    ).toHaveLength(1);
+  });
+
   test("keys a non-ASCII seat the way it keys an ASCII one", () => {
     expect(bareCitationKey("sygn. akt II SA/Łd 123/20")).toBe(
       bareCitationKey("II SA / Łd 123/20"),
