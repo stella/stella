@@ -107,22 +107,27 @@ for (const theme of ["light", "dark"] as const) {
         value: theme,
       },
     );
-    const sidebarFill = async (url: string) => {
+    const inner = page.locator(
+      '[data-slot="sidebar"] [data-slot="sidebar-inner"]',
+    );
+    // The locator re-resolves on every read, so a sidebar that hydration or
+    // the jurisdiction redirect replaces is read again instead of detached.
+    const sidebarFill = async () =>
+      await inner.evaluate(
+        (element) => getComputedStyle(element).backgroundColor,
+      );
+    const openPage = async (url: string) => {
       await page.goto(url, { waitUntil: "domcontentloaded" });
       const html = expect(page.locator("html"));
       await (theme === "dark" ? html : html.not).toHaveClass(/\bdark\b/u);
-      const inner = page.locator(
-        '[data-slot="sidebar"] [data-slot="sidebar-inner"]',
-      );
       await expect(inner).toBeVisible();
-      return await inner.evaluate(
-        (element) => getComputedStyle(element).backgroundColor,
-      );
     };
 
-    const matters = await sidebarFill("/workspaces");
-    expect(matters).not.toBe("rgba(0, 0, 0, 0)");
-    expect(await sidebarFill("/law?country=cze")).toBe(matters);
+    await openPage("/workspaces");
+    await expect.poll(sidebarFill).not.toMatch(/^(?:|rgba\(0, 0, 0, 0\))$/u);
+    const matters = await sidebarFill();
+    await openPage("/law?country=cze");
+    await expect.poll(sidebarFill).toBe(matters);
   });
 }
 
