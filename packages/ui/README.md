@@ -112,9 +112,9 @@ installable layout and virtual cell:
 
 ```tsx
 import {
+  buildKanbanBoardMatrix,
   KanbanSubgroupBoard,
   KanbanVirtualCell,
-  buildKanbanBoardMatrix,
 } from "@stll/ui/kanban";
 
 const matrix = buildKanbanBoardMatrix({

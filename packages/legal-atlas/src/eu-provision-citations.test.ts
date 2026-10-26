@@ -8,11 +8,11 @@ import {
   EU_ACT_ALIASES,
   EU_PRIMARY_WORKS,
   euProvisionAnchor,
-  parseEuWorkIdentifier,
   euProvisionSourceUrl,
   locateEuProvisionCitations,
+  parseEuWorkIdentifier,
 } from "./eu-provision-citations";
-import { provisionRefOf, parseProvisionKey } from "./provision-key";
+import { parseProvisionKey, provisionRefOf } from "./provision-key";
 
 const fixtures = [
   "Article 6(1)(a) of Regulation (EU) 2016/679",

@@ -17,7 +17,7 @@ import {
 } from "@/components/skill-body-markdown";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
-import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
+import { isMarkdownFile, PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";

@@ -5,8 +5,8 @@ import { InfoIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverPanel,
-  PopoverTrigger,
   PopoverTitle,
+  PopoverTrigger,
 } from "@stll/ui/popover";
 
 import { classifyOAuthDestination } from "@/components/oauth-consent/oauth-destination.logic";
@@ -42,9 +42,9 @@ export const OAuthClientDetails = ({
         </p>
         <div className="text-muted-foreground">
           <div className="flex flex-col gap-1 pb-2">
-            {info.redirectHosts.map((host) => (
-              <p className="break-all" key={host}>
-                <bdi>{host}</bdi>
+            {info.redirectTargets.map((target) => (
+              <p className="break-all" key={target}>
+                <bdi>{target}</bdi>
               </p>
             ))}
             {info.clientIdHost ? (

@@ -15,8 +15,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   readTrackedArchiveEntries,
-  trackedSymlinkProblems,
   type TrackedArchiveEntry,
+  trackedSymlinkProblems,
 } from "./check-tracked-symlinks";
 
 type GitOptions = { root: string; args: string[]; input?: string };

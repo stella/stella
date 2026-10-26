@@ -18,7 +18,7 @@
  *   invokeCapability("x.y", (request) => api.x.post(body, request))
  *   (request) => api.x({ id }).patch(body, { ...request, query })
  *
- * Boundary: the Eden write must sit directly in the capability callback (not in
+ * Boundary: the API client write must sit directly in the capability callback (not in
  * a nested function) and be rooted at a registered client import, followed
  * through local immutable aliases. Writes outside capability callbacks are
  * counted by the `undeclared-eden-writes` ratchet metric, which can only
@@ -27,11 +27,11 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  EDEN_CLIENT_EXPORTS,
-  EDEN_CLIENT_MODULES,
-  EDEN_WRITE_METHODS,
-  EDEN_WRITE_OPTIONS_INDEX,
-} from "./eden-client.ts";
+  API_CLIENT_CLIENT_EXPORTS,
+  API_CLIENT_CLIENT_MODULES,
+  API_CLIENT_WRITE_METHODS,
+  API_CLIENT_WRITE_OPTIONS_INDEX,
+} from "./api-client-chain.ts";
 import type { AstNode, ImportedFromOptions } from "./utils.ts";
 import {
   getPropertyName,
@@ -78,8 +78,8 @@ const isClientRooted = (
     isImportedFrom({
       context,
       node,
-      modules: EDEN_CLIENT_MODULES,
-      names: EDEN_CLIENT_EXPORTS,
+      modules: API_CLIENT_CLIENT_MODULES,
+      names: API_CLIENT_CLIENT_EXPORTS,
     })
   ) {
     return true;
@@ -98,7 +98,7 @@ const isClientRooted = (
   return initializer !== null && isClientRooted(context, initializer, visited);
 };
 
-const isEdenWrite = (context: Context, call: AstNode): boolean => {
+const isApiClientWrite = (context: Context, call: AstNode): boolean => {
   const callee = unwrapExpression(call.callee);
   if (callee?.type !== "MemberExpression") {
     return false;
@@ -106,7 +106,7 @@ const isEdenWrite = (context: Context, call: AstNode): boolean => {
   const method = memberPropertyName(callee);
   return (
     method !== null &&
-    EDEN_WRITE_METHODS.has(method) &&
+    API_CLIENT_WRITE_METHODS.has(method) &&
     isClientRooted(context, callee.object)
   );
 };
@@ -164,7 +164,7 @@ const capabilityRequestParam = (
 
 const passesRequest = (call: AstNode, request: string): boolean => {
   const options = Array.isArray(call.arguments)
-    ? unwrapExpression(call.arguments.at(EDEN_WRITE_OPTIONS_INDEX))
+    ? unwrapExpression(call.arguments.at(API_CLIENT_WRITE_OPTIONS_INDEX))
     : null;
   if (options === null) {
     return false;
@@ -284,7 +284,7 @@ export default eslintCompatPlugin({
             ) {
               context.report({ node, messageId: "dynamicCapability" });
             }
-            if (!isEdenWrite(context, node)) {
+            if (!isApiClientWrite(context, node)) {
               return;
             }
             const fn = nearestFunction(node);

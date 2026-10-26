@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/business-registries/desktop/issuance.ts",
+  "delta": 1,
+  "reason": "Desktop credential issuance writes the denied auth key table inside the account credential fence, so it needs the root connection; it is registered as the desktop-account-issuance root-connection owner and replaces the provider endpoint call that committed outside the fence."
+}

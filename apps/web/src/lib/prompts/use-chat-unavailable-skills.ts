@@ -9,8 +9,8 @@ import { useOptionalChatAnonymized } from "@/lib/chat-anonymized-store";
 import { chatUnavailableSkillsOptions } from "@/lib/knowledge/queries";
 import {
   chatSkillAvailabilityQuery,
-  chatSkillMenuAvailability,
   type ChatSkillMenuAvailability,
+  chatSkillMenuAvailability,
   type ComposerSkillChatContext,
 } from "@/lib/prompts/chat-skill-availability.logic";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -33,7 +33,7 @@ export const useChatUnavailableSkills = (
     enabled: organizationId !== undefined && userId !== undefined,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useChatUnavailableSkills:query");
   const data =
     dataView.type === "items" && dataView.refetchError === undefined
       ? dataView.items
@@ -95,7 +95,7 @@ export const useComposerSkillAvailability = ({
     enabled: enabled && known,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useComposerSkillAvailability:query");
   const data =
     dataView.type === "items" && dataView.refetchError === undefined
       ? dataView.items

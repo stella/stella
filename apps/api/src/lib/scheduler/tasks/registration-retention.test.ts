@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { eq, type SQL, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
@@ -9,17 +9,17 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import {
-  agentRegistration,
   agentAssertionReplay,
+  agentRegistration,
 } from "@/api/db/agent-auth-schema";
 import {
-  oauthClient,
-  oauthConsent,
   oauthAccessToken,
-  oauthRefreshToken,
+  oauthClient,
   oauthClientAssertion,
-  verification,
+  oauthConsent,
+  oauthRefreshToken,
   user,
+  verification,
 } from "@/api/db/auth-schema";
 import { registrationDailyBudget } from "@/api/db/registration-budget-schema";
 import { envApiServerSchema } from "@/api/env-schema";

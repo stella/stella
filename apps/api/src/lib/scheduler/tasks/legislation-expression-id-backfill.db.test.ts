@@ -30,6 +30,7 @@ describe.skipIf(!enabled)("expression backfill on PostgreSQL 18", () => {
       for (const table of [
         "legislation_sources",
         "legislation_documents",
+        "legislation_work_identifiers",
         "legislation_work_names",
         "scheduler_jobs",
         "scheduler_job_runs",

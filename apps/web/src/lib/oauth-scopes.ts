@@ -67,6 +67,13 @@ const OAUTH_SCOPE_METADATA = {
     summaryGroup: "change",
     sensitive: true,
   },
+  "stella:memory_write": {
+    label: "consent.scopeMemoryWrite",
+    summary: "consent.summaryMemoryWrite",
+    group: "change",
+    summaryGroup: "change",
+    sensitive: true,
+  },
   "stella:knowledge_write": {
     label: "consent.scopeKnowledgeWrite",
     summary: "consent.summaryKnowledgeWrite",

@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
 import {
-  createS3ObjectIfAbsent,
   corpusS3ObjectExists,
+  createS3ObjectIfAbsent,
   getS3,
   isMissingCorpusObjectError,
   isMissingS3ObjectError,
@@ -12,10 +12,10 @@ import {
   readCorpusS3Bytes,
   readCorpusS3BytesBounded,
   readCorpusS3Range,
-  S3ObjectBudgetError,
   readS3ArrayBuffer,
   resolveS3Credentials,
   S3_OBJECT_WRITE_CERTAINTY,
+  S3ObjectBudgetError,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
 import { isExpiredCredentialsError } from "@/api/lib/s3/credential-guard";

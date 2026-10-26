@@ -9,15 +9,44 @@ class CheckPoolRegistryError extends Error {
 }
 
 /** Jobs whose checks live in .github/ci-checks/<job>.yml. */
-export const CHECK_POOL_JOBS = ["ci-checks-policy", "ci-checks-rest"] as const;
+export const CHECK_POOL_JOBS = [
+  "ci-checks-policy",
+  "ci-checks-rest",
+  "code-quality-web-rest",
+] as const;
 export type CheckPoolJob = (typeof CHECK_POOL_JOBS)[number];
 
 /** Step names stay unique across jobs: guards key checks by name. */
 export const CHECK_POOL_STEP_NAMES = {
   "ci-checks-policy": "Run policy checks",
   "ci-checks-rest": "Run repository checks",
+  "code-quality-web-rest": "Run independent code-quality checks",
 } as const satisfies Record<CheckPoolJob, string>;
-const POOL_COMMAND = /^bun scripts\/ci-check-pool\.ts run ([\w-]+)$/u;
+// The pool step writes the job's `needs` to a file and runs the pool on it:
+// ci-plan's outputs can exceed the 128 KiB limit of one environment value.
+const POOL_COMMAND = new RegExp(
+  [
+    String.raw`^needs_file=\$\(mktemp\)`,
+    String.raw`cat > "\$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
+    String.raw`\$\{\{ toJSON\(needs\) \}\}`,
+    "CI_CHECK_POOL_NEEDS_JSON",
+    String.raw`CI_CHECK_POOL_NEEDS_FILE="\$needs_file" bun scripts/ci-check-pool\.ts run ([\w-]+)$`,
+  ].join("\n"),
+  "u",
+);
+
+/** The pool step's script for `job`, exactly as the workflow declares it. */
+export const checkPoolStepRun = (job: CheckPoolJob) =>
+  [
+    "needs_file=$(mktemp)",
+    `cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'`,
+    // Built, not written literally: a `${...}` in a plain string reads as a
+    // broken template literal to the linter.
+    ["$", "{{ toJSON(needs) }}"].join(""),
+    "CI_CHECK_POOL_NEEDS_JSON",
+    `CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ${job}`,
+    "",
+  ].join("\n");
 
 /** One check: the fields of the workflow step it replaced, verbatim. */
 export type PoolCheck = {

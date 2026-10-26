@@ -27,11 +27,11 @@ import {
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  buildListingQuery,
   buildDecision,
+  buildListingQuery,
   ecjRawParts,
-  fetchNotice,
   euEcjAdapter,
+  fetchNotice,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -55,13 +55,13 @@ import { caseLawProjectionInputFromCanonical } from "@/api/lib/legal-search/corp
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import {
-  sanitizeResult,
   partialObservationFromMetadata,
+  sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import {
+  decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  decodeSourceRawEnvelope,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
@@ -367,6 +367,7 @@ describe("notice publication outcomes", () => {
       ecli: result.ecli ?? null,
       metadata: result.metadata,
       sourceHash: result.rawHash,
+      sourceHashVersion: 0,
       sourceObservedAt: new Date("2026-10-01T00:00:00Z"),
       sourceObservationHash: result.rawHash,
       redactedAt: null,
@@ -526,6 +527,8 @@ describe("notice publication outcomes", () => {
         observedAt,
         observationOrder: 2n,
         refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        sourceFingerprintVersion: 0,
+        sourceFingerprintFromStoredRaw: async () => refused.rawHash,
       });
       expect(outcome?.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
       expect(writes).toHaveLength(1);
@@ -588,6 +591,8 @@ describe("notice publication outcomes", () => {
           observedAt,
           observationOrder: 3n,
           refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+          sourceFingerprintVersion: 0,
+          sourceFingerprintFromStoredRaw: async () => enriched.rawHash,
         }),
       ).toBeNull();
 
@@ -617,6 +622,8 @@ describe("notice publication outcomes", () => {
             observedAt,
             observationOrder: 4n,
             refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+            sourceFingerprintVersion: 0,
+            sourceFingerprintFromStoredRaw: async () => gone.rawHash,
           }),
         ).toBeNull();
         expect(
@@ -1002,7 +1009,7 @@ describe("stored Formex refresh", () => {
 
   test("treats a stored archive as current without contacting Cellar", async () => {
     const currentFormex = `formex-archive:${encodeSourceRawEnvelope({
-      "FORMEX/main.xml": Buffer.from("<current-formex />").toString("base64"),
+      "FORMEX/main.xml": Buffer.from("<current-formex />").toBase64(),
     })}`;
 
     const outcome = await refreshEcjStoredFormex({

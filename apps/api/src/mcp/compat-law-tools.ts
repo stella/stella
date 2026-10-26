@@ -17,13 +17,13 @@ import {
   decodeCompatCorpusId,
 } from "@/api/mcp/compat-ids";
 import {
-  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
   compatCorpusFetchResponse,
   compatSearchCursorError,
   compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
+  LAW_COMPAT_SEARCH_CURSOR_MAX_LENGTH,
 } from "@/api/mcp/compat-shared";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -36,6 +36,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 /**
  * The OpenAI-compatible `search`/`fetch` pair for the law audience.
@@ -89,6 +90,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead("public law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
@@ -111,6 +113,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead("public law corpus"),
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:

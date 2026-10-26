@@ -1,13 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { createDatabase } from "@/api/db/sql-client";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
@@ -157,7 +157,7 @@ if (!databaseUrl || !enabled) {
             const target = phase === "start" || phase === "fail" ? 1 : 2;
             let stepReads = 0;
             const phaseReadRequested = Promise.withResolvers<undefined>();
-            const workerDb = drizzle({
+            const workerDb = createDatabase({
               client: workerClient.sql,
               relations: databaseRelations,
               logger: {

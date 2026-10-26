@@ -1,8 +1,8 @@
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import {
-  fileMetadataQueryKey,
   type FileMetadataQueryKey,
+  fileMetadataQueryKey,
 } from "@/lib/files/file-metadata-query.logic";
 
 type FileMetadataOptions = FileMetadataQueryKey & { enabled?: boolean };
@@ -28,7 +28,7 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
           fetch: { signal },
         });
 
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       return {
         fileId: data.fileId,

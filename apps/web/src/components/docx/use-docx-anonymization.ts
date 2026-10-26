@@ -13,6 +13,7 @@ import {
 } from "@/components/inspector/inspector-anonymization-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
+import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
@@ -43,7 +44,7 @@ export const useDocxAnonymizationHighlights = ({
   workspaceId,
 }: UseDocxAnonymizationHighlightsOptions) => {
   // True while the inspector's Anonymization facet is mounted.
-  // We gate both the term feed *and* the detection heartbeat on
+  // We gate both the term feed *and* entity detection on
   // this so highlights paint only while the user is on that tab
   // — switching to Metadata / History / Suggestions clears the
   // overlay immediately and stops the wasm pipeline from running
@@ -53,7 +54,10 @@ export const useDocxAnonymizationHighlights = ({
     anonymizationTermsOptions(workspaceId),
   );
   const anonymizationTermsQueryView = useQueryView(anonymizationTermsQuery);
-  useQueryViewError(anonymizationTermsQueryView);
+  useQueryViewError(
+    anonymizationTermsQueryView,
+    "useDocxAnonymizationHighlights:query",
+  );
   const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!anonymizationTermsQuery.data) {
       return [];
@@ -72,20 +76,22 @@ export const useDocxAnonymizationHighlights = ({
   // vocabulary so the editor shows everything that *would* be
   // anonymized right now, not only the curated catalogue.
   //
-  // Re-runs when the doc text changes (debounced inside the
+  // Re-runs when the doc text changes (settled inside the
   // pipeline) so edits and reloads pick up new entities without
-  // re-running on every keystroke.
+  // re-running on every keystroke, and does nothing while the
+  // document stays unchanged.
   const [detectedAnonymizationTerms, setDetectedAnonymizationTerms] = useState<
     AnonymizationTerm[]
   >([]);
-  // Exposed by the detection heartbeat effect below so the
-  // exclusions-watching effect can kick a fresh run the moment
-  // the allowlist changes, instead of waiting for the next 2s
-  // heartbeat tick.
-  const runDetectionRef = useRef<(() => void) | null>(null);
-  // Hold the latest exclusions in a ref so the detection heartbeat
-  // sees fresh exclusions without re-installing itself on every
-  // keystroke / mutation.
+  // Exposed by the detection effect below so the exclusions-watching
+  // effect can kick a fresh run the moment the allowlist changes, and
+  // the match callback can report document changes.
+  const detectionRef = useRef<ReturnType<
+    typeof startAnonymizationDetection
+  > | null>(null);
+  // Hold the latest exclusions in a ref so detection sees fresh
+  // exclusions without re-installing itself on every keystroke /
+  // mutation.
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
   const detectionRetry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
@@ -95,7 +101,10 @@ export const useDocxAnonymizationHighlights = ({
     enabled: isAnonymizationActive,
   });
   const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  useQueryViewError(
+    allowlistQueryView,
+    "useDocxAnonymizationHighlights:query-2",
+  );
   const policyReady =
     anonymizationTermsQuery.status === "success" &&
     allowlistQuery.status === "success";
@@ -118,29 +127,22 @@ export const useDocxAnonymizationHighlights = ({
       return undefined;
     }
     const detection = startAnonymizationDetection({
+      detect: anonymizeChatTextInWorker,
       fieldId,
       onDetected: setDetectedAnonymizationTerms,
       readExcludedCanonicals: () => excludedCanonicalsRef.current,
       view,
       workspaceId,
     });
-    // Expose `run` so an outside effect can kick a fresh
-    // detection right after the user toggles an exclusion,
-    // without waiting up to a heartbeat tick for the new
-    // allowlist to take effect.
-    runDetectionRef.current = detection.run;
+    // Expose the detection so an outside effect can kick a fresh
+    // run right after the user toggles an exclusion, and the match
+    // callback can report document edits.
+    detectionRef.current = detection;
     return () => {
-      runDetectionRef.current = null;
+      detectionRef.current = null;
       detection.stop();
     };
-  }, [
-    editorView,
-    isAnonymizationActive,
-    policyReady,
-    workspaceId,
-    fieldId,
-    detectionRetry,
-  ]);
+  }, [editorView, isAnonymizationActive, policyReady, workspaceId, fieldId]);
   // Per-doc allowlist: canonicals the user has flagged as false
   // positives. The chat-anon worker filters these out of its
   // detected entities itself; we still need to strip them from
@@ -156,9 +158,8 @@ export const useDocxAnonymizationHighlights = ({
   useExternalSyncEffect(() => {
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
     // Kick the detection right away so worker-found terms that
-    // the user just added to the allowlist disappear without
-    // having to wait up to 2s for the next heartbeat tick.
-    runDetectionRef.current?.();
+    // the user just added to the allowlist disappear.
+    detectionRef.current?.run();
   }, [excludedCanonicalsSet]);
   const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(
     () =>
@@ -193,7 +194,13 @@ export const useDocxAnonymizationHighlights = ({
       view.dispatch(view.state.tr.setMeta(key, payload));
     });
     if (Result.isError(dispatched)) {
-      getAnalytics().captureError(dispatched.error);
+      getAnalytics().captureError(dispatched.error, {
+        fingerprintKey: "useDocxAnonymizationHighlights:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDocxAnonymizationHighlights:failure",
+        },
+      });
       useInspectorAnonymizationStore
         .getState()
         .markAnonymizationPipelineFailed(fieldId);
@@ -210,6 +217,11 @@ export const useDocxAnonymizationHighlights = ({
   // doc edit, async DOCX load); we mirror it into the matches
   // store so the inspector facet's counter and "matching
   // workspace terms" list stay in sync.
+  //
+  // The same emission is the document-change signal for entity
+  // detection: every doc edit and DOCX load passes through it, and
+  // detection ignores emissions whose document it already read
+  // (term pushes).
   const handleAnonymizationMatchesChange = useCallback(
     (matches: readonly { canonical: string; label: string }[]) => {
       const { publishAnonymizationMatches } =
@@ -217,6 +229,7 @@ export const useDocxAnonymizationHighlights = ({
       if (!isAnonymizationActive) {
         return;
       }
+      detectionRef.current?.noteDocChanged();
       publishAnonymizationMatches(
         fieldId,
         aggregateAnonymizationMatches(matches),

@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -16,8 +16,8 @@ import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestio
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";

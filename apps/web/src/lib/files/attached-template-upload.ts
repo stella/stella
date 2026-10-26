@@ -2,12 +2,12 @@ import { Result } from "better-result";
 
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
+  type AttachedTemplateTargetKind,
   isOpcRelationshipPartPath,
   loadDocx,
   repackZip,
   sanitizeAttachedTemplateRelationships,
   sanitizeAttachedTemplateSource,
-  type AttachedTemplateTargetKind,
   writeZipEntry,
 } from "@stll/docx-utils";
 

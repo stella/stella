@@ -80,11 +80,19 @@ describe("API environment", () => {
       "handlers/health/routes.ts",
       import.meta.url,
     ).href;
+    const appModuleUrl = new URL("http/app.ts", import.meta.url).href;
+    const testServerModuleUrl = new URL(
+      "tests/helpers/test-server.ts",
+      import.meta.url,
+    ).href;
     const script = `const { getDemoAccountOtpOverride } = await import(${JSON.stringify(otpModuleUrl)});
       const { createHealthRoute } = await import(${JSON.stringify(routesModuleUrl)});
+      const { createHttpApp } = await import(${JSON.stringify(appModuleUrl)});
+      const { serveForTest } = await import(${JSON.stringify(testServerModuleUrl)});
       const codes = [" Account@Example.Test ", "standard@example.test", "standard@example.test", "account@example.test"].map(email => getDemoAccountOtpOverride({ email, type: "sign-in" }) ?? null);
-      const route = createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) });
-      const response = await route.handle(new Request("http://localhost/ready"));
+      const server = serveForTest(createHttpApp({ middleware: [], routes: createHealthRoute({ probeReadiness: async () => ({ status: "ready" }) }) }));
+      const response = await server.fetch("http://localhost/ready");
+      await server.stop();
       console.log(JSON.stringify({ status: response.status, codes }));`;
     const result = spawnApiEnvironment(
       {

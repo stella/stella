@@ -2,8 +2,11 @@ import { Result } from "better-result";
 
 import { mergeLegacyLawHistory } from "@/lib/account/law-history-legacy-merge";
 import {
+  CLAIMED_GUEST_ANNOTATIONS_STORAGE_KEY,
   DOCX_OUTLINE_DEPTH_STORAGE_KEY,
+  GUEST_ANNOTATIONS_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
+  LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
   READER_PROVISION_MODE_STORAGE_KEY,
 } from "@/lib/account/storage-keys";
 
@@ -51,21 +54,26 @@ type Legacy = {
   adopt: (raw: string, existing: string | null) => string | null;
 };
 
-type FamilyBase = { area: StorageArea; prefix: string };
+/** Every new persistence family must decide whether safe boot resets it. */
+export type StorageFamilyBase = {
+  area: StorageArea;
+  prefix: string;
+  restoration: "layout" | "data";
+};
 
 type UserStorageFamily =
-  | (FamilyBase & {
+  | (StorageFamilyBase & {
       owner: Extract<OwnerReading, "scoped">;
       retention: Extract<Retention, "kept-for-owner">;
       legacy?: Legacy | undefined;
     })
-  | (FamilyBase & {
+  | (StorageFamilyBase & {
       owner: Extract<OwnerReading, "scoped">;
       retention: Extract<Retention, "cleared">;
       // Nothing cleared on leaving is worth taking over from before keying.
       legacy?: never;
     })
-  | (FamilyBase & {
+  | (StorageFamilyBase & {
       owner: Extract<OwnerReading, "carried">;
       retention: Extract<Retention, "cleared">;
       legacy?: never;
@@ -135,6 +143,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: READER_PROVISION_MODE_STORAGE_KEY,
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
   },
@@ -142,6 +151,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: DOCX_OUTLINE_DEPTH_STORAGE_KEY,
+    restoration: "layout",
     owner: "scoped",
     retention: "kept-for-owner",
   },
@@ -149,6 +159,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: LAW_HISTORY_STORAGE_KEY,
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "bare", adopt: mergeLegacyLawHistory },
@@ -157,6 +168,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.organize-suggestions.user-instructions.",
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "base", adopt: keepUnlessSet },
@@ -165,6 +177,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.chat.anonymized",
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
     // The chosen default only; the per-chat modes name one user's chats.
@@ -174,6 +187,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.chat.threadActiveSkill",
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
   },
@@ -181,6 +195,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.report-exports.active",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
@@ -188,6 +203,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.chat.alwaysApprovedTools",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
@@ -195,6 +211,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella:inspector-state:v1:",
+    restoration: "layout",
     owner: "scoped",
     retention: "cleared",
   },
@@ -203,6 +220,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella:inspector-restore-pending:v1:",
+    restoration: "layout",
     owner: "scoped",
     retention: "cleared",
   },
@@ -210,6 +228,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella:inspector-minimized:v1:",
+    restoration: "layout",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "user-suffix", adopt: keepUnlessSet },
@@ -218,6 +237,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella-search-recent-searches:",
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "user-suffix", adopt: keepUnlessSet },
@@ -227,6 +247,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella-search-recent-files:",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
@@ -234,6 +255,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "sidebar_pinned",
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "user-suffix", adopt: mergeStringLists },
@@ -242,6 +264,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella:table",
+    restoration: "layout",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "bare", adopt: keepUnlessSet },
@@ -250,6 +273,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "stella.tree-view.column-widths.",
+    restoration: "layout",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "base", adopt: keepUnlessSet },
@@ -258,6 +282,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "local",
     prefix: "document_review_start_mode_",
+    restoration: "data",
     owner: "scoped",
     retention: "kept-for-owner",
     legacy: { keys: "base", adopt: keepUnlessSet },
@@ -266,6 +291,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "contact-import-request:v1:",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
@@ -274,14 +300,44 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.provision-question:",
+    restoration: "data",
     owner: "carried",
     retention: "cleared",
+  },
+  // A visitor's private legal-reader marks, until the first account signed in
+  // this tab claims them; unclaimed, they go when that account leaves.
+  {
+    area: "session",
+    prefix: GUEST_ANNOTATIONS_STORAGE_KEY,
+    restoration: "data",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // The previous guest-store shape follows the same ownership boundary until
+  // the reader migrates it to the current shape.
+  {
+    area: "session",
+    prefix: LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
+    restoration: "data",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // Guest marks an account claimed and has not uploaded yet: they wait under
+  // its key through a sign-out for its next sign-in in this tab, and no other
+  // account reads them.
+  {
+    area: "session",
+    prefix: CLAIMED_GUEST_ANNOTATIONS_STORAGE_KEY,
+    restoration: "data",
+    owner: "scoped",
+    retention: "kept-for-owner",
   },
   // A desktop app's linking challenge, held across the sign-in redirect
   // until the desktop settings page consumes it once.
   {
     area: "session",
     prefix: "stella.desktop-account-link",
+    restoration: "data",
     owner: "carried",
     retention: "cleared",
   },
@@ -289,6 +345,7 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.chat.conversationApprovedTools:",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
@@ -296,24 +353,48 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.chat.browserApprovalMode",
+    restoration: "data",
     owner: "scoped",
     retention: "cleared",
   },
 ];
 
 export const DEVICE_STORAGE_FAMILIES = [
-  { area: "local", prefix: "stella-ui-theme" },
-  { area: "local", prefix: "stella-ui-palette" },
-  { area: "local", prefix: "sidebar_state" },
-  { area: "local", prefix: "document_translation_last_target" },
-  { area: "local", prefix: "folio:debug-scroll" },
-  { area: "local", prefix: "stella:selfhost-update-dismissed:" },
-  { area: "local", prefix: "stella.templates.density" },
-  { area: "local", prefix: "stella-dev" },
-  { area: "local", prefix: "stella.session-signal" },
-  { area: "local", prefix: "stella:chat-turn-notifications" },
-  { area: "local", prefix: "stella:inspector-pane-width:" },
-  { area: "session", prefix: "stella:preload-reload-at" },
-  { area: "session", prefix: "stella.devQuickStart.attempt" },
-  { area: "session", prefix: "stella.storage-owner" },
-] as const satisfies readonly { area: StorageArea; prefix: string }[];
+  { area: "local", prefix: "stella:web-hang:", restoration: "data" },
+  { area: "local", prefix: "statute_table_layout", restoration: "layout" },
+  { area: "local", prefix: "case_law_hidden_columns", restoration: "layout" },
+  { area: "local", prefix: "reader_text_scale", restoration: "layout" },
+  { area: "local", prefix: "stella-ui-theme", restoration: "data" },
+  { area: "local", prefix: "stella-ui-palette", restoration: "data" },
+  {
+    area: "local",
+    prefix: "document_translation_last_target",
+    restoration: "data",
+  },
+  { area: "local", prefix: "folio:debug-scroll", restoration: "data" },
+  {
+    area: "local",
+    prefix: "stella:selfhost-update-dismissed:",
+    restoration: "data",
+  },
+  { area: "local", prefix: "stella.templates.density", restoration: "layout" },
+  { area: "local", prefix: "stella-dev", restoration: "data" },
+  { area: "local", prefix: "stella.session-signal", restoration: "data" },
+  {
+    area: "local",
+    prefix: "stella:chat-turn-notifications",
+    restoration: "data",
+  },
+  {
+    area: "local",
+    prefix: "stella:inspector-pane-width:",
+    restoration: "layout",
+  },
+  { area: "session", prefix: "stella:preload-reload-at", restoration: "data" },
+  {
+    area: "session",
+    prefix: "stella.devQuickStart.attempt",
+    restoration: "data",
+  },
+  { area: "session", prefix: "stella.storage-owner", restoration: "data" },
+] as const satisfies readonly StorageFamilyBase[];

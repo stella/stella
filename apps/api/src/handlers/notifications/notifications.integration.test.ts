@@ -21,8 +21,9 @@ import publishAnnouncement, {
   createPublishAnnouncementEndpoint,
 } from "@/api/handlers/notifications/announce";
 import listNotifications from "@/api/handlers/notifications/list";
-import markNotificationRead from "@/api/handlers/notifications/read";
 import markAllNotificationsRead from "@/api/handlers/notifications/read-all";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -128,7 +129,7 @@ const contextFor = ({
     createAuditRecorder: () => recordAuditEvent,
     recordAuditEvent,
     request: new Request("https://example.test/v1/notifications"),
-    route: "/test/notifications",
+    route: "/v1/notifications" satisfies ApiRoutePath,
   };
 };
 

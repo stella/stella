@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { linkIconsApi } from "@/lib/api";
+import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors/client";
 
 const LINK_ICON_REQUEST_TIMEOUT_MS = 5000;
@@ -23,8 +23,7 @@ export const exactIconOptions = (url: string) =>
   iconOptions({ type: "url", value: url });
 
 type IconTarget =
-  | { type: "hostname"; value: string }
-  | { type: "url"; value: string };
+  { type: "hostname"; value: string } | { type: "url"; value: string };
 
 function iconOptions(target: IconTarget) {
   const options = queryOptions({
@@ -33,31 +32,52 @@ function iconOptions(target: IconTarget) {
     gcTime: 60 * 1000,
     queryFn: async ({ signal, client }): Promise<LinkIcon> => {
       const temporary = nextTemporaryOutcome(client);
-      const result = await Result.tryPromise(async () => {
+      const routeTemplate =
+        target.type === "hostname"
+          ? "/v1/chat/link-icons/:hostname"
+          : "/v1/chat/link-icons/exact";
+      const unavailable = (cause: unknown) => {
+        getAnalytics().captureError(
+          new ClientOperationError({
+            action: "readLinkIcon",
+            message: "Link icon unavailable",
+            cause,
+          }),
+          {
+            fingerprintKey: "linkIconOptions:request",
+            scope: { type: "request", method: "GET", routeTemplate },
+          },
+        );
+        return temporary;
+      };
+      const fetched = await Result.tryPromise(async () => {
         const fetch = {
           signal: AbortSignal.any([
             signal,
             AbortSignal.timeout(LINK_ICON_REQUEST_TIMEOUT_MS),
           ]),
         };
-        return target.type === "hostname"
-          ? await linkIconsApi({ hostname: target.value }).get({ fetch })
-          : await linkIconsApi.exact.get({
-              query: { url: target.value },
-              fetch,
-            });
+        const response =
+          target.type === "hostname"
+            ? await api.chat["link-icons"]({ hostname: target.value }).get({
+                fetch,
+              })
+            : await api.chat["link-icons"].exact.get({
+                query: { url: target.value },
+                fetch,
+              });
+        return response.error === null
+          ? Result.ok(response.data)
+          : Result.err(response.error);
       });
-      if (Result.isError(result) || result.value.error) {
-        getAnalytics().captureError(
-          new ClientOperationError({
-            action: "readLinkIcon",
-            message: "Link icon unavailable",
-            cause: Result.isError(result) ? result.error : result.value.error,
-          }),
-        );
-        return temporary;
+      if (Result.isError(fetched)) {
+        return unavailable(fetched.error);
       }
-      const bytes = result.value.data;
+      const answer = fetched.value;
+      if (Result.isError(answer)) {
+        return unavailable(answer.error);
+      }
+      const bytes = answer.value;
       if (!(bytes instanceof Blob)) {
         switch (bytes.type) {
           case "no-icon":
@@ -78,6 +98,14 @@ function iconOptions(target: IconTarget) {
             action: "readLinkIcon",
             message: "Unexpected link icon response",
           }),
+          {
+            fingerprintKey: "linkIconOptions:response",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate,
+            },
+          },
         );
         return temporary;
       }

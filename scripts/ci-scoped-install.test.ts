@@ -930,7 +930,6 @@ test("the dependency audit installs only the root workspace", () => {
 });
 
 const installFreeJobs = [
-  [".github/workflows/db-migrations.yml", "scope"],
   [".github/workflows/autofix.yml", "regenerate-scope"],
 ] as const;
 const setupSchema = v.looseObject({

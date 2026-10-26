@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
-  INGESTION_HEALTH_MESSAGE,
   createIngestionHealthRefresh,
+  INGESTION_HEALTH_MESSAGE,
   ingestionHealthRecord,
 } from "./ingestion-health";
 

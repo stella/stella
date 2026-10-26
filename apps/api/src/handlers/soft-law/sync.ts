@@ -9,9 +9,9 @@ import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 import {
-  SOFT_LAW_ADMISSIONS,
   configureSoftLawAdapter,
   type RegisteredSoftLawAuthority,
+  SOFT_LAW_ADMISSIONS,
 } from "./adapters/registry";
 import { runSoftLawIngestion } from "./ingestion";
 

@@ -145,7 +145,7 @@ Preference:
    Either prepend `--inspect-brk` to the test command inside your
    package script temporarily, or invoke directly while replicating the
    flags the script wires, e.g. `bun --inspect-brk test --preload
-./setup.ts <file-path>`. Open the printed `devtools://` URL in
+   ./setup.ts <file-path>`. Open the printed `devtools://` URL in
    Chrome, set one breakpoint at the suspected fault. One breakpoint
    beats ten logs.
 2. Targeted logs at the boundaries that distinguish hypotheses.

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   providerErrorFields,
-  providerErrorReason,
   type ProviderErrorReason,
+  providerErrorReason,
 } from "@/api/lib/observability/provider-error-reason";
 
 describe("providerErrorReason", () => {

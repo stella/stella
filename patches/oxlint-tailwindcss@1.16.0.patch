@@ -1,7 +1,20 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..f3fd2f6da7b48cca0a61e6ba11266eabadee9c7b 100644
+index 6d9820c..193fe51 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
+@@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
+ 		const memo = this.declMemo.get(key);
+ 		if (memo) return memo;
+ 		const byClass = this.declIndex?.byClass;
+-		let packed = byClass?.[key];
++		let packed = byClass != null && Object.hasOwn(byClass, key) ? byClass[key] : void 0;
+ 		if (packed === void 0) {
+ 			const { bare, position } = splitImportant(key);
+-			if (position) packed = byClass?.[bare];
++			if (position && byClass != null && Object.hasOwn(byClass, bare)) packed = byClass[bare];
+ 		}
+ 		const decoded = this.decodeDecls?.(packed) ?? EMPTY_DECLARATIONS;
+ 		this.declMemo.set(key, decoded);
 @@ -2480,7 +2480,8 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
@@ -35,10 +48,168 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..f3fd2f6da7b48cca0a61e6ba11266eab
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
+@@ -3707,6 +3722,11 @@ function resolveCacheDir() {
+ 	return (0, node_path.join)((0, node_os.tmpdir)(), cacheDirName());
+ }
+ const CACHE_DIR = resolveCacheDir();
++const CACHE_READ_ONLY = process.env.OXLINT_TAILWINDCSS_CACHE_READ_ONLY === "1";
++const CACHE_GENERATE_COMMAND = "bun scripts/generate-tailwind-classes.ts --write";
++function readOnlyCacheError(detail) {
++	return new DesignSystemLoadError(`Tailwind cache is incomplete: ${detail}.`, `Run \`${CACHE_GENERATE_COMMAND}\` and commit the generated cache.`);
++}
+ /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
+ const CACHE_MAX_AGE_MS = 2592e6;
+ /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
+@@ -4099,7 +4119,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+ 	const cached = tryReadCache(contentCachePath);
+ 	const readMs = since(readStart);
+ 	if (cached) {
+-		touchCacheFile(contentCachePath);
++		if (!CACHE_READ_ONLY) touchCacheFile(contentCachePath);
+ 		lastLoadReport = {
+ 			source: "cache",
+ 			hashMs,
+@@ -4107,6 +4127,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+ 		};
+ 		return cached;
+ 	}
++	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing snapshot ${contentCachePath}`);
+ 	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
+ 	onPrecompute?.();
+ 	const computeStart = performance.now();
+@@ -4612,6 +4633,7 @@ var DesignSystemWorker = class {
+ 	}
+ 	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
+ 	spawn(cssPath, warm) {
++		if (CACHE_READ_ONLY) throw this.remember(cssPath, readOnlyCacheError(`missing persisted ${this.opts.serviceName} answer for "${cssPath}"`));
+ 		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
+ 		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
+ 		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
+@@ -5549,6 +5571,73 @@ function answersFor(cache) {
+ 	}
+ 	return map;
+ }
++const declarationPersistLoaded = /* @__PURE__ */ new WeakMap();
++function declarationShardFile(cssPath, cls) {
++	const { json } = cacheArtifactPaths(cssPath);
++	const shard = (0, node_crypto.createHash)("md5").update(cls).digest("hex").slice(0, 2);
++	return json.replace(/\.json$/, `.decl-${shard}.json`);
++}
++function loadDeclarationAnswers(cssPath, cache, classes) {
++	let loaded = declarationPersistLoaded.get(cache);
++	if (!loaded) {
++		loaded = /* @__PURE__ */ new Set();
++		declarationPersistLoaded.set(cache, loaded);
++	}
++	const known = answersFor(cache);
++	for (const cls of classes) {
++		const file = declarationShardFile(cssPath, cls);
++		if (loaded.has(file)) continue;
++		loaded.add(file);
++		try {
++			const data = JSON.parse((0, node_fs.readFileSync)(file, "utf-8"));
++			if (typeof data !== "object" || data === null) continue;
++			for (const [token, entry] of Object.entries(data)) {
++				if (typeof entry !== "object" || entry === null || typeof entry.valid !== "boolean") continue;
++				known.set(token, entry.valid);
++				if (entry.valid && Array.isArray(entry.declarations) && typeof entry.values === "object" && entry.values !== null) cache.internDeclarations(token, entry.declarations, entry.values);
++			}
++			if (!CACHE_READ_ONLY) touchCacheFile(file);
++		} catch {}
++	}
++}
++function persistDeclarationAnswers(cssPath, pending, response) {
++	const invalid = new Set(response.invalid);
++	const byFile = /* @__PURE__ */ new Map();
++	for (const cls of pending) {
++		const file = declarationShardFile(cssPath, cls);
++		let entries = byFile.get(file);
++		if (!entries) {
++			try { entries = JSON.parse((0, node_fs.readFileSync)(file, "utf-8")); } catch { entries = {}; }
++			if (typeof entries !== "object" || entries === null || Array.isArray(entries)) entries = {};
++			byFile.set(file, entries);
++		}
++		const declarations = Object.hasOwn(response.decls, cls) ? response.decls[cls] : [];
++		const values = {};
++		for (const declaration of declarations) {
++			const value = declaration[2];
++			if (Object.hasOwn(response.values, value)) values[value] = response.values[value];
++		}
++		Object.defineProperty(entries, cls, { value: { valid: !invalid.has(cls), declarations, values }, enumerable: true, writable: true, configurable: true });
++	}
++	for (const [file, entries] of byFile) {
++		const lockPath = `${file}.lock`;
++		let lock = acquireFlushLock(lockPath);
++		for (let attempt = 0; lock === "contended" && attempt < 300; attempt++) {
++			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
++			lock = acquireFlushLock(lockPath);
++		}
++		if (lock !== "acquired") throw new Error(`Could not persist Tailwind declaration cache shard "${file}" (${lock})`);
++		try {
++			let merged = {};
++			try { const existing = JSON.parse((0, node_fs.readFileSync)(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
++			for (const [token, answer] of Object.entries(entries)) Object.defineProperty(merged, token, { value: answer, enumerable: true, writable: true, configurable: true });
++			const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
++			const tmp = `${file}.${process.pid}.${node_worker_threads.threadId}.${tmpSeq++}.tmp`;
++			(0, node_fs.writeFileSync)(tmp, `${JSON.stringify(sorted)}\n`);
++			(0, node_fs.renameSync)(tmp, file);
++		} finally { tryUnlink(lockPath); }
++	}
++}
+ /**
+ * Ask the design system about every class there is no answer for yet, intern the
+ * declarations it returns, and record which classes produce no CSS at all.
+@@ -5569,12 +5658,15 @@ function answersFor(cache) {
+ */
+ function ask(cssPath, cache, classes) {
+ 	const known = answersFor(cache);
++	loadDeclarationAnswers(cssPath, cache, classes);
+ 	const pending = [...new Set(classes.filter((cls) => !known.has(cls)))];
+ 	if (pending.length === 0) return;
++	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
+ 	const response = declWorker.callSync(cssPath, { classes: pending });
+ 	const invalid = new Set(response.invalid);
+ 	for (const cls of pending) known.set(cls, !invalid.has(cls));
+ 	for (const [cls, raws] of Object.entries(response.decls)) cache.internDeclarations(cls, raws, response.values);
++	persistDeclarationAnswers(cssPath, pending, response);
+ }
+ /**
+ * Resolve and intern declarations for `classes` that the precompute doesn't know.
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index a330176..52e9de6 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -3993,5 +3993,10 @@ interface CreateOnceRule {
+ //#endregion
+ //#region src/index.d.ts
+ declare const plugin: Plugin;
++/** The cache paths of a stylesheet's design-system snapshot, named by the hash of the inputs that compile it. */
++declare function cacheArtifactPaths(cssPath: string): {
++  json: string;
++  lock: string;
++};
+ //#endregion
+-export { plugin as default };
+\ No newline at end of file
++export { cacheArtifactPaths, plugin as default };
+\ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..6746733758097eb3305e7e650089c0ff72ff8930 100644
+index 61c6242..d83f163 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
+@@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
+ 		const memo = this.declMemo.get(key);
+ 		if (memo) return memo;
+ 		const byClass = this.declIndex?.byClass;
+-		let packed = byClass?.[key];
++		let packed = byClass != null && Object.hasOwn(byClass, key) ? byClass[key] : void 0;
+ 		if (packed === void 0) {
+ 			const { bare, position } = splitImportant(key);
+-			if (position) packed = byClass?.[bare];
++			if (position && byClass != null && Object.hasOwn(byClass, bare)) packed = byClass[bare];
+ 		}
+ 		const decoded = this.decodeDecls?.(packed) ?? EMPTY_DECLARATIONS;
+ 		this.declMemo.set(key, decoded);
 @@ -2483,7 +2483,8 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
@@ -72,3 +243,136 @@ index 61c624233238edcc998099f3d496c04caa7ba154..6746733758097eb3305e7e650089c0ff
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
+@@ -3710,6 +3725,11 @@ function resolveCacheDir() {
+ 	return join(tmpdir(), cacheDirName());
+ }
+ const CACHE_DIR = resolveCacheDir();
++const CACHE_READ_ONLY = process.env.OXLINT_TAILWINDCSS_CACHE_READ_ONLY === "1";
++const CACHE_GENERATE_COMMAND = "bun scripts/generate-tailwind-classes.ts --write";
++function readOnlyCacheError(detail) {
++	return new DesignSystemLoadError(`Tailwind cache is incomplete: ${detail}.`, `Run \`${CACHE_GENERATE_COMMAND}\` and commit the generated cache.`);
++}
+ /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
+ const CACHE_MAX_AGE_MS = 2592e6;
+ /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
+@@ -4102,7 +4122,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+ 	const cached = tryReadCache(contentCachePath);
+ 	const readMs = since(readStart);
+ 	if (cached) {
+-		touchCacheFile(contentCachePath);
++		if (!CACHE_READ_ONLY) touchCacheFile(contentCachePath);
+ 		lastLoadReport = {
+ 			source: "cache",
+ 			hashMs,
+@@ -4110,6 +4130,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+ 		};
+ 		return cached;
+ 	}
++	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing snapshot ${contentCachePath}`);
+ 	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
+ 	onPrecompute?.();
+ 	const computeStart = performance.now();
+@@ -4615,6 +4636,7 @@ var DesignSystemWorker = class {
+ 	}
+ 	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
+ 	spawn(cssPath, warm) {
++		if (CACHE_READ_ONLY) throw this.remember(cssPath, readOnlyCacheError(`missing persisted ${this.opts.serviceName} answer for "${cssPath}"`));
+ 		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
+ 		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
+ 		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
+@@ -5552,6 +5574,73 @@ function answersFor(cache) {
+ 	}
+ 	return map;
+ }
++const declarationPersistLoaded = /* @__PURE__ */ new WeakMap();
++function declarationShardFile(cssPath, cls) {
++	const { json } = cacheArtifactPaths(cssPath);
++	const shard = createHash("md5").update(cls).digest("hex").slice(0, 2);
++	return json.replace(/\.json$/, `.decl-${shard}.json`);
++}
++function loadDeclarationAnswers(cssPath, cache, classes) {
++	let loaded = declarationPersistLoaded.get(cache);
++	if (!loaded) {
++		loaded = /* @__PURE__ */ new Set();
++		declarationPersistLoaded.set(cache, loaded);
++	}
++	const known = answersFor(cache);
++	for (const cls of classes) {
++		const file = declarationShardFile(cssPath, cls);
++		if (loaded.has(file)) continue;
++		loaded.add(file);
++		try {
++			const data = JSON.parse(readFileSync(file, "utf-8"));
++			if (typeof data !== "object" || data === null) continue;
++			for (const [token, entry] of Object.entries(data)) {
++				if (typeof entry !== "object" || entry === null || typeof entry.valid !== "boolean") continue;
++				known.set(token, entry.valid);
++				if (entry.valid && Array.isArray(entry.declarations) && typeof entry.values === "object" && entry.values !== null) cache.internDeclarations(token, entry.declarations, entry.values);
++			}
++			if (!CACHE_READ_ONLY) touchCacheFile(file);
++		} catch {}
++	}
++}
++function persistDeclarationAnswers(cssPath, pending, response) {
++	const invalid = new Set(response.invalid);
++	const byFile = /* @__PURE__ */ new Map();
++	for (const cls of pending) {
++		const file = declarationShardFile(cssPath, cls);
++		let entries = byFile.get(file);
++		if (!entries) {
++			try { entries = JSON.parse(readFileSync(file, "utf-8")); } catch { entries = {}; }
++			if (typeof entries !== "object" || entries === null || Array.isArray(entries)) entries = {};
++			byFile.set(file, entries);
++		}
++		const declarations = Object.hasOwn(response.decls, cls) ? response.decls[cls] : [];
++		const values = {};
++		for (const declaration of declarations) {
++			const value = declaration[2];
++			if (Object.hasOwn(response.values, value)) values[value] = response.values[value];
++		}
++		Object.defineProperty(entries, cls, { value: { valid: !invalid.has(cls), declarations, values }, enumerable: true, writable: true, configurable: true });
++	}
++	for (const [file, entries] of byFile) {
++		const lockPath = `${file}.lock`;
++		let lock = acquireFlushLock(lockPath);
++		for (let attempt = 0; lock === "contended" && attempt < 300; attempt++) {
++			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
++			lock = acquireFlushLock(lockPath);
++		}
++		if (lock !== "acquired") throw new Error(`Could not persist Tailwind declaration cache shard "${file}" (${lock})`);
++		try {
++			let merged = {};
++			try { const existing = JSON.parse(readFileSync(file, "utf-8")); if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) merged = existing; } catch {}
++			for (const [token, answer] of Object.entries(entries)) Object.defineProperty(merged, token, { value: answer, enumerable: true, writable: true, configurable: true });
++			const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
++			const tmp = `${file}.${process.pid}.${threadId}.${tmpSeq++}.tmp`;
++			writeFileSync(tmp, `${JSON.stringify(sorted)}\n`);
++			renameSync(tmp, file);
++		} finally { tryUnlink(lockPath); }
++	}
++}
+ /**
+ * Ask the design system about every class there is no answer for yet, intern the
+ * declarations it returns, and record which classes produce no CSS at all.
+@@ -5572,12 +5661,15 @@ function answersFor(cache) {
+ */
+ function ask(cssPath, cache, classes) {
+ 	const known = answersFor(cache);
++	loadDeclarationAnswers(cssPath, cache, classes);
+ 	const pending = [...new Set(classes.filter((cls) => !known.has(cls)))];
+ 	if (pending.length === 0) return;
++	if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer for ${JSON.stringify(pending[0])}`);
+ 	const response = declWorker.callSync(cssPath, { classes: pending });
+ 	const invalid = new Set(response.invalid);
+ 	for (const cls of pending) known.set(cls, !invalid.has(cls));
+ 	for (const [cls, raws] of Object.entries(response.decls)) cache.internDeclarations(cls, raws, response.values);
++	persistDeclarationAnswers(cssPath, pending, response);
+ }
+ /**
+ * Resolve and intern declarations for `classes` that the precompute doesn't know.
+@@ -10787,4 +10879,4 @@ const plugin = definePlugin({
+ 	}
+ });
+ //#endregion
+-export { plugin as default };
++export { cacheArtifactPaths, plugin as default };

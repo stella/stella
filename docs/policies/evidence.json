@@ -8,8 +8,8 @@
         {
           "path": "apps/api/src/lib/auth.ts",
           "contains": [
-            "export const authMacro",
-            "export const workspaceAccessMacro"
+            "export const authenticateSession",
+            "export const authorizeWorkspace"
           ]
         },
         {
@@ -79,15 +79,15 @@
             "name: CI Checks",
             "name: Code quality",
             "name: Test",
-            "run: bun scripts/ci-check-pool.ts run ci-checks-policy",
-            "run: bun scripts/ci-check-pool.ts run ci-checks-rest",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" bun scripts/ci-check-pool.ts run ci-checks-policy",
+            "CI_CHECK_POOL_NEEDS_FILE=\"$needs_file\" bun scripts/ci-check-pool.ts run ci-checks-rest",
             "bun run code-check:affected -- --leg",
             "bun run test -- --concurrency=2 --output-logs=full"
           ]
         },
         {
           "path": ".github/ci-checks/ci-checks-policy.yml",
-          "contains": ["name: Format", "bun --bun turbo run format"]
+          "contains": ["name: Format", "run: bun fmt --check"]
         },
         {
           "path": ".github/ci-checks/ci-checks-rest.yml",
@@ -121,9 +121,8 @@
       "policy": "docs/policies/change-management.md",
       "evidence": [
         {
-          "path": ".github/workflows/db-migrations.yml",
+          "path": ".github/workflows/ci.yml",
           "contains": [
-            "name: Database Migrations",
             "Apply all migrations to fresh Postgres",
             "Verify schema parity with schema.ts"
           ]
@@ -218,7 +217,7 @@
       "policy": "docs/policies/vendor-management.md",
       "evidence": [
         {
-          "path": ".github/workflows/dependency-review.yml",
+          "path": ".github/workflows/ci.yml",
           "contains": ["fail-on-severity: high", "allow-licenses: >-"]
         },
         {

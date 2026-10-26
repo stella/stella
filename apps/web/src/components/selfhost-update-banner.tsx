@@ -81,7 +81,7 @@ export const SelfhostUpdateBanner = () => {
     },
   });
   const releaseView = useQueryView(releaseQuery);
-  useQueryViewError(releaseView);
+  useQueryViewError(releaseView, "SelfhostUpdateBanner:query");
   const release = releaseView.type === "items" ? releaseView.items : undefined;
   const latestVersion = release ? stripPrefix(release.tag_name) : "";
   const dismissedKey = `${DISMISSED_KEY_PREFIX}${latestVersion}`;

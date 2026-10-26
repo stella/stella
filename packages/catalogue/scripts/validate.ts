@@ -16,11 +16,11 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
-  catalogueEntrySchema,
   CATALOGUE_KINDS,
-  recommendedSchema,
   type CatalogueEntry,
+  catalogueEntrySchema,
   type CatalogueKind,
+  recommendedSchema,
 } from "../src/schema";
 import {
   getInspectedDirectoryEntries,

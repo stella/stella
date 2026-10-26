@@ -15,8 +15,8 @@ import { AIProviderIcon } from "@/components/ai-provider-icons";
 import {
   CHAT_MODEL_MENU_POPUP_CLASS_NAME,
   ChatModelOptionsMenu,
-  EFFORT_LABEL_KEY,
   type ComposerModelsMenuProps,
+  EFFORT_LABEL_KEY,
 } from "@/components/chat/chat-model-options-menu";
 import { modelOptionsOptions } from "@/features/chat/queries";
 import { useQueryView } from "@/lib/use-query-view";

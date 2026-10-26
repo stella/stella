@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
@@ -15,6 +15,7 @@ import {
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -108,6 +109,15 @@ beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  await Promise.all(
+    [organizationId, otherOrganizationId].map(
+      async (id) =>
+        await recordNewOrganizationAccessState(testDb, {
+          organizationId: id,
+          now: new Date(),
+        }),
+    ),
+  );
   await testDb.insert(member).values([
     {
       id: mintAuthProviderIdValue(),

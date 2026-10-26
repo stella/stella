@@ -1,5 +1,53 @@
 # @stll/ui
 
+## 0.52.0
+
+### Minor Changes
+
+- [#6309](https://github.com/stella/stella/pull/6309) [`4fe45ad`](https://github.com/stella/stella/commit/4fe45ad8fc654bb759207c22008d38bc15344091) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Steps` renders an ordered sequence as a semantic list, numbered by the list itself.
+
+## 0.51.0
+
+### Minor Changes
+
+- [#6672](https://github.com/stella/stella/pull/6672) [`281665b`](https://github.com/stella/stella/commit/281665baa193e2ab2b3acba0da3a259ec16a770a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `MenuPreviewLayout` takes `previewWidth: "remaining"` for a menu whose width is set from outside: the preview takes the width the options leave and is hidden below 10rem, so it never paints past the menu. The default, `"fixed"`, keeps the fixed-width pane.
+
+- [#6488](https://github.com/stella/stella/pull/6488) [`a765cda`](https://github.com/stella/stella/commit/a765cdaeb5718de31b707958364dfde7b6c98594) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose controlled browser time for component and integration tests.
+
+- [#5825](https://github.com/stella/stella/pull/5825) [`2dd1699`](https://github.com/stella/stella/commit/2dd16994dfba74f35540d47b1582e428ba7b4bc1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `textMarkBoxClass` draws a text mark as a box over painted text, such as a PDF page, where no text decoration reaches the words: the hue, wash and ring of `textMarkClass`, with a line variant as the box's edge.
+
+- [#6110](https://github.com/stella/stella/pull/6110) [`85a56db`](https://github.com/stella/stella/commit/85a56dbbf73156b5b7e4a0e37c73db382aa02ada) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `useInspectorPaneWidth` takes its storage through an injected `persistence` option (`InspectorPaneWidthPersistence`); `parsePersistedPaneWidth`, `readStoredWidth` and `writeStoredWidth` are removed.
+
+### Patch Changes
+
+- [#6758](https://github.com/stella/stella/pull/6758) [`7835dfd`](https://github.com/stella/stella/commit/7835dfd514ad56fce2a4f00fd4bf0bd522188d34) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `LandingLayout` and `LandingSection` leave a 4px inset inside their scroll viewports, so the box's outer halo and a row's focus ring are no longer clipped at the sides.
+
+## 0.50.2
+
+### Patch Changes
+
+- [#6204](https://github.com/stella/stella/pull/6204) [`81f8075`](https://github.com/stella/stella/commit/81f80750038583d4b7377622cc93108c4c7c89ab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Adds `HorizontalScroller`: a horizontal scroll area with a visible scrollbar, edge fades, previous and next buttons, vertical-wheel scrolling and focus scroll-into-view.
+
+## 0.50.1
+
+### Patch Changes
+
+- [#6447](https://github.com/stella/stella/pull/6447) [`c2289c3`](https://github.com/stella/stella/commit/c2289c387f5e59f6b5248a99325d69e5fd84b2cc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Allow landing row icons to grow to fit court abbreviations.
+
+## 0.50.0
+
+### Minor Changes
+
+- [#5903](https://github.com/stella/stella/pull/5903) [`8cb7fd4`](https://github.com/stella/stella/commit/8cb7fd43886be0ef8dc9be107eafac32613d504a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Name the copy glyph by meaning: `CopyToClipboardIcon` (drawn only by `CopyButton`), `CopyFromMenuIcon` and `DuplicateIcon` replace the plain `CopyIcon` export. `CopyButton` takes a `labelClassName` for its visible label, and `useCopyConfirmation` exposes its in-place confirmation for copy controls that cannot be a glyph button.
+
+- [#6664](https://github.com/stella/stella/pull/6664) [`ae6605a`](https://github.com/stella/stella/commit/ae6605a93f22d05aab53205059032237f0e1cbd8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add start alignment to select triggers and remove inner horizontal padding from unstyled inputs.
+
+- [#6572](https://github.com/stella/stella/pull/6572) [`c48136a`](https://github.com/stella/stella/commit/c48136ad775ad38e1e7f4a9ca91caa485e827952) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/icons` no longer exports `BotIcon`. Use `AiActionIcon` for something the AI does and `CpuIcon` for models and providers.
+
+### Patch Changes
+
+- [#6203](https://github.com/stella/stella/pull/6203) [`ab74b25`](https://github.com/stella/stella/commit/ab74b2560766d05d67c302c4b81639351ef33a64) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A host can trigger the copy button confirmation from outside its own click with `useCopiedFeedback` and `CopyFeedback`.
+
 ## 0.49.4
 
 ### Patch Changes

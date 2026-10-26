@@ -19,6 +19,39 @@ case "$*" in
   *"/statuses?per_page=100"*) echo '[[]]' ;;
   # The release queue history check reads single pages, never --slurp.
   "api repos/stella/stella/commits/$TEST_CANDIDATE/pulls?per_page=100") printf '%s\n' "$TEST_CANDIDATE_PULLS" ;;
+  *"query="*"ReleaseCommitHistory"*)
+    jq -nc \
+      --arg sha "$TEST_CANDIDATE" \
+      --argjson pulls "$TEST_CANDIDATE_PULLS" \
+      --argjson timeline "$TEST_TIMELINE" \
+      --argjson runs "$TEST_MG_RUNS" '
+      {
+        data: {
+          repository: {
+            c0: {
+              oid: $sha,
+              associatedPullRequests: {
+                pageInfo: {hasNextPage: false},
+                nodes: ($pulls | map({
+                  number,
+                  title,
+                  url: .html_url,
+                  mergedAt: .merged_at,
+                  mergeCommit: {oid: .merge_commit_sha},
+                  timelineItems: $timeline.data.repository.pullRequest.timelineItems
+                }))
+              },
+              checkSuites: {
+                pageInfo: {hasNextPage: false, endCursor: null},
+                nodes: ($runs.workflow_runs | map({
+                  conclusion: (if .conclusion == "success" then "SUCCESS" else (.conclusion | ascii_upcase) end),
+                  workflowRun: {event, file: {path: ".github/workflows/ci.yml"}}
+                }))
+              }
+            }
+          }
+        }
+      }' ;;
   "api graphql "*"number=1") printf '%s\n' "$TEST_TIMELINE" ;;
   *"/actions/workflows/ci.yml/runs?head_sha=$TEST_CANDIDATE&event=merge_group&"*) printf '%s\n' "$TEST_MG_RUNS" ;;
   *"/actions/workflows/ci.yml/runs?"*) echo '{"workflow_runs":[]}' ;;

@@ -21,8 +21,7 @@ export { isTerminalFlowRunStatus };
  * last step) or the next step must be enqueued.
  */
 export type FlowStepAdvance =
-  | { kind: "finish" }
-  | { kind: "advance"; nextStepIndex: number };
+  { kind: "finish" } | { kind: "advance"; nextStepIndex: number };
 
 export const advanceAfterStep = ({
   stepIndex,

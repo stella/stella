@@ -11,6 +11,7 @@ import {
   oauthConsent,
   oauthRefreshToken,
   session as sessionTable,
+  verification,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -18,8 +19,8 @@ import {
   desktopEditSessions,
   folioCollabRoomTokens,
   mcpOAuthState,
-  mcpWebHandoff,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
   sharepointConnections,
   sharepointOAuthState,
@@ -29,6 +30,7 @@ import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
+import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 import {
@@ -496,9 +498,27 @@ export const revokeAllUserSessions = async (
 };
 
 /**
+ * Disables every API key a user holds across organizations and key
+ * configurations. Access reset keeps the user row, so its cascade cannot end
+ * credentials that may have been issued by the account controller being
+ * displaced.
+ */
+export const revokeAllUserApiKeys = async (
+  tx: AuthArtifactTransaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  // audit: skip - the enclosing account recovery or deletion records revocation
+  await tx
+    .update(apikey)
+    .set({ enabled: false, updatedAt: new Date() })
+    .where(and(eq(apikey.referenceId, userId), eq(apikey.enabled, true)));
+};
+
+/**
  * Revokes every OAuth access and refresh token a user holds, across all
- * clients and organizations. Account deletion only; per-grant and
- * per-membership revocation stay on the scoped helpers above.
+ * clients and organizations. Account deletion and confirmed access recovery
+ * use this account-wide boundary; per-grant and per-membership revocation stay
+ * on the scoped helpers above.
  */
 export const revokeAllUserOAuthTokens = async (
   tx: AuthArtifactTransaction,
@@ -547,4 +567,170 @@ export const revokeMonitoringSessions = async ({
   };
   await recordAuditEvent(counts);
   return counts;
+};
+
+// The account row is the credential fence. Issuers share it and require a
+// live session; account-wide revocation locks it and ends the sessions in the
+// same transaction. A credential issued by a displaced session therefore
+// either commits before the sweep, which revokes it, or finds its session
+// gone.
+
+type HoldLiveSessionCredentialFenceOptions = {
+  userId: SafeId<"user">;
+  /** The issuing browser session; a credential without one cannot issue. */
+  sessionId: string | null;
+};
+
+type HoldGrantCredentialFenceOptions = HoldLiveSessionCredentialFenceOptions & {
+  /** The provider grant a token continues; its earlier tokens prove it. */
+  grantId: string | null;
+};
+
+const isSessionLive = async (
+  tx: Transaction,
+  { userId, sessionId }: { userId: SafeId<"user">; sessionId: string },
+) => {
+  const [live] = await tx
+    .select({ id: sessionTable.id })
+    .from(sessionTable)
+    .where(
+      and(
+        eq(sessionTable.id, sessionId),
+        eq(sessionTable.userId, userId),
+        sql`${sessionTable.expiresAt} > now()`,
+      ),
+    )
+    .limit(1);
+  return live !== undefined;
+};
+
+const hasGrantToken = async (
+  tx: Transaction,
+  { userId, grantId }: { userId: SafeId<"user">; grantId: string },
+) => {
+  const [earlier] = await tx
+    .select({ id: oauthRefreshToken.id })
+    .from(oauthRefreshToken)
+    .where(
+      and(
+        eq(oauthRefreshToken.userId, userId),
+        eq(oauthRefreshToken.authorizationCodeId, grantId),
+      ),
+    )
+    .limit(1);
+  return earlier !== undefined;
+};
+
+/**
+ * Proof that a transaction holds the account's credential fence for a live
+ * issuing session. Only `hold` creates one, so a credential can be written
+ * only by code that took the fence first.
+ */
+export class CredentialIssuanceFence {
+  readonly tx: Transaction;
+  readonly userId: SafeId<"user">;
+
+  private constructor(tx: Transaction, userId: SafeId<"user">) {
+    this.tx = tx;
+    this.userId = userId;
+  }
+
+  /** The fence, or null when the issuing session is not live under it. */
+  static async hold(
+    tx: Transaction,
+    { userId, sessionId }: HoldLiveSessionCredentialFenceOptions,
+  ): Promise<CredentialIssuanceFence | null> {
+    if (sessionId === null) {
+      return null;
+    }
+    await shareAccountRow(tx, userId);
+    return (await isSessionLive(tx, { userId, sessionId }))
+      ? new CredentialIssuanceFence(tx, userId)
+      : null;
+  }
+
+  /**
+   * The fence for a token a provider grant issues: the grant's session is
+   * live, or an earlier token of the same grant survives. Account-wide
+   * revocation deletes both under this fence, so a refresh that rotated before
+   * a reset cannot insert its successor after it.
+   */
+  static async holdForGrant(
+    tx: Transaction,
+    { userId, sessionId, grantId }: HoldGrantCredentialFenceOptions,
+  ): Promise<CredentialIssuanceFence | null> {
+    if (sessionId === null && grantId === null) {
+      return null;
+    }
+    await shareAccountRow(tx, userId);
+    const authorized =
+      (sessionId !== null &&
+        (await isSessionLive(tx, { userId, sessionId }))) ||
+      (grantId !== null && (await hasGrantToken(tx, { userId, grantId })));
+    return authorized ? new CredentialIssuanceFence(tx, userId) : null;
+  }
+}
+
+/**
+ * Better Auth's pending second-factor sign-in: a `2fa-<random>` verification
+ * row whose value is the user id, with its attempt counter under
+ * `2fa-attempts-<identifier>`. Completing the challenge creates a session.
+ */
+const PENDING_TWO_FACTOR_PREFIX = "2fa-";
+const PENDING_TWO_FACTOR_ATTEMPTS_PREFIX = "2fa-attempts-";
+
+/** Whether a verification identifier is a pending second-factor sign-in. */
+export const isPendingTwoFactorSignIn = (identifier: string): boolean =>
+  identifier.startsWith(PENDING_TWO_FACTOR_PREFIX) &&
+  !identifier.startsWith(PENDING_TWO_FACTOR_ATTEMPTS_PREFIX);
+
+/**
+ * Where a pending second-factor sign-in records the linked account its first
+ * factor authenticated through, so completing it is held to that account.
+ */
+export const secondFactorProviderIdentifier = (grantIdentifier: string) =>
+  `second-factor-provider-${grantIdentifier}`;
+
+/**
+ * Removes every second-factor challenge a user's earlier first-factor sign-in
+ * left pending, so finishing one cannot create a session after recovery.
+ */
+const revokeAllUserPendingTwoFactorSignIns = async (
+  tx: Pick<Transaction, "select" | "delete">,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  const pending = await tx
+    .select({ identifier: verification.identifier })
+    .from(verification)
+    .where(
+      and(
+        sql`starts_with(${verification.identifier}, ${PENDING_TWO_FACTOR_PREFIX})`,
+        sql`not starts_with(${verification.identifier}, ${PENDING_TWO_FACTOR_ATTEMPTS_PREFIX})`,
+        eq(verification.value, userId),
+      ),
+    );
+  if (pending.length === 0) {
+    return;
+  }
+  const identifiers = pending.flatMap(({ identifier }) => [
+    identifier,
+    `${PENDING_TWO_FACTOR_ATTEMPTS_PREFIX}${identifier}`,
+    secondFactorProviderIdentifier(identifier),
+  ]);
+  // audit: skip - the enclosing account recovery records revocation
+  await tx
+    .delete(verification)
+    .where(inArray(verification.identifier, identifiers));
+};
+
+/** Ends every session and durable credential an account holds before recovery. */
+export const revokeAllUserDurableCredentials = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await lockAccountRow(tx, userId);
+  await revokeAllUserPendingTwoFactorSignIns(tx, userId);
+  await revokeAllUserSessions(tx, userId);
+  await revokeAllUserApiKeys(tx, userId);
+  await revokeAllUserOAuthTokens(tx, userId);
 };

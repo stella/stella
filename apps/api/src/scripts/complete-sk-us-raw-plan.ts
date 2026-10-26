@@ -10,8 +10,8 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
-  SourceRawParts,
   SourceRawObjects,
+  SourceRawParts,
   StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SkUsListingFetchOutcome } from "@/api/handlers/case-law/ingestion/adapters/sk-us";

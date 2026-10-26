@@ -29,8 +29,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  authSchema,
   account,
+  authSchema,
   member,
   oauthClient,
   oauthConsent,
@@ -41,8 +41,8 @@ import {
 import { databaseRelations } from "@/api/db/database-relations";
 import { auditLogs } from "@/api/db/schema";
 import {
-  mcpWebHandoff,
   MCP_WEB_HANDOFF_KINDS,
+  mcpWebHandoff,
 } from "@/api/db/schema/mcp-web-handoff";
 import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
@@ -61,6 +61,7 @@ import {
 } from "@/api/lib/db-query-counter";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -156,6 +157,10 @@ beforeAll(async () => {
     slug: "handoff-plugin",
     createdAt: new Date(),
   });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: fixture.organizationId,
+    now: new Date(),
+  });
   await db.insert(member).values({
     id: "plugin-member",
     userId: fixture.userId,
@@ -182,6 +187,10 @@ beforeAll(async () => {
     name: "Browser organization",
     slug: "handoff-browser",
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId: toSafeId<"organization">(browserOrganizationId),
+    now: new Date(),
   });
   await db.insert(member).values({
     id: "browser-member",

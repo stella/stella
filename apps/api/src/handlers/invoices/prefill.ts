@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, asc, eq, isNull, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { todayFor } from "@stll/time";
@@ -19,7 +19,7 @@ import {
   selectTimekeeperNames,
   timekeeperIdsOf,
 } from "@/api/lib/billing/timekeeper-names";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
@@ -64,8 +64,8 @@ const prefillInvoice = createSafeHandler(
       consumesServices: false,
     },
     access: "read",
-    query: t.Object({
-      sellerProfileId: t.Optional(tSafeId("sellerProfile")),
+    query: v.object({
+      sellerProfileId: v.optional(resourceIdSchema("sellerProfile")),
     }),
   },
   async function* ({ safeDb, session, workspaceId, query }) {
@@ -196,6 +196,7 @@ const prefillInvoice = createSafeHandler(
       prefill.clientCurrency;
     return Result.ok({
       currency,
+      language: prefill.language,
       invoiceDate: loaded.invoiceDate,
       taxableSupplyDate: loaded.supplyDate,
       dueDays: prefill.dueDays,

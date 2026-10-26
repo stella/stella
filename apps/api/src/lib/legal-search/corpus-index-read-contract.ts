@@ -12,11 +12,11 @@ import {
   corpusIndexFastFields,
   corpusIndexManifestCoversJurisdiction,
   corpusIndexPositionalFields,
+  type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
+  type CorpusIndexStemFields,
   corpusIndexStemFields,
   requireCorpusIndexManifest,
-  type CorpusIndexPublisherFields,
-  type CorpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusLegacyStemming,
@@ -210,8 +210,7 @@ export type LegislationIndexReadContract = {
 };
 
 export type CorpusIndexReadContract =
-  | CaseLawIndexReadContract
-  | LegislationIndexReadContract;
+  CaseLawIndexReadContract | LegislationIndexReadContract;
 
 /**
  * Query capabilities owned by a generation's physical schema. Every field name

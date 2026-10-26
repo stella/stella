@@ -40,8 +40,8 @@ import {
   normalizeOutboundRequest,
   plannedTranscript,
   transcriptPath,
-  transcriptSteps,
   TRANSCRIPTS_WRITE_ENV,
+  transcriptSteps,
 } from "@/api/tests/helpers/provider-wire-transcript";
 import type {
   ProviderWireTranscript,

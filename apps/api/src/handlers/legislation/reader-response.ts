@@ -1,16 +1,14 @@
 import { panic } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import {
   LEGISLATION_EXPRESSION_KINDS,
-  LEGISLATION_WINDOW_DISPOSITIONS,
   LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES,
+  LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
 import { documentAstSchema } from "@stll/legal-ast/document-ast";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   DECISION_SECTION_TYPES,
   emptyAstSchema,
@@ -27,8 +25,8 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   boundedString,
   nullableBoundedString,
-  truncateTextBytes,
   nullableText,
+  truncateTextBytes,
 } from "@/api/lib/search/response-text-bounds";
 
 // Database varchar limits admit four UTF-8 bytes per character; text columns
@@ -49,13 +47,12 @@ export const readerTextBytes = {
 
 export const PREVIEW_BLOCK_MAX = 32;
 export const PREVIEW_HEADING_MAX = 6;
-const closed = { additionalProperties: false };
 const labelFields = {
-  expressionKind: t.UnionEnum(LEGISLATION_EXPRESSION_KINDS),
-  windowDisposition: t.UnionEnum(LEGISLATION_WINDOW_DISPOSITIONS),
-  windowDispositionBasis: t.Union([
-    t.UnionEnum(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES),
-    t.Null(),
+  expressionKind: v.picklist(LEGISLATION_EXPRESSION_KINDS),
+  windowDisposition: v.picklist(LEGISLATION_WINDOW_DISPOSITIONS),
+  windowDispositionBasis: v.union([
+    v.picklist(LEGISLATION_WINDOW_DISPOSITION_BASIS_VALUES),
+    v.null(),
   ]),
 };
 const windowFields = {
@@ -63,45 +60,37 @@ const windowFields = {
   versionValidTo: nullableBoundedString(readerTextBytes.versionValidTo),
   ...labelFields,
 };
-const statuteAmendmentPageSchema = t.Object(
-  {
-    items: t.Array(
-      t.Object(
-        {
-          publisherId: boundedString(8192),
-          amendingEli: boundedString(readerTextBytes.eli),
-          amendingTitle: nullableBoundedString(readerTextBytes.title),
-          affectedAnchor: boundedString(8192),
-          changeKind: t.UnionEnum(LEGISLATION_AMENDMENT_CHANGE_KINDS),
-          effectiveDate: nullableBoundedString(32),
-          effectiveText: nullableBoundedString(8192),
-        },
-        closed,
-      ),
-      { maxItems: LEGISLATION_AMENDMENT_PAGE_MAX },
+const statuteAmendmentPageSchema = v.object({
+  items: v.pipe(
+    v.array(
+      v.object({
+        publisherId: boundedString(8192),
+        amendingEli: boundedString(readerTextBytes.eli),
+        amendingTitle: nullableBoundedString(readerTextBytes.title),
+        affectedAnchor: boundedString(8192),
+        changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+        effectiveDate: nullableBoundedString(32),
+        effectiveText: nullableBoundedString(8192),
+      }),
     ),
-    observedAt: boundedString(32),
-    coverage: t.Union([
-      t.Object({ type: t.Literal("complete") }, closed),
-      t.Object(
-        {
-          type: t.Literal("partial"),
-          unlocatedRelations: t.Number(),
-          reason: boundedString(8192),
-        },
-        closed,
-      ),
-      t.Object(
-        { type: t.Literal("not-stated"), reason: boundedString(8192) },
-        closed,
-      ),
-    ]),
-    truncated: t.Boolean(),
-  },
-  closed,
-);
+    v.maxLength(LEGISLATION_AMENDMENT_PAGE_MAX),
+  ),
+  observedAt: boundedString(32),
+  coverage: v.union([
+    v.object({ type: v.literal("complete") }),
+    v.object({
+      type: v.literal("partial"),
+      unlocatedRelations: v.number(),
+      reason: boundedString(8192),
+    }),
+    v.object({ type: v.literal("not-stated"), reason: boundedString(8192) }),
+  ]),
+  truncated: v.boolean(),
+});
 
-export type StatuteAmendmentPage = Static<typeof statuteAmendmentPageSchema>;
+export type StatuteAmendmentPage = v.InferOutput<
+  typeof statuteAmendmentPageSchema
+>;
 
 // Field by field: a stored snapshot written before its keys were closed must
 // still pass the closed response schema.
@@ -157,7 +146,7 @@ export const projectStatuteAmendments = ({
 };
 
 const versionFields = {
-  id: tSafeId("legislationDocument"),
+  id: resourceIdSchema("legislationDocument"),
   eli: boundedString(readerTextBytes.eli),
   slug: nullableBoundedString(readerTextBytes.slug),
   title: boundedString(readerTextBytes.title),
@@ -170,131 +159,109 @@ const versionFields = {
   sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
   documentUrl: nullableBoundedString(readerTextBytes.documentUrl),
 };
-const statuteVersionSchema = t.Object(
-  {
-    ...versionFields,
-    isDefault: t.Boolean(),
-    amendedBy: t.Union([statuteAmendmentPageSchema, t.Null()]),
-  },
-  closed,
-);
-export const statuteVersionsSuccessResponseSchema = t.Object(
-  {
-    items: t.Array(statuteVersionSchema, {
-      maxItems: LIMITS.legislationVersionsPageSizeMax,
-    }),
-    limit: t.Number(),
+const statuteVersionSchema = v.object({
+  ...versionFields,
+  isDefault: v.boolean(),
+  amendedBy: v.union([statuteAmendmentPageSchema, v.null()]),
+});
+export const statuteVersionsSuccessResponseSchema = v.pipe(
+  v.object({
+    items: v.pipe(
+      v.array(statuteVersionSchema),
+      v.maxLength(LIMITS.legislationVersionsPageSizeMax),
+    ),
+    limit: v.number(),
     nextCursor: nullableBoundedString(readerTextBytes.cursor),
-  },
-  {
-    ...closed,
-    // The versions handler performs one amendment query for the page, then
-    // partitions those relations among versions. This is a page-wide budget,
-    // not a separate 500-relation allowance for every version.
+  }),
+  // The versions handler performs one amendment query for the page, then
+  // partitions those relations among versions. This is a page-wide budget,
+  // not a separate 500-relation allowance for every version.
+  v.metadata({
     "x-sharedArrayItems": {
       arrayProperty: "items",
       nestedArrayPath: ["amendedBy", "items"],
       maxItems: LEGISLATION_AMENDMENT_PAGE_MAX,
     },
-  },
+  }),
 );
 
-export const statuteReaderSuccessResponseSchema = t.Object(
-  {
-    ...versionFields,
-    pendingChanges: t.Union([statuteAmendmentPageSchema, t.Null()]),
-    createdAt: boundedString(32),
-    updatedAt: boundedString(32),
-    citationCaseCount: t.Union([t.Number(), t.Null()]),
-    allowsDerivedAi: t.Boolean(),
-    sections: t.Union([
-      t.Array(
-        t.Object(
-          {
-            index: t.Number(),
-            type: t.UnionEnum(DECISION_SECTION_TYPES),
-            title: nullableBoundedString(readerTextBytes.sectionTitle),
-            text: t.String(),
-          },
-          closed,
-        ),
-      ),
-      t.Null(),
-    ]),
-    // The reader deliberately returns the complete official document AST/text.
-    documentAst: t
-      .Transform(t.Unknown())
-      .Decode((value) =>
-        v.parse(
-          v.nullable(v.union([documentAstSchema, emptyAstSchema])),
-          value,
-        ),
-      )
-      .Encode((value) => value),
-    fulltext: t.Union([t.String(), t.Null()]),
-  },
-  closed,
-);
+export const statuteReaderSuccessResponseSchema = v.object({
+  ...versionFields,
+  pendingChanges: v.union([statuteAmendmentPageSchema, v.null()]),
+  createdAt: boundedString(32),
+  updatedAt: boundedString(32),
+  citationCaseCount: v.union([v.number(), v.null()]),
+  allowsDerivedAi: v.boolean(),
+  sections: v.union([
+    v.array(
+      v.object({
+        index: v.number(),
+        type: v.picklist(DECISION_SECTION_TYPES),
+        title: nullableBoundedString(readerTextBytes.sectionTitle),
+        text: v.string(),
+      }),
+    ),
+    v.null(),
+  ]),
+  // The reader deliberately returns the complete official document AST/text.
+  // The wire carries it opaque; reading it back yields the parsed AST.
+  documentAst: v.pipe(
+    v.unknown(),
+    v.transform((value) =>
+      v.parse(v.nullable(v.union([documentAstSchema, emptyAstSchema])), value),
+    ),
+  ),
+  fulltext: v.union([v.string(), v.null()]),
+});
 
-const provisionHistoryItemSchema = t.Object(
-  {
-    country: boundedString(readerTextBytes.country),
-    slug: nullableBoundedString(readerTextBytes.slug),
-    sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
-    documentId: tSafeId("legislationDocument"),
-    allowsDerivedAi: t.Boolean(),
-    ...windowFields,
-    text: boundedString(readerTextBytes.provisionText),
-  },
-  closed,
-);
-export const provisionHistorySuccessResponseSchema = t.Object(
-  {
-    items: t.Array(provisionHistoryItemSchema, {
-      maxItems: LIMITS.legislationProvisionHistoryPageSizeMax,
-    }),
-    limit: t.Number(),
-    nextCursor: nullableBoundedString(readerTextBytes.cursor),
-  },
-  closed,
-);
+const provisionHistoryItemSchema = v.object({
+  country: boundedString(readerTextBytes.country),
+  slug: nullableBoundedString(readerTextBytes.slug),
+  sourceUrl: nullableBoundedString(readerTextBytes.sourceUrl),
+  documentId: resourceIdSchema("legislationDocument"),
+  allowsDerivedAi: v.boolean(),
+  ...windowFields,
+  text: boundedString(readerTextBytes.provisionText),
+});
+export const provisionHistorySuccessResponseSchema = v.object({
+  items: v.pipe(
+    v.array(provisionHistoryItemSchema),
+    v.maxLength(LIMITS.legislationProvisionHistoryPageSizeMax),
+  ),
+  limit: v.number(),
+  nextCursor: nullableBoundedString(readerTextBytes.cursor),
+});
 const headingFields = {
   anchorId: boundedString(readerTextBytes.anchor),
-  level: t.UnionEnum([1, 2, 3, 4, 5, 6]),
+  level: v.picklist([1, 2, 3, 4, 5, 6]),
   text: boundedString(readerTextBytes.heading),
 };
-export const provisionPreviewSuccessResponseSchema = t.Object(
-  {
-    documentId: tSafeId("legislationDocument"),
-    language: boundedString(readerTextBytes.language),
-    anchorId: boundedString(readerTextBytes.anchor),
-    citedAnchorId: nullableBoundedString(readerTextBytes.anchor),
-    headings: t.Array(t.Object(headingFields, closed), {
-      maxItems: PREVIEW_HEADING_MAX,
-    }),
-    heading: t.Union([
-      t.Object(
-        { id: boundedString(readerTextBytes.blockId), ...headingFields },
-        closed,
-      ),
-      t.Null(),
-    ]),
-    blocks: t.Array(
-      t.Object(
-        {
-          id: boundedString(readerTextBytes.blockId),
-          anchorId: boundedString(readerTextBytes.anchor),
-          text: boundedString(readerTextBytes.previewText),
-        },
-        closed,
-      ),
-      { maxItems: PREVIEW_BLOCK_MAX },
+export const provisionPreviewSuccessResponseSchema = v.object({
+  documentId: resourceIdSchema("legislationDocument"),
+  language: boundedString(readerTextBytes.language),
+  anchorId: boundedString(readerTextBytes.anchor),
+  citedAnchorId: nullableBoundedString(readerTextBytes.anchor),
+  headings: v.pipe(
+    v.array(v.object(headingFields)),
+    v.maxLength(PREVIEW_HEADING_MAX),
+  ),
+  heading: v.union([
+    v.object({ id: boundedString(readerTextBytes.blockId), ...headingFields }),
+    v.null(),
+  ]),
+  blocks: v.pipe(
+    v.array(
+      v.object({
+        id: boundedString(readerTextBytes.blockId),
+        anchorId: boundedString(readerTextBytes.anchor),
+        text: boundedString(readerTextBytes.previewText),
+      }),
     ),
-  },
-  closed,
-);
+    v.maxLength(PREVIEW_BLOCK_MAX),
+  ),
+});
 
-type Version = Static<typeof statuteVersionSchema>;
+type Version = v.InferOutput<typeof statuteVersionSchema>;
 type VersionRow = Omit<Version, "amendedBy"> & {
   amendedBy?: StatuteAmendmentPage | null;
 };
@@ -325,7 +292,7 @@ export const projectStatuteVersion = (row: VersionRow): Version => ({
   documentUrl: nullableText(row.documentUrl, readerTextBytes.documentUrl),
 });
 
-type Reader = Static<typeof statuteReaderSuccessResponseSchema>;
+type Reader = v.InferOutput<typeof statuteReaderSuccessResponseSchema>;
 type ReaderRow = Omit<Reader, "createdAt" | "updatedAt" | "pendingChanges"> & {
   pendingChanges?: StatuteAmendmentPage | null;
   createdAt: Date;
@@ -359,7 +326,7 @@ export const projectStatuteReader = (row: ReaderRow): Reader => {
   };
 };
 
-type HistoryItem = Static<typeof provisionHistoryItemSchema>;
+type HistoryItem = v.InferOutput<typeof provisionHistoryItemSchema>;
 export const projectProvisionHistoryItem = (row: HistoryItem): HistoryItem => ({
   country: truncateTextBytes(row.country, readerTextBytes.country),
   slug: nullableText(row.slug, readerTextBytes.slug),

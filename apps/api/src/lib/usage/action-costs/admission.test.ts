@@ -11,9 +11,9 @@ import {
 
 import { createObservationBuffer } from "./buffer";
 import {
-  currentActionCostIdentity,
   actionCallObserver,
   type ActionCostObservation,
+  currentActionCostIdentity,
 } from "./context";
 
 const organizationId = toSafeId<"organization">("fixture-org");

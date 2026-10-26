@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
 import {
-  ENTITY_VIEW_GROUP,
   type ENTITY_VIEW_COLUMNS,
+  ENTITY_VIEW_GROUP,
 } from "@stll/api-contract/entity-views";
 
 import { getEntityName } from "@/components/workspaces/entity-utils";

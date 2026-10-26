@@ -1,7 +1,7 @@
 import {
+  type QueryClient,
   queryOptions,
   skipToken,
-  type QueryClient,
 } from "@tanstack/react-query";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
@@ -89,11 +89,11 @@ export const professionalUseOptions = (userId: string | undefined) =>
       userId === undefined
         ? skipToken
         : async ({ signal }) => {
-            const [{ api }, { unwrapEden }] = await Promise.all([
+            const [{ api }, { unwrapApiResponse }] = await Promise.all([
               import("@/lib/api"),
               import("@/lib/errors/api"),
             ]);
-            return unwrapEden(
+            return unwrapApiResponse(
               await api.me["professional-use"].get({ fetch: { signal } }),
             );
           },

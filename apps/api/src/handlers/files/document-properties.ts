@@ -1,5 +1,3 @@
-import { status } from "elysia";
-
 import {
   DOCUMENT_PROPERTIES_MAX_BYTES,
   hasDocumentProperties,
@@ -7,6 +5,7 @@ import {
 import type { DocumentPropertiesResult } from "@stll/api-contract";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

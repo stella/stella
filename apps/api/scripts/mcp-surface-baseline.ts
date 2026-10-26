@@ -457,8 +457,7 @@ export const toBaselineText = (rows: SurfaceRows): string => {
 };
 
 type BaselineParse =
-  | { ok: true; rows: SurfaceRows }
-  | { ok: false; error: string };
+  { ok: true; rows: SurfaceRows } | { ok: false; error: string };
 
 const firstDifferentLine = (actual: string, expected: string): string => {
   const actualLines = actual.split("\n");

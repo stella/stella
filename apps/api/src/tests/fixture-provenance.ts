@@ -132,7 +132,7 @@ export const provenancePathOf = (fixturePath: string): string =>
 /**
  * Serialize a sidecar.
  *
- * Two-space indent and a trailing newline is also oxfmt's own JSON
+ * Two-space indent and a trailing newline is also bun fmt's own JSON
  * spelling, so the formatter and this generator agree and a freshly
  * captured sidecar never lands unformatted. Sidecars are ordinary
  * generated JSON — unlike the fixtures they describe, reformatting one

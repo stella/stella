@@ -5,16 +5,17 @@ import {
   originCheckMiddleware,
   sessionMiddleware,
 } from "better-auth/api";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
+import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import {
   canonicalHandoffPath,
   type createWebHandoffService,
   hasWebHandoffScopes,
-  webHandoffFailure,
   WEB_HANDOFF_CODE_PATTERN,
+  webHandoffFailure,
 } from "@/api/lib/auth/mcp-web-handoff";
 import { MCP_HANDOFF_REDEEM_PATH } from "@/api/lib/auth/mcp-web-handoff-paths";
 import { completeHandoffSession } from "@/api/lib/auth/mcp-web-handoff-session";
@@ -22,10 +23,6 @@ import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
 
 const WEB_HANDOFF_ENDPOINT_FAILURE_SINK = failureSink({
   event: "mcp_web_handoff.endpoint_failed",

@@ -12,9 +12,9 @@ import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
-  WORKSPACE_ACCESS_VIEW_NAME,
   stella,
   stellaIngestion,
+  WORKSPACE_ACCESS_VIEW_NAME,
 } from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import {
@@ -32,9 +32,9 @@ import {
   fetchStellaIngestionColumnPrivileges,
   fetchStellaIngestionPolicies,
   fetchStellaIngestionTablePrivileges,
-  fetchStellaUserSelectColumnPrivileges,
-  fetchStellaTablePrivileges,
   fetchStellaPolicies,
+  fetchStellaTablePrivileges,
+  fetchStellaUserSelectColumnPrivileges,
   fetchWorkspaceTenantPairForeignKeys,
 } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";

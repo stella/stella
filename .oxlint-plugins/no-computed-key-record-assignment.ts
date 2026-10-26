@@ -7,13 +7,13 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Variable } from "@oxlint/plugins";
 
 import {
+  type AstNode,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isIdentifierReference,
   isMemberAccess,
   resolveVariable,
-  type AstNode,
   type ScopeContext,
   unwrapExpression,
 } from "./utils.ts";

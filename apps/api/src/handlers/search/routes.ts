@@ -1,11 +1,10 @@
 import { Result } from "better-result";
-import Elysia from "elysia";
 
 import {
+  createSearchSummaryChatThread,
   refineSearchBodySchema,
   refineSearchQuery,
   searchSummaryChatBodySchema,
-  createSearchSummaryChatThread,
   summarizeSearchBodySchema,
   summarizeSearchResults,
 } from "@/api/handlers/search/ai";
@@ -15,13 +14,13 @@ import {
 } from "@/api/handlers/search/facets";
 import searchPreviewEndpoint from "@/api/handlers/search/preview";
 import { searchBodySchema, searchHandler } from "@/api/handlers/search/search";
+import { routes } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
   configuredModelAdmission,
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 const searchEndpoint = createSafeRootHandler(
   {
@@ -214,37 +213,14 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
   },
 );
 
-export const searchRoute = new Elysia({ prefix: "/search" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .post("/", searchEndpoint.handler, {
-    body: searchEndpoint.config.body,
-    permissions: searchEndpoint.config.permissions,
-    accountAccess: searchEndpoint.config.accountAccess,
-  })
-  .post("/facets", searchFacetsEndpoint.handler, {
-    body: searchFacetsEndpoint.config.body,
-    permissions: searchFacetsEndpoint.config.permissions,
-    accountAccess: searchFacetsEndpoint.config.accountAccess,
-  })
-  .post("/preview", searchPreviewEndpoint.handler, {
-    body: searchPreviewEndpoint.config.body,
-    permissions: searchPreviewEndpoint.config.permissions,
-    accountAccess: searchPreviewEndpoint.config.accountAccess,
-  })
-  .post("/refine", refineSearchEndpoint.handler, {
-    body: refineSearchEndpoint.config.body,
-    permissions: refineSearchEndpoint.config.permissions,
-    accountAccess: refineSearchEndpoint.config.accountAccess,
-  })
-  .post("/summary", summarizeSearchEndpoint.handler, {
-    body: summarizeSearchEndpoint.config.body,
-    permissions: summarizeSearchEndpoint.config.permissions,
-    accountAccess: summarizeSearchEndpoint.config.accountAccess,
-  })
-  .post("/summary/chat", searchSummaryChatEndpoint.handler, {
-    body: searchSummaryChatEndpoint.config.body,
-    permissions: searchSummaryChatEndpoint.config.permissions,
-    accountAccess: searchSummaryChatEndpoint.config.accountAccess,
-  });
+export const searchRoute = routes(
+  {
+    "/": { POST: searchEndpoint },
+    "/facets": { POST: searchFacetsEndpoint },
+    "/preview": { POST: searchPreviewEndpoint },
+    "/refine": { POST: refineSearchEndpoint },
+    "/summary": { POST: summarizeSearchEndpoint },
+    "/summary/chat": { POST: searchSummaryChatEndpoint },
+  },
+  { prefix: "/search" },
+);

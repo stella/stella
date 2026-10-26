@@ -2,7 +2,7 @@ import { afterEach, describe, expect, jest, test } from "bun:test";
 
 import { APIError } from "@/lib/errors/api";
 import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
-import { UploadQueue, uploadFailureDisposition } from "@/lib/upload-queue";
+import { uploadFailureDisposition, UploadQueue } from "@/lib/upload-queue";
 
 /**
  * Tests for the concurrent upload state machine. The state map these

@@ -1,15 +1,11 @@
 import tailwindcss from "@tailwindcss/postcss";
 import { panic } from "better-result";
 import path from "node:path";
-import { transform } from "oxc-transform-react";
 import postcss from "postcss";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import { repoRelativePath } from "@stll/portable-path";
-import {
-  REACT_COMPILER_OPTIONS,
-  REACT_COMPILER_EXCLUDE,
-} from "@stll/scripts/src/react-compiler-options";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import { formattedArtifactsLikeRepository } from "../../../scripts/generated-artifacts";
 import readerPackage from "../../decision-reader/package.json";
@@ -102,31 +98,6 @@ await writeGenerated(
   `${JSON.stringify(Object.fromEntries([...readerMessages].map(([locale, messages]) => [locale, Object.fromEntries(messages)])), null, 2)}\n`,
 );
 
-// Vite's adapter is specific to Vite hooks; Bun uses the same Oxc transform.
-const reactCompiler = {
-  name: "react-compiler",
-  setup(builder: Bun.PluginBuilder) {
-    builder.onLoad({ filter: /\.[jt]sx?$/u }, async ({ path: filename }) => {
-      if (REACT_COMPILER_EXCLUDE.some((pattern) => pattern.test(filename))) {
-        return undefined;
-      }
-      const result = await transform(
-        filename,
-        await Bun.file(filename).text(),
-        {
-          reactCompiler: REACT_COMPILER_OPTIONS,
-        },
-      );
-      if (result.fatal) {
-        panic(
-          `React Compiler failed for ${filename}: ${result.errors.map(({ message }) => message).join("\n")}`,
-        );
-      }
-      return { contents: result.code, loader: "js" };
-    });
-  },
-} satisfies Bun.BunPlugin;
-
 const inlineReaderFonts = {
   name: "inline-reader-fonts",
   setup(builder: Bun.PluginBuilder) {
@@ -150,7 +121,7 @@ const inlineReaderFonts = {
           contents = contents.replaceAll(
             match[0],
             () =>
-              `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
+              `url("data:font/woff2;base64,${Buffer.from(bytes).toBase64()}")`,
           );
         }
         return { contents, loader: "css" };
@@ -187,8 +158,7 @@ for (const fontPath of paths) {
   ).arrayBuffer();
   fonts = fonts.replaceAll(
     `url("${fontPath}")`,
-    () =>
-      `url("data:font/woff2;base64,${Buffer.from(bytes).toString("base64")}")`,
+    () => `url("data:font/woff2;base64,${Buffer.from(bytes).toBase64()}")`,
   );
 }
 await writeGenerated(
@@ -216,7 +186,7 @@ const buildMcpApp = async ({
     root: repoRoot,
     compile: true,
     metafile: true,
-    plugins: [generatedAssetPlugin, reactCompiler, inlineReaderFonts],
+    plugins: [generatedAssetPlugin, reactCompilerBunPlugin, inlineReaderFonts],
     entrypoints: [path.join(appRoot, input)],
     minify: true,
     define: { "process.env.NODE_ENV": JSON.stringify("production") },

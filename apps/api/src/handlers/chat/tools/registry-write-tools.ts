@@ -1,7 +1,7 @@
 import {
-  toolDefinition,
   type SchemaInput,
   type ServerTool,
+  toolDefinition,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
@@ -25,8 +25,8 @@ import { withCurrentMemberRole } from "@/api/lib/permission-authorization";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import {
-  projectMcpFeatureInput,
   isMcpDescriptorFeatureEnabled,
+  projectMcpFeatureInput,
 } from "@/api/mcp/feature-access";
 import {
   hiddenMcpDescriptorIds,

@@ -22,8 +22,8 @@ import {
   TEST_BATCH_RSS_HEADROOM_RATIO,
   TEST_RSS_TABLE_MAX_AGE_DAYS,
   testRssArtifact,
-  unmeasuredTestPeakRss,
   type TestRssTable,
+  unmeasuredTestPeakRss,
 } from "./test-batch-plan";
 import { partitionTestFiles } from "./test-file-shards";
 

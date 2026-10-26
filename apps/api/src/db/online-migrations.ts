@@ -14,17 +14,27 @@ import {
 import { MONITORING_SESSION_INDEXES } from "@/api/lib/synthetic-principal/indexes";
 
 import {
-  REWRITTEN_MIGRATION_INDEXES,
   type RequiredMigrationIndex,
+  REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
+import {
+  AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
+  AGENT_SKILL_BINDING_CONSTRAINTS,
+} from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  CASE_LAW_PARSE_PENDING_INDEX,
+  CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+  CASE_LAW_PARSED_SOURCE_VALIDATION,
+} from "./case-law-parsed-source-hash-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
   CHAT_CONTENT_V3_SOURCES,
 } from "./chat-content-v3-backfill";
+import { CONTACT_VAT_ID_REPAIR } from "./contact-vat-id-repair";
 import {
   CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
@@ -38,6 +48,10 @@ import {
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
+import {
+  INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  INVOICE_LANGUAGE_CONSTRAINTS,
+} from "./invoice-language-constraint-validation";
 import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
@@ -66,6 +80,14 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import {
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
+} from "./organization-access-state-constraint-validation";
+import {
+  READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
+  READER_ANNOTATION_CLAIM_CONSTRAINTS,
+} from "./reader-annotation-claim-constraint-validation";
 import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
@@ -176,6 +198,72 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  CASE_LAW_PARSE_PENDING_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skills_bound_workspace_idx" ON public."agent_skills" (bound_workspace_id) WHERE bound_workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.agent_skills USING btree (bound_workspace_id) WHERE (bound_workspace_id IS NOT NULL)",
+    isUnique: false,
+    name: "agent_skills_bound_workspace_idx",
+    tableName: "agent_skills",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skills_bound_client_idx" ON public."agent_skills" (bound_client_id) WHERE bound_client_id IS NOT NULL',
+    definitionBody:
+      "ON public.agent_skills USING btree (bound_client_id) WHERE (bound_client_id IS NOT NULL)",
+    isUnique: false,
+    name: "agent_skills_bound_client_idx",
+    tableName: "agent_skills",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legislation_documents_work_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (version_valid_from IS NOT NULL)",
+    isUnique: false,
+    name: "legislation_documents_work_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_publisher_identity_idx" ON public."legislation_documents" (source_id, eli, language, publisher_expression_id) WHERE identity_mode = \'publisher-expression\'',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language, publisher_expression_id) WHERE ((identity_mode)::text = 'publisher-expression'::text)",
+    isUnique: true,
+    name: "legislation_documents_publisher_identity_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NOT NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, version_valid_from, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NOT NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_version_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "legislation_documents_legacy_current_lang_idx" ON public."legislation_documents" (source_id, eli, language) WHERE identity_mode = \'legacy-window\' AND version_valid_from IS NULL',
+    definitionBody:
+      "ON public.legislation_documents USING btree (source_id, eli, language) WHERE (((identity_mode)::text = 'legacy-window'::text) AND (version_valid_from IS NULL))",
+    isUnique: true,
+    name: "legislation_documents_legacy_current_lang_idx",
+    tableName: "legislation_documents",
+  },
+  {
+    // Serves the matter key's cascade and the claim cleanup trigger; both
+    // still work, by a scan, until it exists.
+    createSql:
+      'CREATE INDEX CONCURRENTLY "legal_reader_annotations_verification_claim_idx" ON public."legal_reader_annotations" (workspace_id, verification_claim_id) WHERE workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.legal_reader_annotations USING btree (workspace_id, verification_claim_id) WHERE (workspace_id IS NOT NULL)",
+    isUnique: false,
+    name: "legal_reader_annotations_verification_claim_idx",
+    tableName: "legal_reader_annotations",
+  },
   ...MONITORING_SESSION_INDEXES,
   ...Object.values(CHAT_CONTENT_V3_SOURCES).map(({ table: tableName }) => ({
     createSql: `CREATE INDEX CONCURRENTLY "${tableName}_content_v3_pending_idx" ON public."${tableName}" (id) WHERE (content -> 'version') IS DISTINCT FROM '3'::jsonb`,
@@ -193,6 +281,23 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_citations_doctrine_cited_idx",
     tableName: "case_law_citations",
+  },
+  // A provision's subtree of citing rows as one byte-ordered anchor range.
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_work_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_identifier", "anchor" COLLATE "C")`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_identifier, anchor COLLATE "C")',
+    isUnique: false,
+    name: "case_law_provision_citations_work_subtree_idx",
+    tableName: "case_law_provision_citations",
+  },
+  {
+    createSql: `CREATE INDEX CONCURRENTLY "case_law_provision_citations_eli_subtree_idx" ON public."case_law_provision_citations" USING btree ("jurisdiction", "work_eli", "anchor" COLLATE "C") WHERE "work_eli" IS NOT NULL`,
+    definitionBody:
+      'ON public.case_law_provision_citations USING btree (jurisdiction, work_eli, anchor COLLATE "C") WHERE (work_eli IS NOT NULL)',
+    isUnique: false,
+    name: "case_law_provision_citations_eli_subtree_idx",
+    tableName: "case_law_provision_citations",
   },
   // Bounded cross-publisher ruling lookup before a decision insert.
   {
@@ -592,6 +697,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "search_history_entries_owner_country_recent_idx" ON public."search_history_entries" USING btree ("organization_id", "user_id", "country", "last_used_at", "id")',
+    definitionBody:
+      "ON public.search_history_entries USING btree (organization_id, user_id, country, last_used_at, id)",
+    isUnique: false,
+    name: "search_history_entries_owner_country_recent_idx",
+    tableName: "search_history_entries",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -644,6 +758,21 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
     replacementNames: ["case_law_decisions_search_candidate_published_idx"],
   },
   {
+    legacyName: "legislation_documents_eli_version_lang_idx",
+    replacementNames: [
+      "legislation_documents_work_version_lang_idx",
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_version_lang_idx",
+    ],
+  },
+  {
+    legacyName: "legislation_documents_eli_current_lang_idx",
+    replacementNames: [
+      "legislation_documents_publisher_identity_idx",
+      "legislation_documents_legacy_current_lang_idx",
+    ],
+  },
+  {
     legacyName: "legal_reader_answer_messages_answer_idx",
     replacementNames: ["legal_reader_answer_messages_answer_sequence_idx"],
   },
@@ -657,6 +786,16 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
       "case_law_decisions_source_document_idx",
       "case_law_decisions_source_case_lang_null_idx",
     ],
+  },
+  // A provision's citing rows are its whole subtree, which the exact-anchor
+  // walks cannot seek under the database collation.
+  {
+    legacyName: "case_law_provision_citations_work_anchor_idx",
+    replacementNames: ["case_law_provision_citations_work_subtree_idx"],
+  },
+  {
+    legacyName: "case_law_provision_citations_eli_anchor_idx",
+    replacementNames: ["case_law_provision_citations_eli_subtree_idx"],
   },
   // Better Auth 1.7.3 stopped writing `issuer`, so the account identity key is
   // (provider_id, account_id): the pair the library links accounts by. The
@@ -694,11 +833,17 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CASE_LAW_PARSED_SOURCE_VALIDATION,
+  ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
+  ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
+  ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   // Not behind one migration: the OAuth resource set is derived from the MCP
@@ -716,11 +861,16 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+    ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
     ...DECISION_DATE_CEILING_CONSTRAINTS,
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
+    ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
+    ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 
@@ -780,8 +930,7 @@ export const runOnlineMigrations = async (
   );
 
 type OnlineValidationOutcome =
-  | { type: "validated" }
-  | { type: "migrator_active" };
+  { type: "validated" } | { type: "migrator_active" };
 
 const VALIDATED = {
   type: "validated",
@@ -1416,6 +1565,9 @@ export const ensureOnlineIndexValid = async ({
         // DROP before CREATE would let a duplicate commit in between.
         await session.run(reindexIndexConcurrently(index));
         return;
+      }
+      if (!declaresOnlineBuild(index)) {
+        panic(`Required migration index ${index.name} is missing`);
       }
       await session.run(createIndexConcurrently(index));
     },

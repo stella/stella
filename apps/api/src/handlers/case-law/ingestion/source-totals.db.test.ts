@@ -22,24 +22,24 @@ import type { SourceTotalOrigin } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import {
-  countSourceThroughIngestionRole,
   countSourceOnDedicatedConnection,
+  countSourceThroughIngestionRole,
   readSourceReportedTotals,
-  refreshSourceStoredTotal,
   refreshNextSourceStoredTotal,
+  refreshSourceStoredTotal,
   setSourceReportedTotal,
-  SourceReportedTotalError,
-  SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
   SOURCE_STORED_TOTAL_GLOBAL_SPACING,
+  SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  SourceReportedTotalError,
   sourceStoredTotalNextRefreshAt,
   sourceStoredTotalRefreshClaim,
 } from "@/api/handlers/case-law/ingestion/source-totals";
-import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import {
-  openGatedTestDatabase,
   copyIngestionTablePrivileges,
   type GatedTestDb,
+  openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -999,7 +999,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         expect(calls).toBe(0);
       } finally {
         await locker.unsafe("COMMIT");
-        locker.release();
+        await locker.release();
       }
       expect((await Promise.all([first, second])).toSorted()).toEqual([
         "fresh",
@@ -1814,7 +1814,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       } finally {
         released.resolve(undefined);
         await locker.unsafe("COMMIT");
-        locker.release();
+        await locker.release();
       }
       const outcomes = await Promise.all(pending);
       expect(outcomes.filter((value) => value === "refreshed")).toHaveLength(1);

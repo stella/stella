@@ -24,8 +24,8 @@
 
 import { PRUNABLE_BASELINES } from "./autofix-baseline-prune";
 import {
-  GENERATORS,
   type Generator,
+  GENERATORS,
   generatorsForFiles,
   orderGenerators,
 } from "./generated-files";
@@ -48,21 +48,19 @@ const PRUNABLE_PATHS = new Set<string>(
 // What the format and lint fixers read besides the files they fix. Generator
 // sources need no entry: each generator declares them as inputs.
 const FIXER_INPUTS = [
-  ".oxfmtrc.json",
+  "bunfig.toml",
   "oxlint.config.ts",
   ".oxlint-plugins/**",
   "scripts/oxlint-presets/**",
   "**/tsconfig*.json",
   "**/package.json",
   "bun.lock",
-  "bunfig.toml",
   "patches/**",
   "types/**",
   ".github/workflows/autofix.yml",
   "scripts/autofix-*.ts",
   "scripts/ci-generated-sources.ts",
   "scripts/typecheck-coverage.ts",
-  "scripts/check-format-environment.ts",
 ] as const;
 
 /** Whether a change among `files` can alter what format or lint produce. */

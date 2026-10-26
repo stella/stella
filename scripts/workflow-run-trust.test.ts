@@ -24,6 +24,7 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 // Pin the current scan so missing or newly added entry points need review.
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
+  "ci-runner-loss-retry.yml",
   "cla.yml",
   "publish-npm.yml",
   "release-desktop.yml",
@@ -190,6 +191,110 @@ const workflowRunWorkflows = () =>
       isRecord(workflow) && triggers(workflow["on"]).includes("workflow_run"),
   );
 
+const PRIVILEGED_MANUAL_JOB =
+  /(?:TAURI_SIGNING_PRIVATE_KEY|AZURE_CLIENT_SECRET|STELLA_[A-Z_]*PRIVATE_KEY|DOCKERHUB_TOKEN|POSTHOG_CLI_API_KEY|create-github-app-token|"(?:attestations|artifact-metadata|deployments|id-token|packages|pages)"\s*:\s*"write")/u;
+
+const canRunOnFeatureDispatch = (
+  name: string,
+  jobs: Record<string, unknown>,
+  seen = new Set<string>(),
+): boolean => {
+  if (seen.has(name)) {
+    return true;
+  }
+  const job = jobs[name];
+  if (!isRecord(job)) {
+    return true;
+  }
+  const condition = conditionOf(job);
+  if (
+    condition.trim() !== "" &&
+    definitelyFalse(condition, {
+      values: {
+        "github.event_name": "workflow_dispatch",
+        "github.ref": "refs/heads/feature",
+        "github.repository": "stella/stella",
+      },
+      fallback: (path) =>
+        path.startsWith("github.event.workflow_run.") ? "" : undefined,
+      status: {
+        always: true,
+        success: true,
+        failure: false,
+        cancelled: false,
+      },
+    })
+  ) {
+    return false;
+  }
+  const nextSeen = new Set(seen).add(name);
+  const gatedNeeds = needsOf(job).filter(
+    (need) => !canRunOnFeatureDispatch(need, jobs, nextSeen),
+  );
+  if (gatedNeeds.length === 0) {
+    return true;
+  }
+  return (
+    RUNS_AFTER_SKIP.test(condition) &&
+    runsAfterSkippedGate(condition, gatedNeeds)
+  );
+};
+
+const featureDispatchPrivilegeProblems = (
+  file: string,
+  workflow: unknown,
+): string[] => {
+  if (
+    !isRecord(workflow) ||
+    !triggers(workflow["on"]).includes("workflow_dispatch")
+  ) {
+    return [];
+  }
+  const jobs = isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  return Object.entries(jobs).flatMap(([name, job]) =>
+    isRecord(job) &&
+    PRIVILEGED_MANUAL_JOB.test(JSON.stringify(job)) &&
+    canRunOnFeatureDispatch(name, jobs)
+      ? [`${file}: privileged job '${name}' can run from a feature ref`]
+      : [],
+  );
+};
+
+// These pre-existing diagnostic and maintenance paths intentionally run on a
+// selected ref. Keep each job explicit so new privilege-bearing jobs fail the
+// guard, and remove an allowance when that path moves behind a protected-ref
+// dispatcher.
+const FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES = {
+  "audit-branch-protection.yml: privileged job 'audit-fork-approval' can run from a feature ref":
+    "Exercises the configured fork-approval policy without mutating it.",
+  "catalogue-upstream.yml: privileged job 'catalogue-upstream' can run from a feature ref":
+    "Runs the upstream catalogue comparison for an operator-selected revision.",
+  "ci.yml: privileged job 'e2e-production-shard' can run from a feature ref":
+    "Runs an operator-selected production-mode browser shard.",
+  "ci.yml: privileged job 'e2e-vite-canary' can run from a feature ref":
+    "Runs the Vite compatibility canary for an operator-selected revision.",
+  "ci.yml: privileged job 'marketing-screenshots' can run from a feature ref":
+    "Runs screenshot validation for an operator-selected revision.",
+  "ci.yml: privileged job 'route-smoke' can run from a feature ref":
+    "Runs route smoke checks for an operator-selected revision.",
+  "cla.yml: privileged job 'verify-signatures' can run from a feature ref":
+    "Supports a manual signature-policy diagnostic.",
+  "dated-waiver-healing.yml: privileged job 'heal' can run from a feature ref":
+    "Supports a dry-run waiver-healing diagnostic.",
+  "dependency-audit.yml: privileged job 'remediate' can run from a feature ref":
+    "Supports an operator-triggered dependency remediation branch.",
+  "main-heavy.yml: privileged job 'suites' can run from a feature ref":
+    "Runs heavy CI suites for an explicitly selected revision.",
+  "main-pr-depth.yml: privileged job 'suites' can run from a feature ref":
+    "Runs pull-request depth suites for an explicitly selected revision.",
+  "model-catalog-check.yml: privileged job 'model-catalog-check' can run from a feature ref":
+    "Supports a manual model-catalog compatibility diagnostic.",
+  "nightly-test.yml: privileged job 'marketing-screenshots' can run from a feature ref":
+    "Runs the nightly screenshot suite for an operator-selected revision.",
+  "quarantine-prune.yml: privileged job 'prune' can run from a feature ref":
+    "Supports a dry-run quarantine maintenance diagnostic.",
+} as const;
+
 // Events that start a run nobody is watching. Pull request, merge queue and
 // manual dispatch runs report to the person who started them.
 const UNATTENDED_EVENTS = new Set([
@@ -206,6 +311,8 @@ const UNATTENDED_EVENTS = new Set([
 const UNALERTED_UNATTENDED_WORKFLOWS: Record<string, string> = {
   "bot-refresh-auto-merge.yml":
     "Runs after each pull request's checks; a failure affects one bot pull request and shows on it.",
+  "ci-runner-loss-retry.yml":
+    "Runs after a failed pull request run; if the retry fails, that pull request's own red CI still shows on it.",
   "cla.yml":
     "Its workflow_run leg posts the signature status on the contributor's pull request, where a failure shows.",
   "scheduled-run-alerts.yml":
@@ -650,6 +757,7 @@ const APP_TOKEN = /^\$\{\{\s*steps\.[\w-]+\.outputs\.token\s*\}\}$/u;
 const ALERTING_WORKFLOW = "scheduled-run-alerts.yml";
 const ALERT_ONLY_TOKEN_DISPATCHES: Record<string, string[]> = {
   "main-heavy.yml#Dispatch release PR-depth checks": ["main-pr-depth.yml"],
+  "main-heavy.yml#Dispatch version commit staging": ["deploy-staging.yml"],
   "network-baseline-request.yml#Request main recording": [
     "network-baseline-record.yml",
   ],
@@ -840,6 +948,23 @@ describe("a followed run is never started with GITHUB_TOKEN", () => {
         fixture({ run: "gh workflow run publish.yml" }),
       ),
     ).toEqual([]);
+  });
+});
+
+describe("workflow_dispatch trust", () => {
+  test("privileged manual jobs require the protected main workflow ref", () => {
+    const problems = allWorkflows().flatMap(({ file, workflow }) =>
+      featureDispatchPrivilegeProblems(file, workflow),
+    );
+    const allowances = new Set(
+      Object.keys(FEATURE_DISPATCH_PRIVILEGE_ALLOWANCES),
+    );
+    const current = new Set(problems);
+    const unexpected = problems.filter((problem) => !allowances.has(problem));
+    const stale = [...allowances]
+      .filter((allowance) => !current.has(allowance))
+      .map((allowance) => `stale allowance: ${allowance}`);
+    expect([...unexpected, ...stale]).toEqual([]);
   });
 });
 

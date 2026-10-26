@@ -41,6 +41,12 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
+    path: "apps/api/src/db/sql-client.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Creates every Bun SQL client and drizzle database for the API.",
+    transports: ["module:bun"],
+  },
+  {
     path: "packages/start-runtime/src/local-module-loader.ts",
     class: "package-owned-client",
     reason:
@@ -85,13 +91,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Loads the selected archived engine inside the recorder's temporary directory.",
     transports: ["local:module-loader"],
-  },
-  {
-    path: "apps/api/scripts/run-postgres-tests.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Creates and drops per-worker test databases on the Postgres server DATABASE_URL names.",
-    transports: ["global:Bun.SQL"],
   },
   {
     path: "apps/api/scripts/ai-provider-cassette-probe.ts",
@@ -661,56 +660,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "global:fetch",
       "module:better-auth",
       "module:better-auth/plugins",
-      "module:bun",
     ],
-  },
-  {
-    path: "apps/api/scripts/seed-reset.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Runs the database reset using Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/decision-analysis.db.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Queries the configured database for decision analysis.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/better-auth-migration-audit.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads migration state through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/seed-migration-rehearsal.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Runs migration rehearsal queries through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/better-auth-17-backfill.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads and writes migration records through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/scripts/database-census.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Collects database schema information through Bun SQL connections.",
-    transports: ["module:bun"],
   },
   {
     path: "apps/api/src/scripts/better-auth-microsoft-identity-map.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads identity mapping data through Bun SQL connections.",
-    transports: ["module:bun", "module:jose"],
-  },
-  {
-    path: "apps/api/src/lib/public-law-read-db.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads public law data through Bun SQL connections.",
-    transports: ["module:bun"],
+    transports: ["module:jose"],
   },
   {
     path: "apps/api/src/lib/redis-client.ts",
@@ -737,38 +693,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     reason:
       "Creates background workflow jobs through the configured queue service.",
     transports: ["module:bullmq"],
-  },
-  {
-    path: "apps/api/src/lib/health/database-login-probe.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Checks database access through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/long-running-connection.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Admits bounded work, maintenance and cancellation database sessions through Bun SQL.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/migrate.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Runs database migrations through Bun SQL connections.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/root.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Creates root database connections through Bun SQL.",
-    transports: ["module:bun"],
-  },
-  {
-    path: "apps/api/src/db/online-index-observer.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Reads online index state and runs operator online repairs through Bun SQL connections.",
-    transports: ["module:bun"],
   },
   {
     path: "apps/collab/src/server.ts",
@@ -1084,10 +1008,24 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
+    path: "apps/web/src/routes/sitemap[.]xml.ts",
+    class: "operator-configured-infrastructure",
+    reason:
+      "Passes the default fetch transport to public case-law and statute shard readers for the root sitemap.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/bun-docker/api.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Sends Docker API requests over the configured Unix socket with existing cancellation deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed stella API client; sends each route call to the configured API origin through the caller's fetcher or the global fetch.",
     transports: ["global:fetch"],
   },
   {
@@ -1279,6 +1217,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/external-preview/preview.ts",
     reason: "Issues request authority for the external preview routes.",
+  },
+  {
+    path: "apps/api/src/handlers/invoices/transition.ts",
+    reason:
+      "Issues request authority for the official VAT exchange rate an invoice finalize needs.",
   },
   {
     path: "apps/api/src/handlers/legislation/boe/law-structure/get.ts",

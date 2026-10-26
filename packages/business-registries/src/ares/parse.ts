@@ -3,8 +3,8 @@ import { getAresCourtName } from "./court-names.js";
 import type {
   AresAddress,
   AresBodyMember,
-  AresCourtFile,
   AresCompany,
+  AresCourtFile,
   AresRawAddress,
   AresResRecord,
   AresSearchEntry,

@@ -18,7 +18,7 @@ import { panic, Result } from "better-result";
  */
 import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import { Temporal, DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
@@ -60,6 +60,7 @@ import { planReviewRun } from "@/api/lib/document-review/run-plan";
 import type { ReviewRunPlan } from "@/api/lib/document-review/run-plan";
 import { errorTag } from "@/api/lib/errors/utils";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   RECONCILE_SCAN_PAGE_SIZE,
@@ -372,15 +373,27 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
     // resort if the process itself threw before that could run.
     if (job) {
       markRunFailed(job.data, "internal").catch((markError: unknown) => {
-        captureError(markError, {
-          runId: job.data.runId,
-          workspaceId: job.data.workspaceId,
-        });
+        captureError(
+          markError,
+          handlerErrorContext(
+            "documentreview.initDocumentReviewRunWorker.markError",
+            {
+              runId: job.data.runId,
+              workspaceId: job.data.workspaceId,
+            },
+          ),
+        );
       });
     }
     const runId = job ? job.data.runId : "";
     const workspaceId = job ? job.data.workspaceId : "";
-    captureError(error, { runId, workspaceId });
+    captureError(
+      error,
+      handlerErrorContext("documentreview.initDocumentReviewRunWorker", {
+        runId,
+        workspaceId,
+      }),
+    );
     logger.error("document_review_run.failed", {
       runId,
       "error.type": errorTag(error),
@@ -408,7 +421,12 @@ export const initDocumentReviewRunWorker = ({ db }: BullMqWorkerContext) => {
     intervalMs: ORPHAN_RECONCILE_INTERVAL_MS,
     run: runReconcile,
     onError: (error) => {
-      captureError(error, { operation: "document_review_run.reconcile" });
+      captureError(
+        error,
+        handlerErrorContext("documentreview.closeReconcile", {
+          operation: "document_review_run.reconcile",
+        }),
+      );
     },
   });
 
@@ -516,10 +534,16 @@ export const processDocumentReviewRun = async (
     catch: (cause) => cause,
   });
   if (Result.isError(outcome)) {
-    captureError(outcome.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      outcome.error,
+      handlerErrorContext(
+        "documentreview.processDocumentReviewRun.outcome_error",
+        {
+          runId: actor.runId,
+          workspaceId: actor.workspaceId,
+        },
+      ),
+    );
     await setRunFailed(actor, "internal");
     return;
   }
@@ -635,10 +659,13 @@ const executeRun = async ({
   });
   const config = Result.flatten(configResult);
   if (Result.isError(config)) {
-    captureError(config.error, {
-      runId: actor.runId,
-      workspaceId: actor.workspaceId,
-    });
+    captureError(
+      config.error,
+      handlerErrorContext("documentreview.executeRun.config_error", {
+        runId: actor.runId,
+        workspaceId: actor.workspaceId,
+      }),
+    );
     return "ai_unavailable";
   }
 

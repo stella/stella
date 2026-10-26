@@ -57,9 +57,7 @@ const createSigner = async (
  * - `remove-signature-field`: drops the field and its widget entirely.
  */
 export type SignatureHidingRevision =
-  | "drop-sig-flags"
-  | "inherit-signature-value"
-  | "remove-signature-field";
+  "drop-sig-flags" | "inherit-signature-value" | "remove-signature-field";
 
 type SignedPdfOptions = {
   keyPool?: TestRsaKeyPool;

@@ -8,8 +8,8 @@ import {
 } from "@/api/db/schema";
 import { defineScopedTransitions } from "@/api/lib/db/transitions";
 import {
-  SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_REVIEW_DISPOSITIONS,
+  SANCTIONS_SCREENING_STATUSES,
 } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "./monitoring-transition-identities";

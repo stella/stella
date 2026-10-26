@@ -13,14 +13,15 @@ import en from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
-  statuteLawCrumbTrailOf,
   decisionLawCrumbTrailOf,
+  statuteLawCrumbTrailOf,
 } from "../-law-crumb-trail.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { PublicLawBreadcrumbs } = await import("./public-law-shell");
 
@@ -92,11 +93,13 @@ const mount = async ({
       messages={locale === "ar" ? ar : en}
       timeZone="UTC"
     >
-      <TooltipProvider delay={0}>
-        <RouterContextProvider router={router}>
-          <PublicLawBreadcrumbs />
-        </RouterContextProvider>
-      </TooltipProvider>
+      <FormattingProvider locale={locale} timeZone="UTC">
+        <TooltipProvider delay={0}>
+          <RouterContextProvider router={router}>
+            <PublicLawBreadcrumbs />
+          </RouterContextProvider>
+        </TooltipProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 };

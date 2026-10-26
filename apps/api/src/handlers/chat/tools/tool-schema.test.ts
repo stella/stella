@@ -4,9 +4,9 @@ import {
   hashSchemaInput,
   normalizeApprovalSchema,
   parseWithStandardSchema,
-  toolDefinition,
   type StreamChunk,
   type Tool,
+  toolDefinition,
 } from "@tanstack/ai";
 import {
   convertToolsToProviderFormat as convertAnthropicTools,
@@ -75,6 +75,10 @@ import {
   projectToolMapForSubagent,
 } from "@/api/handlers/chat/tools/subagent-tools";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -193,6 +197,7 @@ const getChatTools = (
 };
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
+  binding: UNBOUND,
   body: "# Instructions\nUse the checklist.",
   description: "Review closing files.",
   displayName: "Closing Review",
@@ -447,12 +452,7 @@ const commonProviderOptions = (tools: Tool[]) => ({
 
 type ProviderRequestProbe = {
   provider:
-    | "anthropic"
-    | "bedrock"
-    | "google"
-    | "mistral"
-    | "openai"
-    | "openrouter";
+    "anthropic" | "bedrock" | "google" | "mistral" | "openai" | "openrouter";
   capture: (tools: Tool[]) => Promise<Record<string, unknown>>;
   toolsFromRequest: (request: Record<string, unknown>) => unknown[];
 };
@@ -831,6 +831,7 @@ describe("chat tool schemas", () => {
   test("construct skill tools as JSON-schema-compatible AI tools", () => {
     expect(() =>
       createSkillTools({
+        bindingScope: NO_SKILL_BINDING_SCOPE,
         organizationId,
         safeDb: unusedSafeDb,
         skills: offeredSkillCatalog([
@@ -847,6 +848,7 @@ describe("chat tool schemas", () => {
 
   test("does not offer skill lookup when the catalog is empty", () => {
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId,
       safeDb: unusedSafeDb,
       skills: offeredSkillCatalog([]),
@@ -859,6 +861,7 @@ describe("chat tool schemas", () => {
 
   test("keeps installed skill names out of tool schema descriptions", () => {
     const tools = createSkillTools({
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId,
       safeDb: unusedSafeDb,
       skills: offeredSkillCatalog([

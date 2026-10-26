@@ -28,6 +28,10 @@ inputs:
     description: Checkout containing the current renderer and workflow policy.
     required: false
     default: .
+  previous-web-image:
+    description: Optional repository@sha256 digest of a previous image whose manifested client assets carry forward.
+    required: false
+    default: ""
 
 outputs:
   digest:
@@ -108,8 +112,14 @@ runs:
         SOURCE_PATH: ${{ inputs.source-path }}
         TARGET_ENV: ${{ inputs.target-environment }}
         TOOLING_PATH: ${{ inputs.tooling-path }}
+        PREVIOUS_WEB_IMAGE: ${{ inputs.previous-web-image }}
       run: |
         set -euo pipefail
+        previous_image_arg=""
+        if [[ -n "$PREVIOUS_WEB_IMAGE" ]]; then
+          sh "${TOOLING_PATH}/scripts/validate-previous-web-image.sh" "$PREVIOUS_WEB_IMAGE"
+          previous_image_arg="PREVIOUS_WEB_IMAGE=$PREVIOUS_WEB_IMAGE"
+        fi
         rendered="$(
           bash "${TOOLING_PATH}/scripts/render-web-build-args.sh" \
             "${SOURCE_PATH}/apps/web/build-env-contract.json" \
@@ -127,6 +137,7 @@ runs:
           echo "STELLA_WEB_BUILD_ARGS"
           echo "posthog-name=$posthog_arg"
           echo "version=$version"
+          echo "previous-image-arg=$previous_image_arg"
         } >>"$GITHUB_OUTPUT"
 
     - name: Verify native x64 build host
@@ -186,9 +197,31 @@ runs:
         secrets: |
           posthog_cli_api_key=${{ inputs.posthog-cli-api-key }}
         build-args: |
+          ${{ steps.args.outputs.previous-image-arg }}
           STELLA_VERSION=${{ steps.args.outputs.version }}
           STELLA_COMMIT_SHA=${{ inputs.release-sha }}
           POSTHOG_SOURCEMAP_PUBLISH=true
           POSTHOG_SOURCEMAP_PROJECT_ID=${{ inputs.posthog-project-id }}
           ${{ steps.args.outputs.values }}
           ${{ steps.args.outputs.posthog-name }}=${{ inputs.posthog-key }}
+
+    - name: Report carried web asset and image sizes
+      if: inputs.previous-web-image != ''
+      shell: bash
+      env:
+        NEW_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-web@${{ steps.build.outputs.digest }}
+        PREVIOUS_IMAGE: ${{ inputs.previous-web-image }}
+        TOOLING_PATH: ${{ inputs.tooling-path }}
+      run: |
+        set -euo pipefail
+        bash "${TOOLING_PATH}/scripts/retry.sh" docker pull --platform linux/arm64 "$PREVIOUS_IMAGE" >/dev/null
+        bash "${TOOLING_PATH}/scripts/retry.sh" docker pull --platform linux/arm64 "$NEW_IMAGE" >/dev/null
+        container="$(docker create --platform linux/arm64 "$PREVIOUS_IMAGE")"
+        trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+        mkdir -p "$RUNNER_TEMP/previous-web-assets"
+        docker cp "$container:/app/apps/web/dist/client/." "$RUNNER_TEMP/previous-web-assets"
+        previous_assets_bytes="$(du -sb "$RUNNER_TEMP/previous-web-assets" | cut -f1)"
+        previous_image_bytes="$(docker image inspect "$PREVIOUS_IMAGE" --format '{{.Size}}')"
+        new_image_bytes="$(docker image inspect "$NEW_IMAGE" --format '{{.Size}}')"
+        echo "Previous client assets: ${previous_assets_bytes} bytes"
+        echo "Image size difference: $((new_image_bytes - previous_image_bytes)) bytes"

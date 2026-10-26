@@ -230,7 +230,7 @@ setTranslator(
 export { getTranslator } from "@/i18n/translator";
 
 type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
-type NumberingPreference = "auto" | "latn" | "arab";
+export type NumberingPreference = "auto" | "latn" | "arab";
 export type RegionalFormatPreference = "auto" | "en-IN";
 type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
 
@@ -297,7 +297,7 @@ export const buildFormattingLocale = ({
   if (weekStart !== "auto") {
     keywords.push(`fw-${WEEK_START_KEYWORD[weekStart]}`);
   }
-  if (numbers !== "latn") {
+  if (numbers !== "latn" || autoNumbers !== "latn") {
     keywords.push(`nu-${numbers}`);
   }
   return keywords.length > 0 ? `${base}-u-${keywords.join("-")}` : base;
@@ -473,7 +473,10 @@ export const useI18nStore = create<State & Actions>()(
           });
           // The UI stays in the previous language; tell the user the switch
           // did not happen. The toast renders in that previous language.
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "loadMessages:failure",
+            scope: { type: "handler", handlerId: "loadMessages:failure" },
+          });
           notifyUserError(error, getTranslator()("common.languageLoadFailed"));
           return;
         }

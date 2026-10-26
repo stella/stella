@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
 import {
+  appendFileSync,
   existsSync,
   readFileSync,
   writeFileSync,
-  appendFileSync,
 } from "node:fs";
 import path from "node:path";
 

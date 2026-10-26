@@ -1,16 +1,19 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { CONTACT_IMPORT_ISSUE_CODE } from "@stll/api-contract";
 
 import {
+  type ContactImportReceiptResult,
   contactImportRequests,
   contacts,
-  type ContactImportReceiptResult,
 } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
-import { validateContactImportCandidate } from "@/api/handlers/contacts/contact-import-file";
+import {
+  importedTaxIdentifiers,
+  validateContactImportCandidate,
+} from "@/api/handlers/contacts/contact-import-file";
 import type {
   ContactImportCandidate,
   ContactImportIssue,
@@ -22,32 +25,34 @@ import {
 } from "@/api/handlers/contacts/contact-import-schema";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { dateOfBirthToColumns } from "@/api/handlers/contacts/person-details";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
 // The reviewed row plus the caller-generated id. The field set itself lives in
 // `contact-import-schema.ts`, shared with the validate handler.
-const importContactRowSchema = t.Composite([
-  t.Object({ id: tSafeId("contact") }),
+const importContactRowSchema = v.intersect([
+  v.object({ id: resourceIdSchema("contact") }),
   contactImportCandidateSchema,
 ]);
 
-const importContactsBodySchema = t.Object({
-  importRequestId: tSafeId("contactImportRequest"),
+const importContactsBodySchema = v.object({
+  importRequestId: resourceIdSchema("contactImportRequest"),
   taxIdScheme: taxIdSchemeSchema,
-  rows: t.Array(importContactRowSchema, {
-    maxItems: LIMITS.contactsImportRowsMax,
-  }),
+  rows: v.pipe(
+    v.array(importContactRowSchema),
+    v.maxLength(LIMITS.contactsImportRowsMax),
+  ),
 });
 
 type ImportSkipReason =
@@ -277,7 +282,7 @@ const importContacts = createSafeRootHandler(
                     addresses: contact.addresses,
                     tags: contact.tags,
                     registrationNumber: contact.registrationNumber,
-                    taxId: contact.taxId,
+                    ...importedTaxIdentifiers(contact.taxId, body.taxIdScheme),
                     ...(contact.dateOfBirth === undefined
                       ? {}
                       : dateOfBirthToColumns(contact.dateOfBirth)),
@@ -370,7 +375,11 @@ const importContacts = createSafeRootHandler(
       result.status === "created" ? [result.contactId] : [],
     );
     if (createdContactIds.length > 0) {
-      flushContactSearchRepairs(createdContactIds).catch(captureError);
+      flushContactSearchRepairs(createdContactIds).catch(
+        createErrorCapture(
+          handlerErrorContext("importContacts.flushContactSearchRepairs"),
+        ),
+      );
     }
 
     return Result.ok({

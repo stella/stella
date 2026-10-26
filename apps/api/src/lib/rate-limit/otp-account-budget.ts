@@ -10,10 +10,12 @@ import { panic, Result } from "better-result";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import {
-  recordBudgetRejection,
   type BudgetName,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimitRequestKey } from "@/api/lib/rate-limit/redis-context";
@@ -50,12 +52,12 @@ export const createAccountAttemptBudget = (
     nameFor = () => "auth.account",
   }: {
     counterPrefix: string;
-    budgetFor: (normalizedEmail: string) => AccountAttemptBudget;
-    nameFor?: (normalizedEmail: string) => BudgetName;
+    budgetFor: (normalizedEmail: NormalizedEmail) => AccountAttemptBudget;
+    nameFor?: (normalizedEmail: NormalizedEmail) => BudgetName;
   },
 ) => ({
   reserve: async (email: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
     const accountBudget = budgetFor(normalizedEmail);
     const account = hashSha256Hex(normalizedEmail);
     const key = createRedisRateLimitRequestKey({
@@ -108,18 +110,21 @@ export const createAccountAttemptBudget = (
 export const createOtpAccountBudget = (
   context: Pick<RateLimitContext, "increment" | "decrement" | "complete">,
   demoAccountEmail: string | undefined,
-) =>
-  createAccountAttemptBudget(context, {
+) => {
+  const demoAccount =
+    demoAccountEmail === undefined ? null : normalizeEmail(demoAccountEmail);
+  return createAccountAttemptBudget(context, {
     counterPrefix: "otp-account",
     nameFor: (normalizedEmail) =>
-      normalizedEmail === demoAccountEmail?.trim().toLowerCase()
+      normalizedEmail === demoAccount
         ? "auth.otp.demo_account"
         : "auth.otp.account",
     budgetFor: (normalizedEmail) =>
-      normalizedEmail === demoAccountEmail?.trim().toLowerCase()
+      normalizedEmail === demoAccount
         ? DEMO_OTP_ACCOUNT_BUDGET
         : OTP_ACCOUNT_BUDGET,
   });
+};
 
 type OtpAccountLimitPluginOptions = {
   enabled: boolean;
@@ -155,7 +160,7 @@ export const createOtpAccountLimitPlugin = ({
             if (typeof email !== "string") {
               return undefined;
             }
-            const accountEmail = email.toLowerCase();
+            const accountEmail = normalizeEmail(email);
             let identifier: string;
             switch (verificationType) {
               case "sign-in":
@@ -176,7 +181,7 @@ export const createOtpAccountLimitPlugin = ({
                 if (typeof newEmail !== "string") {
                   return undefined;
                 }
-                identifier = `change-email-otp-${accountEmail}-${newEmail.toLowerCase()}`;
+                identifier = `change-email-otp-${accountEmail}-${normalizeEmail(newEmail)}`;
                 break;
               }
               case "current-email": {

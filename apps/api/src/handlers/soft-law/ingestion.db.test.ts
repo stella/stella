@@ -10,19 +10,19 @@ import { assertProperty } from "@stll/property-testing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  stellaCaseLawReader,
-  stellaPublicLawReader,
   stellaCaseLawAnalysisReader,
+  stellaCaseLawReader,
   stellaCorpusSampleReader,
   stellaIngestion,
+  stellaPublicLawReader,
 } from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  softLawSources,
-  softLawIngestionAttempts,
+  softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
-  softLawDocumentLocators,
+  softLawIngestionAttempts,
+  softLawSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -32,9 +32,9 @@ import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-st
 import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
-  SoftLawSourceAdapter,
-  SoftLawEntry,
   SoftLawDocumentInput,
+  SoftLawEntry,
+  SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import {
   SoftLawIngestionError,
@@ -487,7 +487,7 @@ if (!databaseUrl || !enabled) {
         const sourceRaw = [
           {
             role: "detail",
-            contentBase64: Buffer.from("malformed detail").toString("base64"),
+            contentBase64: Buffer.from("malformed detail").toBase64(),
             contentType: "text/html",
           },
         ];
@@ -1255,7 +1255,7 @@ if (!databaseUrl || !enabled) {
                   sourceRaw: [
                     {
                       role: "source-page-0",
-                      contentBase64: Buffer.from(html).toString("base64"),
+                      contentBase64: Buffer.from(html).toBase64(),
                       contentType: "text/html",
                     },
                   ],

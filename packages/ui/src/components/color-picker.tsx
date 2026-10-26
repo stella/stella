@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, lazy, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type * as React from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";

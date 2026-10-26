@@ -66,7 +66,7 @@ const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: 996,
-  knownGaps: { type: "unknown" },
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 12,
   completeness: {
     state: "measured",
@@ -88,7 +88,7 @@ const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: 4321,
-  knownGaps: { type: "unknown" },
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-measured-yet" },
 };
@@ -104,7 +104,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearTo: 2026,
   pendingTextCount: 0,
   storedDecisions: null,
-  knownGaps: { type: "unknown" },
+  knownGaps: { type: "not_reconciled", reason: "No date slices" },
   addedLastWeek: 0,
   completeness: { state: "not-counted-yet" },
 };
@@ -267,19 +267,20 @@ describe("the coverage page states what it counts", () => {
                   decisionYearTo: 2011,
                   pendingTextCount: 1234,
                   knownGaps: {
-                    type: "known",
-                    gaps: [
+                    type: "reconciled",
+                    summary: { missing: 2, shortSlices: 2, unlistedSlices: 0 },
+                    years: [
                       {
-                        from: "1969-01-01",
-                        to: "1970-12-31",
-                        reason: "Publisher archive has no decisions",
-                        evidenceRef: "publisher-index",
+                        year: 1969,
+                        type: "gaps",
+                        missing: 1,
+                        shortSlices: 1,
                       },
                       {
-                        from: "1989-01-01",
-                        to: "1989-12-31",
-                        reason: "Publisher archive has no decisions",
-                        evidenceRef: "publisher-index",
+                        year: 1989,
+                        type: "gaps",
+                        missing: 1,
+                        shortSlices: 1,
                       },
                     ],
                   },
@@ -297,6 +298,45 @@ describe("the coverage page states what it counts", () => {
       `${messages.caseLaw.coverage.pendingTexts}: 1,234`,
     );
     expect(markup).toContain(`${messages.caseLaw.coverage.knownGaps}: 2`);
+  });
+
+  test("unread listing periods are never counted as missing decisions", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              sources: [
+                {
+                  ...NEARLY_COMPLETE,
+                  knownGaps: {
+                    type: "reconciled",
+                    summary: { missing: 0, shortSlices: 0, unlistedSlices: 3 },
+                    years: [
+                      {
+                        year: 2004,
+                        type: "unlisted",
+                        missing: 0,
+                        shortSlices: 0,
+                        unlistedSlices: 3,
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(
+      `${messages.caseLaw.coverage.unreadListingPeriods}: 3`,
+    );
+    expect(markup).not.toContain(messages.caseLaw.coverage.knownGaps);
+    expect(markup).not.toContain(messages.caseLaw.coverage.noGapsRecorded);
   });
 
   test("freshness is a word, with the dot only beside it", () => {

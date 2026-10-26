@@ -1,7 +1,6 @@
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import { Result } from "better-result";
 import type { JWTPayload } from "jose";
-import * as v from "valibot";
 
 import type { PermissionInput } from "@stll/permissions";
 
@@ -16,11 +15,7 @@ import {
   SERVICE_CLIENT_PRINCIPAL,
   SERVICE_CLIENT_PRINCIPAL_CLAIM,
 } from "@/api/lib/db/service-client-contract";
-import {
-  isMachineApiKeyCredential,
-  machineApiKeyPermissionsSchema,
-  parseMachineApiKeyPermissions,
-} from "@/api/lib/machine-api-key-config";
+import { isMachineApiKeyCredential } from "@/api/lib/machine-api-key-config";
 import { isRecord } from "@/api/lib/type-guards";
 import { AGENT_RUN_TOKEN_PURPOSE } from "@/api/mcp/agent-run-token";
 import { resolveMachineApiKeySession as defaultResolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
@@ -91,62 +86,6 @@ export const getMcpAccessTokenVerificationOptions = (
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) &&
   value.every((item) => typeof item === "string" && item.length > 0);
-
-/**
- * A credential permission set recovered from the transport slot is re-validated
- * against the canonical statement map, exactly as it was when the key first
- * resolved: the slot is opaque state, so its permission set is re-derived
- * rather than trusted.
- */
-const isCredentialPermissions = (value: unknown): value is PermissionInput => {
-  const parsed = v.safeParse(machineApiKeyPermissionsSchema, value);
-  return (
-    parsed.success &&
-    parseMachineApiKeyPermissions(parsed.output).type === "valid"
-  );
-};
-
-const isMcpCredential = (
-  value: unknown,
-): value is NonNullable<McpSession["credential"]> => {
-  if (!isRecord(value) || typeof value["type"] !== "string") {
-    return false;
-  }
-  switch (value["type"]) {
-    case "agent_run":
-      return typeof value["runId"] === "string" && value["runId"].length > 0;
-    case "oauth_client":
-      return (
-        typeof value["clientId"] === "string" && value["clientId"].length > 0
-      );
-    case "personal_api_key":
-    case "machine_api_key":
-      return (
-        typeof value["id"] === "string" &&
-        value["id"].length > 0 &&
-        typeof value["name"] === "string" &&
-        value["name"].length > 0 &&
-        isCredentialPermissions(value["permissions"])
-      );
-    case "delegated_user":
-      return true;
-    default:
-      return false;
-  }
-};
-
-/** Validate session state recovered from an opaque framework transport slot. */
-export const isMcpSession = (value: unknown): value is McpSession =>
-  isRecord(value) &&
-  typeof value["userId"] === "string" &&
-  value["userId"].length > 0 &&
-  typeof value["organizationId"] === "string" &&
-  value["organizationId"].length > 0 &&
-  isStringArray(value["scopes"]) &&
-  (!("credential" in value) || isMcpCredential(value["credential"])) &&
-  (!("workspaceIds" in value) || isStringArray(value["workspaceIds"])) &&
-  (!("memberId" in value) ||
-    (typeof value["memberId"] === "string" && value["memberId"].length > 0));
 
 export const extractMcpSession = (
   payload: JWTPayload,
@@ -294,8 +233,7 @@ export const classifyMcpTokenVerificationError = (
  * then authorizes identically: same member lookup, same RLS identity.
  */
 export type McpAuthenticationFailure =
-  | McpAuthenticationError
-  | McpTokenVerificationError;
+  McpAuthenticationError | McpTokenVerificationError;
 
 type VerifyMcpAccessTokenOptions = {
   mode: McpMode;
@@ -326,8 +264,7 @@ export const authenticateMcpRequest = async (
     mode?: McpMode | undefined;
     reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
     resolveApiKeySession?:
-      | typeof defaultResolveMachineApiKeySession
-      | undefined;
+      typeof defaultResolveMachineApiKeySession | undefined;
     verifyToken?: ReturnType<typeof getVerifyBearerToken>;
   } = {},
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {

@@ -8,9 +8,9 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import {
+  type ConditionNode,
   emptyCondition,
   pruneIncomplete,
-  type ConditionNode,
 } from "@stll/conditions";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -22,8 +22,10 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   DuplicateIcon,
   FlagIcon,
@@ -64,8 +66,8 @@ import {
   PositionHeader,
 } from "@/components/ai-suggestions/review-position-header";
 import {
-  ReferencePassageList,
   type ReferenceNameLookup,
+  ReferencePassageList,
   SeverityChip,
 } from "@/components/ai-suggestions/review-position-row";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -403,14 +405,15 @@ export const PositionEditor = ({
               type="button"
               variant="ghost"
             >
-              <ChevronDownIcon
-                className={cn("transition-transform", open && "rotate-180")}
+              <DirectionalIcon
+                className={cn("transition-transform", open && "rotate-90")}
+                flip={!open}
+                icon={ChevronRightIcon}
               />
             </Button>
           </span>
         }
         className="gap-1.5"
-        index={index}
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}
@@ -1255,7 +1258,7 @@ const ClausePicker = ({
     enabled: clauseId !== "",
   });
   const detailView = useQueryView(detailQuery);
-  useQueryViewError(detailView);
+  useQueryViewError(detailView, "ClausePicker:query");
 
   const resolvedTitle = (() => {
     const detail = detailView.type === "items" ? detailView.items : undefined;

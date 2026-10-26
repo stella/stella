@@ -15,7 +15,6 @@
  */
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
@@ -25,9 +24,10 @@ import type { CitationPassageMention } from "@stll/legal-ast/citation-passage";
 import { hasBlockInlines, plainTextOf } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -380,7 +380,7 @@ export const readGatedDecisionCitations = async ({
         },
         subject,
       });
-      if (page instanceof ElysiaCustomStatusResponse) {
+      if (page instanceof HttpStatusResponse) {
         const statusCode = statusCodeOf(page);
         if (statusCode === 422) {
           return { type: "doctrine_unavailable" as const };

@@ -10,10 +10,10 @@ import {
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  type CorpusSearchPhase,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
-  type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import {
@@ -495,7 +495,7 @@ const phaseCursor = (phase: CorpusSearchPhase) => ({
 });
 
 const phaseSegment = (phase: unknown): string =>
-  `p${Buffer.from(JSON.stringify(phase)).toString("base64url")}`;
+  `p${Buffer.from(JSON.stringify(phase)).toBase64({ alphabet: "base64url", omitPadding: true })}`;
 
 const STRICT_PHASE = {
   type: "strict",
@@ -769,7 +769,7 @@ test("phase segments are canonical base64url and occur once after other optional
 test.each(['{"type":"strict', "{", '"unterminated'])(
   "malformed phase JSON %s rejects the cursor",
   (json) => {
-    const segment = `p${Buffer.from(json).toString("base64url")}`;
+    const segment = `p${Buffer.from(json).toBase64({ alphabet: "base64url", omitPadding: true })}`;
     expect(
       decodeCorpusSearchCursor(
         encodeCursor(0.5, `0:none:relevance:${segment}:${DECISION_ID}`),

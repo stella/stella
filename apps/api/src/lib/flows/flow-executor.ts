@@ -18,17 +18,17 @@ import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
-  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   loadManagedAIResidency,
   loadOrgAIConfig,
 } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   AUDIT_ACTION,
@@ -84,6 +84,7 @@ import {
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NotificationPing } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -100,8 +101,8 @@ import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligat
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
 import {
-  authorizedWorkspaceIds,
   type AuthorizedWorkspaceIds,
+  authorizedWorkspaceIds,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -1206,7 +1207,11 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch(
+    createErrorCapture(
+      handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+    ),
+  );
 };
 
 const readRunProgress = async (

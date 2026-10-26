@@ -468,7 +468,7 @@ describe("publisher amendment snapshots", () => {
           // Production identity constraints normally collapse same-date rows. The
           // handler still defends its response budget while such rows are present.
           await tx.execute(
-            sql`DROP INDEX legislation_documents_eli_version_lang_idx`,
+            sql`DROP INDEX legislation_documents_legacy_version_lang_idx`,
           );
           await tx.insert(legislationDocuments).values({
             id: otherVersionId,

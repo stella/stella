@@ -2,15 +2,15 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   afterAll,
   afterEach,
-  setDefaultTimeout,
   describe,
   expect,
   jest,
+  setDefaultTimeout,
   test,
 } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";

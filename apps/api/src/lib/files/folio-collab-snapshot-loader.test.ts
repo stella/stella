@@ -6,18 +6,18 @@ import * as yjs from "yjs";
 
 import { createHiddenEditorState } from "@stll/folio-core/controller/hiddenEditorManager";
 import {
-  materializeYjsDocx,
   extractDocxText,
   FOLIO_YJS_ATTR_SCHEMA_VERSION,
+  materializeYjsDocx,
   migrateFolioYjsSnapshot,
   parseDocx,
 } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  decideFolioSnapshotRecoveryState,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   loadPersistedFolioSnapshot,
-  decideFolioSnapshotRecoveryState,
 } from "@/api/lib/files/folio-collab-snapshot-loader";
 
 const { Doc, XmlElement, XmlText, encodeStateAsUpdate } = yjs;

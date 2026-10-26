@@ -1,11 +1,13 @@
-import { Result, panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import { afterAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
+import { createHttpApp } from "@/api/http/app";
+import { mount, routes } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -15,7 +17,9 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isRecord } from "@/api/lib/type-guards";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -34,9 +38,9 @@ if (!databaseUrl || !runPostgresTests) {
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "public_indexing" },
         cache: { kind: "none" },
-        query: t.Object({ slow: t.Optional(t.Literal("true")) }),
+        query: v.object({ slow: v.optional(v.literal("true")) }),
         response: safePublicHandlerResponseSchemasWithStatusText(
-          t.Object({ budget: t.String() }),
+          v.object({ budget: v.string() }),
         ),
       },
       async function* ({ query, request }) {
@@ -68,14 +72,27 @@ if (!databaseUrl || !runPostgresTests) {
       },
     );
     // Mount the production route identifiers so the same policy classifier runs.
-    const app = new Elysia({ prefix: STELLA_API_VERSION_PREFIX })
-      .get("/law/statutes/search", readBudget.handler, readBudget.config)
-      .post("/case/decisions/search", readBudget.handler, readBudget.config);
+    const app = createHttpApp({
+      middleware: [errorBoundary],
+      routes: mount(
+        [
+          routes({
+            "/law/statutes/search": { GET: readBudget },
+            "/case/decisions/search": { POST: readBudget },
+          }),
+        ],
+        { prefix: STELLA_API_VERSION_PREFIX },
+      ),
+    });
+    const server = serveForTest(app);
+    afterAll(async () => {
+      await server.stop();
+    });
 
     test(
       "a server-cancelled public search returns a bounded typed error and the next read succeeds",
       async () => {
-        const response = await app.handle(
+        const response = await server.fetch(
           new Request(
             `http://localhost${STELLA_API_VERSION_PREFIX}/law/statutes/search?slow=true`,
           ),
@@ -85,7 +102,7 @@ if (!databaseUrl || !runPostgresTests) {
           code: PUBLIC_READ_TIMEOUT_CODE,
           message: "Public read timed out. Please try again.",
         });
-        const normal = await app.handle(
+        const normal = await server.fetch(
           new Request(
             `http://localhost${STELLA_API_VERSION_PREFIX}/law/statutes/search`,
           ),
@@ -97,7 +114,7 @@ if (!databaseUrl || !runPostgresTests) {
     );
 
     test("case-law reads use the same registered request budget without authentication", async () => {
-      const response = await app.handle(
+      const response = await server.fetch(
         new Request(
           `http://localhost${STELLA_API_VERSION_PREFIX}/case/decisions/search`,
           { method: "POST" },

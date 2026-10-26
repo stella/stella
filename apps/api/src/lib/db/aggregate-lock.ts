@@ -1,13 +1,17 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
   and,
+  asc,
   eq,
-  inArray,
-  or,
-  getColumnTable,
   getColumns,
+  getColumnTable,
   getTableName,
+  inArray,
   is,
+  isNotNull,
+  isNull,
+  lte,
+  or,
   SQL,
   sql,
 } from "drizzle-orm";
@@ -20,6 +24,7 @@ import type {
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type {
@@ -28,6 +33,7 @@ import type {
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawReplayBatches,
   entities,
   entityVersions,
   fields,
@@ -72,6 +78,7 @@ export const AGGREGATE_LOCKS = {
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
   readerAnswer: { rank: 120, kind: "row" },
+  readerAnnotation: { rank: 120, kind: "advisory" },
   readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
@@ -186,6 +193,7 @@ export const AGGREGATE_CHAINS = {
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
+  readerAnnotation: ["readerAnnotation"],
   signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
@@ -282,6 +290,11 @@ type AggregateIdentities = {
   };
   readerAnswer: {
     id: SafeId<"legalReaderAnswer">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  readerAnnotation: {
+    id: SafeId<"legalReaderAnnotation">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -648,7 +661,11 @@ export class ExecutorSavepointError extends TaggedError(
   message: string;
   cause: unknown;
   phase: "setup" | "callback" | "cleanup";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["phase"]);
+  }
+}
 
 /**
  * A savepoint for execute-only callbacks. The callback must not acquire typed
@@ -1296,6 +1313,17 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.aggregate,
           options.id.organizationId,
           options.id.userId,
+        ],
+      };
+    case "readerAnnotation":
+      return {
+        first: sql`${0x0f_10_cc_af}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.userId, options.id.id])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+          options.id.id,
         ],
       };
     case "orgFeatureAdmission":
@@ -2189,8 +2217,8 @@ export const lockCaseLawRepublication = async ({
   });
 };
 
-/** Lock every retained copy before a case-law erasure mutates any of them. */
-export const lockCaseLawDecisionErasureRows = async ({
+/** Lock decision rows in stable order before reading mutation preconditions. */
+export const lockCaseLawDecisionRows = async ({
   tx,
   decisionIds,
 }: {
@@ -2210,6 +2238,89 @@ export const lockCaseLawDecisionErasureRows = async ({
     FOR UPDATE
   `);
 };
+
+/** Acquire one replay reservation after its checkpoint and before its decision. */
+export const lockCaseLawReplayBatch = async ({
+  tx,
+  id,
+  predicate,
+}: {
+  tx: Transaction;
+  id: string;
+  predicate: SQL | undefined;
+}) =>
+  (
+    await tx
+      .select()
+      .from(caseLawReplayBatches)
+      .where(and(eq(caseLawReplayBatches.id, id), predicate))
+      .for("update")
+      .limit(1)
+  ).at(0);
+
+type ReplayPendingBatchLockOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+  cursor: string | null;
+};
+
+/** Select one due batch while retaining the checkpoint's deterministic order. */
+export const lockCaseLawReplayPendingBatch = async ({
+  tx,
+  sourceId,
+  now,
+  cursor,
+}: ReplayPendingBatchLockOptions) =>
+  (
+    await tx
+      .select()
+      .from(caseLawReplayBatches)
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, sourceId),
+          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
+          or(
+            isNull(caseLawReplayBatches.retryAt),
+            lte(caseLawReplayBatches.retryAt, sql`${now}::timestamptz`),
+          ),
+        ),
+      )
+      .orderBy(
+        ...(cursor === null
+          ? []
+          : [
+              sql`CASE WHEN ${caseLawReplayBatches.firstDecisionId} > ${cursor}::uuid THEN 0 ELSE 1 END`,
+            ]),
+        asc(caseLawReplayBatches.firstDecisionId),
+        asc(caseLawReplayBatches.id),
+      )
+      .for("update")
+      .limit(1)
+  ).at(0);
+
+type ReplayCompactionQueryOptions = { cutoff: Date; limit: number };
+export const buildCaseLawReplayCompactionQuery = (
+  tx: Transaction,
+  { cutoff, limit }: ReplayCompactionQueryOptions,
+) =>
+  tx
+    .select({
+      id: caseLawReplayBatches.id,
+    })
+    .from(caseLawReplayBatches)
+    .where(
+      and(
+        isNotNull(caseLawReplayBatches.supersededAt),
+        lte(caseLawReplayBatches.supersededAt, sql`${cutoff}::timestamptz`),
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayBatches.supersededAt),
+      asc(caseLawReplayBatches.id),
+    )
+    .limit(limit)
+    .for("update");
 
 /**
  * The citing decisions a reviewed-label run admits: the unredacted ones among

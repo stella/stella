@@ -17,22 +17,44 @@ const lint = async (sourcePath: string) =>
 
 describe.serial("clause variant insertion ownership", () => {
   test("blocks aliases in handlers, background jobs and native tools", async () => {
-    for (const sourcePath of [
-      "apps/api/src/handlers/clauses/import.ts",
-      "apps/api/src/lib/jobs/import-clauses.ts",
-      "apps/api/src/mcp/import-clauses.ts",
-    ]) {
-      expect(await lint(sourcePath)).toEqual([4, 6]);
-    }
+    const results = await Promise.all(
+      [
+        "apps/api/src/handlers/clauses/import.ts",
+        "apps/api/src/lib/jobs/import-clauses.ts",
+        "apps/api/src/mcp/import-clauses.ts",
+      ].map(async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(sourcePath),
+          expected: [4, 6],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("allows the transaction owner and direct fixture seeding", async () => {
-    for (const sourcePath of [
-      "apps/api/src/handlers/clauses/variant-insert.ts",
-      "apps/api/src/handlers/clauses/variants.postgres.test.ts",
-      "apps/api/src/tests/security/rls-helpers.ts",
-    ]) {
-      expect(await lint(sourcePath)).toEqual([]);
-    }
+    const results = await Promise.all(
+      [
+        "apps/api/src/handlers/clauses/variant-insert.ts",
+        "apps/api/src/handlers/clauses/variants.postgres.test.ts",
+        "apps/api/src/tests/security/rls-helpers.ts",
+      ].map(async (lintCase, index) => {
+        const sourcePath = lintCase;
+
+        return {
+          label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+          result: await lint(sourcePath),
+          expected: [],
+        };
+      }),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 });
