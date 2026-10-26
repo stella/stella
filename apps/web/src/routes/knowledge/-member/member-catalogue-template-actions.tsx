@@ -65,7 +65,7 @@ export const MemberCatalogueTemplateActions = ({
   const { id: userId } = useAuthenticatedUser();
   const organizationsQuery = useQuery(organizationListOptions(userId));
   const organizationsView = useQueryView(organizationsQuery);
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "MemberCatalogueTemplateActions:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
   const organizationName =

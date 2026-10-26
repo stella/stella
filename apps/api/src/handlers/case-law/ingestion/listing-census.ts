@@ -39,11 +39,16 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
-import { listReconciliationSlice } from "@/api/handlers/case-law/ingestion/slice-listing";
+import {
+  listReconciliationSlice,
+  SLICE_LISTING_PROOF,
+} from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -76,7 +81,7 @@ const censusRangeFields = {
   fromSlice: slice,
   toSlice: slice,
   /** The instant the total is stated as of: the census's end. */
-  asOf: v.pipe(v.string(), v.isoTimestamp()),
+  asOf: apiDateTimeSchema,
   slicesCounted: nonNegativeInteger,
 };
 
@@ -433,6 +438,7 @@ const countSlice = async ({
     try: async () =>
       await listReconciliationSlice({
         adapterKey: adapter.key,
+        proof: SLICE_LISTING_PROOF.COUNT,
         listSlicePage: adapter.reconciliation.listSlicePage,
         pageDelayMs: adapter.minRequestIntervalMs,
         pageTimeoutMs: adapter.pageTimeoutMs ?? ADAPTER_TIMEOUT.PAGE,

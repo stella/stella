@@ -1,5 +1,7 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -33,30 +35,27 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   // A browser hands over what it kept locally, once; not an agent action.
   mcp: { type: "internal", reason: "search_ui" },
-  body: t.Object(
-    {
-      clock: searchHistoryImportClockSchema,
-      clientNow: t.String({
-        format: "date-time",
-        maxLength: 64,
-        description:
-          "The importing device's current clock, captured after obtaining clock from search-history/import-clock and immediately before sending this request. Used to correct entry timestamps; clocks differing by more than one day are rejected.",
-      }),
-      entries: t.Array(
-        t.Object(
-          {
-            // Checked entry by entry below: one stale local row must not
-            // sink the rest of the import.
-            entry: t.Unknown(),
-            usedAt: t.String({ maxLength: 64 }),
-          },
-          { additionalProperties: false },
-        ),
-        { maxItems: LIMITS.searchHistoryImportMax },
+  body: v.strictObject({
+    clock: searchHistoryImportClockSchema,
+    clientNow: v.pipe(
+      v.string(),
+      v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
+      v.maxLength(64),
+      v.description(
+        "The importing device's current clock, captured after obtaining clock from search-history/import-clock and immediately before sending this request. Used to correct entry timestamps; clocks differing by more than one day are rejected.",
       ),
-    },
-    { additionalProperties: false },
-  ),
+    ),
+    entries: v.pipe(
+      v.array(
+        v.strictObject({
+          entry: v.unknown(),
+          usedAt: v.pipe(v.string(), v.maxLength(64)),
+        }),
+      ),
+      v.maxLength(LIMITS.searchHistoryImportMax),
+    ),
+  }),
 } satisfies HandlerConfig;
 
 /**
@@ -136,7 +135,7 @@ const importSearchHistory = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(importSearchHistory.handler, {
+declareAggregateMutation(importSearchHistory, {
   type: "independent",
   reason:
     "One batched upsert on the unique owner lookup key; a repeated or concurrent import converges in the database.",

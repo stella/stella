@@ -24,7 +24,7 @@ operations runbook (private).
 <!-- evidence: access-auth-boundary -->
 
 1. **Authentication.** All API requests are authenticated via
-   `better-auth` with session tokens. The `authMacro`
+   `better-auth` with session tokens. `authenticateSession`
    (`apps/api/src/lib/auth.ts`) validates the session and
    resolves the active organization before any handler runs.
 
@@ -33,7 +33,7 @@ operations runbook (private).
    plugin manages membership, roles, and invitations. Users
    can only operate within organizations they belong to.
 
-3. **Workspace authorisation.** The `workspaceAccessMacro`
+3. **Workspace authorisation.** `authorizeWorkspace`
    (`apps/api/src/lib/auth.ts`) runs on every
    workspace-scoped endpoint. It verifies: (a) the workspace
    exists and is active; (b) the workspace belongs to the
@@ -43,7 +43,7 @@ operations runbook (private).
 4. **Branded ownership IDs.** The `SafeId` branded type
    (`apps/api/src/lib/branded-types.ts`) enforces at compile
    time that workspace and organization IDs passed to
-   business logic have been validated by the macro. Ownership
+   business logic have been validated by these checks. Ownership
    IDs are never accepted from client-supplied request bodies.
 
 5. **Tenant isolation in storage.** Workspace file object keys follow the
@@ -96,7 +96,7 @@ operations runbook (private).
 
 - Workspace-scoped handlers use `createSafeHandler`, whose authorized
   context requires the `SafeId<"workspace">` minted by
-  `workspaceAccessMacro`; security invariant tests cover route and RLS
+  `authorizeWorkspace`; security invariant tests cover route and RLS
   enforcement.
 - Branch protection rules are enforced by GitHub and audited
   weekly.

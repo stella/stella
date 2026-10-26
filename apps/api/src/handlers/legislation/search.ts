@@ -1,8 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, getColumns, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status } from "elysia";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   isPublicLegislationCountry,
@@ -27,6 +26,7 @@ import {
   searchLegislationResponseSchema,
   type searchLegislationSuccessResponseSchema,
 } from "@/api/handlers/legislation/search-schema";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
@@ -155,7 +155,7 @@ import {
 } from "@/api/lib/search/highlight";
 import { isRecord } from "@/api/lib/type-guards";
 
-type LegislationHit = Static<
+type LegislationHit = v.InferOutput<
   typeof searchLegislationSuccessResponseSchema
 >["items"][number];
 
@@ -1809,7 +1809,9 @@ export const searchLegislationHandler = async (
 
     stageAccumulator.settle();
     const serializationTiming = beginStage("response_serialization");
-    const response: Static<typeof searchLegislationSuccessResponseSchema> = {
+    const response: v.InferOutput<
+      typeof searchLegislationSuccessResponseSchema
+    > = {
       items: projectSearchHits(items, dependencies),
       nextCursor,
       paginationOutcome,

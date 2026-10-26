@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
@@ -19,8 +19,9 @@ import {
 import type { ClauseDirectiveWarning } from "@/api/lib/clauses/clause-directives";
 import type { ClauseParagraph } from "@/api/lib/clauses/types";
 import { CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 
 import { deriveClauseSlug, parseClauseTags } from "./clause-csv";
 import { isClauseExportPayload } from "./import-export-schema";
@@ -28,8 +29,8 @@ import { normalizeClauseMetadata } from "./metadata";
 import { buildClauseSearchVector } from "./search-vector";
 import { insertClauseVariants } from "./variant-insert";
 
-const importBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.dataImport }),
+const importBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.dataImport }),
 });
 
 const CLAUSE_CSV_TEXT_LIMIT = 256;

@@ -11,7 +11,7 @@ import type { VerificationClaim } from "@/features/avt/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -66,7 +66,7 @@ export const useClaimComments = ({
   });
   const queryKey = options.queryKey;
   const view = useQueryView(useQuery({ ...options, enabled: user !== null }));
-  useQueryViewError(view);
+  useQueryViewError(view, "useClaimComments:query");
   const comments = view.type === "items" ? view.items : [];
   const commentRoutes = () =>
     api.lists({ workspaceId: toSafeId<"workspace">(workspaceId) })[
@@ -76,6 +76,7 @@ export const useClaimComments = ({
     commentRoutes()({ annotationId: toSafeId<"legalReaderAnnotation">(id) });
 
   const { create, remove, update } = useOptimisticAnnotationMutations({
+    handlerId: "claim-comments",
     create: async ({
       body,
       visibility,
@@ -83,7 +84,7 @@ export const useClaimComments = ({
       body: string;
       visibility: AnnotationVisibility;
     }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await commentRoutes().post({
           body,
           claimId: toSafeId<"legalListClaim">(claim.id),
@@ -105,9 +106,10 @@ export const useClaimComments = ({
       visibility,
     }),
     queryKey,
-    remove: async (id: string) => unwrapEden(await oneComment(id).delete()),
+    remove: async (id: string) =>
+      unwrapApiResponse(await oneComment(id).delete()),
     update: async ({ id, ...change }: ClaimCommentChange) =>
-      unwrapEden(await oneComment(id).patch(change)),
+      unwrapApiResponse(await oneComment(id).patch(change)),
   });
 
   return {

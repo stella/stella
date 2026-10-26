@@ -1,5 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { ModelTask } from "@stll/ai-catalog";
 
@@ -14,6 +14,7 @@ import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-bounda
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -35,6 +36,7 @@ import {
 } from "@/api/lib/chat/compaction-tokens";
 import { HISTORY_TRIMMED_NOTICE } from "@/api/lib/chat/context-notice";
 import type { ChatContextNotice } from "@/api/lib/chat/context-notice";
+import { createSkillSummaryProjection } from "@/api/lib/chat/skill-summary-projection";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
@@ -409,7 +411,14 @@ export const compactChatMessages = async ({
     return Result.ok(compacted(messages));
   }
 
-  const transcript = renderChatMessagesForCompaction(plan.messagesToSummarize);
+  const availableParts = messages.map(({ parts }) => parts);
+  const projection = createSkillSummaryProjection(availableParts);
+  const transcript = renderChatMessagesForCompaction(
+    plan.messagesToSummarize.map((message) => ({
+      ...message,
+      parts: projection.parts(message.parts),
+    })),
+  );
   const preparedTranscript = prepareTranscript
     ? await prepareTranscript(transcript)
     : Result.ok(transcript);
@@ -461,7 +470,59 @@ export const compactModelMessages = async ({
     return Result.ok(compacted(messages));
   }
 
-  const transcript = renderModelMessagesForCompaction(plan.messagesToSummarize);
+  const availableParts = messages.map((message) => {
+    const calls = arrayOrEmpty(message.toolCalls).map((call) => ({
+      type: "tool-call",
+      id: call.id,
+      name: call.function.name,
+    }));
+    switch (message.role) {
+      case "assistant":
+      case "user":
+        return calls;
+      case "tool":
+        return [
+          ...calls,
+          { type: "tool-result", toolCallId: message.toolCallId },
+        ];
+      default:
+        message.role satisfies never;
+        return panic("Unhandled model summary message role");
+    }
+  });
+  const projection = createSkillSummaryProjection(availableParts);
+  const transcript = renderModelMessagesForCompaction(
+    plan.messagesToSummarize.flatMap((message) => {
+      switch (message.role) {
+        case "tool":
+          if (
+            message.toolCallId !== undefined &&
+            !projection.includesToolCall(message.toolCallId)
+          ) {
+            return [];
+          }
+          break;
+        case "assistant":
+        case "user":
+          break;
+        default:
+          message.role satisfies never;
+          return panic("Unhandled model summary message role");
+      }
+      return [
+        {
+          ...message,
+          ...(message.toolCalls === undefined
+            ? {}
+            : {
+                toolCalls: message.toolCalls.filter(({ id }) =>
+                  projection.includesToolCall(id),
+                ),
+              }),
+        },
+      ];
+    }),
+  );
   const summaryResult = await Result.tryPromise({
     try: async () => await summarizeTranscript(transcript),
     catch: (cause) =>

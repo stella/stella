@@ -92,6 +92,8 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
+import { skillBindingAllows } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { RequestedSkills } from "@/api/lib/agent-skills/requested-skills";
@@ -154,6 +156,7 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   sanitizeForPrompt,
   sanitizePromptLine,
@@ -708,6 +711,8 @@ type BuildChatSystemPromptProps = {
    * or as the thread's active skill.
    */
   requestedSkillNames: ReadonlySet<string>;
+  /** Where this turn may use a bound skill (`resolveSkillBindingScope`). */
+  skillBindingScope: SkillBindingScope;
   threadId: SafeId<"chatThread">;
   /**
    * The conditionally-registered tools handed to the model this turn.
@@ -840,19 +845,31 @@ const resolveActiveFilePromptContext = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(readResult)) {
-    captureError(readResult.error, {
-      fieldId: fileFieldId,
-      workspaceId,
-    });
+    captureError(
+      readResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.readResult_error",
+        {
+          fieldId: fileFieldId,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
   const previewResult = await emailToPreview(readResult.value, emailMimeType);
   if (Result.isError(previewResult)) {
-    captureError(previewResult.error, {
-      fieldId: fileFieldId,
-      mimeType: emailMimeType,
-      workspaceId,
-    });
+    captureError(
+      previewResult.error,
+      handlerErrorContext(
+        "chat.resolveActiveFilePromptContext.previewResult_error",
+        {
+          fieldId: fileFieldId,
+          mimeType: emailMimeType,
+          workspaceId,
+        },
+      ),
+    );
     return Result.ok(promptBase);
   }
 
@@ -893,6 +910,28 @@ const buildOwnedActiveTemplateSection = async ({
   );
 };
 
+/**
+ * The thread's active skill was resolved before the turn's matters were
+ * known; a skill bound to another matter or client does not run here.
+ */
+const requireActiveSkillInBindingScope = ({
+  activeSkillContext,
+  skillBindingScope,
+}: {
+  activeSkillContext: ActiveChatSkillContext | null;
+  skillBindingScope: SkillBindingScope;
+}): Result<void, HandlerError<403>> =>
+  activeSkillContext === null ||
+  skillBindingAllows(skillBindingScope, activeSkillContext.binding)
+    ? Result.ok(undefined)
+    : Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "The active skill is bound to another matter or client and cannot be used in this conversation.",
+        }),
+      );
+
 export const buildChatSystemPromptParts = async ({
   caseLawDb = caseLawPublicReadDb,
   featureAccessContext,
@@ -912,6 +951,7 @@ export const buildChatSystemPromptParts = async ({
   safeDb,
   messages,
   requestedSkillNames,
+  skillBindingScope,
   threadId,
   toolAvailability,
   userContext,
@@ -921,10 +961,15 @@ export const buildChatSystemPromptParts = async ({
   Result<ChatSystemPromptParts, HandlerError<403 | 404 | 500> | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    yield* requireActiveSkillInBindingScope({
+      activeSkillContext,
+      skillBindingScope,
+    });
     const listedSkills =
       organizationId && userId
         ? yield* Result.await(
             listAvailableChatSkillMetadata({
+              bindingScope: skillBindingScope,
               organizationId,
               safeDb,
               userId,
@@ -2146,10 +2191,13 @@ const readActiveDecisionAst = async (row: ActiveDecisionAstPointers) => {
       raised,
     );
   }
-  captureError(raised, {
-    decisionId: row.id,
-    step: ACTIVE_DECISION_AST_READ_STEP,
-  });
+  captureError(
+    raised,
+    handlerErrorContext("chat.readActiveDecisionAst.raised", {
+      decisionId: row.id,
+      step: ACTIVE_DECISION_AST_READ_STEP,
+    }),
+  );
   return null;
 };
 

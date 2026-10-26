@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Save new clips from <bdi>{source}</bdi> again",
     "pause": "Pause capture",
     "plainText": "Plain text",
+    "plainTextPreview": "Plain text preview",
     "retention": "Keep history for",
     "retentionWeek": "One week",
     "retentionMonth": "One month",

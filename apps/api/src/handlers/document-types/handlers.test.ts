@@ -15,6 +15,8 @@ import deleteDocumentType from "@/api/handlers/document-types/delete";
 import listDocumentTypes from "@/api/handlers/document-types/list";
 import reorderDocumentTypes from "@/api/handlers/document-types/reorder";
 import updateDocumentType from "@/api/handlers/document-types/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -55,7 +57,7 @@ const createOrgContext = (
     memberRole: sessionMemberRole("owner"),
     recordAuditEvent: noopAuditRecorder,
     request: new Request("https://example.test/document-types"),
-    route: "/document-types",
+    route: "/v1/document-types" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
@@ -63,14 +65,14 @@ const createOrgContext = (
 };
 
 // The exported `.handler` returns the *unwrapped* success payload on ok, or an
-// Elysia status response (`{ code, response }`) on error — not a raw Result. So
+// `HttpStatusResponse` (`{ code, response }`) on error — not a raw Result. So
 // we mirror the cross-tenant harness: read the numeric status for errors and
 // inspect the returned object fields for successes.
-type TestEndpoint<TContext> = {
+type TestEndpoint<TContext extends SafeHandlerLogContext> = {
   handler: (context: TContext) => Promise<unknown>;
 };
 
-const runHandler = async <TContext>(
+const runHandler = async <TContext extends SafeHandlerLogContext>(
   endpoint: TestEndpoint<TContext>,
   context: OrgContext,
   requestShape: Record<string, unknown>,
@@ -87,7 +89,7 @@ const runHandler = async <TContext>(
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-// Errors surface as an Elysia status response; success payloads have no
+// Errors surface as an `HttpStatusResponse`; success payloads have no
 // status-like field. `null` means "the handler returned a success payload".
 const getStatusCode = (result: unknown): number | null => {
   if (!isRecord(result)) {

@@ -5,6 +5,7 @@ import {
   READER_ANSWER_MESSAGE_ROLES,
   READER_ANSWER_MESSAGE_STATUSES,
   type ReaderAnswerCitation,
+  type ReaderAnswerSpan,
   type ReaderAnswerUsage,
 } from "@stll/api-contract/reader-answers";
 
@@ -51,6 +52,11 @@ export const legalReaderAnswers = p.pgTable(
     quote: p.text("quote").notNull(),
     startOffset: p.integer("start_offset").notNull(),
     endOffset: p.integer("end_offset").notNull(),
+    /** The selection's spans after the first, one per further paragraph in reading order. */
+    continuationSpans: jsonb("continuation_spans")
+      .$type<ReaderAnswerSpan[]>()
+      .notNull()
+      .default([]),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
     deletedAt: timestamptz("deleted_at"),

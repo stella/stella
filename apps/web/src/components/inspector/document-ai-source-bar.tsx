@@ -58,11 +58,11 @@ export const DocumentAiSourceBar = ({
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
   const propertiesQueryView = useQueryView(propertiesQuery);
-  useQueryViewError(propertiesQueryView);
+  useQueryViewError(propertiesQueryView, "DocumentAiSourceBar:query");
   const properties = propertiesQuery.data;
   const entityQuery = useQuery(entityOptions(workspaceId, activeTab.entityId));
   const entityQueryView = useQueryView(entityQuery);
-  useQueryViewError(entityQueryView);
+  useQueryViewError(entityQueryView, "DocumentAiSourceBar:query-2");
   const entity = entityQuery.data;
   useSyncJustifications({
     workspaceId,
@@ -169,7 +169,13 @@ export const DocumentAiSourceBar = ({
         return response.data;
       });
       if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
+        getAnalytics().captureError(result.error, {
+          fingerprintKey: "DocumentAiSourceBar.queryFn:failure",
+          scope: {
+            type: "handler",
+            handlerId: "DocumentAiSourceBar.queryFn:failure",
+          },
+        });
         throw result.error;
       }
       return result.value;

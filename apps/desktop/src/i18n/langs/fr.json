@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Enregistrer à nouveau les nouveaux extraits de <bdi>{source}</bdi>",
     "pause": "Mettre la capture en pause",
     "plainText": "Texte brut",
+    "plainTextPreview": "Aperçu en texte brut",
     "retention": "Conserver l’historique",
     "retentionWeek": "Une semaine",
     "retentionMonth": "Un mois",

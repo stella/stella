@@ -16,7 +16,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -49,7 +49,7 @@ export const NewEntityViewTask = ({
     workspacesNavigationOptions({ organizationId, userId }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "NewEntityViewTask:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const pendingRef = useRef(false);
   const [pending, setPending] = useState(false);
@@ -60,7 +60,7 @@ export const NewEntityViewTask = ({
     pendingRef.current = true;
     setPending(true);
     const result = await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .tasks({ workspaceId: toSafeId<"workspace">(selectedWorkspaceId) })
           .put({
@@ -79,7 +79,13 @@ export const NewEntityViewTask = ({
       ),
     );
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "NewEntityViewTask.create:failure",
+        scope: {
+          type: "handler",
+          handlerId: "NewEntityViewTask.create:failure",
+        },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     } else {
       await Promise.all([

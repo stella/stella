@@ -65,7 +65,15 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     const qc = context.queryClient;
 
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey:
+          "workspaces.workspaceId.route.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/workspaces/$workspaceId",
+        },
+      });
     };
 
     // Only the workspace name blocks the breadcrumb. Start every independent
@@ -124,7 +132,13 @@ const loadWorkspaceOrRedirect = async (
     if (APIError.is(error) && error.status === 404) {
       // The redirect swallows this branch, so capture here; the rethrow
       // below reaches the route error boundary, which captures already.
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "loadWorkspaceOrRedirect:failure",
+        scope: {
+          type: "handler",
+          handlerId: "loadWorkspaceOrRedirect:failure",
+        },
+      });
       const t = getTranslator();
       notifyUserError(error, t("errors.matterNotFound"));
       throw redirect({ to: "/workspaces", replace: true });
