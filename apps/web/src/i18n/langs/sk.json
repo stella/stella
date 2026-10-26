@@ -1486,7 +1486,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všetky modely ({count, number})",
+      "allModels": "Všetky modely",
       "autoDescription": "Automaticky vyberie model a úroveň uvažovania.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod najlepšími kompromismi",

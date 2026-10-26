@@ -19,11 +19,13 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/field";
 import {
   AiActionIcon,
   AlertTriangleIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   LandmarkIcon,
   PencilIcon,
   PlusIcon,
@@ -1471,6 +1473,7 @@ export const TemplateForm = ({
     Record<string, ClauseBody>
   >({});
   const [loading, setLoading] = useState(false);
+  const [structureWarningsOpen, setStructureWarningsOpen] = useState(false);
   const fillToMatterFlight = useRef<Promise<void> | null>(null);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -2375,7 +2378,13 @@ export const TemplateForm = ({
           )}
 
           {structureErrors.length > 0 && (
-            <details className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3">
+            <details
+              className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3"
+              onToggle={(event) =>
+                setStructureWarningsOpen(event.currentTarget.open)
+              }
+              open={structureWarningsOpen}
+            >
               <summary className="text-warning-foreground flex cursor-pointer list-none items-start gap-2 text-sm [&::-webkit-details-marker]:hidden">
                 <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
                 <span className="flex-1">
@@ -2383,7 +2392,11 @@ export const TemplateForm = ({
                     count: structureErrors.length,
                   })}
                 </span>
-                <ChevronDownIcon className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-180" />
+                <DirectionalIcon
+                  className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-90"
+                  flip={!structureWarningsOpen}
+                  icon={ChevronRightIcon}
+                />
               </summary>
               <ul className="mt-3 grid gap-2 ps-6">
                 {structureErrors.map((error, index) => (

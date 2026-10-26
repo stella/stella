@@ -1486,7 +1486,7 @@
       "label": "Simuleeritud AI"
     },
     "modelSelector": {
-      "allModels": "Kõik mudelid ({count, number})",
+      "allModels": "Kõik mudelid",
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
       "belowFrontier": "Allpool parimaid kompromisse",
