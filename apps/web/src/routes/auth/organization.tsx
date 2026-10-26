@@ -59,6 +59,7 @@ import {
 import { organizationListOptions } from "@/lib/organization/queries";
 import { createSlug, getOrganizationSchema } from "@/lib/organization/utils";
 import {
+  destinationNavigation,
   isAcceptInvitationRedirect,
   normalizeRedirectTo,
   onboardingNavigation,
@@ -118,7 +119,7 @@ export const Route = createFileRoute("/auth/organization")({
       (context.session.activeOrganizationId ||
         isAcceptInvitationRedirect(search.redirectTo ?? "/"))
     ) {
-      throw redirect({ to: search.redirectTo ?? "/", replace: true });
+      throw redirect(destinationNavigation(search.redirectTo ?? "/"));
     }
 
     return { isOauthPostLoginFromSearch, userId: context.session.userId };
@@ -275,7 +276,7 @@ const completeOrganizationFlow = async ({
   await refreshAuthQueries(queryClient);
 
   if (!isOauthPostLogin) {
-    await navigate({ to: redirectTo, replace: true });
+    await navigate(destinationNavigation(redirectTo));
     return;
   }
 
