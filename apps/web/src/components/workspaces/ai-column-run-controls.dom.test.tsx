@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
 import englishMessages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -39,7 +41,7 @@ const renderHeader = ({ reveal, disabled }: RenderHeaderOptions) =>
           role: "member",
           ai: true,
           deepl: true,
-          ocr: true,
+          ocr: DOCUMENT_OCR_AVAILABILITY.live,
           desktop: "current",
           settings: undefined,
         })}
