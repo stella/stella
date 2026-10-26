@@ -1,3 +1,5 @@
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 const dateCursorPattern = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/u;
 
 type DateCursorParts = {
@@ -29,9 +31,9 @@ const parseDateCursorParts = (
     return null;
   }
 
-  const year = Number(yearPart);
-  const month = Number(monthPart);
-  const day = Number(dayPart);
+  const year = parseIntegerToken(yearPart, { sign: "unsigned" }).unwrapOr(-1);
+  const month = parseIntegerToken(monthPart, { sign: "unsigned" }).unwrapOr(-1);
+  const day = parseIntegerToken(dayPart, { sign: "unsigned" }).unwrapOr(-1);
   if (year < 1 || month < 1 || month > 12) {
     return null;
   }

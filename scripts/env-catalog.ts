@@ -1571,6 +1571,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "JOURNEY_WEB_STATUTES_URL",
   "JOURNEY_WEB_URL",
   "LANDING_SITE",
+  // Release pull request refresh: the main commit it plans from.
+  "MAIN_SHA",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
   "MARKETING_THEME",
@@ -1597,19 +1599,19 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
-  // Tailwind lint worker liveness tuning. The test hooks are confined to the
-  // plugin regression suite and are inert unless explicitly set.
+  // Tailwind lint cache configuration.
   "OXLINT_TAILWINDCSS_CACHE_DIR",
-  "OXLINT_TAILWINDCSS_WORKER_HEARTBEAT_LIMIT_MS",
-  "OXLINT_TAILWINDCSS_WORKER_LOAD_HEARTBEAT_LIMIT_MS",
+  "OXLINT_TAILWINDCSS_CACHE_READ_ONLY",
   "OXLINT_TAILWINDCSS_WORKER_REQUEST_TIMEOUT",
-  "OXLINT_TAILWINDCSS_WORKER_TEST_DELAY_MS",
-  "OXLINT_TAILWINDCSS_WORKER_TEST_HOOK",
   // Worker-local custom lint reports, merged before the coverage census.
   "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PR_TITLE",
+  // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
+  "ARMED",
+  "TESTED_TREE",
+  "WORKFLOW_TREE",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
@@ -1646,7 +1648,16 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_WRITER_GAP_BUDGET_SECONDS",
   // Trusted release-proof controls passed between workflow steps.
   "PROOF_MAIN_BASE",
+  "RELEASE_CANDIDATE_CHECKER",
+  "RELEASE_CANDIDATE_TREE_VERIFIER",
   "RELEASE_GATE_DIR",
+  // Release pull request refresh: open release numbers, the release to update,
+  // its branch, whether main merges in, and the versioned staging tip.
+  "RELEASE_NUMBERS",
+  "RELEASE_PULL_REQUEST",
+  "RELEASE_BRANCH",
+  "MERGE_MAIN",
+  "STAGED_HEAD",
   "RELEASE_PR_HEAD",
   "RELEASE_PROOF_REPOSITORY",
   "RELEASE_TREE_PROOF_VERIFIER",
@@ -1723,6 +1734,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.
   "GENERATED_CHECKS_IN_OTHER_JOBS",
+  // Generator families whose inputs the CI plan proved unchanged in this run.
+  "GENERATED_CHECKS_UNCHANGED",
   // Queue proof outcomes and resolved hosted-runner image for static receipts.
   "CHECK_OUTCOMES",
   "ImageOS",

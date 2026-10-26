@@ -33,6 +33,11 @@ export type RenderInvoicePdfOptions = {
     language: InvoiceLanguage;
     reference: string | null;
     notes: string | null;
+    vatExchangeRate?: string | null;
+    vatExchangeRateSource?: string | null;
+    vatExchangeRateDate?: string | null;
+    vatExchangeRateReference?: string | null;
+    vatExchangeRateTaxPoint?: string | null;
     buyerName: string | null;
     buyerRegistrationId: string | null;
     buyerTaxId: string | null;

@@ -103,6 +103,7 @@ jobs:
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
@@ -595,10 +596,17 @@ jobs:
         if: always()
         run: docker logout ghcr.io
 
+  # The builds run after a skipped wake when staging was already up. A job's
+  # default condition skips it when any job it depends on through `needs` was
+  # skipped, which promoted nothing yet ended the run green, so promotion
+  # names the build results it depends on instead.
   promote-staging:
     name: Promote staging images
     needs: [resolve, build-api, build-web]
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.resolve.result == 'success' &&
+      needs.build-api.result == 'success' && needs.build-web.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     # Deployment and its smoke verification are one serialized side-effecting
@@ -922,8 +930,8 @@ jobs:
         with:
           name: staging-user-journeys-report
           path: |
-            apps/web/test-results/user-journeys-deployed*/
-            apps/web/test-results/user-journeys-local-stack*/
+            ${{ steps.deployed-journeys.outputs.report-paths }}
+            ${{ steps.mock-journeys.outputs.report-paths }}
             /tmp/api.log
             ${{ runner.temp }}/web-user-journeys.log
           retention-days: 7

@@ -22,6 +22,8 @@ export type VatRatePreset = {
  * CZ: zákon č. 235/2004 Sb. o dani z přidané hodnoty, § 47 odst. 1
  * (e-Sbírka); 21 % / 15 % from 2013, a second reduced 10 % from 2015-01-01,
  * and 21 % / 12 % from 2024-01-01.
+ * PL: ustawa z dnia 11 marca 2004 r. o podatku od towarów i usług,
+ * art. 146ef: 23 % standard and reduced 8 % / 5 % rates from 2011-01-01.
  */
 export const VAT_RATE_PRESETS = {
   SK: [
@@ -109,6 +111,29 @@ export const VAT_RATE_PRESETS = {
       name: "Reduced 12 %",
       rateBps: 1200,
       validFrom: "2024-01-01",
+      validTo: null,
+    },
+  ],
+  PL: [
+    {
+      code: "pl-standard",
+      name: "Standard 23 %",
+      rateBps: 2300,
+      validFrom: "2011-01-01",
+      validTo: null,
+    },
+    {
+      code: "pl-reduced-8",
+      name: "Reduced 8 %",
+      rateBps: 800,
+      validFrom: "2011-01-01",
+      validTo: null,
+    },
+    {
+      code: "pl-reduced-5",
+      name: "Reduced 5 %",
+      rateBps: 500,
+      validFrom: "2011-01-01",
       validTo: null,
     },
   ],

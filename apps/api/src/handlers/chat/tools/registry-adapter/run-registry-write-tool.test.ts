@@ -13,7 +13,8 @@ import { projectForChat } from "@/api/lib/chat/projection-schema";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { containsRawUuid, MASKED_CONTENT_ID } from "@/api/lib/chat/uuid-mask";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -52,22 +53,24 @@ const buildContext = ({
   recordAuditEvent,
 }: {
   recordAuditEvent?: AuditRecorder;
-} = {}): McpRequestContext =>
-  buildMcpContextFromChat({
-    memberRole: sessionMemberRole("owner"),
-    organizationId: toSafeId<"organization">("org_1"),
-    pinServerValidatedWorkspaceId: () => true,
-    recordAuditEvent,
-    safeDb: toSafeDbMock(noopScopedDb),
-    scopedDb: noopScopedDb,
-    toolWorkspaceIds: resolveToolWorkspaceIds({
-      accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
-      pinnedIds: [],
+} = {}): AuthorizedMcpRequestContext =>
+  authorizedMcpContextForTest(
+    buildMcpContextFromChat({
+      memberRole: sessionMemberRole("owner"),
+      organizationId: toSafeId<"organization">("org_1"),
+      pinServerValidatedWorkspaceId: () => true,
+      recordAuditEvent,
+      safeDb: toSafeDbMock(noopScopedDb),
+      scopedDb: noopScopedDb,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        accessibleWorkspaceIds: [toSafeId<"workspace">(WS_UUID)],
+        pinnedIds: [],
+      }),
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+      workspaceStatusById: new Map([[WS_UUID, "active"]]),
     }),
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-    workspaceStatusById: new Map([[WS_UUID, "active"]]),
-  });
+  );
 
 describe("runRegistryWriteTool (orchestration)", () => {
   test("checks account eligibility before dispatching restricted operations", async () => {

@@ -80,6 +80,7 @@ import type {
   SchedulerTaskContext,
 } from "@/api/lib/scheduler/types";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -150,6 +151,10 @@ const insertOrganization = async (
     name,
     slug: `review-test-${id}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId: id,
+    now: new Date(),
   });
   if (members.length > 0) {
     await testDb.insert(member).values(

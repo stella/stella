@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   RESOURCE_TYPE,
@@ -18,7 +18,7 @@ import {
   avtViewAccessStatus,
   isAvtLayoutVisible,
 } from "@/api/lib/auth/feature-access/view-eligibility";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { broadcastWorkspaceResourceChanges } from "@/api/lib/resource-realtime";
@@ -42,11 +42,12 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  body: t.Object({
-    viewIds: t.Array(tSafeId("workspaceView"), {
-      minItems: 1,
-      maxItems: LIMITS.viewsCount,
-    }),
+  body: v.object({
+    viewIds: v.pipe(
+      v.array(resourceIdSchema("workspaceView")),
+      v.minLength(1),
+      v.maxLength(LIMITS.viewsCount),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 
@@ -107,7 +108,7 @@ const reorderViews = createSafeHandler(
       );
     }
 
-    const existingIds = new Set(existing.map((v) => v.id));
+    const existingIds = new Set(existing.map((view) => view.id));
     for (const id of viewIds) {
       if (!existingIds.has(id)) {
         return Result.err(
@@ -127,7 +128,9 @@ const reorderViews = createSafeHandler(
       (id, i) => sql`when ${workspaceViews.id} = ${id} then ${i}::integer`,
     );
 
-    const oldPositionById = new Map(existing.map((v) => [v.id, v.position]));
+    const oldPositionById = new Map(
+      existing.map((view) => [view.id, view.position]),
+    );
     const movedEvents: AuditEvent[] = [];
     for (const [i, id] of viewIds.entries()) {
       const oldPosition = oldPositionById.get(id);

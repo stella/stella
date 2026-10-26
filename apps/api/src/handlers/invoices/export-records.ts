@@ -61,6 +61,7 @@ const EXPORT_RELATIONS = {
 
 const PARTY_FIELDS = [
   "registrationNumber",
+  "taxId",
   "vatId",
   "addressLine1",
   "addressLine2",
@@ -71,16 +72,23 @@ const PARTY_FIELDS = [
 
 type StoredParty = Record<(typeof PARTY_FIELDS)[number], string | null>;
 
-const presentText = (value: string | null): value is string =>
-  value !== null && value.trim() !== "";
+/**
+ * Stored text as every export reads it: trimmed, and absent when blank. The
+ * one place exports get identifiers from, so a format's validation and its
+ * output never see different strings.
+ */
+const exportText = (value: string | null): string | null => {
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? null : trimmed;
+};
 
 /** A party as an export carries it: blank stored fields are left out. */
 const partyOf = (name: string, stored: StoredParty): InvoiceParty => ({
   name,
   ...Object.fromEntries(
     PARTY_FIELDS.flatMap((field) => {
-      const value = stored[field];
-      return presentText(value) ? [[field, value]] : [];
+      const value = exportText(stored[field]);
+      return value === null ? [] : [[field, value]];
     }),
   ),
 });
@@ -137,7 +145,7 @@ export const loadInvoiceExport = async (
             workspaceId: { eq: workspaceId },
             organizationId: { eq: organizationId },
           },
-          columns: { id: true, invoiceNumber: true },
+          columns: { id: true, invoiceNumber: true, invoiceDate: true },
           limit: originalIds.length,
         });
   const userIds = new Set(
@@ -154,7 +162,10 @@ export const loadInvoiceExport = async (
     invoices,
     sellers: new Map(sellers.map((seller) => [seller.id, seller])),
     originals: new Map(
-      originals.map((original) => [original.id, original.invoiceNumber]),
+      originals.map((original) => [
+        original.id,
+        { number: original.invoiceNumber, issueDate: original.invoiceDate },
+      ]),
     ),
     timekeepers: new Map(timekeepers.map((u) => [u.id, u.name])),
     timeZone: await readOrganizationTimeZone(tx, organizationId),
@@ -171,6 +182,7 @@ type DocumentAmounts = {
     unitPrice: CentsAmount | null;
     timeEntryId: SafeId<"timeEntry"> | null;
     expenseId: SafeId<"expense"> | null;
+    exemptionReason: string | null;
   })[];
   totals: InvoiceTotals;
 };
@@ -216,6 +228,7 @@ const exportLines = (
       grossAmountMinor: line.grossAmountMinor,
       vatRateBps: line.vatRateBps,
       vatTreatment: line.vatTreatment,
+      exemptionReason: exportText(line.exemptionReason),
       source: stored?.source ?? sourceOf(entry, expense),
       date: entry?.dateWorked ?? expense?.dateIncurred ?? null,
       timekeeper: entry?.userId
@@ -232,23 +245,27 @@ const exportLines = (
 
 const exportSellerOf = (
   seller: NonNullable<ReturnType<LoadedExport["sellers"]["get"]>>,
-): InvoiceExportSeller => ({
-  ...partyOf(seller.legalName, {
-    registrationNumber: seller.registrationId,
-    vatId: seller.vatId,
-    addressLine1: seller.addressLine1,
-    addressLine2: seller.addressLine2,
-    city: seller.city,
-    postalCode: seller.postalCode,
-    country: seller.country,
-  }),
-  ...(presentText(seller.iban) ? { iban: seller.iban } : {}),
-  ...(presentText(seller.bic) ? { bic: seller.bic } : {}),
-  ...(presentText(seller.accountNumber)
-    ? { accountNumber: seller.accountNumber }
-    : {}),
-  homeCurrency: seller.defaultCurrency,
-});
+): InvoiceExportSeller => {
+  const iban = exportText(seller.iban);
+  const bic = exportText(seller.bic);
+  const accountNumber = exportText(seller.accountNumber);
+  return {
+    ...partyOf(seller.legalName, {
+      registrationNumber: seller.registrationId,
+      taxId: seller.taxId,
+      vatId: seller.vatId,
+      addressLine1: seller.addressLine1,
+      addressLine2: seller.addressLine2,
+      city: seller.city,
+      postalCode: seller.postalCode,
+      country: seller.country,
+    }),
+    ...(iban === null ? {} : { iban }),
+    ...(bic === null ? {} : { bic }),
+    ...(accountNumber === null ? {} : { accountNumber }),
+    homeCurrency: seller.defaultCurrency,
+  };
+};
 
 /**
  * The loaded invoices as export records. Refused when a selected invoice is
@@ -306,6 +323,15 @@ export const toExportRecords = (
         }),
       );
     }
+    if (invoice.vatExchangeRate !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `Invoice ${invoice.invoiceNumber} includes VAT stated in the seller's home currency`,
+          hint: "This export cannot yet carry the home-currency VAT; use the PDF.",
+        }),
+      );
+    }
     if (!seller) {
       return Result.err(
         new HandlerError({
@@ -326,7 +352,12 @@ export const toExportRecords = (
       originalNumber:
         invoice.originalInvoiceId === null
           ? null
-          : (loaded.originals.get(invoice.originalInvoiceId) ?? null),
+          : (loaded.originals.get(invoice.originalInvoiceId)?.number ?? null),
+      originalIssueDate:
+        invoice.originalInvoiceId === null
+          ? null
+          : (loaded.originals.get(invoice.originalInvoiceId)?.issueDate ??
+            null),
       status: invoice.status,
       issueDate: invoice.invoiceDate,
       taxableSupplyDate: invoice.taxableSupplyDate,
@@ -345,6 +376,7 @@ export const toExportRecords = (
       seller: exportSellerOf(seller),
       buyer: partyOf(invoice.buyerName ?? "", {
         registrationNumber: invoice.buyerRegistrationId,
+        taxId: invoice.buyerTaxId,
         vatId: invoice.buyerVatId,
         addressLine1: invoice.buyerAddressLine1,
         addressLine2: invoice.buyerAddressLine2,

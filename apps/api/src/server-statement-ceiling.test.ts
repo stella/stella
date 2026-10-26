@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
 
+import { apiPipeline } from "@/api/api-pipeline";
+import { apiRoutes } from "@/api/api-routes";
+import { createHttpApp } from "@/api/http/app";
+import { toResponse } from "@/api/http/respond";
+import type { Middleware } from "@/api/http/route";
 import { BULLMQ_QUEUE_HOSTS } from "@/api/lib/bullmq-queue";
 import {
   currentQueryCount,
@@ -11,54 +16,55 @@ import {
 } from "@/api/lib/db/statement-ceiling";
 import ledger from "@/api/lib/db/statement-ceiling.json";
 import { REGISTERED_SCHEDULER_TASK_NAMES } from "@/api/lib/scheduler/registry";
-import api from "@/api/server";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 test("mounted read and write requests retain their canonical statement ceiling scope", async () => {
-  const requestHooks = api.event.request;
-  const originalLength = requestHooks?.length ?? 0;
-  api.onRequest(({ request }) => {
+  const probe: Middleware = async ({ request, set }, inner) => {
     if (
       request.headers.get("x-statement-ceiling-probe") !== "mounted-request"
     ) {
-      return undefined;
+      return await inner();
     }
     queryCountLogger.logQuery("select 1", []);
-    return {
-      scope: activeStatementCeiling(),
-      count: currentQueryCount(),
-    };
-  });
-  api.compile();
-  try {
-    const routes = api.routes.filter(
-      ({ method, path }) =>
-        path.startsWith("/v1/contacts") &&
-        (method === "GET" ||
-          method === "POST" ||
-          method === "PATCH" ||
-          method === "DELETE"),
+    return toResponse(
+      { scope: activeStatementCeiling(), count: currentQueryCount() },
+      set,
     );
-    expect(routes.length).toBeGreaterThan(0);
-    for (const route of routes) {
-      // Concrete parameter values must share the declared route's identity.
-      const path = route.path.replace(/:[^/]+/gu, "ceiling-probe");
-      const response = await api.handle(
-        new Request(`http://localhost${path}`, {
-          method: route.method,
-          headers: { "x-statement-ceiling-probe": "mounted-request" },
-        }),
-      );
-      expect(await response.json()).toEqual({
-        scope: { kind: "request", key: `${route.method} ${route.path}` },
-        count: 1,
-      });
-      expect(
-        statementCeilingMeasurements()[`request ${route.method} ${route.path}`],
-      ).toBe(1);
-    }
-  } finally {
-    api.event.request?.splice(originalLength);
-    api.compile();
+  };
+  await using server = serveForTest(
+    createHttpApp({
+      // Probe within the production request scope, before admission or auth.
+      middleware: apiPipeline.flatMap((middleware, index) =>
+        index === 0 ? [middleware, probe] : [middleware],
+      ),
+      routes: apiRoutes,
+    }),
+  );
+  const routes = apiRoutes.filter(
+    ({ method, path }) =>
+      path.startsWith("/v1/contacts") &&
+      (method === "GET" ||
+        method === "POST" ||
+        method === "PATCH" ||
+        method === "DELETE"),
+  );
+  expect(routes.length).toBeGreaterThan(0);
+  for (const route of routes) {
+    // Concrete parameter values must share the declared route's identity.
+    const path = route.path.replace(/:[^/]+/gu, "ceiling-probe");
+    const response = await server.fetch(
+      new Request(`http://localhost${path}`, {
+        method: route.method,
+        headers: { "x-statement-ceiling-probe": "mounted-request" },
+      }),
+    );
+    expect(await response.json()).toEqual({
+      scope: { kind: "request", key: `${route.method} ${route.path}` },
+      count: 1,
+    });
+    expect(
+      statementCeilingMeasurements()[`request ${route.method} ${route.path}`],
+    ).toBe(1);
   }
 });
 
@@ -68,11 +74,7 @@ test("statement allowances name registered routes, queues and scheduler tasks", 
     const method = key.slice(0, separator);
     const path = key.slice(separator + 1);
     expect(
-      api.routes.some(
-        (route) =>
-          route.path === path &&
-          (route.method === method || route.method === "ALL"),
-      ),
+      apiRoutes.some((route) => route.path === path && route.method === method),
       `Stale request allowance: ${key}`,
     ).toBe(true);
   }

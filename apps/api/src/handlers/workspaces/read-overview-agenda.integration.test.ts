@@ -141,11 +141,14 @@ test("the agenda keeps an older open task that newer activity would push out", a
     },
   ]);
 
-  const agenda = await readOverviewAgenda({
-    scopedDb,
-    workspaceId: ids.wsA1,
-    agendaFrom: undefined,
-  });
+  const agenda = await scopedDb(
+    async (tx) =>
+      await readOverviewAgenda({
+        tx,
+        workspaceId: ids.wsA1,
+        agendaFrom: undefined,
+      }),
+  );
 
   const agendaIds = agenda.map(({ entityId: id }) => id);
   // Dated tasks lead; the fixture's own undated tasks may follow them.
@@ -205,11 +208,14 @@ test("the reader's own date bounds the agenda before the limit applies", async (
   const today = await dueDateOf(todayTaskId);
 
   // A reader a day behind the database still sees the deadlines of its today.
-  const behind = await readOverviewAgenda({
-    scopedDb,
-    workspaceId: ids.wsA1,
-    agendaFrom: yesterday,
-  });
+  const behind = await scopedDb(
+    async (tx) =>
+      await readOverviewAgenda({
+        tx,
+        workspaceId: ids.wsA1,
+        agendaFrom: yesterday,
+      }),
+  );
   // Ties on the due date order by id, so which of them fill the limit is not
   // fixed; every slot going to one of them is.
   expect(behind).toHaveLength(LIMITS.overviewUpcomingAgenda);
@@ -218,11 +224,14 @@ test("the reader's own date bounds the agenda before the limit applies", async (
   }
 
   // Yesterday's deadlines never use up the limit for a reader on today.
-  const current = await readOverviewAgenda({
-    scopedDb,
-    workspaceId: ids.wsA1,
-    agendaFrom: today,
-  });
+  const current = await scopedDb(
+    async (tx) =>
+      await readOverviewAgenda({
+        tx,
+        workspaceId: ids.wsA1,
+        agendaFrom: today,
+      }),
+  );
   const currentIds = current.map(({ entityId: id }) => id);
   expect(currentIds).toContain(todayTaskId);
   for (const id of yesterdayIds) {

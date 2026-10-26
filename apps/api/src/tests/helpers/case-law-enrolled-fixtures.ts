@@ -1023,7 +1023,7 @@ export const plKioFixture = (): EnrolledAdapterFixture => ({
     const built = assemblePlKioDecision({
       item: { ...PL_KIO_LISTING_ROW },
       detailHtml: PL_KIO_DETAIL_PAGE,
-      documentHtml: PL_KIO_DOCUMENT,
+      document: { type: "read", html: PL_KIO_DOCUMENT },
     });
     return await Promise.resolve(
       built.type === "built"
@@ -1657,7 +1657,7 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({
-      content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+      content: Buffer.from(SK_US_DOCUMENT_XHTML).toBase64(),
     });
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {

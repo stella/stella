@@ -506,6 +506,16 @@ describe("the wake in deploy-staging.yml", () => {
     expect(all["staging-health"]?.["environment"]).toBeUndefined();
   });
 
+  test("promotes whenever both builds succeeded, whether or not staging needed a wake", async () => {
+    const { "promote-staging": job } = await jobs();
+    expect(job?.["needs"]).toEqual(["resolve", "build-api", "build-web"]);
+    // Without a status function a skipped wake two levels up would skip the
+    // promotion and end the run green with nothing deployed.
+    expect(job?.["if"]).toBe(
+      "!cancelled() && github.ref == 'refs/heads/main' && needs.resolve.result == 'success' && needs.build-api.result == 'success' && needs.build-web.result == 'success'",
+    );
+  });
+
   test("builds after the health check or after a successful wake", async () => {
     const all = await jobs();
     for (const name of ["build-api", "build-web"]) {

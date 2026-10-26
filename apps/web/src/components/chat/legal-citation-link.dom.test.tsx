@@ -564,9 +564,12 @@ test("Arabic clarification questions use automatic direction and localized numbe
       </FormattingProvider>
     </IntlProvider>,
   );
+  const questions = view.container.querySelector("form")?.querySelector("ol");
   const question = view.container.querySelector("form p");
+  expect(questions?.getAttribute("lang")).toBe("ar-u-nu-arab");
+  expect(questions?.style.listStyleType).toBe("arabic-indic");
   expect(question?.getAttribute("dir")).toBe("auto");
-  expect(question?.textContent).toBe("١. هل ينبغي متابعة هذا المصدر؟");
+  expect(question?.textContent).toBe("هل ينبغي متابعة هذا المصدر؟");
 });
 
 test("an external primary opens immediately in a new tab without inspector interception", async () => {

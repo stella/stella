@@ -2,11 +2,13 @@ import { panic } from "better-result";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
-import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
-import { withActiveUpload } from "@/lib/files/active-uploads";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
+import {
+  hashActiveUploadFile,
+  withActiveUpload,
+} from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -43,7 +45,7 @@ const abortUpload = async (
         uploadId,
       })
       .abort.post({});
-    unwrapEden(response);
+    unwrapApiResponse(response);
   } catch {
     // Preserve the original upload failure. Cleanup is intentionally best effort.
   }
@@ -75,7 +77,7 @@ export const uploadEntityVersion = async ({
   // The page holds the bytes until this settles, so a reload must prompt.
   return await withActiveUpload(async () => {
     signal?.throwIfAborted();
-    const sha256Hex = await hashSha256Hex(fileToUpload);
+    const sha256Hex = await hashActiveUploadFile(fileToUpload);
     signal?.throwIfAborted();
 
     const wsClient = api.uploads({
@@ -92,7 +94,7 @@ export const uploadEntityVersion = async ({
       },
       signal ? { fetch: { signal } } : undefined,
     );
-    const { uploadId, url, headers } = unwrapEden(presign);
+    const { uploadId, url, headers } = unwrapApiResponse(presign);
 
     await completeEntityVersionUpload({
       abort: async () => await abortUpload(workspaceId, uploadId),

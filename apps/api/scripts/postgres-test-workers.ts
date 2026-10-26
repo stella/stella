@@ -131,6 +131,7 @@ type Child = {
 };
 
 type RunPostgresWorkersOptions = PlanPostgresWorkersOptions & {
+  clusterExclusivePaths?: ReadonlySet<string>;
   databaseUrl: string;
   poolMaxPerWorker?: number;
   reserve?: number;
@@ -158,6 +159,7 @@ export const runPostgresWorkers = async ({
   files,
   durations,
   exclusivePaths,
+  clusterExclusivePaths = new Set(),
   workers,
   databaseUrl,
   poolMaxPerWorker = POSTGRES_TEST_POOL_MAX_PER_WORKER,
@@ -239,8 +241,9 @@ export const runPostgresWorkers = async ({
     });
   }
 
+  const clusterFiles = files.filter((file) => clusterExclusivePaths.has(file));
   const plan = planPostgresWorkers({
-    files,
+    files: files.filter((file) => !clusterExclusivePaths.has(file)),
     durations,
     exclusivePaths,
     workers,
@@ -264,6 +267,18 @@ export const runPostgresWorkers = async ({
       );
     }
     const started = plan.map(() => now());
+    const runBatch = async (batch: readonly string[], index: number) => {
+      const child = runWorker({
+        files: batch,
+        databaseUrl: databaseUrlWithName(
+          templateUrl,
+          databaseNames.at(index) ?? "",
+        ),
+        worker: index + 1,
+      });
+      children.push(child);
+      return await child.exited;
+    };
     const statuses = await Promise.all(
       plan.map(async (workerPlan, index) => {
         let firstFailure = 0;
@@ -271,16 +286,7 @@ export const runPostgresWorkers = async ({
           if (signal !== undefined) {
             break;
           }
-          const child = runWorker({
-            files: batch,
-            databaseUrl: databaseUrlWithName(
-              templateUrl,
-              databaseNames.at(index) ?? "",
-            ),
-            worker: index + 1,
-          });
-          children.push(child);
-          const status = await child.exited;
+          const status = await runBatch(batch, index);
           if (firstFailure === 0 && status !== 0) {
             firstFailure = status;
           }
@@ -296,6 +302,18 @@ export const runPostgresWorkers = async ({
       );
       log(
         `Postgres worker ${index + 1}: ${wallSeconds.toFixed(1)}s (${fileCount} files, projected ${workerPlan.seconds.toFixed(1)}s)`,
+      );
+    }
+    // Role grants are cluster-wide even when each worker has its own database.
+    // Drain every worker before replaying bundles, one complete suite at a time.
+    for (const file of clusterFiles) {
+      if (signal !== undefined) {
+        break;
+      }
+      const clusterStarted = now();
+      statuses.push(await runBatch([file], 0));
+      log(
+        `Postgres cluster migration ${file}: ${((now() - clusterStarted) / 1000).toFixed(1)}s`,
       );
     }
     const slowest = [...files]

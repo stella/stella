@@ -1,23 +1,22 @@
-import "@/api/register-schema-formats";
-import { KindGuard, type TSchema } from "@sinclair/typebox";
-import { ValueErrorType } from "@sinclair/typebox/errors";
-import { Value, type ValueError } from "@sinclair/typebox/value";
 import { panic, Result } from "better-result";
-import { ElysiaCustomStatusResponse } from "elysia";
 import * as v from "valibot";
 
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { toWireInput } from "@stll/api-contract/http-input";
 import {
   MCP_CAPABILITY_EXECUTORS,
   type McpCapabilityExecutor,
 } from "@stll/api-contract/mcp-capability-executors";
 import type { PermissionInput } from "@stll/permissions";
 
+import type { RouteAccess, RouteDefinition } from "@/api/http/route";
+import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { WorkspaceStatusAccess } from "@/api/lib/auth";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -30,7 +29,13 @@ import {
   transportFileResponse,
 } from "@/api/lib/capability-transport";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
+import {
+  isValibotSchema,
+  type JsonSchema,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -48,15 +53,13 @@ import {
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { advertisedSchemas } from "@/api/mcp/advertised-schema";
-import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
-import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
+import { capabilityHandlerContext } from "@/api/mcp/capability-context";
+import type { CapabilityHandlerContext } from "@/api/mcp/capability-context";
 import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
 import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
-import {
-  bindApprovedMcpAuditContext,
-  type McpRequestContext,
-} from "@/api/mcp/context";
+import { bindApprovedMcpAuditContext } from "@/api/mcp/context";
+import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
   projectMcpRefusal,
@@ -122,6 +125,8 @@ import {
   defineProjectedMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 // --- Catalog + dispatch runtime views ---------------------------------------
 
@@ -400,29 +405,48 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
 // --- Live handler resolution -------------------------------------------------
 
 /**
- * The endpoint config fields the generic path reads. `body`/`params`/`query`
- * are Elysia `t.*` schemas (TypeBox `TSchema`) at runtime, and `permissions` is
- * the handler's `PermissionInput` literal; both are built by the handler graph.
- * The guard below narrows to this shape at the module boundary.
+ * The slice of a capability endpoint's live config the capability executors
+ * read. Its input schemas are the route's own valibot schemas, and
+ * `permissions` is the handler's `PermissionInput` literal; both are built by
+ * the handler graph. The guard below narrows to this shape at the module
+ * boundary.
  */
 type EndpointConfig = {
   featureAccess?: FeatureAccessRequirement;
   mcp?: unknown;
-  body?: TSchema;
-  params?: TSchema;
-  query?: TSchema;
+  body?: v.GenericSchema;
+  params?: v.GenericSchema;
+  query?: v.GenericSchema;
   permissions?: PermissionInput;
   accountAccess?: AccountAccess;
+  workspaceStatus?: WorkspaceStatusAccess;
 };
 
-type EndpointDefinition = {
-  config: EndpointConfig;
-  handler: (ctx: SynthesizedCapabilityContext) => Promise<unknown>;
+/** A capability's route definition, with the handler core the executors call. */
+type EndpointDefinition = Omit<RouteDefinition, "config"> & {
+  readonly config: RouteDefinition["config"] & EndpointConfig;
+  readonly handler: (ctx: CapabilityHandlerContext) => Promise<unknown>;
 };
+
+const ROUTE_ACCESS: ReadonlySet<unknown> = new Set<RouteAccess>([
+  "public",
+  "token",
+  "session",
+  "member",
+  "workspace",
+]);
+
+const isInputSlot = (value: unknown): boolean =>
+  value === undefined || isValibotSchema(value);
 
 const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
   isRecord(value) &&
   isRecord(value["config"]) &&
+  isInputSlot(value["config"]["body"]) &&
+  isInputSlot(value["config"]["params"]) &&
+  isInputSlot(value["config"]["query"]) &&
+  ROUTE_ACCESS.has(value["access"]) &&
+  typeof value["run"] === "function" &&
   typeof value["handler"] === "function";
 
 /**
@@ -446,11 +470,7 @@ export const loadCapabilityEndpoint = async (
   return isEndpointDefinition(raw) ? raw : null;
 };
 
-// --- TypeBox input validation ------------------------------------------------
-
-/** TypeBox `Value.Errors` path (`/a/b`) -> the envelope's dot-path (`a.b`). */
-const typeboxPathToDot = (path: string): string =>
-  path.startsWith("/") ? path.slice(1).split("/").join(".") : path;
+// --- Input validation: the route's own schemas ------------------------------
 
 /** Join two dot-paths, skipping empty segments (`""` + `x` -> `x`). */
 const joinDot = (head: string, tail: string): string => {
@@ -481,130 +501,200 @@ const toPublicIssue = (issue: McpValidationIssue): McpValidationIssue => ({
   path: toPublicIssuePath(issue.path),
 });
 
+type InputPart = "body" | "params" | "query";
+
 /**
  * Prefix a validated part name onto a dot-path so an agent sees `body.purpose`,
  * never a bare `purpose` it cannot place. An empty dot-path (the whole part
  * failed) renders as the bare part name.
  */
-const prefixPartPath = (
-  part: "body" | "params" | "query",
-  dot: string,
-): string => joinDot(part, dot);
+const prefixPartPath = (part: InputPart, dot: string): string =>
+  joinDot(part, dot);
 
-/** A tagged-union discriminator: the shared key and the literal each variant fixes it to. */
-type UnionDiscriminator = { key: string; literals: readonly string[] };
-
-/**
- * If every variant of a union is an object sharing one literal-typed property,
- * return that key plus the literal each variant fixes it to (a tagged /
- * discriminated union, e.g. uploads.create's `purpose`). Returns `null` for a
- * non-discriminated union (e.g. `string | number`), which has no such key.
- */
-const unionDiscriminator = (
-  variants: readonly TSchema[],
-): UnionDiscriminator | null => {
-  const objects = variants.filter((variant) => KindGuard.IsObject(variant));
-  const first = objects.at(0);
-  if (first === undefined || objects.length !== variants.length) {
-    return null;
+/** A schema node with its optional/nullable/default wrappers peeled off. */
+const unwrappedSchema = (schema: unknown): unknown => {
+  let node = schema;
+  while (isRecord(node) && isRecord(node["wrapped"])) {
+    node = node["wrapped"];
   }
-  for (const key of Object.keys(first.properties)) {
-    const literals: string[] = [];
-    const shared = objects.every((variant) => {
-      const prop = variant.properties[key];
-      if (prop !== undefined && KindGuard.IsLiteral(prop)) {
-        literals.push(JSON.stringify(prop.const));
-        return true;
-      }
-      return false;
-    });
-    if (shared) {
-      return { key, literals: [...new Set(literals)] };
-    }
-  }
-  return null;
+  return node;
 };
 
-/** The variant whose discriminator literal matches the value's, if any. */
-const matchingVariant = (
-  variants: readonly TSchema[],
-  discriminator: UnionDiscriminator,
-  value: unknown,
-): TSchema | undefined => {
-  if (!isRecord(value)) {
+const OBJECT_SCHEMA_TYPES: ReadonlySet<unknown> = new Set([
+  "object",
+  "loose_object",
+  "strict_object",
+  "object_with_rest",
+]);
+
+/** An object schema's declared entries, when the (unwrapped) node is one. */
+const objectSchemaEntries = (
+  schema: unknown,
+): Record<string, unknown> | undefined => {
+  const node = unwrappedSchema(schema);
+  return isRecord(node) &&
+    OBJECT_SCHEMA_TYPES.has(node["type"]) &&
+    isRecord(node["entries"])
+    ? node["entries"]
+    : undefined;
+};
+
+/**
+ * The schema node an issue was raised by, found from `schema` (the node the
+ * issue's path is relative to) through object entries and array items. A path
+ * through any other node is not followed.
+ */
+const schemaAtIssuePath = (
+  schema: unknown,
+  issue: v.BaseIssue<unknown>,
+): unknown => {
+  let node = unwrappedSchema(schema);
+  for (const item of issue.path ?? []) {
+    const entries = objectSchemaEntries(node);
+    if (entries !== undefined && typeof item.key === "string") {
+      node = unwrappedSchema(entries[item.key]);
+    } else if (isRecord(node) && node["type"] === "array") {
+      node = unwrappedSchema(node["item"]);
+    } else {
+      return undefined;
+    }
+  }
+  return node;
+};
+
+/** A tagged union: the key every option fixes to a literal, and those options. */
+type UnionDiscriminator = {
+  key: string;
+  options: readonly { literal: unknown; schema: v.GenericSchema }[];
+};
+
+/**
+ * The discriminator of a `v.union` whose options are all objects fixing one
+ * shared key to a literal (uploads.create's `purpose`); none for any other
+ * union (`string | number`).
+ */
+const unionDiscriminator = (union: unknown): UnionDiscriminator | undefined => {
+  if (
+    !isRecord(union) ||
+    union["type"] !== "union" ||
+    !isUnknownArray(union["options"])
+  ) {
     return undefined;
   }
-  const provided = value[discriminator.key];
-  return variants.find((variant) => {
-    if (!KindGuard.IsObject(variant)) {
-      return false;
-    }
-    const prop = variant.properties[discriminator.key];
-    return KindGuard.IsLiteral(prop) && prop.const === provided;
+  const options = union["options"].flatMap((option) => {
+    const entries = objectSchemaEntries(option);
+    return isValibotSchema(option) && entries !== undefined
+      ? [{ entries, schema: option }]
+      : [];
   });
+  const first = options.at(0);
+  if (first === undefined || options.length !== union["options"].length) {
+    return undefined;
+  }
+  for (const key of Object.keys(first.entries)) {
+    const literals = options.map(({ entries, schema }) => {
+      const entry = entries[key];
+      return isRecord(entry) && entry["type"] === "literal"
+        ? { literal: entry["literal"], schema }
+        : undefined;
+    });
+    if (literals.every((option) => option !== undefined)) {
+      return { key, options: literals };
+    }
+  }
+  return undefined;
 };
+
+// The values JSON has no text for are named by their type.
+const receivedValue = (value: unknown): string =>
+  value === undefined ||
+  typeof value === "function" ||
+  typeof value === "symbol"
+    ? typeof value
+    : JSON.stringify(value);
 
 /**
- * Expand one TypeBox union error into field-level issues. TypeBox reports a
- * failed union as a single opaque `Expected union value` naming no field. For a
- * discriminated union we do better: name the discriminator and its allowed
- * literals when it is missing/wrong, or drill into the matched variant so the
- * caller sees that variant's own missing/invalid fields. A non-discriminated
- * union falls back to the node-level message (which still carries a non-empty
- * path). Every returned issue's path is part-prefixed, so none is ever empty.
+ * A strict object's refusal of an undeclared key, which an agent reads as a
+ * typo: the same `Unknown parameter` a key the route schema drops is reported
+ * with.
  */
-const expandUnionError = (
-  part: "body" | "params" | "query",
-  error: ValueError,
-): McpValidationIssue[] => {
-  const unionDot = typeboxPathToDot(error.path);
-  if (!KindGuard.IsUnion(error.schema)) {
-    return [{ path: prefixPartPath(part, unionDot), message: error.message }];
-  }
-  const variants = error.schema.anyOf;
-  const discriminator = unionDiscriminator(variants);
-  if (discriminator === null) {
-    return [{ path: prefixPartPath(part, unionDot), message: error.message }];
-  }
-  const variant = matchingVariant(variants, discriminator, error.value);
-  // No variant matched: the discriminator is missing or not one of the literals.
-  // Name it and its allowed values -- the single most useful thing to report.
-  if (variant === undefined) {
-    return [
-      {
-        path: prefixPartPath(part, joinDot(unionDot, discriminator.key)),
-        message: `expected one of ${discriminator.literals.join(" | ")}`,
-      },
-    ];
-  }
-  // A variant matched: report that variant's own field-level errors.
-  const nested = [...Value.Errors(variant, error.value)].map((sub) => ({
-    path: prefixPartPath(part, joinDot(unionDot, typeboxPathToDot(sub.path))),
-    message: sub.message,
-  }));
-  if (nested.length > 0) {
-    return nested;
-  }
-  // Matched with no field errors -- unreachable in practice (a clean match means
-  // the union would have passed). Fall back to the opaque node message rather
-  // than blaming the discriminator, which was correct.
-  return [{ path: prefixPartPath(part, unionDot), message: error.message }];
+const isUnknownKeyIssue = (issue: v.BaseIssue<unknown>): boolean =>
+  issue.type === "strict_object" &&
+  issue.expected === "never" &&
+  issue.path?.at(-1)?.origin === "key";
+
+/**
+ * Field-level issues for a refused part, where `schema` is the node the issues'
+ * paths are relative to. A failed tagged union reports the way `v.variant`
+ * would: a missing or unknown tag names the tag field and its allowed literals;
+ * a known tag drills into that option's own failures. Any other union names
+ * each option's own failures, under the union's path, instead of one opaque
+ * "invalid type" for the whole node.
+ */
+const issuesAt = async (
+  path: string,
+  issues: readonly v.BaseIssue<unknown>[],
+  schema: unknown,
+): Promise<McpValidationIssue[]> => {
+  const mapped = await Promise.all(
+    issues.map(async (issue): Promise<McpValidationIssue[]> => {
+      const issuePath = joinDot(path, v.getDotPath(issue) ?? "");
+      if (isUnknownKeyIssue(issue)) {
+        return [
+          {
+            path: issuePath,
+            message: `Unknown parameter: ${String(issue.input)}`,
+          },
+        ];
+      }
+      if (issue.type !== "union" || issue.issues === undefined) {
+        return [{ path: issuePath, message: issue.message }];
+      }
+      const union = schemaAtIssuePath(schema, issue);
+      const discriminator = unionDiscriminator(union);
+      if (discriminator === undefined) {
+        return await issuesAt(issuePath, issue.issues, union);
+      }
+      const provided = isRecord(issue.input)
+        ? issue.input[discriminator.key]
+        : undefined;
+      const matched = discriminator.options.find(
+        ({ literal }) => literal === provided,
+      );
+      if (matched === undefined) {
+        const allowed = discriminator.options
+          .map(({ literal }) => receivedValue(literal))
+          .join(" | ");
+        return [
+          {
+            path: joinDot(issuePath, discriminator.key),
+            message: `Invalid type: Expected one of ${allowed} but received ${receivedValue(provided)}`,
+          },
+        ];
+      }
+      const decoded = await v.safeParseAsync(matched.schema, issue.input);
+      return decoded.success
+        ? [{ path: issuePath, message: issue.message }]
+        : await issuesAt(issuePath, decoded.issues, matched.schema);
+    }),
+  );
+  return mapped.flat();
 };
 
-/** Map one TypeBox validation error to one or more part-prefixed issues. */
-const errorToIssues = (
-  part: "body" | "params" | "query",
-  error: ValueError,
-): McpValidationIssue[] => {
-  if (error.type === ValueErrorType.Union) {
-    return expandUnionError(part, error);
-  }
-  return [
-    {
-      path: prefixPartPath(part, typeboxPathToDot(error.path)),
-      message: error.message,
-    },
-  ];
+const partIssues = async (
+  part: InputPart,
+  issues: readonly v.BaseIssue<unknown>[],
+  schema: v.GenericSchema,
+): Promise<McpValidationIssue[]> => {
+  const seen = new Set<string>();
+  return (await issuesAt(part, issues, schema)).filter((issue) => {
+    const key = JSON.stringify([issue.path, issue.message]);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 };
 
 type PartValidation =
@@ -612,52 +702,28 @@ type PartValidation =
   | { ok: false; issues: McpValidationIssue[]; hint?: string };
 
 /**
- * The part's schema with one property removed, for a fileless-mode call. Returns
- * the schema untouched when there is nothing to remove or it is not an object
- * schema. The property is always OPTIONAL (that is what makes the capability
- * invocable), so dropping it leaves a schema the handler still accepts.
+ * Validate one input part (`body`/`params`/`query`) with the route's own
+ * schema, the way a request is decoded. The agent boundary first repairs the
+ * value against the part's advertised rendering (nulls, declared spellings);
+ * path and query values then travel as the strings a browser would send, so
+ * the route reads them exactly as it reads a request. Undeclared keys the
+ * schema drops are reported as typos: the agent surface is deliberately
+ * stricter than REST. A missing schema passes the value through. Issue paths
+ * are part-prefixed so an agent sees `body.matterId`, not a bare `matterId`.
  */
-const schemaWithoutField = (
-  schema: TSchema | undefined,
-  field: string | undefined,
-): TSchema | undefined => {
-  if (
-    schema === undefined ||
-    field === undefined ||
-    !KindGuard.IsObject(schema)
-  ) {
-    return schema;
-  }
-  const properties: Record<string, TSchema> = {};
-  for (const [key, value] of Object.entries(schema.properties)) {
-    if (key !== field) {
-      properties[key] = value;
-    }
-  }
-  return { ...schema, properties };
-};
-
-/**
- * Validate one input part (`body`/`params`/`query`) against the live handler
- * config's TypeBox schema. The agent boundary first applies shared null and
- * declared-value normalization, then mirrors Elysia's Default -> Convert ->
- * Clean -> Check chain. Clean prevents undeclared keys reaching a handler; the
- * comparison around it deliberately makes the agent surface stricter than REST
- * by reporting every removed key as a typo instead of silently accepting it. A
- * missing schema passes through unchanged. Issue paths are part-prefixed so an
- * agent sees `body.matterId`, not a bare `matterId` it cannot place.
- */
-const validatePart = ({
+const validatePart = async ({
+  advertised,
   allowedRemovedPaths = [],
   part,
   schema,
   value,
 }: {
+  advertised: JsonSchema | undefined;
   allowedRemovedPaths?: readonly string[];
-  part: "body" | "params" | "query";
-  schema: TSchema | undefined;
+  part: InputPart;
+  schema: v.GenericSchema | undefined;
   value: unknown;
-}): PartValidation => {
+}): Promise<PartValidation> => {
   if (schema === undefined) {
     return { ok: true, value };
   }
@@ -669,7 +735,7 @@ const validatePart = ({
     // so a placeholder is asked about rather than read as "not set".
     access: "write",
     path: part,
-    schema,
+    schema: advertised,
     value: base,
   });
   if (!normalized.ok) {
@@ -679,29 +745,26 @@ const validatePart = ({
       hint: normalized.hint,
     };
   }
-  // Ahead of the chain, not just ahead of Check: a dropped null must take the
-  // property's declared default and must never reach Convert, so the part reads
-  // exactly as it would from a client that omitted the property.
-  const withDefaults = Value.Default(schema, normalized.value);
-  const coerced = Value.Convert(schema, withDefaults);
-  const beforeClean = structuredClone(coerced);
-  const cleaned = Value.Clean(schema, coerced);
+  const decoded = await v.safeParseAsync(
+    schema,
+    part === "body" ? normalized.value : toWireInput(normalized.value),
+  );
+  if (!decoded.success) {
+    return {
+      ok: false,
+      issues: await partIssues(part, decoded.issues, schema),
+    };
+  }
   const removedIssues = findRemovedInputIssues({
     allowedRemovedPaths,
-    before: beforeClean,
-    after: cleaned,
+    before: normalized.value,
+    after: decoded.output,
     path: part,
   });
   if (removedIssues.length > 0) {
     return { ok: false, issues: removedIssues };
   }
-  if (Value.Check(schema, cleaned)) {
-    return { ok: true, value: cleaned };
-  }
-  const issues = [...Value.Errors(schema, cleaned)].flatMap((error) =>
-    errorToIssues(part, error),
-  );
-  return { ok: false, issues };
+  return { ok: true, value: decoded.output };
 };
 
 // --- Result mapping ----------------------------------------------------------
@@ -847,6 +910,14 @@ const listCapabilitiesArgsSchema = nullAsAbsent(
         ),
       ),
     ),
+    query: v.optional(
+      v.pipe(
+        v.string(),
+        v.description(
+          "Search capability ids, generated titles, and descriptions. Results are ranked by relevance.",
+        ),
+      ),
+    ),
     access: v.optional(
       v.pipe(
         v.picklist(CAPABILITY_ACCESS_FILTERS),
@@ -924,7 +995,7 @@ export const featureOmittedCapabilityIds = async (
   isFeatureEnabled: (
     feature: string | undefined,
   ) => boolean = isCapabilityFeatureEnabled,
-  context?: McpRequestContext,
+  context?: AuthorizedMcpRequestContext,
 ): Promise<readonly string[]> =>
   (await getCatalog())
     .filter(
@@ -947,22 +1018,29 @@ const listCapabilitiesHandler: McpToolHandler<
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => {
   const parsed = v.safeParse(listCapabilitiesArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
   const { domain, access, cursor, limit } = parsed.output;
+  const query = parsed.output.query?.trim() || undefined;
 
-  const afterId =
+  const decodedCursor =
     cursor === undefined ? undefined : decodeCapabilityCursor(cursor);
-  if (afterId === null) {
+  // A cursor resumes only the listing that issued it: an id-order cursor
+  // carries no query, a relevance cursor carries its query.
+  if (
+    decodedCursor === null ||
+    (decodedCursor !== undefined && decodedCursor.query !== query)
+  ) {
     return invalidCursorResult({
       cursor: cursor ?? "",
       tool: "list_capabilities",
     });
   }
+  const afterId = decodedCursor?.afterId;
 
   // Feature-gated entries whose flag is off are not advertised, matching how
   // the static tools/list hides gated-off tools (describe/invoke also refuse
@@ -971,15 +1049,40 @@ const listCapabilitiesHandler: McpToolHandler<
   // invoke refuses them for it as well.
   const confirmable =
     context.toolConfirmation !== TOOL_CONFIRMATION.unavailable;
-  const filtered = (await getCatalog()).filter(
+  const matching = (await getCatalog()).filter(
     (entry) =>
       contextFeatureEnabled(entry.feature, context) &&
       capabilityFeatureEnabled(entry, context) &&
       (confirmable || !requiresCapabilityConfirmation(entry)) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
-      (access === "all" || entry.access === access) &&
-      (afterId === undefined || entry.id > afterId),
+      (access === "all" || entry.access === access),
   );
+  let filtered: CatalogEntry[];
+  if (query === undefined) {
+    // Id order: a cursor whose entry has since been hidden still resumes after it.
+    filtered = matching.filter(
+      (entry) => afterId === undefined || entry.id > afterId,
+    );
+  } else {
+    // Relevance order: the cursor must name an entry of this same ranking.
+    const ranked = matching
+      .map((entry) => ({ entry, rank: capabilityQueryRank(entry, query) }))
+      .filter(({ rank }) => rank > 0)
+      .toSorted(
+        (left, right) =>
+          right.rank - left.rank || byCapabilityId(left.entry, right.entry),
+      )
+      .map(({ entry }) => entry);
+    const cursorIndex =
+      afterId === undefined ? -1 : ranked.findIndex(({ id }) => id === afterId);
+    if (afterId !== undefined && cursorIndex < 0) {
+      return invalidCursorResult({
+        cursor: cursor ?? "",
+        tool: "list_capabilities",
+      });
+    }
+    filtered = ranked.slice(cursorIndex + 1);
+  }
   const { DEFAULT_MCP_TOOL_DEFINITIONS } =
     await import("@/api/mcp/static-tool-definitions");
   const hiddenIds = hiddenMcpDescriptorIds(
@@ -990,7 +1093,9 @@ const listCapabilitiesHandler: McpToolHandler<
   const last = page.at(-1);
   const nextCursor =
     last !== undefined && filtered.length > page.length
-      ? encodePaginationCursor([last.id])
+      ? encodePaginationCursor(
+          query === undefined ? [last.id] : [last.id, query],
+        )
       : null;
 
   return structuredEgressPlan({
@@ -1025,19 +1130,82 @@ const accessLabel = (entry: CatalogEntry): string =>
 const summarizeEntry = (entry: CatalogEntry): string =>
   `${capabilityDomain(entry.id)} / ${capabilityLeaf(entry.id)} (${accessLabel(entry)})`;
 
-const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
-  const decoded = decodePaginationCursor(cursor)?.at(0);
-  if (decoded === undefined) {
+const capabilityTitle = (id: string): string => id.replaceAll(/[.-]/gu, " ");
+
+const queryWords = (value: string): string[] =>
+  Array.from(
+    value.toLocaleLowerCase("en-US").matchAll(/[\p{L}\p{N}]+/gu),
+    ([word]) => word,
+  );
+
+const wordMatches = (candidate: string, query: string): boolean =>
+  candidate === query ||
+  candidate.startsWith(query) ||
+  query.startsWith(candidate);
+
+const capabilityQueryRank = (entry: CatalogEntry, query: string): number => {
+  const normalizedQuery = query.toLocaleLowerCase("en-US");
+  const id = entry.id.toLocaleLowerCase("en-US");
+  const title = capabilityTitle(entry.id).toLocaleLowerCase("en-US");
+  const description = entry.description?.toLocaleLowerCase("en-US") ?? "";
+  const words = queryWords(normalizedQuery);
+  const idWords = queryWords(id);
+  const titleWords = queryWords(title);
+
+  let rank = 0;
+  if (description.includes(normalizedQuery)) {
+    rank = 100;
+  }
+  if (title.includes(normalizedQuery)) {
+    rank = 800;
+  }
+  if (id.includes(normalizedQuery)) {
+    rank = 1000;
+  }
+  for (const word of words) {
+    if (idWords.some((candidate) => wordMatches(candidate, word))) {
+      rank += 100;
+    } else if (titleWords.some((candidate) => wordMatches(candidate, word))) {
+      rank += 80;
+    } else if (description.includes(word)) {
+      rank += 10;
+    } else {
+      return 0;
+    }
+  }
+  return rank;
+};
+
+const byCapabilityId = (left: CatalogEntry, right: CatalogEntry): number => {
+  if (left.id === right.id) {
+    return 0;
+  }
+  return left.id < right.id ? -1 : 1;
+};
+
+const decodeCapabilityCursor = (
+  cursor: string,
+): { afterId: string; query: string | undefined } | null => {
+  const decoded = decodePaginationCursor(cursor);
+  if (decoded === null) {
     return null;
   }
-  return typeof decoded === "string" ? decoded : null;
+  const [afterId, query, ...rest] = decoded;
+  if (
+    typeof afterId !== "string" ||
+    (query !== undefined && typeof query !== "string") ||
+    rest.length > 0
+  ) {
+    return null;
+  }
+  return { afterId, query };
 };
 
 // --- describe_capability -----------------------------------------------------
 
 const notFoundWithHint = async (
   id: string,
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
 ): Promise<InternalToolErrorResult> =>
   notFoundResult(
     `No capability with id "${id}"`,
@@ -1060,7 +1228,7 @@ const featureDisabledResult = (
 
 const hintForUnknownId = async (
   id: string,
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
 ): Promise<string> => {
   const suggestions = closestToolNames(
     id,
@@ -1108,14 +1276,20 @@ const loadEndpointGuarded = async (
   try {
     endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
-    captureError(error, { source: "mcp", toolName });
+    captureError(
+      error,
+      handlerErrorContext("mcp.loadEndpoint", { source: "mcp", toolName }),
+    );
     endpoint = null;
   }
   if (!endpoint) {
-    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      source: "mcp",
-      toolName,
-    });
+    captureError(
+      new Error(`capability dispatch missing endpoint: ${id}`),
+      handlerErrorContext("mcp.missingEndpoint", {
+        source: "mcp",
+        toolName,
+      }),
+    );
     return {
       ok: false,
       result: structuredErrorResult({
@@ -1135,7 +1309,7 @@ const describeCapabilityHandler: McpToolHandler<
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }) => {
   const parsed = v.safeParse(describeCapabilityArgsSchema, args);
   if (!parsed.success) {
@@ -1161,9 +1335,9 @@ const describeCapabilityHandler: McpToolHandler<
   }
   const endpoint = loaded.endpoint;
 
-  // The live TypeBox schemas are plain objects plus symbol metadata; the final
-  // JSON serialization (toolDataResult in the egress pipeline) drops the symbols, so
-  // they can go on the payload as-is. Uses the live config, never the snapshot,
+  // The advertised schemas are plain JSON Schema rendered from the route's
+  // valibot schemas, so they can go on the payload as-is. Uses the live
+  // config, never the snapshot,
   // so a snapshot-truncated capability still describes fully, and the same
   // `advertisedSchemas` projection the capability executors validate against, so an
   // advertised bound is always an enforced bound.
@@ -1214,7 +1388,8 @@ const describeCapabilityHandler: McpToolHandler<
       // must omit, where the work can be done instead, and whether the
       // capability tolerates an archived workspace (e.g. unarchive).
       transport: renderTransport(entry.transport),
-      allowsArchivedWorkspace: entry.allowsArchivedWorkspace === true,
+      allowsArchivedWorkspace:
+        endpoint.config.workspaceStatus === "active-or-archived",
       feature: entry.feature ?? null,
       permissions: entry.permissions ?? null,
       disposition: entry.mcp,
@@ -1524,12 +1699,12 @@ const withInternalFieldNames = ({
 /** Resolve the workspace id for a workspace-kind capability from `input.params.matterId`. */
 const resolveCapabilityWorkspace = ({
   context,
-  entry,
   params,
+  workspaceStatus,
 }: {
-  context: McpRequestContext;
-  entry: CatalogEntry;
+  context: AuthorizedMcpRequestContext;
   params: unknown;
+  workspaceStatus: WorkspaceStatusAccess;
 }):
   | { ok: true; workspaceId: SafeId<"workspace"> }
   | { ok: false; result: InternalToolErrorResult } => {
@@ -1559,15 +1734,14 @@ const resolveCapabilityWorkspace = ({
       result: notFoundResult("Matter not found or not accessible"),
     };
   }
-  // Mirror `validateWorkspaceAccess` exactly (lib/auth.ts): the REST macro
-  // 404s ANY non-active workspace — reads included — so the generic path must
-  // be no weaker. Only capabilities flagged `allowsArchivedWorkspace` (their
-  // REST route uses `validateWorkspaceAccessIncludingArchived`, e.g.
-  // unarchive) run against an archived — but not deleting — workspace.
-  // Deleting workspaces never enter `accessibleWorkspaceStatusById`, so this
-  // branch only ever sees active/archived.
+  // The route's own admission (`authorizeWorkspace` in lib/auth.ts): a
+  // workspace route refuses ANY non-active matter, reads included, unless it
+  // admits archived ones (`workspaceStatus: "active-or-archived"`, e.g.
+  // unarchive). Deleting workspaces never enter
+  // `accessibleWorkspaceStatusById`, so this branch only ever sees
+  // active/archived.
   if (
-    entry.allowsArchivedWorkspace !== true &&
+    workspaceStatus !== "active-or-archived" &&
     getWorkspaceStatus({ context, workspaceId: rawId }) !== "active"
   ) {
     return {
@@ -1584,6 +1758,60 @@ const resolveCapabilityWorkspace = ({
     };
   }
   return { ok: true, workspaceId: branded };
+};
+
+type CapabilityTarget =
+  | {
+      ok: true;
+      workspaceId: SafeId<"workspace"> | undefined;
+      params: unknown;
+    }
+  | { ok: false; result: InternalToolErrorResult };
+
+/**
+ * The matter a workspace-kind capability runs against, from the RAW input
+ * params (route parity: REST reads the path segment independently of the
+ * handler config schema), and the params its handler sees. A missing,
+ * inaccessible or archived matter fails here with the same envelope it would
+ * at execution, so `validateOnly` never reports a spurious `{ valid: true }`.
+ */
+const resolveCapabilityTarget = ({
+  config,
+  context,
+  isWorkspace,
+  rawParams,
+  validatedParams,
+}: {
+  config: EndpointConfig;
+  context: AuthorizedMcpRequestContext;
+  isWorkspace: boolean;
+  rawParams: unknown;
+  validatedParams: unknown;
+}): CapabilityTarget => {
+  if (!isWorkspace) {
+    return { ok: true, workspaceId: undefined, params: validatedParams };
+  }
+  const resolved = resolveCapabilityWorkspace({
+    context,
+    params: rawParams,
+    workspaceStatus: config.workspaceStatus ?? "active",
+  });
+  if (!resolved.ok) {
+    return resolved;
+  }
+  // The handler's params are the config-declared fields plus workspaceId, as
+  // a REST workspace route's are. Without a config params schema, params is
+  // exactly { workspaceId }.
+  return {
+    ok: true,
+    workspaceId: resolved.workspaceId,
+    params: {
+      ...(isRecord(validatedParams) && config.params !== undefined
+        ? validatedParams
+        : {}),
+      workspaceId: resolved.workspaceId,
+    },
+  };
 };
 
 type CapabilityServiceClassificationOptions = {
@@ -1633,7 +1861,7 @@ export const invokedCapabilityConsumesServices = async ({
 
 type InvokeCapabilityOptions = {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
 };
 
@@ -1760,20 +1988,28 @@ const invokeCapabilityHandler = async ({
   }
 
   try {
-    return await executeInvoke({
-      context: requiresCapabilityConfirmation(entry)
-        ? bindApprovedMcpAuditContext(context)
-        : context,
-      entry,
-      id,
-      input,
-      validateOnly,
-      confirm,
-    });
+    return await withExceptionScope(
+      { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      async () =>
+        await executeInvoke({
+          context: requiresCapabilityConfirmation(entry)
+            ? bindApprovedMcpAuditContext(context)
+            : context,
+          entry,
+          id,
+          input,
+          validateOnly,
+          confirm,
+        }),
+    );
   } catch (error) {
     captureError(error, {
-      source: "mcp",
-      toolName: MCP_CAPABILITY_EXECUTORS[access],
+      fingerprintKey: "mcp.invokeCapabilityHandler",
+      scope: { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      context: {
+        source: "mcp",
+        toolName: MCP_CAPABILITY_EXECUTORS[access],
+      },
     });
     return structuredErrorResult({
       code: "internal_error",
@@ -1827,7 +2063,7 @@ type ValidateInvokeInputOptions = {
   publicInput: InvokeInput;
 };
 
-const validateInvokeInput = ({
+const validateInvokeInput = async ({
   config,
   entry,
   publicInput,
@@ -1876,24 +2112,44 @@ const validateInvokeInput = ({
     params: projectedParams.ok ? projectedParams.value : publicInput.params,
     query: projectedQuery.ok ? projectedQuery.value : publicInput.query,
   };
-  const bodySchema = schemaWithoutField(
-    advertised.body,
-    filelessOnlyField(entry.transport),
-  );
-  const validations = [
-    validatePart({ part: "body", schema: bodySchema, value: input.body }),
-    validatePart({
-      allowedRemovedPaths: isWorkspace ? ["params.workspaceId"] : [],
-      part: "params",
-      schema: advertised.params,
-      value: input.params,
-    }),
-    validatePart({
-      part: "query",
-      schema: advertised.query,
-      value: input.query,
-    }),
-  ] as const;
+  // A fileless call omits the file field; the field is optional, so the
+  // route still accepts the body without it, and sending it is a typo.
+  const filelessField = filelessOnlyField(entry.transport);
+  const filelessIssues =
+    filelessField !== undefined &&
+    isRecord(input.body) &&
+    input.body[filelessField] !== undefined
+      ? [
+          {
+            path: prefixPartPath("body", filelessField),
+            message: `Unknown parameter: ${filelessField}`,
+          },
+        ]
+      : [];
+  const validations: readonly [PartValidation, PartValidation, PartValidation] =
+    [
+      filelessIssues.length > 0
+        ? { ok: false, issues: filelessIssues }
+        : await validatePart({
+            advertised: advertised.body,
+            part: "body",
+            schema: config.body,
+            value: input.body,
+          }),
+      await validatePart({
+        advertised: advertised.params,
+        allowedRemovedPaths: isWorkspace ? ["params.workspaceId"] : [],
+        part: "params",
+        schema: config.params,
+        value: input.params,
+      }),
+      await validatePart({
+        advertised: advertised.query,
+        part: "query",
+        schema: config.query,
+        value: input.query,
+      }),
+    ];
 
   const issues = validations.flatMap((result) =>
     result.ok ? [] : result.issues.map(toPublicIssue),
@@ -1926,12 +2182,12 @@ const validateInvokeInput = ({
   };
 };
 
-export const classifyValidatedCapabilityServiceInput = ({
+export const classifyValidatedCapabilityServiceInput = async ({
   config,
   entry,
   publicInput,
 }: ValidateInvokeInputOptions) => {
-  const validated = validateInvokeInput({ config, entry, publicInput });
+  const validated = await validateInvokeInput({ config, entry, publicInput });
   if (validated.status === "invalid") {
     return Result.err(validated.result);
   }
@@ -1963,7 +2219,7 @@ const capabilityReferenceRefusal = async ({
   entry,
   confirm,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   config: EndpointConfig;
   body: unknown;
   params: unknown;
@@ -2004,7 +2260,7 @@ const executeInvoke = async ({
   validateOnly,
   confirm,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
@@ -2021,7 +2277,7 @@ const executeInvoke = async ({
   const endpoint = loaded.endpoint;
 
   const isWorkspace = entry.handlerKind === "workspace";
-  const validated = validateInvokeInput({
+  const validated = await validateInvokeInput({
     config: endpoint.config,
     entry,
     publicInput,
@@ -2049,35 +2305,19 @@ const executeInvoke = async ({
     return referenceRefusal;
   }
 
-  // 7. Workspace resolution (workspace kind only), from the RAW input params
-  // (route-macro parity: REST validates the path param independently of the
-  // handler config schema). Runs BEFORE the validateOnly return so
-  // `validateOnly: true` mirrors a real invoke: a missing/inaccessible/archived
-  // workspace fails here with the same envelope it would at execution, rather
-  // than validateOnly reporting a spurious `{ valid: true }`.
-  let workspaceId: SafeId<"workspace"> | undefined;
-  let handlerParams = validatedParams;
-  if (isWorkspace) {
-    const resolved = resolveCapabilityWorkspace({
-      context,
-      entry,
-      params: input.params,
-    });
-    if (!resolved.ok) {
-      return resolved.result;
-    }
-    workspaceId = resolved.workspaceId;
-    // The handler's params mirror REST's merged macro+config schema: the
-    // config-declared (cleaned) fields plus workspaceId. Without a config
-    // params schema the macro's schema is all there is, so params is exactly
-    // { workspaceId }.
-    handlerParams = {
-      ...(isRecord(validatedParams) && endpoint.config.params !== undefined
-        ? validatedParams
-        : {}),
-      workspaceId: resolved.workspaceId,
-    };
+  // 7. Workspace resolution (workspace kind only). Runs BEFORE the
+  // validateOnly return so `validateOnly: true` mirrors a real invoke.
+  const target = resolveCapabilityTarget({
+    config: endpoint.config,
+    context,
+    isWorkspace,
+    rawParams: input.params,
+    validatedParams,
+  });
+  if (!target.ok) {
+    return target.result;
   }
+  const { workspaceId, params: handlerParams } = target;
 
   const requirement = endpoint.config.featureAccess;
   if (
@@ -2202,7 +2442,7 @@ const executeInvoke = async ({
     });
   }
 
-  const ctx = await synthesizeCapabilityContext({
+  const ctx = await capabilityHandlerContext({
     capabilityId: id,
     context,
     input: {
@@ -2247,7 +2487,7 @@ export const mapHandlerResult = ({
   id: string;
   result: unknown;
 }): McpToolResponse => {
-  if (result instanceof ElysiaCustomStatusResponse) {
+  if (result instanceof HttpStatusResponse) {
     const statusCode = typeof result.code === "number" ? result.code : 500;
     return mapStatusResponse(statusCode, result.response);
   }
@@ -2288,6 +2528,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "list_capabilities",
     access: "read",
+    permissions: openMcpRead("reads the static capability catalog metadata"),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
@@ -2295,7 +2536,8 @@ const CAPABILITY_TOOL_DEFINITIONS = [
       "List the automatable capabilities beyond the curated tools: every safe " +
       "backend operation (CRUD, exports, processing triggers) reachable through " +
       "read_capability or write_capability. Paginated; filter by domain (the id prefix, e.g. " +
-      '"time-entries") or access (read/write). Each item gives the capability ' +
+      '"time-entries") or access (read/write), or search ids, titles, and descriptions with query. ' +
+      "Each item gives the capability " +
       "id, description, access/destructive, its transport (whether this path " +
       "can run it, which field takes a file, and what to use instead), " +
       "handlerKind (workspace or root), and every OAuth scope it needs. Use " +
@@ -2312,6 +2554,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "describe_capability",
     access: "read",
+    permissions: openMcpRead("reads the static capability catalog metadata"),
     readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
@@ -2334,6 +2577,10 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: MCP_CAPABILITY_EXECUTORS.read,
     access: "read",
+    permissions: {
+      type: "delegated",
+      reason: "The resolved capability enforces its own declared authority",
+    },
     readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",

@@ -158,6 +158,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.duplicate` | write | stella:matters_write, stella:documents_write | — | generic invoke → `stella capability entities duplicate` |
 | `entities.files.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.filesystem-tree.get` | read | stella:read | — | covered by `list_documents` |
+| `entities.folder-from-selection.create` | write | stella:documents_write | — | generic invoke → `stella capability entities folder-from-selection-create` |
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |
@@ -293,6 +294,10 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.sample-case.create` | write | stella:documents_write, stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
+| `lists.verifications.claim-comments.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-create` |
+| `lists.verifications.claim-comments.delete` | write, destructive | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-delete` |
+| `lists.verifications.claim-comments.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-list` |
+| `lists.verifications.claim-comments.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-comments-update` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
 | `lists.verifications.claim-reviews.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-create` |
 | `lists.verifications.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-create` |
@@ -709,7 +714,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 36 |
+| auth_plumbing | 34 |
 | billing_ui | 1 |
 | chat_thread_ui | 17 |
 | compound_consent | 1 |
@@ -720,7 +725,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 9 |
+| public_indexing | 8 |
 | realtime_stream | 9 |
 | search_ui | 19 |
 | session_token_exchange | 21 |

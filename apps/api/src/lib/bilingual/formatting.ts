@@ -2,6 +2,7 @@ import { TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { StoredRow } from "@/api/lib/bilingual/operations";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
@@ -53,7 +54,11 @@ export class BilingualFormattingError extends TaggedError(
 )<{
   message: string;
   reason: BilingualFormattingErrorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const fail = (
   reason: BilingualFormattingErrorReason,

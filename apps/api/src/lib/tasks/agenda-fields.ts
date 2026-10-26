@@ -1,4 +1,6 @@
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 
 import type { AgendaAttendee } from "@/api/db/schema";
 import {
@@ -18,49 +20,59 @@ import { includes } from "@/api/lib/type-guards";
 // unbounded fraction from riding the date-time format.
 const AGENDA_DATE_TIME_MAX_LENGTH = 64;
 
-const agendaDateTimeSchema = t.Nullable(
-  t.String({ format: "date-time", maxLength: AGENDA_DATE_TIME_MAX_LENGTH }),
+const agendaDateTimeSchema = v.nullable(
+  v.pipe(
+    v.string(),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+    v.maxLength(AGENDA_DATE_TIME_MAX_LENGTH),
+  ),
 );
-const agendaParticipantSchema = t.Object({
-  email: t.Nullable(t.String({ format: "email", maxLength: 320 })),
-  name: t.Nullable(t.String({ maxLength: 512 })),
+const agendaParticipantSchema = v.object({
+  email: v.nullable(v.pipe(v.string(), v.email(), v.maxLength(320))),
+  name: v.nullable(v.pipe(v.string(), v.maxLength(512))),
 });
-const agendaAttendeeSchema = t.Object({
-  email: t.Nullable(t.String({ format: "email", maxLength: 320 })),
-  name: t.Nullable(t.String({ maxLength: 512 })),
-  optional: t.Optional(t.Boolean()),
-  responseStatus: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  type: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
+const agendaAttendeeSchema = v.object({
+  email: v.nullable(v.pipe(v.string(), v.email(), v.maxLength(320))),
+  name: v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  optional: v.exactOptional(v.boolean()),
+  responseStatus: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(64))),
+  ),
+  type: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
 });
-const agendaRecurrenceSchema = t.Object({
-  pattern: t.Nullable(t.String({ maxLength: 2000 })),
-  range: t.Nullable(t.String({ maxLength: 2000 })),
+const agendaRecurrenceSchema = v.object({
+  pattern: v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+  range: v.nullable(v.pipe(v.string(), v.maxLength(2000))),
 });
 
 /**
  * The agenda properties a task create and a task update body both accept.
  * Callers spread its `properties` into their own body object.
  */
-export const agendaFieldsBodySchema = t.Object({
-  startAt: t.Optional(agendaDateTimeSchema),
-  endAt: t.Optional(agendaDateTimeSchema),
-  occurredAt: t.Optional(agendaDateTimeSchema),
-  remindAt: t.Optional(agendaDateTimeSchema),
-  allDay: t.Optional(t.Boolean()),
-  timeZone: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  location: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-  onlineMeetingUrl: t.Optional(t.Nullable(t.String({ maxLength: 2048 }))),
-  availability: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  sensitivity: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  organizer: t.Optional(t.Nullable(agendaParticipantSchema)),
-  attendees: t.Optional(
-    t.Nullable(
-      t.Array(agendaAttendeeSchema, {
-        maxItems: LIMITS.agendaAttendeesMax,
-      }),
+export const agendaFieldsBodySchema = v.object({
+  startAt: v.optional(agendaDateTimeSchema),
+  endAt: v.optional(agendaDateTimeSchema),
+  occurredAt: v.optional(agendaDateTimeSchema),
+  remindAt: v.optional(agendaDateTimeSchema),
+  allDay: v.optional(v.boolean()),
+  timeZone: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  location: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(1000)))),
+  onlineMeetingUrl: v.optional(
+    v.nullable(v.pipe(v.string(), v.maxLength(2048))),
+  ),
+  availability: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  sensitivity: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  organizer: v.optional(v.nullable(agendaParticipantSchema)),
+  attendees: v.optional(
+    v.nullable(
+      v.pipe(
+        v.array(agendaAttendeeSchema),
+        v.maxLength(LIMITS.agendaAttendeesMax),
+      ),
     ),
   ),
-  recurrence: t.Optional(t.Nullable(agendaRecurrenceSchema)),
+  recurrence: v.optional(v.nullable(agendaRecurrenceSchema)),
 });
 
 type AgendaAttendeeInput = {

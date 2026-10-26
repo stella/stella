@@ -1,5 +1,65 @@
 # @stll/cli
 
+## 5.8.0
+
+### Minor Changes
+
+- [#5889](https://github.com/stella/stella/pull/5889) [`d37bee5`](https://github.com/stella/stella/commit/d37bee5c2641eb1d2dc32f05da7d1dca52d6474a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills update` accept `invocation` (`auto` or `manual`), and `skills get` and `skills list` report it: a `manual` skill runs only when the user invokes it.
+
+- [#5889](https://github.com/stella/stella/pull/5889) [`d37bee5`](https://github.com/stella/stella/commit/d37bee5c2641eb1d2dc32f05da7d1dca52d6474a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `skills create` and `skills from-blueprint create` accept `boundWorkspaceId` or `boundClientId` to make a skill available only in one matter or for one client, and `skills get` and `skills list` report the binding.
+
+### Patch Changes
+
+- [#6838](https://github.com/stella/stella/pull/6838) [`b817801`](https://github.com/stella/stella/commit/b8178018739a464c0933f209992226505c06dc60) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Cursor can connect to the stella MCP server: a public client that registers a private-use callback without stating an application type registers as a native app, and scopes stella does not offer are left out of registrations and authorizations instead of failing them. The consent screen shows the app callback a code returns to.
+
+## 5.7.1
+
+### Patch Changes
+
+- [#6710](https://github.com/stella/stella/pull/6710) [`212eb0a`](https://github.com/stella/stella/commit/212eb0a8bbccd3e3405ee69e2bc1d3051786672b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read capability input schemas in their standard JSON Schema form: string literal unions stay enum flags whether or not each value states its type, file inputs state their size cap as `x-maxBytes`, and inputs list only the defaults the API applies.
+
+## 5.7.0
+
+### Minor Changes
+
+- [#6035](https://github.com/stella/stella/pull/6035) [`6f99564`](https://github.com/stella/stella/commit/6f99564f57fdcda47a4a52cfeead821ec1858533) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella capability list` takes `--query <text>` to search capabilities by id, title and description.
+
+## 5.6.0
+
+### Minor Changes
+
+- [#6834](https://github.com/stella/stella/pull/6834) [`dd7e7eb`](https://github.com/stella/stella/commit/dd7e7eb5379b3f95f2806cb6fcd1ebaeedb87da0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice export offers a Peppol BIS Billing 3.0 format for Slovak sellers.
+
+## 5.5.0
+
+### Minor Changes
+
+- [#6809](https://github.com/stella/stella/pull/6809) [`0b3bcae`](https://github.com/stella/stella/commit/0b3bcae5f2ab01d64b9182f76b587bc973a2f168) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Finalizing a VAT invoice in a currency other than the seller country's VAT currency records the official exchange rate for its tax point and states the VAT in that currency.
+
+## 5.4.0
+
+### Minor Changes
+
+- [#6559](https://github.com/stella/stella/pull/6559) [`23d1bd0`](https://github.com/stella/stella/commit/23d1bd032baa9c0c75623d0cc2c09710d6c3b312) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the folder-from-selection capability: create a folder and move a selection into it atomically.
+
+- [#6780](https://github.com/stella/stella/pull/6780) [`6e05ee0`](https://github.com/stella/stella/commit/6e05ee01231be81f8ce70f702898166e7c97249c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Invoice line commands accept an exemption basis, the legal provision printed for an exempt or non-VAT-payer line, and the VAT rate preset command accepts Poland.
+
+### Patch Changes
+
+- [#6701](https://github.com/stella/stella/pull/6701) [`9191b62`](https://github.com/stella/stella/commit/9191b623f5f18a4759ac376faeae82cc18877569) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella case-law search` accepts Slovakia, Hungary and the EU, and `stella legislation search` accepts Slovakia.
+
+- [#6332](https://github.com/stella/stella/pull/6332) [`fb05250`](https://github.com/stella/stella/commit/fb05250ee7cab1ceeafde842797a76c7424eebdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the generated company-registry lookup contract for verified KRS name searches.
+
+- [#5894](https://github.com/stella/stella/pull/5894) [`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add strict whole-token numeric parsers for machine input. Reject malformed CLI pagination tokens while preserving localized tool-value normalization.
+- Updated dependencies [[`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9)]:
+  - @stll/agent-input@0.2.0
+
+## 5.3.1
+
+### Patch Changes
+
+- [#5827](https://github.com/stella/stella/pull/5827) [`6f18636`](https://github.com/stella/stella/commit/6f186366c1749c64e0fdcf6f54d29dc746017155) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Comment on the claims of a list verification: `lists.verifications.claim-comments.list`, `.create`, `.update` and `.delete` read, add, change and remove comments on one claim, private unless shared with the matter.
+
 ## 5.3.0
 
 ### Minor Changes

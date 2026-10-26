@@ -1,5 +1,6 @@
 import type { AIErrorKind, AIFailureCode } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
 
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import {
@@ -63,14 +64,38 @@ const diagnostics = new WeakMap<
   RedactedProviderDiagnostic
 >();
 
+// Every provider outcome owns a grade, including an unrecognized response.
+export const PROVIDER_CALL_FAILURE_REASON = {
+  quota_exhausted: "quota_exhausted",
+  provider_billing: "provider_billing",
+  provider_credentials_rejected: "provider_credentials_rejected",
+  model_unavailable: "model_unavailable",
+  provider_unavailable: "provider_unavailable",
+  provider_stream_incomplete: "provider_stream_incomplete",
+  output_incomplete: "model_output_incomplete",
+  output_invalid: "model_output_invalid",
+  output_moderated: "model_output_moderated",
+  deadline_exceeded: "model_deadline_exceeded",
+  loop_detected: "chat_loop_detected",
+  empty_completion: "chat_empty_completion",
+  unknown: "unclassified",
+} as const satisfies Record<AIErrorKind, FailureReason>;
+
 export class ProviderCallError extends HandlerError {
+  static {
+    declareFailureClass(
+      this,
+      (error) => PROVIDER_CALL_FAILURE_REASON[error.kind],
+    );
+  }
+
   declare code?: ProviderCallErrorCode | AIFailureCode | undefined;
   readonly provider: ResolvedTanStackTextModel["provider"];
   readonly keySource: ResolvedTanStackTextModel["keySource"];
   readonly providerStatus: number | undefined;
   readonly requestId: string | undefined;
   readonly kind: AIErrorKind;
-  readonly retryAfterMs: number | undefined;
+  override readonly retryAfterMs: number | undefined;
 
   get providerDiagnostic(): RedactedProviderDiagnostic | undefined {
     return diagnostics.get(this);
@@ -90,6 +115,7 @@ export class ProviderCallError extends HandlerError {
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status,
       code,
+      ...(retryAfterMs === undefined ? {} : { retryable: true, retryAfterMs }),
       ...(facts === undefined
         ? {}
         : {

@@ -4,7 +4,11 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
-import { ownerStorageKey } from "@stll/api-contract/browser-storage";
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+  ownerStorageKey,
+} from "@stll/api-contract/browser-storage";
 
 import type { FileTab } from "../../src/components/inspector/file-tab";
 import { apiDelete, apiPut, apiUploadTemplate, E2E_API_ORIGIN } from "./api";
@@ -141,11 +145,18 @@ export const restoreGeometryInspector = async (
     organizationId: world.session.session.activeOrganizationId,
   };
   await page.addInitScript(
-    ({ stateKey, minimizedKey, fileTab, mode }) => {
+    ({
+      stateKey,
+      minimizedKey,
+      fileTab,
+      mode,
+      stateVersion,
+      minimizedVersion,
+    }) => {
       localStorage.setItem(
         stateKey,
         JSON.stringify({
-          version: 1,
+          version: stateVersion,
           value: {
             tabs: mode === "inspector" ? [fileTab] : [],
             groups: [],
@@ -157,20 +168,28 @@ export const restoreGeometryInspector = async (
       );
       localStorage.setItem(
         minimizedKey,
-        JSON.stringify({ version: 1, value: mode !== "inspector" }),
+        JSON.stringify({
+          version: minimizedVersion,
+          value: mode !== "inspector",
+        }),
       );
     },
     {
       stateKey: ownerStorageKey(
-        `stella:inspector-state:v1:${scope.organizationId}:`,
+        inspectorStorageBaseKey(INSPECTOR_STORAGE.state, scope.organizationId),
         { kind: "user", userId: scope.userId },
       ),
       minimizedKey: ownerStorageKey(
-        `stella:inspector-minimized:v1:${scope.organizationId}:`,
+        inspectorStorageBaseKey(
+          INSPECTOR_STORAGE.minimized,
+          scope.organizationId,
+        ),
         { kind: "user", userId: scope.userId },
       ),
       fileTab: world.fileTab,
       mode: presentation,
+      stateVersion: INSPECTOR_STORAGE.state.version,
+      minimizedVersion: INSPECTOR_STORAGE.minimized.version,
     },
   );
 };

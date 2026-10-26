@@ -36,6 +36,10 @@ import {
   type SignupRateLimitIpSource,
 } from "@/api/lib/client-ip-config";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  sealedRequestClientAddress,
+  sealRequestClientAddress,
+} from "@/api/lib/observability/request-context";
 
 /**
  * The header stella sets on every request after resolving the client address,
@@ -72,6 +76,21 @@ export type ClientAddress = { address: string; source: ClientAddressSource };
 
 type ServerLike = {
   requestIP: (request: Request) => { address: string } | null;
+};
+
+/**
+ * The socket peer, read from the server once per request, as a server the
+ * address resolvers can each ask. `null` without a server (in-process calls).
+ */
+export const socketPeerOnce = (
+  request: Request,
+  server: ServerLike | null,
+): ServerLike | null => {
+  if (server === null) {
+    return null;
+  }
+  const peer = server.requestIP(request);
+  return { requestIP: () => peer };
 };
 
 export type TrustedProxies = { blockList: BlockList };
@@ -341,8 +360,10 @@ export const resolveClientAddress = (
   server: ServerLike | null,
   options?: ClientAddressOptions,
 ): ClientAddress | null => {
-  if (options === undefined && resolvedAddresses.has(request)) {
-    return resolvedAddresses.get(request) ?? null;
+  const sealed =
+    options === undefined ? sealedRequestClientAddress() : undefined;
+  if (sealed !== undefined) {
+    return sealed;
   }
   const peer = server?.requestIP(request)?.address ?? null;
   if (!peer) {
@@ -372,10 +393,6 @@ export const resolveClientAddress = (
   );
 };
 
-// The address each request resolved to when it arrived, before
-// {@link sealEdgeHeaders} removed the headers it was read from.
-const resolvedAddresses = new WeakMap<Request, ClientAddress | null>();
-
 /**
  * Records the request's resolved address for later readers and removes the
  * edge headers, so handlers and logs never see the origin secret and later
@@ -385,7 +402,7 @@ export const sealEdgeHeaders = (
   request: Request,
   clientAddress: ClientAddress | null,
 ): void => {
-  resolvedAddresses.set(request, clientAddress);
+  sealRequestClientAddress(clientAddress);
   for (const header of [
     ORIGIN_VERIFY_HEADER,
     env.STELLA_CLIENT_ADDRESS_HEADER,

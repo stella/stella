@@ -42,7 +42,7 @@ const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
  *
  * This is the only supported way to open a store. `AsyncLocalStorage.enterWith`
  * would be the convenient alternative for a lifecycle split across separate
- * callbacks (Elysia's hooks), but it mutates the ambient async context frame
+ * callbacks (request hooks), but it mutates the ambient async context frame
  * without a restore point: the runtime leaves that frame current for callbacks
  * it dispatches afterwards, so a background timer or worker loop that resumes
  * while a request's frame is current adopts that request's store and bills its

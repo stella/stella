@@ -13,6 +13,7 @@ import {
 import { CASE_LAW_MAX_PAGE } from "@/features/case-law/case-law-route-pages.logic";
 import { searchQuestionsParam } from "@/features/case-law/research/search-questions.logic";
 import { optionalUuidSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 
 const optionalBrowseStringSchema = (maxLength: number) =>
@@ -56,7 +57,7 @@ const optionalStrictSchema = v.fallback(
   undefined,
 );
 
-export const searchSchema = v.object({
+export const searchSchema = routeSearchSchema({
   country: optionalBrowseStringSchema(3),
   court: optionalBrowseStringSchema(512),
   from: optionalDateSchema,

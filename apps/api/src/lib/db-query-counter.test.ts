@@ -1,9 +1,12 @@
-import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+import type { BunRequest } from "bun";
+import { afterAll, describe, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createHttpApp } from "@/api/http/app";
+import { setResponseHeaders } from "@/api/http/headers";
+import { routes } from "@/api/http/route";
+import type { Middleware } from "@/api/http/route";
 import {
   currentQueryCount,
   currentRepeatedQueryFingerprints,
@@ -20,6 +23,8 @@ import {
   runWithHttpRequestScope,
   runWithRequestScope,
 } from "@/api/lib/observability/request-scope";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Yield to the microtask queue so two counter contexts interleave their
 // increments; this is what would break a shared (non-ALS) counter.
@@ -155,115 +160,164 @@ const QUERY_WAIT_MS = 3;
 const BACKGROUND_QUERY_WAIT_MS = 2;
 const REQUEST_ROUNDS = 12;
 
-// Integration: replicate the HTTP wiring from server.ts (`wrap` opens the
-// scope around the composed handler, `onAfterHandle` stamps the count) using
-// the real exported helpers. Importing the full `api` is avoided because its
-// module evaluation mounts better-auth (which needs DB/env).
+// Integration: the request scope the pipeline opens around every request, and
+// a stage that stamps the count on the final answer as the completion stage
+// does in local development, served by a real `Bun.serve`.
 //
-// This runs against a real listener, not `app.handle`, because the failure it
-// pins only exists on a real event loop. The counter used to be opened with
-// `AsyncLocalStorage.enterWith` from `onRequest`, which leaves the store on the
-// ambient async context frame: a background loop (a BullMQ worker, a reconciler
-// tick, the SSE keep-alive — the API process runs all three) that resumed while
-// a request's frame was current adopted that request's counter and billed its
-// own queries to it, inflating one endpoint's `x-db-queries` by however many
-// queries it happened to issue. The route-smoke network baseline caught it as a
+// A real listener matters because the failure this pins only exists on a real
+// event loop. The counter used to be opened with `AsyncLocalStorage.enterWith`
+// from a request hook, which leaves the store on the ambient async context
+// frame: a background loop (a BullMQ worker, a reconciler tick, the SSE
+// keep-alive — the API process runs all three) that resumed while a request's
+// frame was current adopted that request's counter and billed its own queries
+// to it, inflating one endpoint's `x-db-queries` by however many queries it
+// happened to issue. The route-smoke network baseline caught it as a
 // per-endpoint budget failure that passed on re-run.
-const buildCountingApp = () =>
-  new Elysia()
-    .wrap(
-      (handleRequest) => (request: Request) =>
-        runWithRequestScope(() => handleRequest(request)),
-    )
-    .onAfterHandle(({ set }) => {
-      const queryCount = currentQueryCount();
-      const transactionCount = currentTransactionCount();
-      if (queryCount !== undefined) {
-        set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
-      }
-      if (transactionCount !== undefined) {
-        set.headers[DB_TRANSACTION_COUNT_HEADER] = String(transactionCount);
-      }
-    })
-    .get("/queries/:count", async ({ params }) => {
-      // Waits on a timer rather than the microtask queue: a query is real I/O,
-      // and only an I/O wait leaves the gap in which the background loop below
-      // used to resume inside this request's async context frame.
-      for (let index = 0; index < Number(params.count); index += 1) {
-        await Bun.sleep(QUERY_WAIT_MS);
-        queryCountLogger.logQuery("SELECT request", []);
-      }
-      await runCountedTransaction(async () => undefined);
-      return "ok";
-    });
+const requestScope: Middleware = async (_ctx, inner) =>
+  await runWithRequestScope(async () => await inner());
+
+const stampQueryCount: Middleware = async (_ctx, inner) => {
+  const response = await inner();
+  const queryCount = currentQueryCount();
+  const transactionCount = currentTransactionCount();
+  return queryCount === undefined && transactionCount === undefined
+    ? response
+    : setResponseHeaders(
+        response,
+        {
+          ...(queryCount === undefined
+            ? {}
+            : { [DB_QUERY_COUNT_HEADER]: String(queryCount) }),
+          ...(transactionCount === undefined
+            ? {}
+            : { [DB_TRANSACTION_COUNT_HEADER]: String(transactionCount) }),
+        },
+        { overwrite: true },
+      );
+};
+
+const server = serveForTest(
+  createHttpApp({
+    middleware: [requestScope, stampQueryCount],
+    routes: routes({
+      "/queries/:count": {
+        GET: {
+          access: "public",
+          config: {},
+          run: async ({ ctx }) => {
+            // Waits on a timer rather than the microtask queue: a query is
+            // real I/O, and only an I/O wait leaves the gap in which the
+            // background loop below used to resume inside this request's
+            // async context frame.
+            for (
+              let index = 0;
+              index < Number(ctx.params["count"]);
+              index += 1
+            ) {
+              // real-time: only a real I/O wait opens that gap.
+              await Bun.sleep(QUERY_WAIT_MS);
+              queryCountLogger.logQuery("SELECT request", []);
+            }
+            await runCountedTransaction(async () => undefined);
+            return "ok";
+          },
+        },
+      },
+    }),
+  }),
+);
+
+afterAll(async () => {
+  await server.stop();
+});
 
 // Queries from work that belongs to no request: started before any request
 // exists and never awaited by one.
-const runBackgroundQueries = (signal: { done: boolean }) => {
+const runBackgroundQueries = async (signal: {
+  done: boolean;
+}): Promise<void> => {
   const loop = async () => {
     while (!signal.done) {
       await Bun.sleep(BACKGROUND_QUERY_WAIT_MS);
       queryCountLogger.logQuery("SELECT background", []);
     }
   };
-  void loop();
+  return loop();
 };
 
 describe("db query counter HTTP header", () => {
   test("integration HTTP requests reject per-row SQL through the server request scope", async () => {
-    const app = new Elysia()
-      .wrap(
-        (handleRequest) => async (request: Request) =>
-          await runWithHttpRequestScope(async () => {
-            const response: unknown = await Promise.resolve(
-              handleRequest(request),
-            );
-            return response instanceof Response
-              ? response
-              : panic("The HTTP framework returned an invalid response");
-          }),
-      )
-      .get("/queries/:count", ({ params }) => {
-        for (let index = 0; index < Number(params.count); index += 1) {
-          queryCountLogger.logQuery("SELECT id FROM matters WHERE id = $1", [
-            index,
-          ]);
-        }
-        return "ok";
+    const httpScope: Middleware = async (_ctx, inner) =>
+      await runWithHttpRequestScope(async () => await inner());
+    const app = createHttpApp({
+      middleware: [httpScope],
+      routes: routes({
+        "/queries/:count": {
+          GET: {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              for (
+                let index = 0;
+                index < Number(ctx.params["count"]);
+                index += 1
+              ) {
+                queryCountLogger.logQuery(
+                  "SELECT id FROM matters WHERE id = $1",
+                  [index],
+                );
+              }
+              return "ok";
+            },
+          },
+        },
+      }),
+    });
+    // The mounted route, called in process: the measured scope fails the
+    // request after it settles, and that rejection is what is asserted.
+    const route = app.serveOptions.routes["/queries/:count"];
+    if (route === undefined) {
+      throw new TypeError("The probe route is not mounted");
+    }
+    const host = Bun.serve({ port: 0, fetch: () => new Response(null) });
+    const request = (count: string) =>
+      asTestRaw<BunRequest>(
+        Object.assign(new Request(`http://localhost/queries/${count}`), {
+          params: { count },
+        }),
+      );
+    try {
+      const single = await route(request("1"), host);
+      expect(single.status).toBe(200);
+      expect(await single.text()).toBe("ok");
+      expect(await rejectionOf(route(request("2"), host))).toMatchObject({
+        cause: expect.any(RepeatedQueryFingerprintError),
       });
-
-    const single = await app.handle(new Request("http://localhost/queries/1"));
-    expect(single.status).toBe(200);
-    expect(await single.text()).toBe("ok");
-    expect(
-      await rejectionOf(app.handle(new Request("http://localhost/queries/2"))),
-    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
+    } finally {
+      await host.stop(true);
+    }
   });
 
   test("a request counts its own queries and no others", async () => {
     const signal = { done: false };
-    runBackgroundQueries(signal);
-    const app = buildCountingApp().listen({ port: 0 });
-    const origin = `http://localhost:${app.server?.port ?? panic("test server bound no port")}`;
+    const background = runBackgroundQueries(signal);
 
     const counts: (string | null)[] = [];
     for (let round = 0; round < REQUEST_ROUNDS; round += 1) {
-      const response = await fetch(`${origin}/queries/4`);
+      const response = await fetch(new URL("/queries/4", server.url));
       counts.push(response.headers.get(DB_QUERY_COUNT_HEADER));
     }
 
     signal.done = true;
-    await app.stop();
+    await background;
 
     expect(counts).toEqual(Array.from({ length: REQUEST_ROUNDS }, () => "4"));
   });
 
   test("concurrent requests get independent counts", async () => {
-    const app = buildCountingApp();
-
     const [three, seven] = await Promise.all([
-      app.handle(new Request("http://localhost/queries/3")),
-      app.handle(new Request("http://localhost/queries/7")),
+      server.fetch("http://localhost/queries/3"),
+      server.fetch("http://localhost/queries/7"),
     ]);
 
     expect(three.headers.get(DB_QUERY_COUNT_HEADER)).toBe("3");

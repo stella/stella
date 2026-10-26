@@ -22,6 +22,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   AUDIT_ACTION,
@@ -242,7 +243,7 @@ const baseContext = (userId: SafeId<"user">) => ({
   promptCachingEnabled: false,
   recordAuditEvent: async () => {},
   request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-  route: "/test/time-entries/suggestions",
+  route: "/v1/time-entries/:workspaceId/suggestions" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, userId),
   scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, userId),
   session: { activeOrganizationId: ids.orgA },

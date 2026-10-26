@@ -1,9 +1,8 @@
-import Elysia from "elysia";
-
 import { env } from "@/api/env";
 import { createAuthMetadataPreflightHeaders } from "@/api/handlers/auth/metadata";
 import metadataHandler from "@/api/handlers/auth/read-authorization-server-metadata";
-import { dropCredentialedCors } from "@/api/handlers/public-cors";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
@@ -11,57 +10,38 @@ import {
 } from "@/api/lib/auth/auth-paths";
 import { isReviewAccountConfigured } from "@/api/lib/auth/review-account";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
-import { setSecurityHeaders } from "@/api/lib/security-headers";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   isSelfhostFirstUserRequired,
   isSelfhostLocalPasswordAuthEnabled,
 } from "@/api/lib/selfhost-auth";
 
-const applyHeaders = ({
-  headers,
-  set,
-}: {
-  headers: Headers;
-  set: { headers: Record<string, string | number | boolean | undefined> };
-}) => {
-  for (const [key, value] of headers) {
+/**
+ * A discovery document's preflight, answered by the route itself so the
+ * credentialed CORS layer never sees it: any origin may read the metadata,
+ * a third-party MCP client's included.
+ */
+const metadataPreflight = defineEndpoint.public({ cors: "own" }, ({ set }) => {
+  for (const [key, value] of createAuthMetadataPreflightHeaders()) {
     set.headers[key] = value;
   }
-};
+  return status(204);
+});
 
-const AUTH_METADATA_DISCOVERY_PATHS: ReadonlySet<string> = new Set([
-  ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-  OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-  OPENID_CONFIGURATION_DISCOVERY_PATH,
-]);
-
-/**
- * The discovery documents are public and read from any origin, but the global
- * CORS layer answers every preflight before routing, for the browser origins
- * the app trusts and with credentials. A third-party MCP client's preflight
- * would get no `Access-Control-Allow-Origin` at all, so it is answered here,
- * ahead of that layer, the same way the protected-resource documents are.
- */
-export const handleAuthMetadataPreflightRequest = (
-  request: Request,
-  set: { headers: Record<string, string | number | boolean | undefined> },
-): Response | undefined => {
-  if (
-    request.method !== "OPTIONS" ||
-    !AUTH_METADATA_DISCOVERY_PATHS.has(new URL(request.url).pathname)
-  ) {
-    return undefined;
-  }
-  dropCredentialedCors(set);
-  return new Response(null, {
-    headers: createAuthMetadataPreflightHeaders(),
-    status: 204,
-  });
-};
-
-export const authMetadataPreflightRoute = new Elysia().onRequest(
-  ({ request, set }) => handleAuthMetadataPreflightRequest(request, set),
-);
+export const authMetadataRoute = routes({
+  [ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH]: {
+    GET: metadataHandler,
+    OPTIONS: metadataPreflight,
+  },
+  [OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH]: {
+    GET: metadataHandler,
+    OPTIONS: metadataPreflight,
+  },
+  [OPENID_CONFIGURATION_DISCOVERY_PATH]: {
+    GET: metadataHandler,
+    OPTIONS: metadataPreflight,
+  },
+});
 
 const getSocialAuthCapabilities = () => ({
   google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
@@ -72,41 +52,7 @@ const getSocialAuthCapabilities = () => ({
   ),
 });
 
-export const authMetadataRoute = new Elysia()
-  .onRequest(({ set }) => {
-    setSecurityHeaders(set);
-  })
-  .options(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
-    applyHeaders({
-      headers: createAuthMetadataPreflightHeaders(),
-      set,
-    });
-    set.status = 204;
-    return "";
-  })
-  .get(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, metadataHandler.handler)
-  .options(OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
-    applyHeaders({
-      headers: createAuthMetadataPreflightHeaders(),
-      set,
-    });
-    set.status = 204;
-    return "";
-  })
-  .get(OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, metadataHandler.handler)
-  .options(OPENID_CONFIGURATION_DISCOVERY_PATH, ({ set }) => {
-    applyHeaders({
-      headers: createAuthMetadataPreflightHeaders(),
-      set,
-    });
-    set.status = 204;
-    return "";
-  })
-  .get(OPENID_CONFIGURATION_DISCOVERY_PATH, metadataHandler.handler);
-
-export const authCapabilitiesRoute = new Elysia({
-  prefix: "/auth",
-}).get("/capabilities", async () => {
+const authCapabilities = defineEndpoint.public({}, async () => {
   const firstUserRequired = await isSelfhostFirstUserRequired();
   const bootstrap = firstUserRequired && !!env.SELFHOST_BOOTSTRAP_TOKEN;
   return {
@@ -124,3 +70,8 @@ export const authCapabilitiesRoute = new Elysia({
     transactionalEmail: isTransactionalEmailConfigured(),
   };
 });
+
+export const authCapabilitiesRoute = routes(
+  { "/capabilities": { GET: authCapabilities } },
+  { prefix: "/auth" },
+);

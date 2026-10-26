@@ -1,5 +1,3 @@
-import Elysia from "elysia";
-import type { Context } from "elysia";
 import { timingSafeEqual } from "node:crypto";
 
 import { sha256Bytes } from "@stll/sha256/bun";
@@ -7,7 +5,10 @@ import { Temporal } from "@stll/time";
 
 import { bindOwnerSyntheticSessionStore } from "@/api/db/root";
 import { env } from "@/api/env";
+import type { HandlerContext } from "@/api/http/context";
+import { routes } from "@/api/http/route";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { getRequestId } from "@/api/lib/observability/request-context";
 import { reserveSyntheticSessionBudget } from "@/api/lib/rate-limit/synthetic-session-budget";
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
@@ -55,7 +56,7 @@ const createSyntheticSessionHandler = ({
   const createSession = async ({
     request,
     status,
-  }: Pick<Context, "request" | "status">) => {
+  }: Pick<HandlerContext, "request" | "status">) => {
     if (keys === undefined) {
       return new Response(null, { status: 404 });
     }
@@ -71,7 +72,7 @@ const createSyntheticSessionHandler = ({
     }
     const session = await mintSession({
       keyLabel,
-      requestId: getRequestId(request),
+      requestId: getRequestId(),
       userAgent: request.headers.get("user-agent"),
     });
     if (session === null) {
@@ -79,22 +80,22 @@ const createSyntheticSessionHandler = ({
     }
     return session;
   };
-  declareAggregateMutation(createSession, {
-    type: "independent",
-    reason:
-      "The dedicated session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
-  });
-  return createSession;
-};
-
-export const createSyntheticRoute = (options: SyntheticRouteOptions) => {
-  const createSession = createSyntheticSessionHandler(options);
-  return new Elysia({ name: "synthetic-session", prefix: "/synthetic" }).post(
-    "/session",
-    createSession,
-    { parse: "none" },
+  // The key travels in a header; the body is never read.
+  return declareAggregateMutation(
+    defineEndpoint.public({ bodyMode: "none" }, createSession),
+    {
+      type: "independent",
+      reason:
+        "The dedicated session store serializes its singleton control row and owns the account, session, and audit writes in one transaction.",
+    },
   );
 };
+
+export const createSyntheticRoute = (options: SyntheticRouteOptions) =>
+  routes(
+    { "/session": { POST: createSyntheticSessionHandler(options) } },
+    { prefix: "/synthetic" },
+  );
 
 const syntheticSessionStore = bindOwnerSyntheticSessionStore(
   createSyntheticSessionStore,
