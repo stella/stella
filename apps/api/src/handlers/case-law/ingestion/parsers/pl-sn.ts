@@ -306,6 +306,17 @@ const runsOfLine = (line: ExtractedLine): PlSnRun[] => {
  * follows. Collapsing letter spacing removes only whitespace, so the count
  * of printed characters still finds the place.
  */
+/** Non-space code points in `text`, the unit `withSuperscripts` counts in. */
+const printedCodePointsIn = (text: string): number => {
+  let count = 0;
+  for (const character of text) {
+    if (!/\s/u.test(character)) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
 const withSuperscripts = (
   runs: readonly PlSnRun[],
   marks: readonly SuperscriptMark[],
@@ -913,12 +924,7 @@ const liftSuperscripts = (
         // extracted glyph may carry several (a ligature reads "fi").
         after: printed
           .filter(({ bbox }) => bbox.x + bbox.width / 2 < x)
-          .reduce(
-            (count, { char }) =>
-              count +
-              [...char].filter((character) => !/\s/u.test(character)).length,
-            0,
-          ),
+          .reduce((count, { char }) => count + printedCodePointsIn(char), 0),
         text: group.map(({ char }) => char).join(""),
       };
     });
