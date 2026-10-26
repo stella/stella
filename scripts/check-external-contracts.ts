@@ -1113,8 +1113,7 @@ type ContractEntryCheckOptions = {
   entry: ExternalContractEntry;
   baseline: RuntimeSnapshotReader | undefined;
   admitted:
-    | ReturnType<typeof readExternalContractPinAllowances>[number]
-    | undefined;
+    ReturnType<typeof readExternalContractPinAllowances>[number] | undefined;
   now: Date;
 };
 

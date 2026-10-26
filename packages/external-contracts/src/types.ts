@@ -3,19 +3,14 @@ export type PinSource =
       readonly type: "manifest";
       readonly file: string;
       readonly section:
-        | "catalog"
-        | "dependencies"
-        | "devDependencies"
-        | "resolutions";
+        "catalog" | "dependencies" | "devDependencies" | "resolutions";
       readonly package: string;
     }
   | { readonly type: "image"; readonly file: string; readonly name: string }
   | { readonly type: "constant"; readonly file: string; readonly name: string };
 
 export type FixtureProvenanceKind =
-  | "recorded"
-  | "synthetic-from-spec"
-  | "redacted-prod-shape";
+  "recorded" | "synthetic-from-spec" | "redacted-prod-shape";
 
 export type FixtureSet = {
   readonly path: string;
@@ -30,9 +25,7 @@ export type FixtureSet = {
     | {
         readonly type: "sidecars";
         readonly format:
-          | "provider-wire"
-          | "provider-request-schemas"
-          | "fixture-provenance";
+          "provider-wire" | "provider-request-schemas" | "fixture-provenance";
       }
     | { readonly type: "authored"; readonly kind: FixtureProvenanceKind };
 } & (

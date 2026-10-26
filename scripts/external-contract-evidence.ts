@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 import {
   existsSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   statSync,
 } from "node:fs";
@@ -14,9 +14,9 @@ import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options";
 import {
+  type Generator,
   GENERATORS,
   matchesGeneratedGlob,
-  type Generator,
 } from "./generated-files";
 import { isGeneratedCandidate } from "./generated-source-identification";
 import { parseSource } from "./parse-memo";
@@ -47,10 +47,7 @@ const localSpecifier = (specifier: string) =>
   specifier.startsWith("@/");
 
 type RuntimeModuleSyntax =
-  | "esm-import"
-  | "dynamic-import"
-  | "require"
-  | "import-equals-require";
+  "esm-import" | "dynamic-import" | "require" | "import-equals-require";
 
 const resolutionModeFor = (
   syntax: RuntimeModuleSyntax,

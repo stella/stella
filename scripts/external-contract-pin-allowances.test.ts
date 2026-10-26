@@ -7,8 +7,8 @@ import { removeWaiver } from "./dated-waiver-probes";
 import { collectWaivers, expiredWaiverFailures } from "./dated-waivers";
 import {
   EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
-  readExternalContractPinAllowances,
   type ExternalContractPinAllowance,
+  readExternalContractPinAllowances,
 } from "./external-contract-pin-allowances";
 
 const allowance = {
