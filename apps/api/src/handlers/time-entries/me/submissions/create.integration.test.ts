@@ -6,12 +6,15 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, isSQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { TimeEntryStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { user as authUser } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   featureEnrolments,
@@ -269,6 +272,86 @@ describe("submitting a week", () => {
     expect(
       await submitFor(ids.userA1, { startDate: start.toString() }),
     ).toMatchObject({ code: 400, response: { code: "invalid_date_range" } });
+  });
+});
+
+// Runs `edit` in the submit's own transaction just before its guarded write,
+// as a concurrent edit committed between the submit's read and its write
+// would look to that write.
+const safeDbEditingBeforeWrite = (
+  actor: SafeId<"user">,
+  edit: (tx: Transaction) => Promise<unknown>,
+) => {
+  const base = createSafeDb(db, [ids.wsA2], ids.orgA, actor);
+  const dialect = new PgDialect();
+  let pending = true;
+  const isSubmitWrite = (query: unknown) =>
+    isSQLWrapper(query) &&
+    /^\s*UPDATE "time_entries"/u.test(dialect.sqlToQuery(query.getSQL()).sql);
+  return asTestRaw<SafeDb>(
+    async (
+      run: (tx: Transaction) => Promise<unknown>,
+      retry?: Parameters<SafeDb>[1],
+    ) =>
+      await base(
+        async (tx) =>
+          await run(
+            new Proxy(tx, {
+              get: (target, property) => {
+                const value: unknown = Reflect.get(target, property, target);
+                if (typeof value !== "function") {
+                  return value;
+                }
+                if (property !== "execute") {
+                  return value.bind(target);
+                }
+                return async (query: unknown) => {
+                  if (pending && isSubmitWrite(query)) {
+                    pending = false;
+                    await edit(target);
+                  }
+                  return await Reflect.apply(value, target, [query]);
+                };
+              },
+            }),
+          ),
+        retry,
+      ),
+  );
+};
+
+describe("a draft edited between the submit's read and its write", () => {
+  test("is refused with its current reason, not submitted", async () => {
+    await db
+      .update(organizationSettings)
+      .set({ timeNarrativeRequired: true })
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    const edited = await seedEntry();
+    const untouched = await seedEntry({ narrative: "Drafted the lease" });
+    const outcome = await submit.handler(
+      asTestRaw<SubmitCtx>({
+        ...context(ids.userA1),
+        safeDb: safeDbEditingBeforeWrite(ids.userA1, async (tx) =>
+          tx
+            .update(timeEntries)
+            .set({ narrative: "   " })
+            .where(eq(timeEntries.id, edited)),
+        ),
+        body: { startDate: DAY, endDate: DAY, approve: false },
+      }),
+    );
+    if (!("results" in outcome)) {
+      throw new Error(`unexpected submit outcome: ${JSON.stringify(outcome)}`);
+    }
+    // The edit happened after the read saw a description.
+    expect(outcome.results.toSorted((a, b) => (a.id < b.id ? -1 : 1))).toEqual(
+      [
+        { id: untouched, status: "submitted" },
+        { id: edited, status: "refused", reason: "narrative_required" },
+      ].toSorted((a, b) => (a.id < b.id ? -1 : 1)),
+    );
+    expect(await statusOf(edited)).toBe("draft");
+    expect(await statusOf(untouched)).toBe("submitted");
   });
 });
 

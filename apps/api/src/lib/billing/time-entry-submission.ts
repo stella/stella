@@ -1,5 +1,18 @@
-import { Result } from "better-result";
-import { and, asc, eq, getColumns, gte, lte, ne, or } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import {
+  and,
+  asc,
+  eq,
+  getColumns,
+  gt,
+  gte,
+  inArray,
+  lte,
+  ne,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
@@ -14,7 +27,10 @@ import { getTimePolicyViolation, lockTimePolicy } from "@/api/lib/billing-time";
 import type { TimePolicy } from "@/api/lib/billing-time";
 import { recordBillingCapCrossingsForMatters } from "@/api/lib/billing/arrangements";
 import { TIME_ENTRY_REVIEW_TRANSITIONS } from "@/api/lib/billing/time-entry-approval";
-import { canApproveAssignedTimeEntry } from "@/api/lib/billing/time-entry-authorization";
+import {
+  canApproveAssignedTimeEntry,
+  canApproveTimeEntries,
+} from "@/api/lib/billing/time-entry-authorization";
 import { timeEntryIsRunning } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -159,21 +175,74 @@ const recordStatusMoves =
     );
   };
 
-// Moves the drafts in two status-guarded batches; returns the ids that moved.
+type SubmitScope = {
+  userId: SafeId<"user">;
+  memberRole: AuthorizedMemberRole;
+  startDate: string;
+  endDate: string;
+  policy: TimePolicy;
+  now: Date;
+};
+
+/**
+ * Every submit precondition, as the write's own condition: the entry is still
+ * the timekeeper's, in the dates, not running, priced, described when the
+ * policy asks for it, not in a locked month, not in the future in its zone,
+ * and in a live matter (or internal). `timeSubmitRefusal` names the reason for
+ * a row that fails it; the two must list the same rules.
+ */
+const submitGuard = ({
+  userId,
+  startDate,
+  endDate,
+  policy,
+  now,
+}: Omit<SubmitScope, "memberRole">) =>
+  and(
+    eq(timeEntries.userId, userId),
+    gte(timeEntries.dateWorked, startDate),
+    lte(timeEntries.dateWorked, endDate),
+    sql`NOT ${timeEntryIsRunning()}`,
+    not(
+      and(
+        eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+        eq(timeEntries.billable, true),
+        eq(timeEntries.currency, UNPRICED_TIME_ENTRY_CURRENCY),
+      ) ?? panic("The unpriced condition is never empty"),
+    ),
+    policy.timeNarrativeRequired
+      ? sql`${timeEntries.narrative} ~ '[^[:space:]]'`
+      : undefined,
+    policy.timeLockedThroughMonth === null
+      ? undefined
+      : gt(timeEntries.dateWorked, policy.timeLockedThroughMonth),
+    sql`${timeEntries.dateWorked} <= (${now.toISOString()}::timestamptz AT TIME ZONE ${timeEntries.timezoneId})::date`,
+    // Internal work has no matter, so only a matter being deleted excludes.
+    sql`NOT EXISTS (SELECT 1 FROM ${workspaces} WHERE ${workspaces.id} = ${timeEntries.workspaceId} AND ${workspaces.status} = 'deleting')`,
+  ) ?? panic("The submit guard is never empty");
+
+// Approving in the same step also needs the approver to be the timekeeper,
+// unless they approve everyone's time.
+const approveGuard = (scope: SubmitScope) =>
+  canApproveTimeEntries(scope.memberRole)
+    ? submitGuard(scope)
+    : (and(submitGuard(scope), eq(timeEntries.approverUserId, scope.userId)) ??
+      panic("The approve guard is never empty"));
+
+// Moves the drafts in two guarded batches; returns the ids that moved.
 const writeMoves = async (
   tx: Transaction,
   {
-    userId,
+    scope,
     moves,
-    now,
     recordAuditEvent,
   }: {
-    userId: SafeId<"user">;
+    scope: SubmitScope;
     moves: readonly Moved[];
-    now: Date;
     recordAuditEvent: AuditRecorder;
   },
 ) => {
+  const { userId, now } = scope;
   const toSubmit = moves.flatMap(({ entry, to }) =>
     to === "submitted" ? [entry] : [],
   );
@@ -190,6 +259,7 @@ const writeMoves = async (
           options: {
             from: [BILLING_STATUS.DRAFT],
             to: TIME_ENTRY_REVIEW_TRANSITIONS.submit.to,
+            guard: submitGuard(scope),
             set: { updatedAt: now },
           },
           recordTransitionAuditEvent: recordStatusMoves(
@@ -207,6 +277,7 @@ const writeMoves = async (
           options: {
             from: [BILLING_STATUS.DRAFT],
             to: TIME_ENTRY_REVIEW_TRANSITIONS.approve.to,
+            guard: approveGuard(scope),
             set: {
               approvedByUserId: userId,
               approvedAt: now,
@@ -234,6 +305,56 @@ const writeMoves = async (
     recordAuditEvent,
   });
   return new Set([...submitted, ...approved].map(({ id }) => id));
+};
+
+/**
+ * Why each draft the guarded write left in place did not move, read again
+ * after the write: it changed since the first read. Never silently skipped.
+ */
+const refusalsOfUnmoved = async (
+  tx: Transaction,
+  {
+    ids,
+    organizationId,
+    policy,
+    now,
+  }: {
+    ids: readonly SafeId<"timeEntry">[];
+    organizationId: SafeId<"organization">;
+    policy: TimePolicy;
+    now: Date;
+  },
+): Promise<TimeSubmitOutcome[]> => {
+  if (ids.length === 0) {
+    return [];
+  }
+  const rows = await tx
+    .select({ ...getColumns(timeEntries), running: timeEntryIsRunning() })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.organizationId, organizationId),
+        inArray(timeEntries.id, [...ids]),
+      ),
+    )
+    .limit(ids.length);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const reasonFor = (entry: SubmissionEntry | undefined): TimeSubmitRefusal => {
+    if (entry === undefined) {
+      return "not_found";
+    }
+    if (entry.status !== BILLING_STATUS.DRAFT) {
+      return "wrong_status";
+    }
+    // Still a draft: whatever it now fails, or a change the read cannot name
+    // (it moved out of the dates or to another approver).
+    return timeSubmitRefusal({ entry, policy, now }) ?? "invalid_entry";
+  };
+  return ids.map((id) => ({
+    id,
+    status: "refused",
+    reason: reasonFor(byId.get(id)),
+  }));
 };
 
 /**
@@ -291,16 +412,23 @@ export const submitTimeEntries = async ({
       moves.push({ entry, to });
     }
     const moved = await writeMoves(tx, {
-      userId,
+      scope: { userId, memberRole, startDate, endDate, policy, now },
       moves,
-      now,
       recordAuditEvent,
     });
-    // An entry that stopped being a draft since the read is left out.
+    const unmoved = await refusalsOfUnmoved(tx, {
+      ids: moves.flatMap(({ entry }) =>
+        moved.has(entry.id) ? [] : [entry.id],
+      ),
+      organizationId,
+      policy,
+      now,
+    });
     const results: TimeSubmitOutcome[] = [
       ...moves.flatMap(({ entry, to }) =>
         moved.has(entry.id) ? [{ id: entry.id, status: to }] : [],
       ),
+      ...unmoved,
       ...refused,
     ];
     return Result.ok({ results });

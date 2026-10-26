@@ -517,6 +517,8 @@ export const parseTimeApprovalBatch = (input: unknown) => {
 
 /** Why the API refuses to submit one draft for review. */
 export const TIME_SUBMIT_REFUSALS = [
+  "not_found",
+  "wrong_status",
   "running_timer",
   "unpriced",
   "narrative_required",

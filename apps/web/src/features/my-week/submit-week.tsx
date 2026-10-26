@@ -11,6 +11,8 @@ import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 export const SUBMIT_REFUSAL_KEYS = {
+  not_found: "billing.approval.refusals.notFound",
+  wrong_status: "billing.approval.refusals.wrongStatus",
   running_timer: "timesheets.week.refusals.runningTimer",
   unpriced: "timesheets.week.refusals.unpriced",
   narrative_required: "timesheets.week.refusals.narrativeRequired",

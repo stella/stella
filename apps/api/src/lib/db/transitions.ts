@@ -1088,6 +1088,11 @@ type LifecycleUpdateArgs = {
   set: Readonly<Record<string, unknown>> | undefined;
   scope?: TransitionScopeOptions;
   fence: { key: string | undefined; value: unknown; nextValue?: unknown };
+  /**
+   * Further conditions every moved row must meet at write time, over the
+   * table's own columns. A row that no longer meets them does not move.
+   */
+  guard?: SQL | undefined;
   recordTransitionAuditEvent: (
     rows: readonly Record<string, unknown>[],
   ) => Promise<void>;
@@ -1104,6 +1109,7 @@ const lifecycleUpdate = async ({
   set = {},
   scope,
   fence: { key: fenceKey, value: expectedFence, nextValue: nextFence },
+  guard,
   recordTransitionAuditEvent,
 }: LifecycleUpdateArgs) => {
   if (
@@ -1193,6 +1199,7 @@ const lifecycleUpdate = async ({
       ${scoped}
       ${sql.join(sources, sql` `)}
       ${fence === undefined ? sql`` : sql`AND ${fence} IS NOT DISTINCT FROM ${sql.param(expectedFence, fence)}`}
+      ${guard === undefined ? sql`` : sql`AND (${guard})`}
     RETURNING ${identity.column} AS "id"${sql.join(returned, sql``)}
   `);
   const rows = returnedTransitionRows(executed);
@@ -1216,6 +1223,7 @@ type StatusUpdateArgs = Pick<
     set?: Readonly<Record<string, unknown>>;
     fence?: unknown;
     nextFence?: unknown;
+    guard?: SQL;
   };
 };
 
@@ -1251,6 +1259,7 @@ const statusUpdate = async ({
       value: options.fence,
       nextValue: options.nextFence,
     },
+    guard: options.guard,
     recordTransitionAuditEvent,
   });
 
@@ -1321,6 +1330,8 @@ type TransitionBatchArgs<
   ids: readonly GetColumnData<NoInfer<TTable>["_"]["columns"][NoInfer<TKey>]>[];
   options: Move<NoInfer<TEdges>> &
     Fence<NoInfer<TTable>, NoInfer<TOptions>> & {
+      /** Write-time conditions a row must still meet to move; see `guard`. */
+      guard?: SQL;
       set?: Omit<
         PgUpdateSetSource<NoInfer<TTable>>,
         | NoInfer<TKey>
