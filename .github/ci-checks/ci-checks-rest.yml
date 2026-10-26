@@ -672,6 +672,22 @@ checks:
     # doc fails here. Regenerate: `bun scripts/design-tokens-doc.ts --write`.
     run: bun scripts/design-tokens-doc.ts --check
 
+  - name: Icon module imports
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    id: static_check_126
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Icon module imports')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_126 != 'true') }}
+    timeout-minutes: 2
+    # Every lucide-react import goes through packages/ui/src/icons.ts, whose
+    # re-export list follows what the apps and packages import from it. A
+    # direct import or a re-export nothing imports fails here.
+    # Rewrite: `bun scripts/codemod-icons.ts`.
+    run: |
+      bun test scripts/codemod-icons.test.ts
+      bun scripts/codemod-icons.ts --check
+
   - name: Suppression waiver ledger
     env:
       CI_CHECK_KIND: STATIC
