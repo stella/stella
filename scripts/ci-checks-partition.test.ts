@@ -45,6 +45,7 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
       const result = { ...withoutStaticReuseCondition(step) };
       const rawEnv = step["env"];
       if (
+        step["name"] !== "Record autofix drift partition receipt" &&
         typeof rawEnv === "object" &&
         rawEnv !== null &&
         !Array.isArray(rawEnv)
@@ -2753,8 +2754,16 @@ test("a failed planned safety guard prevents installation and every post-install
       ({ name }) => name === "Install dependencies",
     );
     for (const step of steps.slice(installIndex + 1)) {
+      if (
+        step.name === "Record autofix drift partition receipt" ||
+        step.name === "Upload autofix drift partition receipt"
+      ) {
+        continue;
+      }
       expect(results[step.name], step.name).toBe("skipped");
     }
+    expect(results["Record autofix drift partition receipt"]).toBe("success");
+    expect(results["Upload autofix drift partition receipt"]).toBe("success");
   }
 });
 
@@ -2927,6 +2936,18 @@ test("continued guard conditions preserve every previously runnable plan outcome
                 cancelled: false,
               });
               for (const step of steps.slice(checkoutIndex + 1)) {
+                if (
+                  step.name === "Record autofix drift partition receipt" ||
+                  step.name === "Upload autofix drift partition receipt"
+                ) {
+                  expect(
+                    evaluateUnavailable(
+                      v.parse(v.looseObject({ if: v.string() }), step).if,
+                    ),
+                    `${id}: checkout ${checkoutOutcome}: ${step.name}`,
+                  ).toBe(true);
+                  continue;
+                }
                 const condition = v.parse(
                   v.looseObject({ if: v.string() }),
                   step,
@@ -2951,6 +2972,18 @@ test("continued guard conditions preserve every previously runnable plan outcome
               }
               outcomes[guardId] = { outcome: "failure" };
               for (const step of steps.slice(installIndex + 1)) {
+                if (
+                  step.name === "Record autofix drift partition receipt" ||
+                  step.name === "Upload autofix drift partition receipt"
+                ) {
+                  expect(
+                    evaluate(
+                      v.parse(v.looseObject({ if: v.string() }), step).if,
+                    ),
+                    `${guard}: ${step.name}`,
+                  ).toBe(true);
+                  continue;
+                }
                 const condition = v.parse(
                   v.looseObject({ if: v.string() }),
                   step,

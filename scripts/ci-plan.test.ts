@@ -1272,6 +1272,16 @@ test("the result gate evaluates every job in the workflow", () => {
     for (const gated of failedOn) {
       expect(resultJob.needs, `${job} runs on ${gated}`).toContain(gated);
     }
+    if (job === PR_AUTOFIX_DISPATCH_JOB) {
+      expect(jobIf(ciJobs[job]), job).toContain("always()");
+      expect(jobIf(ciJobs[job]), job).toContain(
+        "needs.ci-checks-rest.result == 'failure'",
+      );
+      expect(jobIf(ciJobs[job]), job).toContain(
+        "github.event.pull_request.head.repo.full_name == github.repository",
+      );
+      continue;
+    }
     expect(jobIf(ciJobs[job]), job).not.toContain("always()");
   }
   expect(reportOnlyJobs).toEqual([]);

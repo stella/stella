@@ -33,6 +33,11 @@ export const STATIC_RECEIPT_STEP_NAMES = [
   "Record static check receipts",
   "Publish static check receipts",
 ] as const;
+const CHECK_INFRASTRUCTURE_STEP_NAMES = [
+  ...STATIC_RECEIPT_STEP_NAMES,
+  "Record autofix drift partition receipt",
+  "Upload autofix drift partition receipt",
+] as const;
 
 class StaticCheckError extends Error {
   override name = "StaticCheckError";
@@ -75,7 +80,7 @@ export const classifiedChecks = (workflow: unknown, job: string) => {
   return steps.filter((step) => {
     if (
       isWorkflowBarrier(step) ||
-      STATIC_RECEIPT_STEP_NAMES.some((name) => name === step["name"])
+      CHECK_INFRASTRUCTURE_STEP_NAMES.some((name) => name === step["name"])
     ) {
       return false;
     }

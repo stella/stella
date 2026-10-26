@@ -193,6 +193,8 @@ const defaultPlan = () => ({
 
 const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "api-test-durations": { hash: "", key: "" },
+  check_pool: { fixable: "false" },
+  code_quality: { fixable: "false" },
   "api-tests": {
     api_test_files: "[]",
     api_test_shards: "4",
@@ -271,6 +273,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
 
 const NEEDS = [
   "ci-plan",
+  "ci-checks-rest",
   "ci-tests",
   "e2e-production-shard",
   "e2e-vite-canary",
@@ -331,13 +334,21 @@ export const ciExpressionContext = ({
         "api-deps",
         "assert-cleanup",
         "canary",
+        "capability_catalog_guard",
+        "cli_registry_guard",
         "cleanup",
         "image",
         "install",
         "isolation",
+        "job-classification",
+        "mcp_app_outputs_guard",
         "network",
         "protocol",
         "pull",
+        "route_tree_guard",
+        "tauri_alignment",
+        "typecheck_coverage",
+        "visual_sandbox_guard",
       ].map((id) => [id, { outputs: {}, outcome: "success" }]),
     ),
   };
@@ -355,10 +366,12 @@ export const ciExpressionContext = ({
         pull_request: {
           draft: false,
           labels: [],
+          user: { login: "contributor" },
           head: { repo: { full_name: REPOSITORY } },
         },
       },
       repository: REPOSITORY,
+      actor: "contributor",
     },
     inputs: {
       heavy_only: heavyOnly,

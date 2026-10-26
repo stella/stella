@@ -18,6 +18,7 @@
     "Changeset packages match changed files": ["**"],
     "Validate AI skills": ["**"],
     "Standalone lockfile guard": ["**"],
+    "Record autofix drift partition receipt": ["**"],
     "Standalone negated shell statement guard": ["**"],
     "Tauri package alignment": ["@stll/desktop"],
     "Tauri counterpart autofix tests": ["@stll/desktop"],

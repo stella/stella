@@ -103,7 +103,9 @@ describe("CI drift checks that request autofix", () => {
   test("cover formatting, lint and every autofix-owned generator", () => {
     expectListed(
       stepsRunning(
-        (line) => line.includes("turbo run format") && line.includes("--check"),
+        (line) =>
+          line === "bun fmt --check" ||
+          (line.includes("turbo run format") && line.includes("--check")),
       ),
       "format check",
     );

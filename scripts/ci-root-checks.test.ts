@@ -202,11 +202,11 @@ test("steps whose success or outputs later steps consume cannot be deselected", 
     "utf-8",
   );
   const job = "ci-checks-rest";
-  const name = "Standalone lockfile guard";
-  const id = "id: standalone_lockfiles\n        if: ${{ !cancelled()";
+  const name = "Tauri package alignment";
+  const id = "id: tauri_alignment\n        if: ${{ !cancelled()";
   expect(source).toContain(id);
   const broken = structuredClone(ROOT_CHECK_INPUTS);
-  broken[job][name] = ["**/bun.lock"];
+  broken[job][name] = ["@stll/unrelated"];
   expect(() =>
     validateRootCheckCensus(
       source.replace(id, () => `${id} && ${rootCheckGate({ job, name })}`),
