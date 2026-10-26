@@ -44,7 +44,7 @@ import {
 } from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { retainOutlinePageNumbers } from "@/lib/folio-outline-items.logic";
+import { retainOutlinePageNumbers } from "@/components/docx/folio-outline-items.logic";
 
 const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
   const t = useTranslations();
