@@ -7,9 +7,12 @@ import path from "node:path";
 import { generateBunToolchain } from "./generate-bun-toolchain";
 import { type Generator, GENERATORS } from "./generated-files";
 import {
+  affectedGeneratorIds,
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
+  generatorInputCensus,
   runGeneratorChecks,
+  undeclaredInputFailure,
 } from "./generated-files-guard";
 import { type Context, evaluate } from "./github-expression";
 import { workflowJobSteps } from "./workflow-steps";
@@ -32,6 +35,62 @@ const checkedGenerator = (id: string) => {
 class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;
 }> {}
+
+test("selects direct, output, and transitive changes while unrelated files select none", () => {
+  const direct = affectedGeneratorIds(GENERATORS, [
+    "apps/web/src/components/example.tsx",
+  ]);
+  expect(direct.has("tailwind-class-cache")).toBe(true);
+  const output = affectedGeneratorIds(GENERATORS, [
+    "scripts/bun-toolchain.gen.json",
+  ]);
+  expect(output.has("bun-toolchain")).toBe(true);
+  const transitive = affectedGeneratorIds(GENERATORS, [
+    "apps/api/src/mcp/example.ts",
+  ]);
+  expect(transitive.has("cli-registry")).toBe(true);
+  expect(
+    affectedGeneratorIds(GENERATORS, ["docs/changelog/example.md"]).size,
+  ).toBe(0);
+  expect(affectedGeneratorIds(GENERATORS, null).size).toBe(GENERATORS.length);
+});
+
+test("a glob that matches nothing leaves every family unaffected", () => {
+  const fixture = [
+    { ...generator("bun-toolchain"), inputs: ["missing/**/*.ts"] },
+  ] satisfies Generator[];
+  expect(affectedGeneratorIds(fixture, ["docs/other.md"])).toEqual(new Set());
+});
+
+test("the census rejects a removed Tailwind closure module", () => {
+  const tailwind = generator("tailwind-class-cache");
+  const mutated = {
+    ...tailwind,
+    inputs: tailwind.inputs.filter(
+      (input) => input !== "scripts/generate-tailwind-classes.ts",
+    ),
+  };
+  expect(generatorInputCensus([mutated])).toContain(
+    "tailwind-class-cache: undeclared import scripts/generate-tailwind-classes.ts",
+  );
+});
+
+test("full runs reject diffs from families unchanged since HEAD~1", () => {
+  expect(
+    undeclaredInputFailure(
+      generator("bun-toolchain"),
+      ["docs/changelog/x.md"],
+      ["scripts/bun-toolchain.gen.json"],
+    ),
+  ).toContain("bun-toolchain");
+  expect(
+    undeclaredInputFailure(
+      generator("bun-toolchain"),
+      ["package.json"],
+      ["scripts/bun-toolchain.gen.json"],
+    ),
+  ).toBeUndefined();
+});
 
 test("runs every manifest check exactly once and continues after failed and rejected checks", async () => {
   const visited: string[] = [];
@@ -278,6 +337,7 @@ test("rejects delegated checks that no other CI step runs", () => {
 // owning job runs its `checkedBy` step.
 const DELEGABLE = ["scan-engine-wasm", "api-typecheck-projects"] as const;
 
+// timeout: exhaustively evaluates every Boolean CI context combination.
 test("Guard B delegates each check exactly in runs whose owning job runs it", () => {
   const step = namedJobStep(GUARD_JOB, "Generated files manifest guard");
   const env = step?.["env"];
@@ -344,4 +404,4 @@ test("Guard B delegates each check exactly in runs whose owning job runs it", ()
       id,
     ).toBe(true);
   }
-});
+}, 10_000);

@@ -47,6 +47,14 @@ export type Generator = {
 } & GeneratorCheck &
   ({ outputKind: "committed" } | { outputKind: "derived" });
 
+/** Inputs shared by every Bun-backed generator family. */
+export const SHARED_GENERATOR_INPUTS = ["bun.lock", "package.json"] as const;
+
+export const effectiveGeneratorInputs = (generator: Generator) => [
+  ...SHARED_GENERATOR_INPUTS,
+  ...generator.inputs,
+];
+
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
   "packages/ai-catalog/package.json",
@@ -390,6 +398,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/route-types.ts",
       "packages/cli/src/generated/registry-snapshot.json",
       "packages/cli/src/generated/mcp-contract.ts",
+      "packages/scripts/src/prepare-cli-runtime.ts",
       "package.json",
       "bunfig.toml",
       "bun.lock",
@@ -407,6 +416,7 @@ const GENERATOR_DECLARATIONS = [
     outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
       "apps/api/scripts/generate-mcp-app-contracts.ts",
+      "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
@@ -476,6 +486,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
+      "scripts/check-mcp-generated-tracking.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1235,8 +1246,8 @@ export const generatorsForFiles = (files: readonly string[]) => {
     GENERATORS.filter(
       (generator) =>
         generator.autofix &&
-        [...generator.inputs, ...generator.outputs].some((glob) =>
-          files.some((file) => matchesGeneratedGlob(glob, file)),
+        [...effectiveGeneratorInputs(generator), ...generator.outputs].some(
+          (glob) => files.some((file) => matchesGeneratedGlob(glob, file)),
         ),
     ).map((generator) => generator.id),
   );

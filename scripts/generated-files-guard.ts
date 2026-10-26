@@ -1,7 +1,11 @@
 import { panic, Result } from "better-result";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { buildImportGraph } from "./api-test-impact";
 import {
+  effectiveGeneratorInputs,
   type Generator,
   GENERATORS,
   GUARD_A_EXCLUSIONS,
@@ -202,8 +206,211 @@ const checkManifest = async () => {
     }
   }
   await checkRouteGeneratorVersion();
+  const censusFailures = generatorInputCensus(GENERATORS);
+  if (censusFailures.length > 0) {
+    panic(`Generator input census failed:\n${censusFailures.join("\n")}`);
+  }
   console.log(`Manifest: ${GENERATORS.length} generator families`);
 };
+
+const packageScript = (directory: string, name: string): string => {
+  const manifest: unknown = JSON.parse(
+    readFileSync(path.join(ROOT.pathname, directory, "package.json"), "utf-8"),
+  );
+  const scripts = isRecord(manifest) ? manifest["scripts"] : undefined;
+  const command = isRecord(scripts) ? scripts[name] : undefined;
+  if (typeof command !== "string") {
+    panic(`Cannot resolve package script ${directory}:${name}`);
+  }
+  return command;
+};
+
+const commandModules = (command: readonly string[], base = "."): string[] => {
+  const joined = command.join(" ");
+  const cwdMatch = /\bbun\s+--cwd(?:=|\s+)([^\s]+)\s+(?:run\s+)?([^\s;&|]+)/gu;
+  const rootRunMatch = /\bbun\s+run\s+([^\s;&|]+)/gu;
+  const fileMatch =
+    /\bbun\s+(?!run\b|--cwd\b)(?:--[^\s]+\s+)*([^\s;&|]+\.[cm]?[jt]sx?)/gu;
+  const modules: string[] = [];
+  const cwdRanges: (readonly [number, number])[] = [];
+  const cwdAt = (index: number) => {
+    let directory = base;
+    for (const match of joined
+      .slice(0, index)
+      .matchAll(/(?:^|[;&|]\s*)cd\s+([^\s;&|]+)/gu)) {
+      directory = path.posix.normalize(
+        path.posix.join(directory, match[1] ?? ""),
+      );
+    }
+    return directory;
+  };
+  for (const match of joined.matchAll(cwdMatch)) {
+    cwdRanges.push([match.index, match.index + match[0].length]);
+    const directory = path.posix.normalize(
+      path.posix.join(
+        cwdAt(match.index),
+        match[1] ?? panic("Missing command cwd"),
+      ),
+    );
+    const target = match[2] ?? panic("Missing cwd command target");
+    if (/\.[cm]?[jt]sx?$/u.test(target)) {
+      modules.push(path.posix.join(directory, target));
+    } else {
+      modules.push(
+        ...commandModules([packageScript(directory, target)], directory),
+      );
+    }
+  }
+  for (const match of joined.matchAll(rootRunMatch)) {
+    if (
+      cwdRanges.some(
+        ([start, end]) => match.index >= start && match.index < end,
+      )
+    ) {
+      continue;
+    }
+    const name = match[1] ?? panic("Missing root script name");
+    if (/\.[cm]?[jt]sx?$/u.test(name)) {
+      modules.push(
+        path.posix.normalize(path.posix.join(cwdAt(match.index), name)),
+      );
+    } else {
+      modules.push(...commandModules([packageScript(".", name)]));
+    }
+  }
+  for (const match of joined.matchAll(fileMatch)) {
+    if (
+      cwdRanges.some(
+        ([start, end]) => match.index >= start && match.index < end,
+      )
+    ) {
+      continue;
+    }
+    const file = match[1];
+    if (file !== undefined && !file.startsWith("-")) {
+      modules.push(
+        path.posix.normalize(path.posix.join(cwdAt(match.index), file)),
+      );
+    }
+  }
+  return [...new Set(modules)];
+};
+
+/** Static proof that every local module capable of influencing a family is declared. */
+export const generatorInputCensus = (
+  generators: readonly Generator[],
+  root = ROOT.pathname,
+): string[] => {
+  const failures: string[] = [];
+  for (const generator of generators) {
+    const starts = [
+      ...new Set([
+        ...commandModules(generator.write),
+        ...(generator.check === null ? [] : commandModules(generator.check)),
+      ]),
+    ];
+    const graph = buildImportGraph(root, starts);
+    const closure = new Set(
+      starts.flatMap((start) => [...graph.closure(start)]),
+    );
+    const inputs = effectiveGeneratorInputs(generator);
+    for (const file of closure) {
+      if (!inputs.some((glob) => matchesGeneratedGlob(glob, file))) {
+        failures.push(`${generator.id}: undeclared import ${file}`);
+      }
+    }
+    // Readers and scanners are safe only when their own source, and therefore
+    // changes to the declarations of what they read, participates in the digest.
+    for (const file of [...graph.readers, ...graph.scanners]) {
+      if (
+        closure.has(file) &&
+        !inputs.some((glob) => matchesGeneratedGlob(glob, file))
+      ) {
+        failures.push(
+          `${generator.id}: reader or scanner is undeclared: ${file}`,
+        );
+      }
+    }
+  }
+  return [...new Set(failures)].toSorted();
+};
+
+export const affectedGeneratorIds = (
+  generators: readonly Generator[],
+  changedFiles: readonly string[] | null,
+) => {
+  if (changedFiles === null) {
+    return new Set(generators.map(({ id }) => id));
+  }
+  const affected = new Set(
+    generators
+      .filter((generator) =>
+        [...effectiveGeneratorInputs(generator), ...generator.outputs].some(
+          (glob) =>
+            changedFiles.some((file) => matchesGeneratedGlob(glob, file)),
+        ),
+      )
+      .map(({ id }) => id),
+  );
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    for (const generator of generators) {
+      if (
+        !affected.has(generator.id) &&
+        generator.after.some((id) => affected.has(id))
+      ) {
+        affected.add(generator.id);
+        expanded = true;
+      }
+    }
+  }
+  return affected;
+};
+
+const comparisonBase = (): string | undefined => {
+  const requested = process.env["BASE_SHA"]?.trim();
+  if (requested) {
+    const result = Bun.spawnSync(
+      ["git", "cat-file", "-e", `${requested}^{commit}`],
+      { cwd: ROOT.pathname },
+    );
+    return result.exitCode === 0 ? requested : undefined;
+  }
+  const baseRef = process.env["GITHUB_BASE_REF"]?.trim();
+  if (!baseRef) {
+    return undefined;
+  }
+  const result = Bun.spawnSync(
+    ["git", "merge-base", "HEAD", `origin/${baseRef}`],
+    { cwd: ROOT.pathname, stdout: "pipe", stderr: "ignore" },
+  );
+  return result.exitCode === 0 ? decode(result.stdout).trim() : undefined;
+};
+
+const changedSince = (base: string) =>
+  splitPaths(git(["diff", "--name-only", "-z", `${base}...HEAD`]));
+
+export const undeclaredInputFailure = (
+  generator: Generator,
+  changedFromPreviousHead: readonly string[],
+  producedChanges: readonly string[],
+): string | undefined => {
+  const declared = [
+    ...effectiveGeneratorInputs(generator),
+    ...generator.outputs,
+  ];
+  const declaredChanged = changedFromPreviousHead.some((file) =>
+    declared.some((glob) => matchesGeneratedGlob(glob, file)),
+  );
+  if (declaredChanged || producedChanges.length === 0) {
+    return undefined;
+  }
+  return `${generator.id}: generated a diff although none of its files changed since HEAD~1; an input is undeclared`;
+};
+
+const worktreeChanges = () =>
+  new Set(splitPaths(git(["diff", "--name-only", "-z", "HEAD"])));
 
 // These commands only compare committed outputs or write private temporary
 // directories. Changed/new commands, compiler/AST guards and WASM builds stay
@@ -365,9 +572,49 @@ export const delegatedGeneratorIds = (value: string | undefined) => {
 
 const guardB = async () => {
   const delegated = delegatedGeneratorIds(process.env[DELEGATED_CHECKS_ENV]);
+  const base = comparisonBase();
+  const changed = base === undefined ? null : changedSince(base);
+  const affected = affectedGeneratorIds(GENERATORS, changed);
+  const shortBase = base?.slice(0, 7);
+  const previousChanges =
+    base === undefined
+      ? (() => {
+          const exists = Bun.spawnSync(
+            ["git", "rev-parse", "--verify", "HEAD~1"],
+            { cwd: ROOT.pathname, stdout: "ignore", stderr: "ignore" },
+          );
+          return exists.exitCode === 0 ? changedSince("HEAD~1") : [];
+        })()
+      : [];
+  const undeclaredFailures: string[] = [];
+  for (const generator of orderGenerators(GENERATORS)) {
+    console.log(
+      affected.has(generator.id)
+        ? `${generator.id}: checked`
+        : `${generator.id}: unaffected (no input or output changed since ${String(shortBase)})`,
+    );
+  }
   const failures = await runGeneratorChecks(GENERATORS, async (generator) => {
+    if (!affected.has(generator.id)) {
+      return 0;
+    }
     if (!delegated.has(generator.id)) {
-      return checkGenerator(generator);
+      const before = worktreeChanges();
+      const result = await checkGenerator(generator);
+      if (base === undefined) {
+        const produced = [...worktreeChanges()].filter(
+          (file) => !before.has(file),
+        );
+        const failure = undeclaredInputFailure(
+          generator,
+          previousChanges,
+          produced,
+        );
+        if (failure !== undefined) {
+          undeclaredFailures.push(failure);
+        }
+      }
+      return result;
     }
     console.log(
       `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
@@ -378,6 +625,9 @@ const guardB = async () => {
     panic(
       `Generator checks failed:\n${failures.map(({ id, failure }) => `${id}: ${failure}`).join("\n")}`,
     );
+  }
+  if (undeclaredFailures.length > 0) {
+    panic(`Undeclared generator inputs:\n${undeclaredFailures.join("\n")}`);
   }
 };
 
