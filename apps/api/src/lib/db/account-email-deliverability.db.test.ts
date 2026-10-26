@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -92,6 +93,35 @@ describe("account email deliverability", () => {
       .where(eq(user.id, account.userId));
     expect(
       await readAccountEmailUndeliverable(rootDb, changed),
+    ).toBeUndefined();
+  });
+
+  test("the database refuses a partial or unknown refusal state", async () => {
+    const account = await newAccount();
+    for (const state of [
+      { emailUndeliverableAddress: account.email, emailUndeliverableAt: at },
+      {
+        emailUndeliverableAddress: account.email,
+        emailUndeliverableReason: "hard_bounce",
+      },
+      { emailUndeliverableReason: "suppressed", emailUndeliverableAt: at },
+      {
+        emailUndeliverableAddress: account.email,
+        emailUndeliverableReason: "bounced",
+        emailUndeliverableAt: at,
+      },
+    ]) {
+      const written = await Result.tryPromise(
+        async () =>
+          await rootDb
+            .update(user)
+            .set(state)
+            .where(eq(user.id, account.userId)),
+      );
+      expect(written.isErr()).toBe(true);
+    }
+    expect(
+      await readAccountEmailUndeliverable(rootDb, account.email),
     ).toBeUndefined();
   });
 

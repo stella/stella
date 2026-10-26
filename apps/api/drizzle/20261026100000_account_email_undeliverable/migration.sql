@@ -20,7 +20,7 @@ ALTER TABLE "user"
   ADD CONSTRAINT "user_email_undeliverable_check"
     CHECK (
       ("email_undeliverable_address" IS NULL AND "email_undeliverable_reason" IS NULL AND "email_undeliverable_at" IS NULL)
-      OR ("email_undeliverable_address" IS NOT NULL AND "email_undeliverable_at" IS NOT NULL AND "email_undeliverable_reason" IN ('hard_bounce', 'complaint', 'suppressed'))
+      OR ("email_undeliverable_address" IS NOT NULL AND "email_undeliverable_at" IS NOT NULL AND "email_undeliverable_reason" IS NOT NULL AND "email_undeliverable_reason" IN ('hard_bounce', 'complaint', 'suppressed'))
     ) NOT VALID;
 --> statement-breakpoint
 ALTER TABLE "user" VALIDATE CONSTRAINT "user_email_undeliverable_check";

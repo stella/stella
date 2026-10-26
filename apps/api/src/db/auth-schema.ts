@@ -70,7 +70,7 @@ export const user = pgTable(
     index("user_createdAt_idx").on(table.createdAt, table.id),
     check(
       "user_email_undeliverable_check",
-      sql`(${table.emailUndeliverableAddress} IS NULL AND ${table.emailUndeliverableReason} IS NULL AND ${table.emailUndeliverableAt} IS NULL) OR (${table.emailUndeliverableAddress} IS NOT NULL AND ${table.emailUndeliverableAt} IS NOT NULL AND ${inArray(table.emailUndeliverableReason, ACCOUNT_EMAIL_UNDELIVERABLE_REASONS)})`,
+      sql`(${table.emailUndeliverableAddress} IS NULL AND ${table.emailUndeliverableReason} IS NULL AND ${table.emailUndeliverableAt} IS NULL) OR (${table.emailUndeliverableAddress} IS NOT NULL AND ${table.emailUndeliverableAt} IS NOT NULL AND ${table.emailUndeliverableReason} IS NOT NULL AND ${inArray(table.emailUndeliverableReason, ACCOUNT_EMAIL_UNDELIVERABLE_REASONS)})`,
     ),
     ...authUserPolicies(),
   ],
