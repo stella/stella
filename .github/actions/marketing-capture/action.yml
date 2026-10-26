@@ -182,6 +182,9 @@ runs:
       env:
         NODE_ENV: development
         STELLA_LOCAL_DEV: "1"
+        # Public captures use only verbatim published court fixtures. The
+        # development profile keeps its synthetic pagination/facet corpus.
+        STELLA_MARKETING_CAPTURE: "1"
       run: bun --filter @stll/api db:seed-dev
 
     - name: Capture marketing screenshots

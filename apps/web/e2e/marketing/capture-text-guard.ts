@@ -1,0 +1,64 @@
+/**
+ * Text that must never reach a marketing capture: placeholder and fixture
+ * markers that would show invented data as if it were the product's. The
+ * capture scans each visible element's own text before it takes a screenshot.
+ */
+
+/** One visible element's own text, with where it sits on the page. */
+export type CaptureTextElement = {
+  descriptor: string;
+  text: string;
+};
+
+const wholeWord = (text: string) =>
+  new RegExp(`(?<![\\p{L}\\p{N}_])${text}(?![\\p{L}\\p{N}_])`, "gu");
+
+// The single owner of banned capture text. Matching is whole-word and
+// case-sensitive, so real prose ("testament", "Barcelona", "Bar association")
+// passes.
+const BANNED_CAPTURE_TEXT = [
+  // The prefix the development seed gives invented case numbers.
+  { marker: "DEMO", pattern: wholeWord("DEMO") },
+  // Uppercase fixture marker.
+  { marker: "TEST", pattern: wholeWord("TEST") },
+  // Placeholder prose, opener and continuation.
+  { marker: "Lorem", pattern: wholeWord("Lorem") },
+  { marker: "ipsum", pattern: wholeWord("ipsum") },
+  // Copy that was never replaced.
+  { marker: "placeholder", pattern: wholeWord("placeholder") },
+  // The reserved example domain fixtures use.
+  { marker: "example.com", pattern: wholeWord("example\\.com") },
+  // Metasyntactic fixture values; lowercase only, so the proper noun Bar passes.
+  { marker: "foo", pattern: wholeWord("foo") },
+  { marker: "bar", pattern: wholeWord("bar") },
+  // An unfinished implementation note.
+  { marker: "TODO", pattern: wholeWord("TODO") },
+  // The development corpus's own disclosure.
+  { marker: "synthetic", pattern: wholeWord("synthetic") },
+  // A whole case number in the shape seed-case-law-synthetic.ts generates.
+  {
+    marker: "synthetic case number",
+    pattern:
+      /(?<![\p{L}\p{N}_])DEMO\s+\d+\s+[\p{L}\p{N}]+\s+\d+\/\d{4}(?![\p{L}\p{N}_])/gu,
+  },
+] as const satisfies readonly { marker: string; pattern: RegExp }[];
+
+export type CaptureTextViolation = {
+  element: string;
+  marker: (typeof BANNED_CAPTURE_TEXT)[number]["marker"];
+  matchedText: string;
+};
+
+/** Every banned marker in the elements' text, with the element it sits in. */
+export const findCaptureTextViolations = (
+  elements: readonly CaptureTextElement[],
+): CaptureTextViolation[] =>
+  elements.flatMap(({ descriptor, text }) =>
+    BANNED_CAPTURE_TEXT.flatMap(({ marker, pattern }) =>
+      [...text.matchAll(pattern)].map(({ 0: matchedText }) => ({
+        element: descriptor,
+        marker,
+        matchedText,
+      })),
+    ),
+  );

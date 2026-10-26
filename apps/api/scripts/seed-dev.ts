@@ -106,6 +106,7 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import type { CaseLawSeedProfile } from "./seed-case-law";
 import {
   buildExportReviewCitationSeeds,
   buildExportReviewDocumentText,
@@ -145,6 +146,9 @@ import {
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
+
+const caseLawSeedProfile: CaseLawSeedProfile =
+  process.env["STELLA_MARKETING_CAPTURE"] === "1" ? "recorded" : "development";
 
 // ─── Mock file generators ───────────────────────────────
 
@@ -6332,7 +6336,7 @@ export async function seed(organizationId?: string, userId?: string) {
   // whole seed or dump a giant error toast — warn and continue.
   let caseLawSeeded = false;
   try {
-    await seedCaseLaw();
+    await seedCaseLaw(caseLawSeedProfile);
     caseLawSeeded = true;
   } catch (error) {
     logErrorOutput({
