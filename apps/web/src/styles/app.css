@@ -24,6 +24,10 @@
 :root {
   --untinted-background: var(--background);
   --untinted-sidebar: var(--sidebar);
+  /* `matterChromeStyle(null)`: chrome outside a matter frame (the public law,
+   * tools and knowledge shells) paints untinted instead of transparent. */
+  --matter-background-tint: var(--untinted-background);
+  --matter-sidebar-tint: var(--untinted-sidebar);
 }
 
 @source "../../../../packages/decision-reader/src/**/*.{ts,tsx}";
