@@ -10,11 +10,11 @@ import {
 
 // Syntax-only reads of TypeScript and JavaScript sources. Guards and
 // generators that need types use tsrs instead.
-export { Visitor, type VisitorObject } from "oxc-parser";
+export { Visitor } from "oxc-parser";
 // ESTree node types (`Node`, `CallExpression`, `TSTypeReference`, …).
 export type * from "oxc-parser";
 
-export type SourceLocation = {
+type SourceLocation = {
   /** 1-based line. */
   readonly line: number;
   /** 1-based column in UTF-16 code units. */

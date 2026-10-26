@@ -7,6 +7,7 @@
   "apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "packages/api-contract/src/mcp.ts",
   "packages/scripts/src/generated-artifact-format.ts",
+  "packages/scripts/src/syntax-tree.ts",
   "packages/scripts/src/typescript-program.ts",
   "scripts/db-await-in-loop.ts",
   "scripts/generated-artifacts.ts",
