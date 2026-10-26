@@ -1167,7 +1167,7 @@ export const RowActions = ({
           canRunOcr={offerWhen(sections, "run-ocr", canRunOcr)}
           isPending={isOcrPending}
           onRun={handleRunOcr}
-          rowSources={offer(sections, "run-ocr", rowOcrSources) ?? []}
+          rowSources={rowOcrSources}
           selectedSource={ocrSource}
         />
         <RowFolderDesktopMenuActions
