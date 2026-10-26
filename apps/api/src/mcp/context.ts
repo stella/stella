@@ -258,8 +258,8 @@ export type McpRequestContext = {
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Write
    * tools gate on this to keep archived matters read-only, mirroring the HTTP
-   * `validateWorkspaceAccess` macro which 404s a workspace whose status is not
-   * "active".
+   * core's `authorizeWorkspace`, which 404s a workspace whose status the route
+   * does not admit ("active" unless it admits archived matters).
    */
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**

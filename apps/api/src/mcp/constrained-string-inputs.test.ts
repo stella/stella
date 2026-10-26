@@ -47,6 +47,7 @@ import {
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import { apiRoutes } from "@/api/api-routes";
+import type { ApiRouteKey } from "@/api/http/api-route-types";
 import {
   isValibotSchema,
   toRouteJsonSchema,
@@ -54,114 +55,189 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
+type ConstrainedInputPath =
+  | `${ApiRouteKey}.${(typeof REQUEST_SCHEMA_PARTS)[number]}.${string}`
+  | `${Lowercase<string>}.${string}`;
+
 /**
  * Still hand-constrained, by dotted path, with why. A `language` or a
  * `country` here is the same defect the `country` kind was added to fix, one
  * field over; a cursor or an upstream identifier is a value the caller echoes
  * rather than composes.
  */
-const HAND_CONSTRAINED_STRING_INPUTS: Record<string, string> = {
+const HAND_CONSTRAINED_STRING_INPUTS: ReadonlyMap<
+  ConstrainedInputPath,
+  string
+> = new Map([
   // A provision path level from the citation resolver; the filter
   // canonicalises each value, so the bound limits size, not spelling.
-  "POST /v1/case/decisions/search.body.provision.subsection":
+  [
+    "POST /v1/case/decisions/search.body.provision.subsection",
     "provision path value bounded in size; the filter canonicalises case and leading zeros",
-  "POST /v1/case/decisions/search.body.provision.letter":
+  ],
+  [
+    "POST /v1/case/decisions/search.body.provision.letter",
     "provision path value bounded in size; the filter canonicalises case and leading zeros",
-  "POST /v1/case/decisions/search.body.provision.point":
+  ],
+  [
+    "POST /v1/case/decisions/search.body.provision.point",
     "provision path value bounded in size; the filter canonicalises case and leading zeros",
+  ],
   // A BCP-47 language tag bounded at 8 characters instead of bound to the
   // locale kind, so `cs_CZ` and `Czech` are rejected before it runs.
-  "read_statute.language": "language tag length-bounded, not the locale kind",
-  "read_statute_provisions.items[].language":
+  ["read_statute.language", "language tag length-bounded, not the locale kind"],
+  [
+    "read_statute_provisions.items[].language",
     "language tag length-bounded, not the locale kind",
-  "read_provision_history.language":
+  ],
+  [
+    "read_provision_history.language",
     "language tag length-bounded, not the locale kind",
-  "POST /v1/legislation/corpus/search.body.language":
+  ],
+  [
+    "POST /v1/legislation/corpus/search.body.language",
     "language tag length-bounded, not the locale kind",
+  ],
   // This public projection reuses the authenticated search's language schema.
-  "GET /v1/law/statutes/search.query.language":
+  [
+    "GET /v1/law/statutes/search.query.language",
     "language tag length-bounded, not the locale kind",
-  "GET /v1/law/statutes.query.language":
+  ],
+  [
+    "GET /v1/law/statutes.query.language",
     "language tag length-bounded, not the locale kind",
-  "GET /v1/law/statutes/by-eli.query.language":
+  ],
+  [
+    "GET /v1/law/statutes/by-eli.query.language",
     "language tag length-bounded, not the locale kind",
-  "GET /v1/case/decisions.query.language":
+  ],
+  [
+    "GET /v1/case/decisions.query.language",
     "language tag length-bounded, not the locale kind",
-  "GET /v1/case/decisions/by-slug/:slug.query.language":
+  ],
+  [
+    "GET /v1/case/decisions/by-slug/:slug.query.language",
     "language tag length-bounded, not the locale kind",
-  "POST /v1/case/decisions/search.body.language":
+  ],
+  [
+    "POST /v1/case/decisions/search.body.language",
     "language tag length-bounded, not the locale kind",
-  "POST /v1/case/research/columns/suggest-prompt.body.filters.language":
+  ],
+  [
+    "POST /v1/case/research/columns/suggest-prompt.body.filters.language",
     "language tag length-bounded, not the locale kind",
+  ],
 
   // Still `v.maxLength(3)`, the constraint that rejected
   // `Czechia`: three characters admit the code and refuse the name, so
   // `readPublicLawCountry` never sees the spelling it could read.
-  "POST /v1/legislation/corpus/search.body.jurisdiction":
+  [
+    "POST /v1/legislation/corpus/search.body.jurisdiction",
     "ISO 3166-1 code length-bounded, not bound to the country reader",
-  "POST /v1/case/research/columns/suggest-prompt.body.country":
+  ],
+  [
+    "POST /v1/case/research/columns/suggest-prompt.body.country",
     "ISO 3166-1 code length-bounded, not bound to the country reader",
+  ],
 
   // The BOE publishes and filters on YYYYMMDD. The upstream spelling is the
   // constraint, so an ISO 2026-09-17 is rejected rather than re-spelled.
-  "search_boe_legislation.date_from":
+  [
+    "search_boe_legislation.date_from",
     "upstream BOE YYYYMMDD filter, not the date kind",
-  "search_boe_legislation.date_to":
+  ],
+  [
+    "search_boe_legislation.date_to",
     "upstream BOE YYYYMMDD filter, not the date kind",
-  "GET /v1/legislation/search.query.dateFrom":
+  ],
+  [
+    "GET /v1/legislation/search.query.dateFrom",
     "upstream BOE YYYYMMDD filter, not the date kind",
-  "GET /v1/legislation/search.query.dateTo":
+  ],
+  [
+    "GET /v1/legislation/search.query.dateTo",
     "upstream BOE YYYYMMDD filter, not the date kind",
-  "GET /v1/legislation/borme/:date.params.date":
+  ],
+  [
+    "GET /v1/legislation/borme/:date.params.date",
     "addresses an upstream BORME daily edition by its YYYYMMDD path spelling",
+  ],
 
   // A BOE consolidated-law id (BOE-A-1889-4763) is minted by the publisher and
   // echoed back from a search result, not composed by the caller.
-  "GET /v1/legislation/laws/:lawId.params.lawId":
+  [
+    "GET /v1/legislation/laws/:lawId.params.lawId",
     "publisher-minted BOE consolidated-law identifier",
-  "GET /v1/legislation/laws/:lawId/structure.params.lawId":
+  ],
+  [
+    "GET /v1/legislation/laws/:lawId/structure.params.lawId",
     "publisher-minted BOE consolidated-law identifier",
-  "GET /v1/legislation/laws/:lawId/blocks/:blockId.params.lawId":
+  ],
+  [
+    "GET /v1/legislation/laws/:lawId/blocks/:blockId.params.lawId",
     "publisher-minted BOE consolidated-law identifier",
-  "GET /v1/legislation/laws/:lawId/related.params.lawId":
+  ],
+  [
+    "GET /v1/legislation/laws/:lawId/related.params.lawId",
     "publisher-minted BOE consolidated-law identifier",
+  ],
 
   // The OpenAI-compatible id vocabulary: a value `search` mints and the caller
   // echoes back, never one a model composes. Its pattern is rendered from the
   // same grammar the reader tests (`compat-ids.ts`), so there is nothing here
   // for a value-kind reader to normalize.
-  "fetch.id": "an id `search` minted, echoed back verbatim",
+  ["fetch.id", "an id `search` minted, echoed back verbatim"],
 
   // Court paragraph grammar rather than a value kind: the shared range parser
   // is the reader, and its typed issue names the accepted spellings.
-  "open_case_law_decision.paragraphs":
+  [
+    "open_case_law_decision.paragraphs",
     "court paragraph number or range (`48`, `48-53`, `48–53`)",
+  ],
 
-  "GET /v1/legislation/search.query.cursor":
+  [
+    "GET /v1/legislation/search.query.cursor",
     "an opaque server-issued page token, not a model-authored value",
+  ],
 
   // Statute citation grammar rather than a value kind: the request asks for
   // the work an act number names, in the spelling a collection prints.
-  "GET /v1/law/statutes.query.number":
+  [
+    "GET /v1/law/statutes.query.number",
     "act number in its `<number>/<year>` citation spelling",
-  "GET /v1/law/statutes.query.collection":
+  ],
+  [
+    "GET /v1/law/statutes.query.collection",
     "publisher collection segment of an ELI (`sb`, `ul1`, `zz`)",
+  ],
 
   // Shard coordinates our own sitemap index emits and a crawler echoes back;
   // the pattern is the shard address, not a spelling a caller chooses.
-  "GET /v1/law/sitemap/statutes/shard.query.country":
+  [
+    "GET /v1/law/sitemap/statutes/shard.query.country",
     "sitemap shard address emitted by the sitemap index",
-  "GET /v1/law/sitemap/statutes/shard.query.bucket":
+  ],
+  [
+    "GET /v1/law/sitemap/statutes/shard.query.bucket",
     "sitemap shard address emitted by the sitemap index",
-  "GET /v1/case/sitemap/decisions/shard.query.country":
+  ],
+  [
+    "GET /v1/case/sitemap/decisions/shard.query.country",
     "sitemap shard address emitted by the sitemap index",
-  "GET /v1/case/sitemap/decisions/shard.query.year":
+  ],
+  [
+    "GET /v1/case/sitemap/decisions/shard.query.year",
     "sitemap shard address emitted by the sitemap index",
-  "GET /v1/case/sitemap/decisions/shard.query.month":
+  ],
+  [
+    "GET /v1/case/sitemap/decisions/shard.query.month",
     "sitemap shard address emitted by the sitemap index",
-  "GET /v1/case/sitemap/decisions/shard.query.bucket":
+  ],
+  [
+    "GET /v1/case/sitemap/decisions/shard.query.bucket",
     "sitemap shard address emitted by the sitemap index",
-};
+  ],
+]);
 
 /** Route prefixes of the public case-law and legislation surface. */
 const PUBLIC_LAW_ROUTE_PREFIXES = [
@@ -295,8 +371,11 @@ const handConstrained = stringProperties
 
 describe("a string input is constrained by its kind, not by its field", () => {
   test("no tool or public-law route constrains a spelling itself", () => {
+    const handConstrainedPaths: ReadonlySet<string> = new Set(
+      HAND_CONSTRAINED_STRING_INPUTS.keys(),
+    );
     const unowned = handConstrained.filter(
-      (path) => HAND_CONSTRAINED_STRING_INPUTS[path] === undefined,
+      (path) => !handConstrainedPaths.has(path),
     );
 
     expect(
@@ -309,7 +388,7 @@ describe("a string input is constrained by its kind, not by its field", () => {
     // Both directions: an entry whose field moved to a kind has to leave the
     // list, or the list stops meaning what it says.
     const flagged = new Set(handConstrained);
-    const stale = Object.keys(HAND_CONSTRAINED_STRING_INPUTS).filter(
+    const stale = [...HAND_CONSTRAINED_STRING_INPUTS.keys()].filter(
       (path) => !flagged.has(path),
     );
 

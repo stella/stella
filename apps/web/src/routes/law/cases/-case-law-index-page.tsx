@@ -297,9 +297,10 @@ export function PublicCaseLawIndex({
       locale: getMessageLocale(),
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
+  const scopedSearch = { ...search, country: countryParam };
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
-  const typedFilters = createDecisionFiltersFromSearch(search, {
+  const typedFilters = createDecisionFiltersFromSearch(scopedSearch, {
     excerpt: layout.excerpt,
   });
   const filters = useExpandedDecisionFilters(typedFilters, intent);
@@ -650,7 +651,7 @@ export function PublicCaseLawIndex({
         excerpt: layout.excerpt,
         navigate: routerNavigate,
         queryClient,
-        search: { ...search, q: entry },
+        search: { ...scopedSearch, q: entry },
         uiLocale,
       }),
       "cases.open-match",

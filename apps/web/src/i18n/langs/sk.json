@@ -507,6 +507,24 @@
     "addEntry": "Pridať záznam",
     "amount": "Čiastka",
     "amountMustBePositive": "Suma musí byť vyššia ako nula",
+    "approval": {
+      "approveSelected": "Schváliť {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamov}}",
+      "empty": "V spise nič nečaká na schválenie.",
+      "failed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+      "myTime": "Môj čas",
+      "refusals": {
+        "invalidEntry": "Doplňte popis a skontrolujte dátum práce, potom záznam schváľte.",
+        "notApprover": "Záznam môže schváliť len jeho priradený schvaľovateľ alebo správca.",
+        "notFound": "Tento záznam už neexistuje. Obnovte zoznam.",
+        "runningTimer": "Pred schválením záznamu zastavte bežiaci časovač.",
+        "unpriced": "Záznam nemá sadzbu. Nastavte pre tento spis sadzbu a potom záznam schváľte.",
+        "wrongStatus": "Tento záznam už nie je koncept. Obnovte zoznam."
+      },
+      "returnComment": "Dôvod vrátenia",
+      "selectEntry": "Vybrať záznam",
+      "timeEntries": "Časové záznamy",
+      "title": "Schvaľovanie"
+    },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
     "batchActions": "Hromadné akcie",
@@ -594,6 +612,7 @@
       "openInvoice": "Otvoriť faktúru",
       "otherCurrency": "{count, plural, one {# položka je vedená} few {# položky sú vedené} many {# položky je vedených} other {# položiek je vedených}} v inej mene ako {currency} a fakturujú sa samostatne.",
       "outsideScope": "Nie je predmetom dane v tuzemsku, 0 %",
+      "pendingApprovals": "{count, plural, one {Na schválenie čaká # položka} few {Na schválenie čakajú # položky} many {Na schválenie čaká # položky} other {Na schválenie čaká # položiek}}. Skontrolovať schválenia.",
       "rate": "Sadzba",
       "readyDescription": "Vystavením sa faktúre pridelí ďalšie číslo z vášho číselného radu a faktúra sa uzamkne. Koncept sa dá ďalej upravovať.",
       "readyTitle": "Pripravené na vystavenie",
@@ -1024,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ľudské"
+      "human": "Ľudské",
+      "toggleState": "{label}: {state, select, on {zapnuté} other {vypnuté}}"
     },
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
@@ -1147,6 +1167,7 @@
       "citedDecisionPassage": "Pasáž v rozhodnutí",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Prejsť na odsek} few {Prejsť na odseky} other {Prejsť na odseky}}",
       "judgeRole": {
         "advocateGeneral": "Generálny advokát",
         "dissenting": "Odlišné stanovisko",
@@ -2056,7 +2077,6 @@
       "orLetUsKnowAt": "alebo nám dajte vedieť na",
       "viewDocumentation": "Zobraziť dokumentáciu"
     },
-    "enterKey": "↵",
     "error": "Chyba",
     "expenses": "Výdavky",
     "export": {
@@ -2205,10 +2225,12 @@
     "scrollToTop": "Posunúť nahor",
     "search": "Hľadať...",
     "searchIn": "Hľadať v",
+    "searchMembers": "Hľadať členov…",
     "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte rolu",
     "selectAll": "Vybrať všetko",
     "selectDate": "Vybrať dátum…",
+    "selected": "Vybrané",
     "sessions": "Relácie",
     "settings": "Nastavenia",
     "showAll": "Zobraziť všetko",
@@ -4770,6 +4792,7 @@
     "modelError": "Model nedokázal túto odpoveď dokončiť.",
     "networkError": "Spojenie bolo prerušené. Skúste to znova.",
     "regenerate": "Vygenerovať odpoveď znova",
+    "selectionError": "Vyberte text zo samotného rozhodnutia.",
     "send": "Odoslať doplňujúcu otázku",
     "share": "Zdieľať s tímom",
     "timeoutError": "Vypršal časový limit na odpoveď. Skúste to znova.",
@@ -6209,8 +6232,7 @@
         "lead": "Vedúci",
         "leadActive": "Vedúci",
         "leadInactive": "Nastaviť vedúceho",
-        "noLead": "Bez vedúceho",
-        "searchMembers": "Hľadať členov…"
+        "noLead": "Bez vedúceho"
       },
       "to": "Do"
     },
@@ -6272,6 +6294,7 @@
       "deleteAll": "Odstrániť všetko",
       "deleteAllConfirm": "Odstrániť všetkých {count} položiek v „{column}“?",
       "hideColumn": "Skryť stĺpec",
+      "moveFailed": "{failed, plural, one {# z {total} položiek sa nepodarilo presunúť.} few {# z {total} položiek sa nepodarilo presunúť.} other {# z {total} položiek sa nepodarilo presunúť.}}",
       "readOnlyGrouping": "Toto zoskupenie je iba na čítanie",
       "selectPropertyHint": "Vyberte vlastnosť na zoskupenie v paneli nástrojov",
       "uploadDocument": "Nahrať dokument",
@@ -6290,10 +6313,10 @@
       "addMember": "Pridať do spisu",
       "addMemberDescription": "Vyberte existujúceho člena tímu, ktorého chcete pridať k tomuto spisu",
       "alreadyMember": "Používateľ je už členom",
+      "alreadyOnMatter": "Už je v tomto spise",
       "cannotRemoveLast": "Posledného člena nie je možné odstrániť",
       "noMembersFound": "Nenašli sa žiadni členovia",
-      "removeMemberConfirm": "Odstrániť tohto člena zo spisu?",
-      "selectMember": "Vybrať člena"
+      "removeMemberConfirm": "Odstrániť tohto člena zo spisu?"
     },
     "newDocument": "Nový dokument",
     "newFolder": "Nový priečinok",
@@ -6331,7 +6354,6 @@
           "approvedBy": "Schválil(a)",
           "channel": "Kanál",
           "dateTime": "Dátum a čas",
-          "eventId": "ID udalosti",
           "notAvailable": "Nie je k dispozícii",
           "openTarget": "Otvoriť položku",
           "runId": "ID behu",
@@ -6418,6 +6440,7 @@
       "addParty": "Pridať stranu",
       "changeClient": "Zmeniť klienta",
       "client": "Klient",
+      "movedToClient": "Spis <bdi>{matterName}</bdi> presunutý ku klientovi <bdi>{clientName}</bdi>",
       "noClient": "Žiadny klient nepriradený",
       "noClientOptional": "Bez klienta (voliteľné)",
       "noParties": "K tomuto spisu nie sú pridané žiadne strany.",
@@ -6436,6 +6459,7 @@
       "personalLabel": "Osobný",
       "promoteCta": "Povýšiť na klientsky spis",
       "promoteDescription": "Priraďte klienta na zdieľanie tohto spisu s tímom. Akcia je nezvratná — povýšené spisy nie je možné vrátiť na osobné.",
+      "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude priradený klientovi <bdi>{clientName}</bdi> a zdieľaný s tímom. Na osobný ho už nebude možné vrátiť.",
       "promotedSuccess": "Spis povýšený",
       "recentClients": "Nedávni klienti",
       "removeClient": "Odstrániť klienta",
@@ -6512,6 +6536,11 @@
       },
       "passwordLabel": "Zadajte heslo k PDF",
       "previousPage": "Predchádzajúca strana",
+      "selection": {
+        "explainPassagePrompt": "Vysvetli túto pasáž z {citation}:\n\n„{quote}“",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Zobraziť pôvodné stránky",
       "unlock": "Odomknúť"
     },
