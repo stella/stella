@@ -541,6 +541,20 @@ describe("directory scan coverage", () => {
     });
   });
 
+  test("listings outside the checkout or in installed packages are not scans", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace = [
+        `1 getdents64(3<${path.dirname(root)}>, 0x5555 /* 3 entries */, 32768) = 80`,
+        `1 getdents64(4<${root}/node_modules/.bin>, 0x5555 /* 3 entries */, 32768) = 80`,
+        `1 getdents64(5<${root}/packages/x/node_modules>, 0x5555 /* 3 entries */, 32768) = 80`,
+        `1 getdents64(6<${root}/.git/refs>, 0x5555 /* 3 entries */, 32768) = 80`,
+      ].join("\n");
+      expect(
+        uncoveredScans({ scanLog: "", trace, declared: [], tracked, root }),
+      ).toEqual([]);
+    });
+  });
+
   test("a directory listing through any API is a scan", () => {
     withTrackedFixture(({ root, tracked }) => {
       // A named node:fs import bypasses the preload; the listing still

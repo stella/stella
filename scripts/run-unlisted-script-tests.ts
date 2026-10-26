@@ -458,12 +458,13 @@ const repositoryScan = (
 ): { readonly absolute: string; readonly relative: string } | undefined => {
   const absolute = path.resolve(root, directory);
   const relative = repoRelativePath(root, absolute).replace(/\/$/u, "");
+  // Outside the checkout (its parent included), installed packages and Git's
+  // own store are never repository inputs; Bun's resolver lists some of them.
+  const segments = relative.split("/");
   if (
-    relative.startsWith("../") ||
-    relative === "node_modules" ||
-    relative.includes("/node_modules") ||
-    relative === ".git" ||
-    relative.startsWith(".git/")
+    segments[0] === ".." ||
+    segments.includes("node_modules") ||
+    segments[0] === ".git"
   ) {
     return undefined;
   }
