@@ -343,7 +343,7 @@ export const parsePolishedTimeEntryNarrativeResponse = (input: unknown) =>
     ? { narrative: input.narrative }
     : null;
 
-const parseTimeEntrySuggestionEvidence = (
+export const parseTimeEntrySuggestionEvidence = (
   input: unknown,
 ): TimeEntrySuggestionEvidence | null => {
   if (!isRecord(input) || typeof input.id !== "string") {

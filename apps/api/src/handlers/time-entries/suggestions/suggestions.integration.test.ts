@@ -559,6 +559,54 @@ describe("time entry suggestions integration", () => {
     expect(row).toBeUndefined();
   });
 
+  test("a decision whose stored evidence names no signals covers none", async () => {
+    const withoutSignals = "a".repeat(64);
+    const withoutEvidence = "b".repeat(64);
+    await testDb.insert(timeEntrySuggestions).values([
+      {
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        dateWorked: DAY,
+        fingerprint: withoutSignals,
+        status: "dismissed",
+        // Evidence written before decisions recorded their signal identities.
+        evidence: asTestRaw<
+          (typeof timeEntrySuggestions.$inferInsert)["evidence"]
+        >([
+          {
+            type: "chat_thread",
+            id: threadId,
+            title: "Lease",
+            messageCount: 1,
+          },
+        ]),
+      },
+      {
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        dateWorked: DAY,
+        fingerprint: withoutEvidence,
+        status: "dismissed",
+        evidence: null,
+      },
+    ]);
+    try {
+      const listed = await listFor(ids.userA1);
+      expect(isListResponse(listed)).toBe(true);
+    } finally {
+      await testDb
+        .delete(timeEntrySuggestions)
+        .where(
+          inArray(timeEntrySuggestions.fingerprint, [
+            withoutSignals,
+            withoutEvidence,
+          ]),
+        );
+    }
+  });
+
   test("decisions are invisible to other members of the matter", async () => {
     const asOtherUser = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA2);
     const visible = await asOtherUser((tx) =>

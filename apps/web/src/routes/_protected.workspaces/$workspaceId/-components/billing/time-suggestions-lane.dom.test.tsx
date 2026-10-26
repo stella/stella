@@ -37,6 +37,13 @@ test("shows rounded billed time with raw engaged time", () => {
                   id: "thread",
                   title: "Lease review",
                   messageCount: 1,
+                  signals: [
+                    {
+                      source: "chat_message",
+                      resourceId: "message",
+                      timestamp: "2026-10-24T09:00:00.000Z",
+                    },
+                  ],
                 },
               ],
             },

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
 
-import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
+import { parseTimeEntrySuggestionEvidence } from "@stll/api-contract/time-entries";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -128,15 +128,23 @@ type LoadedTimeSuggestions = {
 const signalIdentityKey = (identity: ActivitySignal["identity"]) =>
   `${identity.source}\n${identity.resourceId}\n${identity.timestamp}`;
 
+// Stored evidence is read as untrusted JSON: a decision whose evidence does not
+// parse, or names no signal identities, covers no signals.
+const decidedSignalKeys = (storedEvidence: unknown) =>
+  Array.isArray(storedEvidence)
+    ? storedEvidence.flatMap(
+        (item) =>
+          parseTimeEntrySuggestionEvidence(item)?.signals.map(
+            signalIdentityKey,
+          ) ?? [],
+      )
+    : [];
+
 const excludeDecidedSignals = (
   signals: readonly ActivitySignal[],
-  decidedEvidence: readonly (TimeEntrySuggestionEvidence[] | null)[],
+  decidedEvidence: readonly unknown[],
 ) => {
-  const coveredSignalKeys = new Set(
-    decidedEvidence.flatMap((evidence) =>
-      (evidence ?? []).flatMap((item) => item.signals.map(signalIdentityKey)),
-    ),
-  );
+  const coveredSignalKeys = new Set(decidedEvidence.flatMap(decidedSignalKeys));
   return signals.filter(
     ({ identity }) => !coveredSignalKeys.has(signalIdentityKey(identity)),
   );
