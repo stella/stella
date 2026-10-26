@@ -507,6 +507,24 @@
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",
     "amountMustBePositive": "Summai jābūt lielākai par nulli",
+    "approval": {
+      "approveSelected": "Apstiprināt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
+      "empty": "Šajā lietā nekas negaida apstiprinājumu.",
+      "failed": "Izmaiņas netika saglabātas. Mēģiniet vēlreiz.",
+      "myTime": "Mans laiks",
+      "refusals": {
+        "invalidEntry": "Pievienojiet aprakstu un pārbaudiet darba datumu, pēc tam apstipriniet ierakstu.",
+        "notApprover": "Šo ierakstu var apstiprināt tikai tam piešķirtais apstiprinātājs vai administrators.",
+        "notFound": "Šis ieraksts vairs nepastāv. Atsvaidziniet sarakstu.",
+        "runningTimer": "Pirms ieraksta apstiprināšanas apturiet aktīvo taimeri.",
+        "unpriced": "Šim ierakstam nav likmes. Iestatiet likmi šai lietai un pēc tam apstipriniet ierakstu.",
+        "wrongStatus": "Šis ieraksts vairs nav melnraksts. Atsvaidziniet sarakstu."
+      },
+      "returnComment": "Atgriešanas iemesls",
+      "selectEntry": "Atlasīt ierakstu",
+      "timeEntries": "Laika ieraksti",
+      "title": "Apstiprinājumi"
+    },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
     "batchActions": "Grupas darbības",
@@ -594,6 +612,7 @@
       "openInvoice": "Atvērt rēķinu",
       "otherCurrency": "{count, plural, zero {# pozīciju ir reģistrētas} one {# pozīcija ir reģistrēta} other {# pozīcijas ir reģistrētas}} citā valūtā, nevis {currency}, un paliek atsevišķam rēķinam.",
       "outsideScope": "Neietilpst PVN piemērošanas jomā, 0 %",
+      "pendingApprovals": "{count, plural, zero {# vienumi gaida} one {# vienums gaida} other {# vienumi gaida}} apstiprinājumu. Pārskatīt apstiprinājumus.",
       "rate": "Likme",
       "readyDescription": "Izrakstot rēķinam tiek piešķirts nākamais numurs no jūsu numuru sērijas, un tas tiek bloķēts. Melnrakstu var turpināt rediģēt.",
       "readyTitle": "Gatavs izrakstīšanai",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "vai rakstiet mums uz",
       "viewDocumentation": "Skatīt dokumentāciju"
     },
-    "enterKey": "↵",
     "error": "Kļūda",
     "expenses": "Izdevumi",
     "export": {
@@ -2205,6 +2223,7 @@
     "scrollToTop": "Ritināt uz augšu",
     "search": "Meklēt...",
     "searchIn": "Meklēt",
+    "searchMembers": "Meklēt dalībniekus…",
     "selectAMatter": "Izvēlieties lietu",
     "selectARole": "Izvēlieties lomu",
     "selectAll": "Atlasīt visus",
@@ -6210,8 +6229,7 @@
         "lead": "Atbildīgais",
         "leadActive": "Atbildīgais",
         "leadInactive": "Iestatīt vadītāju",
-        "noLead": "Nav atbildīgā",
-        "searchMembers": "Meklēt dalībniekus…"
+        "noLead": "Nav atbildīgā"
       },
       "to": "Līdz"
     },
@@ -6291,10 +6309,10 @@
       "addMember": "Pievienot dalībnieku",
       "addMemberDescription": "Pievienot komandas dalībnieku šai lietai",
       "alreadyMember": "Lietotājs jau ir dalībnieks",
+      "alreadyOnMatter": "Jau ir šajā lietā",
       "cannotRemoveLast": "Nevar noņemt pēdējo dalībnieku",
       "noMembersFound": "Dalībnieki nav atrasti",
-      "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?",
-      "selectMember": "Izvēlēties dalībnieku"
+      "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?"
     },
     "newDocument": "Jauns dokuments",
     "newFolder": "Jauna mape",

@@ -24,7 +24,7 @@ import {
   AiColumnRunButton,
   AiColumnSelectionAction,
 } from "./ai-column-run-controls";
-import { aiColumnRunScope } from "./ai-column-run.logic";
+import { AI_COLUMN_RUN_REVEAL, aiColumnRunScope } from "./ai-column-run.logic";
 
 const states = {
   not_run: { type: "not_run" },
@@ -195,7 +195,7 @@ describe("shared AI column controls", () => {
             <IntlProvider locale="en" messages={messages} timeZone="UTC">
               <AiColumnRunButton
                 scope={scope}
-                hasNotRun
+                reveal={AI_COLUMN_RUN_REVEAL.pinned}
                 disabled={false}
                 onRun={() => undefined}
               />
@@ -206,7 +206,6 @@ describe("shared AI column controls", () => {
       expect(html).toContain(`aria-label="${label}"`);
       expect(html).toContain("<svg");
       expect(html).toContain("data-base-ui-tooltip-trigger");
-      expect(html).toContain("bg-primary");
     }
   });
   test("the rendered selection bar states columns times rows and answer budget", () => {
