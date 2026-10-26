@@ -18,6 +18,7 @@
  * HTML tags.
  */
 
+import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import {
   type AnyNode,
