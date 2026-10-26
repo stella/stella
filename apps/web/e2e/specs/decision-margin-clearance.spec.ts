@@ -236,9 +236,11 @@ const WIDE_CASES = [
   { locale: "ar", dir: "rtl", messages: ar },
 ] as const;
 
+const VIEWPORT_HEIGHT = 900;
+
 for (const { locale, dir, messages } of WIDE_CASES) {
   test.describe(`decision reader margin at lg (${dir})`, () => {
-    test.use({ locale, viewport: { width: 1440, height: 900 } });
+    test.use({ locale, viewport: { width: 1440, height: VIEWPORT_HEIGHT } });
 
     test("no floating reader chrome covers the notes column", async ({
       page,
@@ -313,7 +315,11 @@ for (const { locale, dir, messages } of WIDE_CASES) {
       );
       // Toward the column's inline end widens it, in either direction.
       const towardEnd = dir === "rtl" ? -40 : 40;
-      const y = handle.y + handle.height / 2;
+      // The handle runs the column's full height, past the viewport; grab it
+      // inside the visible part, where the pointer can reach it.
+      const visibleTop = Math.max(handle.y, 0);
+      const visibleBottom = Math.min(handle.y + handle.height, VIEWPORT_HEIGHT);
+      const y = (visibleTop + visibleBottom) / 2;
       await page.mouse.move(handle.x + handle.width / 2, y);
       await page.mouse.down();
       await page.mouse.move(handle.x + handle.width / 2 + towardEnd, y, {
