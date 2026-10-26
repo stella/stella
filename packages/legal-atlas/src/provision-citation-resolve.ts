@@ -834,9 +834,33 @@ type ActCitationResolution =
   | Extract<ProvisionCitationResolution, { status: "ambiguous_act" }>;
 
 /** Brackets and separators around an act name once its provision is cut. */
-const NAME_EDGES = /^[\s[(,;:]+|[\s\]),;:]+$/gu;
+const LEADING_NAME_EDGES = new Set(["[", "(", ",", ";", ":"]);
+const TRAILING_NAME_EDGES = new Set(["]", ")", ",", ";", ":"]);
+const WHITESPACE = /^\s$/u;
 
-const actNameOf = (text: string) => normalize(text).replaceAll(NAME_EDGES, "");
+// A scan from each end rather than an anchored regex: alternating `+` runs
+// backtrack quadratically on a long run of separators.
+const trimNameEdges = (text: string): string => {
+  let start = 0;
+  let end = text.length;
+  while (
+    start < end &&
+    (LEADING_NAME_EDGES.has(text.charAt(start)) ||
+      WHITESPACE.test(text.charAt(start)))
+  ) {
+    start += 1;
+  }
+  while (
+    end > start &&
+    (TRAILING_NAME_EDGES.has(text.charAt(end - 1)) ||
+      WHITESPACE.test(text.charAt(end - 1)))
+  ) {
+    end -= 1;
+  }
+  return text.slice(start, end);
+};
+
+const actNameOf = (text: string) => trimNameEdges(normalize(text));
 
 /**
  * The act a citation names, read as `resolveProvisionCitation` reads it: by
