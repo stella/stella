@@ -49,6 +49,10 @@ inputs:
       includes the frontend.
     required: false
     default: ""
+  expected-sha:
+    description: Expected production commit; permits reusing a completed promotion receipt
+    required: false
+    default: ""
   git-sha:
     description: >
       Full 40-char commit SHA the synthetic ref points at. Only valid with
@@ -73,6 +77,7 @@ runs:
         IMAGE_DIGEST: ${{ inputs.image-digest }}
         WEB_IMAGE_DIGEST: ${{ inputs.web-image-digest }}
         GIT_SHA: ${{ inputs.git-sha }}
+        EXPECTED_SHA: ${{ inputs.expected-sha }}
       run: |
         set -euo pipefail
 
@@ -164,6 +169,31 @@ runs:
         # alone leaves the dispatch unmatched and this step failing.
         expected_title="Promote ${RELEASE_REF} → ${TARGET_ENV}"
 
+        # Reuse an accepted promotion before issuing another side effect. A
+        # failed run is retryable; successful and active runs are receipts.
+        if ! existing="$(
+          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
+            "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=100" \
+            --jq ".workflow_runs[] | select(.display_title == \"${expected_title}\") | select(.status == \"queued\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"pending\" or .conclusion == \"success\") | [.id, .status, .conclusion] | @tsv" | head -n 1
+        )"; then
+          echo "::error::Existing promote run lookup failed." >&2
+          exit 1
+        fi
+        run_id="$(cut -f1 <<< "$existing")"
+        if [[ -n "$run_id" && "$(cut -f3 <<< "$existing")" == success ]]; then
+          echo "Promotion already succeeded: ${run_id}"
+          exit 0
+        fi
+        if [[ "$TARGET_ENV" == production && -n "${EXPECTED_SHA:-}" ]]; then
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo '::error::Invalid expected-sha'; exit 1; }
+          api_commit=$(curl --fail --silent --show-error --max-time 15 --retry 2 --retry-all-errors --retry-delay 1 https://api.stll.app/ready | jq -r 'select(.status == "ok") | .commit // empty') || api_commit=""
+          web_commit=$(curl --fail --silent --show-error --max-time 15 --retry 2 --retry-all-errors --retry-delay 1 https://my.stll.app/version.json | jq -r '.commit // empty') || web_commit=""
+          if [[ "$api_commit" == "$EXPECTED_SHA" && "$web_commit" == "$EXPECTED_SHA" ]]; then
+            echo "Production already serves $EXPECTED_SHA"
+            exit 0
+          fi
+        fi
+
         dispatch_args=(
           -f "ref=main"
           -f "inputs[release_ref]=${RELEASE_REF}"
@@ -190,39 +220,43 @@ runs:
         # contents/metadata) those implicit lookups can fail silently and kill
         # the step in well under a second with no output. Any failure here
         # surfaces as a real HTTP error in the log.
-        echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
-        bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method POST \
-          "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
-          "${dispatch_args[@]}"
+        if [[ -z "$run_id" ]]; then
+          echo "Dispatching ${WORKFLOW_FILE} on ${INFRA_REPO} (target=${TARGET_ENV}, release=${RELEASE_REF})..."
+          bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method POST \
+            "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches" \
+            "${dispatch_args[@]}"
 
-        # The dispatches endpoint returns 204 with no body, so the run id has
-        # to be recovered by listing. Match on exact display_title so
-        # concurrent dispatches cannot be confused and prefix-overlapping refs
-        # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10) never collide.
-        echo "Dispatch accepted. Polling for the new run..."
-        run_id=""
-        for attempt in {1..30}; do
-          # Poll successful reads until the run appears. HTTP recovery belongs
-          # to the shared owner; a failed read exhausts that request's budget.
-          if ! run_id="$(
-            bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
-              "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
-              --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
-              | head -n 1
-          )"; then
-            echo "::error::Dispatched run lookup failed." >&2
+          # The dispatches endpoint returns 204 with no body, so the run id has
+          # to be recovered by listing. Match on exact display_title so
+          # concurrent dispatches cannot be confused and prefix-overlapping refs
+          # (v1.2.3 vs v1.2.3-rc.1, v1.2.3-rc.1 vs v1.2.3-rc.10) never collide.
+          echo "Dispatch accepted. Polling for the new run..."
+          for attempt in {1..30}; do
+            # Poll successful reads until the run appears. HTTP recovery belongs
+            # to the shared owner; a failed read exhausts that request's budget.
+            if ! run_id="$(
+              bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api \
+                "/repos/${INFRA_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=10" \
+                --jq ".workflow_runs[] | select(.created_at >= \"${dispatched_at}\") | select(.display_title == \"${expected_title}\") | .id" \
+                | head -n 1
+            )"; then
+              echo "::error::Dispatched run lookup failed." >&2
+              exit 1
+            fi
+            if [[ -n "$run_id" ]]; then
+              echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "::error::Dispatched run did not appear in the workflow run list." >&2
             exit 1
           fi
-          if [[ -n "$run_id" ]]; then
-            echo "Found dispatched run: ${run_id} (attempt ${attempt}/30)"
-            break
-          fi
-          sleep 2
-        done
 
-        if [[ -z "$run_id" ]]; then
-          echo "::error::Dispatched run did not appear in the workflow run list." >&2
-          exit 1
+        else
+          echo "Watching existing promotion: $run_id"
         fi
 
         run_url="https://github.com/${INFRA_REPO}/actions/runs/${run_id}"

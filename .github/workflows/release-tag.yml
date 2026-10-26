@@ -6,14 +6,19 @@ defaults:
     shell: bash
 
 on:
+  workflow_run:
+    workflows: [Deploy main to staging, Main heavy suites, Main PR-depth checks]
+    types: [completed]
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Create an RC tag for an open release pull request head"
+        required: true
+        type: choice
+        options: [rc]
+        default: rc
       sha:
-        description: "Version commit SHA (blank selects the commit that set VERSION on main)"
-        required: false
-        type: string
-      proof_sha:
-        description: "Optional commit carrying tree-identical release evidence"
+        description: "Exact head SHA of the open release pull request"
         required: false
         type: string
       waive_dependency_audit:
@@ -45,8 +50,8 @@ concurrency:
 
 jobs:
   tag:
-    name: Push release tag
-    if: github.ref == 'refs/heads/main'
+    name: Push release candidate tag
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'rc' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment: release-app
     timeout-minutes: 15
@@ -62,10 +67,10 @@ jobs:
       # Bun runs the release queue history check that decides whether a
       # merge-group receipt may stand in for the heavy statuses.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+          no-cache: true
 
       - name: Select the release commit
         id: candidate
@@ -83,6 +88,9 @@ jobs:
           cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
           cp scripts/release-gate.sh "$RUNNER_TEMP/release-gate.sh"
+          cp scripts/release-rc-number.sh "$RUNNER_TEMP/release-rc-number.sh"
+          cp scripts/check-release-rc-source.sh "$RUNNER_TEMP/check-release-rc-source.sh"
+          cp scripts/check-release-open-incidents.sh "$RUNNER_TEMP/check-release-open-incidents.sh"
 
       # Every gate below runs even when an earlier one fails; each records
       # its outcome and the verdict step lists all failures in one run.
@@ -92,8 +100,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
-          PROOF_SHA: ${{ inputs.proof_sha }}
-        run: bash "$RUNNER_TEMP/release-gate.sh" run release-evidence bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$RELEASE_SHA" --proof-sha "$PROOF_SHA" >> "$GITHUB_OUTPUT"
+        run: bash "$RUNNER_TEMP/release-gate.sh" run release-evidence bash "$RUNNER_TEMP/check-release-rc-source.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Checkout the verified commit
         env:
@@ -160,28 +167,79 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      # Re-checks staging/verified plus the merge-group receipt with validated
-      # queue history (or main/heavy and main/pr-depth) on the exact commit
-      # right before the push, so evidence that turned red since selection
-      # stops it.
-      - name: Push tag
+      - name: Push candidate tag once
         if: ${{ !inputs.dry_run }}
         env:
-          RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
-          PROOF_SHA: ${{ steps.evidence.outputs.proof-sha }}
-          RELEASE_HEALTH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.candidate.outputs.tag }}
           RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
-          # Injected only for this step: the App token never touches disk via
-          # persisted git credentials, so earlier steps (setup-bun, repo
-          # scripts) run without it available.
+          VERSION: ${{ steps.candidate.outputs.value }}
+          RELEASE_HEALTH_TOKEN: ${{ github.token }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          GH_TOKEN="$RELEASE_HEALTH_TOKEN" bash "$RUNNER_TEMP/check-release-main-health.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" "$PROOF_SHA"
+          set -euo pipefail
+          GH_TOKEN="$RELEASE_HEALTH_TOKEN" bash "$RUNNER_TEMP/check-release-rc-source.sh" "$GITHUB_REPOSITORY" "$RELEASE_SHA" >/dev/null
+          receipt=$(bash "$RUNNER_TEMP/release-rc-number.sh" "$VERSION" "$RELEASE_SHA")
+          if grep -qx 'existing=true' <<< "$receipt"; then exit 0; fi
+          tag=$(sed -n 's/^tag=//p' <<< "$receipt")
           git config user.name "stella-release-deployer[bot]"
           git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
-          git tag -a "$TAG" "$RELEASE_SHA" -m "$TAG"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TAG"
+          git tag -a "$tag" "$RELEASE_SHA" -m "$tag"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$tag"
+
+  finalize:
+    name: Finalize the proven release candidate
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.event == 'workflow_dispatch' &&
+      (github.event.workflow_run.path == '.github/workflows/deploy-staging.yml' ||
+       github.event.workflow_run.path == '.github/workflows/main-heavy.yml' ||
+       github.event.workflow_run.path == '.github/workflows/main-pr-depth.yml') &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release-app
+    steps:
+      - name: Checkout trusted finalization tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Read the exact proof commit from the trusted run title
+        id: proof
+        env:
+          RUN_TITLE: ${{ github.event.workflow_run.display_title }}
+        run: |
+          set -euo pipefail
+          if [[ "$RUN_TITLE" =~ ^(Staging\ release\ proof|Main\ heavy\ suites|Main\ PR-depth\ checks)\ ([0-9a-f]{40})$ ]]; then
+            echo "sha=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not a release proof run."
+          fi
+
+      - name: Mint App token
+        if: steps.proof.outputs.sha != ''
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Move the final tag to the proven RC commit
+        if: steps.proof.outputs.sha != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_SHA: ${{ steps.proof.outputs.sha }}
+          RELEASE_HEALTH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "stella-release-deployer[bot]"
+          git config user.email "stella-release-deployer[bot]@users.noreply.github.com"
+          bash scripts/finalize-release.sh "$GITHUB_REPOSITORY" "$RELEASE_SHA"
 
   # Marketing freshness is content debt, not a release defect: staleness
   # surfaces as a warning and never blocks the tag. The check loads installed
@@ -203,10 +261,10 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+          no-cache: true
 
       - name: Install dependencies
         timeout-minutes: 5

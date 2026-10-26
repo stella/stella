@@ -84,6 +84,10 @@ jobs:
           set -euo pipefail
           [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid pull request number."; exit 1; }
           bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          if jq -e '.head.ref | startswith("release/v")' "$RUNNER_TEMP/regeneration-pr.json" >/dev/null; then
+            echo "::error::Release branches cannot be rewritten by autofix."
+            exit 1
+          fi
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json" >> "$GITHUB_OUTPUT"
 
       - name: Checkout regeneration head
@@ -139,6 +143,10 @@ jobs:
           echo "$RETRY_HASH  $RUNNER_TEMP/gh-retry.sh" | sha256sum --check
           echo "$EVENT_HASH  $GITHUB_EVENT_PATH" | sha256sum --check
           bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          if jq -e '.head.ref | startswith("release/v")' "$RUNNER_TEMP/regeneration-pr.json" >/dev/null; then
+            echo "::error::Release branches cannot be rewritten by autofix."
+            exit 1
+          fi
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json"
           bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
 
@@ -308,6 +316,7 @@ jobs:
     # job above; fork pull requests keep the CI drift guards alone.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
+      && !startsWith(github.event.pull_request.head.ref, 'release/v')
       && github.event.pull_request.user.login != 'dependabot[bot]'
       && github.actor != 'dependabot[bot]'
       && github.actor != 'autofix-ci[bot]'
