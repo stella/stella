@@ -632,9 +632,7 @@ const renderSmokeRoute = async ({
   await assertNoRouteBoundary(page, route.template);
   // Cold-compiled route chunks can take longer than the default 10s expect
   // timeout to paint <main> on a fresh CI runner.
-  await expect(page.locator("main").first(), route.template).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.locator("main").first(), route.template).toBeVisible();
 };
 
 // `goto` waits for DOMContentLoaded, which a render-blocking `<head>`
@@ -698,7 +696,7 @@ const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
 
   await expect(page, `${route.template} reached redirect target`).toHaveURL(
     (actual) => comparableHref(actual, expected.assertSearch) === expected.href,
-    { timeout: 30_000 },
+    {},
   );
 };
 

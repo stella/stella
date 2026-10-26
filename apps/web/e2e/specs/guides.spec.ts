@@ -128,12 +128,12 @@ const finishGuide = async (page: Page) => {
 
 const startGuide = async (page: Page, title: string) => {
   const helpButton = page.getByRole("button", { name: HELP_BUTTON_NAME });
-  await expect(helpButton).toBeVisible({ timeout: 30_000 });
+  await expect(helpButton).toBeVisible();
   await helpButton.click();
   const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
   const card = drawer.locator("li").filter({ hasText: title });
   const start = card.getByRole("button", { name: /^(?:Start again|Start)$/u });
-  await expect(start).toBeEnabled({ timeout: 30_000 });
+  await expect(start).toBeEnabled();
   await start.click();
   await expect(drawer).toHaveCount(0);
 };
@@ -273,13 +273,13 @@ test("Guide checklist stays stable until matter availability resolves", async ({
       waitUntil: "commit",
     });
     const helpButton = page.getByRole("button", { name: HELP_BUTTON_NAME });
-    await expect(helpButton).toBeVisible({ timeout: 30_000 });
+    await expect(helpButton).toBeVisible();
     await helpButton.click();
     const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
     await expect(drawer.locator('[aria-busy="true"]')).toBeVisible();
     await expect(
       drawer.locator("li").filter({ hasText: "Work with documents" }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible();
   } finally {
     if (workspace) {
       await deleteTestWorkspace(request, workspace.id);
@@ -465,7 +465,7 @@ for (const availability of [
       });
       await expect(
         page.getByRole("button", { name: HELP_BUTTON_NAME }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible();
       browserErrors.expectCaptured(/Failed to load resource:.*503/u);
       await page.route(availability.path, async (route) => {
         await route.fulfill({
@@ -475,9 +475,10 @@ for (const availability of [
       });
       await page.getByRole("button", { name: HELP_BUTTON_NAME }).click();
       const drawer = page.getByRole("dialog", { name: HELP_BUTTON_NAME });
-      await expect(drawer.getByRole("alert")).toContainText("Action failed", {
-        timeout: 30_000,
-      });
+      await expect(drawer.getByRole("alert")).toContainText(
+        "Action failed",
+        {},
+      );
       await expect(
         drawer.locator("li").filter({ hasText: availability.title }),
       ).toHaveCount(0);

@@ -144,18 +144,13 @@ test.each([
     // Nothing above the reader provides the gate, so the only availability
     // read is the one the overlay host makes for itself. Without it the
     // overlay panics and its boundary shows the error fallback instead.
-    await waitFor(
-      () => {
-        expect(availabilityReads).toBeGreaterThan(0);
-      },
-      { timeout: 15_000 },
-    );
+    await waitFor(() => {
+      expect(availabilityReads).toBeGreaterThan(0);
+    });
     expect(screen.getByText(READER_CONTENT)).toBeDefined();
     expect(screen.queryByText(messages.common.somethingWentWrong)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
-    const composer = await screen.findByRole("textbox", undefined, {
-      timeout: 15_000,
-    });
+    const composer = await screen.findByRole("textbox", undefined);
     if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
       panic("Expected the reader overlay's mounted TipTap composer");
     }

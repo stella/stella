@@ -1,4 +1,6 @@
-import { afterAll, afterEach, beforeEach, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, mock } from "bun:test";
+
+import { DEFAULT_WAIT_TIMEOUT_MS } from "@stll/test-kit";
 
 import {
   installDomNetworkGuard,
@@ -12,6 +14,13 @@ import {
   markTimerTestStarted,
   reportLeakedTimers,
 } from "@/testing/timer-guard";
+
+beforeAll(async () => {
+  // This is a hang guard, not a speed assertion. DOM test files install their
+  // document at module scope, before hooks run and Testing Library is loaded.
+  const { configure } = await import("@testing-library/dom");
+  configure({ asyncUtilTimeout: DEFAULT_WAIT_TIMEOUT_MS });
+});
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.

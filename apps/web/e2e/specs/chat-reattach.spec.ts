@@ -12,16 +12,16 @@ test("reloading a running turn rejoins its answer without duplication", async ({
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Summarize the notice provisions");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[\da-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[\da-f-]+$/u);
   const transcript = page.getByRole("log");
   const stop = page.getByRole("button", { name: "Stop", exact: true });
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(stop).toBeHidden({ timeout: 30_000 });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
+  await expect(stop).toBeHidden();
   await composer.fill(LIVE_STREAM_PROMPT);
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(stop).toBeVisible();
@@ -46,7 +46,7 @@ test("reloading a running turn rejoins its answer without duplication", async ({
   await expect(stop).toBeEnabled();
   await page.screenshot({ path: test.info().outputPath("after-catchup.png") });
   await stop.click();
-  await expect(stop).toBeHidden({ timeout: 30_000 });
+  await expect(stop).toBeHidden();
   await expect(transcript).toContainText("Stopped");
   const settled = await answer.textContent();
   assert.ok(settled !== null, "The stopped answer must contain text");
@@ -68,21 +68,21 @@ test("a pending question survives reload and continues its original turn", async
   }
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Ask me, then answer with nothing please");
   await page.getByRole("button", { name: "Send message" }).click();
   const transcript = page.getByRole("log");
   const submit = transcript.getByRole("button", { name: "Submit answers" });
-  await expect(submit).toBeVisible({ timeout: 30_000 });
+  await expect(submit).toBeVisible();
   const threadUrl = page.url();
   await page.reload({ waitUntil: "commit" });
-  await expect(submit).toBeVisible({ timeout: 30_000 });
+  await expect(submit).toBeVisible();
   await expect(transcript).toContainText("Which side?");
   await transcript.getByPlaceholder("Your answer").fill("Buyer");
   await submit.click();
-  await expect(transcript.getByRole("button", { name: "Resend" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Resend" })).toBeVisible(
+    {},
+  );
   expect(page.url()).toBe(threadUrl);
   await expect(transcript).toContainText("Buyer");
   // The answered card numbers its questions ("1. Which side?"); the question
@@ -97,24 +97,20 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Summarize the notice provisions");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[\da-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[\da-f-]+$/u);
   await expect(
     page.getByRole("log").getByRole("button", { name: "Retry" }),
-  ).toBeVisible({
-    timeout: 30_000,
-  });
+  ).toBeVisible();
   const observer = await context.newPage();
   const untrack = browserErrors.trackPage(observer);
   try {
     await observer.goto(page.url(), { waitUntil: "commit" });
     await expect(
       observer.getByRole("log").getByRole("button", { name: "Retry" }),
-    ).toBeVisible({
-      timeout: 30_000,
-    });
+    ).toBeVisible();
     // This turn ends only through cancellation, so reload cannot race a
     // finite mock reply finishing and morphing Stop into disabled Send.
     await composer.fill(LIVE_STREAM_PROMPT);
@@ -137,15 +133,13 @@ test("Stop in another tab cancels a detached turn and settles both viewers", asy
       expect((await join).ok()).toBe(true);
     }
     const stop = observer.getByRole("button", { name: "Stop", exact: true });
-    await expect(stop).toBeVisible({ timeout: 30_000 });
+    await expect(stop).toBeVisible();
     await expect(stop).toBeEnabled();
     await stop.click();
-    await expect(stop).toBeHidden({ timeout: 30_000 });
+    await expect(stop).toBeHidden();
     await expect(
       page.getByRole("button", { name: "Stop", exact: true }),
-    ).toBeHidden({
-      timeout: 30_000,
-    });
+    ).toBeHidden();
     await expect(observer.getByRole("log")).toContainText("Stopped");
     await expect(page.getByRole("log")).toContainText("Stopped");
     const stoppedText = await observer

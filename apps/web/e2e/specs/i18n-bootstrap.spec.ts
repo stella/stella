@@ -17,7 +17,7 @@ test("malformed persisted i18n state cannot block app bootstrap", async ({
 
   await page.goto("/", { waitUntil: "commit" });
 
-  await expect(page).toHaveURL(/\/auth\/?$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/auth\/?$/u);
   await expect
     .poll(async () =>
       page.evaluate((key) => localStorage.getItem(key), storageKey),

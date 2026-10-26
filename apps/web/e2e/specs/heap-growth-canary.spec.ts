@@ -89,9 +89,7 @@ test("repeated navigation does not grow the JS heap unboundedly", async ({
   // Single full navigation to enter the app; every navigation after this
   // point is a client-side sidebar link click (see the module comment above).
   await page.goto("/chat", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(CHAT_READY_SELECTOR)).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.locator(CHAT_READY_SELECTOR)).toBeVisible();
   await page.waitForTimeout(ROUTE_SETTLE_MS);
 
   const heapSnapshots: number[] = [];
@@ -143,17 +141,15 @@ const runNavigationCycle = async (page: Page) => {
     // Sidebar chrome can briefly render a loading skeleton across a route
     // transition (recents/pinned data refetching); an explicit visibility
     // wait survives that instead of racing click()'s shorter action timeout.
-    await expect(link).toBeVisible({ timeout: 30_000 });
+    await expect(link).toBeVisible();
     await link.click();
     await page.waitForURL((url) => url.pathname === route.path, {
       timeout: 30_000,
     });
     await expect(
       page.locator(`[data-heap-canary-route-root="${marker}"]`),
-    ).toHaveCount(0, { timeout: 30_000 });
-    await expect(page.locator(route.readySelector)).toBeVisible({
-      timeout: 30_000,
-    });
+    ).toHaveCount(0);
+    await expect(page.locator(route.readySelector)).toBeVisible();
     await page.waitForTimeout(ROUTE_SETTLE_MS);
   }
 };

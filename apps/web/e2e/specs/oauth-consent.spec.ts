@@ -124,7 +124,7 @@ const openConsent = async ({
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
 };
 
 test("OAuth consent keeps its decision in view on a laptop and a phone", async ({
@@ -286,7 +286,7 @@ test("account switching preserves the signed OAuth query through auth routing", 
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === "/consent");
 
   const queryBeforeSwitch = new URLSearchParams(
@@ -390,7 +390,7 @@ test("organization picker names the signed-in account and switches it without lo
   });
   await expect(
     page.getByText(`Second organization ${id}`, { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(
     page.getByText("Select an organization", { exact: true }),
   ).toBeVisible();
@@ -437,9 +437,7 @@ test("a client asking for a fresh sign-in gets the sign-in form despite a sessio
       waitUntil: "commit",
     },
   );
-  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await expect(page.getByPlaceholder("you@example.com")).toBeVisible();
   await expect(page).toHaveURL((url) => {
     const signedQuery = new URLSearchParams(url.hash.slice(1)).get(
@@ -493,7 +491,7 @@ test("a client asking for account selection gets the organization step with the 
   );
   await expect(
     page.getByText("Select an organization", { exact: true }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(page).toHaveURL((url) => url.pathname === "/auth/organization");
   await expect(
     page.getByRole("term").filter({ hasText: "Account" }),
@@ -507,7 +505,7 @@ test("a client asking for account selection gets the organization step with the 
     page.getByRole("heading", {
       name: `Connect Consent browser test ${id} to stella`,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
 });
 
 test("consent discloses permissions on demand and brands only verified locations", async ({

@@ -45,17 +45,17 @@ for (const kind of KINDS) {
     const composer = page.getByRole("textbox", {
       name: /type your question/iu,
     });
-    await expect(composer).toBeVisible({ timeout: 30_000 });
+    await expect(composer).toBeVisible();
     await composer.click();
     await composer.pressSequentially("Start this test thread");
     await page.getByRole("button", { name: "Send message" }).click();
     await expect(page).toHaveURL(
       /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-      { timeout: 30_000 },
+      {},
     );
     const transcript = page.getByRole("log");
     await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
-      { timeout: 30_000 },
+      {},
     );
 
     // The measured turn streams inside the settled thread route.
@@ -83,11 +83,11 @@ for (const kind of KINDS) {
     // Measure their actual SSE delivery instead of requiring that transient UI.
     expect(await (await streamed).finished()).toBeNull();
     const stop = page.getByRole("button", { name: "Stop" });
-    await expect(stop).toHaveCount(0, { timeout: 60_000 });
+    await expect(stop).toHaveCount(0);
     if (WAITS_ON_USER[kind]) {
       await expect(
         transcript.getByRole("button", { name: "Submit answers" }),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible();
     } else {
       // The initial reply already has one Retry action. The second proves the
       // browser processed this turn's terminal before sampling its commits.

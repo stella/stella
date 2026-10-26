@@ -74,7 +74,6 @@ test.describe("kanban card drag", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
         },
       )
       .toBe(200);
@@ -88,7 +87,7 @@ test.describe("kanban card drag", () => {
 
     const openColumn = column("Open");
     const inProgressColumn = column("In progress");
-    await expect(openColumn).toBeVisible({ timeout: 30_000 });
+    await expect(openColumn).toBeVisible();
     await expect(inProgressColumn).toBeVisible();
 
     const card = openColumn.getByText(cardName, { exact: true });

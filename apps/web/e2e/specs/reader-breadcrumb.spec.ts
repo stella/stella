@@ -337,7 +337,7 @@ for (const view of views) {
     const inspector = page.locator('[data-slot="inspector-dock-pane"]');
     await expect(
       inspector.locator(`[data-anchor="${view.anchors.active}"]`),
-    ).toBeAttached({ timeout: 30_000 });
+    ).toBeAttached();
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       if (surface === "main" && view.kind !== "statute") {

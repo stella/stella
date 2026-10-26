@@ -10,9 +10,7 @@ import {
 
 const openSearch = async (page: Page, route = "/workspaces") => {
   await page.goto(route, { waitUntil: "commit" });
-  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible();
 
   const modifier = await page.evaluate(() =>
     navigator.platform.includes("Mac") ? "Meta" : "Control",
@@ -20,7 +18,7 @@ const openSearch = async (page: Page, route = "/workspaces") => {
   await page.keyboard.press(`${modifier}+k`);
 
   const input = page.getByRole("combobox").first();
-  await expect(input).toBeVisible({ timeout: 30_000 });
+  await expect(input).toBeVisible();
   return input;
 };
 
@@ -166,7 +164,7 @@ test.describe("global create actions", () => {
       .poll(
         async () =>
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
-        { timeout: 10_000 },
+        {},
       )
       .toBe(200);
 
@@ -216,9 +214,7 @@ test.describe("global create actions", () => {
     await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
       waitUntil: "domcontentloaded",
     });
-    await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.locator('[data-slot="sidebar"]')).toBeVisible();
 
     const input = await openSearch(page, `/workspaces/${testWorkspace.id}`);
     const taskAction = page.locator(
@@ -227,9 +223,7 @@ test.describe("global create actions", () => {
     await expect(taskAction).toBeVisible();
     await expect(input).toHaveValue("");
     await taskAction.click();
-    await expect(page.getByPlaceholder("Untitled task")).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(page.getByPlaceholder("Untitled task")).toBeVisible();
 
     const uploadInput = await openSearch(
       page,

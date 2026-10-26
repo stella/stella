@@ -178,10 +178,8 @@ test("anonymous visitors can search and browse by legal task", async ({
   await expect(async () => {
     await search.fill("");
     await search.fill("Companies House");
-    await expect(page.getByText("1 result", { exact: true })).toBeVisible({
-      timeout: 1000,
-    });
-  }).toPass({ timeout: 15_000 });
+    await expect(page.getByText("1 result", { exact: true })).toBeVisible();
+  }).toPass();
   await expect(
     page.getByRole("link", { name: /Companies House/u }),
   ).toBeVisible();

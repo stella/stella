@@ -97,7 +97,6 @@ test.describe("per-view table state", () => {
           await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
         {
           message: "browser context can read the created workspace",
-          timeout: 10_000,
         },
       )
       .toBe(200);
@@ -113,7 +112,7 @@ test.describe("per-view table state", () => {
       exact: true,
       name: secondView.name,
     });
-    await expect(firstTab).toBeVisible({ timeout: 30_000 });
+    await expect(firstTab).toBeVisible();
     await expect(secondTab).toBeVisible();
 
     // Content mode is persisted alongside column widths and is one click to
@@ -143,7 +142,7 @@ test.describe("per-view table state", () => {
     );
 
     await page.goto(viewUrl, { waitUntil: "domcontentloaded" });
-    await expect(firstTab).toBeVisible({ timeout: 30_000 });
+    await expect(firstTab).toBeVisible();
     await expect(secondTab).toBeHidden();
     await expect
       .poll(async () => (await readContentModes(page))?.[testWorkspace.id], {

@@ -7,14 +7,14 @@ test("a word copied from a transcript pastes only that selection", async ({
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Clipboard");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
   const transcript = page.getByRole("log");
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
 
   const message = transcript.getByText("Clipboard", { exact: true });
   const wordPosition = await message.evaluate((element) => {
@@ -61,7 +61,7 @@ test("composer ignores whole-page HTML when plain text is short or absent", asyn
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   const html =
     "<main><nav>Unselected navigation</nav><article><p>Unselected thread</p><button>Technical action</button></article><footer>Unselected footer</footer></main>";
   for (const plain of ["Selected word", ""]) {

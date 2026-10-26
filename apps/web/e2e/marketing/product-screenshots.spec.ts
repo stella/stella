@@ -62,11 +62,6 @@ const MARKETING_URLS = {
   webUrl: process.env["E2E_WEB_URL"] ?? "http://localhost:3000",
 };
 
-// Route chunks are compiled on demand by the dev server, so the first visit to
-// each route pays a cold build that the config's 15s expect timeout cannot
-// cover on a CI runner. Mirrors the same allowance in e2e/specs/route-smoke.
-const COLD_COMPILE_TIMEOUT = 60_000;
-
 // The document inspector renders `${versionLabel} · ${formatRelativeTime(...)}`
 // against the current version's timestamp, so the caption changes with wall
 // clock time and drifts every baseline it appears in. Captures carrying a
@@ -205,12 +200,8 @@ test("capture landing product screenshots", async ({
   // splash paints (measured at ~11s locally, several times that on a CI
   // runner). Absorb that one-time cost here so the per-capture waits below
   // only ever cover a route transition.
-  await expect(page.locator("main").first()).toBeVisible({
-    timeout: COLD_COMPILE_TIMEOUT,
-  });
-  await expect(page.getByText("Legal database").first()).toBeVisible({
-    timeout: COLD_COMPILE_TIMEOUT,
-  });
+  await expect(page.locator("main").first()).toBeVisible();
+  await expect(page.getByText("Legal database").first()).toBeVisible();
 
   // Start from no edit lock: a lock left by an earlier run would badge the
   // Supplier Agreement row in the workspace shot.
@@ -296,13 +287,11 @@ test("capture landing product screenshots", async ({
       // Each capture is the first visit to its route, so its chunk compiles on
       // demand here too; the config's 15s expect timeout is not enough for that
       // on a CI runner.
-      await expect(page.getByText(capture.readyText).first()).toBeVisible({
-        timeout: COLD_COMPILE_TIMEOUT,
-      });
+      await expect(page.getByText(capture.readyText).first()).toBeVisible();
       if ("readySelector" in capture) {
-        await expect(page.locator(capture.readySelector).first()).toBeVisible({
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
+        await expect(page.locator(capture.readySelector).first()).toBeVisible(
+          {},
+        );
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
         // Open the reader directly from its seeded conversation metadata.
@@ -311,9 +300,7 @@ test("capture landing product screenshots", async ({
         // The case detail is its own code-split chunk, so this is the first
         // load of another route: same cold-compile allowance as the
         // navigations above, not the config's 15s default.
-        await expect(page.locator("article").first()).toBeVisible({
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
+        await expect(page.locator("article").first()).toBeVisible();
         // The reader briefly renders the logged-out workspace while the
         // client-side session query settles, then swaps in the authenticated
         // workspace. Wait for that swap before checking its generated outline.
@@ -343,13 +330,9 @@ test("capture landing product screenshots", async ({
         const inspectorChat = page.locator(
           '[data-slot="inspector-chat-panel"]:visible',
         );
-        await expect(inspectorChat).toHaveCount(1, {
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
+        await expect(inspectorChat).toHaveCount(1);
         const messages = inspectorChat.locator("[data-chat-message-id]");
-        await expect(messages).toHaveCount(4, {
-          timeout: COLD_COMPILE_TIMEOUT,
-        });
+        await expect(messages).toHaveCount(4);
         for (const [index, text] of [
           scenario.question,
           scenario.answer,
@@ -512,7 +495,7 @@ test("capture landing product screenshots", async ({
         // rather than a single hit.
         await expect(
           page.locator('main a[href*="/cases/"]').nth(1),
-        ).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });
+        ).toBeVisible();
         await page.waitForLoadState("networkidle");
         await expect(page.locator("#route-error-title")).toHaveCount(0);
       }

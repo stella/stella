@@ -40,12 +40,12 @@ const expectCollaborativeDocumentReady = async ({
   // Publication is enabled only after the editor has joined and synced.
   await expect(
     page.getByRole("button", { exact: true, name: "Create version" }).first(),
-  ).toBeEnabled({ timeout: 45_000 });
+  ).toBeEnabled();
   await expect(
     page.getByRole("status").filter({ hasText: "Synced" }).first(),
   ).toBeVisible();
   await expect
-    .poll(async () => await readDocumentText(page), { timeout: 45_000 })
+    .poll(async () => await readDocumentText(page))
     .toContain(expectedText);
 };
 
@@ -208,9 +208,7 @@ test.describe("lockless DOCX collaboration", () => {
         collaboratorPage.keyboard.insertText(whilePublishingToken),
       ]);
       expect((await publishResponse).ok()).toBe(true);
-      await expect(page.getByText("Version created").first()).toBeVisible({
-        timeout: 45_000,
-      });
+      await expect(page.getByText("Version created").first()).toBeVisible();
 
       await expect
         .poll(async () => await readDocumentText(page))
@@ -286,9 +284,7 @@ test.describe("lockless DOCX collaboration", () => {
         .first()
         .click();
       expect((await secondPublishResponse).ok()).toBe(true);
-      await expect(page.getByText("Version created").first()).toBeVisible({
-        timeout: 45_000,
-      });
+      await expect(page.getByText("Version created").first()).toBeVisible();
       await expect
         .poll(async () => await readDocumentText(rejoinedPage))
         .toContain(secondToken);

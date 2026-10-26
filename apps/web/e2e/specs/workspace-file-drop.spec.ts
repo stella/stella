@@ -68,7 +68,6 @@ const openFilesView = async (
         await apiStatus(page.request, `/workspaces/${testWorkspace.id}`),
       {
         message: "browser context can read the created workspace",
-        timeout: 10_000,
       },
     )
     .toBe(200);
@@ -128,7 +127,7 @@ test.describe("workspace file drop", () => {
     await openFilesView(page, request, testWorkspace);
     await expect(
       page.getByRole("heading", { name: "Upload your first documents" }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible();
 
     const shellContent = page.locator('[data-slot="workspace-shell-content"]');
     const dropZone = shellContent.locator(
@@ -160,7 +159,7 @@ test.describe("workspace file drop", () => {
     // exactly one also fails if the drop created the file twice.
     await expect(
       shellContent.getByRole("button", { name: /^simple\.docx\b/u }),
-    ).toHaveCount(1, { timeout: 60_000 });
+    ).toHaveCount(1);
   });
   test("a native file dropped on a folder row uploads into that folder", async ({
     page,
@@ -177,7 +176,7 @@ test.describe("workspace file drop", () => {
 
     await openFilesView(page, request, testWorkspace);
     const folderLabel = page.getByTitle(folderName, { exact: true });
-    await expect(folderLabel).toBeVisible({ timeout: 30_000 });
+    await expect(folderLabel).toBeVisible();
     const folderBox = await folderLabel.boundingBox();
     if (folderBox === null) {
       throw new Error("Folder row geometry is unavailable");
@@ -203,7 +202,7 @@ test.describe("workspace file drop", () => {
       page
         .locator('[data-slot="workspace-shell-content"]')
         .getByRole("button", { name: /^simple\.docx\b/u }),
-    ).toHaveCount(1, { timeout: 60_000 });
+    ).toHaveCount(1);
   });
 
   test("the keyboard upload inside a folder still targets that folder", async ({
@@ -221,7 +220,7 @@ test.describe("workspace file drop", () => {
 
     await openFilesView(page, request, testWorkspace);
     const folderLabel = page.getByTitle(folderName, { exact: true });
-    await expect(folderLabel).toBeVisible({ timeout: 30_000 });
+    await expect(folderLabel).toBeVisible();
     await folderLabel.dblclick();
 
     const shellContent = page.locator('[data-slot="workspace-shell-content"]');

@@ -54,6 +54,7 @@
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",
+    "@stll/test-kit": "0.3.0",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "catalog:",
     "@testing-library/dom": "10.4.2",

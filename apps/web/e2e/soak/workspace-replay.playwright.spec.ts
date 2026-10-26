@@ -42,7 +42,6 @@ const DEFAULT_SEED = 20_260_919;
 const DEFAULT_STEPS = 25;
 const FIXED_TIME = "2026-09-19T12:00:00.000Z";
 const FIXTURE_FILE_NAME = "workspace-replay.docx";
-const COLD_START_TIMEOUT_MS = 120_000;
 
 type RunConfig = {
   seed: number;
@@ -195,16 +194,13 @@ test("deterministically explores the synthetic matter workspace", async ({
       async () => await apiStatus(page.request, `/workspaces/${workspace.id}`),
       {
         message: "browser context can read the synthetic matter",
-        timeout: 10_000,
       },
     )
     .toBe(200);
   await page.goto(`/workspaces/${workspace.id}/${workspace.viewId}`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible({
-    timeout: COLD_START_TIMEOUT_MS,
-  });
+  await expect(page.locator('[data-slot="sidebar"]')).toBeVisible();
 
   const httpFailures = trackApiFailures(page);
   const context: WorkspaceDriverContext = {

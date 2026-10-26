@@ -102,9 +102,7 @@ for (const { path, listPath } of cases) {
       state: "expanded",
     });
     await page.goto("/knowledge", { waitUntil: "commit" });
-    await expect(appShellNavigationLink(page, path)).toBeVisible({
-      timeout: 30_000,
-    });
+    await expect(appShellNavigationLink(page, path)).toBeVisible();
     await expectSingleShell(page);
     const list = await holdRequest(page, listPath);
     const content = page.locator('[data-slot="workspace-shell-content"]');
@@ -130,7 +128,7 @@ for (const { path, listPath } of cases) {
       await expect(page.locator("html")).toHaveAttribute(
         "data-parent-loader-settled",
         "true",
-        { timeout: 2000 },
+        {},
       );
       // The router can retain the parent fallback until its child settles.
       // Prove the actual page loader remains in flight instead of requiring
@@ -138,11 +136,11 @@ for (const { path, listPath } of cases) {
       await expect(page.locator("html")).toHaveAttribute(
         "data-page-loader-state",
         "running",
-        { timeout: 2000 },
+        {},
       );
       await expect(
         content.locator('[data-slot="skeleton"]').first(),
-      ).toBeVisible({ timeout: 2000 });
+      ).toBeVisible();
       await expectSingleShell(page);
 
       const listResponse = page.waitForResponse(

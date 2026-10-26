@@ -89,7 +89,7 @@ const expectDockGeometry = async (page: Page) => {
     .filter({
       has: page.getByRole("dialog", { name: messages.chat.aiThread }),
     });
-  await expect(thread).toHaveCount(1, { timeout: 45_000 });
+  await expect(thread).toHaveCount(1);
   const card = thread.getByRole("dialog", { name: messages.chat.aiThread });
   await expect(card).toContainText("Saved geometry test answer.");
   await expect

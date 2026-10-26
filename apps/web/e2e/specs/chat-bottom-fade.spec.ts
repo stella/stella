@@ -12,14 +12,14 @@ test("transcript fade appears only while content remains below the viewport", as
   await page.setViewportSize({ width: 960, height: 540 });
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill(LONG_REVIEW_REQUEST);
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
   const transcript = page.getByRole("log");
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
   const viewport = transcript.locator('[data-slot="scroll-area-viewport"]');
   const fade = page.locator("[data-chat-bottom-fade]");
   expect(
@@ -55,12 +55,12 @@ test("transcript fade appears only while content remains below the viewport", as
   await composer.fill("Stream until stopped please");
   await page.getByRole("button", { name: "Send message" }).click();
   const stop = page.getByRole("button", { name: "Stop", exact: true });
-  await expect(stop).toBeVisible({ timeout: 30_000 });
+  await expect(stop).toBeVisible();
   await expect(
     transcript.getByText("This mock reply streams back", { exact: false }),
   ).toBeVisible();
   await expect(fade).toBeHidden();
   await stop.click();
-  await expect(stop).toBeHidden({ timeout: 30_000 });
+  await expect(stop).toBeHidden();
   await expect(fade).toBeHidden();
 });

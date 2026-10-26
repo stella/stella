@@ -19,7 +19,7 @@ test("sidebar color picker stays open when custom colors are expanded", async ({
       .locator('[data-sidebar="menu-item"]')
       .filter({ hasText: workspaceName });
     const matterLink = matterItem.getByRole("link", { name: workspaceName });
-    await expect(matterLink).toBeVisible({ timeout: 30_000 });
+    await expect(matterLink).toBeVisible();
 
     const colorTrigger = matterItem.getByRole("button", {
       name: "Change color",

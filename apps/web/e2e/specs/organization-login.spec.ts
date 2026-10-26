@@ -81,11 +81,11 @@ test("selecting an organization completes login and renders the destination", as
   const organization = page.getByRole("button", {
     name: organizationName,
   });
-  await expect(organization).toBeVisible({ timeout: 30_000 });
+  await expect(organization).toBeVisible();
   await organization.click();
 
-  await expect(page).toHaveURL(/\/chat\/?$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/?$/u);
   await expect(
     page.getByRole("textbox", { name: /type your question/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
 });

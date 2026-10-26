@@ -29,7 +29,7 @@ test("anonymized-mode typing keeps every keystroke and paints highlights", async
   const composer = page.getByRole("textbox", { name: /type your question/iu });
   // First locator after navigation: a cold server can compile the chat route
   // chunk on demand, exceeding the default expect timeout.
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
 
   // Enabling anonymized mode also warms up the wasm worker, so the pipeline
   // loads while the burst below is being typed.
@@ -52,7 +52,7 @@ test("anonymized-mode typing keeps every keystroke and paints highlights", async
   // cold, hence the generous timeout on the first highlight.
   const highlights = composer.locator(".stll-anon-highlight");
   await expect(highlights.filter({ hasText: "Jan Novák" }).first()).toBeVisible(
-    { timeout: 45_000 },
+    {},
   );
   await expect(
     highlights.filter({ hasText: "jan.novak@example.com" }).first(),

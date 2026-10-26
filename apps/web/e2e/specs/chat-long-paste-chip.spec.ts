@@ -11,7 +11,7 @@ for (const pointer of ["fine", "coarse"]) {
         const composer = page.locator(
           '[role="textbox"][contenteditable="true"]',
         );
-        await expect(composer).toBeVisible({ timeout: 30_000 });
+        await expect(composer).toBeVisible();
         const text = `Pasted contract excerpt\r\n\t${"A".repeat(1501)}\n `;
         const paste = async () => {
           await composer.evaluate((element, content) => {

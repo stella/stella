@@ -13,10 +13,6 @@ import { JOURNEY_TAG } from "../playwright.journeys.config";
 
 const TURN_FILLER = "Clause ".repeat(25_000);
 const MAX_TURNS = 16;
-// The compactor's worst case after the thread is marked due: its five-minute
-// cadence, one runner wait (a minute), one sweep (under a minute) and the
-// compactor's one-minute run budget.
-const COMPACTION_SETTLE_MS = 8 * 60_000;
 // One mock-model turn, from send to its persisted reply.
 const TURN_SETTLE_MS = 2 * 60_000;
 const CHAT_THREAD_PATH = /\/chat\/([0-9a-f-]{36})$/u;
@@ -95,16 +91,13 @@ const sendTurn = async ({
   // The streamed response is not the turn's end signal: the browser need not
   // report its body finished. The thread does: no active turn, this reply kept.
   await expect
-    .poll(
-      async () => {
-        const thread = await readThread(request, threadId);
-        return {
-          activeTurnId: thread.activeTurnId,
-          assistantReplies: assistantMessages(thread).length,
-        };
-      },
-      { timeout: TURN_SETTLE_MS },
-    )
+    .poll(async () => {
+      const thread = await readThread(request, threadId);
+      return {
+        activeTurnId: thread.activeTurnId,
+        assistantReplies: assistantMessages(thread).length,
+      };
+    })
     .toEqual({ activeTurnId: null, assistantReplies: turn });
   return await readThread(request, threadId);
 };
@@ -135,7 +128,7 @@ test(
   async ({ page, request }) => {
     test.setTimeout(11 * 60_000);
     await page.goto("/chat/new", { waitUntil: "commit" });
-    await expect(chatComposer(page)).toBeVisible({ timeout: 60_000 });
+    await expect(chatComposer(page)).toBeVisible();
 
     let turn = 1;
     let thread = await sendTurn({ page, request, turn });
@@ -156,7 +149,7 @@ test(
       .poll(
         async () =>
           (await readThread(request, threadId)).context.summarizedMessageCount,
-        { intervals: [10_000], timeout: COMPACTION_SETTLE_MS },
+        { intervals: [10_000] },
       )
       .toBeGreaterThan(0);
     thread = await readThread(request, threadId);
@@ -178,7 +171,7 @@ test(
       reloadedThread.context.summarizedMessageCount,
     ).toBeGreaterThanOrEqual(thread.context.summarizedMessageCount);
     expect(reloadedThread.context.breakdown.summaryTokens).toBeGreaterThan(0);
-    await expect(page.getByRole("log")).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole("log")).toBeVisible();
     await expectNoTrimmedHistory(page, reloadedThread);
   },
 );

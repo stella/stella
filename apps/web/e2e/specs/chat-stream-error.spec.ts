@@ -49,7 +49,7 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   await expect(errorBoundary).toHaveCount(0);
 
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
 
   await composer.click();
   await composer.pressSequentially(EMPTY_COMPLETION_MARKER);
@@ -60,22 +60,20 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   // client-generated uuidv7.
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    {},
   );
 
   const transcript = page.getByRole("log");
 
   // The user message must survive the failed turn — the incident dropped the
   // whole thread back to an empty state.
-  await expect(transcript).toContainText(EMPTY_COMPLETION_MARKER, {
-    timeout: 30_000,
-  });
+  await expect(transcript).toContainText(EMPTY_COMPLETION_MARKER);
 
   // Every ChatErrorMessage variant renders a "Resend" button
   // (apps/web/src/components/chat/chat-thread-messages.tsx); its presence pins
   // the turn as visibly failed rather than silently swallowed.
   const resend = transcript.getByRole("button", { name: "Resend" });
-  await expect(resend).toBeVisible({ timeout: 30_000 });
+  await expect(resend).toBeVisible();
   // The kind-specific copy (chat.sendErrorEmptyCompletion), not the generic
   // send error: reverting the empty_completion classification in
   // apps/api/src/lib/ai-error.ts drops this back to generic copy and fails
@@ -96,7 +94,7 @@ test("a first-turn stream error surfaces retry UI without a render storm", async
   );
   await resend.click();
   await secondTurn;
-  await expect(resend).toBeEnabled({ timeout: 30_000 });
+  await expect(resend).toBeEnabled();
   await expect(transcript).toContainText(EMPTY_COMPLETION_MARKER);
   await expect(transcript).toContainText(EMPTY_REPLY_COPY);
   await expect(errorBoundary).toHaveCount(0);
@@ -122,26 +120,26 @@ test("an empty answer to an answered question surfaces retry UI, live and after 
   await page.goto("/chat", { waitUntil: "commit" });
 
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.click();
   await composer.pressSequentially(EMPTY_CONTINUATION_MARKER);
   await page.getByRole("button", { name: "Send message" }).click();
 
   const transcript = page.getByRole("log");
   const submit = transcript.getByRole("button", { name: "Submit answers" });
-  await expect(submit).toBeVisible({ timeout: 30_000 });
+  await expect(submit).toBeVisible();
   await transcript.getByPlaceholder("Your answer").fill("Buyer");
   await submit.click();
 
   const resend = transcript.getByRole("button", { name: "Resend" });
-  await expect(resend).toBeVisible({ timeout: 30_000 });
+  await expect(resend).toBeVisible();
   await expect(transcript).toContainText(EMPTY_REPLY_COPY);
   // The question and its answer stay on the failed turn.
   await expect(transcript).toContainText("Which side?");
   await expect(transcript).toContainText("Buyer");
 
   await page.reload({ waitUntil: "commit" });
-  await expect(resend).toBeVisible({ timeout: 30_000 });
+  await expect(resend).toBeVisible();
   await expect(transcript).toContainText(EMPTY_REPLY_COPY);
   await expect(transcript).toContainText("Which side?");
   await expect(transcript).toContainText("Buyer");

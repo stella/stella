@@ -32,7 +32,7 @@ test("composer draft survives typing while a response is streaming", async ({
   // First locator after navigation: a cold Vite dev server compiles the
   // chat route chunk on demand, which can exceed the default 10s expect
   // timeout on a fresh CI runner (see playwright.config.ts).
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
 
   await composer.click();
   await composer.pressSequentially("Start this test thread");
@@ -46,13 +46,13 @@ test("composer draft survives typing while a response is streaming", async ({
   // timeout on a cold CI runner — the same headroom the waits below use.
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    {},
   );
 
   const transcript = page.getByRole("log");
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
 
   // New-thread navigation settles after its first response, so exercise the
   // overlap on a second turn inside the stable thread route. The editor's
@@ -66,7 +66,7 @@ test("composer draft survives typing while a response is streaming", async ({
   await page.getByRole("button", { name: "Send message" }).click();
 
   const stopButton = page.getByRole("button", { name: "Stop", exact: true });
-  await expect(stopButton).toBeVisible({ timeout: 30_000 });
+  await expect(stopButton).toBeVisible();
   const answer = transcript.getByText("This mock reply streams back", {
     exact: false,
   });
@@ -82,7 +82,7 @@ test("composer draft survives typing while a response is streaming", async ({
   expect(await answer.textContent()).not.toBe(beforeTyping);
 
   await stopButton.click();
-  await expect(stopButton).toBeHidden({ timeout: 30_000 });
+  await expect(stopButton).toBeHidden();
   await expect(transcript).toContainText("Stopped");
 
   // The draft typed during streaming must have survived every re-render the
@@ -111,18 +111,18 @@ test("a streamed tool input does not re-render the page per delta", async ({
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.click();
   await composer.pressSequentially("Start this test thread");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    {},
   );
   const transcript = page.getByRole("log");
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
 
   // The second turn streams inside the settled thread route, as in the test
   // above.
@@ -139,10 +139,10 @@ test("a streamed tool input does not re-render the page per delta", async ({
   // console.error fails this test through the `browserErrors` fixture.
   await expect(
     page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(
     transcript.getByText("The draft is open in the panel"),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );

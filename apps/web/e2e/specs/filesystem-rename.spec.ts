@@ -71,7 +71,7 @@ test.describe("filesystem rename", () => {
     const originalName = page.getByTitle(`${LONG_BASE_NAME}.docx`, {
       exact: true,
     });
-    await expect(originalName).toBeVisible({ timeout: 30_000 });
+    await expect(originalName).toBeVisible();
     await originalName.locator("xpath=ancestor::button[1]").click({
       button: "right",
     });
@@ -125,7 +125,7 @@ test.describe("filesystem rename", () => {
     const renamedName = page.getByTitle(`${renamedBase}.docx`, {
       exact: true,
     });
-    await expect(renamedName).toBeVisible({ timeout: 1000 });
+    await expect(renamedName).toBeVisible();
 
     renameRequest.resolve(undefined);
     expect((await renameResponse).status()).toBe(200);

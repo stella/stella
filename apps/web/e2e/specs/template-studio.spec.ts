@@ -41,12 +41,12 @@ test.describe("Template Studio", () => {
         name: templateName,
         exact: true,
       });
-      await expect(template).toBeVisible({ timeout: 45_000 });
+      await expect(template).toBeVisible();
       await template.click();
       const editor = page.getByTestId("folio-editor");
-      await expect(editor.locator("[data-page-number]").first()).toBeVisible({
-        timeout: 45_000,
-      });
+      await expect(editor.locator("[data-page-number]").first()).toBeVisible(
+        {},
+      );
       await expect(
         page
           .locator('[data-slot="inspector"]')
@@ -130,7 +130,7 @@ test.describe("Template Studio", () => {
         exact: true,
         name: templateName,
       });
-      await expect(templateButton).toBeVisible({ timeout: 30_000 });
+      await expect(templateButton).toBeVisible();
       const historyLengthBeforeOpen = await page.evaluate(
         () => window.history.length,
       );
@@ -145,12 +145,12 @@ test.describe("Template Studio", () => {
       const fixtureText = page.locator(".layout-run-text", {
         hasText: "Stella E2E test document.",
       });
-      await expect(fixtureText).toBeVisible({ timeout: 45_000 });
+      await expect(fixtureText).toBeVisible();
       await fixtureText.click();
       await page.keyboard.insertText(editToken);
       await expect(
         page.locator(".layout-run-text", { hasText: editToken.trim() }),
-      ).toBeVisible({ timeout: 20_000 });
+      ).toBeVisible();
 
       const documentEditor = page.getByRole("textbox", {
         name: "Document content",
@@ -196,7 +196,7 @@ test.describe("Template Studio", () => {
 
       await expect(
         page.locator(".layout-run-text", { hasText: editToken.trim() }),
-      ).toBeVisible({ timeout: 45_000 });
+      ).toBeVisible();
       await expect(documentEditor).toContainText(conditionName);
     } finally {
       if (templateId !== null) {

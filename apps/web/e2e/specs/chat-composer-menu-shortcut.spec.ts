@@ -12,7 +12,7 @@ test("the slash shortcut opens a Skills popup that survives pointer movement", a
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.click();
   await page.keyboard.press("/");
 
@@ -94,7 +94,7 @@ test("the at-sign shortcut opens a Context popup and hands focus back on Escape"
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.click();
   await page.keyboard.press("@");
 
@@ -115,7 +115,7 @@ test("the pickers open wherever a word starts and stay literal inside one", asyn
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.click();
 
   // Inside a word the character types normally.

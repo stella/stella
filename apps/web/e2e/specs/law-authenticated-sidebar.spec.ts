@@ -85,7 +85,7 @@ test("authenticated law pages retain the user's recent matters", async ({
       page
         .locator('[data-slot="sidebar"]')
         .getByText(workspaceName, { exact: true }),
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible();
   } finally {
     await deleteTestWorkspace(request, workspace.id);
   }

@@ -18,7 +18,7 @@ test("model picker keeps its help and workspace chrome aligned", async ({
     inspectorRail.getByRole("button", {
       name: /^(Open chat|Show pane|Hide pane)$/u,
     }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   const inspectorInlineEndGap = async () =>
     inspectorRail.evaluate(
       (rail) => window.innerWidth - rail.getBoundingClientRect().right,
@@ -32,7 +32,7 @@ test("model picker keeps its help and workspace chrome aligned", async ({
     .toBeLessThanOrEqual(1);
 
   const modelPicker = page.getByRole("button", { name: "Auto", exact: true });
-  await expect(modelPicker).toBeVisible({ timeout: 30_000 });
+  await expect(modelPicker).toBeVisible();
   await modelPicker.click();
   await page.evaluate(() => {
     document.documentElement.style.scrollbarGutter = "stable";
@@ -105,7 +105,7 @@ test("prompt improvement menu uses task strategies", async ({ page }) => {
   const composer = page.getByRole("textbox", {
     name: /type your question/iu,
   });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Review this agreement and identify the material risks.");
 
   await page
@@ -132,14 +132,14 @@ test("/new with trailing text sends that text on a fresh thread", async ({
   await page.goto("/chat", { waitUntil: "commit" });
 
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Create the first conversation.");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
   const firstThreadPath = new URL(page.url()).pathname;
   await expect(
     page.getByRole("log").getByRole("button", { name: "Copy" }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
 
   const firstMessage = "Draft a mutual NDA for Acme.";
   const routedComposer = page.getByRole("textbox", {
@@ -149,11 +149,9 @@ test("/new with trailing text sends that text on a fresh thread", async ({
   await page.getByRole("button", { name: "Send message" }).click();
 
   await expect
-    .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
+    .poll(() => new URL(page.url()).pathname)
     .not.toBe(firstThreadPath);
-  await expect(page.getByRole("log").getByText(firstMessage)).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(page.getByRole("log").getByText(firstMessage)).toBeVisible();
   await expect(
     page.getByRole("log").getByText(`/new ${firstMessage}`),
   ).toHaveCount(0);
@@ -194,7 +192,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // First locator after navigation: a cold Vite dev server compiles the
   // chat route chunk on demand, which can exceed the default 10s expect
   // timeout on a fresh CI runner (see playwright.config.ts).
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
 
   const messageText =
     "Hello from the stella e2e chat spec. This deliberately long prompt wraps across several lines so the sticky user header has a different natural and compact height. ".repeat(
@@ -211,15 +209,13 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // timeout on a cold CI runner — the same headroom the waits below use.
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
-    { timeout: 30_000 },
+    {},
   );
 
   const transcript = page.getByRole("log");
   // First assertion on the thread route: its lazy chunk cold-compiles
   // on a fresh dev server, so allow the same headroom as the composer.
-  await expect(transcript.getByText(messageText)).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByText(messageText)).toBeVisible();
 
   // A "Copy" action renders only under an assistant message that has
   // non-empty text (AssistantMessageActions in
@@ -228,17 +224,17 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // proves an actual reply painted, independent of what the registered
   // mock model streams. Generous timeout: cold Vite chunks + the
   // streamed response both land inside this wait.
-  await expect(transcript.getByRole("button", { name: "Copy" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Copy" })).toBeVisible(
+    {},
+  );
 
   // "Retry" appears on the latest assistant message only once the
   // stream finished, so waiting for it pins the turn as complete before
   // the negative assertions below — otherwise an error chunk arriving
   // after partial text could slip past them.
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
 
   // Every ChatErrorMessage variant renders a "Resend" button
   // (apps/web/src/components/chat/chat-thread-messages.tsx:329-340);
@@ -251,7 +247,7 @@ test("chat composer sends a message and renders the assistant reply", async ({
   const followups = page.getByRole("group", {
     name: /suggested follow-up prompts/iu,
   });
-  await expect(followups).toBeVisible({ timeout: 30_000 });
+  await expect(followups).toBeVisible();
 
   // A populated thread advertises the first follow-up as a Tab-to-ask
   // suggestion. This is intentionally a different accessible name than the
@@ -380,25 +376,25 @@ test("a client-executed draft tool pauses the turn, opens the draft, and resumes
 }) => {
   await page.goto("/chat", { waitUntil: "commit" });
   const composer = page.getByRole("textbox", { name: /type your question/iu });
-  await expect(composer).toBeVisible({ timeout: 30_000 });
+  await expect(composer).toBeVisible();
   await composer.fill("Draft it as a document please: a mutual NDA.");
   await page.getByRole("button", { name: "Send message" }).click();
-  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/chat\/[0-9a-f-]+$/u);
 
   // The compiled draft opens in the inspector with its own file composer.
   await expect(
     page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
 
   // The continuation run answered with text: the transcript carries the reply
   // and no error bubble ("Resend" renders on every ChatErrorMessage variant).
   const transcript = page.getByRole("log");
   await expect(
     transcript.getByText("The draft is open in the panel"),
-  ).toBeVisible({ timeout: 30_000 });
-  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
-    timeout: 30_000,
-  });
+  ).toBeVisible();
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible(
+    {},
+  );
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );
@@ -408,10 +404,10 @@ test("a client-executed draft tool pauses the turn, opens the draft, and resumes
   await page.reload({ waitUntil: "commit" });
   await expect(
     page.getByRole("textbox", { name: /chat about or edit Mutual NDA/iu }),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(
     transcript.getByText("The draft is open in the panel"),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible();
   await expect(transcript.getByRole("button", { name: "Resend" })).toHaveCount(
     0,
   );

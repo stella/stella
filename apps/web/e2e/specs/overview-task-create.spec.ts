@@ -24,7 +24,7 @@ test("double-clicking Add creates one upcoming task", async ({
       has: page.getByRole("heading", { name: "Upcoming agenda", exact: true }),
     });
     const add = upcoming.getByRole("button", { name: "Add", exact: true });
-    await expect(add).toBeVisible({ timeout: 30_000 });
+    await expect(add).toBeVisible();
     await add.dblclick();
     await expect.poll(() => creates).toBeGreaterThan(0);
     expect(creates).toBe(1);

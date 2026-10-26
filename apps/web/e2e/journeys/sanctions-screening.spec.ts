@@ -19,7 +19,6 @@ const SCREENING_STATUS = {
   screened: "screened",
 } as const;
 const LIST_REASON_WARMING = "warming";
-const SCREENING_TIMEOUT_MS = 120_000;
 const SCREENING_POLL_MS = 5000;
 
 const screeningSchema = v.object({
@@ -83,7 +82,6 @@ test(
     await expect
       .poll(async () => await screen({ name, request, source }), {
         intervals: [SCREENING_POLL_MS],
-        timeout: SCREENING_TIMEOUT_MS,
       })
       .toEqual({
         status: SCREENING_STATUS.screened,

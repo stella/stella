@@ -99,12 +99,12 @@ const expectDocumentOpen = async (page: Page, dock: Locator) => {
   await expect(dock).toHaveAttribute("data-state", DOCK_STATE.expanded);
   await expect(
     page.locator(".layout-run-text", { hasText: FIXTURE_TEXT }),
-  ).toBeVisible({ timeout: 60_000 });
+  ).toBeVisible();
 };
 
 const reloadAndRestore = async (page: Page, dock: Locator) => {
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(dock).toBeVisible({ timeout: 60_000 });
+  await expect(dock).toBeVisible();
   await expectInteractive(page);
   if ((await dock.getAttribute("data-state")) === DOCK_STATE.collapsed) {
     await paneToggle(dock, messages.inspector.showPane).click();

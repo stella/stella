@@ -398,3 +398,50 @@ describe("tagged reasons", () => {
     expect(reason.test(" wait for the worker")).toBe(false);
   });
 });
+
+const lintLiteralWaitTimeouts = lintWith("no-literal-wait-timeout");
+
+describe("no-literal-wait-timeout", () => {
+  test("reports Testing Library wait and query timeouts", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          "const SHORT = 500 * 2;",
+          "await waitFor(ready, { timeout: 1000 });",
+          "await testing.waitForElementToBeRemoved(gone, { timeout: SHORT });",
+          'await screen.findByText("done", undefined, { timeout: 2_000 });',
+          'await within(panel).findAllByRole("row", {}, { timeout: SHORT + 1 });',
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3, 4, 5]);
+  });
+
+  test("reports Playwright poll, toPass and locator assertion timeouts", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect } from "@playwright/test";',
+          "await expect.poll(read, { timeout: 1000 }).toBe(true);",
+          "await expect(async () => work()).toPass({ timeout: 2000 });",
+          "await expect(page.getByRole('button')).toBeVisible({ timeout: 3000 });",
+          "await expect(locator).toHaveText('done', { timeout: 4000 });",
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3, 4, 5]);
+  });
+
+  test("accepts shared budgets, unrelated options and real-time reasons", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect } from "@playwright/test";',
+          "await waitFor(ready, { timeout: sharedTimeout });",
+          "await request({ timeout: 1000 });",
+          "// real-time: pacing is what this test measures",
+          "await expect.poll(read, { timeout: 1000 }).toBe(true);",
+          "await screen.findByText('done', undefined, { timeout: 1000 }); // real-time: pacing is what this test measures",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+});

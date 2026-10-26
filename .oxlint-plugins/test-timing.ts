@@ -61,6 +61,17 @@
 //     `propertyTestTimeout(...)` / `propertyTestDefaultTimeout()`, whose
 //     budget the property-testing convention owns.
 //
+// no-literal-wait-timeout
+//   A per-call numeric timeout turns an asynchronous condition into a speed
+//   assertion and can be shorter than the suite's shared hang guard.
+//   Flagged:
+//     Testing Library `waitFor`, `waitForElementToBeRemoved`, and `findBy*` /
+//       `findAllBy*` calls with a numeric `timeout` option
+//     Playwright `expect.poll`, `toPass`, and locator assertions with a
+//       numeric `timeout` option
+//   Allowed: a site with a `// real-time: <reason>` comment, when elapsed real
+//     time is the behaviour under test.
+//
 // Existing sites are budgeted per file, enclosing function and spelling in
 // scripts/test-timing-ledger.json (no line numbers, a reason per row). A hit
 // beyond its budget is reported, and so is a budget the code no longer
@@ -87,6 +98,7 @@ import {
 const REAL_TIME_WAIT_RULE = "no-real-time-wait";
 const POLLING_LOOP_RULE = "no-polling-loop";
 const TIMEOUT_RULE = "no-unreasoned-timeout";
+const LITERAL_WAIT_TIMEOUT_RULE = "no-literal-wait-timeout";
 const LEDGER_PATH = "scripts/test-timing-ledger.json";
 
 const { tracker: budgetTracker, staleMessage: STALE_MESSAGE } =
@@ -193,6 +205,36 @@ const hasTaggedComment = (lookup: TaggedLookup): boolean => {
     boundary = commentLineStart;
   }
   return false;
+};
+
+const hasTaggedCommentInAncestors = (lookup: TaggedLookup): boolean => {
+  let node = lookup.node;
+  while (isAstNode(node)) {
+    if (hasTaggedComment({ ...lookup, node })) {
+      return true;
+    }
+    node = node.parent;
+  }
+  return false;
+};
+
+const hasNearbyTaggedComment = ({
+  node,
+  pattern,
+  text,
+}: TaggedLookup): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
+  const start = lineStartOf(text, node.range[0]);
+  const previousStart = start === 0 ? 0 : lineStartOf(text, start - 1);
+  return text
+    .slice(previousStart, lineEndOf(text, node.range[1]))
+    .split("\n")
+    .some((line) => {
+      const marker = line.indexOf("//");
+      return marker !== -1 && pattern.test(line.slice(marker + 2));
+    });
 };
 
 // --- Waits -------------------------------------------------------------------
@@ -893,6 +935,75 @@ const raisedTimeout = (
   return name === null ? raisedPlaywrightTimeout(call) : null;
 };
 
+const memberChainNames = (node: unknown): string[] => {
+  const names: string[] = [];
+  let current = unwrapExpression(node);
+  while (isAstNode(current) && current.type === "MemberExpression") {
+    const name = memberPropertyName(current);
+    if (name === null) {
+      return [];
+    }
+    names.unshift(name);
+    current = unwrapExpression(current.object);
+  }
+  if (isIdentifier(current)) {
+    names.unshift(current.name);
+  } else if (isAstNode(current) && current.type === "CallExpression") {
+    names.unshift(...memberChainNames(current.callee));
+  }
+  return names;
+};
+
+type LiteralWaitTimeout = { node: AstNode; pattern: string };
+
+const literalTimeoutOption = (
+  context: ScopeContext,
+  options: unknown,
+  pattern: string,
+): LiteralWaitTimeout | null => {
+  const object = unwrapExpression(options);
+  if (!isAstNode(object) || object.type !== "ObjectExpression") {
+    return null;
+  }
+  const timeout = optionValue(object, "timeout");
+  const node = unwrapExpression(timeout);
+  return isAstNode(node) && staticNumber(context, node) !== null
+    ? { node, pattern }
+    : null;
+};
+
+const literalWaitTimeout = (
+  context: ScopeContext,
+  call: AstNode,
+): LiteralWaitTimeout | null => {
+  const args = Array.isArray(call.arguments) ? call.arguments : [];
+  const names = memberChainNames(call.callee);
+  const method = names.at(-1);
+  if (method === undefined) {
+    return null;
+  }
+  if (method === "waitFor" || method === "waitForElementToBeRemoved") {
+    return literalTimeoutOption(context, args.at(1), method);
+  }
+  if (/^find(?:All)?By\p{Lu}/u.test(method)) {
+    return literalTimeoutOption(context, args.at(2), method);
+  }
+  const expectBinding = resolveImportedExpressionForEnforcement(
+    context,
+    ownNodes(call.callee).find((node) => isIdentifier(node, "expect")),
+  );
+  const playwrightExpect =
+    expectBinding?.source === "@playwright/test" &&
+    expectBinding.imported === "expect";
+  if (playwrightExpect && method === "poll" && names.at(-2) === "expect") {
+    return literalTimeoutOption(context, args.at(1), "expect.poll");
+  }
+  if (playwrightExpect && (method === "toPass" || /^to\p{Lu}/u.test(method))) {
+    return literalTimeoutOption(context, args.at(-1), method);
+  }
+  return null;
+};
+
 type WaitSite = { node: ESTree.Node; wait: Wait };
 
 export default eslintCompatPlugin({
@@ -1088,7 +1199,7 @@ export default eslintCompatPlugin({
                 pattern: TIMEOUT_REASON,
                 text: context.sourceCode.text,
               }) ||
-              hasTaggedComment({
+              hasTaggedCommentInAncestors({
                 comments,
                 node,
                 pattern: TIMEOUT_REASON,
@@ -1106,6 +1217,55 @@ export default eslintCompatPlugin({
             for (const report of tracker.stale()) {
               context.report({ node, ...report });
             }
+          },
+        };
+      },
+    },
+    [LITERAL_WAIT_TIMEOUT_RULE]: {
+      meta: {
+        type: "problem",
+        schema: [],
+        messages: {
+          timeout:
+            "`{{pattern}}` uses a numeric per-call timeout, which turns a condition wait into a speed assertion. Remove it and use the suite's shared hang guard; when real time is the behaviour under test, say so with `// real-time: <reason>`.",
+        },
+      },
+      createOnce(context) {
+        let comments: readonly SourceComment[] | null = null;
+        return {
+          CallExpression(call) {
+            const node: unknown = call;
+            if (!isAstNode(node)) {
+              return;
+            }
+            const timeout = literalWaitTimeout(context, node);
+            if (timeout === null) {
+              return;
+            }
+            comments ??= context.sourceCode
+              .getAllComments()
+              .filter(isSourceComment);
+            if (
+              hasNearbyTaggedComment({
+                comments,
+                node,
+                pattern: REAL_TIME_REASON,
+                text: context.sourceCode.text,
+              }) ||
+              hasTaggedCommentInAncestors({
+                comments,
+                node: timeout.node,
+                pattern: REAL_TIME_REASON,
+                text: context.sourceCode.text,
+              })
+            ) {
+              return;
+            }
+            context.report({
+              node: timeout.node,
+              messageId: "timeout",
+              data: { pattern: timeout.pattern },
+            });
           },
         };
       },

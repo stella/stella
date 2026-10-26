@@ -232,7 +232,7 @@ test("error updates preserve recovery options and hide unexpected server details
       title: "Upload failed",
       type: "error",
       description: "Try again",
-      timeout: 0,
+
       actionProps: { children: "Retry", onClick: retry },
     });
     expect(add).not.toHaveBeenCalled();

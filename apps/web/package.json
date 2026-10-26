@@ -195,6 +195,7 @@
     "@stll/sanctions": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/ssr-testkit": "workspace:^",
+    "@stll/test-kit": "0.3.0",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "@tanstack/devtools-vite": "^0.8.5",
