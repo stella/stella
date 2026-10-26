@@ -1,4 +1,8 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import * as cheerio from "cheerio";
+import { isText } from "domhandler";
+import { readdirSync } from "node:fs";
 
 import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
 
@@ -11,8 +15,9 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@/api/lib/case-law/decision-text";
-import { readGzipJson } from "@/api/lib/gzip-json";
+import { PROVENANCE_SUFFIX } from "@/api/tests/fixture-provenance";
 
+const utf8 = new TextDecoder();
 const hasProse = (text: string) => /[\p{L}\p{N}]/u.test(text);
 const declaredSentences = SOURCE_ABSENT_TEXT.filter(({ text }) =>
   hasProse(text),
@@ -126,29 +131,98 @@ test("a sentence that only starts like a marker is text", () => {
   });
 });
 
+/** Every committed capture of `adapter`'s publisher, as served. */
+const capturesOf = async (adapter: string): Promise<string[]> => {
+  const directory = new URL("__fixtures__/", import.meta.url);
+  const names = readdirSync(directory).filter(
+    (name) =>
+      name.startsWith(`${adapter}-`) && !name.endsWith(PROVENANCE_SUFFIX),
+  );
+  const captures: string[] = [];
+  for (const name of names) {
+    const bytes = await Bun.file(new URL(name, directory)).bytes();
+    captures.push(
+      utf8.decode(name.endsWith(".gz") ? Bun.gunzipSync(bytes) : bytes),
+    );
+  }
+  return captures;
+};
+
+/** Each element's own text and each attribute value in a piece of markup. */
+const markupValues = (markup: string): string[] => {
+  const $ = cheerio.load(markup);
+  const values: string[] = [];
+  $("*").each((_, element) => {
+    values.push(
+      element.children
+        .flatMap((child) => (isText(child) ? [child.data] : []))
+        .join(""),
+      ...Object.values(element.attribs),
+    );
+  });
+  return values;
+};
+
+/**
+ * Every value a capture states that could hold `marker`, decoded: each JSON
+ * string, and in markup (served as is, or inside a JSON string) each
+ * element's own text and attribute. Escapes are undone before comparing, so
+ * `"brak\npodstaw"` is the value "brak⏎podstaw", never "brak".
+ */
+const statedValues = (capture: string, marker: string): string[] => {
+  const probe = absentTextComparison(marker).split(" ").at(0) ?? marker;
+  if (!capture.includes(probe)) {
+    return [];
+  }
+  // A page can be recorded as JSON holding JSON holding HTML; each layer is
+  // decoded in turn.
+  const decode = (text: string): string[] => {
+    const parsed = Result.try((): unknown => JSON.parse(text));
+    if (Result.isError(parsed)) {
+      return text.includes("<") ? [text, ...markupValues(text)] : [text];
+    }
+    const strings: string[] = [];
+    const walk = (value: unknown): void => {
+      if (typeof value === "string") {
+        if (value.includes(probe)) {
+          strings.push(value, ...decode(value));
+        }
+      } else if (value !== null && typeof value === "object") {
+        for (const child of Object.values(value)) {
+          walk(child);
+        }
+      }
+    };
+    walk(parsed.value);
+    return strings;
+  };
+  return decode(capture);
+};
+
+const statesMarker = (capture: string, marker: string): boolean =>
+  statedValues(capture, marker).some(
+    (value) => absentTextComparison(value) === absentTextComparison(marker),
+  );
+
+test("a marker counts as recorded only as a whole value", () => {
+  expect(statesMarker('{"summary":"brak"}', "brak")).toBe(true);
+  expect(statesMarker("<thesis> brak </thesis>", "brak")).toBe(true);
+  expect(statesMarker(String.raw`{"summary":"brak\npodstaw"}`, "brak")).toBe(
+    false,
+  );
+  expect(statesMarker("<p>brak podstaw</p>", "brak")).toBe(false);
+});
+
 test("every declared sentence is one its source is recorded printing", async () => {
   // Symbol-only filler is source-independent and tested for every adapter
-  // above. Source-specific sentences must match the captured page. This
-  // reads them back out of the committed capture of that page, so a source
-  // that rewords its sentence fails here on the next fixture refresh instead
-  // of silently storing the new wording as a headnote.
-  const fixtures = new Map<string, string>();
-  const captureOf = async (adapter: string): Promise<string> => {
-    const held = fixtures.get(adapter);
-    if (held !== undefined) {
-      return held;
-    }
-    const capture = JSON.stringify(
-      await readGzipJson(
-        new URL(`__fixtures__/${adapter}-page.json.gz`, import.meta.url),
-      ),
-    );
-    fixtures.set(adapter, capture);
-    return capture;
-  };
-
+  // above. Source-specific sentences must match a captured page. This reads
+  // them back out of the committed captures of that publisher, as the whole
+  // value of a field, so a source that rewords its sentence fails here on the
+  // next fixture refresh instead of silently storing the new wording as a
+  // headnote, and a marker that is an ordinary word ("brak") is not vouched
+  // for by any sentence that happens to contain it.
   for (const { adapter, text } of declaredSentences) {
-    const capture = await captureOf(adapter);
-    expect(capture).toContain(absentTextComparison(text));
+    const captures = await capturesOf(adapter);
+    expect(captures.some((capture) => statesMarker(capture, text))).toBe(true);
   }
 });

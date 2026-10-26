@@ -76,8 +76,8 @@
     "version": 20
   },
   "pl-courts": {
-    "fingerprint": "0b437b804baa7e146bb0107290f26508ecbe32cc9bfd116c12b8b1114554f26b",
-    "version": 15
+    "fingerprint": "a2ffcc80b6e95432907556b6d2f414a845e7a20b1f27d291e1b7d9e92e321115",
+    "version": 16
   },
   "pl-kio": {
     "version": 9,
@@ -88,8 +88,8 @@
     "version": 10
   },
   "pl-ncourt": {
-    "fingerprint": "7b242ba23afc943b67a6886976d1e31e96b3584c10d468feb5fe31515b3758f4",
-    "version": 14
+    "fingerprint": "4a9a728301a2bd8ae327458be0ba5c6521b4ebc2b3f70b0468f4eaeb9e777e12",
+    "version": 15
   },
   "pl-nsa": {
     "fingerprint": "feede37ed209e1b14e1490ca7d8b2521ab2a0b29d7f7b3da2e2b51e8d06b3ac1",
