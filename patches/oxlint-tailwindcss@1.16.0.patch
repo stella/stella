@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c..193fe51 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..13675228893fd649e1e722733bc10f0214932a1c 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -60,7 +60,66 @@ index 6d9820c..193fe51 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -4099,7 +4119,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -3793,6 +3813,41 @@ function packageVersionFrom(fromDir, name) {
+ 		dir = parent;
+ 	}
+ }
++function workspaceCssImport(fromDir, spec) {
++	const name = packageNameOf(spec);
++	if (name === null) return null;
++	let repositoryRoot = fromDir;
++	while (!(0, node_fs.existsSync)((0, node_path.join)(repositoryRoot, ".git"))) {
++		const parent = (0, node_path.dirname)(repositoryRoot);
++		if (parent === repositoryRoot) return null;
++		repositoryRoot = parent;
++	}
++	let dir = fromDir;
++	for (;;) {
++		const packagePath = (0, node_path.join)(dir, "node_modules", name);
++		try {
++			if (!(0, node_fs.lstatSync)(packagePath).isSymbolicLink()) return null;
++			const realPackagePath = (0, node_fs.realpathSync)(packagePath);
++			const repositoryRelative = (0, node_path.relative)(repositoryRoot, realPackagePath);
++			if (repositoryRelative.startsWith("..") || (0, node_path.isAbsolute)(repositoryRelative) || repositoryRelative.split(/[\\/]/).includes("node_modules")) return null;
++			const manifest = JSON.parse((0, node_fs.readFileSync)((0, node_path.join)(realPackagePath, "package.json"), "utf-8"));
++			const suffix = spec.slice(name.length);
++			const subpath = suffix === "" ? "." : `.${suffix}`;
++			const exported = manifest.exports?.[subpath] ?? (subpath === "." ? manifest.exports : void 0);
++			const targets = typeof exported === "string" ? [exported] : [exported?.style, exported?.default];
++			targets.push(suffix.replace(/^\//, ""));
++			for (const target of targets) {
++				if (typeof target !== "string") continue;
++				const resolvedTarget = (0, node_path.resolve)(realPackagePath, target);
++				if ((0, node_fs.existsSync)(resolvedTarget)) return resolvedTarget;
++			}
++			return null;
++		} catch {}
++		const parent = (0, node_path.dirname)(dir);
++		if (parent === dir) return null;
++		dir = parent;
++	}
++}
+ /**
+ * Everything a design system is built from besides the Tailwind engine, as one
+ * string for the cache key — so the cache invalidates when any of it changes,
+@@ -3840,7 +3895,15 @@ function hashableContent(entryPath, entryContent) {
+ 		};
+ 		for (const spec of collect(IMPORT_RE)) {
+ 			if (!isPathSpecifier(spec)) {
+-				addPackage(spec);
++				const workspaceImport = workspaceCssImport(baseDir, spec);
++				if (workspaceImport === null) {
++					addPackage(spec);
++					continue;
++				}
++				const importContent = readOnce(workspaceImport);
++				if (importContent === null) continue;
++				parts.push(importContent);
++				visit(workspaceImport, importContent, depth - 1);
+ 				continue;
+ 			}
+ 			const importPath = (0, node_path.resolve)(baseDir, spec);
+@@ -4099,7 +4162,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -69,7 +128,7 @@ index 6d9820c..193fe51 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4107,6 +4127,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4107,6 +4170,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -77,7 +136,7 @@ index 6d9820c..193fe51 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4612,6 +4633,7 @@ var DesignSystemWorker = class {
+@@ -4612,6 +4676,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -85,7 +144,7 @@ index 6d9820c..193fe51 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5549,6 +5571,73 @@ function answersFor(cache) {
+@@ -5549,6 +5614,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -159,7 +218,7 @@ index 6d9820c..193fe51 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5569,12 +5658,15 @@ function answersFor(cache) {
+@@ -5569,12 +5701,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -176,7 +235,7 @@ index 6d9820c..193fe51 100644
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
 diff --git a/dist/index.d.mts b/dist/index.d.mts
-index a330176..52e9de6 100644
+index a33017683295c52a1e681b23babeb821220d263f..52e9de6dc00f5cd26bda87b4aff5596f014a7c47 100644
 --- a/dist/index.d.mts
 +++ b/dist/index.d.mts
 @@ -3993,5 +3993,10 @@ interface CreateOnceRule {
@@ -194,9 +253,18 @@ index a330176..52e9de6 100644
 +export { cacheArtifactPaths, plugin as default };
 \ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c6242..d83f163 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..37047e1a42532db8c623e26a13cde40a51819000 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
+@@ -1,7 +1,7 @@
+ import { createRequire } from "node:module";
+ import { Worker, threadId } from "node:worker_threads";
+ import { createHash } from "node:crypto";
+-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
++import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+ import { tmpdir, userInfo } from "node:os";
+ //#region \0rolldown/runtime.js
 @@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
  		const memo = this.declMemo.get(key);
  		if (memo) return memo;
@@ -255,7 +323,66 @@ index 61c6242..d83f163 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -4102,7 +4122,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -3796,6 +3816,41 @@ function packageVersionFrom(fromDir, name) {
+ 		dir = parent;
+ 	}
+ }
++function workspaceCssImport(fromDir, spec) {
++	const name = packageNameOf(spec);
++	if (name === null) return null;
++	let repositoryRoot = fromDir;
++	while (!existsSync(join(repositoryRoot, ".git"))) {
++		const parent = dirname(repositoryRoot);
++		if (parent === repositoryRoot) return null;
++		repositoryRoot = parent;
++	}
++	let dir = fromDir;
++	for (;;) {
++		const packagePath = join(dir, "node_modules", name);
++		try {
++			if (!lstatSync(packagePath).isSymbolicLink()) return null;
++			const realPackagePath = realpathSync(packagePath);
++			const repositoryRelative = relative(repositoryRoot, realPackagePath);
++			if (repositoryRelative.startsWith("..") || isAbsolute(repositoryRelative) || repositoryRelative.split(/[\\/]/).includes("node_modules")) return null;
++			const manifest = JSON.parse(readFileSync(join(realPackagePath, "package.json"), "utf-8"));
++			const suffix = spec.slice(name.length);
++			const subpath = suffix === "" ? "." : `.${suffix}`;
++			const exported = manifest.exports?.[subpath] ?? (subpath === "." ? manifest.exports : void 0);
++			const targets = typeof exported === "string" ? [exported] : [exported?.style, exported?.default];
++			targets.push(suffix.replace(/^\//, ""));
++			for (const target of targets) {
++				if (typeof target !== "string") continue;
++				const resolvedTarget = resolve(realPackagePath, target);
++				if (existsSync(resolvedTarget)) return resolvedTarget;
++			}
++			return null;
++		} catch {}
++		const parent = dirname(dir);
++		if (parent === dir) return null;
++		dir = parent;
++	}
++}
+ /**
+ * Everything a design system is built from besides the Tailwind engine, as one
+ * string for the cache key — so the cache invalidates when any of it changes,
+@@ -3843,7 +3898,15 @@ function hashableContent(entryPath, entryContent) {
+ 		};
+ 		for (const spec of collect(IMPORT_RE)) {
+ 			if (!isPathSpecifier(spec)) {
+-				addPackage(spec);
++				const workspaceImport = workspaceCssImport(baseDir, spec);
++				if (workspaceImport === null) {
++					addPackage(spec);
++					continue;
++				}
++				const importContent = readOnce(workspaceImport);
++				if (importContent === null) continue;
++				parts.push(importContent);
++				visit(workspaceImport, importContent, depth - 1);
+ 				continue;
+ 			}
+ 			const importPath = resolve(baseDir, spec);
+@@ -4102,7 +4165,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -264,7 +391,7 @@ index 61c6242..d83f163 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4110,6 +4130,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4110,6 +4173,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -272,7 +399,7 @@ index 61c6242..d83f163 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4615,6 +4636,7 @@ var DesignSystemWorker = class {
+@@ -4615,6 +4679,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -280,7 +407,7 @@ index 61c6242..d83f163 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5552,6 +5574,73 @@ function answersFor(cache) {
+@@ -5552,6 +5617,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -354,7 +481,7 @@ index 61c6242..d83f163 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5572,12 +5661,15 @@ function answersFor(cache) {
+@@ -5572,12 +5704,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -370,7 +497,7 @@ index 61c6242..d83f163 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
-@@ -10787,4 +10879,4 @@ const plugin = definePlugin({
+@@ -10787,4 +10922,4 @@ const plugin = definePlugin({
  	}
  });
  //#endregion

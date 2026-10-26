@@ -2,15 +2,18 @@ import { expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   cp,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
   rm,
+  symlink,
   unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
@@ -34,6 +37,92 @@ const report = v.object({
       severity: v.string(),
     }),
   ),
+});
+
+test("snapshot names track workspace CSS and published package versions", async () => {
+  const fixture = await mkdtemp(
+    path.join(repositoryRoot, ".tailwind-workspace-cache-test-"),
+  );
+  try {
+    const entry = path.join(fixture, "entry.css");
+    const workspace = path.join(fixture, "packages", "theme");
+    const workspaceLink = path.join(
+      fixture,
+      "node_modules",
+      "@fixture",
+      "theme",
+    );
+    const published = path.join(fixture, "node_modules", "published-theme");
+    await mkdir(path.join(workspace, "src"), { recursive: true });
+    await mkdir(path.dirname(workspaceLink), { recursive: true });
+    await mkdir(published, { recursive: true });
+    await writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        name: "@fixture/theme",
+        version: "1.0.0",
+        exports: {
+          "./styles.css": {
+            style: "./src/styles.css",
+            default: "./src/default.css",
+          },
+        },
+      }),
+    );
+    await writeFile(
+      path.join(workspace, "src", "styles.css"),
+      "@theme { --color-workspace: red; }\n",
+    );
+    await writeFile(
+      path.join(workspace, "src", "default.css"),
+      "@theme { --color-default: red; }\n",
+    );
+    await symlink(workspace, workspaceLink, "dir");
+    await writeFile(
+      path.join(published, "package.json"),
+      JSON.stringify({ name: "published-theme", version: "1.0.0" }),
+    );
+    await writeFile(
+      path.join(published, "styles.css"),
+      "@theme { --color-published: red; }\n",
+    );
+    await writeFile(
+      entry,
+      '@import "@fixture/theme/styles.css";\n@import "published-theme/styles.css";\n',
+    );
+
+    const snapshotName = () => path.basename(cacheArtifactPaths(entry).json);
+    const original = snapshotName();
+    await writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        name: "@fixture/theme",
+        version: "2.0.0",
+        exports: {
+          "./styles.css": {
+            style: "./src/styles.css",
+            default: "./src/default.css",
+          },
+        },
+      }),
+    );
+    expect(snapshotName()).toBe(original);
+
+    await writeFile(
+      path.join(workspace, "src", "styles.css"),
+      "@theme { --color-workspace: blue; }\n",
+    );
+    const afterWorkspaceCssChange = snapshotName();
+    expect(afterWorkspaceCssChange).not.toBe(original);
+
+    await writeFile(
+      path.join(published, "package.json"),
+      JSON.stringify({ name: "published-theme", version: "2.0.0" }),
+    );
+    expect(snapshotName()).not.toBe(afterWorkspaceCssChange);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });
 
 const lintFixture = async ({
