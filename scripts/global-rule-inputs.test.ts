@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
+import { listTrackedFiles } from "../packages/scripts/src/tracked-files";
 import {
   checkPoolJob,
   type ReadCheckPool,
@@ -12,7 +12,6 @@ import {
   loadGlobalRuleInputs,
   matchesGlobalRuleInput,
 } from "./global-rule-inputs";
-import { listTrackedFiles } from "./tracked-files";
 
 const REPOSITORY_ROOT = new URL("../", import.meta.url);
 const STATIC_CHECK_JOB_ROOTS = [
@@ -23,7 +22,7 @@ const STATIC_CHECK_JOB_ROOTS = [
 ] as const;
 const STATIC_CHECK_JOB_PREFIXES = ["code-quality-"] as const;
 
-const trackedFiles = listTrackedFiles(fileURLToPath(REPOSITORY_ROOT));
+const trackedFiles = listTrackedFiles(REPOSITORY_ROOT);
 
 const getRunCommands = (readPool?: ReadCheckPool) => {
   const workflow: unknown = Bun.YAML.parse(

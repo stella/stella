@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-import { listTrackedFiles } from "./tracked-files";
+import { listTrackedFiles } from "../packages/scripts/src/tracked-files";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SHELL_FILE = /\.(?:sh|bash)$/u;

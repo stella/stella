@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { listTrackedFiles } from "./tracked-files";
+import { listTrackedFiles } from "../packages/scripts/src/tracked-files";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
@@ -15,7 +15,7 @@ const BUFFERED_LS_FILES =
 test("the tracked listing is read whole", () => {
   const files = listTrackedFiles(REPO_ROOT);
   expect(files).toContain("package.json");
-  expect(files).toContain("scripts/tracked-files.ts");
+  expect(files).toContain("packages/scripts/src/tracked-files.ts");
   expect(files.every((file) => file.length > 0)).toBe(true);
 });
 

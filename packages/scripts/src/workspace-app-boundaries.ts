@@ -1,11 +1,12 @@
-import { panic } from "better-result";
-import { execFileSync, spawnSync } from "node:child_process";
+import { panic, Result } from "better-result";
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
 
 import { repoRelativePath } from "@stll/portable-path";
 
+import { readRepositoryFiles } from "./tracked-files";
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
@@ -100,28 +101,17 @@ const findFiles = (directoryPath: string): string[] => {
 };
 
 const listRepositoryFiles = (rootDir: string): string[] | null => {
-  try {
-    const output = execFileSync(
-      "git",
-      [
-        "ls-files",
-        "--cached",
-        "--others",
-        "--exclude-standard",
-        "--",
-        "apps",
-        "packages",
-      ],
-      { cwd: rootDir, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
-    );
-    return output
-      .split("\n")
-      .filter((filePath) => filePath !== "")
-      .map((filePath) => path.resolve(rootDir, filePath))
-      .filter((filePath) => existsSync(filePath));
-  } catch {
+  const files = readRepositoryFiles({
+    root: rootDir,
+    scope: "worktree",
+    pathspecs: ["apps", "packages"],
+  });
+  if (Result.isError(files)) {
     return null;
   }
+  return files.value
+    .map((filePath) => path.resolve(rootDir, filePath))
+    .filter((filePath) => existsSync(filePath));
 };
 
 const readJson = (filePath: string): unknown => {

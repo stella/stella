@@ -5,7 +5,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript6";
 
-import { listTrackedFiles } from "./tracked-files";
+import { listTrackedFiles } from "../packages/scripts/src/tracked-files";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;
