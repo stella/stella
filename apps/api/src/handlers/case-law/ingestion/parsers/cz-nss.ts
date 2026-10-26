@@ -51,6 +51,7 @@ import {
   CZ_RUNNING_HEADER_SOURCE,
   withoutSoftHyphens,
 } from "@/api/lib/legal-search/parsers/page-furniture";
+import { separateOpinionHeadingTail } from "@/api/lib/legal-search/parsers/separate-opinion-heading";
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import {
@@ -767,18 +768,21 @@ const SUBSECTION_HEADING_RE =
   /^(?=[IVX])(?:X{0,3}(?:IX|IV|V?I{0,3}))\.\s*(?:\d{1,2}\.?|\p{Ll}\))\s*\p{Lu}/u;
 
 /**
- * The heading of a separate opinion printed after the decision ("Odlišné
- * stanovisko soudce …"). A title, so it does not end the way a sentence
- * reporting the opinions does ("Odlišná stanoviska … uplatnili soudci …").
+ * NSS headings of a separate opinion name the judge, the decision and its
+ * docket on one line ("Odlišné stanovisko soudce Petra Mikeše dle § 55a
+ * soudního řádu správního k rozhodnutí … ve věci sp. zn. 9 As 264/2020").
  */
-const SEPARATE_OPINION_HEADING_RE =
-  /^(?:Odlišné\s+stanovisko|Stanovisko\s+menšiny)(?:\s|:|$)/iu;
 const SEPARATE_OPINION_HEADING_MAX_CHARS = 300;
 
+/**
+ * The heading of a separate opinion printed after the decision. A title, so
+ * it does not end the way a sentence reporting the opinions does
+ * ("Odlišná stanoviska k rozsudku … uplatnili soudci …").
+ */
 const isSeparateOpinionHeading = (plainText: string): boolean =>
-  plainText.length <= SEPARATE_OPINION_HEADING_MAX_CHARS &&
-  SEPARATE_OPINION_HEADING_RE.test(plainText) &&
-  !plainText.endsWith(".");
+  !plainText.endsWith(".") &&
+  separateOpinionHeadingTail(plainText, SEPARATE_OPINION_HEADING_MAX_CHARS) !==
+    undefined;
 
 /** Numbered paragraph: [1], [2], ... */
 const NUMBERED_PARA_RE = /^\[(?:\d+)\]\s*/u;
