@@ -82,6 +82,8 @@ import scaleLedger from "../route-scale-ledger.json" with { type: "json" };
 // the longer document-route windows early once it stays quiet.
 const NETWORK_QUIET_MS = 500;
 const DEFAULT_SETTLE_MS = 1000;
+const GIT_REF_OUTPUT_MAX_BYTES = 64 * 1024;
+const ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES = 256 * 1024;
 const SCALE_LEDGER = parseRouteScaleLedger(JSON.stringify(scaleLedger));
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
@@ -102,7 +104,7 @@ const routeScaleLedgerAdditions = (): string[] => {
       "--end-of-options",
       `${baseRef}^{commit}`,
     ],
-    { cwd: REPO_ROOT, encoding: "utf-8" },
+    { cwd: REPO_ROOT, encoding: "utf-8", maxBuffer: GIT_REF_OUTPUT_MAX_BYTES },
   );
   if (resolved.status !== 0) {
     return [`base ${baseRef} could not be resolved`];
@@ -112,6 +114,7 @@ const routeScaleLedgerAdditions = (): string[] => {
   const base = spawnSync("git", ["show", `${commit}:${ledgerPath}`], {
     cwd: REPO_ROOT,
     encoding: "utf-8",
+    maxBuffer: ROUTE_SCALE_LEDGER_OUTPUT_MAX_BYTES,
   });
   if (base.status !== 0) {
     if (/exists on disk, but not in|does not exist in/u.test(base.stderr)) {

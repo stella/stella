@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { e2eFeatureAccessFixtureSchema } from "@stll/scripts/src/e2e-feature-access-fixture";
+import { e2eFeatureAccessFixtureSchema } from "@stll/scripts/src/e2e-feature-access-fixture.ts";
 import { sha256Hex } from "@stll/sha256/node";
 
 import { apiPut, E2E_API_ORIGIN } from "./api";
