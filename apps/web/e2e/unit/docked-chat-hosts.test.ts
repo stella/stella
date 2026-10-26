@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import ts from "typescript6";
+
+import { parseSource as parseSyntax } from "@stll/scripts/src/syntax-tree";
 
 import {
   declaredAppFrameScope,
@@ -7,30 +8,25 @@ import {
   renderedImports,
 } from "../helpers/docked-chat-hosts";
 
+const parseSource = (fileName: string, source: string) => ({
+  ...parseSyntax(fileName, source),
+  fileName,
+});
+
 test.each(["member", "knowledge", "none"])(
   "reads declared %s scope independently of route names",
   (scope) => {
-    const source = ts.createSourceFile(
+    const source = parseSource(
       "renamed-route.tsx",
       `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
 export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${scope} } });`,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
     );
     expect(declaredAppFrameScope(source)).toBe(scope);
   },
 );
 
 test("absent metadata inherits while unsupported metadata fails", () => {
-  const parse = (source: string) =>
-    ts.createSourceFile(
-      "route.tsx",
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    );
+  const parse = (source: string) => parseSource("route.tsx", source);
   expect(
     declaredAppFrameScope(
       parse('export const Route = createFileRoute("/_protected")({});'),
@@ -95,13 +91,10 @@ test("docked chat census follows the frame a route's parent layout selects", () 
 test("a preview-only PDF viewer is not followed into its docked chat reader", () => {
   const imports = (mode: string) =>
     renderedImports(
-      ts.createSourceFile(
+      parseSource(
         "preview.tsx",
         `import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
 export const Preview = () => <PeekPdfViewer interactionMode="${mode}" />;`,
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TSX,
       ),
     );
   expect(imports("preview-only")).toEqual([]);
