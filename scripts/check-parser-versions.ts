@@ -36,6 +36,9 @@ const PARSER_DIRECTORIES = [
   "apps/api/src/handlers/case-law/ingestion/parsers/",
   "apps/api/src/lib/legal-search/parsers/",
 ];
+/** The root manifest, whose `patchedDependencies` patch npm packages. */
+const ROOT_MANIFEST = "package.json";
+const PATCH_DIRECTORY = "patches";
 const PARSER_VERSION_MODULE =
   "apps/api/src/lib/legal-search/ingestion-constants.ts";
 const OUTPUT_SHAPING_ROOTS = [
@@ -71,6 +74,34 @@ type SourceOwner = {
   version: number;
   /** Output-affecting source files reached from this registered adapter. */
   parsers: ReadonlySet<string>;
+  /** npm packages imported anywhere in the module's closure. */
+  packages: ReadonlySet<string>;
+};
+
+/**
+ * A version an imported module stamps on records of its own (a collection
+ * enrichment cache), declared as a bare constant. It versions what that
+ * module's closure reads, the way a registry entry's version does.
+ */
+type RecordVersionOwner = SourceOwner & {
+  /** The constant, named where the guard reports it. */
+  name: string;
+  /** The file that declares the constant. */
+  file: string;
+};
+
+/** A dependency patch that `patchedDependencies` applies. */
+type DependencyPatch = {
+  /** The patch file, as the root manifest names it. */
+  file: string;
+  /** The manifest entry and the patch content: any change to either counts. */
+  identity: string;
+};
+
+type DependencyPatchesResult = {
+  /** By patched package name (`@libpdf/core`). */
+  patches: ReadonlyMap<string, DependencyPatch>;
+  errors: readonly string[];
 };
 
 type RegisteredParserSource = {
@@ -81,6 +112,8 @@ type RegisteredParserSource = {
 
 type SourceOwnersResult = {
   owners: ReadonlyMap<string, SourceOwner>;
+  /** By a key derived from the constant's name (`sk-collection-parser-version`). */
+  recordOwners: ReadonlyMap<string, RecordVersionOwner>;
   registeredSources: readonly RegisteredParserSource[];
   parserFiles: ReadonlySet<string>;
   errors: readonly string[];
@@ -92,6 +125,11 @@ type SourceOwnersResult = {
 class StaticTree {
   private readonly importErrors = new Set<string>();
   private readonly versionDeclarations = new Map<string, Set<string>>();
+  /** Record versions by constant identity, with the files that stamp them. */
+  private readonly recordVersions = new Map<
+    string,
+    { name: string; file: string; version: number; stampedIn: Set<string> }
+  >();
   private readonly codeCache = new Map<string, string>();
   private readonly closureCache = new Map<string, Set<string>>();
   private readonly outputBoundaries: ReadonlySet<string>;
@@ -371,8 +409,18 @@ class StaticTree {
         }
         if (index === undefined && value?.type === "number") {
           // A bare constant in an imported module versions that module's own
-          // records (e.g. collection enrichment), not this source's decisions.
+          // records (e.g. collection enrichment), not this source's decisions;
+          // it is checked as a record version of its own.
           if (file !== module) {
+            const identity = `${value.file}::${value.name}`;
+            const record = this.recordVersions.get(identity) ?? {
+              name: value.name,
+              file: value.file,
+              version: value.value,
+              stampedIn: new Set<string>(),
+            };
+            record.stampedIn.add(file);
+            this.recordVersions.set(identity, record);
             continue;
           }
           version = value.value;
@@ -429,6 +477,101 @@ class StaticTree {
     return printedCode(file, source);
   }
 
+  /** The npm packages a module imports by name, at run time. */
+  packageImports(file: string): string[] {
+    const source = this.files.get(file);
+    if (source === undefined || !SOURCE_MODULE.test(file)) {
+      return [];
+    }
+    return (file.endsWith("x") ? jsxTranspiler : transpiler)
+      .scanImports(source)
+      .flatMap(({ path: specifier }) => {
+        if (
+          specifier.startsWith(".") ||
+          specifier.startsWith("@/") ||
+          /^(?:node|bun):/u.test(specifier) ||
+          this.resolve(file, specifier) !== undefined
+        ) {
+          return [];
+        }
+        const [scope = "", name = ""] = specifier.split("/");
+        return [scope.startsWith("@") ? `${scope}/${name}` : scope];
+      });
+  }
+
+  /** What a module's output depends on: its output-shaping files and packages. */
+  outputOf(module: string): Pick<SourceOwner, "parsers" | "packages"> {
+    const parsers = new Set<string>();
+    const packages = new Set<string>();
+    for (const file of this.closure(module)) {
+      for (const name of this.packageImports(file)) {
+        packages.add(name);
+      }
+      // Adapter-local assemblers, stored-raw decoders and case-law helpers
+      // determine output even when no dedicated parser module exists.
+      if (
+        file.startsWith(ADAPTER_DIRECTORY) ||
+        file.startsWith(CASE_LAW_DIRECTORY)
+      ) {
+        parsers.add(file);
+      }
+      if (PARSER_DIRECTORIES.some((directory) => file.startsWith(directory))) {
+        for (const dependency of this.closure(file)) {
+          parsers.add(dependency);
+        }
+      }
+    }
+    return { parsers, packages };
+  }
+
+  /**
+   * The dependency patches the root manifest applies, by package. A patch it
+   * names that the tree does not hold, or an entry naming no package, fails
+   * closed.
+   */
+  dependencyPatches(): DependencyPatchesResult {
+    const patches = new Map<string, DependencyPatch>();
+    const source = this.files.get(ROOT_MANIFEST);
+    if (source === undefined) {
+      return { patches, errors: [] };
+    }
+    let manifest: unknown;
+    try {
+      manifest = JSON.parse(source);
+    } catch {
+      return { patches, errors: [`Cannot parse ${ROOT_MANIFEST}`] };
+    }
+    const entries =
+      typeof manifest === "object" && manifest !== null
+        ? Reflect.get(manifest, "patchedDependencies")
+        : undefined;
+    if (entries === undefined) {
+      return { patches, errors: [] };
+    }
+    if (typeof entries !== "object" || entries === null) {
+      return {
+        patches,
+        errors: [`${ROOT_MANIFEST} patchedDependencies is not an object`],
+      };
+    }
+    const errors: string[] = [];
+    for (const [entry, file] of Object.entries(entries)) {
+      const at = entry.lastIndexOf("@");
+      const patch = typeof file === "string" ? this.files.get(file) : undefined;
+      if (at <= 0 || typeof file !== "string" || patch === undefined) {
+        errors.push(
+          `${ROOT_MANIFEST} patchedDependencies entry ${entry} names no package and patch file the tree holds`,
+        );
+        continue;
+      }
+      patches.set(entry.slice(0, at), {
+        file,
+        identity: `${entry}\n${patch}`,
+      });
+    }
+    return { patches, errors };
+  }
+
   owners(): SourceOwnersResult {
     const owners = new Map<string, SourceOwner>();
     const errors: string[] = [];
@@ -455,26 +598,54 @@ class StaticTree {
           );
           continue;
         }
-        const parsers = new Set<string>();
-        for (const file of this.closure(imported.module)) {
-          // Adapter-local assemblers, stored-raw decoders and case-law helpers
-          // determine output even when no dedicated parser module exists.
-          if (
-            file.startsWith(ADAPTER_DIRECTORY) ||
-            file.startsWith(CASE_LAW_DIRECTORY)
-          ) {
-            parsers.add(file);
-          }
-          if (
-            PARSER_DIRECTORIES.some((directory) => file.startsWith(directory))
-          ) {
-            for (const dependency of this.closure(file)) {
-              parsers.add(dependency);
-            }
-          }
-        }
-        owners.set(key, { module: imported.module, version, parsers });
+        owners.set(key, {
+          module: imported.module,
+          version,
+          ...this.outputOf(imported.module),
+        });
       }
+    }
+    const recordOwners = new Map<string, RecordVersionOwner>();
+    for (const {
+      name,
+      file,
+      version,
+      stampedIn,
+    } of this.recordVersions.values()) {
+      const key = name.toLowerCase().replaceAll("_", "-");
+      if (!Number.isSafeInteger(version) || version < 1) {
+        errors.push(
+          `Record version ${name} in ${file} is not a positive integer`,
+        );
+        continue;
+      }
+      if (recordOwners.has(key)) {
+        errors.push(
+          `Record version ${name} in ${file} shares its name with another; rename one`,
+        );
+        continue;
+      }
+      // Every module that stamps the version reads what it versions; the
+      // declaring module states the records' shape.
+      const parsers = new Set<string>([file]);
+      const packages = new Set<string>();
+      for (const module of stampedIn) {
+        const output = this.outputOf(module);
+        for (const parser of output.parsers) {
+          parsers.add(parser);
+        }
+        for (const dependency of output.packages) {
+          packages.add(dependency);
+        }
+      }
+      recordOwners.set(key, {
+        module: [...stampedIn].toSorted().join(", "),
+        version,
+        parsers,
+        packages,
+        name,
+        file,
+      });
     }
     errors.push(...this.importErrors);
     const registeredSources: RegisteredParserSource[] = [];
@@ -520,7 +691,14 @@ class StaticTree {
       }
     }
     registryErrors.push(...this.importErrors);
-    return { owners, registeredSources, parserFiles, errors, registryErrors };
+    return {
+      owners,
+      recordOwners,
+      registeredSources,
+      parserFiles,
+      errors,
+      registryErrors,
+    };
   }
 }
 
@@ -709,16 +887,22 @@ export const checkParserVersions = ({
       deletedReexports.add(file);
     }
   }
-  for (const [key, current] of after.owners) {
-    const previous = before.owners.get(key);
-    if (previous === undefined) {
-      continue;
-    }
+  const basePatches = baseTree.dependencyPatches();
+  const headPatches = headTree.dependencyPatches();
+  errors.push(...basePatches.errors, ...headPatches.errors);
+
+  const compare = (
+    key: string,
+    /** How the version is named in an error: the source key or the constant. */
+    label: string,
+    previous: SourceOwner,
+    current: SourceOwner,
+  ): void => {
     if (current.version < previous.version) {
       errors.push(
-        `${key}: parser version ${current.version} must not be lower than base ${previous.version}`,
+        `${label}: parser version ${current.version} must not be lower than base ${previous.version}`,
       );
-      continue;
+      return;
     }
     const changed = [
       ...new Set([...previous.parsers, ...current.parsers]),
@@ -726,8 +910,24 @@ export const checkParserVersions = ({
       (file) =>
         baseTree.comparableSource(file) !== headTree.comparableSource(file),
     );
-    if (changed.length === 0 || current.version > previous.version) {
-      continue;
+    // A patch changes what every module importing its package reads, so it
+    // takes a bump no marker can waive.
+    const changedPatches = [
+      ...new Set([...previous.packages, ...current.packages]),
+    ]
+      .toSorted()
+      .flatMap((name) => {
+        const was = basePatches.patches.get(name);
+        const now = headPatches.patches.get(name);
+        return was?.identity === now?.identity
+          ? []
+          : [`${now?.file ?? was?.file ?? PATCH_DIRECTORY} (patches ${name})`];
+      });
+    if (
+      (changed.length === 0 && changedPatches.length === 0) ||
+      current.version > previous.version
+    ) {
+      return;
     }
     // A marked parser that still imports a workspace package removed from the
     // repository now gets it from the registry; only that package's deleted
@@ -779,10 +979,24 @@ export const checkParserVersions = ({
         return marker !== null && (owner === undefined || owner === key);
       });
     });
-    if (unexempted.length > 0) {
+    const unexplained = [...unexempted, ...changedPatches];
+    if (unexplained.length > 0) {
       errors.push(
-        `${key}: parser version ${current.version} must exceed base ${previous.version}; changed: ${unexempted.join(", ")}`,
+        `${label}: parser version ${current.version} must exceed base ${previous.version}; changed: ${unexplained.join(", ")}`,
       );
+    }
+  };
+
+  for (const [key, current] of after.owners) {
+    const previous = before.owners.get(key);
+    if (previous !== undefined) {
+      compare(key, key, previous, current);
+    }
+  }
+  for (const [key, current] of after.recordOwners) {
+    const previous = before.recordOwners.get(key);
+    if (previous !== undefined) {
+      compare(key, `${current.name} in ${current.file}`, previous, current);
     }
   }
   return errors;
@@ -891,6 +1105,8 @@ export const readGitTree = (
     "--",
     "apps/api/src",
     "packages",
+    PATCH_DIRECTORY,
+    ROOT_MANIFEST,
   ]);
   if (listing.type === "failed") {
     return listing;
@@ -905,9 +1121,14 @@ export const readGitTree = (
       continue;
     }
     // Other imports (JSON, wasm, etc.) still enter the dependency graph by
-    // object identity; only code and package export maps need decoding.
+    // object identity, and so do dependency patches; only code and package
+    // manifests need decoding.
     files.set(file, `git-blob:${object}`);
-    if (/\.[cm]?[jt]sx?$/u.test(file) || file.endsWith("/package.json")) {
+    if (
+      /\.[cm]?[jt]sx?$/u.test(file) ||
+      file.endsWith("/package.json") ||
+      file === ROOT_MANIFEST
+    ) {
       sources.push({ file, object });
     }
   }

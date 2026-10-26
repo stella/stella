@@ -889,6 +889,136 @@ test("versions an imported module declares for its own records do not count as t
   ]);
 });
 
+const PDF_PATCH = "patches/pdf-reader@1.0.0.patch";
+
+/** The fixture with `pdf-reader` patched and read by adapter A's parser only. */
+const withPatchedReader = (
+  tree: Map<string, string>,
+  patch: string,
+  manifestPatch = PDF_PATCH,
+): Map<string, string> => {
+  tree.set(
+    "package.json",
+    JSON.stringify({
+      patchedDependencies: { "pdf-reader@1.0.0": manifestPatch },
+    }),
+  );
+  tree.set(PDF_PATCH, patch);
+  const parserA = `${PARSERS}parser-a.ts`;
+  tree.set(
+    parserA,
+    ['import { read } from "pdf-reader";', tree.get(parserA), "read();"].join(
+      "\n",
+    ),
+  );
+  return tree;
+};
+
+test("a dependency patch change demands a bump of every parser importing the package", () => {
+  const base = withPatchedReader(fixture(), "git-blob:old");
+
+  expect(changed(base, withPatchedReader(fixture(), "git-blob:new"))).toEqual([
+    "test-a: parser version 1 must exceed base 1; changed: patches/pdf-reader@1.0.0.patch (patches pdf-reader)",
+  ]);
+  expect(
+    changed(
+      base,
+      withPatchedReader(fixture({ versions: { A: 2 } }), "git-blob:new"),
+    ),
+  ).toEqual([]);
+  // A parser-output-unchanged marker cannot waive a patch.
+  expect(
+    changed(
+      base,
+      withPatchedReader(
+        fixture({ markerSource: "// parser-output-unchanged: [test-a] no.\n" }),
+        "git-blob:new",
+      ),
+    ),
+  ).toEqual([expect.stringContaining("test-a: parser version 1 must exceed")]);
+});
+
+test("a patched dependency the tree does not hold fails closed", () => {
+  const base = withPatchedReader(fixture(), "git-blob:old");
+
+  expect(
+    changed(
+      base,
+      withPatchedReader(fixture(), "git-blob:old", "patches/missing.patch"),
+    ),
+  ).toEqual([
+    "package.json patchedDependencies entry pdf-reader@1.0.0 names no package and patch file the tree holds",
+    // Unread, the patch counts as changed for the parser importing it.
+    "test-a: parser version 1 must exceed base 1; changed: patches/pdf-reader@1.0.0.patch (patches pdf-reader)",
+  ]);
+});
+
+test("a version an imported module stamps on its own records is checked like an adapter's", () => {
+  const withCollections = (
+    tree: Map<string, string>,
+    { version = 9, body = "'base'", patch = "git-blob:old" } = {},
+  ) => {
+    const adapterA = `${ADAPTERS}adapter-a.ts`;
+    tree.set(
+      adapterA,
+      ['import { enrich } from "./collections";', tree.get(adapterA)].join(
+        "\n",
+      ),
+    );
+    tree.set(
+      `${ADAPTERS}collections.ts`,
+      [
+        'import { read } from "pdf-reader";',
+        `export const COLLECTION_PARSER_VERSION = ${version};`,
+        `export const enrich = () => ({ parserVersion: COLLECTION_PARSER_VERSION, text: read(${body}) });`,
+      ].join("\n"),
+    );
+    tree.set(
+      "package.json",
+      JSON.stringify({
+        patchedDependencies: { "pdf-reader@1.0.0": PDF_PATCH },
+      }),
+    );
+    tree.set(PDF_PATCH, patch);
+    return tree;
+  };
+  const base = withCollections(fixture());
+  const record =
+    "COLLECTION_PARSER_VERSION in apps/api/src/handlers/case-law/ingestion/adapters/collections.ts";
+
+  // The enrichment's own reading changed: its record version and the
+  // importing adapter's both move.
+  expect(
+    changed(base, withCollections(fixture(), { body: "'changed'" })),
+  ).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    `${record}: parser version 9 must exceed base 9; changed: apps/api/src/handlers/case-law/ingestion/adapters/collections.ts`,
+  ]);
+  expect(
+    changed(
+      base,
+      withCollections(fixture({ versions: { A: 2 } }), {
+        body: "'changed'",
+        version: 10,
+      }),
+    ),
+  ).toEqual([]);
+  // The package it reads with was patched.
+  expect(
+    changed(
+      base,
+      withCollections(fixture({ versions: { A: 2 } }), {
+        patch: "git-blob:new",
+      }),
+    ),
+  ).toEqual([
+    `${record}: parser version 9 must exceed base 9; changed: patches/pdf-reader@1.0.0.patch (patches pdf-reader)`,
+  ]);
+  expect(changed(base, withCollections(fixture(), { version: 8 }))).toEqual([
+    `${record}: parser version 8 must not be lower than base 9`,
+  ]);
+});
+
 test("the queue compares against its exact base while pull requests use the merge-base", () => {
   const commands: string[][] = [];
   const runGit = (args: string[]) => {
