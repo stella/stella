@@ -26,14 +26,6 @@ const directoryName = (value: unknown): string => {
 const resolvedDirectoryName = (value: unknown): string =>
   path.resolve(process.cwd(), directoryName(value));
 
-const wrapDirectoryFunction = <Arguments extends unknown[], Result>(
-  original: (...args: Arguments) => Result,
-) =>
-  function (this: unknown, ...args: Arguments): Result {
-    writeScan({ directory: resolvedDirectoryName(args[0]) });
-    return original.apply(this, args);
-  };
-
 const installDirectoryWrapper = (
   owner: object,
   name: string,
@@ -45,23 +37,36 @@ const installDirectoryWrapper = (
   });
 };
 
-installDirectoryWrapper(
-  fs,
-  "readdirSync",
-  wrapDirectoryFunction(fs.readdirSync),
-);
-installDirectoryWrapper(fs, "readdir", wrapDirectoryFunction(fs.readdir));
-installDirectoryWrapper(
-  fs,
-  "opendirSync",
-  wrapDirectoryFunction(fs.opendirSync),
-);
-installDirectoryWrapper(fs, "opendir", wrapDirectoryFunction(fs.opendir));
-installDirectoryWrapper(
-  fs.promises,
-  "readdir",
-  wrapDirectoryFunction(fs.promises.readdir),
-);
+/**
+ * Every node:fs API that enumerates a directory, sync, callback and promise
+ * forms. A test that lists a directory through any of them leaves a scan
+ * record; a census test keeps this table complete.
+ */
+export const DIRECTORY_SCAN_APIS = {
+  fs: ["readdir", "readdirSync", "opendir", "opendirSync", "glob", "globSync"],
+  promises: ["readdir", "opendir", "glob"],
+} as const;
+
+const wrapScanApi = (owner: object, name: string) => {
+  const original: unknown = Reflect.get(owner, name);
+  if (typeof original !== "function") {
+    return;
+  }
+  installDirectoryWrapper(
+    owner,
+    name,
+    function (this: unknown, ...args: unknown[]): unknown {
+      writeScan({ directory: resolvedDirectoryName(args[0]) });
+      return Reflect.apply(original, this, args);
+    },
+  );
+};
+for (const name of DIRECTORY_SCAN_APIS.fs) {
+  wrapScanApi(fs, name);
+}
+for (const name of DIRECTORY_SCAN_APIS.promises) {
+  wrapScanApi(fs.promises, name);
+}
 
 const globDirectory = (value: unknown): string => {
   if (typeof value === "string" || value instanceof URL) {

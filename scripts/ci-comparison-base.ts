@@ -28,16 +28,21 @@ export const comparisonBase = (
     : undefined;
 };
 
-/** Lists both sides of renames and all other changed paths, including deletions. */
+/**
+ * Lists both sides of renames and all other changed paths, including
+ * deletions. NUL-separated output keeps every path exactly as it is: the
+ * line form quotes paths with non-ASCII characters, tabs or newlines.
+ */
 export const changedFilesSince = (base: string): string[] => {
-  const output = gitOutput([
-    "diff",
-    "--name-only",
-    "--no-renames",
-    `${base}...HEAD`,
-  ]);
-  if (output === undefined) {
+  const result = Bun.spawnSync(
+    ["git", "diff", "--name-only", "--no-renames", "-z", `${base}...HEAD`],
+    { stdout: "pipe", stderr: "ignore" },
+  );
+  if (result.exitCode !== 0) {
     panic(`Cannot compare HEAD with ${base}`);
   }
-  return output === "" ? [] : output.split("\n");
+  return result.stdout
+    .toString()
+    .split("\0")
+    .filter((file) => file !== "");
 };

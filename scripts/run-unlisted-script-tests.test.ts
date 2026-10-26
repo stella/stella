@@ -545,16 +545,22 @@ describe("directory scan coverage", () => {
     );
     const log = path.join(root, "scans.log");
     mkdirSync(path.join(root, "fixtures/data"), { recursive: true });
+    mkdirSync(path.join(root, "fixtures/listed"), { recursive: true });
     writeFileSync(path.join(root, "fixtures/data/a.txt"), "a");
+    writeFileSync(path.join(root, "fixtures/listed/b.txt"), "b");
     writeFileSync(
       path.join(root, "subject.test.ts"),
       [
         'import { expect, test } from "bun:test";',
         'import { readdirSync } from "node:fs";',
-        'test("calls through", () => {',
+        'import { opendir } from "node:fs/promises";',
+        'test("calls through", async () => {',
         '  process.chdir("fixtures");',
         '  expect(readdirSync("data")).toEqual(["a.txt"]);',
         '  expect([...new Bun.Glob("*.txt").scanSync({ cwd: "data" })]).toEqual(["a.txt"]);',
+        "  const names = [];",
+        '  for await (const entry of await opendir("listed")) names.push(entry.name);',
+        '  expect(names).toEqual(["b.txt"]);',
         "});",
       ].join("\n"),
     );
@@ -579,10 +585,49 @@ describe("directory scan coverage", () => {
         `"directory":"${path.join(root, "fixtures/data")}"`,
       );
       expect(readFileSync(log, "utf-8")).toContain('"pattern":"*.txt"');
+      // A promise-API listing leaves a scan record too, so a declaration
+      // that covers only today's files cannot pass for it.
+      expect(readFileSync(log, "utf-8")).toContain(
+        `"directory":"${path.join(root, "fixtures/listed")}"`,
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
   });
+});
+
+test("the scan preload wraps every node:fs API that lists a directory", async () => {
+  const fs = await import("node:fs");
+  const { DIRECTORY_SCAN_APIS } = await import("./script-test-scan-preload");
+  const listing = /^(?:readdir|opendir|glob)(?:Sync)?$/u;
+  expect(
+    Object.keys(fs.default)
+      .filter(
+        (name) =>
+          listing.test(name) &&
+          typeof Reflect.get(fs.default, name) === "function",
+      )
+      .toSorted(),
+  ).toEqual(
+    DIRECTORY_SCAN_APIS.fs
+      .filter((name) => typeof Reflect.get(fs.default, name) === "function")
+      .toSorted(),
+  );
+  expect(
+    Object.keys(fs.default.promises)
+      .filter(
+        (name) =>
+          listing.test(name) &&
+          typeof Reflect.get(fs.default.promises, name) === "function",
+      )
+      .toSorted(),
+  ).toEqual(
+    DIRECTORY_SCAN_APIS.promises
+      .filter(
+        (name) => typeof Reflect.get(fs.default.promises, name) === "function",
+      )
+      .toSorted(),
+  );
 });
 
 test("CI does not require or install strace when no tests are selected", () => {
