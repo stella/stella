@@ -114,6 +114,7 @@ const runDeniedTitle = async ({
           if (storeState === "offline") {
             throw new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Coordination unavailable",
             });
           }
