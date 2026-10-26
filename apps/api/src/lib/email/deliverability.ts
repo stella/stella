@@ -193,7 +193,7 @@ export const drainDeliverabilityEvents = async ({
     receiveCount,
   }: SnsQueueDelivery): Promise<SnsQueueDisposition> => {
     const transition = parseSnsQueueBody({ body, topicArn })
-      .mapErr(
+      .mapError(
         () =>
           new DeliverabilityEventError({
             message: "Provider event envelope is not trusted",
