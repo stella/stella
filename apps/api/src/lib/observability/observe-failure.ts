@@ -12,7 +12,13 @@
 
 import { Result } from "better-result";
 
-import { type FailureGrade, sanitizeQueryErrorText } from "@stll/errors";
+import {
+  type ExceptionScope,
+  type FailureGrade,
+  type HandlerExceptionScope,
+  type RequestExceptionScope,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
@@ -138,20 +144,23 @@ const resolvePolicy = (
 type ObserveFailureOptions = {
   readonly sink: FailureSink;
   readonly ctx?: FailureContext | undefined;
-  readonly request?: Request | undefined;
   readonly escalation?: "sustained" | undefined;
-};
+} & (
+  | {
+      readonly request: Request;
+      readonly scope: RequestExceptionScope | HandlerExceptionScope;
+    }
+  | { readonly request?: undefined; readonly scope?: ExceptionScope }
+);
 
 const requestFields = (request: Request | undefined): LoggerAttributes => {
   const requestId =
-    request === undefined ? undefined : getRequestContext(request)?.requestId;
+    request === undefined ? undefined : getRequestContext()?.requestId;
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
-const observe = (
-  error: unknown,
-  { sink, ctx, request, escalation }: ObserveFailureOptions,
-): void => {
+const observe = (error: unknown, options: ObserveFailureOptions): void => {
+  const { sink, ctx, request, escalation } = options;
   const evidence = readEvidence(error);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
     requestAborted: request?.signal.aborted,
@@ -170,7 +179,7 @@ const observe = (
   };
 
   if (request !== undefined) {
-    recordRequestFailure(request, {
+    recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
       sink: sink.event,
@@ -194,11 +203,20 @@ const observe = (
     logger.warn(sink.event, attributes);
   }
   if (policy.capture) {
-    captureObservedError(error, {
+    const capture = {
+      scope: { type: "handler", handlerId: sink.event },
+      fingerprintKey: `observe.${sink.event}`,
       context: context.accepted,
-      request,
       observation: grading,
-    });
+    } as const;
+    const captureOptions =
+      options.request !== undefined
+        ? { ...capture, request: options.request, scope: options.scope }
+        : {
+            ...capture,
+            scope: options.scope ?? capture.scope,
+          };
+    captureObservedError(error, captureOptions);
   }
 };
 

@@ -141,6 +141,8 @@ const readerOf = (extra: SafeId<"workspace">[]): SafeDb =>
   );
 
 const handlerContext = (safeDb: SafeDb, rest: Record<string, unknown>) => ({
+  request: new Request("http://localhost/v1/document-reviews/runs"),
+  route: "/v1/document-reviews/runs/:runId",
   memberRole: sessionMemberRole("member"),
   recordAuditEvent: auditRecorderDouble(),
   safeDb,

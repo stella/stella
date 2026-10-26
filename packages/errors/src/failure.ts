@@ -1,4 +1,4 @@
-// parser-output-unchanged: total failure grading changes telemetry observation policy; no parser reads this vocabulary.
+// parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
 
@@ -90,6 +90,7 @@ export const FAILURE_REASON_GRADE = {
   request_validation: "client",
   route_not_found: "client",
   request_malformed: "client",
+  method_not_allowed: "client",
   unclassified: "defect",
   tagged_failure: "defect",
   // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
@@ -245,9 +246,14 @@ const resolveDeclaration = (
  * A reader that has already walked the prototype chain passes it, so a Proxy
  * whose `getPrototypeOf` answers differently on each call is read once.
  */
+type ReadFailureBrandOptions = {
+  prototypes?: readonly object[];
+  read?: (value: object, key: string) => unknown;
+};
+
 export const readFailureBrand = (
   value: unknown,
-  prototypes?: readonly object[],
+  { prototypes, read }: ReadFailureBrandOptions = {},
 ): FailureBrand | undefined => {
   if (typeof value !== "object" || value === null) {
     return undefined;
@@ -260,7 +266,17 @@ export const readFailureBrand = (
     const declaration = classDeclarations.get(prototype);
     if (declaration !== undefined) {
       return {
-        reason: resolveDeclaration(declaration, value),
+        reason: resolveDeclaration(
+          declaration,
+          read === undefined
+            ? value
+            : new Proxy(value, {
+                get: (target, key): unknown =>
+                  typeof key === "string"
+                    ? read(target, key)
+                    : Reflect.get(target, key),
+              }),
+        ),
         source: "class",
       };
     }

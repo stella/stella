@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.13.1
+
+### Patch Changes
+
+- [#6790](https://github.com/stella/stella/pull/6790) [`85c80dd`](https://github.com/stella/stella/commit/85c80dd20e5d55b981c60f58786fe18c88d1058f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `ResponsiveActionToolbar` wraps its slots instead of scrolling them behind a hidden scrollbar, and the action slot aligns to the inline end by itself.
+- Updated dependencies [[`4fe45ad`](https://github.com/stella/stella/commit/4fe45ad8fc654bb759207c22008d38bc15344091)]:
+  - @stll/ui@0.52.0
+
 ## 0.13.0
 
 ### Minor Changes

@@ -1,6 +1,7 @@
 import { Panic, panic, Result } from "better-result";
 import { asc, eq, sql } from "drizzle-orm";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -36,6 +37,10 @@ type OrganizationFileUsageErrorProps = {
 };
 
 export class OrganizationFileUsageError extends HandlerError<409 | 503> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
   readonly reason: OrganizationFileUsageErrorProps["reason"];
 
   constructor({ message, reason, cause }: OrganizationFileUsageErrorProps) {

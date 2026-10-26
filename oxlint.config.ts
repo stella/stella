@@ -177,7 +177,7 @@ const fixtureRuleOverrides = [
   {
     files: [".oxlint-plugins/__fixtures__/no-raw-sha256.fixture.ts"],
     rules: {
-      "no-raw-sha256/no-raw-sha256": "error",
+      "no-raw-sha256/no-raw-sha256": ["error", { hmacTarget: "bun" }],
       "no-unused-vars": "off",
       "no-new": "off",
       "prefer-const": "off",
@@ -192,8 +192,8 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-stable-geometry.fixture.ts", [
     "require-stable-geometry/require-stable-geometry",
   ]),
-  fixtureRuleOverride("no-raw-eden-telemetry.fixture.ts", [
-    "no-raw-eden-telemetry/no-raw-eden-telemetry",
+  fixtureRuleOverride("no-raw-api-error-telemetry.fixture.ts", [
+    "no-raw-api-error-telemetry/no-raw-api-error-telemetry",
   ]),
   fixtureRuleOverride("capability-request.fixture.ts", [
     "capability-request/capability-request",
@@ -260,6 +260,10 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-async-context-enter-with.fixture.ts", [
     "no-async-context-enter-with/no-async-context-enter-with",
+  ]),
+  fixtureRuleOverride("prefer-bun-native.fixture.ts", [
+    "prefer-bun-native/no-buffer-string-encoding",
+    "prefer-bun-native/no-headers-from-entries",
   ]),
   fixtureRuleOverride("request-lifetime.fixture.ts", [
     "request-lifetime/confine-request-reads",
@@ -348,6 +352,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-error-output.fixture.ts", [
     "no-raw-error-output/no-raw-error-output",
+  ]),
+  fixtureRuleOverride("require-fingerprint-fields.fixture.ts", [
+    "require-fingerprint-fields/require-fingerprint-fields",
   ]),
   fixtureRuleOverride("no-raw-mcp-error-result.fixture.ts", [
     "no-raw-mcp-error-result/no-raw-mcp-error-result",
@@ -528,8 +535,8 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-derived-check-enum.fixture.ts", [
     "require-derived-check-enum/require-derived-check-enum",
   ]),
-  fixtureRuleOverride("require-eden-error-check.fixture.ts", [
-    "require-eden-error-check/require-eden-error-check",
+  fixtureRuleOverride("require-api-error-check.fixture.ts", [
+    "require-api-error-check/require-api-error-check",
   ]),
   fixtureRuleOverride("require-fetch-timeout.fixture.ts", [
     "require-fetch-timeout/require-fetch-timeout",
@@ -661,8 +668,38 @@ const noZodImport = {
 const noClassicTypeScriptImport = {
   name: "typescript",
   message:
-    "TypeScript 7 exposes no compiler API at 'typescript'. Use 'typescript6' for the classic API, or 'typescript/unstable/*' for the TypeScript 7 API.",
+    "'typescript' is only the copy linters peer on, not a dependency. Use 'typescript6' for the classic API, or 'tsrs/unstable/*' for the TypeScript 7 API.",
 };
+
+// The API serves its routes from its own HTTP core on Bun.serve
+// (apps/api/src/http) with valibot schemas, and the web reads them through
+// @stll/api-client. Each retired module is named so none comes back.
+const noRetiredHttpFrameworkImports = [
+  "elysia",
+  "elysia/error",
+  "@elysia/cors",
+  "@elysia/eden",
+  "@sinclair/typebox",
+  "@sinclair/typebox/compiler",
+  "@sinclair/typebox/errors",
+  "@sinclair/typebox/value",
+].map((name) => ({
+  name,
+  message:
+    "Routes use the API's own HTTP core (apps/api/src/http) and valibot schemas; the browser uses @stll/api-client.",
+}));
+
+// Every module of the retired frameworks, by scope, for files whose
+// `no-restricted-imports` entry can carry patterns. The rule fixtures use it:
+// a fixture written against a retired framework exercises a rule shape no
+// current code has, and passes while the rule matches nothing.
+const noRetiredHttpFrameworkImportPatterns = [
+  {
+    group: ["elysia/**", "@elysia/**", "@elysiajs/**", "@sinclair/typebox/**"],
+    message:
+      "Routes use the API's own HTTP core (apps/api/src/http) and valibot schemas; a rule fixture is written in the shapes that code uses today.",
+  },
+];
 
 const webLocalApiImportGroup = ["@/api/*", "@/api/**/*"];
 
@@ -941,6 +978,143 @@ const customCssClassNames = [
   "word",
 ] satisfies string[];
 
+// Exact files with verified Bun execution owners; new paths do not inherit a runtime.
+const bunNativeFiles = [
+  ".oxlint-plugins/__tests__/no-raw-sha256.test.ts",
+  ".oxlint-plugins/__tests__/prefer-bun-native.test.ts",
+  "apps/api/evals/template-authoring.ts",
+  "apps/api/scripts/ai-native-image-canary.ts",
+  "apps/api/scripts/ai-provider-canary.ts",
+  "apps/api/scripts/seed-dev.ts",
+  "apps/api/scripts/visual-sandbox-fonts.test.ts",
+  "apps/api/scripts/visual-sandbox-fonts.ts",
+  "apps/api/src/agent-auth/credentials.ts",
+  "apps/api/src/db/schema/bytea.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj-notice.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/hu-bhgy.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/pl-nsa.ts",
+  "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.test.ts",
+  "apps/api/src/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts.ts",
+  "apps/api/src/handlers/chat/link-icons/cache.ts",
+  "apps/api/src/handlers/chat/message-page.test.ts",
+  "apps/api/src/handlers/chat/third-party-boundary.test.ts",
+  "apps/api/src/handlers/chat/upload-files.test.ts",
+  "apps/api/src/handlers/chat/upload-files.ts",
+  "apps/api/src/handlers/desktop-registry/redeem-link.postgres.test.ts",
+  "apps/api/src/handlers/docx-suggestions/cursor.property.test.ts",
+  "apps/api/src/handlers/entities/pdf-signing-certificate.ts",
+  "apps/api/src/handlers/entities/pdf-signing-signature.integration.test.ts",
+  "apps/api/src/handlers/entities/pdf-signing-signature.ts",
+  "apps/api/src/handlers/entities/version-cursor.test.ts",
+  "apps/api/src/handlers/legal-resolve/authorization.test.ts",
+  "apps/api/src/handlers/legislation/search-relaxed.contract.test.ts",
+  "apps/api/src/handlers/lists/verifications/get.db.test.ts",
+  "apps/api/src/handlers/sharepoint/graph-oauth.ts",
+  "apps/api/src/handlers/soft-law/adapters/edpb.test.ts",
+  "apps/api/src/handlers/soft-law/adapters/edpb.ts",
+  "apps/api/src/handlers/soft-law/adapters/wp29.test.ts",
+  "apps/api/src/handlers/soft-law/adapters/wp29.ts",
+  "apps/api/src/handlers/soft-law/eu-expressions.db.test.ts",
+  "apps/api/src/handlers/soft-law/ingestion.db.test.ts",
+  "apps/api/src/handlers/templates/list-cursor.test.ts",
+  "apps/api/src/handlers/templates/prepare.ts",
+  "apps/api/src/handlers/workspaces/activity-cursor.test.ts",
+  "apps/api/src/lib/agent-client-credential-storage.postgres.test.ts",
+  "apps/api/src/lib/agent-client-credentials.postgres.test.ts",
+  "apps/api/src/lib/agent-client-credentials.test.ts",
+  "apps/api/src/lib/auth/http-basic-auth.ts",
+  "apps/api/src/lib/auth/mcp-web-handoff.ts",
+  "apps/api/src/lib/auth/session-lifetime-store.ts",
+  "apps/api/src/lib/bbox/ai-generate-b-boxes.ts",
+  "apps/api/src/lib/business-registries/desktop/proof.test.ts",
+  "apps/api/src/lib/business-registries/desktop/proof.ts",
+  "apps/api/src/lib/business-registries/desktop/renewal.postgres.test.ts",
+  "apps/api/src/lib/chat/provider-image-input.test.ts",
+  "apps/api/src/lib/chat/provider-image-input.ts",
+  "apps/api/src/lib/content-encryption.test.ts",
+  "apps/api/src/lib/content-encryption.ts",
+  "apps/api/src/lib/data-url.ts",
+  "apps/api/src/lib/db-pagination.test.ts",
+  "apps/api/src/lib/db/operator-registrations/input.test.ts",
+  "apps/api/src/lib/db/service-client-operator.ts",
+  "apps/api/src/lib/email/inbound/address.ts",
+  "apps/api/src/lib/email/inbound/authentication.test.ts",
+  "apps/api/src/lib/email/inbound/email-file.test-fixture.ts",
+  "apps/api/src/lib/email/inbound/message.test.ts",
+  "apps/api/src/lib/email/inbound/original-signature.test.ts",
+  "apps/api/src/lib/email/inbound/upload.db.test.ts",
+  "apps/api/src/lib/entities/window-cursor.ts",
+  "apps/api/src/lib/files/email-attachment-token.ts",
+  "apps/api/src/lib/files/email-to-html.test.ts",
+  "apps/api/src/lib/files/email-to-html.ts",
+  "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
+  "apps/api/src/lib/files/pdf-signing/certificate-chain.test.ts",
+  "apps/api/src/lib/files/pdf-signing/certificate-chain.ts",
+  "apps/api/src/lib/files/pdf-signing/sign-pdf.test.ts",
+  "apps/api/src/lib/files/pdf-signing/sign-pdf.ts",
+  "apps/api/src/lib/files/pdf-signing/stamp-glyphs.ts",
+  "apps/api/src/lib/files/pdf-signing/timestamp-trust.test.ts",
+  "apps/api/src/lib/folio-collab-rooms.test.ts",
+  "apps/api/src/lib/folio-collab-rooms.ts",
+  "apps/api/src/lib/health/database-login-probe.postgres.test.ts",
+  "apps/api/src/lib/hosted-usage-provider/verify-signature.test.ts",
+  "apps/api/src/lib/hosted-usage-provider/verify-signature.ts",
+  "apps/api/src/lib/legal-search/corpus-search-cursor.test.ts",
+  "apps/api/src/lib/legal-search/corpus-search-cursor.ts",
+  "apps/api/src/lib/mcp-upstream/oauth.ts",
+  "apps/api/src/lib/member-credential-lifecycle.db.test.ts",
+  "apps/api/src/lib/pagination.property.test.ts",
+  "apps/api/src/lib/pagination.ts",
+  "apps/api/src/lib/provider-document-adapters.test.ts",
+  "apps/api/src/lib/search/cursor.test.ts",
+  "apps/api/src/lib/search/cursor.ts",
+  "apps/api/src/lib/stella-openrouter-text-adapter.test.ts",
+  "apps/api/src/lib/tanstack-ai-models.test.ts",
+  "apps/api/src/lib/workflow/ai-generate-batch.ts",
+  "apps/api/src/mcp/decision-reader.logic.test.ts",
+  "apps/api/src/mcp/feedback-approval.ts",
+  "apps/api/src/mcp/file-comparison-links-tool.test.ts",
+  "apps/api/src/mcp/file-comparison-prepare-tool.test.ts",
+  "apps/api/src/mcp/file-comparison-prepare-tool.ts",
+  "apps/api/src/mcp/file-comparison-run.test.ts",
+  "apps/api/src/mcp/sha256-storage-parity.test.ts",
+  "apps/api/src/mcp/template-tools.test.ts",
+  "apps/api/src/mcp/template-tools.ts",
+  "apps/api/src/scripts/mcp-canary.ts",
+  "apps/api/src/tests/helpers/case-law-enrolled-fixtures.ts",
+  "apps/api/src/tests/helpers/oauth-grant.ts",
+  "apps/api/src/tests/helpers/read-fault-drivers.ts",
+  "apps/api/src/tests/security/business-registry-credentials-rls.integration.test.ts",
+  "apps/collab/src/server.test.ts",
+  "apps/collab/src/server.ts",
+  "apps/landing/scripts/render-og-card.ts",
+  "apps/landing/src/lib/og-card.ts",
+  "apps/web/src/lib/desktop-bridge.test.ts",
+  "packages/agent-engine/scripts/e2e-mcp-canary.ts",
+  "packages/agent-engine/src/bun-docker/provider.ts",
+  "packages/business-registries/src/companies-house/client.test.ts",
+  "packages/catalogue/scripts/generate-manifest.ts",
+  "packages/mcp-apps/scripts/build-mcp-apps.ts",
+  "packages/property-testing/src/sha256.property.test.ts",
+  "packages/scripts/src/dev-runtime.ts",
+  "packages/sha256/src/sha256.test.ts",
+  "scripts/check-published-versions.test.ts",
+  "scripts/ci-checks-partition.test.ts",
+  "scripts/ci-windows-dry-run-result.test.ts",
+  "scripts/cla-workflow.test.ts",
+  "scripts/dated-waiver-fix-task.ts",
+  "scripts/dated-waiver-publish.ts",
+  "scripts/dependency-review-workflow.test.ts",
+  "scripts/generated-conflicts.ts",
+  "scripts/gh-retry.test.ts",
+  "scripts/product-media.test.ts",
+  "scripts/product-media.ts",
+  "scripts/verify.test.ts",
+  "scripts/verify.ts",
+];
+
+const sha256AllowedFiles = sha256MigrationLedger.map(({ id }) => id);
+
 const config = defineConfig({
   extends: [core, react, shadcn],
   // `typeAware` and `reportUnusedDisableDirectives` stay CLI flags: the
@@ -1001,7 +1175,7 @@ const config = defineConfig({
     "confine-aggregate-lock/confine-aggregate-lock": "error",
     "no-raw-sha256/no-raw-sha256": [
       "error",
-      { allowedFiles: sha256MigrationLedger.map(({ id }) => id) },
+      { allowedFiles: sha256AllowedFiles },
     ],
     // Every base rule is decided here or in the vendored presets, never by a
     // spread: a spread replaces preset severities without naming the rules,
@@ -1194,10 +1368,16 @@ const config = defineConfig({
     "eslint/grouped-accessor-pairs": "off",
     "no-restricted-imports": [
       "error",
-      { paths: [noZodImport, noClassicTypeScriptImport] },
+      {
+        paths: [
+          noZodImport,
+          noClassicTypeScriptImport,
+          ...noRetiredHttpFrameworkImports,
+        ],
+      },
     ],
     "no-bare-error/no-bare-error": "error",
-    "no-raw-eden-telemetry/no-raw-eden-telemetry": "error",
+    "no-raw-api-error-telemetry/no-raw-api-error-telemetry": "error",
     "capability-request/capability-request": "error",
     "no-minted-auth-provider-id/no-minted-auth-provider-id": "error",
     "ai-output-strict-schema/ai-output-strict-schema": "error",
@@ -1205,7 +1385,6 @@ const config = defineConfig({
     "require-complete-compaction-generation/require-complete-compaction-generation":
       "error",
     "no-model-timeout-abort-signal/no-model-timeout-abort-signal": "error",
-    "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "no-domain-enum/no-domain-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "provider-call-error-message/provider-call-error-message": "error",
@@ -1244,10 +1423,10 @@ const config = defineConfig({
       "error",
     "require-buffer-cleanup-intent-status/require-buffer-cleanup-intent-status":
       "error",
-    // Cursor query fields come from `tPaginationCursor()`, which owns the byte
-    // cap and the description an MCP client reads. The BOE search cursor is
-    // not that: it is an upstream page number, validated by its own syntax
-    // pattern and capped at five characters.
+    // Cursor query fields come from `paginationCursorSchema()`, which owns the
+    // length cap and the description an MCP client reads. The BOE search
+    // cursor is not that: it is an upstream page number, validated by its own
+    // syntax pattern and capped at five characters.
     "require-pagination-cursor-schema/require-pagination-cursor-schema": [
       "error",
       {
@@ -1545,6 +1724,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-error-output.ts",
     "./.oxlint-plugins/no-raw-mcp-error-result.ts",
     "./.oxlint-plugins/failure-sink-handle.ts",
+    "./.oxlint-plugins/require-fingerprint-fields.ts",
     "./.oxlint-plugins/no-redacted-log-attribute-key.ts",
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
@@ -1630,14 +1810,14 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/no-raw-resource-uri.ts",
     "./.oxlint-plugins/no-legacy-entity-route.ts",
-    "./.oxlint-plugins/require-eden-error-check.ts",
+    "./.oxlint-plugins/require-api-error-check.ts",
     "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-file-transport-disposition.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/sql-perf.ts",
     "./.oxlint-plugins/no-bare-error.ts",
-    "./.oxlint-plugins/no-raw-eden-telemetry.ts",
+    "./.oxlint-plugins/no-raw-api-error-telemetry.ts",
     "./.oxlint-plugins/capability-request.ts",
     "./.oxlint-plugins/no-unsafe-controller-editor-access.ts",
     "./.oxlint-plugins/no-minted-auth-provider-id.ts",
@@ -1675,9 +1855,7 @@ const config = defineConfig({
     "./.oxlint-plugins/public-law-read-boundary.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
-    "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
     "./.oxlint-plugins/no-domain-enum.ts",
-    "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
     "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
@@ -1751,7 +1929,6 @@ const config = defineConfig({
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
     "./.oxlint-plugins/require-toast-error-capture.ts",
     "./.oxlint-plugins/no-swallowed-rejection.ts",
-    "./.oxlint-plugins/no-unreviewed-typebox-unsafe.ts",
     "./.oxlint-plugins/no-known-value-widening.ts",
     "./.oxlint-plugins/require-detached-label-shape.ts",
     "./.oxlint-plugins/no-awaited-builder-union.ts",
@@ -1764,6 +1941,7 @@ const config = defineConfig({
     "./.oxlint-plugins/queue-worker-error-sink.ts",
     "./.oxlint-plugins/require-coordination-key.ts",
     "./.oxlint-plugins/no-async-context-enter-with.ts",
+    "./.oxlint-plugins/prefer-bun-native.ts",
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
@@ -1916,6 +2094,19 @@ const config = defineConfig({
       rules: {
         "no-raw-sha256/no-raw-sha256": "off",
         "eslint/no-use-before-define": "off",
+        // The base bans plus every retired-framework subpath, so a fixture
+        // cannot keep testing a rule against TypeBox or Elysia shapes.
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+            ],
+            patterns: noRetiredHttpFrameworkImportPatterns,
+          },
+        ],
       },
     },
     {
@@ -2481,7 +2672,6 @@ const config = defineConfig({
       // code on structured logging. The type rules still apply to both.
       files: [
         "apps/api/src/tests/load/**/*.ts",
-        "apps/api/src/tests/exact-mirror-guard.ts",
         "apps/api/src/scripts/**/*.ts",
       ],
       rules: { "no-console": "off" },
@@ -2886,119 +3076,6 @@ const config = defineConfig({
       },
     },
     {
-      // Unsafe schemas require an exact adapter owner and a reviewed reason;
-      // another call in the same source file is not implicitly approved.
-      files: [
-        "apps/*/src/**/*.{ts,tsx}",
-        "packages/*/src/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-unreviewed-typebox-unsafe.fixture.ts",
-      ],
-      excludeFiles: [
-        "**/*.{test,spec}.{ts,tsx}",
-        "**/tests/**",
-        "**/__tests__/**",
-      ],
-      rules: {
-        "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe": [
-          "error",
-          {
-            approvedAdapters: [
-              {
-                path: "apps/api/src/handlers/desktop-time-entries/batch.ts",
-                binding: "responseSchema",
-                reason:
-                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
-              },
-              {
-                path: "apps/api/src/handlers/desktop-time-entries/batch-status.ts",
-                binding: "responseSchema",
-                reason:
-                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
-              },
-              {
-                path: "apps/api/src/handlers/desktop-time-entries/candidates.ts",
-                binding: "responseSchema",
-                reason:
-                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
-              },
-              {
-                path: "apps/api/src/handlers/desktop-time-entries/matters.ts",
-                binding: "mattersResponseSchema",
-                reason:
-                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
-              },
-              {
-                path: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
-                binding: "acceptedEditSchema",
-                reason:
-                  "Runtime JSON Schema and static type are derived from the same shared Valibot edit schema.",
-              },
-              {
-                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
-                binding: "courtYearSchema",
-                reason:
-                  "Runtime JSON Schema and static type are derived from the same shared Valibot schema.",
-              },
-              {
-                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
-                binding: "decisionIdentifiersSchema",
-                reason:
-                  "Runtime array bounds preserve the canonical non-empty readonly identifier contract.",
-              },
-              {
-                path: "apps/api/src/handlers/case-law/decisions/search-schema.ts",
-                binding: "languageAlternatesSchema",
-                reason:
-                  "JSON arrays lack readonly metadata; the runtime element schema preserves the public contract.",
-              },
-              {
-                path: "apps/api/src/lib/case-law/decision-headnote-schema.ts",
-                binding: "decisionHeadnotePreviewSchema",
-                reason:
-                  "Closed runtime branches are exhaustively checked against the canonical discriminated union.",
-              },
-              {
-                path: "apps/api/src/lib/search/total-schema.ts",
-                binding: "searchTotalSchema",
-                reason:
-                  "Closed runtime branches are exhaustively checked against the canonical discriminated union.",
-              },
-              {
-                path: "apps/api/src/lib/custom-schema.ts",
-                binding: "tSafeId",
-                reason:
-                  "The UUID runtime validator constructs the nominal identifier brand.",
-              },
-              {
-                path: "apps/api/src/lib/conditions/contract.ts",
-                binding: "tConditionNode",
-                reason:
-                  "Bounded runtime recursion exposes the canonical recursive AST, with compile-time shape parity.",
-              },
-              {
-                path: "apps/api/src/lib/views-schema.ts",
-                binding: "tViewLayoutSchema",
-                reason:
-                  "The runtime discriminator branches preserve the canonical layout union without TypeBox intersection inference.",
-              },
-              {
-                path: "apps/api/src/lib/permissive-route-schema.ts",
-                binding: "permissiveRouteSchema",
-                reason:
-                  "Branded optional route fields defer strict validation until token authorization succeeds.",
-              },
-              {
-                path: "apps/api/src/lib/permissive-route-schema.ts",
-                binding: "permissiveBodySchema",
-                reason:
-                  "Branded permissive request bodies defer strict validation until token authorization succeeds.",
-              },
-            ],
-          },
-        ],
-      },
-    },
-    {
       files: [
         "apps/*/src/**/*.{ts,tsx}",
         "packages/*/src/**/*.{ts,tsx}",
@@ -3011,18 +3088,6 @@ const config = defineConfig({
       ],
       rules: {
         "no-known-value-widening/no-known-value-widening": "error",
-      },
-    },
-    {
-      // A union over a computed array has a non-tuple type, so its `Static`
-      // collapses while the runtime schema still validates.
-      files: [
-        "apps/api/src/**/*.ts",
-        "packages/*/src/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-array-built-typebox-union.fixture.ts",
-      ],
-      rules: {
-        "no-array-built-typebox-union/no-array-built-typebox-union": "error",
       },
     },
     {
@@ -3177,6 +3242,18 @@ const config = defineConfig({
       },
     },
     {
+      // Native preferences require this exact Bun execution enrollment.
+      files: bunNativeFiles,
+      rules: {
+        "prefer-bun-native/no-buffer-string-encoding": "error",
+        "prefer-bun-native/no-headers-from-entries": "error",
+        "no-raw-sha256/no-raw-sha256": [
+          "error",
+          { allowedFiles: sha256AllowedFiles, hmacTarget: "bun" },
+        ],
+      },
+    },
+    {
       // Chat tools write rows through the shared write primitives in
       // `apps/api/src/lib`, which own each write's checks and audit event.
       files: ["apps/api/src/handlers/chat/tools/**/*.ts"],
@@ -3254,14 +3331,14 @@ const config = defineConfig({
       },
     },
     {
-      // Eden treaty calls (api.* from @/lib/api) resolve { data, error }
+      // API client calls (api.* from @/lib/api) resolve { data, error }
       // and never throw, so consuming them with .then()/.catch() lets a
       // failed request masquerade as success. Scoped to product code;
       // logic tests exercise mocked responses directly, not live chains.
       files: ["apps/web/src/**/*.{ts,tsx}"],
       excludeFiles: ["apps/web/src/**/*.test.{ts,tsx}"],
       rules: {
-        "require-eden-error-check/require-eden-error-check": "error",
+        "require-api-error-check/require-api-error-check": "error",
       },
     },
     {
@@ -3749,6 +3826,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -3768,7 +3846,11 @@ const config = defineConfig({
         "no-restricted-imports": [
           "error",
           {
-            paths: [noZodImport, noClassicTypeScriptImport],
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+            ],
             patterns: [
               ...uiStandaloneImports,
               pragmaticDragAdapterDeepImportBan,
@@ -3901,6 +3983,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -3937,6 +4020,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
             ],
             patterns: [
@@ -4155,6 +4239,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4182,6 +4267,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4217,6 +4303,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
             ],
@@ -4263,13 +4350,14 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
                 message:
-                  "Public law route files must use approved public case-law query modules instead of importing the Eden API client directly.",
+                  "Public law route files must use approved public case-law query modules instead of importing the API client directly.",
               },
             ],
             patterns: [
@@ -4307,6 +4395,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               {
@@ -4979,6 +5068,7 @@ const config = defineConfig({
       ],
       rules: {
         "failure-sink-handle/failure-sink-handle": "error",
+        "require-fingerprint-fields/require-fingerprint-fields": "error",
       },
     },
     {
@@ -5093,6 +5183,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5121,6 +5212,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               {
                 name: "@/api/db/root",
                 message:
@@ -5153,6 +5245,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5172,6 +5265,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5194,6 +5288,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5251,10 +5346,10 @@ const config = defineConfig({
       },
     },
     {
-      // Size bounds at the API's input and upstream boundaries. Request
-      // schemas are where Elysia enforces a length for every entry point, and
-      // a buffered upstream body is memory spent before any code can refuse
-      // it. Existing debt is carried per file in
+      // Size bounds at the API's input and upstream boundaries. A route's
+      // request schema is where a length is enforced for every entry point,
+      // and a buffered upstream body is memory spent before any code can
+      // refuse it. Existing debt is carried per file in
       // scripts/design-lint-baseline.json and switched off there by
       // `designLintBacklogOverrides` below.
       files: ["apps/api/src/**/*.ts"],
@@ -5655,13 +5750,16 @@ const config = defineConfig({
         // Case-law result lists are addressed by page number as well as by
         // cursor: `offset + limit` is bounded by `LIMITS.caseLawResultDepthMax`
         // and refused past it before any read, so a numbered pager reaches
-        // any page within the bound in one request.
+        // any page within the bound in one request. The BOE tool passes the
+        // upstream API's own offset through: BOE pages that way and has no
+        // cursor to hand on.
         "no-offset-pagination/no-offset-pagination": [
           "error",
           {
             allowedFiles: [
               "apps/api/src/handlers/case-law/decisions/list.ts",
               "apps/api/src/handlers/case-law/decisions/search-schema.ts",
+              "apps/api/src/handlers/chat/tools/boe-tools.ts",
             ],
           },
         ],
@@ -5673,12 +5771,13 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
                 importNames: ["toSafeId"],
                 message:
-                  "Handlers must receive SafeId from macros (workspaceAccessMacro, authMacro) or actor session validation, not construct it from raw strings.",
+                  "Handlers must receive SafeId from request authorization (authorizeWorkspace, authenticateSession) or actor session validation, not construct it from raw strings.",
               },
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5727,6 +5826,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
             ],
           },
@@ -5799,6 +5899,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5922,6 +6023,14 @@ const config = defineConfig({
       rules: {
         "typescript/no-unsafe-type-assertion": "off",
         "typescript/no-unnecessary-type-assertion": "off",
+      },
+    },
+    {
+      // In-memory test doubles keep production Promise contracts without
+      // artificial awaits. no-test-support-import isolates this helper tree.
+      files: ["apps/api/src/tests/helpers/**/*.{ts,tsx}"],
+      rules: {
+        "typescript/require-await": "off",
       },
     },
     {

@@ -28,7 +28,6 @@ const REVIEW_PENDING = new Set([
   "ci.yml#legal-atlas-image",
   "ci.yml#migration-upgrade-rehearsal",
   "ci.yml#mobile-build",
-  "ci.yml#pr-heavy-gate",
   "ci.yml#query-perf",
   "ci.yml#release-typecheck",
   "ci.yml#scan-engine-wasm-drift",
@@ -50,7 +49,6 @@ const REVIEW_PENDING = new Set([
   "release-pr.yml#version",
   "release-tag.yml#marketing-freshness",
   "release.yml#dispatch-release-health",
-  "release.yml#promote",
   "user-journeys.yml#local-stack",
   "user-journeys.yml#staging",
 ]);

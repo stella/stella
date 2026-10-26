@@ -1,4 +1,3 @@
-import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
 import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
@@ -253,6 +252,7 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  compactMessages = compactMessagesForContext,
   beforeTurnSettles,
   boundaryAnonymizer,
   failingApprovalNames = [],
@@ -269,7 +269,10 @@ export const createApprovalHarness = ({
   textAdapterFactory,
   user,
   withDirectRefTool = false,
+  workspaceId: homeWorkspaceId,
 }: {
+  /** Observe or control the real send's pre-model compaction boundary. */
+  compactMessages?: typeof compactMessagesForContext | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -326,6 +329,8 @@ export const createApprovalHarness = ({
   promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
+  /** Home matter supplied by the route's authorized workspace boundary. */
+  workspaceId?: SafeId<"workspace"> | undefined;
   /** Uses a local adapter through the same resolution seam as scripted replies. */
   textAdapterFactory?: NonNullable<
     Parameters<typeof installScriptedProvider>[0]
@@ -460,7 +465,7 @@ export const createApprovalHarness = ({
         sources.web ?? { urlFetcher: null, webSearchProvider: null },
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
-    compactMessagesForContext,
+    compactMessagesForContext: compactMessages,
     streamResponse: async (props) => {
       // The run owns every terminal path, including checkpoint restoration and
       // failures that produce no onFinish event. Its notification only wakes
@@ -555,7 +560,10 @@ export const createApprovalHarness = ({
         ]),
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
-      getWorkspaceAccess: async () => await Promise.resolve(null),
+      getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+        workspaceId === homeWorkspaceId
+          ? { id: workspaceId, status: "active" }
+          : null,
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -661,6 +669,7 @@ export const createApprovalHarness = ({
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
       activeFile,
+      workspaceId: homeWorkspaceId,
       contextMatterIds: [],
       message,
       runId,
@@ -671,6 +680,7 @@ export const createApprovalHarness = ({
     return contextFromBody(
       asTestRaw<SendBody>({
         activeFile,
+        workspaceId: homeWorkspaceId,
         threadId,
         runId: forwardedProps.runId,
         state: {},
@@ -1291,13 +1301,15 @@ export const createApprovalHarness = ({
    * has ended and been checked.
    */
   const postChatBody = async (
-    raw: unknown,
+    posted: unknown,
     signal: AbortSignal | undefined,
   ): Promise<{ done: Promise<void>; response: Response }> => {
-    if (!Value.Check(agUiSendMessageBodySchema, raw)) {
-      const errors = [...Value.Errors(agUiSendMessageBodySchema, raw)]
+    // Decoded exactly as the route decodes it: unknown keys are dropped.
+    const decoded = v.safeParse(agUiSendMessageBodySchema, posted);
+    if (!decoded.success) {
+      const errors = decoded.issues
         .slice(0, 3)
-        .map(({ message, path }) => `${path}: ${message}`);
+        .map((issue) => `${v.getDotPath(issue) ?? "$"}: ${issue.message}`);
       clientFindings.push(
         ...violationsOf(CHAT_ORACLE.clientRequestsAccepted, [
           { invalidBody: errors },
@@ -1310,6 +1322,7 @@ export const createApprovalHarness = ({
         }),
       };
     }
+    const raw = decoded.output;
     const endRecord = beginRecord(raw);
     if (raw.forwardedProps.turnIntent === CHAT_TURN_INTENT.regenerate) {
       provider.promptLedgerOf(raw.threadId).replacesTail();

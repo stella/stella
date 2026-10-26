@@ -34,6 +34,28 @@ export const getOauthHashFragment = (query: string): string => {
   return fragment.toString();
 };
 
+/**
+ * Where switching accounts on an OAuth step leads once the current account is
+ * signed out: sign-in carrying the same signed OAuth request, or, for a page
+ * reached without one, back to that page after sign-in.
+ */
+export const getOauthAccountSwitchHref = ({
+  hash,
+  pathname,
+  search,
+}: {
+  hash: string;
+  pathname: string;
+  search: string;
+}): string => {
+  const bridgedQuery = getSignedOauthQueryFromHash(hash);
+  if (bridgedQuery) {
+    return `/auth#${getOauthHashFragment(bridgedQuery)}`;
+  }
+
+  return `/auth?${new URLSearchParams({ redirectTo: pathname + search })}`;
+};
+
 export const getOauthClientDisplayName = (value: unknown): string | null => {
   if (typeof value !== "object" || value === null) {
     return null;
@@ -76,7 +98,7 @@ export const getOauthRedirectUrl = (value: unknown): string | null => {
 
 export const oauthConsentInfoSchema = v.object({
   client_name: v.nullable(v.string()),
-  redirectHosts: v.array(v.string()),
+  redirectTargets: v.array(v.string()),
   clientIdHost: v.nullable(v.string()),
   unverified: v.boolean(),
   // An omitted brand reads as "no verified brand", never as an error.

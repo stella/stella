@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import Elysia from "elysia";
 import * as v from "valibot";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
@@ -19,6 +18,9 @@ import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import { createDesktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import releaseRequests from "@/api/handlers/entities/desktop-handoff-release-requests.json";
 import { createPdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
+import { createHttpApp } from "@/api/http/app";
+import { mount } from "@/api/http/route";
+import type { RouteEntry } from "@/api/http/route";
 import { createSafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import type { DesktopHandoffAuthorizationDependencies } from "@/api/lib/business-registries/desktop/handoff-auth";
@@ -28,12 +30,14 @@ import {
   hashPdfSigningToken,
   recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -190,14 +194,18 @@ const seedPendingHandoff = async ({
   };
 };
 
-const createApp = () =>
-  new Elysia()
-    .use(
-      new Elysia({ prefix: STELLA_API_VERSION_PREFIX }).use(
-        createDesktopEditSessionsRoute(dependencies),
-      ),
-    )
-    .use(createPdfSigningSessionsRoute(dependencies));
+const serve = (table: readonly RouteEntry[]) =>
+  serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
+
+// The desktop edit routes are mounted under the version prefix like the API
+// table mounts them; the PDF signing routes carry it themselves.
+const serveHandoffs = () =>
+  serve([
+    ...mount([createDesktopEditSessionsRoute(dependencies)], {
+      prefix: STELLA_API_VERSION_PREFIX,
+    }),
+    ...createPdfSigningSessionsRoute(dependencies),
+  ]);
 
 // Captured from git show at the immutable release commits recorded in the
 // fixture. Values replace credentials; method, path, headers and JSON keys
@@ -212,8 +220,8 @@ for (const release of releaseRequests) {
         handoffToken: fixture.body.handoffToken,
       });
       try {
-        const app = createApp();
-        const response = await app.handle(
+        await using server = serveHandoffs();
+        const response = await server.fetch(
           new Request(`http://localhost${fixture.path}`, {
             method: fixture.method,
             headers: fixture.headers,
@@ -243,7 +251,8 @@ for (const kind of ["desktop_edit", "pdf_signing"] as const) {
         kind === "desktop_edit"
           ? "/v1/desktop-edit-handoffs/redeem"
           : "/v1/pdf-signing-handoffs/redeem";
-      const response = await createApp().handle(
+      await using server = serveHandoffs();
+      const response = await server.fetch(
         new Request(`http://localhost${path}`, {
           method: "POST",
           headers: {
@@ -275,7 +284,7 @@ test("a supported PDF desktop with its matching account redeems the signing sess
   });
   const { ids } = rlsFixture;
   const device = await createDesktopDeviceSigner();
-  const app = new Elysia().use(
+  await using server = serve(
     createPdfSigningSessionsRoute({
       recordFailure: dependencies.recordFailure,
       redemptionDatabase: tokenDb,
@@ -303,7 +312,7 @@ test("a supported PDF desktop with its matching account redeems the signing sess
     }),
   );
   try {
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request("http://localhost/v1/pdf-signing-handoffs/redeem", {
         method: "POST",
         headers: {

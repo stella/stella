@@ -22,7 +22,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { filesKeys } from "@/lib/files/queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -133,7 +133,7 @@ export const CompareVersionsPanel = ({
     enabled: false,
   });
   const outcomeQueryView = useQueryView(outcomeQuery);
-  useQueryViewError(outcomeQueryView);
+  useQueryViewError(outcomeQueryView, "CompareVersionsPanel:query");
   const [requestedSelection, setRequestedSelection] =
     useState<CompareVersionSelection | null>(null);
   const [baseTrackedChanges, setBaseTrackedChanges] =
@@ -227,7 +227,7 @@ export const CompareVersionsPanel = ({
     targetVersionId,
   }: RequestComparisonOptions) =>
     await Result.tryPromise(async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .documents({ workspaceId: toSafeId<"workspace">(workspaceId) })
           .document({ documentId: toSafeId<"entity">(entityId) })
@@ -248,7 +248,13 @@ export const CompareVersionsPanel = ({
     );
 
   const surfaceRequestError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "CompareVersionsPanel.surfaceRequestError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "CompareVersionsPanel.surfaceRequestError:failure",
+      },
+    });
     setRequestState({
       status: "error",
       message: userErrorFromThrown(error, t("fileDetail.compareRequestFailed")),
@@ -352,7 +358,13 @@ export const CompareVersionsPanel = ({
       async () => await openRedline(result),
     );
     if (Result.isError(opened)) {
-      getAnalytics().captureError(opened.error);
+      getAnalytics().captureError(opened.error, {
+        fingerprintKey: "CompareVersionsPanel.saveComparison:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CompareVersionsPanel.saveComparison:failure",
+        },
+      });
       setOutcome({
         type: "created",
         result,

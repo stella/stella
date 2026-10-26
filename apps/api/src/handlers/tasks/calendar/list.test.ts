@@ -82,9 +82,9 @@ describe("calendar task handler", () => {
         ],
       ],
     ];
-    const safeDb: Parameters<
-      typeof calendarTasks.handler
-    >[0]["safeDb"] = async <T>() => Result.ok(asTestRaw<T>(results.shift()));
+    const safeDb = asTestRaw<CalendarCtx["safeDb"]>(async () =>
+      Result.ok(results.shift()),
+    );
 
     const result = await calendarTasks.handler(
       createContext({
@@ -129,8 +129,7 @@ describe("calendar task handler", () => {
   });
 
   test("accepts an ordered range with different offsets", async () => {
-    const safeDb: CalendarCtx["safeDb"] = async <T>() =>
-      Result.ok(asTestRaw<T>([]));
+    const safeDb = asTestRaw<CalendarCtx["safeDb"]>(async () => Result.ok([]));
     const result = await calendarTasks.handler(
       createContext({
         body: {

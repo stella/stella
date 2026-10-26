@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Ein Klient",
+      "availabilityClientBadgeHelp": "Nur in den Akten eines Klienten verfügbar.",
+      "availabilityClientHelp": "Nur in den Akten dieses Klienten nutzbar. Das lässt sich später nicht ändern.",
+      "availabilityFixedHelp": "Beim Erstellen des Skills festgelegt. Das lässt sich nicht ändern.",
+      "availabilityLabel": "Verfügbar in",
+      "availabilityMatter": "Eine Akte",
+      "availabilityMatterBadgeHelp": "Nur in einer Akte verfügbar.",
+      "availabilityMatterHelp": "Nur in dieser Akte nutzbar. Das lässt sich später nicht ändern.",
+      "availabilityOrganization": "Gesamte Organisation",
+      "availabilityTeamNeedsMatter": "Um einen Skill mit dem Team zu teilen, wählen Sie die Akte, für die er gedacht ist. Das lässt sich später nicht ändern.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Erstellen Sie Standpunkt für Standpunkt ein Playbook für die Vertragsprüfung, gestützt auf Ihre bereits unterzeichneten Verträge, ein kurzes Gespräch und marktübliche Standards.",
@@ -4760,7 +4770,6 @@
     "modelError": "Das Modell konnte diese Antwort nicht fertigstellen.",
     "networkError": "Die Verbindung wurde unterbrochen. Versuchen Sie es erneut.",
     "regenerate": "Antwort neu generieren",
-    "selectionError": "Wählen Sie Text innerhalb eines einzelnen Absatzes aus (bis zu 2.000 Zeichen).",
     "send": "Rückfrage senden",
     "share": "Mit dem Team teilen",
     "timeoutError": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut.",
