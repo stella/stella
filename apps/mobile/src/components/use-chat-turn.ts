@@ -221,7 +221,8 @@ export const useChatTurn = ({
 
   /** Asks the server to stop the turn; its stream then ends with the answer stopped. */
   const stop = () => {
-    if (turn.turnId === undefined) {
+    const { turnId } = turn;
+    if (turnId === undefined) {
       return;
     }
     void (async () => {
@@ -229,7 +230,7 @@ export const useChatTurn = ({
         fetch,
         source,
         threadId,
-        turnId: turn.turnId,
+        turnId,
       });
       // Any other failure leaves the answer streaming, so Stop stays offered.
       if (Result.isError(stopped)) {
