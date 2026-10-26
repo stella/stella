@@ -67,6 +67,18 @@ test("a glob that matches nothing leaves every family unaffected", () => {
   expect(affectedGeneratorIds(fixture, ["docs/other.md"])).toEqual(new Set());
 });
 
+test("a check-only input change selects its generator family", () => {
+  const fixture = [
+    {
+      ...generator("bun-toolchain"),
+      checkInputs: ["scripts/check-only.ts"],
+    },
+  ] satisfies Generator[];
+  expect(affectedGeneratorIds(fixture, ["scripts/check-only.ts"])).toEqual(
+    new Set(["bun-toolchain"]),
+  );
+});
+
 test("a renamed input reports both the removed and destination paths", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generator-rename-"));
   const runGit = (args: string[]) =>
@@ -119,6 +131,21 @@ test("the census rejects a removed Tailwind closure module", () => {
   };
   expect(generatorInputCensus([mutated])).toContain(
     "tailwind-class-cache: undeclared import scripts/generate-tailwind-classes.ts",
+  );
+});
+
+test("the census rejects a write closure file declared only as a check input", () => {
+  const tailwind = generator("tailwind-class-cache");
+  const writeInput = "scripts/generate-tailwind-classes.ts";
+  const mutated = {
+    ...tailwind,
+    inputs: tailwind.inputs.filter(
+      (input) => !matchesGeneratedGlob(input, writeInput),
+    ),
+    checkInputs: [...(tailwind.checkInputs ?? []), writeInput],
+  };
+  expect(generatorInputCensus([mutated])).toContain(
+    `tailwind-class-cache: undeclared import ${writeInput}`,
   );
 });
 

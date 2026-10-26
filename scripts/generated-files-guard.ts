@@ -312,30 +312,53 @@ export const generatorInputCensus = (
 ): string[] => {
   const failures: string[] = [];
   for (const generator of generators) {
-    const starts = [
+    const generationStarts = [...new Set(commandModules(generator.write))];
+    const checkStarts = [
       ...new Set([
-        ...commandModules(generator.write),
-        ...(generator.check === null ? [] : commandModules(generator.check)),
+        ...commandModules(generator.prepare ?? []),
+        ...commandModules(generator.check ?? generator.checkedWith ?? []),
       ]),
     ];
+    const starts = [...new Set([...generationStarts, ...checkStarts])];
     const graph = buildImportGraph(root, starts);
-    const closure = new Set(
-      starts.flatMap((start) => [...graph.closure(start)]),
+    const generationClosure = new Set(
+      generationStarts.flatMap((start) => [...graph.closure(start)]),
     );
+    const checkClosure = new Set(
+      checkStarts.flatMap((start) => [...graph.closure(start)]),
+    );
+    const closure = new Set([...generationClosure, ...checkClosure]);
     const inputs = effectiveGeneratorInputs(generator);
+    const checkInputs = generator.checkInputs ?? [];
     const prerequisiteOutputs = generators
       .filter(({ id }) => generator.after.includes(id))
       .flatMap(({ outputs }) => outputs);
-    const coveredInputs = [...inputs, ...prerequisiteOutputs];
-    for (const file of closure) {
-      if (!coveredInputs.some((glob) => matchesGeneratedGlob(glob, file))) {
+    const generationCoveredInputs = [...inputs, ...prerequisiteOutputs];
+    const checkCoveredInputs = [...generationCoveredInputs, ...checkInputs];
+    for (const file of generationClosure) {
+      if (
+        !generationCoveredInputs.some((glob) =>
+          matchesGeneratedGlob(glob, file),
+        )
+      ) {
+        failures.push(`${generator.id}: undeclared import ${file}`);
+      }
+    }
+    for (const file of checkClosure) {
+      if (
+        !checkCoveredInputs.some((glob) => matchesGeneratedGlob(glob, file))
+      ) {
         failures.push(`${generator.id}: undeclared import ${file}`);
       }
     }
     for (const file of closure) {
       const implicitInputs = IMPLICIT_MODULE_INPUTS[file] ?? [];
       for (const implicitInput of implicitInputs) {
-        if (!inputs.some((glob) => matchesGeneratedGlob(glob, implicitInput))) {
+        if (
+          ![...inputs, ...checkInputs].some((glob) =>
+            matchesGeneratedGlob(glob, implicitInput),
+          )
+        ) {
           failures.push(
             `${generator.id}: undeclared implicit input ${implicitInput} from ${file}`,
           );
@@ -347,7 +370,9 @@ export const generatorInputCensus = (
     for (const file of [...graph.readers, ...graph.scanners]) {
       if (
         closure.has(file) &&
-        !inputs.some((glob) => matchesGeneratedGlob(glob, file))
+        ![...inputs, ...checkInputs].some((glob) =>
+          matchesGeneratedGlob(glob, file),
+        )
       ) {
         failures.push(
           `${generator.id}: reader or scanner is undeclared: ${file}`,
@@ -368,9 +393,12 @@ export const affectedGeneratorIds = (
   const affected = new Set(
     generators
       .filter((generator) =>
-        [...effectiveGeneratorInputs(generator), ...generator.outputs].some(
-          (glob) =>
-            changedFiles.some((file) => matchesGeneratedGlob(glob, file)),
+        [
+          ...effectiveGeneratorInputs(generator),
+          ...(generator.checkInputs ?? []),
+          ...generator.outputs,
+        ].some((glob) =>
+          changedFiles.some((file) => matchesGeneratedGlob(glob, file)),
         ),
       )
       .map(({ id }) => id),
@@ -392,7 +420,7 @@ export const affectedGeneratorIds = (
 };
 
 const comparisonBase = (): string | undefined => {
-  const requested = process.env["BASE_SHA"]?.trim();
+  const requested = process.env["CI_COMPARISON_BASE"]?.trim();
   if (requested) {
     const result = Bun.spawnSync(
       ["git", "cat-file", "-e", `${requested}^{commit}`],

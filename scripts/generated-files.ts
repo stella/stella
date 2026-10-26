@@ -34,6 +34,8 @@ export type Generator = {
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
+  /** Inputs read only while checking generated outputs, never while writing them. */
+  checkInputs?: readonly string[];
   write: readonly string[];
   prepare?: readonly string[];
   /**
@@ -1188,10 +1190,8 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "derived",
     outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
-      ".prettierrc.yml",
       ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-contracts"],
       "apps/api/scripts/generate-mcp-app-contracts.ts",
-      "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
@@ -1210,6 +1210,18 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/**",
       "packages/legal-ast/**",
       "bun.lock",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      "packages/scripts/src/generated-file-inventory.ts",
+      "packages/scripts/src/generated-files.ts",
+      "packages/scripts/src/generated-input-identity.ts",
+      "packages/scripts/src/generated-output-cache.ts",
+      "packages/scripts/src/generation-lock.ts",
+      "packages/scripts/src/prepared-generated-sources.ts",
+      "scripts/check-mcp-generated-tracking.ts",
+      "scripts/generated-files.ts",
+      "scripts/prepare-mcp-apps.ts",
     ],
     write: ["bun", "--cwd=apps/api", "run", "generate:mcp-app-contracts"],
     prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
@@ -1257,13 +1269,11 @@ const GENERATOR_DECLARATIONS = [
       ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
-      ".prettierrc.yml",
       ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-bundles"],
       "packages/mcp-apps/src/**",
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
       "packages/mcp-apps/scripts/lib/mcp-reader-ui-guard.ts",
-      "scripts/check-mcp-generated-tracking.ts",
       "packages/scripts/src/react-compiler-options.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1280,6 +1290,15 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/**",
       "packages/fetch/**",
       "bun.lock",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      "packages/runtime-mode/src/index.ts",
+      "packages/runtime-mode/src/secret-examples.generated.ts",
+      "packages/sha256/src/bun.ts",
+      "scripts/check-mcp-generated-tracking.ts",
+      "scripts/generated-files.ts",
+      "scripts/prepare-mcp-apps.ts",
     ],
     write: ["bun", "packages/mcp-apps/scripts/build-mcp-apps.ts"],
     prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
