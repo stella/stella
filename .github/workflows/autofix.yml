@@ -510,6 +510,9 @@ jobs:
           touch artifact-marker
           if [[ "${{ matrix.active }}" == true ]]; then
             printf '%s@%s\n' "$REPOSITORY" "$SHA" > source-spec
+            # The generator reads the pinned revision through Git, so the
+            # checkout travels with its .git directory in one archive.
+            tar -cf source.tar -C source .
           fi
 
       - name: Upload pinned source
@@ -518,10 +521,9 @@ jobs:
         with:
           name: classification-source-${{ matrix.index }}
           path: |
-            source
+            source.tar
             source-spec
             artifact-marker
-          include-hidden-files: true
 
   dependabot-actions-snapshot-autofix:
     name: Autofix Dependabot workflow snapshots
@@ -587,7 +589,10 @@ jobs:
           set -euo pipefail
           source_args=()
           while IFS= read -r spec_file; do
-            source_args+=(--source "$(cat "$spec_file")=$(dirname "$spec_file")/source")
+            source_directory="$(dirname "$spec_file")/source"
+            mkdir -p "$source_directory"
+            tar -xf "$(dirname "$spec_file")/source.tar" -C "$source_directory"
+            source_args+=(--source "$(cat "$spec_file")=$source_directory")
           done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
           bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "${source_args[@]}"
           bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"
@@ -835,7 +840,10 @@ jobs:
           if [[ ",$GENERATOR_IDS," == *,ci-job-classification-digests,* ]]; then
             source_args=()
             while IFS= read -r spec_file; do
-              source_args+=(--source "$(cat "$spec_file")=$(dirname "$spec_file")/source")
+              source_directory="$(dirname "$spec_file")/source"
+              mkdir -p "$source_directory"
+              tar -xf "$(dirname "$spec_file")/source.tar" -C "$source_directory"
+              source_args+=(--source "$(cat "$spec_file")=$source_directory")
             done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
             bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "${source_args[@]}"
           fi

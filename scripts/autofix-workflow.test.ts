@@ -875,3 +875,19 @@ test("pinned source discovery reads quoted and unquoted reusable workflow pins",
     `stella/.github@${"c".repeat(40)}`,
   ]);
 });
+
+test("pinned sources travel as an archive that keeps their Git directory", () => {
+  const workflow = readFileSync(WORKFLOW_URL, "utf-8");
+  // The generator reads each pinned revision through Git; artifact uploads
+  // do not carry a checkout's .git directory.
+  expect(workflow).toContain("tar -cf source.tar -C source .");
+  expect(workflow).not.toContain("include-hidden-files: true");
+  const unpacks = workflow.match(
+    /tar -xf "\$\(dirname "\$spec_file"\)\/source\.tar" -C "\$source_directory"/gu,
+  );
+  const generatorRuns = workflow.match(
+    /bun scripts\/ci-job-classification\/snapshots\.ts --write/gu,
+  );
+  expect(unpacks?.length).toBe(2);
+  expect(unpacks?.length).toBe(generatorRuns?.length);
+});

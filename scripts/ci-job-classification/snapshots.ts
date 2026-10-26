@@ -501,7 +501,7 @@ const run = () => {
   writeSnapshots({
     root: ".",
     sources: parseSources(base === undefined ? args : args.slice(2)),
-    base,
+    ...(base === undefined ? {} : { base }),
   });
   return 0;
 };
