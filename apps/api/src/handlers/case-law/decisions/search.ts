@@ -3378,7 +3378,7 @@ export const listCaseLawProvisionDecisions = async ({
       )
       .orderBy(desc(keyColumn), desc(publishedCaseLawDecisions.id))
       .limit(limit + 1);
-    // sql-perf-allow: bounded by the provision's own links, read through their work index
+    // sql-perf-allow: bounded by the provision's own links, read through their work-subtree index
     const [counted] = await tx
       .select({ total: sql<number>`count(*)::int` })
       .from(publishedCaseLawDecisions)
