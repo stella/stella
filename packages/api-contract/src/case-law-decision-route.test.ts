@@ -23,7 +23,7 @@ const DECISION_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
 
 /** Letters NFKD leaves whole, which the old fold dropped. */
-const LETTERS_NFKD_CANNOT_STRIP = [..."łŁđĐøØßæÆœŒþÞðÐıħĦŧŦ"];
+const LETTERS_NFKD_CANNOT_STRIP = Array.from("łŁđĐøØßæÆœŒþÞðÐıħĦŧŦ");
 
 /**
  * Characters of published case numbers and court names whose letters
@@ -31,13 +31,13 @@ const LETTERS_NFKD_CANNOT_STRIP = [..."łŁđĐøØßæÆœŒþÞðÐıħĦŧŦ"
  * Turkish), compatibility forms, other scripts, and docket punctuation.
  */
 const DECOMPOSING_CHARACTERS = [
-  ..."aAzZ09 ./-–()§,:;'\"",
-  ..."áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽľĺŕôäĽĹŔÔÄ",
-  ..."ąćęńóśźżĄĆĘŃÓŚŹŻőűŐŰöüÖÜàâçèêëîïùûÿ",
-  ..."șțăîâȘȚĂğşçİĞŞÇ",
-  ..."ﬁﬂ²ＡＺ０\u0301\u030c",
-  ..."ΣσжЖ契約",
-];
+  "aAzZ09 ./-–()§,:;'\"",
+  "áčďéěíňóřšťúůýžÁČĎÉĚÍŇÓŘŠŤÚŮÝŽľĺŕôäĽĹŔÔÄ",
+  "ąćęńóśźżĄĆĘŃÓŚŹŻőűŐŰöüÖÜàâçèêëîïùûÿ",
+  "șțăîâȘȚĂğşçİĞŞÇ",
+  "ﬁﬂ²ＡＺ０\u0301\u030c",
+  "ΣσжЖ契約",
+].flatMap((group) => Array.from(group));
 
 const routeParams = (
   overrides: Partial<Parameters<typeof createCaseLawDecisionRouteParams>[0]>,
