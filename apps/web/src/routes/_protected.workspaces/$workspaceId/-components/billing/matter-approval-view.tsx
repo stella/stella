@@ -73,10 +73,7 @@ const usePendingRows = () => {
         }
         return next;
       });
-    await request.then(settle, (error: unknown) => {
-      settle();
-      throw error;
-    });
+    await request.finally(settle);
   };
   return { has: (id: string) => pending.has(id), track };
 };

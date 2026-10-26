@@ -912,7 +912,9 @@ describe("lists longer than one page", () => {
     );
     expect(testing.screen.getByText("Narrative entry-first")).toBeTruthy();
     const [issued] = server.cursors.keys();
-    expect(issued).toBeDefined();
+    if (issued === undefined) {
+      throw new Error("expected the server to issue a cursor");
+    }
     expect(cursorsSent("time-entries")).toEqual([null, issued]);
   });
 
@@ -932,7 +934,9 @@ describe("lists longer than one page", () => {
       testing.screen.getByText("Timekeeper One: Expense expense-first"),
     ).toBeTruthy();
     const [issued] = server.cursors.keys();
-    expect(issued).toBeDefined();
+    if (issued === undefined) {
+      throw new Error("expected the server to issue a cursor");
+    }
     expect(cursorsSent("expenses")).toEqual([null, issued]);
   });
 });
