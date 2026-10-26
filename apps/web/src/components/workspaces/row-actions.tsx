@@ -148,6 +148,7 @@ import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -1200,6 +1201,7 @@ export const RowActions = ({
             offerWhen(sections, "desktop-edit", canOpenInDesktop) &&
             desktopEditFileType !== null
               ? {
+                  capability: "desktop",
                   label: t.rich(
                     "workspaces.files.desktopEdit.editInApplication",
                     {
@@ -1237,18 +1239,15 @@ export const RowActions = ({
               : null
           }
           sign={
-            offer(
-              sections,
-              "sign",
-              pdfSignTarget === null
-                ? undefined
-                : {
-                    label: pdfSignFlow.actionLabel,
-                    onSelect: pdfSignFlow.start,
-                    onSetUp: pdfSignFlow.setUp,
-                    status: pdfSignFlow.status,
-                  },
-            ) ?? null
+            offerWhen(sections, "sign", pdfSignTarget !== null)
+              ? {
+                  capability: "desktop",
+                  label: pdfSignFlow.actionLabel,
+                  onSelect: pdfSignFlow.start,
+                  onSetUp: pdfSignFlow.setUp,
+                  status: pdfSignFlow.status,
+                }
+              : null
           }
         />
 
@@ -1555,6 +1554,7 @@ const RowFolderMenuActions = ({
 
 /** A file action stella desktop runs, with the desktop status it depends on. */
 type RowDesktopAction = {
+  capability: Capability;
   label: ReactNode;
   onSelect: () => void;
   onSetUp: (step: DesktopSetupStep) => void;
@@ -1590,7 +1590,7 @@ const RowDesktopMenuActions = ({
         />
       )}
       {edit !== null && (
-        <CapabilityAction action={{ capability: "desktop" }}>
+        <CapabilityAction action={{ capability: edit.capability }}>
           {(capabilityProps) => (
             <MenuItem onClick={edit.onSelect} {...capabilityProps}>
               <LaptopIcon />
@@ -1600,7 +1600,7 @@ const RowDesktopMenuActions = ({
         </CapabilityAction>
       )}
       {sign !== null && (
-        <CapabilityAction action={{ capability: "desktop" }}>
+        <CapabilityAction action={{ capability: sign.capability }}>
           {(capabilityProps) => (
             <MenuItem onClick={sign.onSelect} {...capabilityProps}>
               <SignatureIcon />
