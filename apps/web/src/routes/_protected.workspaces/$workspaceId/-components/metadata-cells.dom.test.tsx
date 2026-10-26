@@ -46,7 +46,7 @@ const entity = ({
     priority: null,
     listItemType: null,
     dueDate: null,
-    agendaKind: null,
+    agendaKind: "task",
     startAt: null,
     endAt: null,
     occurredAt: null,
@@ -148,7 +148,7 @@ describe("table version cell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: SHOW_VERSION_HISTORY }));
 
-    expect(fileTab()?.facet).toBe("versions");
+    expect(fileTab()).toMatchObject({ facet: "versions" });
   });
 
   test.each([
