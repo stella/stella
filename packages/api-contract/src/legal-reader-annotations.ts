@@ -69,21 +69,15 @@ export const READER_COPY_MODES = [
 ] as const;
 export type ReaderCopyMode = (typeof READER_COPY_MODES)[number];
 
-const PDF_PAGE_ANCHOR_PREFIX = "page-";
-/** The last page a PDF anchor can name: six digits, as the pattern and the
- *  database check allow. */
+/** How a PDF page's block anchor starts; the page number follows. */
+export const READER_PDF_PAGE_ANCHOR_PREFIX = "page-";
+/** The last page a PDF anchor can name: six digits, as the database check
+ *  allows. */
 export const READER_PDF_PAGE_NUMBER_MAX = 999_999;
-const PDF_PAGE_ANCHOR_PATTERN = /^page-([1-9][0-9]{0,5})$/u;
 
 /** The block a mark on one page of a PDF sits in, by the page's 1-based number. */
 export const readerPdfPageAnchorId = (pageNumber: number): string =>
-  `${PDF_PAGE_ANCHOR_PREFIX}${String(pageNumber)}`;
-
-/** The 1-based page a PDF block anchor names; null for any other anchor. */
-export const readerPdfPageNumber = (anchorId: string): number | null => {
-  const digits = PDF_PAGE_ANCHOR_PATTERN.exec(anchorId)?.at(1);
-  return digits === undefined ? null : Number(digits);
-};
+  `${READER_PDF_PAGE_ANCHOR_PREFIX}${String(pageNumber)}`;
 
 /**
  * Why a mark on a matter document's PDF was refused, as the error `code` the

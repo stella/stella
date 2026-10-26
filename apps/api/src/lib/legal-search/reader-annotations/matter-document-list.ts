@@ -10,10 +10,7 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
-import {
-  READER_ANNOTATION_MAX_SPANS,
-  readerPdfPageNumber,
-} from "@stll/api-contract/legal-reader-annotations";
+import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -30,6 +27,7 @@ import {
   readMarkedDocumentField,
 } from "@/api/lib/legal-search/reader-annotations/matter-document";
 import { pageLengthKeepingMarksWhole } from "@/api/lib/legal-search/reader-annotations/page.logic";
+import { pdfPageNumberOfAnchor } from "@/api/lib/legal-search/reader-annotations/pdf-page-anchor";
 import type { MatterDocumentRef } from "@/api/lib/legal-search/reader-annotations/target";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -234,7 +232,7 @@ export const listMatterDocumentAnnotations = async function* ({
         ...item,
         fieldId: targetId,
         pageNumber:
-          readerPdfPageNumber(blockAnchorId) ??
+          pdfPageNumberOfAnchor(blockAnchorId) ??
           panic("A matter document mark has no page anchor"),
         pageTextSha256:
           pageTextSha256 ?? panic("A matter document mark has no page digest"),

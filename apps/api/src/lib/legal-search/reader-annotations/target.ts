@@ -6,9 +6,11 @@ import type {
 } from "@stll/api-contract/legal-reader-annotations";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { legalReaderAnnotations } from "@/api/db/schema";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { requireAnnotationTargetType } from "@/api/lib/legal-search/reader-annotations/schema";
 
 /**
  * Who a mark belongs to, from the session and never from the request: the
@@ -166,3 +168,33 @@ export const annotationAuditSubject = ({
     }
   }
 };
+
+/** The columns a change to stored marks returns to file its audit entry by. */
+export const ANNOTATION_TARGET_RETURNING = {
+  id: legalReaderAnnotations.id,
+  entityId: legalReaderAnnotations.entityId,
+  targetId: legalReaderAnnotations.targetId,
+  targetType: legalReaderAnnotations.targetType,
+  verificationClaimId: legalReaderAnnotations.verificationClaimId,
+  verificationRunId: legalReaderAnnotations.verificationRunId,
+  workspaceId: legalReaderAnnotations.workspaceId,
+} as const;
+
+type ReturnedAnnotationTarget = Omit<AnnotationTargetRow, "targetType"> & {
+  targetType: string;
+};
+
+/** Where a change to a stored mark is filed, from the row it returned. */
+export const returnedAnnotationAuditSubject = (
+  annotationId: string,
+  row: ReturnedAnnotationTarget,
+): AnnotationAuditSubject =>
+  annotationAuditSubject({
+    annotationId,
+    entityId: row.entityId,
+    targetId: row.targetId,
+    targetType: requireAnnotationTargetType(row.targetType),
+    verificationClaimId: row.verificationClaimId,
+    verificationRunId: row.verificationRunId,
+    workspaceId: row.workspaceId,
+  });

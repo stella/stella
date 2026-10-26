@@ -7,8 +7,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { wholeAnnotationSql } from "@/api/lib/legal-search/reader-annotations/group";
-import { requireAnnotationTargetType } from "@/api/lib/legal-search/reader-annotations/schema";
-import { annotationAuditSubject } from "@/api/lib/legal-search/reader-annotations/target";
+import {
+  ANNOTATION_TARGET_RETURNING,
+  returnedAnnotationAuditSubject,
+} from "@/api/lib/legal-search/reader-annotations/target";
 import type {
   AnnotationAuthorScope,
   AnnotationReach,
@@ -55,26 +57,10 @@ export const deleteReaderAnnotationRows = async ({
         userId,
       }),
     )
-    .returning({
-      id: legalReaderAnnotations.id,
-      entityId: legalReaderAnnotations.entityId,
-      targetId: legalReaderAnnotations.targetId,
-      targetType: legalReaderAnnotations.targetType,
-      verificationClaimId: legalReaderAnnotations.verificationClaimId,
-      verificationRunId: legalReaderAnnotations.verificationRunId,
-      workspaceId: legalReaderAnnotations.workspaceId,
-    });
+    .returning(ANNOTATION_TARGET_RETURNING);
   const first = mutatedRows.at(0);
   if (first !== undefined) {
-    const subject = annotationAuditSubject({
-      annotationId,
-      entityId: first.entityId,
-      targetId: first.targetId,
-      targetType: requireAnnotationTargetType(first.targetType),
-      verificationClaimId: first.verificationClaimId,
-      verificationRunId: first.verificationRunId,
-      workspaceId: first.workspaceId,
-    });
+    const subject = returnedAnnotationAuditSubject(annotationId, first);
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.DELETE,
       resourceType: subject.resourceType,

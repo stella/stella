@@ -168,33 +168,47 @@ export const placeMatterDocumentSpans = async ({
   if (Result.isError(pdfFileId)) {
     return Result.err(pdfFileId.error);
   }
-  const pages = await Result.tryPromise({
+  const stored = await Result.tryPromise({
     try: async () =>
-      await readPdfPageTexts({
-        bytes: new Uint8Array(
-          (
-            await readStoredFile({
-              key: createFileKey({
-                organizationId,
-                workspaceId,
-                fileId: pdfFileId.value,
-                mimeType: PDF_MIME_TYPE,
-              }),
-              mimeType: PDF_MIME_TYPE,
-              maxBytes: FILE_SIZE_LIMIT_BYTES.document,
-              signal: AbortSignal.timeout(MARKED_PDF_READ_TIMEOUT_MS),
-            })
-          ).bytes,
-        ),
-        pageNumbers: new Set(spans.map((span) => span.pageNumber)),
+      await readStoredFile({
+        key: createFileKey({
+          organizationId,
+          workspaceId,
+          fileId: pdfFileId.value,
+          mimeType: PDF_MIME_TYPE,
+        }),
+        mimeType: PDF_MIME_TYPE,
+        maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+        signal: AbortSignal.timeout(MARKED_PDF_READ_TIMEOUT_MS),
       }),
     catch: (cause) =>
       new HandlerError({
         status: 502,
-        message: "The document's text could not be read.",
+        code: "upstream_unavailable",
+        message: "The document could not be read from storage.",
         hint: "Try again in a moment.",
         retryable: true,
         retryAfterMs: 1000,
+        cause,
+      }),
+  });
+  if (Result.isError(stored)) {
+    return Result.err(stored.error);
+  }
+  // Bytes that do not parse as a PDF are the file's own fault, not the
+  // storage's: the reader can do nothing but mark another file.
+  const pages = await Result.tryPromise({
+    try: async () =>
+      await readPdfPageTexts({
+        bytes: new Uint8Array(stored.value.bytes),
+        pageNumbers: new Set(spans.map((span) => span.pageNumber)),
+      }),
+    catch: (cause) =>
+      new HandlerError({
+        status: 422,
+        code: MATTER_DOCUMENT_ANNOTATION_REFUSALS.fileNotPdf,
+        message: "This PDF cannot be read, so its words cannot be marked.",
+        hint: "Upload a new version of the document, then select the words again.",
         cause,
       }),
   });
