@@ -30,6 +30,11 @@ export const collectCaptureText = ({
       return true;
     }
     const style = getComputedStyle(element);
+    // A `display: contents` wrapper has no box of its own but renders its
+    // children, whose text it reads.
+    if (style.display === "contents") {
+      return style.visibility !== "hidden";
+    }
     const bounds = element.getBoundingClientRect();
     return (
       style.display !== "none" &&
