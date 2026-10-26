@@ -369,6 +369,47 @@ describe("page numbers the markup keeps", () => {
     },
   );
 
+  test("numbers glued to body lines a page apart do not vouch for each other", () => {
+    for (const [third, fourth] of [
+      ["3 eurá.", "4 eurá."],
+      ["3 Ďalšie odôvodnenie.", "4 Ďalšie odôvodnenie."],
+    ] as const) {
+      const paragraphs = texts([
+        "Odôvodnenie:",
+        "Text odôvodnenia. ".repeat(130),
+        "",
+        third,
+        "Text odôvodnenia. ".repeat(70),
+        "",
+        fourth,
+      ]);
+      expect(paragraphs.some((text) => text.startsWith(third))).toBe(true);
+      expect(paragraphs.at(-1)).toBe(fourth);
+    }
+  });
+
+  test("an amount where a page's number is due keeps its number, and the pages stay unproven", () => {
+    const paragraphs = texts([
+      "O d ô v o d n e n i e :",
+      "",
+      ...page("Prvá strana"),
+      "",
+      "2",
+      "",
+      ...page("Druhá strana"),
+      "",
+      "3 eurá za každý deň omeškania.",
+      ...page("Tretia strana"),
+      "",
+      "4",
+    ]);
+    expect(
+      paragraphs.some((text) =>
+        text.startsWith("3 eurá za každý deň omeškania."),
+      ),
+    ).toBe(true);
+  });
+
   test("an amount on a page of a numbered document is not that page's number", () => {
     const paragraphs = texts([
       "O d ô v o d n e n i e :",

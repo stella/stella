@@ -251,15 +251,24 @@ type FooterCandidate = {
 };
 
 const PAGE_SEQUENCE = {
-  /** Pages that must confirm each other before any number is removed. */
-  minPages: 2,
   /** No page of a decision holds less text than this. */
   minPageChars: 1000,
+  /** No page of a decision holds more text than this. */
+  maxPageChars: 6000,
 } as const;
 
 /**
+ * What a number opening a line counts when it is the text's: an amount, a
+ * share, a measure or a period (`3 eurá`, `20 %`, `5 rokov`), or a docket's
+ * senate and register (`5 Cdo 12/2020`). Such a number is never a page's.
+ */
+const COUNTED_AFTER_NUMBER =
+  /^\d{1,4}\s+(?:(?:eur[aáoi]?|EUR|centov|centy|centa|Sk|Kč|korún|USD|%|€|\$|ks|kusov|kusy|m|km|m2|ha|kg|g|t|l|mm|cm|rok|roky|rokov|roka|rokoch|mesiac|mesiace|mesiacov|mesiaca|týždeň|týždne|týždňov|deň|dni|dní|dňa|dňoch|hodín|hodiny|hodinu|min|minút|percent|percentá|percenta|krát)(?=$|[\s.,;:)])|\p{Lu}\p{Ll}{0,3}\s+\d{1,6}\/\d)/u;
+
+/**
  * Every line where a page number may stand: a number on a line of its own,
- * or one glued to a line that a blank line separates from the other page.
+ * or one glued to a line that a blank line separates from the other page,
+ * or to the document's last line.
  */
 const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
   const candidates: FooterCandidate[] = [];
@@ -267,10 +276,14 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
   const lastText = lines.findLastIndex(({ text }) => text.length > 0);
   let offset = 0;
   for (const [index, { text }] of lines.entries()) {
-    const leading = isBlank(index - 1) ? LEADING_PAGE_NUMBER.exec(text) : null;
-    const trailing = isBlank(index + 1)
-      ? TRAILING_PAGE_NUMBER.exec(text)
-      : null;
+    const leading =
+      isBlank(index - 1) && !COUNTED_AFTER_NUMBER.test(text)
+        ? LEADING_PAGE_NUMBER.exec(text)
+        : null;
+    const trailing =
+      isBlank(index + 1) || index === lastText
+        ? TRAILING_PAGE_NUMBER.exec(text)
+        : null;
     if (PAGE_NUMBER_PATTERN.test(text)) {
       candidates.push({
         index,
@@ -296,7 +309,7 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         offset: offset + text.length,
         form: "trailing",
         length: trailing[0].length,
-        last: false,
+        last: index === lastText,
       });
     }
     offset += text.length;
@@ -305,25 +318,22 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
 };
 
 /**
- * The candidates that number the pages: the longest run of numbers that
- * advance by one, each a page of text after the one before; among runs as
- * long, the one whose pages are most alike in length. A number the run
- * does not reach (`Zostáva zaplatiť` / `2 eurá.`, `5 Cdo …`) is the text's.
+ * The best run of page numbers ending at each candidate: numbers that
+ * advance by one from the first page or the second, each a page of text
+ * after the one before. Among runs as long, the one whose pages are closest
+ * to `pageChars` in length.
  */
-const pageSequence = (
+const pageRuns = (
   candidates: readonly FooterCandidate[],
-): FooterCandidate[] => {
-  const chain = (pageChars: number | null): FooterCandidate[] => {
-    const best = candidates.map(() => ({
-      length: 0,
-      cost: 0,
-      previous: -1,
-    }));
-    for (const [at, candidate] of candidates.entries()) {
-      const first = candidate.number - 1;
-      if (candidate.offset < first * PAGE_SEQUENCE.minPageChars) {
-        continue;
-      }
+  pageChars: number | null,
+) => {
+  const best = candidates.map(() => ({ length: 0, cost: 0, previous: -1 }));
+  for (const [at, candidate] of candidates.entries()) {
+    const first = candidate.number - 1;
+    if (
+      candidate.number <= 2 &&
+      candidate.offset >= first * PAGE_SEQUENCE.minPageChars
+    ) {
       best[at] = {
         length: 1,
         cost:
@@ -332,70 +342,128 @@ const pageSequence = (
             : Math.abs(candidate.offset - first * pageChars),
         previous: -1,
       };
-      for (let before = 0; before < at; before += 1) {
-        const previous = candidates[before];
-        const step = best[before];
-        if (
-          previous === undefined ||
-          step === undefined ||
-          step.length === 0 ||
-          previous.number !== candidate.number - 1 ||
-          (!candidate.last &&
-            candidate.offset - previous.offset < PAGE_SEQUENCE.minPageChars)
-        ) {
-          continue;
-        }
-        const gap = candidate.offset - previous.offset;
-        const length = step.length + 1;
-        const cost =
-          step.cost + (pageChars === null ? 0 : Math.abs(gap - pageChars));
-        const current = best[at];
-        if (
-          current !== undefined &&
-          (length > current.length ||
-            (length === current.length && cost < current.cost))
-        ) {
-          best[at] = { length, cost, previous: before };
-        }
-      }
     }
-    let last = -1;
-    for (const [at, step] of best.entries()) {
-      const current = best[last];
+    for (let before = 0; before < at; before += 1) {
+      const previous = candidates[before];
+      const step = best[before];
       if (
-        step.length > (current?.length ?? 0) ||
-        (current !== undefined &&
-          step.length === current.length &&
-          step.cost < current.cost)
+        previous === undefined ||
+        step === undefined ||
+        step.length === 0 ||
+        previous.number !== candidate.number - 1 ||
+        (!candidate.last &&
+          candidate.offset - previous.offset < PAGE_SEQUENCE.minPageChars)
       ) {
-        last = at;
+        continue;
+      }
+      const length = step.length + 1;
+      const cost =
+        step.cost +
+        (pageChars === null
+          ? 0
+          : Math.abs(candidate.offset - previous.offset - pageChars));
+      const current = best[at];
+      if (
+        current !== undefined &&
+        (length > current.length ||
+          (length === current.length && cost < current.cost))
+      ) {
+        best[at] = { length, cost, previous: before };
       }
     }
-    const members: FooterCandidate[] = [];
-    for (let at = last; at >= 0; at = best[at]?.previous ?? -1) {
-      const member = candidates[at];
-      if (member !== undefined) {
-        members.unshift(member);
+  }
+  return best;
+};
+
+/** The run ending at `at`, first page first. */
+const runEndingAt = (
+  candidates: readonly FooterCandidate[],
+  best: ReturnType<typeof pageRuns>,
+  at: number,
+): FooterCandidate[] => {
+  const members: FooterCandidate[] = [];
+  for (let index = at; index >= 0; index = best[index]?.previous ?? -1) {
+    const member = candidates[index];
+    if (member === undefined || (best[index]?.length ?? 0) === 0) {
+      return [];
+    }
+    members.unshift(member);
+  }
+  return members;
+};
+
+/**
+ * The candidates that number the pages, or none.
+ *
+ * Numbers glued to body lines never vouch for each other: `3 eurá` and
+ * `4 eurá` a page apart read like pages 3 and 4. What proves a document
+ * paginated is a footer on a line of its own: the run must count every page
+ * from the first up to such a footer (the anchor), each a page of text
+ * after the one before. Past the last anchor, the run goes on only in the
+ * form the anchored pages print their numbers in (all glued before a line,
+ * or all after one) and only a page of text at a time, which is how a final
+ * page without a footer of its own ends. Where one page number has more
+ * than one candidate, the one that keeps the pages most alike wins.
+ * Anything short of that keeps every number the document prints.
+ */
+const pageSequence = (
+  candidates: readonly FooterCandidate[],
+): FooterCandidate[] => {
+  const anchorOf = (best: ReturnType<typeof pageRuns>): number => {
+    let anchor = -1;
+    for (const [at, candidate] of candidates.entries()) {
+      if (
+        candidate.form === "alone" &&
+        runEndingAt(candidates, best, at).length > 0 &&
+        candidate.number > (candidates[anchor]?.number ?? 0)
+      ) {
+        anchor = at;
       }
     }
-    return members;
+    return anchor;
   };
-  const rough = chain(null);
-  const head = rough.at(0);
-  const tail = rough.at(-1);
-  if (
-    head === undefined ||
-    tail === undefined ||
-    rough.length < PAGE_SEQUENCE.minPages
-  ) {
+  const rough = pageRuns(candidates, null);
+  const roughRun = runEndingAt(candidates, rough, anchorOf(rough));
+  const head = roughRun.at(0);
+  const tail = roughRun.at(-1);
+  if (head === undefined || tail === undefined) {
     return [];
   }
   const pageChars =
-    tail.number === head.number
-      ? null
+    head === tail
+      ? head.offset / Math.max(1, head.number - 1)
       : (tail.offset - head.offset) / (tail.number - head.number);
-  const members = chain(pageChars);
-  return members.length < PAGE_SEQUENCE.minPages ? [] : members;
+  const best = pageRuns(candidates, pageChars);
+  const anchor = anchorOf(best);
+  const run = runEndingAt(candidates, best, anchor);
+  const glued = run.filter(({ form }) => form !== "alone");
+  if (run.length === 0 || glued.some(({ form }) => form !== glued[0]?.form)) {
+    return run;
+  }
+  // Past the anchor: one form of glued number, a page at a time.
+  let form = glued.at(0)?.form;
+  let last = run.at(-1);
+  for (const candidate of candidates.slice(anchor + 1)) {
+    if (
+      last === undefined ||
+      candidate.number !== last.number + 1 ||
+      (candidate.form !== "alone" &&
+        form !== undefined &&
+        candidate.form !== form)
+    ) {
+      continue;
+    }
+    const gap = candidate.offset - last.offset;
+    if (
+      candidate.last ||
+      (gap >= PAGE_SEQUENCE.minPageChars && gap <= PAGE_SEQUENCE.maxPageChars)
+    ) {
+      run.push(candidate);
+      last = candidate;
+      form ??= candidate.form === "alone" ? undefined : candidate.form;
+    }
+  }
+  return run;
 };
 
 /**
@@ -410,10 +478,10 @@ const pageSequence = (
  * the first word of a sentence, hides a section numeral or a paragraph
  * number, and the blank line cuts a sentence in two.
  *
- * A number is removed only as a member of the document's own page sequence
- * (see {@link pageSequence}): a blank line before `2 eurá.` does not make
- * the amount a page number, and a document whose pages do not confirm each
- * other keeps every number it prints.
+ * A number is removed only as a member of a page sequence that a footer on
+ * a line of its own proves (see {@link pageSequence}): a blank line before
+ * `2 eurá.` does not make the amount a page number, and a document that
+ * does not prove its pages keeps every number it prints.
  */
 const removePageFurniture = (lines: readonly MarkupLine[]): MarkupLine[] => {
   const result = lines.map((line) => ({ ...line }));
