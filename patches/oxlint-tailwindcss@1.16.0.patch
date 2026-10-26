@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..2d7288b4594dab58707423d9cbae5b8c843fe72d 100644
+index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..cbbd08ee46961ec231320d64df12d549c98678e9 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -73,8 +73,8 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..2d7288b4594dab58707423d9cbae5b8c
 +}
 +/**
 +* The files an `exports` field maps `subpath` to under the conditions the
-+* Tailwind CSS resolver uses (`style`, then `default`), including `*` patterns,
-+* where the longest matching prefix wins.
++* Tailwind CSS resolver uses (`style`, then `default`), including `*` patterns
++* ranked as Node ranks them: the longest prefix wins, then the longest key.
 +*/
 +function exportedCssTargets(exportsField, subpath) {
 +	const conditional = exportsField === null || typeof exportsField !== "object" || Array.isArray(exportsField) || !Object.keys(exportsField).some((key) => key.startsWith("."));
@@ -87,7 +87,7 @@ index 6d9820c3bec77b467e4372c6b08cea5aeec0fd4e..2d7288b4594dab58707423d9cbae5b8c
 +		const prefix = key.slice(0, star);
 +		const suffix = key.slice(star + 1);
 +		if (subpath.length < prefix.length + suffix.length || !subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
-+		if (best === null || prefix.length > best.prefix.length) best = {
++		if (best === null || prefix.length > best.prefix.length || prefix.length === best.prefix.length && key.length > best.key.length) best = {
 +			key,
 +			prefix,
 +			match: subpath.slice(prefix.length, subpath.length - suffix.length)
@@ -304,7 +304,7 @@ index a33017683295c52a1e681b23babeb821220d263f..52e9de6dc00f5cd26bda87b4aff5596f
 +export { cacheArtifactPaths, plugin as default };
 \ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c624233238edcc998099f3d496c04caa7ba154..510ea759038af7d59720e34d6fba644bc5b3f475 100644
+index 61c624233238edcc998099f3d496c04caa7ba154..ed9241c664afbaceb5596ddf59cffdeaf8d23da9 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -1,7 +1,7 @@
@@ -387,8 +387,8 @@ index 61c624233238edcc998099f3d496c04caa7ba154..510ea759038af7d59720e34d6fba644b
 +}
 +/**
 +* The files an `exports` field maps `subpath` to under the conditions the
-+* Tailwind CSS resolver uses (`style`, then `default`), including `*` patterns,
-+* where the longest matching prefix wins.
++* Tailwind CSS resolver uses (`style`, then `default`), including `*` patterns
++* ranked as Node ranks them: the longest prefix wins, then the longest key.
 +*/
 +function exportedCssTargets(exportsField, subpath) {
 +	const conditional = exportsField === null || typeof exportsField !== "object" || Array.isArray(exportsField) || !Object.keys(exportsField).some((key) => key.startsWith("."));
@@ -401,7 +401,7 @@ index 61c624233238edcc998099f3d496c04caa7ba154..510ea759038af7d59720e34d6fba644b
 +		const prefix = key.slice(0, star);
 +		const suffix = key.slice(star + 1);
 +		if (subpath.length < prefix.length + suffix.length || !subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
-+		if (best === null || prefix.length > best.prefix.length) best = {
++		if (best === null || prefix.length > best.prefix.length || prefix.length === best.prefix.length && key.length > best.key.length) best = {
 +			key,
 +			prefix,
 +			match: subpath.slice(prefix.length, subpath.length - suffix.length)

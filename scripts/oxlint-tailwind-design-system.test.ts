@@ -171,6 +171,25 @@ test("snapshot names track workspace CSS reached through a wildcard export", asy
   }
 });
 
+test("overlapping wildcard exports resolve to the most specific pattern", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./*": "./generic/*", "./*.css": "./src/*.css" } },
+    "@fixture/theme/palette.css",
+  );
+  try {
+    await mkdir(path.join(theme.fixture, "packages", "theme", "generic"));
+    await writeFile(
+      path.join(theme.fixture, "packages", "theme", "generic", "palette.css"),
+      "@theme { --color-generic: red; }\n",
+    );
+    const original = theme.snapshotName();
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
 test("an unresolvable workspace CSS import keys on the package's stylesheets", async () => {
   const theme = await workspaceThemeFixture(
     { exports: { "./other.css": "./src/other.css" } },
