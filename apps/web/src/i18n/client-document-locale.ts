@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { resolveUiLocale } from "@stll/locales";
 
@@ -11,6 +11,7 @@ import {
 } from "@/i18n/i18n-store";
 import type { LocaleMessages, SupportedLanguage } from "@/i18n/i18n-store";
 import { migrateLegacyPresentationPreferences } from "@/i18n/legacy-preferences-migration";
+import type { LegacyPresentationMigrationResult } from "@/i18n/legacy-preferences-migration";
 import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import {
   getBrowserPresentationPrefs,
@@ -24,6 +25,7 @@ import { isCurrentDocumentSession } from "@/lib/session-cache-guard";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 type DocumentUser = { id: string; locale: string | null } | null;
+type DocumentLocaleFingerprint = `${string}:${string}`;
 
 type ClientLocaleOperations = {
   readBootUser: (queryClient: QueryClient) => Promise<DocumentUser>;
@@ -35,9 +37,9 @@ type ClientLocaleOperations = {
     user: DocumentUser;
     localePriority: "explicit" | "legacy-if-default";
     isCurrent: () => boolean;
-  }) => Promise<{ prefs: PresentationPrefs; locale: string | null }>;
+  }) => Promise<LegacyPresentationMigrationResult>;
   writePrefs: (patch: Partial<PresentationPrefs>) => Promise<PresentationPrefs>;
-  updateProfile: (locale: SupportedLanguage) => Promise<void>;
+  updateProfile: (locale: SupportedLanguage) => Promise<Result<void, unknown>>;
   loadBootMessages: (locale: SupportedLanguage) => Promise<LocaleMessages>;
   applyBoot: (args: {
     locale: SupportedLanguage;
@@ -49,7 +51,10 @@ type ClientLocaleOperations = {
     isCurrent: () => boolean,
   ) => Promise<void>;
   loadedLocale: () => SupportedLanguage;
-  reportSelectionError: (error: unknown, fingerprintKey: string) => void;
+  reportSelectionError: (
+    error: unknown,
+    fingerprintKey: DocumentLocaleFingerprint,
+  ) => void;
 };
 
 type Selection =
@@ -99,6 +104,16 @@ export const createClientDocumentLocaleOwner = (
       if (!current()) {
         return operations.getPrefs();
       }
+      switch (migrated.status) {
+        case "profile-error":
+          operations.reportSelectionError(migrated.error, "boot:updateUser");
+          return operations.getPrefs();
+        case "complete":
+          break;
+        default:
+          migrated satisfies never;
+          return panic("Unhandled legacy presentation migration result");
+      }
       const locale =
         selection.kind === "chosen"
           ? selection.locale
@@ -135,9 +150,7 @@ export const createClientDocumentLocaleOwner = (
         return;
       }
       if (userId !== null) {
-        const updated = await Result.tryPromise(
-          async () => await operations.updateProfile(locale),
-        );
+        const updated = await operations.updateProfile(locale);
         if (updated.isErr()) {
           operations.reportSelectionError(updated.error, "setLang:updateUser");
           return;
@@ -179,7 +192,10 @@ export const createClientDocumentLocaleOwner = (
   return { boot, select };
 };
 
-const reportSelectionError = (error: unknown, fingerprintKey: string) => {
+const reportSelectionError = (
+  error: unknown,
+  fingerprintKey: DocumentLocaleFingerprint,
+) => {
   getAnalytics().captureError(error, {
     fingerprintKey,
     scope: { type: "handler", handlerId: fingerprintKey },
@@ -188,11 +204,16 @@ const reportSelectionError = (error: unknown, fingerprintKey: string) => {
 };
 
 const updateProfileLocale = async (locale: SupportedLanguage) => {
-  const { authClient } = await import("@/lib/auth-client");
-  const result = await authClient.updateUser({ locale });
-  if (result.error) {
-    throw toAuthClientError(result.error);
+  const updated = await Result.tryPromise(async () => {
+    const { authClient } = await import("@/lib/auth-client");
+    return await authClient.updateUser({ locale });
+  });
+  if (updated.isErr()) {
+    return Result.err(updated.error);
   }
+  return updated.value.error
+    ? Result.err(toAuthClientError(updated.value.error))
+    : Result.ok(undefined);
 };
 
 const clientLocaleOwner = createClientDocumentLocaleOwner({

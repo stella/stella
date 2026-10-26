@@ -112,7 +112,10 @@ test("mounted tabs receive saved themes and sidebar changes even after a local t
 
 test("a deserialized store and peer updates preserve a boundary still hydrating", async () => {
   const hub = createPrefsBroadcastHub();
-  const initialPrefs = { ...defaultPresentationPrefs, theme: "light" as const };
+  const initialPrefs: PresentationPrefs = {
+    ...defaultPresentationPrefs,
+    theme: "light",
+  };
   const options = {
     initialPrefs: { ...initialPrefs },
     read: async () => await Promise.resolve(initialPrefs),

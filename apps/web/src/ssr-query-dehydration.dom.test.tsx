@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { AnyRoute } from "@tanstack/react-router";
 import { afterAll, expect, test } from "bun:test";
 
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
@@ -241,8 +242,12 @@ test("router hydration keeps the server catalogue until client presentation appl
     expect(legacyBrowserStorage.getItem(legacyKey).unwrap()).not.toBeNull();
 
     queryClient.setQueryData(sessionOptions.queryKey, {
-      user: { id: "hydrated-member", locale: "de" },
-      session: { id: "hydrated-session", userId: "hydrated-member" },
+      user: { ...MEMBER_SESSION.user, id: "hydrated-member", locale: "de" },
+      session: {
+        ...MEMBER_SESSION.session,
+        id: "hydrated-session",
+        userId: "hydrated-member",
+      },
     });
     await loadClientDocumentPresentation(queryClient);
     expect(useI18nStore.getState().loadedLang).toBe("de");

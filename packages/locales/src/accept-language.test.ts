@@ -16,6 +16,10 @@ test("quality wins over order, equal qualities retain order, and regional tags r
   expect(resolveAcceptLanguage("en;q=0.2,cs-CZ;q=0.9,de;q=0.8")).toBe("cs");
   expect(resolveAcceptLanguage("de;q=0.9,cs;q=0.9")).toBe("de");
   expect(resolveAcceptLanguage("CS-cz, en;q=0.9")).toBe("cs");
+  expect(resolveAcceptLanguage("de;q=0.,cs;q=0.001")).toBe("cs");
+  expect(resolveAcceptLanguage("de;q=1.,cs;q=0.999")).toBe("de");
+  expect(resolveAcceptLanguage("de;q=0.5,cs;q=0.500")).toBe("de");
+  expect(resolveAcceptLanguage("de;q=0.001,cs;q=0.002")).toBe("cs");
 });
 
 test("unsupported, excluded and malformed ranges cannot select a catalogue", () => {
@@ -25,6 +29,7 @@ test("unsupported, excluded and malformed ranges cannot select a catalogue", () 
     "*",
     "zz",
     "cs;q=0",
+    "cs;q=0.",
     "cs;q=-1",
     "cs;q=2",
     "cs;q=NaN",

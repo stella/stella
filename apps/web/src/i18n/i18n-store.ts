@@ -204,7 +204,7 @@ export const getTranslator = createIsomorphicFn()
   .client(() => getBrowserTranslator());
 
 type CalendarPreference = PresentationPrefs["calendar"];
-type NumberingPreference = PresentationPrefs["numberingSystem"];
+export type NumberingPreference = PresentationPrefs["numberingSystem"];
 export type RegionalFormatPreference = PresentationPrefs["regionalFormat"];
 type WeekStartPreference = PresentationPrefs["weekStart"];
 

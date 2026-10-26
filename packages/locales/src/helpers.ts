@@ -54,7 +54,7 @@ export const negotiateAcceptLanguage = (
   header: string | undefined,
 ): NegotiatedLocale => {
   let selected: NegotiatedLocale = { locale: "en", region: "" };
-  let highestQuality = 0;
+  let highestQuality = "0000";
   for (const part of (header ?? "").split(",")) {
     const [range, ...parameters] = part.trim().split(";");
     if (!range || !/^[a-z]{1,8}(?:-[a-z0-9]{1,8})*$/iu.test(range)) {
@@ -68,7 +68,12 @@ export const negotiateAcceptLanguage = (
     ) {
       continue;
     }
-    const quality = weight === undefined ? 1 : Number(weight.slice(2));
+    // The accepted q grammar has one whole digit and at most three decimal
+    // digits, so fixed-width ranks have the same order as numeric weights.
+    const quality =
+      weight === undefined
+        ? "1000"
+        : `${weight.charAt(2)}${(weight.split(".").at(1) ?? "").padEnd(3, "0")}`;
     const locale = resolveUiLocale(range.toLowerCase());
     if (locale !== null && quality > highestQuality) {
       // This header is untrusted; a supported prefix alone does not make a

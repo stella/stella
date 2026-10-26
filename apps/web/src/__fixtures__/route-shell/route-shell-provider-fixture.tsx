@@ -30,6 +30,7 @@ import {
 import type { api } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -517,14 +518,10 @@ const loadFixtureRuntime = async (
   } = await import("@testing-library/react");
   const waitFor = async (assertion: () => void) =>
     waitForDom(assertion, { onTimeout: (error) => error });
-  const { initializeI18n, useI18nStore } = await import("@/i18n/i18n-store");
+  const { useI18nStore } = await import("@/i18n/i18n-store");
   const initializeFixtureI18n = async () => {
-    if (!Object.hasOwn(useI18nStore, "persist")) {
-      const state = useI18nStore.getState();
-      await state.loadMessages(state.lang);
-      return;
-    }
-    await initializeI18n();
+    const state = useI18nStore.getState();
+    await state.loadMessages(state.lang);
   };
   const { useFormatter, useLocale } = await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
@@ -562,6 +559,7 @@ const loadFixtureRuntime = async (
       context: {
         queryClient,
         analyticsValue: { analytics: noopAnalytics, client: null },
+        presentationPrefs: defaultPresentationPrefs,
         routeErrorLifecycle,
       },
     });

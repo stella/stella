@@ -57,7 +57,11 @@ test("a late boundary hydrates the visitor snapshot before showing the live acco
   };
   const tree = (hydrationGate?: Promise<undefined>) => (
     <Suspense fallback={null}>
-      <Language hydrationGate={hydrationGate} />
+      {hydrationGate === undefined ? (
+        <Language />
+      ) : (
+        <Language hydrationGate={hydrationGate} />
+      )}
     </Suspense>
   );
   const container = document.createElement("div");

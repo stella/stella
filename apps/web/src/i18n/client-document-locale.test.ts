@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
@@ -15,6 +16,8 @@ const createHarness = ({
   selectedEntered,
   onWritePrefs,
   onLoadSelectedMessages,
+  profileFailure,
+  migrationProfileFailure,
 }: {
   bootGate?: Promise<unknown>;
   selectedGate?: Promise<unknown>;
@@ -23,18 +26,32 @@ const createHarness = ({
   selectedEntered?: () => void;
   onWritePrefs?: (patch: Partial<typeof defaultPresentationPrefs>) => void;
   onLoadSelectedMessages?: (locale: SupportedLanguage) => void;
+  profileFailure?: Error;
+  migrationProfileFailure?: Error;
 } = {}) => {
   let prefs = defaultPresentationPrefs;
   let visible: SupportedLanguage = "en";
   const profileWrites: SupportedLanguage[] = [];
   const reportedErrors: string[] = [];
+  let failMigration = migrationProfileFailure !== undefined;
   const owner = createClientDocumentLocaleOwner({
     readBootUser: async () => ({ id: "member", locale: "de" }),
     readSelectionUser: async () => ({ id: "member", locale: "de" }),
     isCurrent: (_queryClient, userId) =>
       userId === (currentUser?.() ?? "member"),
     getPrefs: () => prefs,
-    migrate: async ({ user }) => ({ prefs, locale: user?.locale ?? null }),
+    migrate: async ({ user }) => {
+      if (failMigration) {
+        failMigration = false;
+        return {
+          status: "profile-error",
+          prefs,
+          locale: user?.locale ?? null,
+          error: migrationProfileFailure,
+        };
+      }
+      return { status: "complete", prefs, locale: user?.locale ?? null };
+    },
     writePrefs: async (patch) => {
       onWritePrefs?.(patch);
       prefs = { ...prefs, ...patch };
@@ -42,6 +59,9 @@ const createHarness = ({
     },
     updateProfile: async (locale) => {
       profileWrites.push(locale);
+      return profileFailure === undefined
+        ? Result.ok(undefined)
+        : Result.err(profileFailure);
     },
     loadBootMessages: async (locale) => {
       bootEntered?.();
@@ -197,6 +217,44 @@ test("a failed catalogue load leaves the queue usable for a later selection", as
     expect(current().visible).toBe("ar");
     expect(current().prefs.visitorLocale).toBe("ar");
     expect(current().reportedErrors).toEqual(["setLang:loadMessages"]);
+  } finally {
+    queryClient.clear();
+  }
+});
+
+test("a rejected profile update leaves the visible locale and cookie unchanged", async () => {
+  const queryClient = new QueryClient();
+  const { owner, current } = createHarness({
+    profileFailure: new Error("profile unavailable"),
+  });
+  try {
+    await owner.select(queryClient, "cs");
+    expect(current()).toEqual({
+      prefs: defaultPresentationPrefs,
+      visible: "en",
+      profileWrites: ["cs"],
+      reportedErrors: ["setLang:updateUser"],
+    });
+  } finally {
+    queryClient.clear();
+  }
+});
+
+test("a failed legacy profile write leaves boot unapplied and retries later", async () => {
+  const queryClient = new QueryClient();
+  const { owner, current } = createHarness({
+    migrationProfileFailure: new Error("legacy profile unavailable"),
+  });
+  try {
+    await owner.boot(queryClient);
+    expect(current().visible).toBe("en");
+    expect(current().prefs.visitorLocale).toBe("en");
+    expect(current().reportedErrors).toEqual(["boot:updateUser"]);
+
+    await owner.boot(queryClient);
+    expect(current().visible).toBe("de");
+    expect(current().prefs.visitorLocale).toBe("de");
+    expect(current().reportedErrors).toEqual(["boot:updateUser"]);
   } finally {
     queryClient.clear();
   }

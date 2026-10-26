@@ -5,11 +5,6 @@ import {
   USER_STORAGE_FAMILIES,
 } from "@/lib/account/storage-families";
 
-export type PersistedDeviceUiStateKey = `${Extract<
-  (typeof DEVICE_STORAGE_FAMILIES)[number],
-  { restoration: "layout" }
->["prefix"]}${string}`;
-
 /** Derived from storage ownership: adding persistence requires a reset decision. */
 export const PERSISTED_UI_STATE_PREFIXES = [
   ...USER_STORAGE_FAMILIES,

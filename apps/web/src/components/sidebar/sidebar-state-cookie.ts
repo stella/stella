@@ -5,6 +5,3 @@ export const SIDEBAR_STATE_VALUES = {
   expanded: "expanded",
   collapsed: "collapsed",
 } as const;
-
-export type SidebarStateValue =
-  (typeof SIDEBAR_STATE_VALUES)[keyof typeof SIDEBAR_STATE_VALUES];

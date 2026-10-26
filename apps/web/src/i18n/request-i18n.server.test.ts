@@ -1,11 +1,11 @@
-import { createElement, Suspense, use } from "react";
-import { renderToReadableStream } from "react-dom/server";
-
 import { expect, test } from "bun:test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import {
   loadLocaleMessages,
-  RenderedI18nStoreProvider,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
@@ -50,85 +50,35 @@ test("concurrent server renders keep their locale catalogues isolated", async ()
   expect(useI18nStore.getState()).toBe(baseline);
 });
 
-test("suspended concurrent response streams retain their request locale when resumed outside the request", async () => {
-  const baseline = useI18nStore.getState();
-  const release = Promise.withResolvers<undefined>();
-  const LocaleSnapshot = ({ suspended }: { suspended: boolean }) => {
-    if (suspended) {
-      use(release.promise);
-    }
-    const { loadedLang, messages } = useI18nStore((state) => state);
-    return createElement(
-      "span",
-      { "data-locale": loadedLang },
-      messages.common.legalDatabase,
+// timeout: child startup, all shipped catalogues and suspended streams share this budget.
+test("suspended concurrent response streams retain request locale outside the request", async () => {
+  // Plain `bun` runs the server isomorphic branch; `bun test` preloads the
+  // browser branch for DOM suites in this workspace.
+  const child = Bun.spawn(
+    [
+      "bun",
+      fileURLToPath(new URL("request-i18n-stream.fixture.ts", import.meta.url)),
+    ],
+    {
+      cwd: path.resolve(import.meta.dir, "../.."),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  try {
+    const [exitCode, stdout, stderr] = await withTimeout(
+      async () =>
+        await Promise.all([
+          child.exited,
+          new Response(child.stdout).text(),
+          new Response(child.stderr).text(),
+        ]),
+      // Includes a fresh Bun process, all shipped catalogues and suspended SSR.
+      { label: "unmocked request stream fixture", timeoutMs: 10_000 },
     );
-  };
-  const streams = await Promise.all(
-    supportedLanguages.map(async (locale) => {
-      const messages = await loadLocaleMessages(locale);
-      const stream = await withRequestI18n(async () => {
-        initializeRequestI18n({
-          ...baseline,
-          lang: locale,
-          loadedLang: locale,
-          messages,
-          isLoaded: true,
-          hasLoadedOnce: true,
-        });
-        return await renderToReadableStream(
-          createElement(
-            RenderedI18nStoreProvider,
-            null,
-            createElement(
-              "html",
-              null,
-              createElement("head"),
-              createElement(
-                "body",
-                null,
-                createElement(
-                  Suspense,
-                  {
-                    fallback: createElement(LocaleSnapshot, {
-                      suspended: false,
-                    }),
-                  },
-                  createElement(LocaleSnapshot, { suspended: true }),
-                ),
-              ),
-            ),
-          ),
-          { bootstrapScripts: ["/fixture.js"] },
-        );
-      });
-      const reader = stream.getReader();
-      const shell = await reader.read();
-      expect(shell.done).toBe(false);
-      return { locale, messages, stream, reader, shell };
-    }),
-  );
-  expect(getRequestI18nStore()).toBeUndefined();
-  release.resolve(undefined);
-  await Promise.all(
-    streams.map(async ({ locale, messages, stream, reader, shell }) => {
-      await stream.allReady;
-      const decoder = new TextDecoder();
-      const chunks = [decoder.decode(shell.value, { stream: true })];
-      while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) {
-          chunks.push(decoder.decode());
-          break;
-        }
-        chunks.push(decoder.decode(chunk.value, { stream: true }));
-      }
-      const html = chunks.join("");
-      expect(
-        html.match(new RegExp(`data-locale="${locale}"`, "gu")),
-      ).toHaveLength(2);
-      expect(html).toContain(messages.common.legalDatabase);
-    }),
-  );
-  expect(useI18nStore.getState()).toBe(baseline);
-});
+    expect(exitCode, stderr).toBe(0);
+    expect(stdout).toContain(`resumed ${supportedLanguages.length} locales`);
+  } finally {
+    child.kill();
+  }
+}, 12_000);

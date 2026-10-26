@@ -19,10 +19,8 @@ import {
   parseVisitorPresentationPrefs,
   serializePresentationPrefs,
 } from "@/lib/account/presentation-prefs/preferences";
-import { sessionOptions } from "@/lib/auth-query-options";
 import { runInRequest } from "@/testing/request-test";
 
-import { loadClientDocumentPresentation } from "./document-presentation";
 import { withRequestI18n } from "./request-i18n.server";
 
 let initialI18nState = useI18nStore.getState();
@@ -55,37 +53,6 @@ const sessionFor = ({ id, locale }: { id: string; locale: UiLocale }) => ({
     expiresAt: new Date("2027-01-01T00:00:00Z"),
     activeOrganizationId: "fixture-org",
   },
-});
-
-test("account changes replace the catalogue before navigation completes without a document reload", async () =>
-  await withRequestI18n(async () => {
-    const queryClient = new QueryClient();
-    for (const user of [
-      { id: "first", locale: "cs", navigation: "Právní databáze" },
-      { id: "second", locale: "de", navigation: "Rechtsdatenbank" },
-      { id: "first", locale: "cs", navigation: "Právní databáze" },
-    ] as const) {
-      queryClient.setQueryData(sessionOptions.queryKey, sessionFor(user));
-      await loadClientDocumentPresentation(queryClient);
-      expect(useI18nStore.getState().loadedLang).toBe(user.locale);
-      expect(useI18nStore.getState().messages.common.legalDatabase).toBe(
-        user.navigation,
-      );
-    }
-    queryClient.clear();
-  }));
-
-test("navigation by the same account retains a freshly selected catalogue despite a cached profile", async () => {
-  const queryClient = new QueryClient();
-  queryClient.setQueryData(
-    sessionOptions.queryKey,
-    sessionFor({ id: "same", locale: "en" }),
-  );
-  await loadClientDocumentPresentation(queryClient);
-  await useI18nStore.getState().loadMessages("cs");
-  await loadClientDocumentPresentation(queryClient);
-  expect(useI18nStore.getState().loadedLang).toBe("cs");
-  queryClient.clear();
 });
 
 const DocumentSnapshot = () => {

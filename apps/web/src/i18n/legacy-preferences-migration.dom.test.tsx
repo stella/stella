@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
@@ -103,6 +104,7 @@ test.each(migrationLocales)(
       },
       writeProfileLocale: async (locale) => {
         savedLocale = locale;
+        return Result.ok(undefined);
       },
     });
 
@@ -175,6 +177,7 @@ test("an explicit selection keeps its locale while still migrating other legacy 
     writePrefs: async (patch) => ({ ...defaultPresentationPrefs, ...patch }),
     writeProfileLocale: async () => {
       profileWrites += 1;
+      return Result.ok(undefined);
     },
   });
   expect(profileWrites).toBe(0);
@@ -195,6 +198,7 @@ test("a later profile locale is not overwritten by stale legacy data", async () 
     writePrefs: async (patch) => ({ ...currentPrefs, ...patch }),
     writeProfileLocale: async () => {
       profileWrites += 1;
+      return Result.ok(undefined);
     },
   });
   expect(migrated.locale).toBe("ar");
@@ -215,6 +219,7 @@ test("a completed migration is a no-op when run twice", async () => {
     },
     writeProfileLocale: async () => {
       writes += 1;
+      return Result.ok(undefined);
     },
   };
   const first = await migrateLegacyPresentationPreferences(options);
@@ -235,7 +240,7 @@ test("a failed write leaves legacy entries for retry", async () => {
       writePrefs: async () => {
         throw new Error("fixture write failed");
       },
-      writeProfileLocale: async () => undefined,
+      writeProfileLocale: async () => Result.ok(undefined),
     }),
   );
   expect(rejection).toBeInstanceOf(Error);
@@ -247,6 +252,32 @@ test("a failed write leaves legacy entries for retry", async () => {
   expect(legacyBrowserStorage.getItem("statute_table_layout").unwrap()).toBe(
     fixture.statute_table_layout,
   );
+});
+
+test("a rejected profile locale keeps every legacy entry for a later boot", async () => {
+  seedFixture("cs");
+  const failure = new Error("profile unavailable");
+  let preferenceWrites = 0;
+  const migrated = await migrateLegacyPresentationPreferences({
+    prefs: defaultPresentationPrefs,
+    profileLocale: "en",
+    userId: "user-1",
+    writePrefs: async (patch) => {
+      preferenceWrites += 1;
+      return { ...defaultPresentationPrefs, ...patch };
+    },
+    writeProfileLocale: async () => Result.err(failure),
+  });
+  expect(migrated).toEqual({
+    status: "profile-error",
+    prefs: defaultPresentationPrefs,
+    locale: "en",
+    error: failure,
+  });
+  expect(preferenceWrites).toBe(0);
+  for (const [key, value] of Object.entries(fixture)) {
+    expect(legacyBrowserStorage.getItem(key).unwrap()).toBe(value);
+  }
 });
 
 test("a valid layout too large for a cookie remains in local storage for retry", async () => {
@@ -288,7 +319,7 @@ test("a valid layout too large for a cookie remains in local storage for retry",
     profileLocale: "ar",
     userId: "user-1",
     writePrefs: async (patch) => ({ ...defaultPresentationPrefs, ...patch }),
-    writeProfileLocale: async () => undefined,
+    writeProfileLocale: async () => Result.ok(undefined),
   });
   expect(migrated.prefs.theme).toBe("dark");
   expect(migrated.prefs.decisionLayouts).toEqual({});
@@ -313,9 +344,9 @@ test("canonical country wins a legacy alias collision without deleting either or
     profileLocale: "ar",
     userId: "user-1",
     writePrefs: async (patch) => ({ ...defaultPresentationPrefs, ...patch }),
-    writeProfileLocale: async () => undefined,
+    writeProfileLocale: async () => Result.ok(undefined),
   });
-  expect(migrated.prefs.decisionLayouts.CZE?.hidden).toEqual(["country"]);
+  expect(migrated.prefs.decisionLayouts["CZE"]?.hidden).toEqual(["country"]);
   expect(legacyBrowserStorage.getItem("case_law_hidden_columns").unwrap()).toBe(
     raw,
   );

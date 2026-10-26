@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, expect, test } from "bun:test";
 
+import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -23,6 +24,73 @@ const { seedLegacyBrowserStorage } =
   await import("@/lib/account/browser-storage.test-fixtures");
 const { legacyBrowserStorage } = await import("@/lib/account/browser-storage");
 const { sessionOptions } = await import("@/lib/auth-queries");
+
+const createTestPrefsSync = () => {
+  let savedPrefs = defaultPresentationPrefs;
+  return createPresentationPrefsSync({
+    initialPrefs: defaultPresentationPrefs,
+    read: async () => await Promise.resolve(savedPrefs),
+    write: async (patch) => {
+      savedPrefs = { ...savedPrefs, ...patch };
+      return await Promise.resolve(savedPrefs);
+    },
+  });
+};
+
+test("account changes replace the catalogue before navigation completes without a document reload", async () => {
+  const initialI18n = useI18nStore.getState();
+  initializeBrowserPresentationPrefs(
+    defaultPresentationPrefs,
+    createTestPrefsSync(),
+  );
+  const queryClient = new QueryClient();
+  try {
+    for (const user of [
+      { id: "first", locale: "cs", navigation: "Právní databáze" },
+      { id: "second", locale: "de", navigation: "Rechtsdatenbank" },
+      { id: "first", locale: "cs", navigation: "Právní databáze" },
+    ] as const) {
+      queryClient.setQueryData(sessionOptions.queryKey, {
+        user: { ...MEMBER_SESSION.user, id: user.id, locale: user.locale },
+        session: { ...MEMBER_SESSION.session, userId: user.id },
+      });
+      await loadClientDocumentPresentation(queryClient);
+      expect(useI18nStore.getState().loadedLang).toBe(user.locale);
+      expect(useI18nStore.getState().messages.common.legalDatabase).toBe(
+        user.navigation,
+      );
+    }
+  } finally {
+    initializeBrowserPresentationPrefs(defaultPresentationPrefs);
+    queryClient.clear();
+    await useI18nStore.getState().loadMessages(initialI18n.loadedLang);
+    useI18nStore.setState(initialI18n);
+  }
+});
+
+test("navigation by the same account retains a freshly selected catalogue despite a cached profile", async () => {
+  const initialI18n = useI18nStore.getState();
+  initializeBrowserPresentationPrefs(
+    defaultPresentationPrefs,
+    createTestPrefsSync(),
+  );
+  const queryClient = new QueryClient();
+  queryClient.setQueryData(sessionOptions.queryKey, {
+    user: { ...MEMBER_SESSION.user, id: "same", locale: "en" },
+    session: { ...MEMBER_SESSION.session, userId: "same" },
+  });
+  try {
+    await loadClientDocumentPresentation(queryClient);
+    await useI18nStore.getState().loadMessages("cs");
+    await loadClientDocumentPresentation(queryClient);
+    expect(useI18nStore.getState().loadedLang).toBe("cs");
+  } finally {
+    initializeBrowserPresentationPrefs(defaultPresentationPrefs);
+    queryClient.clear();
+    await useI18nStore.getState().loadMessages(initialI18n.loadedLang);
+    useI18nStore.setState(initialI18n);
+  }
+});
 
 afterAll(async () => {
   cleanup();
@@ -55,8 +123,12 @@ test("document migration updates an already mounted preference provider", async 
   seedLegacyBrowserStorage(key, "dark");
   const queryClient = new QueryClient();
   queryClient.setQueryData(sessionOptions.queryKey, {
-    user: { id: "mounted-member", locale: "de" },
-    session: { id: "mounted-session", userId: "mounted-member" },
+    user: { ...MEMBER_SESSION.user, id: "mounted-member", locale: "de" },
+    session: {
+      ...MEMBER_SESSION.session,
+      id: "mounted-session",
+      userId: "mounted-member",
+    },
   });
   const view = render(
     <PresentationPrefsProvider initialPrefs={defaultPresentationPrefs}>

@@ -11,6 +11,10 @@ import {
 import { SEARCH_EXCERPTS } from "@stll/api-contract/search";
 import { READER_TEXT_SCALES } from "@stll/decision-reader/reader-text-scale.logic";
 import { UI_LOCALES } from "@stll/locales";
+import {
+  INSPECTOR_PANE_MAX_WIDTH,
+  INSPECTOR_PANE_MIN_WIDTH,
+} from "@stll/ui/pane-width";
 
 import { DEFAULT_TABLE_COLUMN_MIN_SIZE } from "@/components/workspaces/table/table-column-sizing";
 import { legacyBrowserStorage } from "@/lib/account/browser-storage";
@@ -95,6 +99,7 @@ const legacyStatuteLayoutsSchema = v.record(
   v.string(),
   legacyPublicLawLayoutSchema,
 );
+const partialPresentationPrefsSchema = v.partial(presentationPrefsSchema);
 type LegacyDecisionLayout = v.InferOutput<
   typeof legacyDecisionLayoutsSchema
 >[string];
@@ -127,11 +132,14 @@ const normalizeLegacyLayouts = (
 ) => {
   let retainLegacyKey = false;
   const normalized = new Map<string, unknown>();
-  const ordered = Object.entries(layouts).toSorted(
-    ([left], [right]) =>
-      Number(legacyPublicCountry(left) !== left.toUpperCase()) -
-      Number(legacyPublicCountry(right) !== right.toUpperCase()),
-  );
+  const ordered = Object.entries(layouts).toSorted(([left], [right]) => {
+    const leftIsAlias = legacyPublicCountry(left) !== left.toUpperCase();
+    const rightIsAlias = legacyPublicCountry(right) !== right.toUpperCase();
+    if (leftIsAlias === rightIsAlias) {
+      return 0;
+    }
+    return leftIsAlias ? 1 : -1;
+  });
   for (const [key, stored] of ordered) {
     const country = legacyPublicCountry(key);
     if (country === undefined) {
@@ -247,8 +255,19 @@ type MigrationOptions = {
   localePriority?: "explicit" | "legacy-if-default";
   isCurrentDocument?: () => boolean;
   writePrefs: (patch: Partial<PresentationPrefs>) => Promise<PresentationPrefs>;
-  writeProfileLocale: (locale: (typeof UI_LOCALES)[number]) => Promise<void>;
+  writeProfileLocale: (
+    locale: (typeof UI_LOCALES)[number],
+  ) => Promise<Result<void, unknown>>;
 };
+
+export type LegacyPresentationMigrationResult =
+  | { status: "complete"; prefs: PresentationPrefs; locale: string | null }
+  | {
+      status: "profile-error";
+      prefs: PresentationPrefs;
+      locale: string | null;
+      error: unknown;
+    };
 
 const readLegacyLayoutPatch = (
   prefs: PresentationPrefs,
@@ -291,6 +310,53 @@ const readLegacyLayoutPatch = (
   return { patch, retainLegacyKeys };
 };
 
+const exactLegacyPatch = (
+  parsed: v.InferOutput<typeof partialPresentationPrefsSchema>,
+  layoutPatch: Partial<PresentationPrefs>,
+): Partial<PresentationPrefs> => {
+  const patch: Partial<PresentationPrefs> = {};
+  if (parsed.calendar !== undefined) {
+    patch.calendar = parsed.calendar;
+  }
+  if (parsed.numberingSystem !== undefined) {
+    patch.numberingSystem = parsed.numberingSystem;
+  }
+  if (parsed.regionalFormat !== undefined) {
+    patch.regionalFormat = parsed.regionalFormat;
+  }
+  if (parsed.weekStart !== undefined) {
+    patch.weekStart = parsed.weekStart;
+  }
+  if (parsed.theme !== undefined) {
+    patch.theme = parsed.theme;
+  }
+  if (parsed.palette !== undefined) {
+    patch.palette = parsed.palette;
+  }
+  if (parsed.sidebarOpen !== undefined) {
+    patch.sidebarOpen = parsed.sidebarOpen;
+  }
+  if (parsed.readerProvisionMode !== undefined) {
+    patch.readerProvisionMode = parsed.readerProvisionMode;
+  }
+  if (parsed.readerTextScale !== undefined) {
+    patch.readerTextScale = parsed.readerTextScale;
+  }
+  if (parsed.templateDensity !== undefined) {
+    patch.templateDensity = parsed.templateDensity;
+  }
+  if (parsed.inspectorWidth !== undefined) {
+    patch.inspectorWidth = parsed.inspectorWidth;
+  }
+  if (layoutPatch.decisionLayouts !== undefined) {
+    patch.decisionLayouts = layoutPatch.decisionLayouts;
+  }
+  if (layoutPatch.statuteLayouts !== undefined) {
+    patch.statuteLayouts = layoutPatch.statuteLayouts;
+  }
+  return patch;
+};
+
 const buildLegacyPatch = (
   prefs: PresentationPrefs,
   values: Map<string, string>,
@@ -328,14 +394,24 @@ const buildLegacyPatch = (
   ]
     .map((key) => values.get(key))
     .find((value) => value !== undefined);
-  const width = widthRaw === undefined ? undefined : Number(widthRaw);
+  const parsedWidth =
+    widthRaw === undefined
+      ? null
+      : Result.try((): unknown => JSON.parse(widthRaw));
+  const validWidth =
+    parsedWidth?.isOk() === true
+      ? v.safeParse(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(INSPECTOR_PANE_MIN_WIDTH),
+            v.maxValue(INSPECTOR_PANE_MAX_WIDTH),
+          ),
+          parsedWidth.value,
+        )
+      : null;
   const legacyWidth =
-    width !== undefined &&
-    Number.isInteger(width) &&
-    width >= 320 &&
-    width <= 1400
-      ? width
-      : undefined;
+    validWidth?.success === true ? validWidth.output : undefined;
   const candidate: Record<string, unknown> = {
     calendar: legacyChoice(
       prefs.calendar,
@@ -396,15 +472,16 @@ const buildLegacyPatch = (
       legacyWidth,
     ),
   };
-  const patch = v.parse(
-    v.partial(presentationPrefsSchema),
+  const parsed = v.parse(
+    partialPresentationPrefsSchema,
     Object.fromEntries(
       Object.entries(candidate).filter((entry) => entry[1] !== undefined),
     ),
   );
   const layouts = readLegacyLayoutPatch(prefs, values);
+  const patch = exactLegacyPatch(parsed, layouts.patch);
   return {
-    patch: { ...patch, ...layouts.patch },
+    patch,
     legacyLocale: state?.lang,
     retainLegacyKeys: layouts.retainLegacyKeys,
   };
@@ -419,10 +496,7 @@ export const migrateLegacyPresentationPreferences = async ({
   isCurrentDocument = () => true,
   writePrefs,
   writeProfileLocale,
-}: MigrationOptions): Promise<{
-  prefs: PresentationPrefs;
-  locale: string | null;
-}> => {
+}: MigrationOptions): Promise<LegacyPresentationMigrationResult> => {
   const provisionKey = ownerStorageKey(
     READER_PROVISION_MODE_STORAGE_KEY,
     userId === null ? { kind: "visitor" } : { kind: "user", userId },
@@ -432,17 +506,17 @@ export const migrateLegacyPresentationPreferences = async ({
   for (const key of keys) {
     const read = legacyBrowserStorage.getItem(key);
     if (read.isErr()) {
-      return { prefs, locale: profileLocale };
+      return { status: "complete", prefs, locale: profileLocale };
     }
     if (read.value !== null) {
       values.set(key, read.value);
     }
   }
   if (values.size === 0) {
-    return { prefs, locale: profileLocale };
+    return { status: "complete", prefs, locale: profileLocale };
   }
   if (!isCurrentDocument()) {
-    return { prefs, locale: profileLocale };
+    return { status: "complete", prefs, locale: profileLocale };
   }
 
   const { patch, legacyLocale, retainLegacyKeys } = buildLegacyPatch(
@@ -461,20 +535,28 @@ export const migrateLegacyPresentationPreferences = async ({
       );
       locale = patch.visitorLocale ?? prefs.visitorLocale;
     } else if (profileLocale === defaultPresentationPrefs.visitorLocale) {
-      await writeProfileLocale(legacyLocale);
+      const written = await writeProfileLocale(legacyLocale);
+      if (written.isErr()) {
+        return {
+          status: "profile-error",
+          prefs,
+          locale: profileLocale,
+          error: written.error,
+        };
+      }
       if (!isCurrentDocument()) {
-        return { prefs, locale: profileLocale };
+        return { status: "complete", prefs, locale: profileLocale };
       }
       locale = legacyLocale;
     }
   }
   if (!isCurrentDocument()) {
-    return { prefs, locale: profileLocale };
+    return { status: "complete", prefs, locale: profileLocale };
   }
   const nextPrefs =
     Object.keys(patch).length === 0 ? prefs : await writePrefs(patch);
   if (!isCurrentDocument()) {
-    return { prefs: nextPrefs, locale };
+    return { status: "complete", prefs: nextPrefs, locale };
   }
   for (const key of values.keys()) {
     if (retainLegacyKeys.has(key)) {
@@ -485,5 +567,5 @@ export const migrateLegacyPresentationPreferences = async ({
       break;
     }
   }
-  return { prefs: nextPrefs, locale };
+  return { status: "complete", prefs: nextPrefs, locale };
 };
