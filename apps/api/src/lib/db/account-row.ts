@@ -1,6 +1,6 @@
 import { and, asc, eq, gt } from "drizzle-orm";
 
-import { member, user } from "@/api/db/auth-schema";
+import { account, member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -102,6 +102,24 @@ export const readAccountEmail = async (
   return rows.at(0)?.email;
 };
 
+/** Whether the user still has a linked account at `providerId`. */
+export const hasAccountForProvider = async (
+  userId: SafeId<"user">,
+  providerId: string,
+): Promise<boolean> => {
+  const rows = await rootDb
+    .select({ id: account.id })
+    .from(account)
+    .where(and(eq(account.userId, userId), eq(account.providerId, providerId)))
+    .limit(1);
+  return rows.length > 0;
+};
+
+/** Whether the caller can sign in with a password of their own. */
+export const hasCredentialAccount = async (
+  userId: SafeId<"user">,
+): Promise<boolean> => await hasAccountForProvider(userId, "credential");
+
 /** The id of the account registered under `email`, if one exists. */
 export const findAccountIdByEmail = async (
   email: string,
@@ -138,6 +156,24 @@ export const lockAccountRow = async (
     aggregate: "account",
     id: userId,
     mode: "no key update",
+    select: (lockedTx) => lockedTx.select({ id: user.id }).from(user),
+  });
+};
+
+/**
+ * Shares the account row while issuing a durable credential. Access recovery
+ * takes {@link lockAccountRow}, which conflicts with this mode, so issuance and
+ * recovery serialize while concurrent issuers do not block each other.
+ */
+export const shareAccountRow = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  await withAggregateRowQuery({
+    tx,
+    aggregate: "account",
+    id: userId,
+    mode: "share",
     select: (lockedTx) => lockedTx.select({ id: user.id }).from(user),
   });
 };

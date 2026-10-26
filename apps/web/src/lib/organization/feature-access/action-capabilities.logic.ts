@@ -1,6 +1,8 @@
 import type { LinkProps } from "@tanstack/react-router";
 
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
+import { acceptsDocumentOcrRequests } from "@stll/api-contract/document-ocr-availability";
+import type { DocumentOcrAvailability } from "@stll/api-contract/document-ocr-availability";
 
 import type { TranslationKey } from "@/i18n/types";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
@@ -43,6 +45,8 @@ export type ActionDescriptor = { capability: Capability | null };
 export type ActionCapabilities = {
   role: "admin" | "member";
   capabilities: Record<Capability, CapabilityAvailability>;
+  /** Whether a worker is live or requests wait for a batch; unknown until observed. */
+  documentOcr: DocumentOcrAvailability | undefined;
 };
 export const isCapabilityActionVisible = (
   action: ActionDescriptor,
@@ -66,7 +70,7 @@ type ResolveActionCapabilitiesOptions = {
   role: string | undefined;
   ai: boolean | undefined;
   deepl: boolean | undefined;
-  ocr: boolean | undefined;
+  ocr: DocumentOcrAvailability | undefined;
   desktop: DesktopPresence["type"] | undefined;
   settings:
     | Pick<
@@ -118,10 +122,13 @@ export const resolveActionCapabilities = ({
         settingsLink: CAPABILITY_SETTINGS_ROUTES.ai,
       },
     ),
-    ocr: availability(ocr, {
-      reason: "ocrUnavailable",
-      settingsLink: CAPABILITY_SETTINGS_ROUTES.ai,
-    }),
+    ocr: availability(
+      ocr === undefined ? undefined : acceptsDocumentOcrRequests(ocr),
+      {
+        reason: "ocrUnavailable",
+        settingsLink: CAPABILITY_SETTINGS_ROUTES.ai,
+      },
+    ),
     desktop: availability(
       // Installation, linking, and updating belong to the desktop action gate.
       desktop === undefined ? undefined : true,
@@ -149,4 +156,5 @@ export const resolveActionCapabilities = ({
       },
     ),
   } as const satisfies Record<Capability, CapabilityAvailability>,
+  documentOcr: ocr,
 });

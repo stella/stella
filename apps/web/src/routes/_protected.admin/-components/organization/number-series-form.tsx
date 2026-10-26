@@ -1,7 +1,7 @@
 import { useId } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type {

@@ -19,6 +19,7 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -245,8 +246,10 @@ export const ProvisionsCited = ({
         onClick={() => setLocalOpen(!open)}
         type="button"
       >
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn("size-3.5 transition-transform", open && "rotate-90")}
+          flip={!open}
+          icon={ChevronRightIcon}
         />
         {t("caseLaw.viewer.provisionsCited")}
       </button>

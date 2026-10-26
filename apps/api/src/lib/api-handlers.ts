@@ -11,7 +11,7 @@ import type { PermissionInput } from "@stll/permissions";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
-import type { CachePolicy } from "@/api/http/cache";
+import type { RouteCachePolicy } from "@/api/http/cache";
 import type { ResponseSet } from "@/api/http/context";
 import { decodeRequestInput } from "@/api/http/input";
 import type { QueryRecord } from "@/api/http/input";
@@ -141,8 +141,8 @@ import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
-import { recordWriteContract } from "@/api/lib/write-contract";
-import type { WriteContract } from "@/api/lib/write-contract";
+import { recordWriteContract } from "@/api/lib/write-contract/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 // Type-only: keep endpoint metadata independent of the expensive MCP schema graph.
 import type { McpToolName } from "@/api/mcp/static-tool-names";
 import type { McpReadClass } from "@/api/mcp/tool-types";
@@ -2275,7 +2275,7 @@ export type PublicHandlerConfig = InputSchema &
   ContentDeliveryDisposition &
   CapabilityAccess &
   SandboxAccountAccess & {
-    cache: CachePolicy;
+    cache: RouteCachePolicy;
     /** `own`: the route answers CORS itself (an any-origin discovery document). */
     cors?: "own";
     mcp: McpExposure;
@@ -2291,7 +2291,7 @@ export type PublicHandlerContext<
  * a raw function passed to `.get()` reads the same at the call site.
  */
 type PublicHandlerRegistration = {
-  cache: CachePolicy;
+  cache: RouteCachePolicy;
   readTimeout: "route-class" | "none";
 };
 
