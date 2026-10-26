@@ -1050,6 +1050,7 @@ test("arrow-highlighting a plain-text paste option previews the clip without for
   await expectPastePreview(page, "original");
 
   await page.keyboard.press("ArrowRight");
+  await expect(original).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(plainText).toBeFocused();
   await expectPastePreview(page, "plainText");
