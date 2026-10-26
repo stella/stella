@@ -39,6 +39,31 @@ describe("marking the query's words inside a headnote", () => {
     expect(text.toLowerCase()).not.toBe(text);
   });
 
+  // The reader marks a decision through the shared search fold, so the
+  // headnote of the row that opens it marks the same words: a query typed
+  // without accents, or with a German "ss", still explains the row.
+  test("marks the word however the query spells its accents", () => {
+    expect(
+      marked("Předpokladem je odpovědnost žalovaného.", "odpovednost"),
+    ).toEqual(["odpovědnost"]);
+    expect(marked("Die Straße war gesperrt.", "strasse")).toEqual(["Straße"]);
+    expect(marked("Vu l'œuvre d'Élise.", "oeuvre elise")).toEqual([
+      "œuvre",
+      "Élise",
+    ]);
+    expect(marked("قال مُحَمَّد", "محمد")).toEqual(["مُحَمَّد"]);
+  });
+
+  test("marks a word whose case fold changes its length", () => {
+    // "İ" lowercases to two code units, so an offset into the lowercased
+    // text would address the wrong character of the original.
+    const text = "Mahkeme İSTANBUL'da toplandı.";
+    expect(text.toLowerCase()).not.toHaveLength(text.length);
+
+    expect(marked(text, "istanbul")).toEqual(["İSTANBUL"]);
+    expect(joined(text, "istanbul")).toBe(text);
+  });
+
   test("does not mark the middle of an unrelated word", () => {
     // "pra" is at the floor and occurs inside "doprava"; only the word that
     // starts with it may be marked. The fixture has to carry both, or the

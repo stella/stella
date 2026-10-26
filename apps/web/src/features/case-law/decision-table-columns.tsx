@@ -15,6 +15,8 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ColumnSortKind } from "@stll/api-contract/column-sort";
+import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
+import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
 import {
   CalendarIcon,
   FileDigitIcon,
@@ -115,12 +117,11 @@ type DecisionRenderScopeValue = {
   /** The rows whose cut headnote the reader asked to see whole. */
   expandedHeadnoteIds: ReadonlySet<string>;
   onToggleHeadnote: (decisionId: string) => void;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   /** The query as typed, which every gesture that opens a row carries with it. */
   searchQuery: string | undefined;
 };
 
-const NO_QUERY_TOKENS: readonly string[] = [];
 const NO_EXPANDED_HEADNOTES: ReadonlySet<string> = new Set();
 
 const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
@@ -131,7 +132,7 @@ const DecisionRenderScopeContext = createContext<DecisionRenderScopeValue>({
   // expand.
   onToggleHeadnote: () =>
     panic("Decision cell rendered outside a decision render scope"),
-  queryTokens: NO_QUERY_TOKENS,
+  queryTokens: NO_QUERY_MARK_TOKENS,
   searchQuery: undefined,
 });
 

@@ -19,6 +19,8 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { DecisionSearchMatch } from "@stll/api-contract/search";
+import { NO_QUERY_MARK_TOKENS } from "@stll/decision-reader/query-marks";
+import type { QueryMarkTokens } from "@stll/decision-reader/query-marks";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -59,7 +61,6 @@ import { detached } from "@/lib/detached";
 const EMPTY_VALUE = "—";
 
 /** A cell no search reached: only the reader's find marks its text. */
-const NO_QUERY_TOKENS: readonly string[] = [];
 
 /** One decision as the public list, search and research tables show it. */
 export type Decision = {
@@ -109,7 +110,7 @@ export type DecisionRenderContext = {
    */
   identityLineFields: readonly DecisionIdentityLineField[];
   /** The query's words, so the summary cell can show why the row matched. */
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   /**
    * The query as it was typed, carried into whatever the row opens so the
    * decision's own text marks the words the row marks.
@@ -330,7 +331,7 @@ type HeadnotePreviewCellProps = {
   context: DecisionRenderContext;
   decision: Decision;
   /** The search's words, marked inside whatever the publisher supplied. */
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
 };
 
 /**
@@ -388,7 +389,7 @@ export const DecisionKeywords = ({
   items: readonly string[];
   /** Terms the row's budget dropped, so a part filing does not read whole. */
   omitted: number;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
 }) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -437,7 +438,7 @@ const HighlightedProse = ({
   text,
 }: {
   columnId: DecisionColumnId;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   text: string;
 }) => (
   <>
@@ -529,7 +530,7 @@ const DecisionHeadnote = ({
   context: DecisionRenderContext;
   decision: Decision;
   headnote: PresentHeadnote;
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
 }) => {
   const expanded = context.expandedHeadnoteIds.has(decision.id);
   // The decision read, and only the one line of it this cell shows: the
@@ -574,7 +575,7 @@ type HeadnoteProseProps = {
   onActivate: () => void;
   preview: PresentHeadnote;
   /** The search's words, marked inside the publisher's own sentence. */
-  queryTokens: readonly string[];
+  queryTokens: QueryMarkTokens;
   view: HeadnoteView;
 };
 
@@ -829,7 +830,7 @@ export const HeadnoteCell = ({
     decision={decision}
     // This column is what the publisher supplied, not the row's match: only
     // the reader's find marks it, the way every metadata column is marked.
-    queryTokens={NO_QUERY_TOKENS}
+    queryTokens={NO_QUERY_MARK_TOKENS}
   />
 );
 
