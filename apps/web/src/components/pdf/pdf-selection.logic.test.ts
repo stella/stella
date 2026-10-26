@@ -18,7 +18,15 @@ import en from "@/i18n/langs/en.json";
 import fr from "@/i18n/langs/fr.json";
 import hu from "@/i18n/langs/hu.json";
 
-const CATALOGS = { cs, en, fr, hu } as const;
+// Typed as the English catalog: a union of four catalog types makes the
+// translator infer its keys over every one of them, which costs the web
+// typecheck several hundred thousand instantiations.
+const CATALOGS: Record<"cs" | "en" | "fr" | "hu", typeof en> = {
+  cs,
+  en,
+  fr,
+  hu,
+};
 
 type CopyCase = {
   document: PdfCitedDocument;
