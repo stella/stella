@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import * as cheerio from "cheerio";
-import { isText } from "domhandler";
+import { isTag, isText } from "domhandler";
 import { readdirSync } from "node:fs";
 
 import { DECISION_TEXT_FIELD_KEYS } from "@stll/api-contract/case-law-text-field";
@@ -153,6 +153,9 @@ const markupValues = (markup: string): string[] => {
   const $ = cheerio.load(markup);
   const values: string[] = [];
   $("*").each((_, element) => {
+    if (!isTag(element)) {
+      return;
+    }
     values.push(
       element.children
         .flatMap((child) => (isText(child) ? [child.data] : []))
