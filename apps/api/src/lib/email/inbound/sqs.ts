@@ -1,10 +1,4 @@
-import {
-  ChangeMessageVisibilityBatchCommand,
-  DeleteMessageCommand,
-  type Message,
-  ReceiveMessageCommand,
-  type SQSClient,
-} from "@aws-sdk/client-sqs";
+import type { SQSClient } from "@aws-sdk/client-sqs";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
@@ -12,36 +6,25 @@ import {
   declareFingerprintFields,
   sanitizeErrorAttributesForOutput,
 } from "@stll/errors";
-import { Temporal } from "@stll/time";
 
 import type { receiveAndDeleteSesInboundMail } from "@/api/lib/email/inbound/ses";
-import { errorTag } from "@/api/lib/errors/error-tag";
+import {
+  drainSnsQueue,
+  parseSnsQueueBody,
+  type SnsQueueDelivery,
+  type SnsQueueDisposition,
+} from "@/api/lib/email/sns-queue-drain";
 import type { logger as appLogger } from "@/api/lib/observability/logger";
 
-// SQS caps a message body at 256 KiB. A longer body did not come from the
-// configured queue and is not worth parsing.
-export const MAX_QUEUE_MESSAGE_CHARS = 262_144;
-const MAX_MESSAGES_PER_BATCH = 10;
-const MAX_BATCHES_PER_RUN = 10;
-const RUN_BUDGET_MS = 30_000;
-const RECEIVE_WAIT_SECONDS = 1;
 // Messages in one batch are filed sequentially; each may spend the provider
 // read, authentication and persistence budgets. The lease must outlast the
 // batch so a later run cannot take a message that is still being filed.
 const VISIBILITY_TIMEOUT_SECONDS = 600;
-const DELETE_TIMEOUT_MS = 5000;
-const RELEASE_TIMEOUT_MS = 5000;
 
 // SES publishes this once when a receipt rule's topic is configured.
 const SES_SETUP_NOTIFICATION = "AMAZON_SES_SETUP_NOTIFICATION";
 const SES_RECEIVED_NOTIFICATION = "Received";
 
-// SNS adds signing and routing fields this receiver does not use; strip them.
-const snsNotificationSchema = v.object({
-  Type: v.literal("Notification"),
-  TopicArn: v.string(),
-  Message: v.string(),
-});
 const sesNotificationKindSchema = v.object({
   notificationType: v.string(),
 });
@@ -63,24 +46,18 @@ class InboundQueueMessageError extends TaggedError("InboundQueueMessageError")<{
 type InboundQueueNotification =
   { type: "received"; event: unknown } | { type: "setup" };
 
-const parseJson = (text: string) =>
-  Result.try({
-    try: (): unknown => JSON.parse(text),
-    catch: () =>
-      new InboundQueueMessageError({
-        message: "Inbound queue message is not JSON",
-        reason: "malformed-json",
-      }),
-  });
+const ENVELOPE_REJECTION_MESSAGE = {
+  oversized: "Inbound queue message has no bounded body",
+  "malformed-json": "Inbound queue message is not JSON",
+  "invalid-envelope": "Inbound queue message is not an SNS notification",
+  "untrusted-topic": "Inbound queue message came from another topic",
+} as const;
 
 type ParseInboundQueueMessageOptions = {
   body: string | undefined;
   topicArn: string;
 };
 
-// The queue policy admits only the configured topic; the topic check here
-// keeps a misrouted subscription from reaching the filer. SNS signatures are
-// not fetched: IAM on the queue is the trust boundary.
 export const parseInboundQueueMessage = ({
   body,
   topicArn,
@@ -88,38 +65,14 @@ export const parseInboundQueueMessage = ({
   InboundQueueNotification,
   InboundQueueMessageError
 > => {
-  if (body === undefined || body.length > MAX_QUEUE_MESSAGE_CHARS) {
-    return Result.err(
-      new InboundQueueMessageError({
-        message: "Inbound queue message has no bounded body",
-        reason: "oversized",
-      }),
-    );
-  }
-  const outer = parseJson(body);
-  if (outer.isErr()) {
-    return outer;
-  }
-  const envelope = v.safeParse(snsNotificationSchema, outer.value);
-  if (!envelope.success) {
-    return Result.err(
-      new InboundQueueMessageError({
-        message: "Inbound queue message is not an SNS notification",
-        reason: "invalid-envelope",
-      }),
-    );
-  }
-  if (envelope.output.TopicArn !== topicArn) {
-    return Result.err(
-      new InboundQueueMessageError({
-        message: "Inbound queue message came from another topic",
-        reason: "untrusted-topic",
-      }),
-    );
-  }
-  const inner = parseJson(envelope.output.Message);
+  const inner = parseSnsQueueBody({ body, topicArn });
   if (inner.isErr()) {
-    return inner;
+    return Result.err(
+      new InboundQueueMessageError({
+        message: ENVELOPE_REJECTION_MESSAGE[inner.error],
+        reason: inner.error,
+      }),
+    );
   }
   const kind = v.safeParse(sesNotificationKindSchema, inner.value);
   if (!kind.success) {
@@ -160,11 +113,11 @@ type InboundQueueDrainCounts = {
   setup: number;
   retry: number;
   poison: number;
-  deleteFailed: number;
-  releaseFailed: number;
 };
 
 type InboundQueueDrainSummary = InboundQueueDrainCounts & {
+  deleteFailed: number;
+  releaseFailed: number;
   batches: number;
   stoppedBecause: "drained" | "aborted" | "limitReached";
 };
@@ -202,115 +155,32 @@ export const drainInboundMailQueue = async ({
     setup: 0,
     retry: 0,
     poison: 0,
-    deleteFailed: 0,
-    releaseFailed: 0,
-  };
-  const deadline = Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS;
-
-  // Leases one batch. Batches are sequential: a lease taken before the
-  // previous batch finished would spend its visibility timeout waiting.
-  const receiveBatch = async () =>
-    await Result.tryPromise({
-      try: async () =>
-        await client.send(
-          new ReceiveMessageCommand({
-            QueueUrl: queueUrl,
-            MaxNumberOfMessages: MAX_MESSAGES_PER_BATCH,
-            WaitTimeSeconds: RECEIVE_WAIT_SECONDS,
-            VisibilityTimeout: VISIBILITY_TIMEOUT_SECONDS,
-            MessageSystemAttributeNames: ["ApproximateReceiveCount"],
-          }),
-          { abortSignal: signal },
-        ),
-      catch: (cause) =>
-        new InboundQueueReceiveError({
-          message: "Inbound mail queue could not be read",
-          cause,
-        }),
-    });
-
-  const remove = async (message: Message, messageId: string) => {
-    const deleted = await Result.tryPromise({
-      try: async () =>
-        await client.send(
-          new DeleteMessageCommand({
-            QueueUrl: queueUrl,
-            ReceiptHandle: message.ReceiptHandle,
-          }),
-          // Not the run signal: once a delivery is terminal, an abort must
-          // not turn its acknowledgement into a redelivery.
-          { abortSignal: AbortSignal.timeout(DELETE_TIMEOUT_MS) },
-        ),
-      catch: (cause) => cause,
-    });
-    if (deleted.isErr()) {
-      // The record is durable; redelivery converges as a duplicate.
-      counts.deleteFailed += 1;
-      logger.warn("inbound_mail.queue.delete_failed", {
-        "queue.delivery_id": messageId,
-        "error.type": errorTag(deleted.error),
-      });
-    }
   };
 
-  const releaseMessages = async (messages: readonly Message[]) => {
-    const released = await Result.tryPromise({
-      try: async () =>
-        await client.send(
-          new ChangeMessageVisibilityBatchCommand({
-            QueueUrl: queueUrl,
-            Entries: messages.map((message, index) => ({
-              Id: String(index),
-              ReceiptHandle: message.ReceiptHandle,
-              VisibilityTimeout: 0,
-            })),
-          }),
-          { abortSignal: AbortSignal.timeout(RELEASE_TIMEOUT_MS) },
-        ),
-      catch: (cause) => cause,
-    });
-    const failedIds = released.isErr()
-      ? messages.map((_, index) => String(index))
-      : released.value.Failed?.map(({ Id }) => Id);
-    // SQS omits `Failed` when every entry was released.
-    if (failedIds === undefined) {
-      return;
-    }
-    for (const failedId of failedIds) {
-      const message = messages.at(Number(failedId));
-      counts.releaseFailed += 1;
-      logger.warn("inbound_mail.queue.release_failed", {
-        "queue.delivery_id": message?.MessageId ?? "unknown",
-        "error.type": released.isErr()
-          ? errorTag(released.error)
-          : "SqsBatchEntryError",
-      });
-    }
-  };
-
-  const handle = async (message: Message) => {
-    const messageId = message.MessageId ?? "unknown";
-    const attempt = message.Attributes?.ApproximateReceiveCount ?? "unknown";
-    const parsed = parseInboundQueueMessage({ body: message.Body, topicArn });
+  const handle = async ({
+    body,
+    deliveryId,
+    receiveCount,
+  }: SnsQueueDelivery): Promise<SnsQueueDisposition> => {
+    const parsed = parseInboundQueueMessage({ body, topicArn });
     if (parsed.isErr()) {
       counts.poison += 1;
       const fields = sanitizeErrorAttributesForOutput({
-        "queue.delivery_id": messageId,
-        "queue.receive_count": attempt,
+        "queue.delivery_id": deliveryId,
+        "queue.receive_count": receiveCount,
         "error.reason": parsed.error.reason,
       });
       logger.error("inbound_mail.queue.poison", fields);
-      return;
+      return "keep";
     }
     const notification = parsed.value;
     switch (notification.type) {
       case "setup":
         counts.setup += 1;
         logger.info("inbound_mail.queue.setup_notification", {
-          "queue.delivery_id": messageId,
+          "queue.delivery_id": deliveryId,
         });
-        await remove(message, messageId);
-        return;
+        return "acknowledge";
       case "received":
         break;
       default:
@@ -321,13 +191,13 @@ export const drainInboundMailQueue = async ({
     if (outcome.isErr()) {
       counts.retry += 1;
       const fields = sanitizeErrorAttributesForOutput({
-        "queue.delivery_id": messageId,
-        "queue.receive_count": attempt,
+        "queue.delivery_id": deliveryId,
+        "queue.receive_count": receiveCount,
         "error.type": outcome.error._tag,
         "error.reason": outcome.error.reason,
       });
       logger.warn("inbound_mail.queue.retry", fields);
-      return;
+      return "keep";
     }
     // Outcomes are terminal: recipient filing/drop, or a prior raw deletion.
     for (const delivery of outcome.value) {
@@ -349,58 +219,34 @@ export const drainInboundMailQueue = async ({
           panic("Unhandled inbound delivery outcome");
       }
       logger.info("inbound_mail.queue.received", {
-        "queue.delivery_id": messageId,
+        "queue.delivery_id": deliveryId,
         "inbound_mail.outcome": delivery.status,
         ...(delivery.status === "dropped" && {
           "inbound_mail.drop_reason": delivery.reason,
         }),
       });
     }
-    await remove(message, messageId);
+    return "acknowledge";
   };
 
-  const summary = (
-    batches: number,
-    stoppedBecause: InboundQueueDrainSummary["stoppedBecause"],
-  ) => {
-    const result = { ...counts, batches, stoppedBecause };
-    logger.info("inbound_mail.queue.drained", result);
-    return Result.ok(result);
-  };
-
-  // Read through a call: the signal can abort during any await, so a
-  // narrowed `signal.aborted` would be stale.
-  const aborted = () => signal.aborted;
-
-  for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
-    if (aborted()) {
-      return summary(batch, "aborted");
-    }
-    if (Temporal.Now.instant().epochMilliseconds >= deadline) {
-      return summary(batch, "limitReached");
-    }
-    const received = await receiveBatch();
-    if (received.isErr()) {
-      if (aborted()) {
-        return summary(batch, "aborted");
-      }
-      return received;
-    }
-    // SQS omits Messages when a receive finds the queue empty.
-    const messages = received.value.Messages;
-    if (messages === undefined || messages.length === 0) {
-      return summary(batch, "drained");
-    }
-    for (const [index, message] of messages.entries()) {
-      // On abort, immediately re-offer only deliveries that have not started.
-      if (aborted()) {
-        await releaseMessages(messages.slice(index));
-        return summary(batch + 1, "aborted");
-      }
-      // Messages are filed one at a time so an abort leaves no delivery
-      // half-acknowledged.
-      await handle(message);
-    }
+  const drained = await drainSnsQueue({
+    client,
+    queueUrl,
+    visibilityTimeoutSeconds: VISIBILITY_TIMEOUT_SECONDS,
+    handle,
+    signal,
+    logger,
+    logPrefix: "inbound_mail.queue",
+  });
+  if (drained.isErr()) {
+    return Result.err(
+      new InboundQueueReceiveError({
+        message: "Inbound mail queue could not be read",
+        cause: drained.error.cause,
+      }),
+    );
   }
-  return summary(MAX_BATCHES_PER_RUN, "limitReached");
+  const result = { ...counts, ...drained.value };
+  logger.info("inbound_mail.queue.drained", result);
+  return Result.ok(result);
 };

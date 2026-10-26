@@ -504,7 +504,6 @@
         "@stll/portable-path": "workspace:*",
         "@stll/regex-set": "catalog:",
         "@stll/regex-set-wasm": "catalog:",
-        "@stll/scan-engine": "workspace:*",
         "@stll/sha256": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/ssr-kit": "workspace:^",
@@ -860,7 +859,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "5.8.0",
+      "version": "6.0.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1019,6 +1018,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/infosoud": {
@@ -1297,12 +1297,13 @@
       "name": "@stll/scan-engine",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/fetch": "workspace:*",
+        "@stll/fetch": "workspace:^",
         "better-result": "catalog:",
       },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "tsdown": "catalog:",
       },
     },
     "packages/scripts": {
@@ -1471,7 +1472,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.52.0",
+      "version": "0.52.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
