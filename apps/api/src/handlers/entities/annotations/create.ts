@@ -87,6 +87,11 @@ const bodySchema = v.union([
 
 const config = {
   contract: "patch",
+  contentDelivery: {
+    type: "none",
+    reason:
+      "Reads the file's extracted text to check quotes; returns the mark.",
+  },
   realtime: noResourceSetUpdates(
     "Document marks refresh through the document's own mark query; no listed resource set changes",
   ),
