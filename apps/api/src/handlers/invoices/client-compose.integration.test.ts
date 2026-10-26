@@ -6,6 +6,7 @@ import {
   BILLING_STATUS,
   contacts,
   featureEnrolments,
+  INVOICE_STATUS,
   invoiceLines,
   invoices,
   sellerProfiles,
@@ -15,8 +16,10 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
+import deleteInvoice from "@/api/handlers/invoices/delete";
 import readInvoice from "@/api/handlers/invoices/get";
 import deleteLine from "@/api/handlers/invoices/lines/delete";
+import transitionInvoice from "@/api/handlers/invoices/transition";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -45,6 +48,15 @@ const matters = [
 ];
 const matterIds = matters.map(({ workspaceId }) => workspaceId);
 const entryIds = matters.map(({ entryId }) => entryId);
+type InvoiceSource = (typeof matters)[number];
+// Fresh entries on the same two matters, one set per running-entry case.
+const runningCaseSources = (["delete", "void"] as const).map((operation) => ({
+  operation,
+  sources: matters.map(({ workspaceId }) => ({
+    workspaceId,
+    entryId: createSafeId<"timeEntry">(),
+  })),
+}));
 const sellerId = createSafeId<"sellerProfile">();
 const vatIds = [createSafeId<"vatRate">(), createSafeId<"vatRate">()];
 
@@ -109,7 +121,16 @@ beforeAll(async () => {
 afterAll(async () => {
   try {
     await db.delete(invoices).where(eq(invoices.clientId, clientId));
-    await db.delete(timeEntries).where(inArray(timeEntries.id, entryIds));
+    await db
+      .delete(timeEntries)
+      .where(
+        inArray(timeEntries.id, [
+          ...entryIds,
+          ...runningCaseSources.flatMap(({ sources }) =>
+            sources.map(({ entryId }) => entryId),
+          ),
+        ]),
+      );
     await db.delete(workspaces).where(inArray(workspaces.id, matterIds));
     await db.delete(contacts).where(eq(contacts.id, clientId));
     await db.delete(sellerProfiles).where(eq(sellerProfiles.id, sellerId));
@@ -149,9 +170,9 @@ const context = <TContext extends SafeHandlerLogContext>(
     promptCachingEnabled: false,
   });
 
-const create = async () => {
+const create = async (sources: readonly InvoiceSource[] = matters) => {
   await db.insert(timeEntries).values(
-    matters.map(({ entryId: id, workspaceId }, index) => ({
+    sources.map(({ entryId: id, workspaceId }, index) => ({
       id,
       organizationId: ids.orgA,
       workspaceId,
@@ -174,7 +195,7 @@ const create = async () => {
         currency: "CZK",
         sellerProfileId: sellerId,
         expectedTotalAmount: 49_200,
-        matters: matters.map(({ workspaceId, entryId }) => ({
+        matters: sources.map(({ workspaceId, entryId }) => ({
           workspaceId,
           timeEntryIds: [entryId],
           expenseIds: [],
@@ -248,4 +269,97 @@ describe("client invoice composition", () => {
       { invoiceId: null, status: "approved" },
     ]);
   });
+});
+
+describe("client invoice release and running time", () => {
+  const release = {
+    delete: async (invoiceId: SafeId<"invoice">) =>
+      await deleteInvoice.handler(
+        context(deleteInvoice.handler, undefined, {
+          invoiceId,
+          workspaceId: matterIds.at(0),
+        }),
+      ),
+    void: async (invoiceId: SafeId<"invoice">) =>
+      await transitionInvoice.handler(
+        context(
+          transitionInvoice.handler,
+          { action: "void" },
+          { invoiceId, workspaceId: matterIds.at(0) },
+        ),
+      ),
+  };
+
+  // The URL names the first matter, while the running entry sits on the
+  // second: the guard must cover every matter the invoice bills.
+  test.each(runningCaseSources)(
+    "$operation through one matter refuses another member's running entry on another matter",
+    async ({ operation, sources }) => {
+      const invoiceId = await create(sources);
+      const [first, second] = sources;
+      if (first === undefined || second === undefined) {
+        throw new Error("Expected two client invoice matters");
+      }
+      expect(second.workspaceId).not.toBe(matterIds.at(0));
+      if (operation === "void") {
+        await db
+          .update(invoices)
+          .set({
+            status: INVOICE_STATUS.FINALIZED,
+            invoiceNumber: `RUN-${invoiceId}`,
+          })
+          .where(eq(invoices.id, invoiceId));
+      }
+      await db
+        .update(timeEntries)
+        .set({
+          userId: ids.userA1,
+          timerStartedAt: new Date(Date.now() - 3 * 60_000),
+          timerStoppedAt: null,
+        })
+        .where(eq(timeEntries.id, second.entryId));
+      const state = async () =>
+        await Promise.all([
+          db.select().from(invoices).where(eq(invoices.id, invoiceId)),
+          db
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.invoiceId, invoiceId)),
+          db
+            .select()
+            .from(timeEntries)
+            .where(
+              inArray(
+                timeEntries.id,
+                sources.map(({ entryId }) => entryId),
+              ),
+            ),
+        ]);
+      const before = await state();
+      expect(
+        before[1].map(({ workspaceId }) => workspaceId).toSorted(),
+      ).toEqual([...matterIds].toSorted());
+      expect(before[2]).toContainEqual(
+        expect.objectContaining({
+          id: second.entryId,
+          invoiceId,
+          status: BILLING_STATUS.BILLED,
+        }),
+      );
+
+      try {
+        expect(await release[operation](invoiceId)).toMatchObject({
+          code: 409,
+          response: { code: "running_timer" },
+        });
+        expect(await state()).toEqual(before);
+      } finally {
+        // A member has one running timer at a time; end it for the next case.
+        await db
+          .update(timeEntries)
+          .set({ timerStartedAt: null })
+          .where(eq(timeEntries.id, second.entryId));
+      }
+    },
+  );
 });
