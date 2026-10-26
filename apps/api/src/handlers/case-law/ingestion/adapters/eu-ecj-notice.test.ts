@@ -1048,7 +1048,7 @@ describe("what the notice adds to a stored row", () => {
     if (outcome.type !== "parsed") {
       throw new TypeError(`Expected parsed, got ${outcome.type}`);
     }
-    expect(outcome.result.court).toBe("Civil Service Tribunal");
+    expect(outcome.result.court === "Civil Service Tribunal").toBe(true);
   });
 
   test("states the docket as the publisher does, without a letter it never had", async () => {
@@ -1074,11 +1074,11 @@ describe("what the notice adds to a stored row", () => {
     if (outcome.type !== "parsed") {
       throw new TypeError(`Expected parsed, got ${outcome.type}`);
     }
-    expect(outcome.result.caseNumber).toBe("128/22");
+    expect(outcome.result.caseNumber === "128/22").toBe(true);
     // A row an earlier release stored under the CELEX reading is still found.
-    expect(outcome.result.legacyCaseNumber).toBe("C-128/22");
+    expect(outcome.result.legacyCaseNumber === "C-128/22").toBe(true);
     const lettered = await decisionFrom(noticeEn);
-    expect(lettered.caseNumber).toBe("C-128/22");
+    expect(lettered.caseNumber === "C-128/22").toBe(true);
     expect(lettered.legacyCaseNumber).toBeUndefined();
   });
 
