@@ -9,6 +9,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
@@ -105,7 +106,7 @@ const createHandlerContext = ({
     request: new Request(`https://example.test/v1/tasks/${workspaceId}`, {
       method: "PUT",
     }),
-    route: "/v1/tasks/:workspaceId",
+    route: "/v1/tasks/:workspaceId" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
   });

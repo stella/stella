@@ -8,6 +8,7 @@ import { CASE_LAW_RESEARCH_ANSWER_STATES } from "@stll/api-contract";
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 
 import type { QuestionAnswer } from "@/features/case-law/research/question-columns.logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { resolveActionCapabilities } from "@/lib/organization/feature-access/action-capabilities.logic";
@@ -222,12 +223,14 @@ describe("shared AI column controls", () => {
           })}
         >
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <AiColumnSelectionAction
-              columns={3}
-              rows={5}
-              disabled={false}
-              onRun={() => undefined}
-            />
+            <FormattingProvider locale="en" timeZone="UTC">
+              <AiColumnSelectionAction
+                columns={3}
+                rows={5}
+                disabled={false}
+                onRun={() => undefined}
+              />
+            </FormattingProvider>
           </IntlProvider>
         </ActionCapabilitiesProvider>
       </QueryClientProvider>,

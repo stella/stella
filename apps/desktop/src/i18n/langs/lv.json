@@ -311,6 +311,7 @@
     "removeSourceAppExclusion": "Atkal saglabāt jaunus izgriezumus no <bdi>{source}</bdi>",
     "pause": "Apturēt tveršanu",
     "plainText": "Vienkāršs teksts",
+    "plainTextPreview": "Vienkārša teksta priekšskatījums",
     "retention": "Glabāt vēsturi",
     "retentionWeek": "Vienu nedēļu",
     "retentionMonth": "Vienu mēnesi",

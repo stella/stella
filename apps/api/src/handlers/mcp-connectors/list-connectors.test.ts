@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import listMcpConnectors from "@/api/handlers/mcp-connectors/list-connectors";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -124,7 +125,7 @@ test("lists shared authorization status in one connector query", async () => {
   };
   const context = asTestRaw<Context>({
     request: new Request("https://api.example.test/handler"),
-    route: "/v1/mcp-connectors",
+    route: "/v1/mcp/connectors" satisfies ApiRoutePath,
     safeDb: async (operation: (tx: unknown) => unknown) => {
       databaseOperations += 1;
       return Result.ok(await operation(chain));
