@@ -100,8 +100,7 @@ jobs:
           fi
 
           # A proposal already in the merge queue leaves it when the refresh
-          # pushes a new head, and under a merge hold the queue's required
-          # result refuses it, so disarming is what remains to do here.
+          # pushes a new head, so disarming is what remains to do here.
 
           gh pr merge "$armed_pr" --repo "$GITHUB_REPOSITORY" --disable-auto
 
@@ -137,15 +136,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number }}
           WRITTEN_HEAD: ${{ steps.removal-pr.outputs.commit-sha }}
-          MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
         run: |
           set -euo pipefail
-
-          if [[ -n "$MERGE_HOLD" ]]; then
-            echo "::notice::Automatic quarantine removal is held by STELLA_MERGE_HOLD."
-            echo "Automatic quarantine removal is held by STELLA_MERGE_HOLD." >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
 
           # refresh-pr may report no operation for an unchanged proposal.
           if [[ -z "$PR_NUMBER" ]]; then

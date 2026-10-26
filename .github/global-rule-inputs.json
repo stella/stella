@@ -74,7 +74,6 @@
     "scripts/check-lockfile-release-ages.test.ts",
     "scripts/check-lockfile-release-ages.ts",
     "scripts/check-lockfile-workspace-versions.ts",
-    "scripts/check-main-merge-hold.test.sh",
     "scripts/check-marketing-content.ts",
     "scripts/check-marketing-recordings.test.ts",
     "scripts/check-marketing-recordings.ts",

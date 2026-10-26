@@ -61,7 +61,7 @@ chmod +x "$fixture_root/gh"
 export PATH="$fixture_root:$PATH"
 export CALLS="$fixture_root/calls" GITHUB_STEP_SUMMARY="$fixture_root/summary"
 export GITHUB_REPOSITORY=stella/stella PRUNE_BRANCH=chore/prune-quarantine-excludes
-export PR_NUMBER='' MERGE_HOLD='' LOOKUP_NUMBER=42 QUEUE_STATUS=0 WRITTEN_HEAD=''
+export PR_NUMBER='' LOOKUP_NUMBER=42 QUEUE_STATUS=0 WRITTEN_HEAD=''
 export VIEW_HEAD=0123456789abcdef0123456789abcdef01234567
 export ARMED_NUMBER='' DISARM_STATUS=0
 
@@ -98,12 +98,8 @@ DISARM_STATUS=0
 PR_NUMBER=42
 run_step
 assert_calls $'view\nqueue:42'
-# A held proposal remains untouched, then is armed on the unchanged next run.
+# An unchanged proposal is looked up and armed.
 PR_NUMBER=''
-MERGE_HOLD=maintenance
-run_step
-assert_calls ''
-MERGE_HOLD=''
 run_step
 assert_calls $'lookup\nview\nqueue:42'
 # A vanished proposal cannot pass an empty number to the gate.

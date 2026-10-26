@@ -60,7 +60,7 @@ jobs:
 
   version:
     needs: gate
-    if: needs.gate.outputs.may-version == 'true' && vars.STELLA_MERGE_HOLD == ''
+    if: needs.gate.outputs.may-version == 'true'
     name: Maintain Version Packages PR
     permissions:
       contents: read

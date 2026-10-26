@@ -1501,10 +1501,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STAGING_WAKE_START_POLL_SECONDS",
   "STAGING_WAKE_READY_MINUTES",
   "STAGING_WAKE_READY_POLL_SECONDS",
-  // Dated-waiver healing: the private repository its fix tasks go to, and
-  // the merge hold that keeps it from arming removals.
+  // Dated-waiver healing: the private repository its fix tasks go to.
   "DATED_WAIVER_FIX_REPO",
-  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1732,7 +1730,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
-  "STELLA_MERGE_HOLD",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
