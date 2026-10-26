@@ -442,6 +442,7 @@ const discoverOAuthMetadataWithinDeadline = async (
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "MCP server did not expose protected resource metadata",
       }),
     );
@@ -459,6 +460,7 @@ const discoverOAuthMetadataWithinDeadline = async (
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "MCP authorization server metadata could not be discovered",
       }),
     );
@@ -785,6 +787,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message:
           "MCP authorization server does not support dynamic registration",
       }),
@@ -813,6 +816,7 @@ export const registerOAuthClient = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Failed to register stella with MCP authorization server",
         cause: response.error,
       }),
@@ -856,6 +860,7 @@ export const exchangeAuthorizationCode = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "MCP authorization response issuer does not match",
       }),
     );
@@ -891,6 +896,7 @@ export const exchangeAuthorizationCode = async ({
     return Result.err(
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Failed to exchange MCP authorization code",
         cause: token.error,
       }),
@@ -1095,6 +1101,7 @@ const discoverAuthorizationServer = async (
   return Result.err(
     new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "MCP authorization server metadata could not be discovered",
     }),
   );
@@ -1124,6 +1131,7 @@ const validateAuthorizationServerMetadata = async (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP authorization server metadata contains an unsafe URL",
           cause: validation.error,
         }),
