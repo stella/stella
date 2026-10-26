@@ -13,7 +13,7 @@ export default defineConfig({
       name: "scan-engine-worker-url",
       transform(code, id) {
         if (id.replaceAll("\\", "/") !== engineSourcePath) {
-          return;
+          return null;
         }
         const workerUrl =
           /new URL\(\s*(["'])scan-engine\.worker\.ts\1\s*,\s*import\.meta\.url\s*\)/u;
