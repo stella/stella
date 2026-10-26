@@ -48,6 +48,7 @@ import {
   HighlightedText,
   InlineContent,
   rangesForPiece,
+  READER_PROSE_CLASS,
   WrappedParagraphRun,
 } from "./document-ast-text";
 import type { TextAnchor } from "./document-ast-text";
@@ -273,7 +274,7 @@ const EditorialSupplementBody = ({
       ) : (
         <p
           className={cn(
-            "reader-justify",
+            READER_PROSE_CLASS,
             variant === "abstract" && "text-foreground-strong-muted",
           )}
           data-anchor={blockAnchorId}
@@ -592,6 +593,7 @@ const buildAnchorsByPieceId = ({
             decision: span.source.decision,
             citation: span.source,
             treatment: span.source.treatment,
+            blockId,
             children: marked,
           });
         },

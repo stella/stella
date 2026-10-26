@@ -1,6 +1,9 @@
+import { linkOptions } from "@tanstack/react-router";
+
 import { statuteActLabel } from "@stll/api-contract/statute-act-number";
 import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 
+import { yearDateRange } from "@/features/case-law/case-law-index-search.logic";
 import { decisionYear } from "@/features/case-law/citation-format";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
@@ -26,6 +29,7 @@ export const statuteLawCrumbTrailOf = ({
 >) => {
   const identity = statuteDocumentIdentity(eli);
   const label = statuteActLabel({ eli, title });
+  const year = identity.year === null ? null : Number(identity.year);
   return {
     kind: "statute",
     status,
@@ -36,12 +40,15 @@ export const statuteLawCrumbTrailOf = ({
     shortTitle: label.name,
     fullTitle: title,
     yearLink:
-      identity.year === null
+      year === null
         ? null
         : {
-            to: "/law/$country/statutes",
-            params: { country: toStatuteCountrySegment(country) },
-            search: { year: Number(identity.year) },
+            year,
+            link: linkOptions({
+              to: "/law/$country/statutes",
+              params: { country: toStatuteCountrySegment(country) },
+              search: { year },
+            }),
           },
   } as const;
 };
@@ -68,10 +75,20 @@ export const decisionLawCrumbTrailOf = ({
       name: court,
       abbreviation: courtAbbreviation,
       tier: courtTier,
-      link: { to: "/law/cases", search: { court } },
+      link: linkOptions({ to: "/law/cases", search: { court } }),
     },
+    // The year's span in the form the results page writes; `year` is only read
+    // there, for links made before the range existed.
     yearLink:
-      year === null ? null : { to: "/law/cases", search: { court, year } },
+      year === null
+        ? null
+        : {
+            year,
+            link: linkOptions({
+              to: "/law/cases",
+              search: { court, ...yearDateRange(String(year)) },
+            }),
+          },
     caseNumber,
     legalArea:
       typeof metadata["legalArea"] === "string" ? metadata["legalArea"] : null,
