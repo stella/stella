@@ -96,35 +96,35 @@ type ProviderRequest =
  */
 const sendProviderRequest = async (
   credentials: HostedUsageProviderApiCredentials,
-  request: ProviderRequest,
+  providerRequest: ProviderRequest,
 ): Promise<Response> => {
   const headers = {
     authorization: `Bearer ${credentials.apiKey}`,
     "Polar-Version": getHostedUsageProviderApiVersion(),
   };
   const init = (() => {
-    switch (request.method) {
+    switch (providerRequest.method) {
       case "POST":
         return {
-          method: request.method,
+          method: providerRequest.method,
           headers: { ...headers, "content-type": "application/json" },
-          body: JSON.stringify(request.body),
+          body: JSON.stringify(providerRequest.body),
           timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
         };
       case "DELETE":
         return {
-          method: request.method,
+          method: providerRequest.method,
           headers,
           timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
         };
       default:
-        request satisfies never;
+        providerRequest satisfies never;
         return panic("Unhandled provider request method");
     }
   })();
   return await fetchWithTimeout(
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- provider base URL from validated operator configuration (HOSTED_USAGE_PROVIDER_BASE_URL)
-    `${credentials.baseUrl}/v1/${request.path}`,
+    `${credentials.baseUrl}/v1/${providerRequest.path}`,
     init,
   );
 };
