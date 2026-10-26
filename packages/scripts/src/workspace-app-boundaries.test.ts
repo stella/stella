@@ -65,6 +65,8 @@ describe("workspace app boundaries", () => {
         'export { serverValue } from "../../api/src/server-value";',
         'const lazy = import("@server/lazy");',
         'const required = require("@stll/api/required");',
+        "const lazyTemplate = import(`@stll/api/lazy-template`);",
+        "const requiredTemplate = require(`@stll/api/required-template`);",
         'import type { ChatMessage } from "@/api/handlers/chat/types";',
         "const stringLiteral = 'import(\"@stll/api/ignored\")';",
         '// export { ignored } from "../../api/src/ignored";',
@@ -76,7 +78,7 @@ describe("workspace app boundaries", () => {
     );
     writeFileSync(
       path.join(rootDir, "apps/landing/src/page.astro"),
-      '---\nimport type { API } from "@stll/api/types";\n---\n<script type="application/json" set:html={JSON.stringify({})} /><script>import type { ScriptAPI } from "@stll/api/script-types";</script>',
+      '---\nimport type { API } from "@stll/api/types";\n---\n<script type="application/json" set:html={JSON.stringify({})} /><script type="application/ld+json">{"@context": "https://schema.org"}</script><script type="module">import type { ScriptAPI } from "@stll/api/script-types";</script>',
     );
 
     expect(await validateWorkspaceAppBoundaries(rootDir, LOCAL)).toEqual(
@@ -133,6 +135,16 @@ describe("workspace app boundaries", () => {
         {
           message:
             "source import @/api/handlers/chat/types targets apps/api; import shared code from packages/*",
+          path: "apps/web/src/contracts.ts",
+        },
+        {
+          message:
+            "source import @stll/api/lazy-template targets apps/api; import shared code from packages/*",
+          path: "apps/web/src/contracts.ts",
+        },
+        {
+          message:
+            "source import @stll/api/required-template targets apps/api; import shared code from packages/*",
           path: "apps/web/src/contracts.ts",
         },
       ]),

@@ -6,7 +6,7 @@ import { API } from "tsrs/unstable/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import { parseSource, walk } from "./syntax-tree";
+import { type Node, parseSource, walk } from "./syntax-tree";
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
 const DEPENDENCY_FIELDS = [
@@ -303,13 +303,39 @@ const readTsconfig = async (
 const edgeKey = (edge: AppBoundaryEdge) =>
   `${edge.kind}\u0000${edge.source}\u0000${edge.specifier}\u0000${edge.target}`;
 
+// A script without a type, or with a module or JavaScript type, runs as code;
+// any other type (JSON, JSON-LD, templates) is data and is not parsed.
+const isCodeScriptType = (attributes: string): boolean => {
+  const type = /\btype\s*=\s*["']?([^"'\s>]+)/iu.exec(attributes)?.at(1);
+  return (
+    type === undefined ||
+    /^(?:module|(?:text|application)\/(?:java|type)script)$/iu.test(type)
+  );
+};
+
+// A dynamic import or require of a string or a template without
+// substitutions names a static specifier.
+const staticSpecifier = (argument: Node | undefined): string | null => {
+  if (argument?.type === "Literal" && typeof argument.value === "string") {
+    return argument.value;
+  }
+  if (
+    argument?.type === "TemplateLiteral" &&
+    argument.expressions.length === 0
+  ) {
+    return argument.quasis.at(0)?.value.cooked ?? null;
+  }
+  return null;
+};
+
 const sourceImportSpecifiers = (sourcePath: string, text: string): string[] => {
   const sourceTexts = sourcePath.endsWith(".astro")
     ? [
         /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/u.exec(text)?.at(1) ?? "",
         ...text
-          .matchAll(/<script\b[^>]*?(?:\/>|>([\s\S]*?)<\/script\s*>)/giu)
-          .map((match) => match.at(1) ?? ""),
+          .matchAll(/<script\b([^>]*?)(?:\/>|>([\s\S]*?)<\/script\s*>)/giu)
+          .filter((match) => isCodeScriptType(match.at(1) ?? ""))
+          .map((match) => match.at(2) ?? ""),
       ]
     : [text];
   const importedFiles: string[] = [];
@@ -331,25 +357,18 @@ const sourceImportSpecifiers = (sourcePath: string, text: string): string[] => {
       }
     }
     walk(parsed.program, (node) => {
-      if (
-        node.type === "ImportExpression" &&
-        node.source.type === "Literal" &&
-        typeof node.source.value === "string"
-      ) {
-        importedFiles.push(node.source.value);
-      }
-      if (
+      let specifier: string | null = null;
+      if (node.type === "ImportExpression") {
+        specifier = staticSpecifier(node.source);
+      } else if (
         node.type === "CallExpression" &&
         node.callee.type === "Identifier" &&
         node.callee.name === "require"
       ) {
-        const argument = node.arguments.at(0);
-        if (
-          argument?.type === "Literal" &&
-          typeof argument.value === "string"
-        ) {
-          importedFiles.push(argument.value);
-        }
+        specifier = staticSpecifier(node.arguments.at(0));
+      }
+      if (specifier !== null) {
+        importedFiles.push(specifier);
       }
       if (
         node.type === "TSImportEqualsDeclaration" &&
