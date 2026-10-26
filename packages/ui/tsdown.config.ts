@@ -1,5 +1,6 @@
-import path from "node:path";
 import { defineConfig } from "tsdown";
+
+import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
 
 export default defineConfig({
   // One output module per source module: the package.json export map names
@@ -17,7 +18,7 @@ export default defineConfig({
   dts: {
     generator: "tsgo",
     tsgo: {
-      path: path.join(import.meta.dirname, "../../node_modules/tsrs/bin/tsrs"),
+      path: resolvePackageBinary(import.meta.url, "tsrs"),
     },
   },
   outDir: "dist",

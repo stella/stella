@@ -656,6 +656,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/ai-catalog": {
@@ -675,6 +676,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/analytics-config": {
@@ -700,6 +702,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/api-client": {
@@ -748,6 +751,7 @@
         "better-auth": "catalog:",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/boe": {
@@ -792,6 +796,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/catalogue": {
@@ -836,6 +841,7 @@
         "fast-check": "catalog:",
         "react": "catalog:react19",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "@base-ui/react": "^1.7.0",
@@ -927,6 +933,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/country-codes": {
@@ -994,6 +1001,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/errors": {
@@ -1382,6 +1390,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/stable-stringify": {
@@ -1404,6 +1413,7 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/template-conditions": {
@@ -1420,6 +1430,7 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
     },
     "packages/template-packs": {
@@ -1499,6 +1510,7 @@
         "react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
         "vite": "catalog:",
       },
       "peerDependencies": {
@@ -1580,6 +1592,7 @@
         "react-dom": "catalog:react19",
         "tailwindcss": "catalog:",
         "tsdown": "catalog:",
+        "tsrs": "catalog:",
       },
       "peerDependencies": {
         "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
