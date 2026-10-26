@@ -224,7 +224,6 @@
     "skillHistory.statusProposed",
     "skillHistory.statusRejected",
     "styleSets.defaultBadge",
-    "styleSets.newDocument",
     "success.documentCreated",
     "tasks.activity",
     "tasks.dueDate",
@@ -258,7 +257,6 @@
     "workspaces.filters.noMatches",
     "workspaces.filters.to",
     "workspaces.members.noMembersFound",
-    "workspaces.newDocument",
     "workspaces.newFolder",
     "workspaces.overview.activity.actorActions.cancelled",
     "workspaces.overview.activity.actorActions.created",
@@ -934,6 +932,12 @@
     "workspaces.parties.personalLabel": [
       "es"
     ],
+    "workspaces.pdf.selection.pageLocator": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -1195,7 +1199,6 @@
     "workspaces.infosoud.statusDate",
     "workspaces.infosoud.validTo",
     "workspaces.lockMatter",
-    "workspaces.mattersCount",
     "workspaces.members.alreadyMember",
     "workspaces.members.cannotRemoveLast",
     "workspaces.noMatters",

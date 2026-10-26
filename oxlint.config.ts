@@ -425,6 +425,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-person-select.fixture.tsx", [
+    "no-person-select/no-person-select",
+  ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
@@ -767,6 +770,15 @@ const webDatePickerImport = {
   ],
   message:
     "Use '@/components/date-picker-popover' so locale labels are injected.",
+};
+
+// use-intl's formatter formats in the UI language; FormattingProvider's
+// formatter applies the reader's region, calendar, numbering and week start.
+const webUseIntlFormatterImport = {
+  name: "use-intl",
+  importNames: ["useFormatter"],
+  message:
+    "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
 };
 
 const apiSafeIdBrandingImport = {
@@ -1139,10 +1151,6 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
-        {
-          files: "packages/mcp-apps/**",
-          use: "packages/mcp-apps/src/shared/style.css",
-        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1740,6 +1748,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-person-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -1763,6 +1772,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
+    "./.oxlint-plugins/query-invalidation-scope.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -1917,6 +1927,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
+    "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
@@ -1924,6 +1935,8 @@ const config = defineConfig({
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-raw-browser-storage.ts",
+    "./.oxlint-plugins/no-raw-history-state.ts",
+    "./.oxlint-plugins/no-literal-view-id.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -2588,6 +2601,17 @@ const config = defineConfig({
       ],
       rules: {
         "require-loader-prefetch/require-loader-prefetch": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/query-invalidation-scope.fixture.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.ts",
+        "apps/web/src/lib/workspaces/mutations/entities.logic.ts",
+        "apps/web/src/lib/workspaces/queries/entities.ts",
+      ],
+      rules: {
+        "query-invalidation-scope/query-invalidation-scope": "error",
       },
     },
     {
@@ -3318,6 +3342,28 @@ const config = defineConfig({
       },
     },
     {
+      // In-app back navigation reads the router's history, never the
+      // browser's state or length; the router setup is the one owner.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-history-state.fixture.ts",
+      ],
+      rules: {
+        "no-raw-history-state/no-raw-history-state": "error",
+      },
+    },
+    {
+      // The default `$viewId` slug lives in its owner; navigations keep the
+      // view on screen or name the owner's constant.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-literal-view-id.fixture.tsx",
+      ],
+      rules: {
+        "no-literal-view-id/no-literal-view-id": "error",
+      },
+    },
+    {
       // Persisted-storage reads: scoped to apps/web, the only surface that
       // reads localStorage/sessionStorage. The helper module itself is the
       // one place a raw JSON.parse on a persisted string is intentional.
@@ -3528,6 +3574,18 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-file-input/no-raw-file-input": "error",
+      },
+    },
+    {
+      // A person is chosen through MemberCombobox, which searches members by
+      // name and email as people type. A Select over members cannot be
+      // searched, so a long list turns into scrolling.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-person-select.fixture.tsx",
+      ],
+      rules: {
+        "no-person-select/no-person-select": "error",
       },
     },
     {
@@ -3986,6 +4044,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4022,6 +4081,7 @@ const config = defineConfig({
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4228,6 +4288,14 @@ const config = defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-network-in-transaction.fixture.ts",
+      ],
+      rules: {
+        "no-network-in-transaction/no-network-in-transaction": "error",
+      },
+    },
+    {
       // The locale-injecting wrapper around the UI date picker: the one web
       // module that has to import the primitive it wraps. Every other
       // apps/web import restriction still applies, so they are restated here.
@@ -4242,6 +4310,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4270,6 +4339,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -4306,6 +4376,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4353,6 +4424,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -4398,6 +4470,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -4972,6 +5045,7 @@ const config = defineConfig({
       ],
       rules: {
         "no-network-await-in-loop/no-network-await-in-loop": "error",
+        "no-network-in-transaction/no-network-in-transaction": "error",
       },
     },
     {

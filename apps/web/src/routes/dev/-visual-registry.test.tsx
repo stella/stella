@@ -57,7 +57,9 @@ describe("registered visual fixtures", () => {
     test(`chat history renders every anchored state in ${locale}`, () => {
       const html = renderToStaticMarkup(
         <IntlProvider locale={locale} messages={messages} timeZone="UTC">
-          <ChatHistoryDecisionPlayground />
+          <FormattingProvider locale={locale} timeZone="UTC">
+            <ChatHistoryDecisionPlayground />
+          </FormattingProvider>
         </IntlProvider>,
       );
       expect(html).toContain('data-playground-section="chat-history-decision"');

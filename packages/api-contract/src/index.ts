@@ -79,6 +79,7 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,

@@ -507,6 +507,24 @@
     "addEntry": "Přidat záznam",
     "amount": "Částka",
     "amountMustBePositive": "Částka musí být vyšší než nula",
+    "approval": {
+      "approveSelected": "Schválit {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamů}}",
+      "empty": "Ve spisu nic nečeká na schválení.",
+      "failed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+      "myTime": "Můj čas",
+      "refusals": {
+        "invalidEntry": "Doplňte popis a zkontrolujte datum práce, pak záznam schvalte.",
+        "notApprover": "Záznam může schválit jen jeho přiřazený schvalovatel nebo správce.",
+        "notFound": "Tento záznam už neexistuje. Obnovte seznam.",
+        "runningTimer": "Před schválením záznamu zastavte běžící časovač.",
+        "unpriced": "Záznam nemá sazbu. Nastavte pro tento spis sazbu a pak záznam schvalte.",
+        "wrongStatus": "Tento záznam už není koncept. Obnovte seznam."
+      },
+      "returnComment": "Důvod vrácení",
+      "selectEntry": "Vybrat záznam",
+      "timeEntries": "Časové záznamy",
+      "title": "Schvalování"
+    },
     "approve": "Schválit",
     "approveSelected": "Schválit vybrané",
     "batchActions": "Hromadné akce",
@@ -594,6 +612,7 @@
       "openInvoice": "Otevřít fakturu",
       "otherCurrency": "{count, plural, one {# položka je vedena} few {# položky jsou vedeny} many {# položky je vedeno} other {# položek je vedeno}} v jiné měně než {currency} a {count, plural, one {zůstává} few {zůstávají} many {zůstává} other {zůstává}} k vyfakturování zvlášť.",
       "outsideScope": "Není předmětem daně v tuzemsku, 0 %",
+      "pendingApprovals": "{count, plural, one {Na schválení čeká # položka} few {Na schválení čekají # položky} many {Na schválení čeká # položky} other {Na schválení čeká # položek}}. Zkontrolovat schválení.",
       "rate": "Sazba",
       "readyDescription": "Vystavením se faktuře přidělí další číslo z vaší číselné řady a faktura se uzamkne. Koncept lze dál upravovat.",
       "readyTitle": "Připraveno k vystavení",
@@ -1486,7 +1505,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všechny modely ({count, number})",
+      "allModels": "Všechny modely",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod nejlepšími kompromisy",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "nebo nám napište na",
       "viewDocumentation": "Zobrazit dokumentaci"
     },
-    "enterKey": "↵",
     "error": "Chyba",
     "expenses": "Výdaje",
     "export": {
@@ -2205,10 +2223,12 @@
     "scrollToTop": "Posunout nahoru",
     "search": "Hledat...",
     "searchIn": "Hledat v",
+    "searchMembers": "Hledat členy…",
     "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte roli",
     "selectAll": "Vybrat vše",
     "selectDate": "Vybrat datum…",
+    "selected": "Vybráno",
     "sessions": "Sezení",
     "settings": "Nastavení",
     "showAll": "Zobrazit vše",
@@ -4770,6 +4790,7 @@
     "modelError": "Model nedokázal tuto odpověď dokončit.",
     "networkError": "Spojení bylo přerušeno. Zkuste to znovu.",
     "regenerate": "Vygenerovat odpověď znovu",
+    "selectionError": "Vyberte text ze samotného rozhodnutí.",
     "send": "Odeslat doplňující otázku",
     "share": "Sdílet s týmem",
     "timeoutError": "Vypršel časový limit pro odpověď. Zkuste to znovu.",
@@ -5359,7 +5380,7 @@
     "importDescription": "Styly se extrahují do nového DOCX bez obsahu.",
     "importTitle": "Importovat sadu stylů",
     "loadFailed": "Sady stylů se nepodařilo načíst",
-    "newDocument": "Nový dokument",
+    "newDocument": "Nový dokument DOCX",
     "pickerDescription": "Zvolte systém formátování nového souboru.",
     "renameTitle": "Přejmenovat sadu stylů",
     "replace": "Nahradit zdroj",
@@ -5643,7 +5664,7 @@
     "moveToMatter": "Uložit do spisu",
     "moveToMatterAnyway": "Přesto uložit",
     "myDefaultLookupFormat": "Moje výchozí",
-    "newFromTemplate": "Nový dokument ze vzoru",
+    "newFromTemplate": "Nový dokument DOCX ze vzoru",
     "newFromTemplateFillHint": "Vyplňte pole; dokument se vytvoří v tomto spisu.",
     "newTemplate": "Nový vzor",
     "noTemplates": "Zatím žádné vzory",
@@ -6014,6 +6035,7 @@
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",
+        "editInApplication": "Upravit v aplikaci <bdi>{application}</bdi>",
         "editLocallyPrompt": "Upravte tento soubor lokálně a synchronizujte změny se stellou.",
         "forceRelease": "Vynutit uvolnění",
         "notOpenedDescription": "stella desktop nepotvrdil otevření aplikace <bdi>{application}</bdi>. Spusťte stella desktop a zkuste to znovu.",
@@ -6037,13 +6059,15 @@
         "alreadyInstalled": "Už nainstalováno? Připojit",
         "connect": "Připojit stella desktop",
         "connected": "stella desktop je připojený",
+        "download": "Stáhnout stella desktop",
         "editNone": "Stáhněte stella desktop a upravte tento soubor",
         "editOutdated": "Aktualizujte stella desktop a upravujte",
         "editReason": "Úpravy na počítači otevírají soubor v aplikaci ve vašem počítači přes stella desktop.",
         "signCurrent": "Podepsat ve stella desktop",
         "signNone": "Stáhněte stella desktop a podepište toto PDF",
         "signOutdated": "Aktualizujte stella desktop a podepisujte",
-        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop."
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop.",
+        "update": "Aktualizovat stella desktop"
       },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
@@ -6056,8 +6080,10 @@
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
       "ocrAlreadyProcessed": "Rozpoznávání textu již bylo dokončeno",
+      "ocrBatchHelp": "Dokumenty ve frontě se zpracují v příští dávce OCR.",
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
-      "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
+      "ocrQueued": "Rozpoznávání textu bylo zařazeno do fronty",
+      "ocrQueuedForBatch": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Podepisování ve stella desktop už probíhá",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
@@ -6114,6 +6140,7 @@
         "waitingDescription": "Vyberte ve stella desktop podpisový certifikát a podepište toto PDF.",
         "waitingTitle": "Čeká se na stella desktop"
       },
+      "queueForOcr": "Zařadit do fronty OCR",
       "rateLimited": "Omezení rychlosti; pokračování za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Co udělat se souborem {fileName}",
@@ -6125,7 +6152,6 @@
       "removeMetadata": "Odebrat metadata dokumentu",
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům}}",
       "retryFailed": "Opakovat {count, plural, one {# soubor} few {# soubory} other {# souborů}}",
-      "runOcr": "Zařadit OCR do fronty",
       "scrubFailed": "Metadata tohoto souboru se nepodařilo odstranit, proto se nic nestáhlo",
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo}} z {total, number}",
       "uploadedSuccessfully": "Soubory úspěšně nahrány",
@@ -6204,8 +6230,7 @@
         "lead": "Vedoucí",
         "leadActive": "Vedoucí",
         "leadInactive": "Nastavit vedoucího",
-        "noLead": "Bez vedoucího",
-        "searchMembers": "Hledat členy…"
+        "noLead": "Bez vedoucího"
       },
       "to": "Do"
     },
@@ -6267,6 +6292,7 @@
       "deleteAll": "Smazat vše",
       "deleteAllConfirm": "Smazat všechny {count} položky ve sloupci „{column}“?",
       "hideColumn": "Skrýt sloupec",
+      "moveFailed": "{failed, plural, one {# z {total} položek se nepodařilo přesunout.} few {# z {total} položek se nepodařilo přesunout.} other {# z {total} položek se nepodařilo přesunout.}}",
       "readOnlyGrouping": "Toto seskupení je jen pro čtení",
       "selectPropertyHint": "Vyberte vlastnost pro seskupení v panelu nástrojů",
       "uploadDocument": "Nahrát dokument",
@@ -6285,10 +6311,10 @@
       "addMember": "Přidat do spisu",
       "addMemberDescription": "Vyberte existujícího člena týmu, kterého chcete přidat k tomuto spisu",
       "alreadyMember": "Uživatel je již členem",
+      "alreadyOnMatter": "Již je v tomto spisu",
       "cannotRemoveLast": "Nelze odebrat posledního člena",
       "noMembersFound": "Nebyli nalezeni žádní členové",
-      "removeMemberConfirm": "Odebrat tohoto člena ze spisu?",
-      "selectMember": "Vybrat člena"
+      "removeMemberConfirm": "Odebrat tohoto člena ze spisu?"
     },
     "newDocument": "Nový dokument",
     "newFolder": "Nová složka",
@@ -6326,7 +6352,6 @@
           "approvedBy": "Schválil(a)",
           "channel": "Kanál",
           "dateTime": "Datum a čas",
-          "eventId": "ID události",
           "notAvailable": "Není k dispozici",
           "openTarget": "Otevřít položku",
           "runId": "ID běhu",
@@ -6413,6 +6438,7 @@
       "addParty": "Přidat stranu",
       "changeClient": "Změnit klienta",
       "client": "Klient",
+      "movedToClient": "Spis <bdi>{matterName}</bdi> přesunut ke klientovi <bdi>{clientName}</bdi>",
       "noClient": "Žádný klient nepřiřazen",
       "noClientOptional": "Bez klienta (volitelné)",
       "noParties": "K tomuto spisu nejsou přidány žádné strany.",
@@ -6431,7 +6457,9 @@
       "personalLabel": "Osobní",
       "promoteCta": "Povýšit na klientský spis",
       "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
+      "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude přidělen klientovi <bdi>{clientName}</bdi> a sdílen s týmem. Na osobní ho už nepůjde vrátit.",
       "promotedSuccess": "Spis povýšen",
+      "recentClients": "Nedávní klienti",
       "removeClient": "Odebrat klienta",
       "removeParty": "Odebrat stranu",
       "removePartyConfirm": "Opravdu chcete odebrat tuto stranu ze spisu?",
@@ -6506,6 +6534,11 @@
       },
       "passwordLabel": "Zadejte heslo PDF",
       "previousPage": "Předchozí strana",
+      "selection": {
+        "explainPassagePrompt": "Vysvětli tuto pasáž z {citation}:\n\n„{quote}“",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Zobrazit původní stránky",
       "unlock": "Odemknout"
     },
@@ -6643,6 +6676,12 @@
     "referenceTaken": "Toto referenční číslo je již použito",
     "sections": {
       "parties": "Strany"
+    },
+    "switcher": {
+      "searchPlaceholder": "Najít spis…",
+      "trigger": "Přepnout spis",
+      "viewAll": "Zobrazit všechny spisy",
+      "viewAllForClient": "Zobrazit všechny spisy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Odstranit označení",

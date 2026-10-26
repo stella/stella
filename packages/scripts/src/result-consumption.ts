@@ -1,7 +1,14 @@
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import * as ts from "tsrs/unstable/ast";
+import {
+  type Checker,
+  IndexKind,
+  type Program,
+  type Type,
+} from "tsrs/unstable/async";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
@@ -11,6 +18,18 @@ import {
   ownsCodeCheckPath,
 } from "./code-quality-partition";
 import { createProgram } from "./typescript-program";
+
+const asyncSome = async <T>(
+  values: readonly T[],
+  predicate: (value: T) => Promise<boolean>,
+): Promise<boolean> => {
+  for (const value of values) {
+    if (await predicate(value)) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const BETTER_RESULT_PACKAGE = `${path.sep}node_modules${path.sep}better-result${path.sep}`;
 const RESULT_VARIANT_STATUS = new Map([
@@ -35,21 +54,32 @@ export type ResultConsumptionDiagnostic = {
 };
 
 type ScanProgramOptions = {
-  readonly program: ts.Program;
+  readonly program: Program;
+  readonly checker: Checker;
   readonly repositoryRoot: string;
   readonly sourceFiles?: ReadonlySet<string>;
 };
 
-export const scanResultConsumption = ({
+export const scanResultConsumption = async ({
   program,
+  checker,
   repositoryRoot,
   sourceFiles,
-}: ScanProgramOptions): ResultConsumptionDiagnostic[] => {
-  const checker = program.getTypeChecker();
+}: ScanProgramOptions): Promise<ResultConsumptionDiagnostic[]> => {
   const diagnostics: ResultConsumptionDiagnostic[] = [];
   const reportedDiscardedExpressions = new Set<ts.Expression>();
 
-  for (const sourceFile of program.getSourceFiles()) {
+  for (const fileName of await program.getSourceFileNames()) {
+    if (
+      !isProductSourcePath(repoRelativePath(repositoryRoot, fileName)) ||
+      (sourceFiles !== undefined && !sourceFiles.has(fileName))
+    ) {
+      continue;
+    }
+    const sourceFile = await program.getSourceFile(fileName);
+    if (sourceFile === undefined) {
+      continue;
+    }
     if (
       !isProductSourceFile(sourceFile, repositoryRoot) ||
       (sourceFiles !== undefined && !sourceFiles.has(sourceFile.fileName))
@@ -73,9 +103,9 @@ export const scanResultConsumption = ({
       );
     };
 
-    const visit = (node: ts.Node): void => {
+    const inspect = async (node: ts.Node): Promise<void> => {
       if (ts.isExpressionStatement(node)) {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: node.expression,
           report: reportDiscardedResult,
@@ -85,7 +115,7 @@ export const scanResultConsumption = ({
       if (isCommaExpression(node)) {
         // A comma expression always discards its non-final operand, even when
         // the surrounding expression is assigned, returned, or passed on.
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: node.left,
           report: reportDiscardedResult,
@@ -95,11 +125,11 @@ export const scanResultConsumption = ({
       if (
         (ts.isPropertyAccessExpression(node) ||
           ts.isElementAccessExpression(node)) &&
-        !isConsumedInlineContainerMethod(node, checker)
+        !(await isConsumedInlineContainerMethod(node, checker))
       ) {
         // Constructing an ephemeral container evaluates every entry, even
         // when the selected value is retained by an assignment or return.
-        inspectDiscardedContainerSelection({
+        await inspectDiscardedContainerSelection({
           checker,
           expression: node,
           report: reportDiscardedResult,
@@ -109,7 +139,7 @@ export const scanResultConsumption = ({
       if (ts.isCallExpression(node)) {
         const atSelection = inlineArrayAtSelection(node);
         if (atSelection !== null) {
-          inspectDiscardedContainerSelection({
+          await inspectDiscardedContainerSelection({
             checker,
             expression: atSelection.callee,
             report: reportDiscardedResult,
@@ -121,7 +151,10 @@ export const scanResultConsumption = ({
         }
       }
 
-      if (ts.isCallExpression(node) && isUnwrapWithoutMessage(node, checker)) {
+      if (
+        ts.isCallExpression(node) &&
+        (await isUnwrapWithoutMessage(node, checker))
+      ) {
         diagnostics.push(
           createDiagnostic({
             node,
@@ -132,11 +165,16 @@ export const scanResultConsumption = ({
           }),
         );
       }
-
-      ts.forEachChild(node, visit);
     };
-
+    const nodes: ts.Node[] = [];
+    const visit = (node: ts.Node): void => {
+      nodes.push(node);
+      node.forEachChild(visit);
+    };
     visit(sourceFile);
+    for (const node of nodes) {
+      await inspect(node);
+    }
   }
 
   return diagnostics;
@@ -205,28 +243,28 @@ const unwrapDiscardedExpression = (
 };
 
 type InspectDiscardedExpressionOptions = {
-  readonly checker: ts.TypeChecker;
+  readonly checker: Checker;
   readonly expression: ts.Expression;
   readonly report: (expression: ts.Expression) => void;
 };
 
-const inspectDiscardedExpression = ({
+const inspectDiscardedExpression = async ({
   checker,
   expression: candidate,
   report,
-}: InspectDiscardedExpressionOptions): void => {
+}: InspectDiscardedExpressionOptions): Promise<void> => {
   const expression = unwrapDiscardedExpression(candidate);
   if (isAssignmentExpression(expression)) {
     return;
   }
 
   if (isCommaExpression(expression)) {
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.left,
       report,
     });
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.right,
       report,
@@ -235,12 +273,12 @@ const inspectDiscardedExpression = ({
   }
 
   if (isLogicalExpression(expression)) {
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.left,
       report,
     });
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.right,
       report,
@@ -249,17 +287,17 @@ const inspectDiscardedExpression = ({
   }
 
   if (ts.isConditionalExpression(expression)) {
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.condition,
       report,
     });
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.whenTrue,
       report,
     });
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: expression.whenFalse,
       report,
@@ -267,33 +305,25 @@ const inspectDiscardedExpression = ({
     return;
   }
 
-  if (ts.isCommaListExpression(expression)) {
-    for (const element of expression.elements) {
-      inspectDiscardedExpression({
-        checker,
-        expression: element,
-        report,
-      });
-    }
-    return;
-  }
-
   if (ts.isObjectLiteralExpression(expression)) {
     for (const property of expression.properties) {
       if (ts.isPropertyAssignment(property)) {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: property.initializer,
           report,
         });
-      } else if (ts.isShorthandPropertyAssignment(property)) {
-        inspectDiscardedExpression({
+      } else if (
+        ts.isShorthandPropertyAssignment(property) &&
+        ts.isIdentifier(property.name)
+      ) {
+        await inspectDiscardedExpression({
           checker,
           expression: property.name,
           report,
         });
       } else if (ts.isSpreadAssignment(property)) {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: property.expression,
           report,
@@ -306,7 +336,7 @@ const inspectDiscardedExpression = ({
   if (ts.isArrayLiteralExpression(expression)) {
     for (const element of expression.elements) {
       if (!ts.isOmittedExpression(element)) {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: ts.isSpreadElement(element)
             ? element.expression
@@ -320,7 +350,7 @@ const inspectDiscardedExpression = ({
 
   if (ts.isTemplateExpression(expression)) {
     for (const { expression: interpolation } of expression.templateSpans) {
-      inspectDiscardedExpression({
+      await inspectDiscardedExpression({
         checker,
         expression: interpolation,
         report,
@@ -333,7 +363,7 @@ const inspectDiscardedExpression = ({
     ts.isPropertyAccessExpression(expression) ||
     ts.isElementAccessExpression(expression)
   ) {
-    const handledInlineSelection = inspectDiscardedContainerSelection({
+    const handledInlineSelection = await inspectDiscardedContainerSelection({
       checker,
       expression,
       includeSelected: true,
@@ -349,17 +379,17 @@ const inspectDiscardedExpression = ({
     if (
       (ts.isPropertyAccessExpression(callee) ||
         ts.isElementAccessExpression(callee)) &&
-      !isCollectionCallbackInvocation(expression, callee, checker)
+      !(await isCollectionCallbackInvocation(expression, callee, checker))
     ) {
       const atSelection = inlineArrayAtSelection(expression);
       if (atSelection === null) {
-        inspectDiscardedContainerSelection({
+        await inspectDiscardedContainerSelection({
           checker,
           expression: callee,
           report,
         });
       } else {
-        inspectDiscardedContainerSelection({
+        await inspectDiscardedContainerSelection({
           checker,
           expression: callee,
           report,
@@ -369,7 +399,12 @@ const inspectDiscardedExpression = ({
     }
   }
 
-  if (isBetterResultValueType(checker, checker.getTypeAtLocation(expression))) {
+  if (
+    await isBetterResultValueType(
+      checker,
+      await checker.getTypeAtLocation(expression),
+    )
+  ) {
     report(expression);
   }
 };
@@ -389,7 +424,7 @@ const containerSelection = (
   if (ts.isNumericLiteral(argument)) {
     return { kind: "index", value: Number(argument.text) };
   }
-  if (ts.isStringLiteralLike(argument)) {
+  if (ts.isStringLiteralLikeNode(argument)) {
     const numericIndex = Number(argument.text);
     return Number.isInteger(numericIndex) &&
       String(numericIndex) === argument.text
@@ -410,7 +445,7 @@ const propertyName = (property: ts.ObjectLiteralElementLike): string | null => {
     return null;
   }
   const name = property.name;
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLikeNode(name)) {
     return name.text;
   }
   return ts.isNumericLiteral(name) ? name.text : null;
@@ -451,7 +486,7 @@ const staticObjectProvider = (
   return { kind: "absent" };
 };
 
-const inspectDiscardedObjectEntries = ({
+const inspectDiscardedObjectEntries = async ({
   checker,
   object,
   report,
@@ -459,19 +494,22 @@ const inspectDiscardedObjectEntries = ({
 }: InspectDiscardedExpressionOptions & {
   readonly object: ts.ObjectLiteralExpression;
   readonly retainedNode: ts.Node | undefined;
-}): void => {
+}): Promise<void> => {
   for (const property of object.properties) {
     if (ts.isPropertyAssignment(property)) {
       if (property.initializer !== retainedNode) {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: property.initializer,
           report,
         });
       }
-    } else if (ts.isShorthandPropertyAssignment(property)) {
+    } else if (
+      ts.isShorthandPropertyAssignment(property) &&
+      ts.isIdentifier(property.name)
+    ) {
       if (property.name !== retainedNode) {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: property.name,
           report,
@@ -480,7 +518,7 @@ const inspectDiscardedObjectEntries = ({
     } else if (ts.isSpreadAssignment(property)) {
       const spread = unwrapDiscardedExpression(property.expression);
       if (ts.isObjectLiteralExpression(spread)) {
-        inspectDiscardedObjectEntries({
+        await inspectDiscardedObjectEntries({
           checker,
           expression: spread,
           object: spread,
@@ -488,7 +526,7 @@ const inspectDiscardedObjectEntries = ({
           retainedNode,
         });
       } else {
-        inspectDiscardedExpression({
+        await inspectDiscardedExpression({
           checker,
           expression: property.expression,
           report,
@@ -498,7 +536,7 @@ const inspectDiscardedObjectEntries = ({
   }
 };
 
-const inspectDiscardedContainerSelection = ({
+const inspectDiscardedContainerSelection = async ({
   checker,
   expression,
   report,
@@ -508,7 +546,7 @@ const inspectDiscardedContainerSelection = ({
   readonly expression: ts.PropertyAccessExpression | ts.ElementAccessExpression;
   readonly includeSelected?: boolean;
   readonly selectionOverride?: ContainerSelection;
-}): boolean => {
+}): Promise<boolean> => {
   const host = unwrapDiscardedExpression(expression.expression);
   const parentAtSelection = ts.isCallExpression(expression.parent)
     ? inlineArrayAtSelection(expression.parent)
@@ -531,7 +569,7 @@ const inspectDiscardedContainerSelection = ({
     if (provider.kind === "opaque") {
       return true;
     }
-    inspectDiscardedObjectEntries({
+    await inspectDiscardedObjectEntries({
       checker,
       expression: host,
       object: host,
@@ -552,7 +590,7 @@ const inspectDiscardedContainerSelection = ({
     ) {
       continue;
     }
-    inspectDiscardedExpression({
+    await inspectDiscardedExpression({
       checker,
       expression: ts.isSpreadElement(element) ? element.expression : element,
       report,
@@ -616,11 +654,11 @@ const inlineArrayAtSelection = (
   };
 };
 
-const isCollectionCallbackInvocation = (
+const isCollectionCallbackInvocation = async (
   call: ts.CallExpression,
   callee: ts.PropertyAccessExpression | ts.ElementAccessExpression,
-  checker: ts.TypeChecker,
-): boolean => {
+  checker: Checker,
+): Promise<boolean> => {
   const host = unwrapDiscardedExpression(callee.expression);
   if (!ts.isArrayLiteralExpression(host) || call.arguments.length === 0) {
     return false;
@@ -644,12 +682,14 @@ const isCollectionCallbackInvocation = (
   if (parameter === undefined || !ts.isIdentifier(parameter)) {
     return false;
   }
-  const parameterSymbol = checker.getSymbolAtLocation(parameter);
+  const parameterSymbol = await checker.getSymbolAtLocation(parameter);
   if (parameterSymbol === undefined) {
     return false;
   }
 
-  const isTerminalConsume = (candidate: ts.Expression): boolean => {
+  const isTerminalConsume = async (
+    candidate: ts.Expression,
+  ): Promise<boolean> => {
     const expression = unwrapDiscardedExpression(candidate);
     if (!ts.isCallExpression(expression)) {
       return false;
@@ -664,7 +704,7 @@ const isCollectionCallbackInvocation = (
     const consumedValue = unwrapDiscardedExpression(consumedMember.expression);
     if (
       !ts.isIdentifier(consumedValue) ||
-      checker.getSymbolAtLocation(consumedValue) !== parameterSymbol
+      (await checker.getSymbolAtLocation(consumedValue)) !== parameterSymbol
     ) {
       return false;
     }
@@ -676,12 +716,12 @@ const isCollectionCallbackInvocation = (
   };
 
   if (!ts.isBlock(callback.body)) {
-    return isTerminalConsume(callback.body);
+    return await isTerminalConsume(callback.body);
   }
   for (const statement of callback.body.statements) {
     if (
       ts.isExpressionStatement(statement) &&
-      isTerminalConsume(statement.expression)
+      (await isTerminalConsume(statement.expression))
     ) {
       return true;
     }
@@ -704,15 +744,15 @@ const isCollectionCallbackInvocation = (
   return false;
 };
 
-const isConsumedInlineContainerMethod = (
+const isConsumedInlineContainerMethod = async (
   expression: ts.PropertyAccessExpression | ts.ElementAccessExpression,
-  checker: ts.TypeChecker,
-): boolean => {
+  checker: Checker,
+): Promise<boolean> => {
   const parent = expression.parent;
   if (!ts.isCallExpression(parent) || parent.expression !== expression) {
     return false;
   }
-  if (isCollectionCallbackInvocation(parent, expression, checker)) {
+  if (await isCollectionCallbackInvocation(parent, expression, checker)) {
     return true;
   }
   const host = unwrapDiscardedExpression(expression.expression);
@@ -725,59 +765,74 @@ const isConsumedInlineContainerMethod = (
   );
 };
 
-const isBetterResultVariant = (
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): boolean => {
-  const symbol = type.aliasSymbol ?? type.getSymbol();
+const isBetterResultVariant = async (
+  checker: Checker,
+  type: Type,
+): Promise<boolean> => {
+  const symbol = (await type.getAliasSymbol()) ?? (await type.getSymbol());
   const expectedStatus =
-    symbol === undefined
-      ? undefined
-      : RESULT_VARIANT_STATUS.get(symbol.getName());
+    symbol === undefined ? undefined : RESULT_VARIANT_STATUS.get(symbol.name);
   if (symbol === undefined || expectedStatus === undefined) {
     return false;
   }
 
-  if (symbol.declarations?.some(isBetterResultDeclaration) !== true) {
+  if (
+    !(
+      await Promise.all(
+        symbol.declarations.map(async (declaration) =>
+          isBetterResultDeclaration(
+            (await declaration.resolve()) ??
+              panic("A Result declaration handle did not resolve"),
+          ),
+        ),
+      )
+    ).some(Boolean)
+  ) {
     return false;
   }
 
-  const statusProperty = type.getProperty("status");
-  const statusDeclaration =
-    statusProperty?.valueDeclaration ?? statusProperty?.declarations?.at(0);
+  const statusProperty = await type.getProperty("status");
+  const statusDeclaration = await (
+    statusProperty?.valueDeclaration ?? statusProperty?.declarations.at(0)
+  )?.resolve();
   if (statusProperty === undefined || statusDeclaration === undefined) {
     return false;
   }
 
-  const statusType = checker.getTypeOfSymbolAtLocation(
+  const statusType = await checker.getTypeOfSymbolAtLocation(
     statusProperty,
     statusDeclaration,
   );
-  return statusType.isStringLiteral() && statusType.value === expectedStatus;
+  return (
+    statusType.isStringLiteralType() && statusType.value === expectedStatus
+  );
 };
 
-const isBetterResultType = (
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): boolean => {
-  if (type.isUnionOrIntersection()) {
-    return type.types.some((part) => isBetterResultType(checker, part));
+const isBetterResultType = async (
+  checker: Checker,
+  type: Type,
+): Promise<boolean> => {
+  if (type.isUnionType() || type.isIntersectionType()) {
+    return asyncSome(
+      await type.getTypes(),
+      async (part) => await isBetterResultType(checker, part),
+    );
   }
 
   // Require three independent signals before reporting: the public variant
   // name, a declaration owned by better-result, and its matching literal
   // status discriminant. Structural lookalikes and local Ok/Err classes can
   // satisfy at most two of those signals.
-  return isBetterResultVariant(checker, type);
+  return await isBetterResultVariant(checker, type);
 };
 
-const promiseFulfilledValueType = (
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): ts.Type | undefined => {
-  if (type.isUnionOrIntersection()) {
-    for (const part of type.types) {
-      const valueType = promiseFulfilledValueType(checker, part);
+const promiseFulfilledValueType = async (
+  checker: Checker,
+  type: Type,
+): Promise<Type | undefined> => {
+  if (type.isUnionType() || type.isIntersectionType()) {
+    for (const part of await type.getTypes()) {
+      const valueType = await promiseFulfilledValueType(checker, part);
       if (valueType !== undefined) {
         return valueType;
       }
@@ -785,63 +840,68 @@ const promiseFulfilledValueType = (
     return undefined;
   }
 
-  const symbol = type.aliasSymbol ?? type.getSymbol();
+  const symbol = (await type.getAliasSymbol()) ?? (await type.getSymbol());
   if (
-    symbol?.getName() !== "PromiseFulfilledResult" ||
-    symbol.declarations?.some((declaration) =>
-      declaration
+    symbol?.name !== "PromiseFulfilledResult" ||
+    !(await asyncSome(symbol.declarations, async (handle) =>
+      (
+        (await handle.resolve()) ??
+        panic("A promise declaration handle did not resolve")
+      )
         .getSourceFile()
         .fileName.replaceAll("\\", "/")
         .endsWith("/lib.es2020.promise.d.ts"),
-    ) !== true
+    ))
   ) {
     return undefined;
   }
 
-  const value = type.getProperty("value");
-  const declaration = value?.valueDeclaration ?? value?.declarations?.at(0);
+  const value = await type.getProperty("value");
+  const declaration = await (
+    value?.valueDeclaration ?? value?.declarations.at(0)
+  )?.resolve();
   return value === undefined || declaration === undefined
     ? undefined
-    : checker.getTypeOfSymbolAtLocation(value, declaration);
+    : await checker.getTypeOfSymbolAtLocation(value, declaration);
 };
 
-const isBetterResultValueType = (
-  checker: ts.TypeChecker,
-  type: ts.Type,
-  seen = new Set<ts.Type>(),
-): boolean => {
+const isBetterResultValueType = async (
+  checker: Checker,
+  type: Type,
+  seen = new Set<Type>(),
+): Promise<boolean> => {
   if (seen.has(type)) {
     return false;
   }
   seen.add(type);
 
-  if (isBetterResultType(checker, type)) {
+  if (await isBetterResultType(checker, type)) {
     return true;
   }
 
-  const awaitedType = checker.getAwaitedType(type);
+  const awaitedType = await checker.getAwaitedType(type);
   if (
     awaitedType !== undefined &&
     awaitedType !== type &&
-    isBetterResultValueType(checker, awaitedType, seen)
+    (await isBetterResultValueType(checker, awaitedType, seen))
   ) {
     return true;
   }
 
-  const fulfilledValueType = promiseFulfilledValueType(checker, type);
+  const fulfilledValueType = await promiseFulfilledValueType(checker, type);
   if (
     fulfilledValueType !== undefined &&
     fulfilledValueType !== type &&
-    isBetterResultValueType(checker, fulfilledValueType, seen)
+    (await isBetterResultValueType(checker, fulfilledValueType, seen))
   ) {
     return true;
   }
 
-  const elementType = checker.getIndexTypeOfType(type, ts.IndexKind.Number);
+  const elementType = await checker.getIndexTypeOfType(type, IndexKind.Number);
   return (
     elementType !== undefined &&
     elementType !== type &&
-    isBetterResultValueType(checker, elementType, seen)
+    (await isBetterResultValueType(checker, elementType, seen))
   );
 };
 
@@ -850,14 +910,17 @@ const isBetterResultDeclaration = (declaration: ts.Declaration): boolean =>
     .normalize(declaration.getSourceFile().fileName)
     .includes(BETTER_RESULT_PACKAGE);
 
-const isUnwrapWithoutMessage = (
+const isUnwrapWithoutMessage = async (
   call: ts.CallExpression,
-  checker: ts.TypeChecker,
-): boolean => {
-  const signature = checker.getResolvedSignature(call);
+  checker: Checker,
+): Promise<boolean> => {
+  const signature = await checker.getResolvedSignature(call);
   if (
-    signature?.declaration === undefined ||
-    !isBetterResultDeclaration(signature.declaration)
+    signature.declaration === undefined ||
+    !isBetterResultDeclaration(
+      (await signature.declaration.resolve()) ??
+        panic("A Result signature declaration handle did not resolve"),
+    )
   ) {
     return false;
   }
@@ -867,11 +930,11 @@ const isUnwrapWithoutMessage = (
     return false;
   }
 
-  const messageArgumentIndex = signature.getParameters().length === 2 ? 1 : 0;
+  const messageArgumentIndex = signature.parameters.length === 2 ? 1 : 0;
   const message = call.arguments.at(messageArgumentIndex);
   return (
     message === undefined ||
-    !ts.isStringLiteralLike(message) ||
+    !ts.isStringLiteralLikeNode(message) ||
     message.text.trim().length === 0
   );
 };
@@ -934,6 +997,7 @@ const gitLines = (
   args: readonly string[],
 ): string[] => {
   const output = execFileSync("git", args, {
+    maxBuffer: 2 ** 30,
     cwd: repositoryRoot,
     encoding: "utf-8",
   });
@@ -973,7 +1037,7 @@ const workspaceConfig = (
   ).split("/");
   if (parent === "scripts") {
     const config = path.join(repositoryRoot, "scripts", "tsconfig.json");
-    return ts.sys.fileExists(config) ? config : null;
+    return existsSync(config) ? config : null;
   }
   if ((parent !== "apps" && parent !== "packages") || workspace === undefined) {
     return null;
@@ -987,13 +1051,13 @@ const workspaceConfig = (
       directory,
       "tsconfig.json",
     );
-    if (ts.sys.fileExists(scriptsConfig)) {
+    if (existsSync(scriptsConfig)) {
       return scriptsConfig;
     }
   }
 
   const config = path.join(repositoryRoot, parent, workspace, "tsconfig.json");
-  return ts.sys.fileExists(config) ? config : null;
+  return existsSync(config) ? config : null;
 };
 
 const groupChangedFilesByConfig = (
@@ -1022,24 +1086,27 @@ export const findResultWorkspaceConfigs = (
     directory: string,
     requireResultImport: boolean,
   ): void => {
-    if (!ts.sys.directoryExists(directory)) {
+    if (!existsSync(directory)) {
       return;
     }
 
-    const eligibleSourceFiles = ts.sys
-      .readDirectory(directory, [".ts", ".tsx"])
-      .filter((sourceFile) => {
-        const relative = repoRelativePath(repositoryRoot, sourceFile);
-        return isProductSourcePath(relative);
-      });
+    const eligibleSourceFiles = [
+      ...new Bun.Glob("**/*.{ts,tsx}").scanSync({
+        cwd: directory,
+        absolute: true,
+      }),
+    ].filter((sourceFile) => {
+      const relative = repoRelativePath(repositoryRoot, sourceFile);
+      return isProductSourcePath(relative);
+    });
     if (eligibleSourceFiles.length === 0) {
       return;
     }
     if (
       requireResultImport &&
       !eligibleSourceFiles.some((sourceFile) => {
-        const source = ts.sys.readFile(sourceFile);
-        return source !== undefined && RESULT_IMPORT_PATTERN.test(source);
+        const source = readFileSync(sourceFile, "utf-8");
+        return RESULT_IMPORT_PATTERN.test(source);
       })
     ) {
       return;
@@ -1058,7 +1125,14 @@ export const findResultWorkspaceConfigs = (
 
   for (const parent of ["apps", "packages"]) {
     const parentDirectory = path.join(repositoryRoot, parent);
-    for (const workspace of ts.sys.getDirectories(parentDirectory)) {
+    if (!existsSync(parentDirectory)) {
+      continue;
+    }
+    for (const workspace of readdirSync(parentDirectory, {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)) {
       const workspaceDirectory = path.join(parentDirectory, workspace);
       addDirectoryConfig(path.join(workspaceDirectory, "src"), true);
       addDirectoryConfig(path.join(workspaceDirectory, "scripts"), false);
@@ -1086,7 +1160,7 @@ export const partitionResultProjects = ({
     ),
   );
 
-const run = (): number => {
+const run = async (): Promise<number> => {
   const repositoryRoot = path.resolve(import.meta.dir, "../../..");
   const cli = parseResultConsumptionArgs(process.argv.slice(2));
   const changedFiles =
@@ -1117,19 +1191,23 @@ const run = (): number => {
     const started = performance.now();
     const program =
       rootNames === undefined
-        ? createProgram({ configPath })
-        : createProgram({ configPath, rootNames });
-    const diagnostics =
-      rootNames === undefined
-        ? scanResultConsumption({ program, repositoryRoot })
-        : scanResultConsumption({
-            program,
-            repositoryRoot,
-            sourceFiles: new Set(rootNames),
-          });
-    for (const diagnostic of diagnostics) {
-      const key = `${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.rule}`;
-      diagnosticsByLocation.set(key, diagnostic);
+        ? await createProgram({ configPath })
+        : await createProgram({ configPath, rootNames });
+    try {
+      const diagnostics =
+        rootNames === undefined
+          ? await scanResultConsumption({ ...program, repositoryRoot })
+          : await scanResultConsumption({
+              ...program,
+              repositoryRoot,
+              sourceFiles: new Set(rootNames),
+            });
+      for (const diagnostic of diagnostics) {
+        const key = `${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.rule}`;
+        diagnosticsByLocation.set(key, diagnostic);
+      }
+    } finally {
+      await program.close();
     }
     console.log(
       `result-consumption: ${repoRelativePath(repositoryRoot, configPath)} checked in ${((performance.now() - started) / 1000).toFixed(1)}s`,
@@ -1159,5 +1237,5 @@ const run = (): number => {
 };
 
 if (import.meta.main) {
-  process.exitCode = run();
+  process.exitCode = await run();
 }

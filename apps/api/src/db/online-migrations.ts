@@ -47,6 +47,10 @@ import {
   DECISION_DATE_CEILING_CONSTRAINTS,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import {
+  EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
+  EMAIL_UNDELIVERABLE_CONSTRAINTS,
+} from "./email-undeliverable-constraint-validation";
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
@@ -80,6 +84,10 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import {
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
+} from "./organization-access-state-constraint-validation";
 import {
   READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   READER_ANNOTATION_CLAIM_CONSTRAINTS,
@@ -693,6 +701,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "search_history_entries_owner_country_recent_idx" ON public."search_history_entries" USING btree ("organization_id", "user_id", "country", "last_used_at", "id")',
+    definitionBody:
+      "ON public.search_history_entries USING btree (organization_id, user_id, country, last_used_at, id)",
+    isUnique: false,
+    name: "search_history_entries_owner_country_recent_idx",
+    tableName: "search_history_entries",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -827,8 +844,10 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
   ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
+  EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
@@ -854,8 +873,10 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
+    ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

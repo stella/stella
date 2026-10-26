@@ -507,6 +507,24 @@
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "approval": {
+      "approveSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} freigeben",
+      "empty": "In dieser Akte wartet nichts auf Freigabe.",
+      "failed": "Die Änderung wurde nicht gespeichert. Versuchen Sie es erneut.",
+      "myTime": "Meine Zeit",
+      "refusals": {
+        "invalidEntry": "Ergänzen Sie eine Beschreibung, prüfen Sie das Arbeitsdatum und geben Sie den Eintrag dann frei.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag freigeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr. Aktualisieren Sie die Liste.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag freigeben.",
+        "unpriced": "Für diesen Eintrag ist kein Tarif hinterlegt. Legen Sie einen Tarif für diese Akte fest und geben Sie den Eintrag dann frei.",
+        "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
+      },
+      "returnComment": "Grund für Rückgabe",
+      "selectEntry": "Eintrag auswählen",
+      "timeEntries": "Zeiteinträge",
+      "title": "Freigaben"
+    },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",
@@ -594,6 +612,7 @@
       "openInvoice": "Rechnung öffnen",
       "otherCurrency": "{count, plural, one {# Position ist} other {# Positionen sind}} in einer anderen Währung als {currency} erfasst und bleiben für eine eigene Rechnung offen.",
       "outsideScope": "Im Inland nicht steuerbar, 0 %",
+      "pendingApprovals": "{count, plural, one {# Position wartet} other {# Positionen warten}} auf Freigabe. Freigaben prüfen.",
       "rate": "Satz",
       "readyDescription": "Beim Ausstellen erhält die Rechnung die nächste Nummer aus Ihrem Nummernkreis und wird gesperrt. Ein Entwurf bleibt bearbeitbar.",
       "readyTitle": "Bereit zum Ausstellen",
@@ -1486,7 +1505,7 @@
       "label": "Simulierte KI"
     },
     "modelSelector": {
-      "allModels": "Alle Modelle ({count, number})",
+      "allModels": "Alle Modelle",
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
       "belowFrontier": "Unter den besten Kompromissen",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "oder schreiben Sie uns an",
       "viewDocumentation": "Dokumentation ansehen"
     },
-    "enterKey": "↵",
     "error": "Fehler",
     "expenses": "Ausgaben",
     "export": {
@@ -2205,10 +2223,12 @@
     "scrollToTop": "Nach oben scrollen",
     "search": "Suchen...",
     "searchIn": "Suchen in",
+    "searchMembers": "Mitglieder suchen…",
     "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
     "selectAll": "Alle auswählen",
     "selectDate": "Datum wählen…",
+    "selected": "Ausgewählt",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
@@ -4770,6 +4790,7 @@
     "modelError": "Das Modell konnte diese Antwort nicht fertigstellen.",
     "networkError": "Die Verbindung wurde unterbrochen. Versuchen Sie es erneut.",
     "regenerate": "Antwort neu generieren",
+    "selectionError": "Wählen Sie Text aus der Entscheidung selbst aus.",
     "send": "Rückfrage senden",
     "share": "Mit dem Team teilen",
     "timeoutError": "Das Zeitlimit für die Antwort wurde überschritten. Versuchen Sie es erneut.",
@@ -5359,7 +5380,7 @@
     "importDescription": "Stile werden in eine neue, inhaltsfreie DOCX-Datei extrahiert.",
     "importTitle": "Stilset importieren",
     "loadFailed": "Stilsets konnten nicht geladen werden",
-    "newDocument": "Neues Dokument",
+    "newDocument": "Neues DOCX-Dokument",
     "pickerDescription": "Wählen Sie das Formatierungssystem für die neue Datei.",
     "renameTitle": "Stilset umbenennen",
     "replace": "Quelle ersetzen",
@@ -5643,7 +5664,7 @@
     "moveToMatter": "In Akte speichern",
     "moveToMatterAnyway": "Trotzdem speichern",
     "myDefaultLookupFormat": "Mein Standard",
-    "newFromTemplate": "Neues Dokument aus Vorlage",
+    "newFromTemplate": "Neues DOCX-Dokument aus Vorlage",
     "newFromTemplateFillHint": "Füllen Sie die Felder aus; das Dokument wird in dieser Akte erstellt.",
     "newTemplate": "Neue Vorlage",
     "noTemplates": "Noch keine Vorlagen",
@@ -6014,6 +6035,7 @@
         "action": "Im Desktop bearbeiten",
         "authRequiredDescription": "Aktualisieren Sie stella und melden Sie sich erneut an, bevor Sie die Desktop-Bearbeitung verwenden.",
         "authRequiredTitle": "Ihre Sitzung ist abgelaufen",
+        "editInApplication": "In <bdi>{application}</bdi> bearbeiten",
         "editLocallyPrompt": "Bearbeiten Sie diese Datei lokal und synchronisieren Sie die Änderungen mit stella.",
         "forceRelease": "Freigabe erzwingen",
         "notOpenedDescription": "stella desktop hat nicht bestätigt, dass <bdi>{application}</bdi> geöffnet wurde. Starten Sie stella desktop und versuchen Sie es erneut.",
@@ -6037,13 +6059,15 @@
         "alreadyInstalled": "Bereits installiert? Verbinden",
         "connect": "stella desktop verbinden",
         "connected": "stella desktop ist verbunden",
+        "download": "stella desktop herunterladen",
         "editNone": "stella desktop herunterladen, um diese Datei zu bearbeiten",
         "editOutdated": "stella desktop aktualisieren, um zu bearbeiten",
         "editReason": "Die Desktop-Bearbeitung öffnet die Datei über stella desktop in einer App auf Ihrem Computer.",
         "signCurrent": "Mit stella desktop signieren",
         "signNone": "stella desktop herunterladen, um dieses PDF zu signieren",
         "signOutdated": "stella desktop aktualisieren, um zu signieren",
-        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop."
+        "signReason": "Die Signatur verwendet das Zertifikat auf Ihrem Computer und läuft daher in stella desktop.",
+        "update": "stella desktop aktualisieren"
       },
       "downloadAs": "Herunterladen als…",
       "downloadAsZip": "Als .zip herunterladen",
@@ -6056,8 +6080,10 @@
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
       "maxEntitiesReached": "Maximale Anzahl an Einträgen erreicht",
       "ocrAlreadyProcessed": "Texterkennung wurde bereits abgeschlossen",
+      "ocrBatchHelp": "Eingereihte Dokumente werden im nächsten OCR-Lauf verarbeitet.",
       "ocrQueueFailed": "Texterkennung konnte nicht in die Warteschlange gestellt werden",
-      "ocrQueued": "Texterkennung für den nächsten OCR-Lauf eingeplant",
+      "ocrQueued": "Texterkennung eingereiht",
+      "ocrQueuedForBatch": "Texterkennung für den nächsten OCR-Lauf eingeplant",
       "pdfSigning": {
         "alreadySigningTitle": "Das Signieren läuft bereits in stella desktop",
         "cancelledBaseVersionDescription": "Das Dokument hat sich während des Signierens geändert. Öffnen Sie die neueste Version und signieren Sie erneut.",
@@ -6114,6 +6140,7 @@
         "waitingDescription": "Wählen Sie in stella desktop ein Signaturzertifikat, um dieses PDF zu signieren.",
         "waitingTitle": "Warten auf stella desktop"
       },
+      "queueForOcr": "Für OCR einreihen",
       "rateLimited": "Ratenlimit erreicht; Wiederaufnahme in {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Was mit {fileName} geschehen soll",
@@ -6125,7 +6152,6 @@
       "removeMetadata": "Dokumentmetadaten entfernen",
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
-      "runOcr": "OCR einreihen",
       "scrubFailed": "Die Metadaten dieser Datei konnten nicht entfernt werden, daher wurde nichts heruntergeladen",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",
@@ -6204,8 +6230,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Lead festlegen",
-        "noLead": "Kein Lead",
-        "searchMembers": "Mitglieder suchen…"
+        "noLead": "Kein Lead"
       },
       "to": "Bis"
     },
@@ -6267,6 +6292,7 @@
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",
+      "moveFailed": "{failed, plural, one {# von {total} Elementen konnte nicht verschoben werden.} other {# von {total} Elementen konnten nicht verschoben werden.}}",
       "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
       "uploadDocument": "Dokument hochladen",
@@ -6285,10 +6311,10 @@
       "addMember": "Mitglied hinzufügen",
       "addMemberDescription": "Ein Teammitglied zu dieser Akte hinzufügen",
       "alreadyMember": "Benutzer ist bereits Mitglied",
+      "alreadyOnMatter": "Bereits in dieser Akte",
       "cannotRemoveLast": "Das letzte Mitglied kann nicht entfernt werden",
       "noMembersFound": "Keine Mitglieder gefunden",
-      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?",
-      "selectMember": "Mitglied auswählen"
+      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?"
     },
     "newDocument": "Neues Dokument",
     "newFolder": "Neuer Ordner",
@@ -6326,7 +6352,6 @@
           "approvedBy": "Genehmigt von",
           "channel": "Kanal",
           "dateTime": "Datum und Uhrzeit",
-          "eventId": "Ereignis-ID",
           "notAvailable": "Nicht verfügbar",
           "openTarget": "Element öffnen",
           "runId": "Ausführungs-ID",
@@ -6413,6 +6438,7 @@
       "addParty": "Partei hinzufügen",
       "changeClient": "Klient ändern",
       "client": "Klient",
+      "movedToClient": "Akte <bdi>{matterName}</bdi> zu <bdi>{clientName}</bdi> verschoben",
       "noClient": "Kein Klient zugeordnet",
       "noClientOptional": "Kein Klient (optional)",
       "noParties": "Dieser Akte sind keine Parteien zugeordnet.",
@@ -6431,7 +6457,9 @@
       "personalLabel": "Persönlich",
       "promoteCta": "Zu Klient hochstufen",
       "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig — hochgestufte Akten können nicht wieder persönlich werden.",
+      "promoteToClientConfirm": "Die Akte <bdi>{matterName}</bdi> wird <bdi>{clientName}</bdi> zugeordnet und mit dem Team geteilt. Sie kann danach nicht wieder persönlich werden.",
       "promotedSuccess": "Akte hochgestuft",
+      "recentClients": "Zuletzt verwendete Klienten",
       "removeClient": "Klient entfernen",
       "removeParty": "Partei entfernen",
       "removePartyConfirm": "Möchten Sie diese Partei wirklich aus der Akte entfernen?",
@@ -6506,6 +6534,11 @@
       },
       "passwordLabel": "PDF-Passwort eingeben",
       "previousPage": "Vorherige Seite",
+      "selection": {
+        "explainPassagePrompt": "Erkläre diese Passage aus {citation}:\n\n„{quote}“",
+        "pageLocator": "S. {page}",
+        "pageRangeLocator": "S. {start}–{end}"
+      },
       "showOriginal": "Originalseiten anzeigen",
       "unlock": "Entsperren"
     },
@@ -6643,6 +6676,12 @@
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {
       "parties": "Parteien"
+    },
+    "switcher": {
+      "searchPlaceholder": "Akte suchen…",
+      "trigger": "Akte wechseln",
+      "viewAll": "Alle Akten anzeigen",
+      "viewAllForClient": "Alle Akten des Klienten {clientName} anzeigen"
     },
     "table": {
       "clearFlags": "Markierungen löschen",

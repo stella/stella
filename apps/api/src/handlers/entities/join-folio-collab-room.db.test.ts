@@ -37,6 +37,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { resetFolioCollabUserState } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -328,7 +329,8 @@ test("a dedicated principal joins only while its dedicated session is live", asy
         workspaceId,
         memberRole: sessionMemberRole("owner"),
         request: new Request("https://example.test/join"),
-        route: "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+        route:
+          "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,
       }),
@@ -423,7 +425,7 @@ test("a dedicated principal joins only while its dedicated session is live", asy
           memberRole: sessionMemberRole("owner"),
           request: new Request("https://example.test/checkpoint"),
           route:
-            "/v1/workspaces/:workspaceId/entities/checkpoint-folio-collab-room",
+            "/v1/entities/:workspaceId/folio-collab-rooms/checkpoint" satisfies ApiRoutePath,
           recordAuditEvent: noAudit,
           createAuditRecorder: () => noAudit,
         }),
@@ -905,7 +907,7 @@ describe("folio collaboration room seed generation CAS", () => {
               memberRole: sessionMemberRole("owner"),
               request: new Request("https://example.test/join"),
               route:
-                "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+                "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
               recordAuditEvent: noAudit,
               createAuditRecorder: () => noAudit,
             }),
@@ -1317,7 +1319,7 @@ describe("stale pending seed recovery notices", () => {
               memberRole: sessionMemberRole("owner"),
               request: new Request("https://example.test/join"),
               route:
-                "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+                "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
               recordAuditEvent: noAudit,
               createAuditRecorder: () => noAudit,
             }),
@@ -1539,7 +1541,8 @@ test("deleting a claimant before seed acknowledgement warns the next member abou
         workspaceId: ids.wsA1,
         memberRole: sessionMemberRole("member"),
         request: new Request("https://example.test/join"),
-        route: "/v1/workspaces/:workspaceId/entities/join-folio-collab-room",
+        route:
+          "/v1/entities/:workspaceId/folio-collab-rooms/join" satisfies ApiRoutePath,
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,
       }),
