@@ -296,7 +296,9 @@ describe("member pickers save the chosen member", () => {
     const chosen: string[] = [];
     await mount(() => (
       <OwnerPicker
-        onChange={(userId) => chosen.push(userId)}
+        onChange={(userId) => {
+          chosen.push(userId);
+        }}
         owner={null}
         reason=""
         workspaceId={WORKSPACE}

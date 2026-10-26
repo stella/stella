@@ -300,7 +300,6 @@
     "apps/web/src/components/workspaces/properties/composer-primitives.tsx": 1,
     "apps/web/src/components/workspaces/table/table-find-bar.tsx": 1,
     "apps/web/src/components/workspaces/table/workspace-table/workspace-table.tsx": 1,
-    "apps/web/src/components/workspaces/tasks/task-metadata.tsx": 1,
     "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx": 1,
     "apps/web/src/features/knowledge/playbook-editor/playbook-editor.tsx": 1,
     "apps/web/src/features/knowledge/public/tools/public-tool-content.tsx": 1,
