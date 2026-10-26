@@ -323,7 +323,7 @@ test("a comment still being stored offers no controls until the server answers",
   for (const name of [
     messages.legalReader.annotations.editComment,
     messages.common.delete,
-    messages.legalReader.annotations.visibilityShared,
+    messages.legalReader.annotations.visibilitySharedWithMatter,
   ]) {
     expect(screen.queryByRole("button", { name })).toBeNull();
   }

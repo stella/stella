@@ -4306,7 +4306,8 @@
       "styleHighlight": "Esiletõst",
       "styleSquiggly": "Laineline joon",
       "styleStrikethrough": "Läbikriipsutus",
-      "visibilityShared": "Jagatud organisatsiooniga"
+      "visibilityShared": "Jagatud organisatsiooniga",
+      "visibilitySharedWithMatter": "Jagatud toimikuga"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Plokktsitaat viitega",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "Esile tõstnud: {name}",
         "refusedNoText": "Sellel leheküljel pole märgitavat teksti. Käivitage esmalt dokumendi teksti tuvastamine.",
         "refusedNotFound": "Neid sõnu ei leitud lehekülje tekstist. Valige need uuesti.",
-        "refusedTooLong": "See lõik on märkimiseks liiga pikk. Valige lühem.",
-        "visibilityShared": "Jagatud toimikuga"
+        "refusedTooLong": "See lõik on märkimiseks liiga pikk. Valige lühem."
       },
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Dokumendi üksikasjad",

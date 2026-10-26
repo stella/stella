@@ -4306,7 +4306,8 @@
       "styleHighlight": "Destaque",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartilhado com a organização"
+      "visibilityShared": "Compartilhado com a organização",
+      "visibilitySharedWithMatter": "Compartilhado com o caso"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citação em bloco com referência",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "Destacado por {name}",
         "refusedNoText": "Esta página não tem texto para marcar. Execute primeiro o reconhecimento de texto no documento.",
         "refusedNotFound": "Estas palavras não foram encontradas no texto da página. Selecione-as novamente.",
-        "refusedTooLong": "Este trecho é longo demais para marcar. Selecione um mais curto.",
-        "visibilityShared": "Compartilhado com o caso"
+        "refusedTooLong": "Este trecho é longo demais para marcar. Selecione um mais curto."
       },
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes do documento",

@@ -153,7 +153,9 @@ export const DocumentMarkBar = ({
                   "document-annotations.visibility",
                 );
               }}
-              sharedLabel={t("workspaces.pdf.annotations.visibilityShared")}
+              sharedLabel={t(
+                "legalReader.annotations.visibilitySharedWithMatter",
+              )}
               value={mark.visibility}
             />
             <Tooltip

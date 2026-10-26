@@ -4306,7 +4306,8 @@
       "styleHighlight": "Wyróżnienie",
       "styleSquiggly": "Falista linia",
       "styleStrikethrough": "Przekreślenie",
-      "visibilityShared": "Udostępnione organizacji"
+      "visibilityShared": "Udostępnione organizacji",
+      "visibilitySharedWithMatter": "Udostępnione w sprawie"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "Wyróżnienie: {name}",
         "refusedNoText": "Na tej stronie nie ma tekstu do oznaczenia. Najpierw uruchom rozpoznawanie tekstu dokumentu.",
         "refusedNotFound": "Tych słów nie znaleziono w tekście strony. Zaznacz je ponownie.",
-        "refusedTooLong": "Ten fragment jest za długi, aby go oznaczyć. Zaznacz krótszy.",
-        "visibilityShared": "Udostępnione w sprawie"
+        "refusedTooLong": "Ten fragment jest za długi, aby go oznaczyć. Zaznacz krótszy."
       },
       "backToPeek": "Wróć do podglądu",
       "entitySidebar": "Szczegóły dokumentu",

@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { readerPdfPageAnchorId } from "@stll/api-contract/legal-reader-annotations";
@@ -9,12 +9,10 @@ import { XIcon } from "@stll/ui/icons";
 import { ReviewCommentCard } from "@stll/ui/review-comment-card";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
+import { saveCommentEdit } from "@/components/legal-reader/annotations/comment-edit";
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import { MarginNotes } from "@/components/legal-reader/margin-notes";
-import type {
-  CommentEdit,
-  CommentMarginItem,
-} from "@/components/legal-reader/margin-notes";
+import type { CommentMarginItem } from "@/components/legal-reader/margin-notes";
 import { DETACHED_REASON } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type { DetachedReason } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type {
@@ -60,43 +58,12 @@ const firstRows = (marks: readonly DocumentMark[]): DocumentMark[] => {
 const detachedReason = (mark: DocumentMark): DetachedReason | null =>
   mark.placement.type === "detached" ? mark.placement.reason : null;
 
-/**
- * Saves an edit in the order that never shows colleagues words meant to stay
- * private: new words before sharing, unsharing before new words. The second
- * write runs only once the first has held.
- */
-const saveEdit = async (
-  marks: DocumentMarks,
-  mark: DocumentMark,
-  edit: CommentEdit,
-): Promise<void> => {
-  const writeBody = async () => {
-    if (edit.body !== mark.body) {
-      await marks.update({ body: edit.body, change: "body", id: mark.id });
-    }
-  };
-  const writeVisibility = async () => {
-    if (edit.visibility !== mark.visibility) {
-      await marks.update({
-        change: "visibility",
-        id: mark.id,
-        visibility: edit.visibility,
-      });
-    }
-  };
-  const [first, second] =
-    edit.visibility === "shared"
-      ? [writeBody, writeVisibility]
-      : [writeVisibility, writeBody];
-  await first();
-  await second();
-};
-
 const commentItem = (
   marks: DocumentMarks,
   mark: DocumentMark,
 ): CommentMarginItem => ({
   author: { image: mark.authorImage, name: mark.authorName },
+  createdAt: mark.createdAt,
   id: mark.id,
   kind: "comment",
   mine: mark.mine,
@@ -104,7 +71,22 @@ const commentItem = (
     detached(marks.remove(mark.id), "document-annotations.remove");
   },
   onEdit: (edit) => {
-    detached(saveEdit(marks, mark, edit), "document-annotations.edit");
+    detached(
+      saveCommentEdit({
+        comment: {
+          body: mark.body ?? "",
+          id: mark.id,
+          visibility: mark.visibility,
+        },
+        edit,
+        // A failed write has already rolled back and told the reader why.
+        update: async (change) =>
+          (await Result.tryPromise(async () => marks.update(change))).map(
+            () => undefined,
+          ),
+      }),
+      "document-annotations.edit",
+    );
   },
   onToggleVisibility: () => {
     detached(
@@ -117,7 +99,9 @@ const commentItem = (
     );
   },
   startAnchorId: readerPdfPageAnchorId(mark.pageNumber),
+  targetType: "matter-document",
   text: mark.body ?? "",
+  updatedAt: mark.updatedAt,
   visibility: mark.visibility,
 });
 
@@ -201,6 +185,7 @@ export const DocumentMarksPanel = ({
                     composing.spans.at(0)?.pageNumber ??
                       panic("A pending comment has no span"),
                   ),
+                  targetType: "matter-document",
                 },
               ]}
               placement="inline"

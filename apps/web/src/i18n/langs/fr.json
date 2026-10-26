@@ -4306,7 +4306,8 @@
       "styleHighlight": "Surlignage",
       "styleSquiggly": "Ondulé",
       "styleStrikethrough": "Barré",
-      "visibilityShared": "Partagé avec l’organisation"
+      "visibilityShared": "Partagé avec l’organisation",
+      "visibilitySharedWithMatter": "Partagé avec le dossier"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "Surligné par {name}",
         "refusedNoText": "Cette page ne contient aucun texte à marquer. Lancez d’abord la reconnaissance de texte sur le document.",
         "refusedNotFound": "Ces mots sont introuvables dans le texte de la page. Sélectionnez-les à nouveau.",
-        "refusedTooLong": "Ce passage est trop long pour être marqué. Sélectionnez-en un plus court.",
-        "visibilityShared": "Partagé avec le dossier"
+        "refusedTooLong": "Ce passage est trop long pour être marqué. Sélectionnez-en un plus court."
       },
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",

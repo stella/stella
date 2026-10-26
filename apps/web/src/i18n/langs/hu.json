@@ -4306,7 +4306,8 @@
       "styleHighlight": "Kiemelés",
       "styleSquiggly": "Hullámos vonal",
       "styleStrikethrough": "Áthúzás",
-      "visibilityShared": "Megosztva a szervezettel"
+      "visibilityShared": "Megosztva a szervezettel",
+      "visibilitySharedWithMatter": "Megosztva az üggyel"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "Kiemelte: {name}",
         "refusedNoText": "Ezen az oldalon nincs megjelölhető szöveg. Először futtassa a szövegfelismerést a dokumentumon.",
         "refusedNotFound": "Ezek a szavak nem találhatók az oldal szövegében. Jelölje ki őket újra.",
-        "refusedTooLong": "Ez a szakasz túl hosszú a megjelöléshez. Válasszon rövidebbet.",
-        "visibilityShared": "Megosztva az üggyel"
+        "refusedTooLong": "Ez a szakasz túl hosszú a megjelöléshez. Válasszon rövidebbet."
       },
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",

@@ -4306,7 +4306,8 @@
       "styleHighlight": "Izcēlums",
       "styleSquiggly": "Viļņota līnija",
       "styleStrikethrough": "Pārsvītrojums",
-      "visibilityShared": "Kopīgots ar organizāciju"
+      "visibilityShared": "Kopīgots ar organizāciju",
+      "visibilitySharedWithMatter": "Kopīgots ar lietu"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "Iezīmēja: {name}",
         "refusedNoText": "Šajā lapā nav teksta, ko iezīmēt. Vispirms palaidiet dokumenta teksta atpazīšanu.",
         "refusedNotFound": "Šie vārdi lapas tekstā netika atrasti. Atlasiet tos vēlreiz.",
-        "refusedTooLong": "Šis fragments ir pārāk garš, lai to iezīmētu. Atlasiet īsāku.",
-        "visibilityShared": "Kopīgots ar lietu"
+        "refusedTooLong": "Šis fragments ir pārāk garš, lai to iezīmētu. Atlasiet īsāku."
       },
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Dokumenta informācija",

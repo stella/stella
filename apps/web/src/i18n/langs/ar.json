@@ -4306,7 +4306,8 @@
       "styleHighlight": "تمييز",
       "styleSquiggly": "خط متموج",
       "styleStrikethrough": "يتوسطه خط",
-      "visibilityShared": "مشارك مع المؤسسة"
+      "visibilityShared": "مشارك مع المؤسسة",
+      "visibilitySharedWithMatter": "مشارك مع الملف القانوني"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
@@ -6479,8 +6480,7 @@
         "highlightedBy": "تمييز بواسطة {name}",
         "refusedNoText": "لا يوجد في هذه الصفحة نص يمكن تمييزه. شغّل التعرّف على النص في المستند أولًا.",
         "refusedNotFound": "لم يُعثر على هذه الكلمات في نص الصفحة. حدّدها مرة أخرى.",
-        "refusedTooLong": "هذا المقطع أطول من أن يُميَّز. حدّد مقطعًا أقصر.",
-        "visibilityShared": "مشارك مع الملف القانوني"
+        "refusedTooLong": "هذا المقطع أطول من أن يُميَّز. حدّد مقطعًا أقصر."
       },
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل المستند",
