@@ -40,7 +40,7 @@ const named = (node: slimdom.Element, namespace: string, name: string) =>
   );
 const onlyText = (node: slimdom.Element, namespace: string, name: string) => {
   const matches = named(node, namespace, name);
-  return matches.length === 1 ? matches[0]?.textContent.trim() : undefined;
+  return matches.length === 1 ? matches[0]?.textContent?.trim() : undefined;
 };
 const readEntry = (entry: slimdom.Element) => {
   const sourceDocumentId = onlyText(entry, TNA, "uri");
@@ -51,16 +51,32 @@ const readEntry = (entry: slimdom.Element) => {
     !isPersistableSourceDocumentId(sourceDocumentId) ||
     !/^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/u.test(sourceDocumentId)
   ) {
-    throw invalid("Invalid feed document identity");
+    return Result.err(
+      invalid("Feed entry requires a single valid tna:uri document identity"),
+    );
   }
   if (!updated || !contentHash || !/^[a-fA-F0-9]{64}$/u.test(contentHash)) {
-    throw invalid("Invalid feed version fields");
+    return Result.err(
+      invalid(
+        "Feed entry requires updated and a 64-digit hexadecimal tna:contenthash",
+      ),
+    );
   }
-  Temporal.Instant.from(updated);
+  const timestamp = Result.try({
+    try: () => Temporal.Instant.from(updated),
+    catch: (cause) =>
+      new ParseXmlError({
+        message: "Feed entry updated must be a valid timestamp with an offset",
+        cause,
+      }),
+  });
+  if (timestamp.isErr()) {
+    return Result.err(timestamp.error);
+  }
   const identifiers = named(entry, TNA, "identifier").map((identifier) => ({
     type: identifier.getAttribute("type"),
     slug: identifier.getAttribute("slug"),
-    value: identifier.textContent.trim(),
+    value: identifier.textContent?.trim() ?? "",
   }));
   const neutral = identifiers.find(({ type }) => type === "ukncn");
   const fields = new Map<
@@ -69,7 +85,7 @@ const readEntry = (entry: slimdom.Element) => {
   >();
   for (const child of entry.getElementsByTagNameNS("*", "*")) {
     const value = {
-      text: child.textContent,
+      text: child.textContent ?? "",
       attributes: Object.fromEntries(
         Array.from(child.attributes, ({ name, value: attribute }) => [
           name,
@@ -77,7 +93,7 @@ const readEntry = (entry: slimdom.Element) => {
         ]),
       ),
     };
-    const label = `{${child.namespaceURI}}${child.localName}`;
+    const label = `{${child.namespaceURI ?? ""}}${child.localName}`;
     const group = fields.get(label);
     if (group === undefined) {
       fields.set(label, [value]);
@@ -85,7 +101,7 @@ const readEntry = (entry: slimdom.Element) => {
       group.push(value);
     }
   }
-  return {
+  return Result.ok({
     sourceDocumentId,
     updated,
     contentHash,
@@ -93,54 +109,82 @@ const readEntry = (entry: slimdom.Element) => {
     caseNumber: neutral?.value,
     courtSlug: neutral?.slug?.split("/").slice(0, -2).join("/"),
     fields: Object.fromEntries(fields),
-  };
+  });
 };
 
-export const readUkFclFeed = (raw: string) =>
-  Result.try({
-    try: () => {
-      const document = slimdom.parseXmlDocument(raw);
-      const root = document.documentElement;
-      if (
-        document.doctype !== null ||
-        root.namespaceURI !== ATOM ||
-        root.localName !== "feed"
-      ) {
-        throw invalid("Invalid Atom feed");
-      }
-      const entries = named(root, ATOM, "entry").map(readEntry);
-      if (
-        new Set(entries.map(({ sourceDocumentId }) => sourceDocumentId))
-          .size !== entries.length
-      ) {
-        throw invalid("Duplicate feed document identity");
-      }
-      const links = named(root, ATOM, "link").filter(
-        (link) => link.getAttribute("rel") === "next",
-      );
-      if (links.length > 1) {
-        throw invalid("Ambiguous next feed page");
-      }
-      const href = links.at(0)?.getAttribute("href");
-      if (href === null) {
-        throw invalid("Missing next feed URL");
-      }
-      const next =
-        href === undefined
-          ? null
-          : restrictOutboundUrl({
-              rawUrl: new URL(href, ORIGIN).toString(),
-              hostPolicy: { type: "exact-origin", origins: [ORIGIN] },
-              pathPrefixes: ["/atom.xml"],
-            });
-      if (href !== undefined && next === null) {
-        throw invalid("Invalid next feed URL");
-      }
-      return { entries, next: next?.toString() ?? null };
-    },
+export const readUkFclFeed = (raw: string) => {
+  const parsed = Result.try({
+    try: () => slimdom.parseXmlDocument(raw),
     catch: (cause) =>
-      new ParseXmlError({ message: "Unreadable Atom feed", cause }),
+      new ParseXmlError({
+        message: "Atom feed XML could not be parsed",
+        cause,
+      }),
   });
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  const document = parsed.value;
+  const root = document.documentElement;
+  if (
+    document.doctype !== null ||
+    root === null ||
+    root.namespaceURI !== ATOM ||
+    root.localName !== "feed"
+  ) {
+    return Result.err(
+      invalid("Expected an Atom feed root without a document type declaration"),
+    );
+  }
+  const readEntries = Result.all(named(root, ATOM, "entry").map(readEntry));
+  if (readEntries.isErr()) {
+    return Result.err(readEntries.error);
+  }
+  const entries = readEntries.value;
+  if (
+    new Set(entries.map(({ sourceDocumentId }) => sourceDocumentId)).size !==
+    entries.length
+  ) {
+    return Result.err(
+      invalid("Feed contains duplicate tna:uri document identities"),
+    );
+  }
+  const links = named(root, ATOM, "link").filter(
+    (link) => link.getAttribute("rel") === "next",
+  );
+  if (links.length > 1) {
+    return Result.err(invalid("Feed must contain at most one next page link"));
+  }
+  const href = links.at(0)?.getAttribute("href");
+  if (href === null) {
+    return Result.err(invalid("Next page link requires an href attribute"));
+  }
+  if (href === undefined) {
+    return Result.ok({ entries, next: null });
+  }
+  const resolved = Result.try({
+    try: () => new URL(href, ORIGIN),
+    catch: (cause) =>
+      new ParseXmlError({
+        message: "Next page href could not be parsed as a URL",
+        cause,
+      }),
+  });
+  if (resolved.isErr()) {
+    return Result.err(resolved.error);
+  }
+  const next = restrictOutboundUrl({
+    rawUrl: resolved.value.toString(),
+    hostPolicy: { type: "exact-origin", origins: [ORIGIN] },
+    pathPrefixes: ["/atom.xml"],
+  });
+  if (next === null) {
+    return Result.err(
+      invalid("Next page href must target the publisher's /atom.xml feed"),
+    );
+  }
+  return Result.ok({ entries, next: next.toString() });
+};
 
 type BuildUkFclDecisionOptions = {
   feed: string;

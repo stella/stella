@@ -1,10 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
 
 import type {
+  Block,
   DecisionDocumentAst,
   Inline,
-  ParagraphBlock,
+  ParagraphRole,
 } from "@stll/legal-ast/document-ast";
 import { parsePlainDate } from "@stll/time";
 
@@ -22,6 +23,13 @@ const attributes = (element: slimdom.Element) =>
   Object.fromEntries(
     Array.from(element.attributes, ({ name, value }) => [name, value]),
   );
+const matchesReference = (
+  element: slimdom.Element,
+  reference: string | null,
+) => {
+  const id = element.getAttribute("eId");
+  return id !== null && `#${id}` === reference;
+};
 const text = (node: slimdom.Node) =>
   (node.textContent ?? "").replace(/\s+/gu, " ").trim();
 
@@ -60,80 +68,253 @@ const inlinesOf = (node: slimdom.Node): Inline[] => {
   ) {
     return [{ type: "text", text: node.nodeValue ?? "" }];
   }
-  const inlines: Inline[] = [];
-  for (const child of node.childNodes) {
-    if (
-      child.nodeType === slimdom.Node.TEXT_NODE ||
-      child.nodeType === slimdom.Node.CDATA_SECTION_NODE
-    ) {
-      inlines.push({ type: "text", text: child.nodeValue ?? "" });
-      continue;
-    }
-    if (!(child instanceof slimdom.Element)) {
-      continue;
-    }
-    if (
-      child.namespaceURI === AKN &&
-      (child.localName === "num" || child.localName === "img")
-    ) {
-      continue;
-    }
-    const children = inlinesOf(child);
-    const href = sanitizeUrl(child.getAttribute("href"));
-    switch (child.namespaceURI === AKN ? child.localName : "") {
-      case "ref":
-        if (href !== undefined) {
-          inlines.push({ type: "link", href, children });
-        } else {
-          inlines.push(...children);
-        }
-        break;
-      case "b":
-        inlines.push({ type: "bold", children });
-        break;
-      case "i":
-        inlines.push({ type: "italic", children });
-        break;
-      case "br":
-        inlines.push({ type: "line-break" });
-        break;
-      default:
-        inlines.push(...children);
-    }
+  if (!(node instanceof slimdom.Element)) {
+    return [];
   }
-  return inlines;
+  if (node.namespaceURI === AKN && node.localName === "img") {
+    return [];
+  }
+  const children = Array.from(node.childNodes).flatMap(inlinesOf);
+  switch (node.namespaceURI === AKN ? node.localName : "") {
+    case "ref": {
+      const href = sanitizeUrl(node.getAttribute("href"));
+      return href === undefined ? children : [{ type: "link", href, children }];
+    }
+    case "b":
+      return [{ type: "bold", children }];
+    case "i":
+      return [{ type: "italic", children }];
+    case "br":
+      return [{ type: "line-break" }];
+    case "num":
+      return [...children, { type: "text", text: " " }];
+    default:
+      return children;
+  }
 };
 
-const rejectedJudgment = (message: string) =>
-  Result.err(new ParseXmlError({ message, cause: undefined }));
+const BLOCK_ELEMENTS = new Set([
+  "paragraph",
+  "p",
+  "heading",
+  "block",
+  "blockList",
+  "item",
+  "li",
+  "list",
+  "table",
+  "tr",
+  "td",
+  "th",
+]);
+const isBlockElement = (node: slimdom.Node) =>
+  node instanceof slimdom.Element &&
+  node.namespaceURI === AKN &&
+  BLOCK_ELEMENTS.has(node.localName);
 
-const headerBlocks = (header: slimdom.Element | undefined) => {
-  const blocks: ParagraphBlock[] = [];
-  for (const child of header?.childNodes ?? []) {
-    if (text(child) === "") {
-      continue;
+// Read the source's text nodes directly, independently of inline rendering or AST construction.
+const sourceTextOf = (root: slimdom.Node) => {
+  const parts: string[] = [];
+  const visit = (node: slimdom.Node): void => {
+    if (
+      node.nodeType === slimdom.Node.TEXT_NODE ||
+      node.nodeType === slimdom.Node.CDATA_SECTION_NODE
+    ) {
+      parts.push(node.nodeValue ?? "");
+      return;
     }
-    const inlines = inlinesOf(child);
-    const id =
-      child instanceof slimdom.Element
-        ? (child.getAttribute("eId") ?? `header-${blocks.length}`)
-        : `header-${blocks.length}`;
-    const role =
-      child instanceof slimdom.Element &&
-      /counsel|solicitor/iu.test(child.getAttribute("name") ?? "")
-        ? "counsel"
-        : "front-matter";
+    if (
+      node instanceof slimdom.Element &&
+      node.namespaceURI === AKN &&
+      node.localName === "img"
+    ) {
+      return;
+    }
+    if (isBlockElement(node)) {
+      parts.push("\n");
+    }
+    for (const child of node.childNodes) {
+      visit(child);
+    }
+    if (
+      node instanceof slimdom.Element &&
+      node.namespaceURI === AKN &&
+      node.localName === "num"
+    ) {
+      parts.push(" ");
+    } else if (
+      isBlockElement(node) ||
+      (node instanceof slimdom.Element &&
+        node.namespaceURI === AKN &&
+        node.localName === "br")
+    ) {
+      parts.push("\n");
+    }
+  };
+  visit(root);
+  return parts.join("");
+};
+
+const createBlockIds = (judgment: slimdom.Element) => {
+  const reserved = new Set(
+    Array.from(judgment.getElementsByTagNameNS("*", "*")).flatMap((node) => {
+      const id = node.getAttribute("eId");
+      return id === null ? [] : [id];
+    }),
+  );
+  const used = new Set<string>();
+  const occurrences = new Map<string, { suffix: number; ordinal: number }>();
+  type AllocateIdOptions = { sourceId: string | undefined; prefix: string };
+  return ({ sourceId, prefix }: AllocateIdOptions) => {
+    const base = sourceId ?? `${prefix}-${used.size}`;
+    const occurrenceKey =
+      sourceId === undefined ? `generated:${base}` : `published:${base}`;
+    const previous = occurrences.get(occurrenceKey);
+    const ordinal = (previous?.ordinal ?? 0) + 1;
+    let suffix = (previous?.suffix ?? 0) + 1;
+    let id = suffix === 1 ? base : `${base}-${suffix}`;
+    while (used.has(id) || (id !== sourceId && reserved.has(id))) {
+      suffix++;
+      id = `${base}-${suffix}`;
+    }
+    occurrences.set(occurrenceKey, { suffix, ordinal });
+    used.add(id);
+    return { id, ordinal };
+  };
+};
+
+type BlockContext = {
+  anchorId: string | undefined;
+  number: number | undefined;
+  role: ParagraphRole;
+};
+type BlocksOptions = {
+  root: slimdom.Element;
+  role: ParagraphRole;
+  allocateId: ReturnType<typeof createBlockIds>;
+};
+const blocksOf = ({ root, role, allocateId }: BlocksOptions) => {
+  const blocks: Block[] = [];
+  const structuralDescendants = new Map<slimdom.Node, boolean>();
+  const inspect = (node: slimdom.Node): boolean => {
+    let structural = false;
+    for (const child of node.childNodes) {
+      const nested = inspect(child);
+      if (isBlockElement(child) || nested) {
+        structural = true;
+      }
+    }
+    structuralDescendants.set(node, structural);
+    return structural;
+  };
+  inspect(root);
+  const hasStructure = (node: slimdom.Node) => {
+    const structural = structuralDescendants.get(node);
+    if (structural === undefined) {
+      return panic("LegalDocML node was not inspected");
+    }
+    return structural;
+  };
+  type EmitBlockOptions = {
+    node: slimdom.Element;
+    inlines: Inline[];
+    context: BlockContext;
+  };
+  const emit = ({ node, inlines, context }: EmitBlockOptions) => {
+    const plainText = inlinesToPlainText(inlines).trim();
+    if (plainText === "") {
+      return;
+    }
+    const { id, ordinal } = allocateId({
+      sourceId: context.anchorId,
+      prefix: role,
+    });
+    if (node.namespaceURI === AKN && node.localName === "heading") {
+      blocks.push({
+        type: "heading",
+        id,
+        anchorId: id,
+        level: 1,
+        role: "section-heading",
+        inlines,
+        plainText,
+      });
+      return;
+    }
     blocks.push({
       type: "paragraph",
       id,
       anchorId: id,
-      role,
+      role: context.role,
+      number: ordinal === 1 ? context.number : undefined,
       inlines,
-      plainText: inlinesToPlainText(inlines),
+      plainText,
     });
-  }
+  };
+  type WalkBlockOptions = {
+    node: slimdom.Element;
+    inherited: BlockContext;
+    prefix: Inline[];
+  };
+  const walk = ({ node, inherited, prefix }: WalkBlockOptions) => {
+    const label = Array.from(node.children)
+      .find((child) => child.namespaceURI === AKN && child.localName === "num")
+      ?.textContent?.trim();
+    const numericLabel =
+      label !== undefined && /^\d+\.?$/u.test(label)
+        ? Number.parseInt(label, 10)
+        : undefined;
+    const context = {
+      anchorId: node.getAttribute("eId") ?? inherited.anchorId,
+      number: label === undefined ? inherited.number : numericLabel,
+      role: /counsel|solicitor/iu.test(node.getAttribute("name") ?? "")
+        ? "counsel"
+        : inherited.role,
+    } satisfies BlockContext;
+    if (!hasStructure(node)) {
+      emit({ node, inlines: [...prefix, ...inlinesOf(node)], context });
+      return;
+    }
+    let pending = prefix;
+    let labelOnly = true;
+    for (const child of node.childNodes) {
+      if (
+        child instanceof slimdom.Element &&
+        (isBlockElement(child) || hasStructure(child))
+      ) {
+        if (!labelOnly) {
+          emit({ node, inlines: pending, context });
+          pending = [];
+        }
+        walk({ node: child, inherited: context, prefix: pending });
+        pending = [];
+        labelOnly = true;
+      } else {
+        pending.push(...inlinesOf(child));
+        if (
+          !(
+            child instanceof slimdom.Element &&
+            child.namespaceURI === AKN &&
+            child.localName === "num"
+          ) &&
+          text(child) !== ""
+        ) {
+          labelOnly = false;
+        }
+      }
+    }
+    emit({ node, inlines: pending, context });
+  };
+  walk({
+    node: root,
+    inherited: { anchorId: undefined, number: undefined, role },
+    prefix: [],
+  });
   return blocks;
 };
+
+const rejectedJudgment = (message: string) =>
+  Result.err(new ParseXmlError({ message, cause: undefined }));
 
 type ParseUkFclInput = { xml: string; documentId: string; sourceUrl: string };
 
@@ -198,55 +379,29 @@ export const parseUkFclDecision = ({
             nameAsPrinted:
               text(judge) ||
               people
-                .find(
-                  (person) =>
-                    `#${person.getAttribute("eId")}` ===
-                    judge.getAttribute("refersTo"),
+                .find((person) =>
+                  matchesReference(person, judge.getAttribute("refersTo")),
                 )
                 ?.getAttribute("showAs") ||
               "",
           }))
           .filter(({ nameAsPrinted }) => nameAsPrinted !== "");
-  const blocks = headerBlocks(header);
-  const bodyInlines = inlinesOf(body);
-  const walk = (node: slimdom.Node): void => {
-    if (!(node instanceof slimdom.Element)) {
-      return;
-    }
-    const isTextBlock =
-      node.localName === "paragraph" ||
-      node.localName === "p" ||
-      (elements(node, "paragraph").length === 0 &&
-        elements(node, "p").length === 0);
-    if (node.namespaceURI === AKN && isTextBlock && text(node) !== "") {
-      const inlines = inlinesOf(node);
-      const label = elements(node, "num").at(0)?.textContent?.trim() ?? "";
-      const number = /^\d+\.?$/u.test(label)
-        ? Number.parseInt(label, 10)
-        : undefined;
-      const id = node.getAttribute("eId") ?? `body-${blocks.length}`;
-      blocks.push({
-        type: "paragraph",
-        id,
-        anchorId: id,
-        role: "argumentation",
-        number,
-        inlines,
-        plainText: inlinesToPlainText(inlines),
-      });
-      return;
-    }
-    for (const child of node.childNodes) {
-      walk(child);
-    }
-  };
-  walk(body);
-  const reasoning = blocks.filter(({ role }) => role === "argumentation");
+  const allocateId = createBlockIds(judgment);
+  const frontMatter =
+    header === undefined
+      ? []
+      : blocksOf({ root: header, role: "front-matter", allocateId });
+  const reasoning = blocksOf({ root: body, role: "argumentation", allocateId });
+  const blocks = [...frontMatter, ...reasoning];
+  const sourceBody = sourceTextOf(body);
   const fulltext = reasoning.map(({ plainText }) => plainText).join("\n\n");
+  const normalized = (value: string) => value.replace(/\s+/gu, " ").trim();
   if (
     reasoning.length === 0 ||
-    fulltext.replace(/\s/gu, "") !==
-      inlinesToPlainText(bodyInlines).replace(/\s/gu, "")
+    normalized(blocks.map(({ plainText }) => plainText).join("\n")) !==
+      normalized(
+        `${header === undefined ? "" : sourceTextOf(header)}\n${sourceBody}`,
+      )
   ) {
     return rejectedJudgment("Unmapped LegalDocML body text");
   }
@@ -291,10 +446,8 @@ export const parseUkFclDecision = ({
               person: attributes(party),
               role:
                 roles
-                  .find(
-                    (role) =>
-                      `#${role.getAttribute("eId")}` ===
-                      party.getAttribute("as"),
+                  .find((role) =>
+                    matchesReference(role, party.getAttribute("as")),
                   )
                   ?.getAttribute("showAs") ?? undefined,
             })),

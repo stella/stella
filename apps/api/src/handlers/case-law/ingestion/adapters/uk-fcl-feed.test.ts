@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 
 import {
@@ -58,9 +59,8 @@ test("feed identity and repeated fields survive raw assembly and offline replay"
     type: "absent",
     reason: "not_published",
   });
-  expect(initial.metadata["ecli"]).toEqual({
-    type: "absent",
-    reason: "not_published",
+  expect(initial.metadata).toMatchObject({
+    ecli: { type: "absent", reason: "not_published" },
   });
   expect(reparseUkFclStoredRaw(stored())).toEqual({
     type: "parsed",
@@ -139,3 +139,107 @@ test("namespace aliases preserve discovery and malformed inputs are rejected", (
     }).isErr(),
   ).toBe(true);
 });
+
+const syntheticEntry = feed.slice(
+  feed.indexOf("<entry>"),
+  feed.indexOf("</entry>") + "</entry>".length,
+);
+const refusalCases = [
+  {
+    name: "malformed XML",
+    raw: feed.slice(0, -20),
+    message: "Atom feed XML could not be parsed",
+  },
+  {
+    name: "wrong root namespace",
+    raw: feed.replace(
+      'xmlns="http://www.w3.org/2005/Atom"',
+      'xmlns="urn:wrong"',
+    ),
+    message: "Expected an Atom feed root",
+  },
+  {
+    name: "document type declaration",
+    raw: feed.replace("<feed ", "<!DOCTYPE feed><feed "),
+    message: "without a document type declaration",
+  },
+  {
+    name: "invalid identity",
+    raw: feed.replace(
+      /<tna:uri>[^<]+<\/tna:uri>/u,
+      "<tna:uri>../escape</tna:uri>",
+    ),
+    message: "valid tna:uri document identity",
+  },
+  {
+    name: "invalid content hash",
+    raw: feed.replace("a".repeat(64), "invalid"),
+    message: "64-digit hexadecimal tna:contenthash",
+  },
+  {
+    name: "missing updated field",
+    raw: feed.replace(/<updated>[^<]+<\/updated>/u, ""),
+    message: "requires updated",
+  },
+  {
+    name: "invalid timestamp",
+    raw: feed.replace("2026-01-03T12:00:00Z", "invalid"),
+    message: "valid timestamp with an offset",
+  },
+  {
+    name: "duplicate identities",
+    raw: feed.replace("</feed>", () => `${syntheticEntry}</feed>`),
+    message: "duplicate tna:uri document identities",
+  },
+  {
+    name: "ambiguous next page",
+    raw: feed.replace(
+      "</feed>",
+      '<link rel="next" href="/atom.xml?page=2"/><link rel="next" href="/atom.xml?page=3"/></feed>',
+    ),
+    message: "at most one next page link",
+  },
+  {
+    name: "missing next href",
+    raw: feed.replace("</feed>", '<link rel="next"/></feed>'),
+    message: "requires an href attribute",
+  },
+  {
+    name: "unparseable next URL",
+    raw: feed.replace(
+      "</feed>",
+      '<link rel="next" href="https://[invalid"/></feed>',
+    ),
+    message: "could not be parsed as a URL",
+  },
+  {
+    name: "invalid next URL origin",
+    raw: feed.replace(
+      "</feed>",
+      '<link rel="next" href="https://example.test/atom.xml"/></feed>',
+    ),
+    message: "must target the publisher",
+  },
+  {
+    name: "invalid later entry",
+    raw: feed.replace(
+      "</feed>",
+      () =>
+        `${syntheticEntry.replace("2026-01-03T12:00:00Z", "invalid")}</feed>`,
+    ),
+    message: "valid timestamp with an offset",
+  },
+];
+
+for (const { name, raw, message } of refusalCases) {
+  test(`feed returns a typed refusal for ${name}`, () => {
+    expect(raw).not.toBe(feed);
+    const result = readUkFclFeed(raw);
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      return;
+    }
+    expect(result.error).toBeInstanceOf(ParseXmlError);
+    expect(result.error.message).toContain(message);
+  });
+}

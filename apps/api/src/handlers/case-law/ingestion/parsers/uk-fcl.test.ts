@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 
+import * as astValidation from "@/api/lib/legal-search/parsers/validate-ast";
+
 import { parseUkFclDecision } from "./uk-fcl";
 
 const xml = await readFile(
@@ -42,13 +44,14 @@ describe("LegalDocML judgment", () => {
     ).toMatchObject({
       number: 2,
       role: "argumentation",
-      plainText: "Compare Invented Grove and section 2.",
+      plainText: "2. Compare Invented Grove and section 2.",
     });
     expect(result.fulltext).not.toContain("Invented Fir Solicitors");
     expect(result.metadata.images.reason).toBe("not_collected");
     expect(
-      result.documentAst.blocks.find(({ role }) => role === "counsel")
-        ?.plainText,
+      result.documentAst.blocks.find(
+        (block) => block.type === "paragraph" && block.role === "counsel",
+      )?.plainText,
     ).toContain("Invented Fir Solicitors");
     expect(parse().unwrap()).toEqual(result);
   });
@@ -108,4 +111,111 @@ describe("LegalDocML judgment", () => {
       }
     }
   });
+});
+
+const withBody = (body: string) =>
+  xml.replace(
+    /<judgmentBody>[\s\S]*<\/judgmentBody>/u,
+    () => `<judgmentBody>${body}</judgmentBody>`,
+  );
+
+test.each(["1.", "(a)", "(i)", "A.", "(iv)"])(
+  "preserves the complete paragraph label %s",
+  (label) => {
+    const source = withBody(
+      `<paragraph eId="labelled"><num>${label}</num><content><p>The invented boundary remains blue.</p></content></paragraph>`,
+    );
+    const result = parse(source).unwrap();
+    expect(result.fulltext).toBe(
+      `${label} The invented boundary remains blue.`,
+    );
+    expect(
+      result.documentAst.blocks.find(({ id }) => id === "labelled")?.plainText,
+    ).toBe(result.fulltext);
+  },
+);
+
+test("adjacent paragraphs, cells and list items retain their boundaries without indentation", () => {
+  const source = withBody(
+    '<paragraph eId="multi"><num>7.</num><content><p>First sentence.</p><p>Second sentence.</p><table><tr><td>Amber</td><td>Birch</td></tr><tr><td><p>Cedar</p><p>Dune</p></td><td>Elm</td></tr></table><blockList><item><num>(i)</num><p>First item.</p></item><item><num>(ii)</num><p>Second item.</p></item></blockList></content></paragraph>',
+  );
+  const result = parse(source).unwrap();
+  expect(result.fulltext.split("\n\n")).toEqual([
+    "7. First sentence.",
+    "Second sentence.",
+    "Amber",
+    "Birch",
+    "Cedar",
+    "Dune",
+    "Elm",
+    "(i) First item.",
+    "(ii) Second item.",
+  ]);
+  expect(new Set(result.documentAst.blocks.map(({ id }) => id)).size).toBe(
+    result.documentAst.blocks.length,
+  );
+});
+
+test("the shared validator reports complete output with degraded structure", () => {
+  const source = withBody(
+    '<paragraph eId="degraded"><num>(a)</num><p>Invented prose with no published heading.</p></paragraph>',
+  );
+  const result = parse(source).unwrap();
+  const validation = astValidation.validateAndLog(
+    { parser: "uk-fcl", caseNumber: result.caseNumber, language: "en" },
+    {
+      type: "paragraphs",
+      paragraphs: [
+        result.metadata.header ?? "",
+        "(a) Invented prose with no published heading.",
+      ],
+    },
+    result.documentAst.blocks,
+  );
+  expect(validation.ok).toBe(true);
+  expect(validation.issues.map(({ code }) => code)).toContain("NO_HEADINGS");
+});
+
+test("explicit line breaks preserve word boundaries and inline formatting", () => {
+  const source = withBody(
+    '<paragraph eId="breaks"><p>First<br/><b>Second</b> and pre<i>fix</i>.</p></paragraph>',
+  );
+  const result = parse(source).unwrap();
+  expect(result.fulltext).toBe("First\nSecond and prefix.");
+  expect(
+    result.documentAst.blocks
+      .filter((block) => block.type === "paragraph")
+      .find(({ id }) => id === "breaks")?.inlines,
+  ).toContainEqual({
+    type: "bold",
+    children: [{ type: "text", text: "Second" }],
+  });
+});
+
+test("continuation anchors cannot collide with published header or body identifiers", () => {
+  const source = withBody(
+    '<paragraph eId="p"><p>First invented point.</p><p>Second invented point.</p></paragraph><paragraph eId="p-2"><p>Third invented point.</p></paragraph>',
+  ).replace("<header>", '<header><p eId="p-3">Invented header.</p>');
+  const result = parse(source).unwrap();
+  const ids = result.documentAst.blocks.map(({ id }) => id);
+  expect(ids).toContain("p");
+  expect(ids).toContain("p-2");
+  expect(ids).toContain("p-3");
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(
+    result.documentAst.blocks.find(({ id }) => id === "p-2")?.plainText,
+  ).toBe("Third invented point.");
+});
+
+test("a fallback anchor collision keeps the first block's numeric paragraph metadata", () => {
+  const source = withBody(
+    '<paragraph><num>1.</num><p>First invented point.</p></paragraph><paragraph eId="argumentation-0"><p>Second invented point.</p></paragraph>',
+  ).replace(/<header>[\s\S]*?<\/header>/u, "");
+  const result = parse(source).unwrap();
+  expect(result.documentAst.blocks.at(0)).toMatchObject({
+    type: "paragraph",
+    number: 1,
+    plainText: "1. First invented point.",
+  });
+  expect(result.documentAst.blocks.at(1)?.id).toBe("argumentation-0");
 });
