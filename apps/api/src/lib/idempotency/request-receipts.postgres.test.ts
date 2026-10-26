@@ -23,8 +23,8 @@ import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

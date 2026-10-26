@@ -53,14 +53,12 @@ export const useIdempotentSubmit = () => {
       const previous = pending.get(key);
       const execute = async () => {
         const result = await send(body, capturedRequest);
-        if (
-          !(
-            typeof result === "object" &&
-            result !== null &&
-            "error" in result &&
-            result.error !== null
-          )
-        ) {
+        if (!(
+          typeof result === "object" &&
+          result !== null &&
+          "error" in result &&
+          result.error !== null
+        )) {
           prepared.intent?.complete(key);
         }
         return result;

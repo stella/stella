@@ -8,8 +8,8 @@ import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 import {
   createReplayExceptions,
   liveCreateRoutes,
-  serverCreateRoutes,
   mountedServerCreateRoutes,
+  serverCreateRoutes,
 } from "../../tests/helpers/idempotent-create-route-census";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
