@@ -8,7 +8,7 @@ import {
   postgresShardMatrix,
   readPostgresTestDurations,
   TestShardPlanningError,
-} from "./test-shard-planning";
+} from "../packages/scripts/src/test-shard-planning";
 
 const fail = (message: string): never => {
   throw new TestShardPlanningError(message);

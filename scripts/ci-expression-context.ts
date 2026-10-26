@@ -2,12 +2,12 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import type { ScopeOutput } from "./ci-plan-scope";
-import { predicateVariables } from "./ci-plan-variables";
 import {
   POSTGRES_MAX_SHARDS,
   postgresShardMatrix,
-} from "./test-shard-planning";
+} from "../packages/scripts/src/test-shard-planning";
+import type { ScopeOutput } from "./ci-plan-scope";
+import { predicateVariables } from "./ci-plan-variables";
 
 const MODELLED_EVENTS = [
   "merge_group",

@@ -5,7 +5,7 @@ import {
   API_TEST_SHARD_ENV,
   parseApiTestShard,
   partitionTestFiles,
-} from "../../../scripts/test-shard-planning";
+} from "@stll/scripts/src/test-shard-planning";
 
 export { API_TEST_SHARD_ENV, parseApiTestShard, partitionTestFiles };
 

@@ -2,8 +2,6 @@ import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
-import { sha256Hex } from "@stll/sha256/bun";
-
 import {
   durationSeconds,
   parseTestDurationWeights,
@@ -11,7 +9,8 @@ import {
   TEST_DURATION_HISTORY_LIMIT,
   TEST_DURATION_SOURCE,
   testFileDurationWeights,
-} from "../../../scripts/test-shard-planning";
+} from "@stll/scripts/src/test-shard-planning";
+import { sha256Hex } from "@stll/sha256/bun";
 
 export {
   durationSeconds,

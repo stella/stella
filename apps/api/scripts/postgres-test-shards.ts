@@ -11,7 +11,7 @@ import {
   postgresShardBudgetWarnings,
   postgresShardMatrix,
   readPostgresTestDurations,
-} from "../../../scripts/test-shard-planning";
+} from "@stll/scripts/src/test-shard-planning";
 
 export {
   POSTGRES_MAX_SHARDS,

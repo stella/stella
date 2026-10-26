@@ -4,12 +4,12 @@ import path from "node:path";
 import * as v from "valibot";
 
 import type { GatedTestSelection } from "../apps/api/scripts/gated-test-selection";
-import { planPostgresTests } from "./ci-postgres-test-plan";
-import { parseJunit } from "./fix-tests-on-base";
 import {
   POSTGRES_MAX_SHARDS,
   POSTGRES_MIN_SHARDS,
-} from "./test-shard-planning";
+} from "../packages/scripts/src/test-shard-planning";
+import { planPostgresTests } from "./ci-postgres-test-plan";
+import { parseJunit } from "./fix-tests-on-base";
 
 const normalizeFailedFile = (file: string | undefined): string => {
   if (file === undefined || file === "") {

@@ -1,10 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { postgresShardOutputs } from "./ci-postgres-shard-plan";
 import {
   POSTGRES_MAX_SHARDS,
   POSTGRES_SHARD_TEST_BUDGET_SECONDS,
-} from "./test-shard-planning";
+} from "../packages/scripts/src/test-shard-planning";
+import { postgresShardOutputs } from "./ci-postgres-shard-plan";
 
 const suite = (fileCount: number, seconds: number) => {
   const files = Array.from({ length: fileCount }, (_, index) => `${index}`);
