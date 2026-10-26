@@ -38,6 +38,7 @@ import { sanitizeHandoffDiagnosticText } from "@/api/lib/errors/handoff-diagnost
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
@@ -383,11 +384,14 @@ const recordTanStackConsumption = async ({
   });
 
   if (Result.isError(result)) {
-    captureTelemetryError(result.error, {
-      organization_id: metering.organizationId,
-      source: "usage.tanstack_ai",
-      trace_id: config.traceId,
-    });
+    captureTelemetryError(
+      result.error,
+      handlerErrorContext("analytics.recordTanStackConsumption.result_error", {
+        organization_id: metering.organizationId,
+        source: "usage.tanstack_ai",
+        trace_id: config.traceId,
+      }),
+    );
   }
 };
 
@@ -548,11 +552,14 @@ export const createTanStackAIAnalyticsCallbacks = (
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {
       logger.error("tanstack_ai.generation.failed", attributes);
-      captureTelemetryError(error, {
-        feature: config.feature,
-        organization_id: analyticsOrganizationId ?? "",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        error,
+        handlerErrorContext(`analytics.generation.${config.feature}.${kind}`, {
+          feature: config.feature,
+          organization_id: analyticsOrganizationId ?? "",
+          trace_id: config.traceId,
+        }),
+      );
     }
 
     // Standard-schema failure record for LLM observability: the error class
@@ -679,10 +686,13 @@ export const createTanStackAIAnalyticsCallbacks = (
     });
     if (Result.isError(usageSnapshot)) {
       // The payload itself is unreadable: neither side effect can use it.
-      captureTelemetryError(usageSnapshot.error, {
-        source: "usage.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        usageSnapshot.error,
+        handlerErrorContext("analytics.meterUsage.usageSnapshot_error", {
+          source: "usage.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
       return;
     }
     run.outputTokens = usageSnapshot.value.completionTokens;
@@ -749,10 +759,13 @@ export const createTanStackAIAnalyticsCallbacks = (
         catch: (error) => error,
       });
       if (Result.isError(consumptionArgs)) {
-        captureTelemetryError(consumptionArgs.error, {
-          source: "usage.tanstack_ai",
-          trace_id: config.traceId,
-        });
+        captureTelemetryError(
+          consumptionArgs.error,
+          handlerErrorContext("analytics.meterUsage.consumptionArgs_error", {
+            source: "usage.tanstack_ai",
+            trace_id: config.traceId,
+          }),
+        );
       } else {
         const consumption = recordTanStackConsumption(
           consumptionArgs.value,
@@ -760,11 +773,14 @@ export const createTanStackAIAnalyticsCallbacks = (
           // A rejected deferred settles inside the stream lifecycle;
           // capture it here so it cannot surface as an unhandled
           // rejection there.
-          captureTelemetryError(error, {
-            organization_id: metering.organizationId,
-            source: "usage.tanstack_ai",
-            trace_id: config.traceId,
-          });
+          captureTelemetryError(
+            error,
+            handlerErrorContext("analytics.consumption", {
+              organization_id: metering.organizationId,
+              source: "usage.tanstack_ai",
+              trace_id: config.traceId,
+            }),
+          );
         });
         ctx.defer(consumption);
       }
@@ -790,10 +806,13 @@ export const createTanStackAIAnalyticsCallbacks = (
       catch: (error) => error,
     });
     if (Result.isError(captured)) {
-      captureTelemetryError(captured.error, {
-        source: "analytics.tanstack_ai",
-        trace_id: config.traceId,
-      });
+      captureTelemetryError(
+        captured.error,
+        handlerErrorContext("analytics.meterUsage.captured_error", {
+          source: "analytics.tanstack_ai",
+          trace_id: config.traceId,
+        }),
+      );
     }
   };
 

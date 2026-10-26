@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { api } from "@/lib/api";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 
@@ -37,7 +37,7 @@ const fetchDocumentTranslationPreparation = async (
   { workspaceId, entityId, fieldId }: DocumentTranslationPreparationRef,
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-translations"].prepare.post(
@@ -76,7 +76,7 @@ const fetchDocumentTranslationRun = async (
   { workspaceId, runId }: DocumentTranslationRunRef,
   signal?: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-translations"].runs({

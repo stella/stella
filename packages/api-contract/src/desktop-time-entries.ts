@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { apiDateSchema } from "./api-date";
 import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
 
 export const desktopMatterSchema = v.strictObject({
@@ -31,17 +32,24 @@ const codeSchema = v.pipe(
 
 /** UTBMS task and activity codes for clients billed electronically (LEDES),
  * otherwise the firm's activity group. */
-export const desktopTimeEntryClassificationSchema = v.union([
-  v.strictObject({
-    type: v.literal("ledes"),
-    taskCode: codeSchema,
-    activityCode: codeSchema,
-  }),
-  v.strictObject({
-    type: v.literal("activity_group"),
-    activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
-  }),
-]);
+export const createDesktopTimeEntryClassificationSchema = (
+  profile: "canonical" | "model",
+) => {
+  const code = profile === "canonical" ? codeSchema : v.string();
+  return v.union([
+    v.strictObject({
+      type: v.literal("ledes"),
+      taskCode: code,
+      activityCode: code,
+    }),
+    v.strictObject({
+      type: v.literal("activity_group"),
+      activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
+    }),
+  ]);
+};
+export const desktopTimeEntryClassificationSchema =
+  createDesktopTimeEntryClassificationSchema("canonical");
 export type DesktopTimeEntryClassification = v.InferOutput<
   typeof desktopTimeEntryClassificationSchema
 >;
@@ -69,7 +77,7 @@ export type DesktopMatterCandidatesResponse = v.InferOutput<
 
 export const desktopTimeEntryBatchItemSchema = v.strictObject({
   matterId: v.pipe(v.string(), v.uuid()),
-  dateWorked: v.pipe(v.string(), v.isoDate()),
+  dateWorked: apiDateSchema,
   timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   durationMinutes: v.pipe(
     v.number(),

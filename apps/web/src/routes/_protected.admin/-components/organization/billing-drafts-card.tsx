@@ -16,9 +16,12 @@ import { SearchField } from "@stll/ui/search-field";
 import { ContactPicker } from "@/components/contact-picker";
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
@@ -67,7 +70,7 @@ export const BillingDraftsCard = () => {
       clientId,
     ],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["billing-drafts"].get({
           query: clientId ? { clientId } : {},
           fetch: { signal },
@@ -84,7 +87,7 @@ export const BillingDraftsCard = () => {
       cursor,
     ],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["billing-drafts"][
           "knowledge-files"
         ].get({
@@ -109,30 +112,47 @@ export const BillingDraftsCard = () => {
       }
       const filesRoute =
         api["organization-settings"]["billing-drafts"]["knowledge-files"];
-      return unwrapEden(
+      return unwrapApiResponse(
         await filesRoute({ resourceId: editingId }).get({ fetch: { signal } }),
       );
     },
   });
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "organization-settings.billing-drafts.update",
+    },
     mutationFn: async (body: BillingConfigurationUpdate) =>
-      unwrapEden(
-        await api["organization-settings"]["billing-drafts"].post({
-          ...body,
-          expectedUpdatedAt:
-            config.data?.updatedAt ??
-            panic("Billing settings must be loaded before updating"),
-        }),
+      await invokeCapability(
+        "organization-settings.billing-drafts.update",
+        async (request) =>
+          unwrapApiResponse(
+            await api["organization-settings"]["billing-drafts"].post(
+              {
+                ...body,
+                expectedUpdatedAt:
+                  config.data?.updatedAt ??
+                  panic("Billing settings must be loaded before updating"),
+              },
+              request,
+            ),
+          ),
       ),
     invalidate: billingDraftKeys.all(),
     errorToast: { title: t("errors.actionFailed") },
   });
   const save = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "skills.resources.update",
+    },
     mutationFn: async ({ file, source }: KnowledgeSave) =>
-      unwrapEden(
-        await api
-          .skills({ skillId: file.skillId })
-          .resources.patch({ path: file.path, content: source }),
+      await invokeCapability("skills.resources.update", async (request) =>
+        unwrapApiResponse(
+          await api
+            .skills({ skillId: file.skillId })
+            .resources.patch({ path: file.path, content: source }, request),
+        ),
       ),
     invalidate: billingDraftKeys.all(),
     errorToast: { title: t("errors.actionFailed") },
@@ -143,7 +163,7 @@ export const BillingDraftsCard = () => {
     return (
       <Frame>
         <FramePanel>
-          <p role="alert">{t("errors.actionFailed")}</p>
+          <QueryViewFeedback view={queryView(config)} />
         </FramePanel>
       </Frame>
     );
@@ -172,9 +192,12 @@ export const BillingDraftsCard = () => {
           <p className="text-muted-foreground text-xs">
             {t("settings.organization.billingDrafts.description")}
           </p>
-          {(files.isError || editor.isError) && (
-            <p role="alert">{t("errors.actionFailed")}</p>
-          )}
+          {(files.isError || editor.isError) &&
+            (files.isError ? (
+              <QueryViewFeedback view={queryView(files)} />
+            ) : (
+              <QueryViewFeedback view={queryView(editor)} />
+            ))}
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={config.data.mode === "enabled"}

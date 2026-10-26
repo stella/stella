@@ -2,9 +2,18 @@ import { Panic, UnhandledException } from "better-result";
 import { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
-import { classifyFailure } from "@stll/errors";
+import {
+  classifyFailure,
+  declareFailureClass,
+  declareFingerprintFields,
+} from "@stll/errors";
 
-import { DatabaseRlsError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseRlsError,
+  ExtractionWorkerError,
+  HandlerError,
+  SandboxError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   MAX_EVIDENCE_DEPTH,
   readEvidence,
@@ -112,6 +121,41 @@ describe("failure evidence walks the chain once", () => {
 });
 
 describe("failure evidence survives hostile values", () => {
+  test("constructor descriptor failures preserve the readable cause prefix", () => {
+    const hostile = Object.create(
+      new Proxy(Error.prototype, {
+        getOwnPropertyDescriptor: () => {
+          throw new TypeError("unreadable descriptor");
+        },
+      }),
+    );
+    const evidence = readEvidence(new Error("outer", { cause: hostile }));
+    expect(evidence.truncation).toBe("read_failed");
+    expect(evidence.nodes).toHaveLength(2);
+    expect(evidence.nodes[0]).toMatchObject({ kind: "error", tag: "Error" });
+  });
+
+  test("unreadable metadata indices preserve readable finite dimensions", () => {
+    class MetadataError extends Error {
+      override readonly name = "MetadataError";
+      readonly reason = "decode";
+      static readonly stellaExceptionFingerprintFields = new Proxy(
+        ["reason", "stage"],
+        {
+          get: (target, key, receiver): unknown => {
+            if (key === "1") {
+              throw new TypeError("unreadable metadata");
+            }
+            return Reflect.get(target, key, receiver);
+          },
+        },
+      );
+    }
+    const evidence = readEvidence(new MetadataError("private message"));
+    expect(evidence.truncation).toBe("read_failed");
+    expect(evidence.nodes[0]?.discriminators).toEqual({ reason: "decode" });
+  });
+
   test("a revoked Proxy reads as a failed read, not a throw", () => {
     const { proxy, revoke } = Proxy.revocable(new Error("x"), {});
     revoke();
@@ -405,4 +449,79 @@ describe("provider status provenance", () => {
     expect(readProviderStatus({ code: "insufficient_quota" })).toBeUndefined();
     expect(readProviderStatus(new Panic({ message: "x" }))).toBeUndefined();
   });
+});
+
+describe("failure evidence snapshots typed fingerprint dimensions", () => {
+  test("keeps sandbox causes separate and reads a changing reason once", () => {
+    const error = new SandboxError({ message: "private", reason: "runtime" });
+    let reads = 0;
+    Object.defineProperty(error, "reason", {
+      get: () => {
+        reads += 1;
+        return reads === 1 ? "runtime" : "timeout";
+      },
+    });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason: "runtime",
+    });
+    expect(readEvidence(error).nodes.at(0)?.discriminators).toEqual({
+      reason: "runtime",
+    });
+    expect(reads).toBe(1);
+  });
+
+  test("shares nested termination reads with extraction diagnostics", () => {
+    const error = new ExtractionWorkerError({
+      message: "private",
+      code: "worker_timeout",
+      workerErrorClass: null,
+      exitCode: null,
+      mimeType: "text/plain",
+      sizeBytes: 10,
+      termination: { reason: "timeout", signalCode: "SIGTERM" },
+    });
+    let reads = 0;
+    Object.defineProperty(error.termination, "reason", {
+      get: () => {
+        reads += 1;
+        return reads === 1 ? "timeout" : "crashed";
+      },
+    });
+    const node = readEvidence(error).nodes.at(0);
+    expect(node?.discriminators).toEqual({ "termination.reason": "timeout" });
+    expect(node?.extraction?.["terminationReason"]).toBe("timeout");
+    expect(reads).toBe(1);
+  });
+});
+
+test("failure evidence shares discriminator reads with class brands and accessors", () => {
+  class ReasonFailureError extends Error {
+    override readonly name = "ReasonFailureError";
+    readonly reason: "runtime" | "timeout" = "runtime";
+    static {
+      declareFailureClass(this, ({ reason }) =>
+        reason === "runtime" ? "unclassified" : "invalid_declaration",
+      );
+      declareFingerprintFields(this, ["reason"]);
+    }
+    get code() {
+      return this.reason;
+    }
+  }
+  const error = new ReasonFailureError("private");
+  let reads = 0;
+  Object.defineProperty(error, "reason", {
+    get: () => {
+      reads += 1;
+      return reads === 1 ? "runtime" : "timeout";
+    },
+  });
+  const node = readEvidence(error).nodes.at(0);
+  expect(node?.code).toBe("runtime");
+  expect(node?.brand?.reason).toBe("unclassified");
+  expect(node?.discriminators).toEqual({
+    reason: "runtime",
+    failureReason: "unclassified",
+  });
+  expect(reads).toBe(1);
 });

@@ -1,4 +1,3 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -6,7 +5,6 @@ import {
   desktopBillingDraftSettingsRequestSchema,
   desktopBillingDraftSettingsResponseSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
-import type { DesktopBillingDraftSettingsResponse } from "@stll/api-contract/desktop-billing-drafts";
 
 import {
   billingDraftUserSettings,
@@ -23,20 +21,12 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
 
-const billingDraftSettingsResponseSchema =
-  Type.Unsafe<DesktopBillingDraftSettingsResponse>(
-    jsonSchemaToTypeBox(
-      toJsonSchema(desktopBillingDraftSettingsResponseSchema),
-    ),
-  );
-
 const settingsResponse = safePublicHandlerResponseSchemasWithStatusText(
-  billingDraftSettingsResponseSchema,
+  desktopBillingDraftSettingsResponseSchema,
 );
 
 export const createDesktopBillingDraftSettingsReadEndpoint = (
@@ -95,86 +85,95 @@ export const createDesktopBillingDraftSettingsReadEndpoint = (
 export const createDesktopBillingDraftSettingsUpdateEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
 ) =>
-  createSafeBoundedPublicHandler(
-    {
-      contract: "patch",
-      accountAccess: ACCOUNT_ACCESS.sandbox,
-      mcp: { type: "internal", reason: "auth_plumbing" },
-      cache: { kind: "none" },
-      body: desktopBillingDraftSettingsRequestSchema,
-      response: settingsResponse,
-    },
-    async function* ({ request, body }) {
-      const account = yield* Result.await(
-        authorizeDesktopTimeEntries(request, authorizeAccount),
-      );
-      const recordAuditEvent = createAuditRecorder({
-        organizationId: account.organizationId,
-        userId: account.userId,
-        workspaceId: null,
-        request,
-        server: null,
-      });
-      const settings = yield* Result.await(
-        account.safeDb(async (tx) => {
-          const patch = {
-            ...(body.consent === undefined
-              ? {}
-              : { consentAt: body.consent === "granted" ? new Date() : null }),
-            ...(body.preference === undefined
-              ? {}
-              : { preference: body.preference }),
-            updatedAt: new Date(),
-          };
-          const rows = await tx
-            .insert(billingDraftUserSettings)
-            .values({
-              organizationId: account.organizationId,
-              userId: account.userId,
-              ...patch,
-            })
-            .onConflictDoUpdate({
-              target: [
-                billingDraftUserSettings.organizationId,
-                billingDraftUserSettings.userId,
-              ],
-              set: patch,
-            })
-            .returning({
-              consentAt: billingDraftUserSettings.consentAt,
-              preference: billingDraftUserSettings.preference,
+  declareAggregateMutation(
+    createSafeBoundedPublicHandler(
+      {
+        contract: "patch",
+        accountAccess: ACCOUNT_ACCESS.sandbox,
+        mcp: { type: "internal", reason: "auth_plumbing" },
+        cache: { kind: "none" },
+        body: desktopBillingDraftSettingsRequestSchema,
+        response: settingsResponse,
+      },
+      async function* ({ request, body }) {
+        const account = yield* Result.await(
+          authorizeDesktopTimeEntries(request, authorizeAccount),
+        );
+        const recordAuditEvent = createAuditRecorder({
+          organizationId: account.organizationId,
+          userId: account.userId,
+          workspaceId: null,
+          request,
+          server: null,
+        });
+        const settings = yield* Result.await(
+          account.safeDb(async (tx) => {
+            const patch = {
+              ...(body.consent === undefined
+                ? {}
+                : {
+                    consentAt: body.consent === "granted" ? new Date() : null,
+                  }),
+              ...(body.preference === undefined
+                ? {}
+                : { preference: body.preference }),
+              updatedAt: new Date(),
+            };
+            const rows = await tx
+              .insert(billingDraftUserSettings)
+              .values({
+                organizationId: account.organizationId,
+                userId: account.userId,
+                ...patch,
+              })
+              .onConflictDoUpdate({
+                target: [
+                  billingDraftUserSettings.organizationId,
+                  billingDraftUserSettings.userId,
+                ],
+                set: patch,
+              })
+              .returning({
+                consentAt: billingDraftUserSettings.consentAt,
+                preference: billingDraftUserSettings.preference,
+              });
+            const own =
+              rows.at(0) ??
+              panic("Billing draft settings upsert returned no row");
+            // Audit the action without storing private drafting instructions in logs.
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+              resourceId: account.userId,
+              metadata: {
+                settings: "personal-billing-drafts",
+                consent: body.consent,
+                preferenceChanged: body.preference !== undefined,
+              },
             });
-          const own =
-            rows.at(0) ??
-            panic("Billing draft settings upsert returned no row");
-          // Audit the action without storing private drafting instructions in logs.
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-            resourceId: account.userId,
-            metadata: {
-              settings: "personal-billing-drafts",
-              consent: body.consent,
-              preferenceChanged: body.preference !== undefined,
-            },
-          });
-          const org = await tx
-            .select({ mode: organizationSettings.aiBillingDraftsMode })
-            .from(organizationSettings)
-            .where(
-              eq(organizationSettings.organizationId, account.organizationId),
-            )
-            .limit(1);
-          return {
-            organizationMode: org.at(0)?.mode ?? "disabled",
-            consent: own.consentAt
-              ? ("granted" as const)
-              : ("revoked" as const),
-            preference: own.preference,
-          };
-        }),
-      );
-      return Result.ok(settings);
+            const org = await tx
+              .select({ mode: organizationSettings.aiBillingDraftsMode })
+              .from(organizationSettings)
+              .where(
+                eq(organizationSettings.organizationId, account.organizationId),
+              )
+              .limit(1);
+            return {
+              organizationMode: org.at(0)?.mode ?? "disabled",
+              consent: own.consentAt
+                ? ("granted" as const)
+                : ("revoked" as const),
+              preference: own.preference,
+            };
+          }),
+        );
+        return Result.ok(settings);
+      },
+    ),
+    {
+      type: "independent",
+      reason:
+        "Updates only the authenticated person's consent and preference through the organization/user primary-key upsert; no shared aggregate state is mutated.",
     },
   );
 

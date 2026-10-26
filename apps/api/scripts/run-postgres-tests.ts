@@ -14,7 +14,7 @@ import {
 import { loadTestEnv } from "./load-test-env";
 import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
-  assertSharedTableDdlIsolated,
+  classifyPostgresTestIsolation,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
 } from "./postgres-test-plan";
 import {
@@ -46,6 +46,7 @@ const durations = measured?.unwrapOr({}) ?? {};
 
 loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
 const parsedWorkers = parsePostgresWorkerCount(Bun.argv.slice(2));
+let clusterExclusivePaths = new Set<string>();
 
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
@@ -57,7 +58,7 @@ process.exitCode = await runGatedTests({
   spawnTestProcess: spawnPostgresTestProcess,
   prepare: preparePostgresTests,
   validateTestPlan: async (apiRoot, files) => {
-    await assertSharedTableDdlIsolated(apiRoot, files);
+    clusterExclusivePaths = await classifyPostgresTestIsolation(apiRoot, files);
     const shard = parseApiTestShard(shardValue);
     if (shard !== null) {
       planPostgresTestShards({ files, durations, count: shard.count });
@@ -90,6 +91,7 @@ process.exitCode = await runGatedTests({
         files,
         durations,
         exclusivePaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+        clusterExclusivePaths,
         workers: parsedWorkers.workers,
         databaseUrl,
         admin: {

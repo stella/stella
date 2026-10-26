@@ -1,8 +1,11 @@
 import { Result } from "better-result";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import type { InvoiceLanguage } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
@@ -23,8 +26,8 @@ import type { FieldDiffs } from "@/api/lib/audit-log";
 import { flatFeeInvoiceRefusal } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tCurrencyCode,
-  tSafeId,
+  invoiceLanguageSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,32 +36,49 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import { tInvoiceDocumentType, validateInvoiceDocument } from "./document-type";
 import { recalculateInvoiceTotals } from "./invoice-lines";
 
-const updateInvoiceBodySchema = t.Object({
-  invoiceNumber: t.Optional(
-    t.Nullable(t.String({ minLength: 1, maxLength: 64 })),
+const updateInvoiceBodySchema = v.object({
+  invoiceNumber: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
   ),
-  documentType: t.Optional(tInvoiceDocumentType),
-  originalInvoiceId: t.Optional(t.Nullable(tSafeId("invoice"))),
-  invoiceDate: t.Optional(t.String({ format: "date" })),
-  dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  reference: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  currency: t.Optional(tCurrencyCode),
-  notes: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
-  taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  sellerProfileId: t.Optional(t.Nullable(tSafeId("sellerProfile"))),
-  buyerName: t.Optional(t.Nullable(t.String({ minLength: 1, maxLength: 512 }))),
-  buyerRegistrationId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  buyerVatId: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
-  buyerAddressLine1: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
-  buyerAddressLine2: t.Optional(t.Nullable(t.String({ maxLength: 512 }))),
-  buyerCity: t.Optional(t.Nullable(t.String({ maxLength: 256 }))),
-  buyerPostalCode: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
-  buyerCountry: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
+  documentType: v.exactOptional(tInvoiceDocumentType),
+  originalInvoiceId: v.exactOptional(v.nullable(resourceIdSchema("invoice"))),
+  invoiceDate: v.exactOptional(apiDateSchema),
+  dueDate: v.exactOptional(v.nullable(apiDateSchema)),
+  reference: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+  currency: v.exactOptional(currencyCodeSchema),
+  language: v.exactOptional(invoiceLanguageSchema),
+  notes: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(10_000)))),
+  taxableSupplyDate: v.exactOptional(v.nullable(apiDateSchema)),
+  sellerProfileId: v.exactOptional(
+    v.nullable(resourceIdSchema("sellerProfile")),
+  ),
+  buyerName: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+  ),
+  buyerRegistrationId: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(64))),
+  ),
+  buyerTaxId: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  buyerVatId: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
+  buyerAddressLine1: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  ),
+  buyerAddressLine2: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(512))),
+  ),
+  buyerCity: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+  buyerPostalCode: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(32))),
+  ),
+  buyerCountry: v.exactOptional(
+    v.nullable(v.pipe(v.string(), v.maxLength(128))),
+  ),
 });
 
 const BUYER_FIELDS = [
   "buyerName",
   "buyerRegistrationId",
+  "buyerTaxId",
   "buyerVatId",
   "buyerAddressLine1",
   "buyerAddressLine2",
@@ -67,10 +87,13 @@ const BUYER_FIELDS = [
   "buyerCountry",
 ] as const;
 
-const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
+const invoiceParamsSchema = workspaceParams({
+  invoiceId: resourceIdSchema("invoice"),
+});
 
 type InvoiceUpdateSource = {
   currency: string;
+  language: InvoiceLanguage;
   dueDate: string | null;
   invoiceDate: string;
   invoiceNumber: string | null;
@@ -131,6 +154,12 @@ const buildInvoiceUpdateAuditChanges = (
     changes["currency"] = {
       old: existing.currency,
       new: changedFields.currency,
+    };
+  }
+  if (changedFields.language !== undefined) {
+    changes["language"] = {
+      old: existing.language,
+      new: changedFields.language,
     };
   }
   if (changedFields.taxableSupplyDate !== undefined) {
@@ -267,6 +296,7 @@ const updateInvoice = createSafeHandler(
       "reference",
       "notes",
       "currency",
+      "language",
       "taxableSupplyDate",
       "sellerProfileId",
     ]);

@@ -1,4 +1,3 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -8,7 +7,6 @@ import {
 } from "@stll/api-contract";
 import {
   type DesktopTimeEntryBatch,
-  type DesktopTimeEntryBatchResponse,
   desktopTimeEntryBatchResponseSchema,
   desktopTimeEntryBatchSchema,
   type DesktopTimeEntryClassification,
@@ -46,8 +44,6 @@ import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/a
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { jsonSchemaToTypeBox } from "@/api/lib/json-schema/json-schema-to-typebox";
-import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
@@ -144,8 +140,8 @@ const normalizedBatchEntries = ({ entries }: DesktopTimeEntryBatch) => {
   );
 };
 
-const responseSchema = Type.Unsafe<DesktopTimeEntryBatchResponse>(
-  jsonSchemaToTypeBox(toJsonSchema(desktopTimeEntryBatchResponseSchema)),
+const responseSchemas = safePublicHandlerResponseSchemasWithStatusText(
+  desktopTimeEntryBatchResponseSchema,
 );
 
 export const createDesktopTimeEntryBatchEndpoint = (
@@ -158,7 +154,7 @@ export const createDesktopTimeEntryBatchEndpoint = (
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
       body: desktopTimeEntryBatchSchema,
-      response: safePublicHandlerResponseSchemasWithStatusText(responseSchema),
+      response: responseSchemas,
     },
     async function* ({ request, body }) {
       const account = yield* Result.await(
@@ -353,7 +349,7 @@ const desktopTimeEntryBatchEndpoint = createDesktopTimeEntryBatchEndpoint();
 
 // Batch receipts serialize on the desktopBatch aggregate lock per account
 // and idempotency key.
-declareAggregateMutation(desktopTimeEntryBatchEndpoint.handler, {
+declareAggregateMutation(desktopTimeEntryBatchEndpoint, {
   type: "aggregate",
   aggregates: ["desktopBatch"],
 });

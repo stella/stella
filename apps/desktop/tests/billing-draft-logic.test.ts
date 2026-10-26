@@ -7,7 +7,7 @@ import { AI_DISCLOSURES } from "@stll/api-contract/ai-disclosure";
 import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopBillingDraft } from "@stll/api-contract/desktop-billing-drafts";
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import {
@@ -178,60 +178,64 @@ describe("draft request", () => {
 const PARTITION_PROPERTY =
   "billing draft range partitions conserve time, keep order and never overlap";
 
-test(PARTITION_PROPERTY, () => {
-  assertProperty(
-    PARTITION_PROPERTY,
-    fc.property(
-      fc
-        .array(
-          fc.tuple(
-            fc.integer({ min: 0, max: 30 }),
-            fc.integer({ min: 1, max: 90 }),
-          ),
-          {
-            minLength: 1,
-            maxLength: 6,
-          },
-        )
-        .map((gapsAndLengths) => {
-          let cursor = 0;
-          return gapsAndLengths.map(([gap, length]) => {
-            const start = cursor + gap;
-            cursor = start + length;
-            return { start: at(start), end: at(cursor) };
-          });
-        }),
-      fc.array(fc.integer({ min: 1, max: 600 }), {
-        minLength: 1,
-        maxLength: 20,
-      }),
-      (ranges, weights) => {
-        const parts = partitionRanges(ranges, weights);
-        expect(parts).toHaveLength(weights.length);
-        const flat = parts.flat();
-        const total = (list: { start: string; end: string }[]) =>
-          list.reduce((sum, { start, end }) => sum + ms(end) - ms(start), 0);
-        expect(total(flat)).toBe(total(ranges));
-        for (const part of parts) {
-          expect(total(part)).toBeGreaterThan(0);
-        }
-        for (const [index, range] of flat.entries()) {
-          expect(ms(range.end)).toBeGreaterThan(ms(range.start));
-          const next = flat.at(index + 1);
-          if (next) {
-            expect(ms(next.start)).toBeGreaterThanOrEqual(ms(range.end));
-          }
-          expect(
-            ranges.some(
-              ({ start, end }) =>
-                ms(start) <= ms(range.start) && ms(range.end) <= ms(end),
+test(
+  PARTITION_PROPERTY,
+  () => {
+    assertProperty(
+      PARTITION_PROPERTY,
+      fc.property(
+        fc
+          .array(
+            fc.tuple(
+              fc.integer({ min: 0, max: 30 }),
+              fc.integer({ min: 1, max: 90 }),
             ),
-          ).toBe(true);
-        }
-      },
-    ),
-  );
-});
+            {
+              minLength: 1,
+              maxLength: 6,
+            },
+          )
+          .map((gapsAndLengths) => {
+            let cursor = 0;
+            return gapsAndLengths.map(([gap, length]) => {
+              const start = cursor + gap;
+              cursor = start + length;
+              return { start: at(start), end: at(cursor) };
+            });
+          }),
+        fc.array(fc.integer({ min: 1, max: 600 }), {
+          minLength: 1,
+          maxLength: 20,
+        }),
+        (ranges, weights) => {
+          const parts = partitionRanges(ranges, weights);
+          expect(parts).toHaveLength(weights.length);
+          const flat = parts.flat();
+          const total = (list: { start: string; end: string }[]) =>
+            list.reduce((sum, { start, end }) => sum + ms(end) - ms(start), 0);
+          expect(total(flat)).toBe(total(ranges));
+          for (const part of parts) {
+            expect(total(part)).toBeGreaterThan(0);
+          }
+          for (const [index, range] of flat.entries()) {
+            expect(ms(range.end)).toBeGreaterThan(ms(range.start));
+            const next = flat.at(index + 1);
+            if (next) {
+              expect(ms(next.start)).toBeGreaterThanOrEqual(ms(range.end));
+            }
+            expect(
+              ranges.some(
+                ({ start, end }) =>
+                  ms(start) <= ms(range.start) && ms(range.end) <= ms(end),
+              ),
+            ).toBe(true);
+          }
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(5000),
+);
 
 describe("accepted proposals become batch items", () => {
   const riverside = group({

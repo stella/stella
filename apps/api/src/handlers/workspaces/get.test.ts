@@ -24,6 +24,7 @@ const workspaceRow = {
   clientId: toSafeId<"contact">("contact_test123"),
   leadUserId: null,
   billingReference: null,
+  billingNarrativeLanguage: null,
   color: null,
   status: "active",
   lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),

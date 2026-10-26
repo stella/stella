@@ -1,19 +1,29 @@
 import { Result } from "better-result";
-import { beforeEach, expect, test } from "bun:test";
-import Elysia from "elysia";
+import { afterAll, beforeEach, expect, test } from "bun:test";
 
-import { desktopBillingDraftResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
+import {
+  DESKTOP_BILLING_DRAFT_LIMITS,
+  desktopBillingDraftModelResponseSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
 import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -24,6 +34,13 @@ import {
 } from "./billing-drafts";
 import type { loadBillingDraftContext } from "./billing-drafts-context";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
+const servers: TestServer[] = [];
+afterAll(async () => {
+  await Promise.all(servers.map(async (server) => await server.stop()));
+});
+
 const MATTER_ID = toSafeId<"workspace">("00000000-0000-4000-8000-000000000001");
 const EARLIER_ID = toSafeId<"timeEntry">(
   "00000000-0000-4000-8000-000000000002",
@@ -33,7 +50,6 @@ const GUIDELINE_ID = toSafeId<"agentSkillResource">(
 );
 const USER_ID = toSafeId<"user">("billing-drafter");
 const ORGANIZATION_ID = toSafeId<"organization">("billing-firm");
-const testState = createTestState({ file: import.meta.path, config: env });
 beforeEach(() => {
   testState.setConfig("FEATURE_TIME_BILLING", true);
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
@@ -174,14 +190,25 @@ const exercise = async ({
     return result;
   };
   const endpoint = createDesktopBillingDraftEndpoint({
-    authorizeAccount: async () =>
-      Result.ok({
+    authorizeAccount: async (request) => {
+      const device = await createDesktopDeviceSigner();
+      return Result.ok({
+        consumedProof: await claimFixtureDeviceProof({
+          request: await device.signRequest({
+            request,
+            credential: "billing-draft-fixture",
+          }),
+          deviceJkt: device.deviceJkt,
+          keyId: "linked-desktop",
+          credential: "billing-draft-fixture",
+        }),
         organizationId: ORGANIZATION_ID,
         userId: USER_ID,
         keyId: "linked-desktop",
         memberRole: sessionMemberRole("member"),
         scopedDb,
-      }),
+      });
+    },
     loadContext: asTestRaw<typeof loadBillingDraftContext>(async () =>
       refused
         ? Result.err(new HandlerError({ status: 403, message: "Refused" }))
@@ -198,13 +225,14 @@ const exercise = async ({
         ),
     ),
   });
-  // A parent may enable normalization; strict Standard Schema must still reject extras.
-  const app = new Elysia({ normalize: true }).post(
-    "/drafts",
-    endpoint.handler,
-    { body: endpoint.config.body, response: endpoint.config.response },
+  const server = serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({ "/drafts": { POST: endpoint } }),
+    }),
   );
-  const response = await app.handle(
+  servers.push(server);
+  const response = await server.fetch(
     new Request("http://localhost/drafts", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -229,7 +257,7 @@ test("one structured request uses selected evidence, region and opaque reference
     ],
   });
   expect(calls).toHaveLength(1);
-  expect(calls.at(0)?.schema).toBe(desktopBillingDraftResponseSchema);
+  expect(calls.at(0)?.schema).toBe(desktopBillingDraftModelResponseSchema);
   expect(calls.at(0)?.region).toBe("eu");
   expect(calls.at(0)?.prompt).toContain("Agreement");
   expect(calls.at(0)?.prompt).not.toContain(MATTER_ID);
@@ -439,4 +467,18 @@ test("move proposals use the authorized target's canonical name", async () => {
       ],
     },
   });
+});
+
+test("compact model output still passes canonical bounds before proposals are accepted", async () => {
+  const { response, calls } = await exercise({
+    output: {
+      ...fixture,
+      drafts: fixture.drafts.map((draft) => ({
+        ...draft,
+        narrative: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.narrativeLength + 1),
+      })),
+    },
+  });
+  expect(calls).toHaveLength(1);
+  expect(response.status).toBe(502);
 });

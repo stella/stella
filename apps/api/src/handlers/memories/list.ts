@@ -1,13 +1,18 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { aiMemories } from "@/api/db/schema";
 import { toMemoryResponse } from "@/api/handlers/memories/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -39,25 +44,18 @@ const config = {
   // The `chat:create` gate is the caller floor, not the operation: this only
   // reads.
   access: "read",
-  query: t.Object({
-    scope: t.Optional(
-      t.Union([
-        t.Literal("organization"),
-        t.Literal("user"),
-        t.Literal("workspace"),
-      ]),
+  query: v.object({
+    scope: v.optional(v.picklist(["organization", "user", "workspace"])),
+    status: v.optional(
+      v.picklist(["suggested", "active", "stale", "archived"]),
     ),
-    status: t.Optional(
-      t.Union([
-        t.Literal("suggested"),
-        t.Literal("active"),
-        t.Literal("stale"),
-        t.Literal("archived"),
-      ]),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
+      ),
     ),
-    workspaceId: t.Optional(tSafeId("workspace")),
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
   }),
 } satisfies HandlerConfig;
 

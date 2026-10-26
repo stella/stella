@@ -11,8 +11,7 @@ type KeyedPreview = ProvisionPreview & { key: string };
 
 // The hover card is a preview: tell the caller when its display window ends.
 export const projectProvisionPreview = (preview: KeyedPreview) => {
-  const schema =
-    decisionProvisionsSuccessResponseSchema.properties.previews.items;
+  const schema = decisionProvisionsSuccessResponseSchema.entries.previews.item;
   const bounded = projectResponseText(
     {
       ...preview,

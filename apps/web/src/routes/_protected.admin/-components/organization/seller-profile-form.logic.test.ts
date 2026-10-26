@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  SELLER_PROFILE_FIELDS,
-  sellerProfileFormSchema,
-} from "./seller-profile-form.logic";
+import { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
+
+import { sellerProfileFormSchema } from "./seller-profile-form.logic";
 
 const schema = sellerProfileFormSchema({
   required: "Required",
@@ -28,6 +27,9 @@ const empty = {
   bic: "",
   accountNumber: "",
   defaultCurrency: " eur ",
+  taxId: "",
+  registerEntry: "",
+  barRegistration: "",
   footerNotes: "",
 } satisfies v.InferInput<typeof schema>;
 
@@ -44,7 +46,7 @@ describe("seller profile form normalization", () => {
       "legalName",
       "vatPayer",
     ]);
-    for (const name of SELLER_PROFILE_FIELDS) {
+    for (const name of SELLER_PROFILE_TEXT_FIELDS) {
       expect(Object.hasOwn(values, name)).toBe(
         name === "legalName" || name === "defaultCurrency",
       );
@@ -85,7 +87,7 @@ describe("seller profile form normalization", () => {
   });
 
   test("clears whitespace-only optional values", () => {
-    for (const name of SELLER_PROFILE_FIELDS) {
+    for (const name of SELLER_PROFILE_TEXT_FIELDS) {
       if (name === "legalName" || name === "defaultCurrency") {
         continue;
       }

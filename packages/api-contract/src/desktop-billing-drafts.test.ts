@@ -1,11 +1,13 @@
 import { toJsonSchema } from "@valibot/to-json-schema";
 import { expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
   desktopBillingDraftEntrySchema,
   desktopBillingDraftEvidenceSchema,
+  desktopBillingDraftModelResponseSchema,
   type DesktopBillingDraftOperation,
   desktopBillingDraftOperationSchema,
   type DesktopBillingDraftRequest,
@@ -285,6 +287,17 @@ test("draft operations carry reviewable payloads and classification branches rem
     expect(v.parse(desktopBillingDraftOperationSchema, operation)).toEqual(
       operation,
     );
+    const value = {
+      ...response,
+      drafts: response.drafts.map((draft) => ({
+        ...draft,
+        operations: [operation],
+      })),
+    };
+    expect(v.parse(desktopBillingDraftResponseSchema, value)).toEqual(value);
+    expect(v.parse(desktopBillingDraftModelResponseSchema, value)).toEqual(
+      value,
+    );
   }
   for (const operation of [
     { type: "split", parts: [part] },
@@ -373,4 +386,78 @@ test("the review returns the model result beside only the cited entry fields", (
     v.safeParse(desktopBillingDraftReviewSchema, { ...review, timeline: [] })
       .success,
   ).toBe(false);
+});
+
+test("model grammar preserves shape while canonical validation enforces every response bound", () => {
+  expect(v.parse(desktopBillingDraftModelResponseSchema, response)).toEqual(
+    response,
+  );
+  const draft = response.drafts.at(0);
+  assert.ok(draft);
+  for (const invalidDraft of [
+    { ...draft, entryId: "" },
+    {
+      ...draft,
+      narrative: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.narrativeLength + 1),
+    },
+    {
+      ...draft,
+      matchedEarlierEntryIds: Array.from(
+        { length: DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries + 1 },
+        () => "entry",
+      ),
+    },
+    {
+      ...draft,
+      operations: [
+        {
+          type: "move",
+          targetMatterId: "invalid",
+          targetMatterName: "",
+          durationMinutes: 1,
+          narrative: "Move",
+          classification: draft.classification,
+          billable: true,
+        },
+      ],
+    },
+    {
+      ...draft,
+      operations: [
+        {
+          type: "move",
+          targetMatterId: entry.matterId,
+          targetMatterName: "",
+          durationMinutes: 1.5,
+          narrative: "Move",
+          classification: draft.classification,
+          billable: true,
+        },
+      ],
+    },
+  ]) {
+    const value = { ...response, drafts: [invalidDraft] };
+    expect(
+      v.safeParse(desktopBillingDraftModelResponseSchema, value).success,
+    ).toBe(true);
+    expect(v.safeParse(desktopBillingDraftResponseSchema, value).success).toBe(
+      false,
+    );
+  }
+  for (const invalidDraft of [
+    {
+      ...draft,
+      classification: { type: "activity_group", activityGroup: "unknown" },
+    },
+    { ...draft, unexpected: true },
+    { ...draft, operations: [{ type: "execute" }] },
+  ]) {
+    const value = { ...response, drafts: [invalidDraft] };
+    expect(
+      v.safeParse(desktopBillingDraftModelResponseSchema, value).success,
+    ).toBe(false);
+    expect(v.safeParse(desktopBillingDraftResponseSchema, value).success).toBe(
+      false,
+    );
+  }
 });

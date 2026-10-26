@@ -610,8 +610,7 @@ mod tests {
       assert!(serde_json::from_value::<ConfirmedTimeEntry>(input).is_err());
     }
     let mut long = base;
-    long["classification"] =
-      serde_json::json!({"type": "ledes", "taskCode": "L".repeat(21), "activityCode": "A103"});
+    long["classification"] = serde_json::json!({"type": "ledes", "taskCode": "L".repeat(21), "activityCode": "A103"});
     let batch = ConfirmedBatch {
       idempotency_key: "classified".into(),
       entries: vec![serde_json::from_value(long).unwrap()],

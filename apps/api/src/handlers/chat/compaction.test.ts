@@ -1,7 +1,9 @@
-import { EventType } from "@tanstack/ai";
+import { convertMessagesToModelMessages, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessage } from "@/api/handlers/chat/types";
@@ -16,15 +18,21 @@ import {
   resolveCompactionTriggerTokens,
   resolvePreserveTokensForTrigger,
 } from "@/api/lib/chat/compaction-tokens";
+import { ModelDeadlineExceededError } from "@/api/lib/errors/provider-call-error";
 import { LIMITS } from "@/api/lib/limits";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  SKILL_SUMMARY_SECRET,
+  skillSummaryMessage,
+} from "@/api/tests/helpers/skill-summary-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
   chatThreadNeedsCompaction,
   compactChatMessages,
+  compactChatMessagesForModel,
   compactModelMessages,
   compactModelMessagesForModel,
   computeThreadContextUsage,
@@ -56,6 +64,122 @@ const textMessage = ({
 });
 
 describe("chat history compaction", () => {
+  test("the chat summarizer omits skill payloads while preserving conversation, outcomes, and the authorized tail", async () => {
+    const older = skillSummaryMessage({
+      id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000a1"),
+      instructions: SKILL_SUMMARY_SECRET.repeat(100),
+    });
+    const tail = [
+      textMessage({ id: "latest", role: "user", text: "Continue the work" }),
+      skillSummaryMessage({
+        id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000a2"),
+      }),
+    ];
+    const messages = [older, ...tail];
+    const before = JSON.stringify(messages);
+    const preserveTokens = planChatCompaction({
+      messages: tail,
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    let captured = "";
+    const result = await compactChatMessages({
+      messages,
+      preserveTokens,
+      triggerTokens: 1,
+      summarizeTranscript: async (transcript) => {
+        captured = transcript;
+        return "Conversation and outcomes retained";
+      },
+    });
+    expect(captured).not.toBe("");
+    expect(captured).not.toContain(SKILL_SUMMARY_SECRET);
+    expect(captured).toContain("ORDINARY CONVERSATION");
+    expect(captured).toContain("ORDINARY OUTCOME");
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.messages.slice(1)).toEqual(tail);
+    expect(result.value.messages.at(-1)).toBe(tail.at(-1));
+    expect(JSON.stringify(result.value.messages.at(-1))).toContain(
+      SKILL_SUMMARY_SECRET,
+    );
+    expect(JSON.stringify(messages)).toBe(before);
+  });
+
+  test("the model-step summarizer applies the same skill policy without changing its wire tail", async () => {
+    const older = skillSummaryMessage({
+      id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000b1"),
+      instructions: SKILL_SUMMARY_SECRET.repeat(100),
+    });
+    const prefix = convertMessagesToModelMessages([older]);
+    const tail = convertMessagesToModelMessages([
+      textMessage({ id: "latest", role: "user", text: "Continue the work" }),
+      skillSummaryMessage({
+        id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000b2"),
+      }),
+    ]);
+    const messages = [...prefix, ...tail];
+    const before = JSON.stringify(messages);
+    const preserveTokens = planModelCompaction({
+      messages: tail,
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    let captured = "";
+    const result = await compactModelMessages({
+      messages,
+      preserveTokens,
+      triggerTokens: 1,
+      summarizeTranscript: async (transcript) => {
+        captured = transcript;
+        return "Conversation and outcomes retained";
+      },
+    });
+    expect(captured).not.toBe("");
+    expect(captured).not.toContain(SKILL_SUMMARY_SECRET);
+    expect(captured).toContain("ORDINARY CONVERSATION");
+    expect(captured).toContain("ORDINARY OUTCOME");
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.messages.slice(1)).toEqual(tail);
+    expect(result.value.messages.at(-1)).toBe(tail.at(-1));
+    expect(JSON.stringify(result.value.messages)).toContain(
+      SKILL_SUMMARY_SECRET,
+    );
+    expect(JSON.stringify(messages)).toBe(before);
+  });
+
+  test("an orphan result is rejected before the chat summarizer receives text", async () => {
+    let calls = 0;
+    const summary = compactChatMessages({
+      messages: [
+        {
+          id: "orphan",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-result",
+              toolCallId: "missing",
+              state: "complete",
+              content: SKILL_SUMMARY_SECRET,
+            },
+          ],
+        },
+        textMessage({ id: "latest", role: "user", text: "Continue" }),
+      ],
+      preserveTokens: 1,
+      triggerTokens: 1,
+      summarizeTranscript: async () => {
+        calls += 1;
+        return "Unexpected summary";
+      },
+    });
+    expect(await rejectionOf(summary)).toMatchObject({
+      message: expect.stringContaining("Tool result has no matching call"),
+    });
+    expect(calls).toBe(0);
+  });
+
   test("bounds the summary in its prompt, well under a ceiling sized to the input", () => {
     const targets: number[] = [];
     for (const chars of [0, 4000, 40_000, 400_000, 4_000_000]) {
@@ -387,8 +511,8 @@ describe("chat history compaction", () => {
           summarizeTranscript,
         });
 
-        expect(Result.isOk(compacted)).toBe(true);
-        if (Result.isError(compacted)) {
+        expect(compacted.status).toBe("ok");
+        if (compacted.status === "error") {
           return;
         }
         const preservedTail = planChatCompaction({
@@ -573,6 +697,107 @@ Continue drafting the termination analysis.
         "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
     });
   });
+
+  for (const history of ["chat", "model"] as const) {
+    for (const stalledAt of ["resolution", "stream"] as const) {
+      test(`${history} compaction reports a stalled ${stalledAt} and returns bounded history`, async () => {
+        const pendingModel = Promise.withResolvers<ResolvedTanStackTextModel>();
+        const pendingStream = Promise.withResolvers<undefined>();
+        const summaryErrors: unknown[] = [];
+        const capturedErrors: unknown[] = [];
+        let reachedStall = false;
+        const adapter = asTestRaw<AnyTextAdapter>({
+          async *chatStream(): AsyncIterable<StreamChunk> {
+            reachedStall = true;
+            yield {
+              type: EventType.RUN_STARTED,
+              runId: "stalled-compaction",
+              threadId: "compaction-thread",
+            };
+            // This boundary ignores cancellation, as a broken provider can.
+            await pendingStream.promise;
+          },
+        });
+        const model = asTestRaw<ResolvedTanStackTextModel>({
+          adapter,
+          keySource: "instance",
+          modelId: "compaction-model",
+          modelOptions: {},
+          provider: "openai",
+        });
+        const forModel = () => ({ captureError, forModel, middleware });
+        const captureError = (error: unknown) => capturedErrors.push(error);
+        const middleware = { name: "compaction-deadline-test" };
+        const options = {
+          abortSignal: new AbortController().signal,
+          aiAnalytics: { captureError, forModel, middleware },
+          summaryDeadlineMs: 40,
+          organizationId: toSafeId<"organization">("org_compaction"),
+          admission: testModelAdmission(
+            toSafeId<"organization">("org_compaction"),
+          ),
+          orgAIConfig: null,
+          managedAIResidency: "eu",
+          preserveTokens: 20,
+          resolveTextModel: async () => {
+            if (stalledAt === "resolution") {
+              reachedStall = true;
+              return await pendingModel.promise;
+            }
+            return model;
+          },
+          tenantWorkspaceIds: [],
+          triggerTokens: 50,
+          onSummaryError: (error: unknown) => summaryErrors.push(error),
+        } as const;
+        const oldText = "old request ".repeat(80);
+        const compacted =
+          history === "chat"
+            ? await compactChatMessagesForModel({
+                ...options,
+                boundary: { type: "raw" },
+                messages: [
+                  textMessage({ id: "old", role: "user", text: oldText }),
+                  textMessage({
+                    id: "latest",
+                    role: "user",
+                    text: "latest request",
+                  }),
+                ],
+              })
+            : await compactModelMessagesForModel({
+                ...options,
+                task: "chat",
+                messages: [
+                  { role: "user", content: oldText },
+                  { role: "user", content: "latest request" },
+                ],
+              });
+        expect(reachedStall).toBe(true);
+        expect(capturedErrors).toHaveLength(1);
+        expect(capturedErrors.at(0)).toBeInstanceOf(ModelDeadlineExceededError);
+        expect(capturedErrors.at(0)).toMatchObject({
+          deadlineMs: 40,
+        });
+        expect(summaryErrors).toHaveLength(1);
+        expect(summaryErrors.at(0)).toMatchObject({
+          cause: capturedErrors.at(0),
+        });
+        expect(compacted.status).toBe("ok");
+        if (compacted.status === "error") {
+          return;
+        }
+        expect(compacted.value.messages).toHaveLength(1);
+        expect(JSON.stringify(compacted.value.messages)).toContain(
+          "latest request",
+        );
+        expect(JSON.stringify(compacted.value.messages)).not.toContain(oldText);
+        expect(compacted.value.notice).toMatchObject({
+          type: "history-trimmed",
+        });
+      });
+    }
+  }
 
   test("meters model compaction against the fallback model that answers", async () => {
     const requestedModelId = "requested-model";

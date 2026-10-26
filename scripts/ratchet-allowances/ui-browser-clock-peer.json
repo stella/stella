@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The public UI browser-clock testing helper exposes Playwright Page in its contract and declares @playwright/test as an optional peer at the existing development version; runtime UI consumers do not need the testing SDK."
+}

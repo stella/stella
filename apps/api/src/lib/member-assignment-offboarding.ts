@@ -20,6 +20,7 @@ import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
+  billingDraftUserSettings,
   chatToolGrants,
   contacts,
   correspondence,
@@ -1437,6 +1438,36 @@ const clearMemberPresence = async ({
   });
 };
 
+type ValidateOrganizationReassignmentOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId"
+> & { reassignTo: SafeId<"user"> };
+
+const validateOrganizationReassignment = async ({
+  tx,
+  organizationId,
+  userId,
+  reassignTo,
+}: ValidateOrganizationReassignmentOptions) => {
+  const replacement = await tx
+    .select({ id: member.id })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, reassignTo),
+      ),
+    );
+  if (reassignTo === userId || replacement.length === 0) {
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "User is not a member of this organization",
+      }),
+    );
+  }
+};
+
 /**
  * Better Auth's permission/owner checks precede this transactional operation.
  * The membership row, its credentials and every assignment leave in the
@@ -1468,23 +1499,12 @@ export const removeOrganizationMemberInTransaction = async (
     abortTransaction(timerClose.error);
   }
   if (reassignTo) {
-    const replacement = await tx
-      .select({ id: member.id })
-      .from(member)
-      .where(
-        and(
-          eq(member.organizationId, organizationId),
-          eq(member.userId, reassignTo),
-        ),
-      );
-    if (reassignTo === userId || replacement.length === 0) {
-      abortTransaction(
-        new HandlerError({
-          status: 400,
-          message: "User is not a member of this organization",
-        }),
-      );
-    }
+    await validateOrganizationReassignment({
+      tx,
+      organizationId,
+      userId,
+      reassignTo,
+    });
   }
   // Workspace locks precede run, step, obligation and entity cleanup.
   await cancelMemberFlowRuns({
@@ -1533,6 +1553,14 @@ export const removeOrganizationMemberInTransaction = async (
     memberId,
     recordAuditEvent,
   });
+  await tx
+    .delete(billingDraftUserSettings)
+    .where(
+      and(
+        eq(billingDraftUserSettings.organizationId, organizationId),
+        eq(billingDraftUserSettings.userId, userId),
+      ),
+    );
   await tx
     .delete(searchHistoryTombstones)
     .where(
@@ -1652,6 +1680,7 @@ export type MemberCleanupDisposition =
  * schema coverage guard derives its census from this list.
  */
 export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS = [
+  [billingDraftUserSettings.userId, "cleared"],
   [member.userId, "cleared"],
   [desktopPresence.userId, "cleared"],
   [searchHistoryEntries.userId, "cleared"],

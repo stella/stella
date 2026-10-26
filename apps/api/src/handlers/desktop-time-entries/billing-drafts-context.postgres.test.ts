@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -213,12 +214,15 @@ if (!databaseUrl || !runPostgres) {
           expect(result.value.preference).toBe("Concise narratives");
         }
 
+        const firstEntry =
+          body.entries.at(0) ??
+          panic("Billing draft fixture requires an entry");
         const otherMatter = await loadBillingDraftContext({
           safeDb,
           organizationId,
           userId,
           body: {
-            entries: [{ ...body.entries[0], matterId: otherWorkspaceId }],
+            entries: [{ ...firstEntry, matterId: otherWorkspaceId }],
           },
         });
         expect(otherMatter.isErr()).toBe(true);

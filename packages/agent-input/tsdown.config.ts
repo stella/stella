@@ -6,6 +6,7 @@ export default defineConfig({
     "src/country.ts",
     "src/date-value.ts",
     "src/locale.ts",
+    "src/numeric-token.ts",
     "src/string-list.ts",
   ],
   format: ["esm"],

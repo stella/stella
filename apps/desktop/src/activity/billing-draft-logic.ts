@@ -25,7 +25,7 @@ export type DraftableGroup = DayReviewGroup & {
 };
 
 /** The server numbers drafts by position in the request, starting at 1. */
-export const draftEntryId = (index: number) => `entry_${index + 1}`;
+const draftEntryId = (index: number) => `entry_${index + 1}`;
 
 const unique = (values: readonly string[]) => [...new Set(values)];
 
@@ -289,7 +289,7 @@ const matterOf = ({ id, name, reference, color }: DesktopMatter) => ({
 });
 
 /** A merge applies only while every group it names is still selected. */
-export const effectiveStructure = (
+const effectiveStructure = (
   row: ReviewRow,
   selectedIds: ReadonlySet<string>,
 ) =>
@@ -531,15 +531,17 @@ export const previousDraftResult = (
     return {
       ...draft,
       entryId: positions.get(groupId) ?? panic("Steered group has no position"),
-      operations: draft.operations.flatMap((operation) => {
-        if (operation.type !== "merge") {
-          return [operation];
-        }
-        const entryIds = operation.entryIds.map(renumbered);
-        return entryIds.every((id) => id !== undefined)
-          ? [{ ...operation, entryIds }]
-          : [];
-      }),
+      operations: draft.operations
+        .map((operation) => {
+          if (operation.type !== "merge") {
+            return operation;
+          }
+          const entryIds = operation.entryIds.map(renumbered);
+          return entryIds.every((id) => id !== undefined)
+            ? { ...operation, entryIds }
+            : null;
+        })
+        .filter((operation) => operation !== null),
     };
   });
   const cited = new Map(

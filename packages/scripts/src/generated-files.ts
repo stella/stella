@@ -19,13 +19,17 @@ export const CI_GENERATED_OUTPUTS = {
     "apps/api/src/mcp/generated/capability-catalog.ts",
     "apps/api/src/mcp/generated/capability-feature-bindings.ts",
   ],
+  cliRegistry: ["apps/api/mcp-connect-tool-weights.json"],
   cliRuntime: [
     "packages/cli/src/generated/route-map.ts",
     "packages/cli/src/generated/tool-annotations.ts",
   ],
   webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
   prepaintLocale: ["apps/web/public/prepaint-init.js"],
-  routeTree: ["apps/web/src/routeTree.gen.ts"],
+  routeTree: [
+    "apps/web/src/routeTree.gen.ts",
+    "apps/web/src/route-templates.gen.ts",
+  ],
   apiTypes: ["apps/web/src/generated/api-routes.gen.ts"],
   apiTypecheckProjects: [
     "apps/api/.cache/typecheck-declarations/roots.json",

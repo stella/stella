@@ -53,10 +53,9 @@ impl DraftRequest {
   fn validate(&self) -> Result<(), String> {
     if self.entries.is_empty()
       || self.entries.len() > MAX_ENTRIES
-      || self
-        .steer
-        .as_ref()
-        .is_some_and(|steer| steer.is_empty() || steer.chars().count() > MAX_STEER_CHARS)
+      || self.steer.as_ref().is_some_and(|steer| {
+        steer.is_empty() || steer.chars().count() > MAX_STEER_CHARS
+      })
       || (self.previous_result.is_some() && self.steer.is_none())
     {
       return Err(FAILURE.to_string());
@@ -114,7 +113,10 @@ async fn json_response(
 }
 
 fn settings_url(account: &AccountRequest) -> String {
-  format!("{}/v1/desktop/billing-drafts/settings", account.api_base_url)
+  format!(
+    "{}/v1/desktop/billing-drafts/settings",
+    account.api_base_url
+  )
 }
 
 pub async fn settings(account: &AccountRequest) -> Result<serde_json::Value, String> {
@@ -138,7 +140,9 @@ pub async fn set_preference(
   account: &AccountRequest,
   preference: Option<&str>,
 ) -> Result<serde_json::Value, String> {
-  if preference.is_some_and(|text| text.is_empty() || text.chars().count() > MAX_STEER_CHARS) {
+  if preference
+    .is_some_and(|text| text.is_empty() || text.chars().count() > MAX_STEER_CHARS)
+  {
     return Err(FAILURE.to_string());
   }
   update_settings(account, &SettingsUpdate::Preference(preference)).await
@@ -149,7 +153,9 @@ async fn update_settings(
   update: &SettingsUpdate<'_>,
 ) -> Result<serde_json::Value, String> {
   json_response(crate::http_client::device_proof_request(
-    client(SETTINGS_TIMEOUT)?.put(settings_url(account)).json(update),
+    client(SETTINGS_TIMEOUT)?
+      .put(settings_url(account))
+      .json(update),
     &account.device_key,
     Some(&account.credential.key),
     None,
@@ -164,7 +170,10 @@ pub async fn draft(
   request.validate()?;
   json_response(crate::http_client::device_proof_request(
     client(DRAFT_TIMEOUT)?
-      .post(format!("{}/v1/desktop/billing-drafts", account.api_base_url))
+      .post(format!(
+        "{}/v1/desktop/billing-drafts",
+        account.api_base_url
+      ))
       .json(request),
     &account.device_key,
     Some(&account.credential.key),
@@ -207,8 +216,10 @@ mod tests {
         .unwrap()
         .extend(extra.as_object().unwrap().clone());
       assert!(
-        serde_json::from_value::<DraftRequest>(serde_json::json!({ "entries": [with_extra] }))
-          .is_err()
+        serde_json::from_value::<DraftRequest>(
+          serde_json::json!({ "entries": [with_extra] })
+        )
+        .is_err()
       );
       let mut top_level = serde_json::json!({ "entries": [entry()] });
       top_level
@@ -221,8 +232,13 @@ mod tests {
 
   #[test]
   fn draft_request_bounds_entries_and_steering() {
-    let request = |value: serde_json::Value| serde_json::from_value::<DraftRequest>(value).unwrap();
-    assert!(request(serde_json::json!({ "entries": [] })).validate().is_err());
+    let request =
+      |value: serde_json::Value| serde_json::from_value::<DraftRequest>(value).unwrap();
+    assert!(
+      request(serde_json::json!({ "entries": [] }))
+        .validate()
+        .is_err()
+    );
     assert!(
       request(serde_json::json!({ "entries": vec![entry(); MAX_ENTRIES + 1] }))
         .validate()

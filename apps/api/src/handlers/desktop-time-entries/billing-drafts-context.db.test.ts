@@ -47,6 +47,7 @@ const guidelineIds = {
   otherFirm: createSafeId<"agentSkillResource">(),
 };
 
+// timeout: This setup creates the isolated PGlite schema and seeds authorized and foreign-tenant rows before any behavior test runs.
 beforeAll(async () => {
   db = await getTestDb();
   await setupRlsTestData(db, ids);

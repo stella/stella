@@ -249,8 +249,9 @@ publishable code lives in `packages/`. Use Glob/Grep to explore.
 Before changing a convention-governed domain, read and apply the matching
 `.agents/skills/conventions-*/SKILL.md`. This includes AI, databases, i18n and
 user-facing strings, ingestion, MCP tools and CLI capabilities (agent-facing
-schemas, errors, and reference resources), performance guard failures and hot
-paths, architecture and scale, auth and data access, files and external APIs,
+schemas, errors, and reference resources), performance measurement for routes,
+screens, endpoints, MCP tools, mutations, live events, background jobs and polling
+loops, architecture and scale, auth and data access, files and external APIs,
 tests, `apps/web` React effects, and user-facing UI. The skills own the detailed
 rules.
 

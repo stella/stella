@@ -93,7 +93,7 @@ import {
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -145,7 +145,7 @@ export const ChatThreadPage = ({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const currentUserRoleView = useQueryView(currentUserRoleQuery);
-  useQueryViewError(currentUserRoleView);
+  useQueryViewError(currentUserRoleView, "ChatThreadPage:query");
   const currentUserRole =
     currentUserRoleView.type === "items" &&
     currentUserRoleView.refetchError === undefined
@@ -233,7 +233,7 @@ export const ChatThreadPage = ({
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
   const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
-  useQueryViewError(usageEntitlementDataView);
+  useQueryViewError(usageEntitlementDataView, "ChatThreadPage:query-2");
   const usageEntitlementData =
     usageEntitlementDataView.type === "items"
       ? usageEntitlementDataView.items
@@ -284,6 +284,7 @@ export const ChatThreadPage = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
     timingSurface: "chat-thread",
     conversationId: threadRef.threadId,
@@ -932,10 +933,10 @@ const useChatWebSearchSeed = ({
               : {},
         },
       );
-      // Eden returns `{ error }` on non-2xx responses; without this
+      // The API client returns `{ error }` on non-2xx responses; without this
       // throw onSuccess fires and the thread is marked seeded for
       // the session, leaving web search silently off.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(
@@ -945,7 +946,10 @@ const useChatWebSearchSeed = ({
       onSettled(threadRef.threadId, true);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useChatWebSearchSeed:failure",
+        scope: { type: "handler", handlerId: "useChatWebSearchSeed:failure" },
+      });
       onSettled(threadRef.threadId, false);
     },
   });

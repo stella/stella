@@ -64,7 +64,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions, filesKeys } from "@/lib/files/queries";
 import {
@@ -235,7 +235,11 @@ const loadAddedSources = async ({
 
   const bytes = await file.arrayBuffer();
   const sourceId = createUuid();
-  const result = await loadPDF({ fileId: sourceId, buffer: bytes });
+  const result = await loadPDF({
+    fileId: sourceId,
+    buffer: bytes,
+    pageSource: "portfolio",
+  });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -294,7 +298,7 @@ const authorizePDFOrganizerExport = async ({
     .files({ workspaceId })
     .url({ fieldId })
     .get({ query: { purpose: "download" } });
-  unwrapEden(response);
+  unwrapApiResponse(response);
 };
 
 type PageThumbnailProps = {
@@ -780,7 +784,13 @@ const LoadedPDFPageOrganizer = ({
       if (error instanceof DOMException && error.name === "AbortError") {
         return;
       }
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "LoadedPDFPageOrganizer.runOperation:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedPDFPageOrganizer.runOperation:failure",
+        },
+      });
       notifyUserError(error, tErrors("actionFailed"));
     }
   };
@@ -1282,7 +1292,7 @@ export const PDFPageOrganizer = ({
   );
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: sourceDocumentResult } = usePDFDocument({
-    key: { fileId: fieldId },
+    key: { fileId: fieldId, pageSource: "portfolio" },
     context: { buffer: originalFile.buffer },
   });
   const sourceDocument = resolveOrganizerSourceDocument({

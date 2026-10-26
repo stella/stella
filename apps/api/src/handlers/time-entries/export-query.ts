@@ -1,8 +1,8 @@
 import { eq, gte, lte } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import type { Temporal } from "@stll/time";
 
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
@@ -13,20 +13,20 @@ import {
   timekeeperIdsOf,
 } from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
-export const timeEntryExportQuerySchema = t.Object({
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  status: t.Optional(timeEntryStatusSchema),
-  workItemId: t.Optional(tSafeId("entity")),
+export const timeEntryExportQuerySchema = v.object({
+  dateFrom: v.optional(apiDateSchema),
+  dateTo: v.optional(apiDateSchema),
+  status: v.optional(timeEntryStatusSchema),
+  workItemId: v.optional(resourceIdSchema("entity")),
 });
 
 export type TimeEntryExportHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
-  query: Static<typeof timeEntryExportQuerySchema>;
+  query: v.InferOutput<typeof timeEntryExportQuerySchema>;
   /** The instant whose organization day dates the export. */
   at?: Temporal.Instant;
 };

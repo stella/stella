@@ -288,7 +288,8 @@ export const useBillingDraftSession = ({
       if (granted) {
         requestDrafts({ groups: undrafted, steer: null });
       }
-      return settingsFailed(granted);
+      settingsFailed(granted);
+      return undefined;
     });
   };
 
