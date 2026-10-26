@@ -72,7 +72,7 @@ export const AiHeadnotes = ({
           label={t("caseLaw.viewer.legalSentence")}
           origin={AI_ORIGIN}
         >
-          <p className="reader-justify">
+          <p className="reader-prose">
             <BidiText as="span" lang={holding.language}>
               <CitedSpans
                 blocks={blocks}
@@ -95,7 +95,7 @@ export const AiHeadnotes = ({
         >
           <BidiText
             as="p"
-            className="reader-justify text-foreground-strong-muted"
+            className="reader-prose text-foreground-strong-muted"
             lang={abstract.language}
           >
             <CitedSpans
