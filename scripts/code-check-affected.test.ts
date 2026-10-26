@@ -18,7 +18,6 @@ import {
   CODE_CHECK_LEGS,
   ownsCodeCheckPath,
 } from "../packages/scripts/src/code-quality-partition";
-import { checkBudgetMinutes, readCheckBudgets } from "./ci-check-pool-registry";
 import {
   ALL_WORKSPACE_CACHE_INPUTS,
   cgroupMemoryLimitFiles,
@@ -1300,7 +1299,7 @@ describe("parallel code-quality legs", () => {
         panic(`Missing job ${job}`);
       const jobBlock = block.split(/\n {2}[\w-]+:\n/u).at(0) ?? block;
       const jobMinutes = minutes(jobBlock, 4);
-      // A check moved into the job's check pool is bounded by its budget.
+      // A check moved into the job's check pool keeps its step fields there.
       const pool = pooledChecks(job);
       for (const name of names) {
         const step = jobBlock
@@ -1309,12 +1308,8 @@ describe("parallel code-quality legs", () => {
         const pooled = pool.find((check) => check["name"] === name);
         const stepMinutes =
           step === undefined
-            ? checkBudgetMinutes(
-                readCheckBudgets(),
-                job === "code-quality-web-rest"
-                  ? job
-                  : panic(`Unpooled job ${job}`),
-                pooled === undefined ? panic(`Missing step ${name}`) : name,
+            ? Number(
+                pooled?.["timeout-minutes"] ?? panic(`Missing step ${name}`),
               )
             : minutes(step, 8);
         expect(stepMinutes * 60_000, name).toBeGreaterThanOrEqual(

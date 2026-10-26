@@ -368,25 +368,8 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toBase64()}`
   ),
 ).CANONICAL_CANCEL_STEP;
-// Pooled checks once set their own `timeout-minutes`; budgets now live in the
-// generated budgets file, so a merge base from before that reads without the
-// field. Inert once no base entry declares it.
-const withoutStepTimeouts = (source: string) => {
-  const { checks } = v.parse(
-    v.object({ checks: v.array(v.record(v.string(), v.unknown())) }),
-    Bun.YAML.parse(source),
-  );
-  if (!checks.some((entry) => "timeout-minutes" in entry)) {
-    return source;
-  }
-  return Bun.YAML.stringify({
-    checks: checks.map(({ "timeout-minutes": _timeout, ...entry }) => entry),
-  });
-};
 const readBaseCheckPool: ReadCheckPool = (pool) =>
-  withoutStepTimeouts(
-    git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]),
-  );
+  git(["show", `${mergeBase}:${checkPoolRegistryPath(pool)}`]);
 const baseCancellationSchema = cancellationJobSchema(
   baseCancellation,
   readBaseCheckPool,

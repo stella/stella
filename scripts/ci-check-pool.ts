@@ -39,6 +39,7 @@ import path from "node:path";
 import {
   CHECK_POOL_JOBS,
   checkBudgetMinutes,
+  type CheckBudgets,
   type CheckPoolJob,
   checkPoolResultsPath,
   type PoolCheck,
@@ -530,6 +531,17 @@ const processDump = (pids: readonly number[]) => {
   );
   return `${listed.stdout.toString()}${listed.stderr.toString()}`;
 };
+
+/** A check's cap: its generated budget, lowered by a declared timeout-minutes. */
+export const effectiveBudgetMinutes = (
+  budgets: CheckBudgets,
+  job: CheckPoolJob,
+  { name, timeoutMinutes }: Pick<PoolCheck, "name" | "timeoutMinutes">,
+) =>
+  Math.min(
+    timeoutMinutes ?? Number.POSITIVE_INFINITY,
+    checkBudgetMinutes(budgets, job, name),
+  );
 
 /** A sample of what a running check has done so far. */
 export type Progress = {
@@ -1316,7 +1328,7 @@ const main = async () => {
   const launch = processLauncher({
     root,
     directory,
-    budgetMinutes: ({ name }) => checkBudgetMinutes(budgets, job, name),
+    budgetMinutes: (check) => effectiveBudgetMinutes(budgets, job, check),
   });
   const results = await runChecks({
     planned,

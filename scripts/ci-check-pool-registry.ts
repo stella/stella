@@ -51,8 +51,9 @@ export const checkPoolStepRun = (job: CheckPoolJob) =>
   ].join("\n");
 
 /**
- * One check: the fields of the workflow step it replaced, verbatim, except
- * its time limit, which lives in the generated budgets file.
+ * One check: the fields of the workflow step it replaced, verbatim. Its time
+ * limit is its generated budget, or a stricter `timeout-minutes` its author
+ * declared.
  */
 export type PoolCheck = {
   name: string;
@@ -60,6 +61,8 @@ export type PoolCheck = {
   condition: string;
   run: string;
   env: Readonly<Record<string, string>>;
+  /** An explicit cap below the generated budget, as its author declared it. */
+  timeoutMinutes: number | undefined;
   /** `continue-on-error` as declared: a literal or a `${{ }}` expression. */
   continueOnError: boolean | string | undefined;
   step: Readonly<Record<string, unknown>>;
@@ -71,6 +74,7 @@ const CHECK_KEYS = new Set([
   "if",
   "env",
   "run",
+  "timeout-minutes",
   "continue-on-error",
 ]);
 
@@ -118,6 +122,7 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
     }
     const { name, id, env = {}, run } = entry;
     const condition = entry["if"];
+    const timeout = entry["timeout-minutes"];
     const continueOnError = entry["continue-on-error"];
     if (typeof name !== "string" || name.trim() === "" || names.has(name)) {
       throw new CheckPoolRegistryError(
@@ -147,6 +152,12 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
       throw new CheckPoolRegistryError(`${name}: env values must be strings`);
     }
     if (
+      timeout !== undefined &&
+      (typeof timeout !== "number" || !Number.isInteger(timeout) || timeout < 1)
+    ) {
+      throw new CheckPoolRegistryError(`${name}: invalid timeout-minutes`);
+    }
+    if (
       continueOnError !== undefined &&
       typeof continueOnError !== "boolean" &&
       (typeof continueOnError !== "string" || continueOnError.trim() === "")
@@ -161,6 +172,7 @@ export const parseCheckPool = (source: string): PoolCheck[] => {
       env: Object.fromEntries(
         Object.entries(env).map(([key, value]) => [key, String(value)]),
       ),
+      timeoutMinutes: typeof timeout === "number" ? timeout : undefined,
       continueOnError,
       step: entry,
     };
@@ -236,7 +248,7 @@ export const parseCheckBudgets = (source: string): CheckBudgets => {
 export const readCheckBudgets = (root: string = ROOT) =>
   parseCheckBudgets(readFileSync(path.join(root, CHECK_BUDGETS_PATH), "utf-8"));
 
-/** A pooled check's budget; a check without one cannot run. */
+/** A pooled check's generated budget; a check without one cannot run. */
 export const checkBudgetMinutes = (
   budgets: CheckBudgets,
   job: CheckPoolJob,

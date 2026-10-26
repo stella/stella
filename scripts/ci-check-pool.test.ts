@@ -19,6 +19,7 @@ import {
   type CheckResult,
   conditionHolds,
   continueOnErrorHolds,
+  effectiveBudgetMinutes,
   failedCheckAnnotation,
   failedCheckCause,
   finishedCheckLine,
@@ -71,6 +72,7 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   condition: "true",
   run: "true",
   env: {},
+  timeoutMinutes: undefined,
   continueOnError: undefined,
   step: { name },
   ...extra,
@@ -236,10 +238,11 @@ test("the registry rejects fields the pool cannot honour", () => {
     "    uses: actions/checkout@v4\n",
     "    background: true\n",
     "    shell: sh\n",
-    // A check's time limit is its generated budget, never a step field.
-    "    timeout-minutes: 5\n",
+    "    timeout-minutes: 0\n",
   ]) {
-    expect(() => parseCheckPool(entry(field))).toThrow("unsupported fields");
+    expect(() => parseCheckPool(entry(field))).toThrow(
+      /unsupported fields|timeout-minutes/u,
+    );
   }
   expect(() =>
     parseCheckPool(`${entry("")}  - name: A\n    if: x\n    run: y\n`),
@@ -678,6 +681,22 @@ test("a check's process tree follows descendants that left its group", () => {
   expect(processTree(rows, 10).map(({ pid }) => pid)).toEqual([
     10, 11, 12, 13, 14,
   ]);
+});
+
+test("a declared timeout-minutes only ever lowers a check's budget", () => {
+  const budgets = {
+    "ci-checks-policy": {},
+    "ci-checks-rest": { Check: { minutes: 12, samples: 3 } },
+    "code-quality-web-rest": {},
+  };
+  const effective = (timeoutMinutes: number | undefined) =>
+    effectiveBudgetMinutes(budgets, "ci-checks-rest", {
+      name: "Check",
+      timeoutMinutes,
+    });
+  expect(effective(undefined)).toBe(12);
+  expect(effective(1)).toBe(1);
+  expect(effective(40)).toBe(12);
 });
 
 test("every pooled check has exactly one budget", () => {

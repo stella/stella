@@ -12,7 +12,6 @@ import path from "node:path";
 import ts from "typescript6";
 import * as v from "valibot";
 
-import { checkBudgetMinutes, readCheckBudgets } from "./ci-check-pool-registry";
 import {
   BUN_FLAGS,
   checkDockerSource,
@@ -1435,7 +1434,7 @@ describe("Docker source closure", () => {
     { rootIgnore: "", specificIgnore: "entry.ts", available: false },
     { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
     { rootIgnore: "", specificIgnore: undefined, available: true },
-  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
+  ])("Dockerfile ignore rules replace the root rules: %j", async (fixture) => {
     const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
     writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
     writeFileSync(
@@ -1460,7 +1459,7 @@ describe("Docker source closure", () => {
         Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
       ).toBe(0);
     }
-    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
+    expect(await checkRepositoryDockerSources(fixtureRoot)).toEqual(
       fixture.available
         ? []
         : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
@@ -1468,9 +1467,9 @@ describe("Docker source closure", () => {
   });
 
   // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
-  test("every tracked Dockerfile passes the full hydrated repository check", () => {
+  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
     expect(
-      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
   }, 40_000);
 
@@ -1505,15 +1504,7 @@ describe("Docker source closure", () => {
     expect(guard).toBeGreaterThan(restore);
     expect(steps[guard]?.if).toContain("steps.install.outcome == 'success'");
     expect(steps[guard]?.if).toContain("package_checks_required == 'true'");
-    // The pool caps the step at its generated budget; the command's own
-    // `timeout 30s` stays the check's fixed total budget.
-    expect(steps[guard]?.["timeout-minutes"]).toBe(
-      checkBudgetMinutes(
-        readCheckBudgets(),
-        "ci-checks-rest",
-        "Check Docker source closure",
-      ),
-    );
+    expect(steps[guard]?.["timeout-minutes"]).toBe(1);
     expect(steps[guard]?.run).toBe(
       "timeout 30s bun test scripts/docker-source-closure.test.ts",
     );

@@ -49,9 +49,9 @@ const isStepRecord = (step: unknown): step is Record<string, unknown> =>
 
 let budgets: CheckBudgets | undefined;
 /**
- * The pool bounds every check by its budget, so an expanded check carries
- * that bound as its `timeout-minutes` for guards that require one. Budgets
- * come from the working tree, the file the pool itself enforces.
+ * The pool bounds every check by its budget, so an expanded check without a
+ * declared `timeout-minutes` carries that bound for guards that require one.
+ * Budgets come from the working tree, the file the pool itself enforces.
  */
 const withBudget = (
   pool: NonNullable<ReturnType<typeof checkPoolJob>>,
@@ -62,7 +62,7 @@ const withBudget = (
   const budget = Object.hasOwn(budgets[pool], name)
     ? budgets[pool][name]
     : undefined;
-  return budget === undefined
+  return budget === undefined || step["timeout-minutes"] !== undefined
     ? { ...step }
     : { ...step, "timeout-minutes": budget.minutes };
 };

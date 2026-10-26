@@ -7,6 +7,7 @@
 checks:
   - name: Code quality (web)
     if: ${{ !cancelled() }}
+    timeout-minutes: 20
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -37,6 +38,7 @@ checks:
 
   - name: Code quality (rest)
     if: ${{ !cancelled() }}
+    timeout-minutes: 20
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
