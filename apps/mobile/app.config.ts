@@ -145,7 +145,8 @@ const appConfigBase = ({
   },
   runtimeVersion,
   updates: updatesFor(variant, signingCertificatePresent),
-  plugins: ["expo-router"],
+  // Scene life cycle: iOS 27 asserts at launch without it.
+  plugins: ["expo-router", "./plugins/with-scene-lifecycle.ts"],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
