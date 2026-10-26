@@ -507,6 +507,24 @@
     "addEntry": "Lisa kanne",
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
+    "approval": {
+      "approveSelected": "Kinnita {count, plural, one {# valitud kanne} other {# valitud kannet}}",
+      "empty": "Selles toimikus ei oota midagi kinnitamist.",
+      "failed": "Muudatust ei salvestatud. Proovige uuesti.",
+      "myTime": "Minu aeg",
+      "refusals": {
+        "invalidEntry": "Lisage kirjeldus ja kontrollige töö kuupäeva, seejärel kinnitage kanne.",
+        "notApprover": "Seda kannet saab kinnitada ainult määratud kinnitaja või administraator.",
+        "notFound": "Seda kannet enam ei ole. Värskendage loendit.",
+        "runningTimer": "Peatage töötav taimer enne kande kinnitamist.",
+        "unpriced": "Sellel kandel pole määra. Seadistage selle toimiku määr ja kinnitage seejärel kanne.",
+        "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
+      },
+      "returnComment": "Tagastamise põhjus",
+      "selectEntry": "Vali kanne",
+      "timeEntries": "Ajakanded",
+      "title": "Kinnitamine"
+    },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
     "batchActions": "Partiiaktsioonid",
@@ -594,6 +612,7 @@
       "openInvoice": "Ava arve",
       "otherCurrency": "{count, plural, one {# rida on} other {# rida on}} kirjendatud muus valuutas kui {currency} ja jääb eraldi arve jaoks.",
       "outsideScope": "Ei kuulu käibemaksu kohaldamisalasse, 0 %",
+      "pendingApprovals": "{count, plural, one {# kirje ootab} other {# kirjet ootab}} kinnitamist. Vaata kinnitamisi.",
       "rate": "Tunnihind",
       "readyDescription": "Väljastamisel saab arve teie numbriseeria järgmise numbri ja lukustatakse. Mustandit saab edasi muuta.",
       "readyTitle": "Valmis väljastamiseks",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "või andke meile teada aadressil",
       "viewDocumentation": "Vaata dokumentatsiooni"
     },
-    "enterKey": "↵",
     "error": "Viga",
     "expenses": "Kulud",
     "export": {

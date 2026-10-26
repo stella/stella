@@ -45,8 +45,8 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
             <>
               <BreadcrumbSeparator className="max-sm:hidden" />
               <BreadcrumbItem className="max-sm:hidden">
-                <Link {...trail.yearLink}>
-                  {formatYear(format, trail.yearLink.search.year)}
+                <Link {...trail.yearLink.link}>
+                  {formatYear(format, trail.yearLink.year)}
                 </Link>
               </BreadcrumbItem>
             </>
@@ -117,8 +117,8 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
             <>
               <BreadcrumbSeparator className="max-sm:hidden" />
               <BreadcrumbItem className="max-sm:hidden">
-                <Link {...trail.yearLink}>
-                  {formatYear(format, trail.yearLink.search.year)}
+                <Link {...trail.yearLink.link}>
+                  {formatYear(format, trail.yearLink.year)}
                 </Link>
               </BreadcrumbItem>
             </>
