@@ -261,9 +261,14 @@ export const RELEASE_ARTIFACT = {
     manifestKey: "image",
   },
   webImage: {
-    name: "Web image",
+    name: "staging Web image",
     portability: "target-bound",
     manifestKey: "webImage",
+  },
+  productionWebImage: {
+    name: "production Web image",
+    portability: "target-bound",
+    manifestKey: "productionWebImage",
   },
 } as const;
 
@@ -321,15 +326,16 @@ export const renderReleaseDocsContract = () =>
   [
     RELEASE_DOC_MARKERS.begin,
     "",
-    "Each release publishes two container artifacts:",
+    "Each release candidate builds three container artifacts once:",
     "",
     `- The ${RELEASE_ARTIFACT.apiImage.name} is portable and is the image used by the self-host`,
     "  Compose contract.",
-    `- The ${RELEASE_ARTIFACT.webImage.name} is built for the release workflow's selected hosted`,
-    "  target environment; self-hosted operators must build the web image with",
+    `- The ${RELEASE_ARTIFACT.webImage.name} and ${RELEASE_ARTIFACT.productionWebImage.name} use their respective`,
+    "  hosted public URLs; self-hosted operators must build the web image with",
     "  their own public URLs.",
-    `- \`release-manifest.json\` records both \`${RELEASE_ARTIFACT.apiImage.manifestKey}\` and \`${RELEASE_ARTIFACT.webImage.manifestKey}\` with`,
-    "  digest-qualified references.",
+    `- \`release-manifest.json\` records \`${RELEASE_ARTIFACT.apiImage.manifestKey}\`, \`${RELEASE_ARTIFACT.webImage.manifestKey}\` and`,
+    `  \`${RELEASE_ARTIFACT.productionWebImage.manifestKey}\` with digest-qualified references.`,
+    "- The final release aliases these proven digests without rebuilding images.",
     "",
     RELEASE_DOC_MARKERS.end,
   ].join("\n");
