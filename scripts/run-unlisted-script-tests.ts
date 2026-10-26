@@ -648,7 +648,11 @@ export const gitInvocation = (args: readonly string[]) => {
   while ((args[index] ?? "").startsWith("-")) {
     const option = args[index] ?? "";
     if (option === "-C") {
-      directory = path.join(directory, args[index + 1] ?? ".");
+      // Like `cd`: an absolute operand replaces the directory so far.
+      const operand = args[index + 1] ?? ".";
+      directory = path.isAbsolute(operand)
+        ? path.normalize(operand)
+        : path.join(directory, operand);
     }
     index += GIT_VALUE_OPTIONS.has(option) ? 2 : 1;
   }
@@ -764,7 +768,7 @@ const commandScans = (trace: string): ScanRecord[] => {
     for (const operand of operands.length === 0 ? ["."] : operands) {
       // An untraced working directory resolves later; `git -C` still applies.
       const directory =
-        git !== undefined && traced === undefined
+        git !== undefined && traced === undefined && !path.isAbsolute(operand)
           ? path.join(git.directory, operand)
           : operand;
       const record = {

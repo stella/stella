@@ -516,6 +516,22 @@ describe("directory scan coverage", () => {
       directory: "parent",
       rest: ["--", "data"],
     });
+    expect(
+      gitInvocation(["git", "-C", "/repo/sub", "ls-files", "--", "data"])
+        .directory,
+    ).toBe("/repo/sub");
+    expect(
+      gitInvocation([
+        "git",
+        "-C",
+        "parent",
+        "-C",
+        "/repo/sub",
+        "-C",
+        "child",
+        "ls-files",
+      ]).directory,
+    ).toBe("/repo/sub/child");
     withTrackedFixture(({ root, tracked }) => {
       const trace = [
         `1 openat(AT_FDCWD<${root}>, ".git", O_RDONLY) = 3`,
