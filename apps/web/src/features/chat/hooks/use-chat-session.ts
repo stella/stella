@@ -9,6 +9,7 @@ import {
 import type { ComponentProps } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -166,6 +167,10 @@ import {
 } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import {
+  type CurrentWorkspaceDocument,
+  getCurrentWorkspaceDocument,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type CreateDocumentInput = ChatUITools["create-document"]["input"];
 type CreateDocumentOutput = ChatUITools["create-document"]["output"];
@@ -264,12 +269,14 @@ const prepareCreateDocumentDraft = async (
 
 const openCreatedDocumentInInspector = async (
   output: CreateDocumentMatterSuccess,
+  documentOnScreen: CurrentWorkspaceDocument,
 ) => {
-  await openEntityInInspector(
-    output.entityId,
-    output.fileName,
-    output.workspaceId,
-  );
+  await openEntityInInspector({
+    documentOnScreen,
+    entityId: output.entityId,
+    label: output.fileName,
+    workspaceId: output.workspaceId,
+  });
   const tab = useInspectorTabsStore
     .getState()
     .tabs.find(
@@ -320,6 +327,7 @@ export const useChatSession = ({
   const { activeOrganizationId: organizationId, id: userId } =
     useAuthenticatedUser();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const chatToolGrantsQuery = useQuery(
     chatToolGrantsOptions({
       activeOrganizationId: organizationId,
@@ -1567,17 +1575,23 @@ export const useChatSession = ({
       );
 
       if (!promotedDraftInPlace) {
-        await openCreatedDocumentInInspector(output);
+        await openCreatedDocumentInInspector(
+          output,
+          getCurrentWorkspaceDocument(router.state.matches),
+        );
       }
     },
-    [chat, queryClient, setMessages, t, threadRef, exceptionHandlerId],
+    [chat, queryClient, router, setMessages, t, threadRef, exceptionHandlerId],
   );
 
   const handleOpenCreatedDocument = useCallback(
     async (output: CreateDocumentMatterSuccess) => {
-      await openCreatedDocumentInInspector(output);
+      await openCreatedDocumentInInspector(
+        output,
+        getCurrentWorkspaceDocument(router.state.matches),
+      );
     },
-    [],
+    [router],
   );
   const streamdownComponents = useMemo(
     () => ({

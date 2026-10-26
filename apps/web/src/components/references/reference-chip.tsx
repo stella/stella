@@ -46,6 +46,7 @@ import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /**
  * The matter a chat surface renders in. An entity href persisted without its
@@ -312,11 +313,14 @@ export const useReferenceActivation = (reference: ChatReference) => {
       return () =>
         detached(
           (async () => {
-            const result = await openEntityInInspector(
+            const result = await openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
               entityId,
               label,
-              matterId,
-            );
+              workspaceId: matterId,
+            });
             if (result.type === "folder") {
               await navigateToWorkspaceFolder({
                 folderId: result.entityId,

@@ -23,6 +23,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 type SourceChipsProps = {
   messageId: string;
@@ -258,11 +259,12 @@ const SourceChip = ({
 
     detached(
       (async () => {
-        const result = await openEntityInInspector(
-          sourceDocument.entityId,
-          sourceDocument.title,
-          resolvedWorkspaceId,
-        );
+        const result = await openEntityInInspector({
+          documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+          entityId: sourceDocument.entityId,
+          label: sourceDocument.title,
+          workspaceId: resolvedWorkspaceId,
+        });
 
         if (result.type === "folder") {
           await navigateToWorkspaceFolder({

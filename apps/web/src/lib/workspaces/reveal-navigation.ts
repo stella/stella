@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { useNavigate } from "@tanstack/react-router";
+import type { RegisteredRouter, useNavigate } from "@tanstack/react-router";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -67,7 +67,7 @@ type NavigateToWorkspaceRevealOptions = RevealTargetInput & {
   navigate: Navigate;
   queryClient: QueryClient;
   /** Where the view on screen is read once the matter's views load. */
-  router: Parameters<typeof getCurrentWorkspaceView>[0];
+  router: Pick<RegisteredRouter, "state">;
 };
 
 export const navigateToWorkspaceReveal = async ({
@@ -94,7 +94,7 @@ export const navigateToWorkspaceReveal = async ({
   await navigate(
     getWorkspaceRevealTarget({
       ...target,
-      currentView: getCurrentWorkspaceView(router),
+      currentView: getCurrentWorkspaceView(router.state.matches),
       views,
     }),
   );

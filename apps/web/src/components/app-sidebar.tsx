@@ -158,6 +158,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
@@ -1662,7 +1663,12 @@ export const MatterActivityList = ({
     }
 
     if (destination.type === "document") {
-      await openEntityInInspector(entityId, title, workspaceId);
+      await openEntityInInspector({
+        documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+        entityId,
+        label: title,
+        workspaceId,
+      });
       return;
     }
 

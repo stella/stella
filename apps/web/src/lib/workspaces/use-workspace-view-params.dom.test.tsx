@@ -8,6 +8,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, render } = await import("@testing-library/react");
 const { RouterProvider, useRouter } = await import("@tanstack/react-router");
 const {
+  getCurrentWorkspaceDocument,
   getCurrentWorkspaceView,
   useCurrentWorkspaceView,
   useWorkspaceViewParams,
@@ -22,20 +23,22 @@ const {
 
 const matterB = "019a0000-0000-7000-8000-000000000302";
 
-/** Renders the params a navigation into each matter would open under, and
- * the view on screen as the hook and the router snapshot each read it. */
+/** Renders the params a navigation into each matter would open under, the
+ * view on screen as the hook and the router snapshot each read it, and the
+ * document page on screen. */
 const Probe = () => {
   const intoA = useWorkspaceViewParams(matterA);
   const intoB = useWorkspaceViewParams(matterB);
   const subscribed = useCurrentWorkspaceView();
-  const router = useRouter();
+  const { matches } = useRouter().state;
   return (
     <>
       <output data-testid="params">{JSON.stringify({ intoA, intoB })}</output>
       <output data-testid="current">
         {JSON.stringify({
           subscribed: subscribed ?? null,
-          snapshot: getCurrentWorkspaceView(router) ?? null,
+          snapshot: getCurrentWorkspaceView(matches) ?? null,
+          document: getCurrentWorkspaceDocument(matches) ?? null,
         })}
       </output>
     </>
@@ -94,30 +97,38 @@ describe("the view a matter navigation opens under", () => {
   });
 });
 
-describe("the view on screen", () => {
+describe("the page on screen", () => {
   const filesView = { workspaceId: matterA, viewId: filesViewId };
+  const offView = { subscribed: null, snapshot: null, document: null };
 
-  test("is the matched view under a view and its document, read alike by the hook and the router", async () => {
-    for (const path of [
-      `/workspaces/${matterA}/${filesViewId}`,
-      `/workspaces/${matterA}/${filesViewId}/document?entity=e`,
-    ]) {
-      expect(await currentViewAt(path)).toEqual({
-        subscribed: filesView,
-        snapshot: filesView,
-      });
-    }
+  test("a view root names its view and no document", async () => {
+    expect(
+      await currentViewAt(`/workspaces/${matterA}/${filesViewId}`),
+    ).toEqual({ subscribed: filesView, snapshot: filesView, document: null });
   });
 
-  test("is none on a matter page that is not a view, or outside any matter", async () => {
+  test("a document page names its view, matter, entity and field", async () => {
+    expect(
+      await currentViewAt(
+        `/workspaces/${matterA}/${filesViewId}/document?entity=e&field=f`,
+      ),
+    ).toEqual({
+      subscribed: filesView,
+      snapshot: filesView,
+      document: { workspaceId: matterA, entityId: "e", fieldId: "f" },
+    });
+  });
+
+  test("a matter page that is not a view names neither, even when its path ends in /document", async () => {
     for (const path of [
       `/workspaces/${matterA}/reports/export_1`,
-      `/workspaces/${matterA}/correspondence/thread_1`,
+      `/workspaces/${matterA}/reports/document`,
+      `/workspaces/${matterA}/correspondence/document`,
       "/chat",
     ]) {
-      expect(await currentViewAt(path)).toEqual({
-        subscribed: null,
-        snapshot: null,
+      expect({ path, current: await currentViewAt(path) }).toEqual({
+        path,
+        current: offView,
       });
     }
   });
