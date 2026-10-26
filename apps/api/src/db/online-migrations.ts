@@ -19,6 +19,10 @@ import {
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
+  ACCOUNT_AUDIT_CONSTRAINT,
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
+} from "./account-audit-constraint-validation";
+import {
   AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   AGENT_SKILL_BINDING_CONSTRAINTS,
 } from "./agent-skill-binding-constraint-validation";
@@ -824,6 +828,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
   ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
@@ -852,6 +857,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    ACCOUNT_AUDIT_CONSTRAINT,
     CASE_LAW_PARSED_SOURCE_CONSTRAINT,
     ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,

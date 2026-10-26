@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261026120000_sign_in_method_audit_event",
+    form: "add-constraint",
+    reason:
+      "The expanded account-audit CHECK is added NOT VALID without scanning existing audit rows; the preceding drop and replacement are atomic, lock acquisition is bounded by 1s and each catalog statement by 10s, and the registered online phase validates after the schema lock is released.",
+  },
+  {
     migration: "20261025130000_reader_answer_continuation_spans",
     form: "add-column",
     reason:

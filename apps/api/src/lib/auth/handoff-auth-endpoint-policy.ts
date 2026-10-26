@@ -109,6 +109,7 @@ export const HANDOFF_AUTH_ENDPOINT_POLICY = {
   "/sign-in/email": "step-up-method",
   "/sign-in/email-otp": "step-up-method",
   "/sign-in/social": "step-up-method",
+  "/sign-in-methods/send-otp": "refused",
   "/sign-out": "ordinary",
   "/sign-up/email": "ordinary",
   "/social-link-hint": "ordinary",

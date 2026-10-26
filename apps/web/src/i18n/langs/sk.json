@@ -4947,6 +4947,16 @@
       "preferredNamePlaceholder": "Vaše meno",
       "profileDescription": "Spravujte svoje osobné nastavenia",
       "sendOtpCode": "Odoslať overovací kód",
+      "signInMethods": {
+        "confirmDescription": "Zadajte nový kód zaslaný na e-mail, aby ste tento spôsob prihlásenia odpojili.",
+        "confirmTitle": "Odpojiť {provider}?",
+        "description": "Prepojte účty, ktoré používajú rovnakú overenú e-mailovú adresu.",
+        "emailCode": "Kód z e-mailu",
+        "emailCodeDescription": "Vždy sa môžete prihlásiť pomocou kódu zaslaného na e-mail.",
+        "lastMethod": "Pred odpojením tohto účtu prepojte iný účet.",
+        "title": "Spôsoby prihlásenia",
+        "unavailable": "Aby bolo možné odpojiť spôsoby prihlásenia, musí byť nakonfigurované doručovanie e-mailov."
+      },
       "timezone": "Časové pásmo",
       "timezoneDescription": "Použité pre časové údaje v notifikáciách a e-mailoch",
       "timezoneSaved": "Časové pásmo aktualizované",

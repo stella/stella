@@ -4947,6 +4947,16 @@
       "preferredNamePlaceholder": "Tu nombre",
       "profileDescription": "Gestiona tus preferencias personales",
       "sendOtpCode": "Enviar código de verificación",
+      "signInMethods": {
+        "confirmDescription": "Introduce un código nuevo enviado a tu correo electrónico para desconectar este método de inicio de sesión.",
+        "confirmTitle": "¿Desconectar {provider}?",
+        "description": "Conecta cuentas que usen la misma dirección de correo electrónico verificada.",
+        "emailCode": "Código por correo electrónico",
+        "emailCodeDescription": "Siempre puedes iniciar sesión con un código enviado a tu correo electrónico.",
+        "lastMethod": "Conecta otra cuenta antes de desconectar esta.",
+        "title": "Métodos de inicio de sesión",
+        "unavailable": "Debe configurarse el envío de correo electrónico para desconectar métodos de inicio de sesión."
+      },
       "timezone": "Zona horaria",
       "timezoneDescription": "Se usa para las marcas de tiempo en notificaciones y correos",
       "timezoneSaved": "Zona horaria actualizada",

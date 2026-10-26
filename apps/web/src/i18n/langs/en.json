@@ -4947,6 +4947,16 @@
       "preferredNamePlaceholder": "Your name",
       "profileDescription": "Manage your personal preferences",
       "sendOtpCode": "Send verification code",
+      "signInMethods": {
+        "confirmDescription": "Enter a fresh code sent to your email to disconnect this sign-in method.",
+        "confirmTitle": "Disconnect {provider}?",
+        "description": "Connect accounts that use the same verified email address.",
+        "emailCode": "Email code",
+        "emailCodeDescription": "You can always sign in with a code sent to your email.",
+        "lastMethod": "Connect another account before disconnecting this one.",
+        "title": "Sign-in methods",
+        "unavailable": "Email delivery must be configured to disconnect sign-in methods."
+      },
       "timezone": "Timezone",
       "timezoneDescription": "Used for timestamps in notifications and emails",
       "timezoneSaved": "Timezone updated",

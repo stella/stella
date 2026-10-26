@@ -4947,6 +4947,16 @@
       "preferredNamePlaceholder": "Jūsų vardas",
       "profileDescription": "Tvarkykite savo asmenines nuostatas",
       "sendOtpCode": "Siųsti patvirtinimo kodą",
+      "signInMethods": {
+        "confirmDescription": "Norėdami atsieti šį prisijungimo būdą, įveskite naują į el. paštą atsiųstą kodą.",
+        "confirmTitle": "Atsieti „{provider}“?",
+        "description": "Susiekite paskyras, kuriose naudojamas tas pats patvirtintas el. pašto adresas.",
+        "emailCode": "El. paštu siunčiamas kodas",
+        "emailCodeDescription": "Visada galite prisijungti naudodami į el. paštą atsiųstą kodą.",
+        "lastMethod": "Prieš atjungdami šią paskyrą, susiekite kitą.",
+        "title": "Prisijungimo būdai",
+        "unavailable": "Norint atsieti prisijungimo būdus, turi būti sukonfigūruotas el. laiškų siuntimas."
+      },
       "timezone": "Laiko juosta",
       "timezoneDescription": "Naudojama pranešimų ir el. laiškų laiko žymoms",
       "timezoneSaved": "Laiko juosta atnaujinta",

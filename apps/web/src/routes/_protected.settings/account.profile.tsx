@@ -74,6 +74,7 @@ import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 
 import {
@@ -596,6 +597,7 @@ function ProfilePageBody() {
 
       <ChatNotificationsCard />
 
+      <SignInMethods />
       <TwoFactorCard />
 
       <SessionsCard />
