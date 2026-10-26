@@ -625,6 +625,11 @@ const classValuePosition = (
       ? "class-list"
       : "other";
   }
+  return bindingValuePosition(node, parent);
+};
+
+// A value bound to a class-list name: `const className = …` or a class field.
+const bindingValuePosition = (node: Node, parent: Node): StringPosition => {
   if (parent.type === "VariableDeclarator") {
     return parent.init === node && isClassListBinding(parent.id)
       ? "class-list"
