@@ -1886,6 +1886,167 @@ if (!databaseUrl || !runPostgres) {
       });
     });
 
+    test("credit notes credit only their original's matters, so every caller counts every credit", async () => {
+      const scenario = await seedScenario();
+      await db
+        .update(invoices)
+        .set({
+          status: INVOICE_STATUS.FINALIZED,
+          finalizedAt: new Date("2026-10-15T12:00:00Z"),
+          invoiceNumber: "CREDIT-ORIGINAL",
+          netAmount: cents(200),
+          vatAmount: cents(42),
+          totalAmount: cents(242),
+        })
+        .where(eq(invoices.id, scenario.invoiceId));
+      // A third matter of the same client that the original does not bill and
+      // the member cannot access.
+      const thirdMatterId = createSafeId<"workspace">();
+      await db.insert(workspaces).values({
+        id: thirdMatterId,
+        organizationId: scenario.orgId,
+        clientId: scenario.clientId,
+        name: "Invoice matter",
+        reference: thirdMatterId,
+      });
+      const [ownerCredit, memberCredit] = [
+        createSafeId<"invoice">(),
+        createSafeId<"invoice">(),
+      ];
+      await db.insert(invoices).values(
+        [ownerCredit, memberCredit].map((id) => ({
+          id,
+          organizationId: scenario.orgId,
+          workspaceId: null,
+          clientId: scenario.clientId,
+          documentType: "credit_note" as const,
+          originalInvoiceId: scenario.invoiceId,
+          invoiceDate: "2026-10-16",
+          currency: "EUR",
+        })),
+      );
+      const addCreditLine = async ({
+        actor,
+        role,
+        invoiceId,
+        workspaceId,
+        unitPriceMinor,
+      }: {
+        actor: SafeId<"user">;
+        role: "owner" | "member";
+        invoiceId: SafeId<"invoice">;
+        workspaceId: SafeId<"workspace">;
+        unitPriceMinor: number;
+      }) => {
+        const scopedDb = scoped(scenario, actor);
+        const visible = (
+          await scopedDb(
+            async (tx) =>
+              await tx
+                .select({ id: workspaces.id })
+                .from(workspaces)
+                .where(eq(workspaces.organizationId, scenario.orgId)),
+          )
+        ).map(({ id }) => id);
+        return await createInvoiceLine.handler(
+          createTestHandlerContext<
+            Parameters<typeof createInvoiceLine.handler>[0]
+          >({
+            safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              organizationId: scenario.orgId,
+              userId: actor,
+              serverValidatedWorkspaceIds: [],
+            }),
+            scopedDb,
+            audit: async () => {},
+            memberRole: sessionMemberRole(role),
+            session: { activeOrganizationId: scenario.orgId },
+            user: { id: actor },
+            workspaceId,
+            getActiveWorkspaceIds: async () => visible,
+            getAccessibleWorkspaces: async () =>
+              visible.map((id) => ({ id, status: "active" as const })),
+            getWorkspaceAccess: async (id: SafeId<"workspace">) =>
+              visible.includes(id) ? { id, status: "active" as const } : null,
+            pinServerValidatedWorkspaceId: (id: SafeId<"workspace">) =>
+              visible.includes(id),
+            params: { workspaceId, invoiceId },
+            body: {
+              source: {
+                type: "manual",
+                description: "Correction",
+                quantity: "1",
+                unitPriceMinor,
+              },
+              vatRateBps: 2100,
+              vatTreatment: "domestic_vat",
+            },
+          }),
+        );
+      };
+      const linesOf = async (invoiceId: SafeId<"invoice">) =>
+        await db
+          .select({ workspaceId: invoiceLines.workspaceId })
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, invoiceId));
+
+      // Even an owner cannot credit a matter the original never billed: a
+      // member authorized for the original's matters could not see that
+      // credit note, and would credit past the original.
+      expect(
+        await addCreditLine({
+          actor: scenario.actors.owner,
+          role: "owner",
+          invoiceId: ownerCredit,
+          workspaceId: thirdMatterId,
+          unitPriceMinor: 100,
+        }),
+      ).toMatchObject({
+        code: 422,
+        response: {
+          message:
+            "A credit note can only credit matters its original invoice bills",
+        },
+      });
+      expect(await linesOf(ownerCredit)).toEqual([]);
+      expect(
+        await addCreditLine({
+          actor: scenario.actors.owner,
+          role: "owner",
+          invoiceId: ownerCredit,
+          workspaceId: scenario.firstMatterId,
+          unitPriceMinor: 100,
+        }),
+      ).toHaveProperty("id");
+
+      // The member sees the owner's 121 credit: 121 + 242 exceeds 242, while
+      // 121 + 121 fills the original exactly.
+      expect(
+        await addCreditLine({
+          actor: scenario.actors.full,
+          role: "member",
+          invoiceId: memberCredit,
+          workspaceId: scenario.secondMatterId,
+          unitPriceMinor: 200,
+        }),
+      ).toMatchObject({
+        code: 422,
+        response: {
+          message: "Credit notes together cannot exceed their original invoice",
+        },
+      });
+      expect(await linesOf(memberCredit)).toEqual([]);
+      expect(
+        await addCreditLine({
+          actor: scenario.actors.full,
+          role: "member",
+          invoiceId: memberCredit,
+          workspaceId: scenario.secondMatterId,
+          unitPriceMinor: 100,
+        }),
+      ).toHaveProperty("id");
+    });
+
     test("MCP invoice reads retain the credential matter allowlist for owners and admins", async () => {
       const scenario = await seedScenario();
       const singleMatterInvoiceId = createSafeId<"invoice">();

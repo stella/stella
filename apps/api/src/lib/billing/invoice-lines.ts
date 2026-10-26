@@ -350,6 +350,13 @@ type InvoiceScope = {
   workspaceId: SafeId<"workspace">;
 };
 
+/** A credit line on a matter its original invoice does not bill. */
+export const creditOutsideOriginalMattersRefusal = () =>
+  new HandlerError({
+    status: 422,
+    message: "A credit note can only credit matters its original invoice bills",
+  });
+
 /** A matter already counts the most invoices it may take part in. */
 export const matterInvoiceLimitRefusal = () =>
   new HandlerError({
@@ -411,10 +418,33 @@ export const insertInvoiceLines = async (
       id: { eq: scope.invoiceId },
       organizationId: { eq: scope.organizationId },
     },
-    columns: { documentType: true, workspaceId: true },
+    columns: { documentType: true, workspaceId: true, originalInvoiceId: true },
   });
   if (!invoice) {
     return panic("The locked invoice disappeared before line insertion");
+  }
+  // A client credit note bills only matters its original invoice bills. Anyone
+  // who can see the original is authorized for all of those matters, so they
+  // see every related credit note and the credit limit counts all of them.
+  // A single-matter credit note shares its original's matter by constraint.
+  if (
+    invoice.documentType === "credit_note" &&
+    invoice.workspaceId === null &&
+    invoice.originalInvoiceId !== null
+  ) {
+    const [originalLine] = await tx
+      .select({ id: invoiceLines.id })
+      .from(invoiceLines)
+      .where(
+        and(
+          eq(invoiceLines.invoiceId, invoice.originalInvoiceId),
+          eq(invoiceLines.workspaceId, scope.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (originalLine === undefined) {
+      return Result.err(creditOutsideOriginalMattersRefusal());
+    }
   }
   // A single-matter invoice always counts toward its own matter, and a client
   // invoice with a line in this matter already counts; only a first line can

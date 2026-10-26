@@ -123,6 +123,10 @@ export const validateInvoiceDocument = async (
     return Result.ok(undefined);
   }
   // The original row serializes reservations across every related credit note.
+  // This sum reads through row security, and it is complete: the original is
+  // visible only to a caller authorized for every matter it bills
+  // (stella_invoice_access), and a credit note bills only those matters
+  // (insertInvoiceLines), so every related credit note is visible here.
   const credits = await tx
     .select({
       amount: sql<string>`coalesce(sum(abs(${invoices.totalAmount})), 0)`,
