@@ -892,7 +892,7 @@ const PERMALINK_PLACEMENT_CLASS = {
  * cannot hover shows it always, since there would be no way to reveal it.
  */
 export const READER_BLOCK_CHROME_REVEAL_CLASS =
-  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
 
 /**
  * A block's own address, as a link the reader can take with them.
