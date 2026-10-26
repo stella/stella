@@ -219,3 +219,39 @@ test("a fallback anchor collision keeps the first block's numeric paragraph meta
   });
   expect(result.documentAst.blocks.at(1)?.id).toBe("argumentation-0");
 });
+
+test("published conclusions follow the judgment body in the AST and fulltext", () => {
+  const source = xml.replace(
+    "</judgmentBody>",
+    '</judgmentBody><conclusions><p eId="conclusion">The invented order takes effect tomorrow.</p></conclusions>',
+  );
+  const result = parse(source).unwrap();
+  expect(result.documentAst.blocks.at(-1)).toMatchObject({
+    id: "conclusion",
+    role: "closing",
+    plainText: "The invented order takes effect tomorrow.",
+  });
+  expect(
+    result.fulltext.endsWith("The invented order takes effect tomorrow."),
+  ).toBe(true);
+  expect(
+    result.documentAst.blocks.findIndex(({ id }) => id === "para_3"),
+  ).toBeLessThan(
+    result.documentAst.blocks.findIndex(({ id }) => id === "conclusion"),
+  );
+});
+
+test("retention refuses unhandled published siblings outside the body", () => {
+  const source = xml.replace(
+    "</judgmentBody>",
+    "</judgmentBody><conclusions><p>Invented final order.</p></conclusions><publisherExtra><p>Additional invented operative text.</p></publisherExtra>",
+  );
+  const result = parse(source);
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toMatchObject({
+      _tag: "ParseXmlError",
+      message: "Unmapped LegalDocML judgment text",
+    });
+  }
+});

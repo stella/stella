@@ -78,7 +78,15 @@ const readEntry = (entry: slimdom.Element) => {
     slug: identifier.getAttribute("slug"),
     value: identifier.textContent?.trim() ?? "",
   }));
-  const neutral = identifiers.find(({ type }) => type === "ukncn");
+  const neutralIdentifiers = identifiers.filter(({ type }) => type === "ukncn");
+  const neutral = neutralIdentifiers.at(0);
+  if (neutralIdentifiers.length !== 1 || !neutral?.value) {
+    return Result.err(
+      invalid(
+        "Feed entry requires exactly one nonempty ukncn identifier to verify the judgment citation",
+      ),
+    );
+  }
   const fields = new Map<
     string,
     { text: string; attributes: Record<string, string> }[]
@@ -106,8 +114,8 @@ const readEntry = (entry: slimdom.Element) => {
     updated,
     contentHash,
     identifiers,
-    caseNumber: neutral?.value,
-    courtSlug: neutral?.slug?.split("/").slice(0, -2).join("/"),
+    caseNumber: neutral.value,
+    courtSlug: neutral.slug?.split("/").slice(0, -2).join("/"),
     fields: Object.fromEntries(fields),
   });
 };
@@ -226,7 +234,7 @@ export const buildUkFclDecision = ({
     caseName,
     metadata,
   } = parsed.value;
-  if (entry.caseNumber !== undefined && entry.caseNumber !== caseNumber) {
+  if (entry.caseNumber !== caseNumber) {
     return Result.err(invalid("Feed and document citations differ"));
   }
   const sourceRaw = encodeSourceRawEnvelope({ listing: feed, document });
@@ -294,7 +302,7 @@ export const reparseUkFclStoredRaw = (
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: "Stored XML cannot rebuild the judgment",
+      detail: built.error.message,
     };
   }
   if (built.value.caseNumber !== stored.caseNumber) {

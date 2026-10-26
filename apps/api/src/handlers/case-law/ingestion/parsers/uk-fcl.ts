@@ -126,11 +126,16 @@ const sourceTextOf = (root: slimdom.Node) => {
     if (
       node instanceof slimdom.Element &&
       node.namespaceURI === AKN &&
-      node.localName === "img"
+      (node.localName === "img" || node.localName === "meta")
     ) {
       return;
     }
-    if (isBlockElement(node)) {
+    const separatesText =
+      isBlockElement(node) ||
+      (node.parentNode instanceof slimdom.Element &&
+        node.parentNode.namespaceURI === AKN &&
+        node.parentNode.localName === "judgment");
+    if (separatesText) {
       parts.push("\n");
     }
     for (const child of node.childNodes) {
@@ -143,7 +148,7 @@ const sourceTextOf = (root: slimdom.Node) => {
     ) {
       parts.push(" ");
     } else if (
-      isBlockElement(node) ||
+      separatesText ||
       (node instanceof slimdom.Element &&
         node.namespaceURI === AKN &&
         node.localName === "br")
@@ -313,6 +318,40 @@ const blocksOf = ({ root, role, allocateId }: BlocksOptions) => {
   return blocks;
 };
 
+const judgmentPartRole = (part: slimdom.Element) => {
+  if (part.namespaceURI !== AKN) {
+    return undefined;
+  }
+  switch (part.localName) {
+    case "header":
+      return "front-matter";
+    case "judgmentBody":
+      return "argumentation";
+    case "conclusions":
+      return "closing";
+    default:
+      return undefined;
+  }
+};
+
+const judgmentBlocksOf = (judgment: slimdom.Element) => {
+  const allocateId = createBlockIds(judgment);
+  const blocks: Block[] = [];
+  const substantive: Block[] = [];
+  for (const part of judgment.children) {
+    const role = judgmentPartRole(part);
+    if (role === undefined) {
+      continue;
+    }
+    const partBlocks = blocksOf({ root: part, role, allocateId });
+    blocks.push(...partBlocks);
+    if (role !== "front-matter") {
+      substantive.push(...partBlocks);
+    }
+  }
+  return { blocks, substantive };
+};
+
 const rejectedJudgment = (message: string) =>
   Result.err(new ParseXmlError({ message, cause: undefined }));
 
@@ -386,24 +425,15 @@ export const parseUkFclDecision = ({
               "",
           }))
           .filter(({ nameAsPrinted }) => nameAsPrinted !== "");
-  const allocateId = createBlockIds(judgment);
-  const frontMatter =
-    header === undefined
-      ? []
-      : blocksOf({ root: header, role: "front-matter", allocateId });
-  const reasoning = blocksOf({ root: body, role: "argumentation", allocateId });
-  const blocks = [...frontMatter, ...reasoning];
-  const sourceBody = sourceTextOf(body);
-  const fulltext = reasoning.map(({ plainText }) => plainText).join("\n\n");
+  const { blocks, substantive } = judgmentBlocksOf(judgment);
+  const fulltext = substantive.map(({ plainText }) => plainText).join("\n\n");
   const normalized = (value: string) => value.replace(/\s+/gu, " ").trim();
   if (
-    reasoning.length === 0 ||
+    substantive.length === 0 ||
     normalized(blocks.map(({ plainText }) => plainText).join("\n")) !==
-      normalized(
-        `${header === undefined ? "" : sourceTextOf(header)}\n${sourceBody}`,
-      )
+      normalized(sourceTextOf(judgment))
   ) {
-    return rejectedJudgment("Unmapped LegalDocML body text");
+    return rejectedJudgment("Unmapped LegalDocML judgment text");
   }
   const documentAst: DecisionDocumentAst = {
     version: 1,

@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 
 import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+} from "@/api/lib/legal-search/source-raw-envelope";
 
 import {
   buildUkFclDecision,
@@ -243,3 +246,77 @@ for (const { name, raw, message } of refusalCases) {
     expect(result.error.message).toContain(message);
   });
 }
+
+const citationElement =
+  /<tna:identifier type="ukncn"[^>]*>[^<]*<\/tna:identifier>/u;
+for (const { name, raw } of [
+  { name: "missing", raw: feed.replace(citationElement, "") },
+  {
+    name: "empty",
+    raw: feed.replace(
+      citationElement,
+      '<tna:identifier type="ukncn"> </tna:identifier>',
+    ),
+  },
+  {
+    name: "duplicate",
+    raw: feed.replace(citationElement, (citation) => citation + citation),
+  },
+]) {
+  test(`${name} feed citation refuses discovery, assembly and replay`, () => {
+    expect(raw).not.toBe(feed);
+    const listed = readUkFclFeed(raw);
+    expect(listed.isErr()).toBe(true);
+    if (listed.isOk()) {
+      return;
+    }
+    expect(listed.error).toBeInstanceOf(ParseXmlError);
+    expect(listed.error.message).toContain("exactly one nonempty ukncn");
+    expect(
+      buildUkFclDecision({ feed: raw, document, sourceDocumentId }).isErr(),
+    ).toBe(true);
+    expect(
+      reparseUkFclStoredRaw({
+        ...stored(),
+        raw: new TextEncoder().encode(
+          encodeSourceRawEnvelope({ listing: raw, document }),
+        ),
+      }),
+    ).toMatchObject({
+      type: "rejected",
+      rejection: "no-document",
+      detail: listed.error.message,
+    });
+  });
+}
+
+test("a different judgment citation refuses assembly and stored-raw replay", () => {
+  const differentDocument = document.replaceAll(
+    "[2026] UKSC 900001",
+    "[2026] UKSC 900002",
+  );
+  expect(differentDocument).not.toBe(document);
+  const result = buildUkFclDecision({
+    feed,
+    document: differentDocument,
+    sourceDocumentId,
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isOk()) {
+    return;
+  }
+  expect(result.error).toBeInstanceOf(ParseXmlError);
+  expect(result.error.message).toBe("Feed and document citations differ");
+  expect(
+    reparseUkFclStoredRaw({
+      ...stored(),
+      raw: new TextEncoder().encode(
+        encodeSourceRawEnvelope({ listing: feed, document: differentDocument }),
+      ),
+    }),
+  ).toMatchObject({
+    type: "rejected",
+    rejection: "no-document",
+    detail: result.error.message,
+  });
+});
