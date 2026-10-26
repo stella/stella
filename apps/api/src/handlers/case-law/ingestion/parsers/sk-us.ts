@@ -28,6 +28,7 @@ import { panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
@@ -233,7 +234,27 @@ const PAGE_NUMBER_PATTERN = /^\d{1,4}$/u;
  * line, set apart by at least two spaces.
  */
 const LEADING_PAGE_NUMBER = /^(?<number>\d{1,4})\s+(?=\S)/u;
-const TRAILING_PAGE_NUMBER = /\s{2,}(?<number>\d{1,4})$/u;
+const trailingPageNumber = (
+  text: string,
+): { number: number; length: number } | null => {
+  const digits = /[0-9]{1,4}$/u.exec(text);
+  if (digits === null) {
+    return null;
+  }
+  let start = digits.index;
+  while (start > 0 && /\s/u.test(text.charAt(start - 1))) {
+    start -= 1;
+  }
+  if (digits.index - start < 2) {
+    return null;
+  }
+  return {
+    number: parseIntegerToken(digits[0]).unwrap(
+      "Page-number grammar admits a bounded decimal token",
+    ),
+    length: text.length - start,
+  };
+};
 
 /** Where a page number may stand, and how many characters it takes. */
 type FooterCandidate = {
@@ -282,12 +303,14 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
         : null;
     const trailing =
       isBlank(index + 1) || index === lastText
-        ? TRAILING_PAGE_NUMBER.exec(text)
+        ? trailingPageNumber(text)
         : null;
     if (PAGE_NUMBER_PATTERN.test(text)) {
       candidates.push({
         index,
-        number: Number(text),
+        number: parseIntegerToken(text).unwrap(
+          "Page-number grammar admits a bounded decimal token",
+        ),
         offset,
         form: "alone",
         length: text.length,
@@ -296,7 +319,9 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
     } else if (leading !== null) {
       candidates.push({
         index,
-        number: Number(leading.groups?.["number"]),
+        number: parseIntegerToken(leading.groups?.["number"]).unwrap(
+          "Page-number grammar admits a bounded decimal token",
+        ),
         offset,
         form: "leading",
         length: leading[0].length,
@@ -305,10 +330,10 @@ const footerCandidates = (lines: readonly MarkupLine[]): FooterCandidate[] => {
     } else if (trailing !== null) {
       candidates.push({
         index,
-        number: Number(trailing.groups?.["number"]),
+        number: trailing.number,
         offset: offset + text.length,
         form: "trailing",
-        length: trailing[0].length,
+        length: trailing.length,
         last: index === lastText,
       });
     }
