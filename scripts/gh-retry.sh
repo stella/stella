@@ -288,9 +288,6 @@ for ((attempt=1; attempt<=4; attempt+=1)); do
     else
       failure="HTTP $http (operation is not safe to retry)"
     fi
-  elif ((http == 0)) && [[ "$paginated" == true && "$method" == GET ]]; then
-    failure="paginated read error"
-    transient=true
   elif ((http == 0)) && [[ "$transport_retryable" == true ]] && awk '
     # Match Go transport errors logged by gh, not headers, payloads or decoder
     # failures mentioning EOF. Unknown non-HTTP failures stay single-shot.

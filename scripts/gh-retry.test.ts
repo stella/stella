@@ -284,6 +284,18 @@ test("a paginated GET retries when its second successful page cannot be decoded"
   expect(result.stderr).toContain("HTTP 200, attempt 1/4");
 });
 
+test("a paginated GET that fails without any HTTP status stays single-shot", async () => {
+  // No response was recorded, so nothing shows the read reached GitHub;
+  // an unknown failure (for example authentication) must not be repeated.
+  const result = await scenario({
+    args: ["api", "repos/example/project/issues", "--paginate"],
+    responses: [{ exit: 2 }, success],
+  });
+  expect(result.exit).toBe(2);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+});
+
 test("a POST that fails after HTTP 200 stays single-shot", async () => {
   const result = await scenario({
     args: ["api", "repos/example/project", "--method", "POST"],
