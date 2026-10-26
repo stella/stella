@@ -27,6 +27,7 @@ components/chat-input-surface.tsx
 components/inspector/chat-tab-panel.tsx
 routes/_protected.chat/-components/chat-thread-page.tsx
 routes/_protected.chat/index.tsx
+routes/dev/-components/chat-composer-reference-playground.tsx
 routes/dev/-components/chat-long-paste-playground.tsx
 routes/knowledge/-components/template-studio-chat.tsx`;
 
@@ -71,6 +72,9 @@ const sendEntryPoints = {
     controllerSubmit: 1,
   },
   "routes/_protected.chat/index.tsx": { chatInputSurface: 1 },
+  "routes/dev/-components/chat-composer-reference-playground.tsx": {
+    chatInputSurface: 1,
+  },
   "routes/dev/-components/chat-long-paste-playground.tsx": {
     chatInputSurface: 1,
   },
