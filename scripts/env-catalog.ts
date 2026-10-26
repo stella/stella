@@ -1695,6 +1695,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RETRY_DELAYS_SECONDS",
   // scripts/retry.sh: `warning` for callers that tolerate the failure.
   "RETRY_FAILURE_LEVEL",
+  // scripts/retry.sh: exit codes that are an answer, not a failure to retry.
+  "RETRY_PASSTHROUGH_EXIT_CODES",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
   "RUN_ID",
