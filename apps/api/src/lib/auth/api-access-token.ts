@@ -53,6 +53,14 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/list.ts",
   },
+  "POST /v1/entities/:workspaceId/query": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/entities/list.ts",
+  },
+  "GET /v1/entities/:workspaceId/entity/:entityId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/entities/get.ts",
+  },
 } as const satisfies Record<
   string,
   {
