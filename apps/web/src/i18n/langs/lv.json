@@ -1024,7 +1024,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Cilvēku"
+      "human": "Cilvēku",
+      "toggleState": "{label}: {state, select, on {ieslēgts} other {izslēgts}}"
     },
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",

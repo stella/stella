@@ -1024,7 +1024,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ľudské"
+      "human": "Ľudské",
+      "toggleState": "{label}: {state, select, on {zapnuté} other {vypnuté}}"
     },
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",

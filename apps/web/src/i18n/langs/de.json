@@ -1024,7 +1024,8 @@
     },
     "notesFilter": {
       "ai": "KI",
-      "human": "Mensch"
+      "human": "Mensch",
+      "toggleState": "{label}: {state, select, on {ein} other {aus}}"
     },
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
