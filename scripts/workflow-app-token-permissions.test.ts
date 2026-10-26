@@ -66,6 +66,16 @@ type Job = { steps?: unknown };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isStep = (value: unknown): value is Step => isRecord(value);
+
+/** A YAML scalar input as text; anything else reads as empty. */
+const scalar = (value: unknown): string =>
+  typeof value === "string" ||
+  typeof value === "number" ||
+  typeof value === "boolean"
+    ? String(value)
+    : "";
+
 const EXPRESSION = /^\$\{\{\s*([\w.]+)\s*\}\}$/u;
 const APP_TOKEN_OUTPUT = /\bsteps\.[\w-]+\.outputs\.token\b/u;
 const RELATIVE_IMPORT = /\bfrom\s+["'](\.{1,2}\/[^"']+)["']/gu;
@@ -94,7 +104,7 @@ const jobText = (steps: readonly Step[]): string => {
     ) {
       parts.push(
         Object.entries(step.with)
-          .map(([key, value]) => `${key}: ${String(value)}`)
+          .map(([key, value]) => `${key}: ${scalar(value)}`)
           .join("\n"),
       );
     }
@@ -135,7 +145,7 @@ export const appTokenRequests = (
 ): AppTokenRequest[] =>
   Object.entries(jobs).flatMap(([job, definition]) => {
     const steps = Array.isArray(definition.steps)
-      ? definition.steps.filter(isRecord)
+      ? definition.steps.filter(isStep)
       : [];
     return steps
       .filter(
@@ -145,7 +155,7 @@ export const appTokenRequests = (
       )
       .map((step) => {
         const inputs = isRecord(step.with) ? step.with : {};
-        const id = String(inputs["app-id"] ?? inputs["client-id"] ?? "");
+        const id = scalar(inputs["app-id"] ?? inputs["client-id"]);
         const app = EXPRESSION.exec(id)?.[1] ?? id;
         return {
           job: `${file}#${job}`,
@@ -155,7 +165,7 @@ export const appTokenRequests = (
               .filter(([key]) => key.startsWith("permission-"))
               .map(([key, value]) => [
                 key.slice("permission-".length),
-                String(value),
+                scalar(value),
               ]),
           ),
           text: jobText(steps),
