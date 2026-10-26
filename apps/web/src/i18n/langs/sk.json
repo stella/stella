@@ -507,6 +507,24 @@
     "addEntry": "Pridať záznam",
     "amount": "Čiastka",
     "amountMustBePositive": "Suma musí byť vyššia ako nula",
+    "approval": {
+      "approveSelected": "Schváliť {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamov}}",
+      "empty": "V spise nič nečaká na schválenie.",
+      "failed": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+      "myTime": "Môj čas",
+      "refusals": {
+        "invalidEntry": "Doplňte popis a skontrolujte dátum práce, potom záznam schváľte.",
+        "notApprover": "Záznam môže schváliť len jeho priradený schvaľovateľ alebo správca.",
+        "notFound": "Tento záznam už neexistuje. Obnovte zoznam.",
+        "runningTimer": "Pred schválením záznamu zastavte bežiaci časovač.",
+        "unpriced": "Záznam nemá sadzbu. Nastavte pre tento spis sadzbu a potom záznam schváľte.",
+        "wrongStatus": "Tento záznam už nie je koncept. Obnovte zoznam."
+      },
+      "returnComment": "Dôvod vrátenia",
+      "selectEntry": "Vybrať záznam",
+      "timeEntries": "Časové záznamy",
+      "title": "Schvaľovanie"
+    },
     "approve": "Schváliť",
     "approveSelected": "Schváliť vybrané",
     "batchActions": "Hromadné akcie",
@@ -605,6 +623,7 @@
       "openInvoice": "Otvoriť faktúru",
       "otherCurrency": "{count, plural, one {# položka je vedená} few {# položky sú vedené} many {# položky je vedených} other {# položiek je vedených}} v inej mene ako {currency} a fakturujú sa samostatne.",
       "outsideScope": "Nie je predmetom dane v tuzemsku, 0 %",
+      "pendingApprovals": "{count, plural, one {Na schválenie čaká # položka} few {Na schválenie čakajú # položky} many {Na schválenie čaká # položky} other {Na schválenie čaká # položiek}}. Skontrolovať schválenia.",
       "rate": "Sadzba",
       "readyDescription": "Vystavením sa faktúre pridelí ďalšie číslo z vášho číselného radu a faktúra sa uzamkne. Koncept sa dá ďalej upravovať.",
       "readyTitle": "Pripravené na vystavenie",
@@ -2072,7 +2091,6 @@
       "orLetUsKnowAt": "alebo nám dajte vedieť na",
       "viewDocumentation": "Zobraziť dokumentáciu"
     },
-    "enterKey": "↵",
     "error": "Chyba",
     "expenses": "Výdavky",
     "export": {

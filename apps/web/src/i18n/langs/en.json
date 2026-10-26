@@ -507,6 +507,24 @@
     "addEntry": "Add entry",
     "amount": "Amount",
     "amountMustBePositive": "Amount must be greater than zero",
+    "approval": {
+      "approveSelected": "Approve {count, plural, one {# selected entry} other {# selected entries}}",
+      "empty": "Nothing on this matter is waiting for approval.",
+      "failed": "The change was not saved. Try again.",
+      "myTime": "My time",
+      "refusals": {
+        "invalidEntry": "Add a description and check the work date, then approve the entry.",
+        "notApprover": "Only the entry's assigned approver or an administrator can approve it.",
+        "notFound": "This entry no longer exists. Refresh the list.",
+        "runningTimer": "Stop the running timer before approving this entry.",
+        "unpriced": "This entry has no rate. Set a rate for this matter, then approve it.",
+        "wrongStatus": "This entry is no longer a draft. Refresh the list."
+      },
+      "returnComment": "Reason for returning",
+      "selectEntry": "Select entry",
+      "timeEntries": "Time entries",
+      "title": "Approvals"
+    },
     "approve": "Approve",
     "approveSelected": "Approve selected",
     "batchActions": "Batch actions",
@@ -605,6 +623,7 @@
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
       "outsideScope": "Outside the scope of VAT, 0 %",
+      "pendingApprovals": "{count, plural, one {# item is awaiting approval} other {# items are awaiting approval}}. Review approvals.",
       "rate": "Rate",
       "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.",
       "readyTitle": "Ready to issue",
@@ -2072,7 +2091,6 @@
       "orLetUsKnowAt": "or let us know at",
       "viewDocumentation": "View documentation"
     },
-    "enterKey": "↵",
     "error": "Error",
     "expenses": "Expenses",
     "export": {

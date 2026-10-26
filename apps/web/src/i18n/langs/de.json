@@ -507,6 +507,24 @@
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "approval": {
+      "approveSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} freigeben",
+      "empty": "In dieser Akte wartet nichts auf Freigabe.",
+      "failed": "Die Änderung wurde nicht gespeichert. Versuchen Sie es erneut.",
+      "myTime": "Meine Zeit",
+      "refusals": {
+        "invalidEntry": "Ergänzen Sie eine Beschreibung, prüfen Sie das Arbeitsdatum und geben Sie den Eintrag dann frei.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag freigeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr. Aktualisieren Sie die Liste.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag freigeben.",
+        "unpriced": "Für diesen Eintrag ist kein Tarif hinterlegt. Legen Sie einen Tarif für diese Akte fest und geben Sie den Eintrag dann frei.",
+        "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
+      },
+      "returnComment": "Grund für Rückgabe",
+      "selectEntry": "Eintrag auswählen",
+      "timeEntries": "Zeiteinträge",
+      "title": "Freigaben"
+    },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",
@@ -605,6 +623,7 @@
       "openInvoice": "Rechnung öffnen",
       "otherCurrency": "{count, plural, one {# Position ist} other {# Positionen sind}} in einer anderen Währung als {currency} erfasst und bleiben für eine eigene Rechnung offen.",
       "outsideScope": "Im Inland nicht steuerbar, 0 %",
+      "pendingApprovals": "{count, plural, one {# Position wartet} other {# Positionen warten}} auf Freigabe. Freigaben prüfen.",
       "rate": "Satz",
       "readyDescription": "Beim Ausstellen erhält die Rechnung die nächste Nummer aus Ihrem Nummernkreis und wird gesperrt. Ein Entwurf bleibt bearbeitbar.",
       "readyTitle": "Bereit zum Ausstellen",
@@ -2072,7 +2091,6 @@
       "orLetUsKnowAt": "oder schreiben Sie uns an",
       "viewDocumentation": "Dokumentation ansehen"
     },
-    "enterKey": "↵",
     "error": "Fehler",
     "expenses": "Ausgaben",
     "export": {

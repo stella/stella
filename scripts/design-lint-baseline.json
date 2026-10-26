@@ -37,7 +37,6 @@
     "apps/web/src/components/docx/docx-browser-editor.tsx": 19,
     "apps/web/src/components/docx/docx-find-bar.tsx": 1,
     "apps/web/src/components/inbox/signal-card.tsx": 4,
-    "apps/web/src/components/inline-edit.tsx": 2,
     "apps/web/src/components/inspector/anonymization-facet.tsx": 10,
     "apps/web/src/components/inspector/chat-tab-panel.tsx": 1,
     "apps/web/src/components/inspector/desktop-open-button.tsx": 6,

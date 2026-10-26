@@ -507,6 +507,24 @@
     "addEntry": "Bejegyzés hozzáadása",
     "amount": "Összeg",
     "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
+    "approval": {
+      "approveSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} jóváhagyása",
+      "empty": "Ebben az ügyben semmi nem vár jóváhagyásra.",
+      "failed": "A módosítás nem lett mentve. Próbálja újra.",
+      "myTime": "Saját idő",
+      "refusals": {
+        "invalidEntry": "Adjon meg leírást, ellenőrizze a munkavégzés dátumát, majd hagyja jóvá a bejegyzést.",
+        "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda hagyhatja jóvá.",
+        "notFound": "Ez a bejegyzés már nem létezik. Frissítse a listát.",
+        "runningTimer": "A jóváhagyás előtt állítsa le a futó időmérőt.",
+        "unpriced": "Ehhez a bejegyzéshez nincs díjszabás. Állítson be díjszabást az ügyhöz, majd hagyja jóvá a bejegyzést.",
+        "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
+      },
+      "returnComment": "Visszaküldés oka",
+      "selectEntry": "Bejegyzés kijelölése",
+      "timeEntries": "Időbejegyzések",
+      "title": "Jóváhagyások"
+    },
     "approve": "Jóváhagy",
     "approveSelected": "Kijelöltek jóváhagyása",
     "batchActions": "Tömeges műveletek",
@@ -605,6 +623,7 @@
       "openInvoice": "Számla megnyitása",
       "otherCurrency": "{count, plural, one {# tétel} other {# tétel}} {currency} helyett más pénznemben van rögzítve, ezek külön számlára várnak.",
       "outsideScope": "Az ÁFA hatályán kívül, 0 %",
+      "pendingApprovals": "{count, plural, one {# tétel vár} other {# tétel vár}} jóváhagyásra. Jóváhagyások áttekintése.",
       "rate": "Óradíj",
       "readyDescription": "Kiállításkor a számla megkapja a sorszámtartomány következő számát, és zárolódik. A piszkozat továbbra is szerkeszthető.",
       "readyTitle": "Kiállításra kész",
@@ -2072,7 +2091,6 @@
       "orLetUsKnowAt": "vagy írjon nekünk ide:",
       "viewDocumentation": "Dokumentáció megtekintése"
     },
-    "enterKey": "↵",
     "error": "Hiba",
     "expenses": "Kiadások",
     "export": {

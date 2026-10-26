@@ -12,6 +12,9 @@ type MissingTimeEntryActivityGroup = Exclude<
 >;
 true satisfies MissingTimeEntryActivityGroup extends never ? true : never;
 
+/** ISO 4217 code for an entry whose financial value has not been configured. */
+export const UNPRICED_TIME_ENTRY_CURRENCY = "XXX";
+
 export const TIME_ENTRY_STATUSES = [
   "draft",
   "approved",

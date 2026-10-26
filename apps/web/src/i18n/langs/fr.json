@@ -507,6 +507,24 @@
     "addEntry": "Ajouter une entrée",
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
+    "approval": {
+      "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "empty": "Rien n’attend d’approbation dans ce dossier.",
+      "failed": "La modification n’a pas été enregistrée. Réessayez.",
+      "myTime": "Mon temps",
+      "refusals": {
+        "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
+        "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
+        "notFound": "Cette saisie n’existe plus. Actualisez la liste.",
+        "runningTimer": "Arrêtez le chronomètre en cours avant d’approuver cette saisie.",
+        "unpriced": "Cette saisie n’a pas de tarif. Définissez un tarif pour ce dossier, puis approuvez-la.",
+        "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
+      },
+      "returnComment": "Motif du renvoi",
+      "selectEntry": "Sélectionner la saisie",
+      "timeEntries": "Saisies de temps",
+      "title": "Approbations"
+    },
     "approve": "Approuver",
     "approveSelected": "Approuver la sélection",
     "batchActions": "Actions groupées",
@@ -605,6 +623,7 @@
       "openInvoice": "Ouvrir la facture",
       "otherCurrency": "{count, plural, one {# élément est saisi} other {# éléments sont saisis}} dans une autre devise que {currency} et restent à facturer séparément.",
       "outsideScope": "Hors du champ d'application de la TVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# élément attend} other {# éléments attendent}} une approbation. Vérifier les approbations.",
       "rate": "Taux",
       "readyDescription": "L’émission attribue le numéro suivant de votre série et verrouille la facture. Un brouillon reste modifiable.",
       "readyTitle": "Prête à émettre",
@@ -2072,7 +2091,6 @@
       "orLetUsKnowAt": "ou écrivez-nous à",
       "viewDocumentation": "Voir la documentation"
     },
-    "enterKey": "↵",
     "error": "Erreur",
     "expenses": "Dépenses",
     "export": {

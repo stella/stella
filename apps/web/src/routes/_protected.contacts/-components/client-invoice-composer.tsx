@@ -138,6 +138,9 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
       <InvoiceComposer
         key={`${clientId}:${periodStart ?? ""}:${periodEnd ?? ""}:${currency}`}
         onSaved={setSaved}
+        // Approvals are per matter; the client view has no single matter to
+        // send an approver to, so it shows no pending-approval hint.
+        pendingApprovalCount={0}
         workspaceId={first.workspaceId}
         client={{ clientId, matters: currencyMatters }}
         prefill={{
