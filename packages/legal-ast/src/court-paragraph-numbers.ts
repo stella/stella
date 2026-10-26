@@ -166,11 +166,6 @@ type Candidate = {
   readonly number: number;
   /** The first paragraph of a separate opinion, which may count from 1. */
   readonly opensOpinion: boolean;
-  /**
-   * The paragraph opens inside a quotation an earlier paragraph began: a
-   * passage the court quotes, whose markers are the quoted decision's.
-   */
-  readonly quoted: boolean;
 };
 
 /**
@@ -356,10 +351,8 @@ type Walk = {
  * Read a style's candidates as the court's run beside nested lists. A
  * nested list starts at 1 after a court paragraph and counts up; a separate
  * opinion may start the run again at 1; a forward skip of a few numbers is
- * the court's own. A marker that fits none of these inside a quotation is
- * the quoted decision's paragraph number ("[118] …" continuing a passage
- * quoted from paragraph 117), and is neither. Everything else is left
- * unassigned, and an unassigned marker rejects the reading.
+ * the court's own. Quoted markers are excluded before this walk. Everything
+ * else is left unassigned, and an unassigned marker rejects the reading.
  */
 const walk = (candidates: readonly Candidate[]): Walk => {
   const accepted: Candidate[] = [];
@@ -410,9 +403,6 @@ const walk = (candidates: readonly Candidate[]): Walk => {
       nestedNext = null;
       continue;
     }
-    if (candidate.quoted) {
-      continue;
-    }
     unassigned.push(candidate);
   }
   return { accepted, skips, unassigned };
@@ -443,6 +433,11 @@ const candidatesOf = (
   style: CourtParagraphMarkerStyle,
 ): Candidate[] =>
   body.paragraphs.flatMap((blockIndex, bodyIndex) => {
+    // A closed quotation's markers cannot advance either the court's run
+    // or a nested list, including when lookahead examines them.
+    if (body.quotedStarts.has(bodyIndex)) {
+      return [];
+    }
     const block = blocks[blockIndex];
     const number =
       block?.type === "paragraph"
@@ -456,7 +451,6 @@ const candidatesOf = (
             blockIndex,
             number,
             opensOpinion: body.opinionStarts.has(bodyIndex),
-            quoted: body.quotedStarts.has(bodyIndex),
           },
         ];
   });

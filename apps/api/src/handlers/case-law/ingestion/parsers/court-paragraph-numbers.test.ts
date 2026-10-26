@@ -328,6 +328,27 @@ describe("the hard invariants of a numbering", () => {
     ).toEqual([1, 2, null, null, null, 3]);
   });
 
+  test.each([1, 2, 3, 4, 117, 118])(
+    "a quoted paragraph %i cannot advance the court's sequence",
+    (quotedNumber) => {
+      const numbering = extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Soud uvedl: „Citace začíná.",
+          `[${String(quotedNumber)}] Citace pokračuje a končí.“`,
+          "[3] Soud dále uvážil.",
+          "[4] Soud uzavřel.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+      expect(numbering.type).toBe("numbered");
+      expect(
+        numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+      ).toEqual([1, 2, null, 3, 4]);
+    },
+  );
+
   test("a quoted decision's paragraph numbers are not the court's", () => {
     const read = (quoted: string) =>
       extractCourtParagraphNumbers(
