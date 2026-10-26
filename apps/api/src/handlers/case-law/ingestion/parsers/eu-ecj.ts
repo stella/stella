@@ -41,9 +41,11 @@
  * a wrong answer, and the reader cannot tell that it happened.
  */
 
+import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -1126,7 +1128,8 @@ const settlePrintedNumbers = (
   const numbers = new Map<number, number>();
   let after = -1;
   for (let expected = 1; ; expected += 1) {
-    const open = candidatesAfter(byNumber.get(expected) ?? [], after);
+    const entries = byNumber.get(expected);
+    const open = entries === undefined ? [] : candidatesAfter(entries, after);
     if (open.length === 0) {
       return numbers;
     }
@@ -1261,19 +1264,22 @@ const visitLegacyParagraph = (
     line,
     PRINTED_PARAGRAPH_NUMBER,
   );
-  const printed = match?.groups?.["number"];
+  const printed = parseIntegerToken(match?.groups?.["number"], {
+    sign: "unsigned",
+  });
   const { printedNumbers } = builder;
   if (
-    printed !== undefined &&
+    Result.isOk(printed) &&
     body.plainText !== "" &&
     printedNumbers.type === "survey"
   ) {
-    const value = Number.parseInt(printed, 10);
     printedNumbers.candidates.push({
       index,
-      number: value,
+      number: printed.value,
       marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
-      dated: value <= DAYS_IN_MONTH_MAX && MONTH_AND_YEAR.test(body.plainText),
+      dated:
+        printed.value <= DAYS_IN_MONTH_MAX &&
+        MONTH_AND_YEAR.test(body.plainText),
     });
   }
   const number =

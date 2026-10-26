@@ -1,5 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { headingPathsByAnchor } from "@stll/legal-ast";
 import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
@@ -30,11 +31,11 @@ export const printedParagraphLabel = (text: string): string | null => {
 };
 
 /** The paragraph numbers the parser recovered as structure. */
-const courtNumbersOf = (blocks: readonly Block[]): ReadonlySet<string> =>
+const courtNumbersOf = (blocks: readonly Block[]): ReadonlySet<number> =>
   new Set(
     blocks.flatMap((block) => {
       const number = courtParagraphNumber(block);
-      return number === null ? [] : [String(number)];
+      return number === null ? [] : [number];
     }),
   );
 
@@ -55,14 +56,18 @@ const blockLabel = ({
 }: {
   block: Block;
   number: number | null;
-  courtNumbers: ReadonlySet<string>;
+  courtNumbers: ReadonlySet<number>;
 }): string | null => {
   if (number !== null) {
     return String(number);
   }
   const printed =
     block.type === "paragraph" ? printedParagraphLabel(block.plainText) : null;
-  return printed === null || courtNumbers.has(String(Number(printed)))
+  if (printed === null) {
+    return null;
+  }
+  const printedNumber = parseIntegerToken(printed, { sign: "unsigned" });
+  return Result.isOk(printedNumber) && courtNumbers.has(printedNumber.value)
     ? null
     : printed;
 };

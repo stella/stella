@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 
 /** The sign the served text prints before a court's paragraph number. */
@@ -43,12 +46,11 @@ export const servedParagraphQuoteOf = (
   quote: string,
 ): { number: number; words: string } | null => {
   const match = SERVED_PARAGRAPH_PREFIX.exec(quote);
-  const printed = match?.groups?.["number"];
-  if (match === null || printed === undefined) {
+  const number = parseIntegerToken(match?.groups?.["number"], {
+    sign: "unsigned",
+  });
+  if (match === null || Result.isError(number)) {
     return null;
   }
-  return {
-    number: Number.parseInt(printed, 10),
-    words: quote.slice(match[0].length),
-  };
+  return { number: number.value, words: quote.slice(match[0].length) };
 };

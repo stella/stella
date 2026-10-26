@@ -612,6 +612,10 @@ export const celexToCaseNumber = (celex: string): string => {
 const STATED_DOCKET =
   /(?:(?<letter>[A-Z])\s*[-‑–]\s*)?(?<number>\d{1,4})\s*[/‑–-]\s*(?<year>\d{2})\b/gu;
 
+/** A run of digits as the number it names is written, `0120` as `120`. */
+const withoutLeadingZeros = (digits: string): string =>
+  digits.replace(/^0+(?=\d)/u, "");
+
 /**
  * The decision's case number, as the publisher states it.
  *
@@ -627,24 +631,25 @@ export const ecjCaseNumber = (
   statements: readonly string[],
 ): string => {
   const derived = celexToCaseNumber(celex);
-  const parts = /^(?<letter>[A-Z])-(?<number>\d+)\/(?<year>\d{2})$/u.exec(
+  const parts = /^[A-Z]-(?<ordinal>\d+)\/(?<year>\d{2})$/u.exec(
     derived,
   )?.groups;
-  if (parts === undefined) {
+  const ordinal = parts?.["ordinal"];
+  const year = parts?.["year"];
+  if (ordinal === undefined || year === undefined) {
     return derived;
   }
   for (const statement of statements) {
     for (const stated of statement.matchAll(STATED_DOCKET)) {
-      const { letter, number, year } = stated.groups ?? {};
+      const { letter, number } = stated.groups ?? {};
       if (
         number === undefined ||
-        Number.parseInt(number, 10) !==
-          Number.parseInt(parts["number"] ?? "", 10) ||
-        year !== parts["year"]
+        withoutLeadingZeros(number) !== withoutLeadingZeros(ordinal) ||
+        stated.groups?.["year"] !== year
       ) {
         continue;
       }
-      return letter === undefined ? `${parts["number"]}/${year}` : derived;
+      return letter === undefined ? `${ordinal}/${year}` : derived;
     }
   }
   return derived;
@@ -1095,8 +1100,7 @@ const ecjSections = (blocks: readonly Block[]): DecisionSection[] => {
   for (const section of sectionsFromAst(blocks)) {
     const previous = folded.at(-1);
     if (
-      previous !== undefined &&
-      previous.text === "" &&
+      previous?.text === "" &&
       previous.title !== null &&
       section.title === null
     ) {
@@ -1683,9 +1687,11 @@ const ecjDecisionFromParts = ({
   }
 
   const celexCaseNumber = celexToCaseNumber(celex);
+  // A manifestation read without its Formex or its notice states nothing
+  // through the part it lacks.
   const caseNumber = ecjCaseNumber(celex, [
-    ...(bibliography?.caseNumber ?? []),
-    ...(facts?.caseIdentifier ?? []),
+    ...(bibliography === undefined ? [] : bibliography.caseNumber),
+    ...(facts === undefined ? [] : facts.caseIdentifier),
   ]);
   const { documentAst, sections, fulltext, keywords } = parseManifestation({
     caseNumber,
