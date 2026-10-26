@@ -117,6 +117,9 @@ export const readProvisionPreviewHandler = async ({
 
   return {
     ...projectProvisionPreview(preview),
+    // The publisher's anchor grammar is the country's: a client reads the
+    // blocks' list nesting off their anchors through it.
+    country: version.country,
     url: buildLegislationDocumentAppUrl({
       country: version.country,
       documentId: version.id,
