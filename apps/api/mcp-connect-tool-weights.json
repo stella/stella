@@ -8,10 +8,10 @@
     {
       "name": "add_matter_member",
       "nameChars": 17,
-      "descriptionChars": 156,
+      "descriptionChars": 43,
       "inputSchemaChars": 258,
-      "totalChars": 431,
-      "estimatedTokens": 166
+      "totalChars": 318,
+      "estimatedTokens": 128
     },
     {
       "name": "case_law_coverage",
@@ -80,18 +80,18 @@
     {
       "name": "delete_document",
       "nameChars": 15,
-      "descriptionChars": 329,
+      "descriptionChars": 216,
       "inputSchemaChars": 295,
-      "totalChars": 639,
-      "estimatedTokens": 238
+      "totalChars": 526,
+      "estimatedTokens": 200
     },
     {
       "name": "delete_matter",
       "nameChars": 13,
-      "descriptionChars": 251,
+      "descriptionChars": 105,
       "inputSchemaChars": 168,
-      "totalChars": 432,
-      "estimatedTokens": 158
+      "totalChars": 286,
+      "estimatedTokens": 110
     },
     {
       "name": "delete_reader_annotation",
@@ -424,10 +424,10 @@
     {
       "name": "remove_matter_member",
       "nameChars": 20,
-      "descriptionChars": 197,
+      "descriptionChars": 84,
       "inputSchemaChars": 352,
-      "totalChars": 569,
-      "estimatedTokens": 219
+      "totalChars": 456,
+      "estimatedTokens": 182
     },
     {
       "name": "resolve_case_law_decision",
@@ -576,10 +576,10 @@
     {
       "name": "set_practice_jurisdictions",
       "nameChars": 26,
-      "descriptionChars": 390,
+      "descriptionChars": 277,
       "inputSchemaChars": 2049,
-      "totalChars": 2465,
-      "estimatedTokens": 993
+      "totalChars": 2352,
+      "estimatedTokens": 955
     },
     {
       "name": "submit_feedback",
@@ -592,10 +592,10 @@
     {
       "name": "update_organization_settings",
       "nameChars": 28,
-      "descriptionChars": 276,
+      "descriptionChars": 163,
       "inputSchemaChars": 1256,
-      "totalChars": 1560,
-      "estimatedTokens": 625
+      "totalChars": 1447,
+      "estimatedTokens": 587
     },
     {
       "name": "update_reader_annotation",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127804,
-    "estimatedTokens": 50592
+    "characters": 127093,
+    "estimatedTokens": 50355
   }
 }

@@ -16,7 +16,11 @@ import {
 import type { AgentAccess, AgentAccessTarget } from "@/api/mcp/agent-access";
 import { loadCapabilityCatalog } from "@/api/mcp/capability-tools";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type {
+  McpOperationDatabaseScope,
+  McpRequestContext,
+  McpRequestResources,
+} from "@/api/mcp/context";
 import { listGatewayMcpToolDefinitions } from "@/api/mcp/gateway/list-tools";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
@@ -33,11 +37,12 @@ const createContext = (
   toolConfirmation?: McpRequestContext["toolConfirmation"],
 ) => {
   const scopedDb = asTestRaw<
-    McpRequestContext["scopedDb"] & ReturnType<typeof mock>
+    McpOperationDatabaseScope["scopedDb"] & ReturnType<typeof mock>
   >(mock(async () => []));
-  const context: McpRequestContext = {
+  const accessibleWorkspaceIdSet = new Set(["ws_1"]);
+  const context = {
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
-    accessibleWorkspaceIdSet: new Set(["ws_1"]),
+    accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
     accessibleWorkspaces: [],
     grantedScopes: MCP_OAUTH_SCOPES,
@@ -48,10 +53,16 @@ const createContext = (
     ),
     safeDb: toSafeDbMock(scopedDb),
     scopedDb,
+    createOperationDatabaseScope: () => ({
+      pinServerValidatedWorkspaceId: (workspaceId) =>
+        accessibleWorkspaceIdSet.has(workspaceId),
+      safeDb: toSafeDbMock(scopedDb),
+      scopedDb,
+    }),
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
-  };
+  } satisfies McpRequestResources;
   return { context, scopedDb };
 };
 

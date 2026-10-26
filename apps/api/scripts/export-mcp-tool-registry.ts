@@ -124,7 +124,7 @@ const connectWeightPath = new URL(
 );
 await Bun.write(
   connectWeightPath,
-  `${JSON.stringify(connectToolWeights(listings), null, 2)}\n`,
+  `${JSON.stringify(connectToolWeights(DEFAULT_MCP_TOOL_DEFINITIONS), null, 2)}\n`,
 );
 process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
 
