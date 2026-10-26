@@ -1139,10 +1139,6 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
-        {
-          files: "packages/mcp-apps/**",
-          use: "packages/mcp-apps/src/shared/style.css",
-        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
