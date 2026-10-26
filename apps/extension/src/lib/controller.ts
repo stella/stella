@@ -7,8 +7,8 @@ import {
 import { hasAllSiteAccess } from "./access";
 import {
   BROWSER_COMMAND_BUDGET_STORAGE_KEY,
-  BROWSER_CONTROLLER_STORAGE_KEY,
   BROWSER_CONTROLLED_TAB_STORAGE_KEY,
+  BROWSER_CONTROLLER_STORAGE_KEY,
   BROWSER_EXECUTION_RECEIPTS_STORAGE_KEY,
 } from "./storage-keys";
 import { releaseContainedTabs } from "./tab-containment";

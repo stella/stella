@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { type FoldHandlers, foldCondition, foldConditions } from "./fold";
+import { foldCondition, foldConditions, type FoldHandlers } from "./fold";
 import type { ConditionNode } from "./schema";
 
 const kindPredicate = (value: string): ConditionNode => ({

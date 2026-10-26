@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { SanctionsSource } from "@stll/sanctions";
 import { Temporal } from "@stll/time";
 
 import type { VerificationRunErrorCode } from "@/api/lib/lists/verification/contract";
@@ -58,10 +59,7 @@ const REQUEST_STAGE_FAMILY = {
 } as const satisfies Record<RequestStage, keyof typeof REQUEST_STAGE_FAMILIES>;
 
 export type RequestStageOutcome =
-  | "completed"
-  | "failed"
-  | "refused"
-  | "cancelled";
+  "completed" | "failed" | "refused" | "cancelled";
 
 type RequestStageRecordInput = {
   route: string;
@@ -270,6 +268,36 @@ export const emitSanctionsScreeningWorkMetric = ({
   });
 };
 
+const SANCTIONS_SCREENING_COMPLETION_METRIC =
+  "SanctionsScreeningListCompletion";
+
+/** One complete or incomplete result per source; subjects never become dimensions. */
+export const emitSanctionsScreeningCompletionMetric = ({
+  source,
+  outcome,
+}: {
+  source: SanctionsSource;
+  outcome: "complete" | "incomplete";
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["source", "outcome"]],
+          Metrics: [
+            { Name: SANCTIONS_SCREENING_COMPLETION_METRIC, Unit: "Count" },
+          ],
+        },
+      ],
+    },
+    source,
+    outcome,
+    [SANCTIONS_SCREENING_COMPLETION_METRIC]: 1,
+  });
+};
+
 const DATA_INVARIANT_METRIC = "DataInvariantUnhealthy";
 
 type DataInvariantMetricInput = {
@@ -332,15 +360,36 @@ export type ProcessMemoryReport = {
   rssBytes: number;
   heapUsedBytes: number;
   arrayBuffersBytes: number;
-  uploadFinalizeInFlightBytes: number;
+  workPools: Record<
+    string,
+    {
+      inFlight: number;
+      queued: number;
+      bytesInFlight: number;
+      refusedBusy: number;
+      refusedMemory: number;
+      deadlineCancelled: number;
+    }
+  >;
 };
 
 /** Log-only: memory diagnostics must not create billable custom metrics. */
 export const emitProcessMemoryLog = (memory: ProcessMemoryReport): void => {
+  const poolFields = Object.fromEntries(
+    Object.entries(memory.workPools).flatMap(([pool, metrics]) =>
+      Object.entries(metrics).map(([field, value]) => [
+        `work_pool.${pool}.${field}`,
+        value,
+      ]),
+    ),
+  );
   writeMetricLine({
     severity: "INFO",
     message: "runtime.process_memory",
-    ...memory,
+    rssBytes: memory.rssBytes,
+    heapUsedBytes: memory.heapUsedBytes,
+    arrayBuffersBytes: memory.arrayBuffersBytes,
+    ...poolFields,
   });
 };
 

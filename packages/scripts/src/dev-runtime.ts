@@ -1,7 +1,7 @@
 import {
+  panic,
   Result,
   TaggedError,
-  panic,
   type TaggedErrorClass,
 } from "better-result";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -108,7 +108,7 @@ export const readOrCreateDevContentEncryptionKey = (
     const written = Result.try({
       try: () => {
         mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });
-        writeFileSync(temporaryPath, randomBytes(32).toString("hex"), {
+        writeFileSync(temporaryPath, randomBytes(32).toHex(), {
           flag: "wx",
           mode: 0o600,
         });
@@ -131,9 +131,11 @@ export const readOrCreateDevContentEncryptionKey = (
     }
     if (published.isErr()) {
       const cause = published.error.cause;
-      if (
-        !(cause instanceof Error && "code" in cause && cause.code === "EEXIST")
-      ) {
+      if (!(
+        cause instanceof Error &&
+        "code" in cause &&
+        cause.code === "EEXIST"
+      )) {
         return published;
       }
     }

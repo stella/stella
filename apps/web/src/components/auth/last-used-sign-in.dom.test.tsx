@@ -100,28 +100,49 @@ const mount = async () => {
 const isFilled = (button: HTMLElement) =>
   button.classList.contains("bg-primary");
 
-const describedByBadge = (button: HTMLElement, badge: HTMLElement) =>
-  badge.id !== "" && button.getAttribute("aria-describedby") === badge.id;
+// A method typed into a form is marked on its email field, never on the
+// submit button: the badge is the field's description.
+const emailFieldOf = (submit: HTMLElement) => {
+  const field = submit.closest("form")?.querySelector('input[type="email"]');
+  if (!(field instanceof HTMLInputElement)) {
+    throw new Error("the submit button's form has no email field");
+  }
+  return field;
+};
 
-test("the last-used method is the only filled action and carries the badge", async () => {
+const describesField = (field: HTMLElement, badge: HTMLElement) => {
+  const description = badge.closest('[data-slot="field-description"]');
+  return (
+    description !== null &&
+    description.id !== "" &&
+    (field.getAttribute("aria-describedby") ?? "")
+      .split(" ")
+      .includes(description.id)
+  );
+};
+
+test("the last-used method is the only filled action and its email field carries the badge", async () => {
   browserCookie(() => `theme=dark; ${LAST_USED_COOKIE}=email`);
   const { ui, emailButton, passwordButton } = await mount();
 
   expect(isFilled(passwordButton)).toBe(true);
   const badge = ui.getByText(messages.auth.lastUsed);
-  expect(describedByBadge(passwordButton, badge)).toBe(true);
+  expect(describesField(emailFieldOf(passwordButton), badge)).toBe(true);
+  expect(describesField(emailFieldOf(emailButton), badge)).toBe(false);
+  expect(passwordButton.hasAttribute("aria-describedby")).toBe(false);
   expect(isFilled(emailButton)).toBe(false);
   expect(emailButton.hasAttribute("aria-describedby")).toBe(false);
 });
 
-test("an email-code sign-in marks the email action", async () => {
+test("an email-code sign-in marks the email-code field, not its button", async () => {
   browserCookie(() => `${LAST_USED_COOKIE}=email-otp`);
   const { ui, emailButton, passwordButton } = await mount();
 
   expect(isFilled(emailButton)).toBe(true);
-  expect(
-    describedByBadge(emailButton, ui.getByText(messages.auth.lastUsed)),
-  ).toBe(true);
+  const badge = ui.getByText(messages.auth.lastUsed);
+  expect(describesField(emailFieldOf(emailButton), badge)).toBe(true);
+  expect(describesField(emailFieldOf(passwordButton), badge)).toBe(false);
+  expect(emailButton.hasAttribute("aria-describedby")).toBe(false);
   expect(isFilled(passwordButton)).toBe(false);
 });
 

@@ -1,10 +1,10 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   excludeSanctionsContact,
   includeSanctionsContact,
@@ -24,8 +24,8 @@ export default createSafeRootHandler(
       reason: "contact_directory",
       consumesServices: false,
     },
-    params: t.Object({ contactId: tSafeId("contact") }),
-    body: t.Object({ mode: t.UnionEnum(["included", "excluded"]) }),
+    params: v.object({ contactId: resourceIdSchema("contact") }),
+    body: v.object({ mode: v.picklist(["included", "excluded"]) }),
   },
   async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     const result = yield* Result.await(

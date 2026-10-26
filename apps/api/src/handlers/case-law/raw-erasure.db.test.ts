@@ -25,8 +25,9 @@ import { createSha256 } from "@stll/sha256/node";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  caseLawDecisionSourceIdentities,
+  caseLawDecisionAliases,
   caseLawDecisions,
+  caseLawDecisionSourceIdentities,
   caseLawIndexJobs,
   caseLawRawSweeps,
   caseLawSources,
@@ -44,8 +45,8 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   censusCaseLawRawObjectsPage,
@@ -64,12 +65,18 @@ import {
   enqueueCaseLawRawSweepTx,
   reconcileCaseLawRawSweeps,
 } from "@/api/lib/legal-search/case-law-raw-sweeps";
+import { lockActiveCorpusProjectionSourceTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { decodeSourceRawEnvelopeObjects } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
+import {
+  applyRepublishedDecisionBatch,
+  reverseRepublishedDecisionBatch,
+} from "@/api/scripts/link-republished-decisions-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -270,6 +277,253 @@ const drainSweeps = async (): Promise<void> => {
     signal: signal(),
   });
 };
+
+let linkedSources:
+  | {
+      canonicalSource: SafeId<"caseLawSource">;
+      republisherSource: SafeId<"caseLawSource">;
+    }
+  | undefined;
+
+const seedLinkedPair = async () => {
+  if (linkedSources === undefined) {
+    linkedSources = {
+      canonicalSource: createSafeId<"caseLawSource">(),
+      republisherSource: createSafeId<"caseLawSource">(),
+    };
+    await db.insert(caseLawSources).values([
+      {
+        id: linkedSources.canonicalSource,
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        name: "Raw owner court fixture",
+      },
+      {
+        id: linkedSources.republisherSource,
+        adapterKey: ADAPTER_KEYS.PL_COURTS,
+        name: "Raw owner republisher fixture",
+      },
+    ]);
+  }
+  const { canonicalSource, republisherSource } = linkedSources;
+  const canonicalId = createSafeId<"caseLawDecision">();
+  const retiredId = createSafeId<"caseLawDecision">();
+  const common = {
+    country: "POL",
+    court: "Trybunał Konstytucyjny",
+    language: "pl",
+    caseNumber: "K 1/26",
+  };
+  await db.insert(caseLawDecisions).values([
+    {
+      ...common,
+      id: canonicalId,
+      sourceId: canonicalSource,
+      sourceDocumentId: canonicalId,
+      fulltext: "canonical retained payload",
+    },
+    {
+      ...common,
+      id: retiredId,
+      sourceId: republisherSource,
+      sourceDocumentId: retiredId,
+      fulltext: "retired retained payload",
+    },
+  ]);
+  await db.insert(caseLawDecisionSourceIdentities).values([
+    {
+      sourceId: canonicalSource,
+      sourceDocumentId: canonicalId,
+      decisionId: canonicalId,
+    },
+    {
+      sourceId: republisherSource,
+      sourceDocumentId: retiredId,
+      decisionId: retiredId,
+    },
+  ]);
+  await db.transaction(async (tx) => {
+    await applyRepublishedDecisionBatch(
+      tx,
+      [
+        {
+          canonical: {
+            adapterKey: ADAPTER_KEYS.PL_TK,
+            createdAt: new Date("2026-01-01"),
+            id: canonicalId,
+          },
+          duplicate: {
+            adapterKey: ADAPTER_KEYS.PL_COURTS,
+            createdAt: new Date("2026-01-02"),
+            id: retiredId,
+          },
+          disposition: "link",
+        },
+      ],
+      async () => undefined,
+    );
+  });
+  return { canonicalId, canonicalSource, retiredId, republisherSource };
+};
+
+test("erasing a canonical decision removes raw objects under both original owners", async () => {
+  const { canonicalId, canonicalSource, retiredId, republisherSource } =
+    await seedLinkedPair();
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  const retiredKey = `${prefixOf(republisherSource, retiredId)}payloads/retired`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  fake.put(envBase.S3_BUCKET, retiredKey, "retired");
+
+  await redact(canonicalId);
+  await drainSweeps();
+
+  expect(stored(canonicalKey)).toBe(false);
+  expect(stored(retiredKey)).toBe(false);
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      { id: canonicalId, fulltext: null },
+      { id: retiredId, fulltext: null },
+    ]),
+  );
+
+  const reverseOutcome = await db.transaction(
+    async (tx) =>
+      await reverseRepublishedDecisionBatch(tx, 10, async () => undefined),
+  );
+  expect(reverseOutcome).toEqual([{ type: "refused_erased", retiredId }]);
+  expect(await db.select().from(caseLawDecisionAliases)).toEqual([
+    expect.objectContaining({
+      canonicalDecisionId: canonicalId,
+      retiredDecisionId: retiredId,
+    }),
+  ]);
+  expect(
+    await db
+      .select({ decisionId: caseLawDecisionSourceIdentities.decisionId })
+      .from(caseLawDecisionSourceIdentities)
+      .where(eq(caseLawDecisionSourceIdentities.sourceId, republisherSource)),
+  ).toEqual([{ decisionId: canonicalId }]);
+});
+
+test("erasing a retired decision removes the canonical and retired copies", async () => {
+  const { canonicalId, canonicalSource, retiredId, republisherSource } =
+    await seedLinkedPair();
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  const retiredKey = `${prefixOf(republisherSource, retiredId)}payloads/retired`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  fake.put(envBase.S3_BUCKET, retiredKey, "retired");
+
+  const outcome = await redact(retiredId);
+  await drainSweeps();
+
+  expect(outcome.type).toBe("redacted");
+  expect(stored(canonicalKey)).toBe(false);
+  expect(stored(retiredKey)).toBe(false);
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      { id: canonicalId, fulltext: null },
+      { id: retiredId, fulltext: null },
+    ]),
+  );
+});
+
+test("erasing through a retired id whose row is gone still erases its canonical group", async () => {
+  const { canonicalId, canonicalSource, retiredId } = await seedLinkedPair();
+  const canonicalKey = `${prefixOf(canonicalSource, canonicalId)}payloads/canonical`;
+  fake.put(envBase.S3_BUCKET, canonicalKey, "canonical");
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+
+  const outcome = await redact(retiredId);
+  await drainSweeps();
+
+  expect(outcome.type).toBe("redacted");
+  expect(stored(canonicalKey)).toBe(false);
+  expect(await rowOf(canonicalId)).toEqual(
+    expect.objectContaining({ redactedAt: expect.any(Date) }),
+  );
+});
+
+test("erasing an unknown decision remains missing", async () => {
+  expect(await redact(createSafeId<"caseLawDecision">())).toEqual({
+    type: "not-found",
+  });
+});
+
+test("erasing a canonical decision skips an alias whose retired row is gone", async () => {
+  const { canonicalId, canonicalSource, retiredId } = await seedLinkedPair();
+  const goneId = createSafeId<"caseLawDecision">();
+  await db.insert(caseLawDecisions).values({
+    id: goneId,
+    sourceId: canonicalSource,
+    country: "POL",
+    court: "Trybunał Konstytucyjny",
+    language: "pl",
+    caseNumber: "K 2/26",
+  });
+  await db.insert(caseLawDecisionAliases).values({
+    retiredDecisionId: goneId,
+    canonicalDecisionId: canonicalId,
+  });
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, goneId));
+
+  await redact(canonicalId);
+
+  expect(
+    await db
+      .select({ id: caseLawDecisions.id, fulltext: caseLawDecisions.fulltext })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      { id: canonicalId, fulltext: null },
+      { id: retiredId, fulltext: null },
+    ]),
+  );
+});
+
+test("a linked decision whose projection lock fails leaves every decision unredacted", async () => {
+  const { canonicalId, retiredId } = await seedLinkedPair();
+  const lockFailure = new Error("projection source lock failed");
+
+  const outcome = await redactCaseLawDecision({
+    decisionId: canonicalId,
+    scopedDb,
+    lockSource: async (tx, subject) =>
+      subject.entityId === retiredId
+        ? await Promise.reject(lockFailure)
+        : await lockActiveCorpusProjectionSourceTx(tx, subject),
+  });
+
+  expect(Result.isError(outcome)).toBe(true);
+  expect(
+    await db
+      .select({
+        id: caseLawDecisions.id,
+        fulltext: caseLawDecisions.fulltext,
+        redactedAt: caseLawDecisions.redactedAt,
+      })
+      .from(caseLawDecisions)
+      .where(sql`${caseLawDecisions.id} IN (${canonicalId}, ${retiredId})`),
+  ).toEqual(
+    expect.arrayContaining([
+      {
+        id: canonicalId,
+        fulltext: "canonical retained payload",
+        redactedAt: null,
+      },
+      { id: retiredId, fulltext: "retired retained payload", redactedAt: null },
+    ]),
+  );
+});
 
 type LegacyDecision = {
   decisionId: SafeId<"caseLawDecision">;

@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { readFile, readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
   CONFIRMED_ENTRY_NETWORK_MODULES,
+  isFeatureModule,
   LOCAL_ONLY_FEATURES,
   LOCAL_ONLY_GATE_MODULES,
   LOCAL_ONLY_SHARED_MODULES,
-  isFeatureModule,
 } from "./local-only-features";
 
 const NATIVE_SOURCE = path.join(import.meta.dir, "../src-tauri/src");

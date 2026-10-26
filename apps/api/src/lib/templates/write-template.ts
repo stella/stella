@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { abortableTx } from "@/api/db/safe-db";
@@ -78,8 +78,7 @@ type WriteStoredTemplateOptions = {
 };
 
 type TemplateWriteAttempt =
-  | ({ type: "published" } & TemplateWriteResult)
-  | { type: "retry" };
+  ({ type: "published" } & TemplateWriteResult) | { type: "retry" };
 
 // One optimistic attempt owns exactly one prepared candidate and intent.
 const writeTemplateAttempt = async function* ({

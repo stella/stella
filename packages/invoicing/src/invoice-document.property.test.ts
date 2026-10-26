@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { cents } from "@stll/money";
-import { propertyConfig, propertySeed } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { calculateDocumentTotals } from "./invoice-document";
 
@@ -19,7 +19,8 @@ const lineArbitrary = fc.record({
 });
 
 test("line sums, rate breakdowns, and credit note reversals agree", () => {
-  fc.assert(
+  assertProperty(
+    "line sums, rate breakdowns, and credit note reversals agree",
     fc.property(
       fc.array(lineArbitrary, { minLength: 1, maxLength: 20 }),
       (lines) => {
@@ -70,6 +71,6 @@ test("line sums, rate breakdowns, and credit note reversals agree", () => {
         );
       },
     ),
-    propertyConfig({ numRuns: 300, seed: propertySeed() }),
+    { numRuns: 300 },
   );
 });

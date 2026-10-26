@@ -11,7 +11,6 @@ import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { TooltipProvider } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import type { ProvisionPreview } from "../shared/generated/contracts";
@@ -21,7 +20,7 @@ import type { ReaderController } from "./controller";
 import { openDecisionAnchor, openProvisionAnchor } from "./link-actions";
 import { readerMessages } from "./messages";
 import { resolveReaderRange } from "./model";
-import type { ReaderPager, OpenDecision } from "./model";
+import type { OpenDecision, ReaderPager } from "./model";
 
 const focusReaderBack = (button: HTMLButtonElement | null) => {
   button?.focus({ preventScroll: true });
@@ -69,7 +68,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
-                "open cited decision",
+                "decisionReader.openCitedDecision",
               )
             }
           >
@@ -93,7 +92,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
-                "preview cited provision",
+                "decisionReader.previewCitedProvision",
               )
             }
           >
@@ -138,7 +137,7 @@ const McpDecisionMetadata = ({
               onClick={() =>
                 host.bridge.detached(
                   host.bridge.openLink(webUrl),
-                  "open decision in stella",
+                  "decisionReader.openDecisionInStella",
                 )
               }
             >
@@ -181,7 +180,7 @@ const McpProvisionPreview = ({
           onClick={() =>
             host.bridge.detached(
               host.bridge.openLink(previewUrl),
-              "open provision in stella",
+              "decisionReader.openProvisionInStella",
             )
           }
         >
@@ -276,145 +275,142 @@ export const ReaderView = ({
     bridgeState.result.status === "error";
   return (
     <DirectionProvider direction={direction}>
-      <TooltipProvider>
-        <ReaderPresentationProvider
-          adapters={{
-            messages: presentation,
+      <ReaderPresentationProvider
+        adapters={{
+          messages: presentation,
+        }}
+      >
+        <main
+          dir={direction}
+          data-display-mode={mode}
+          className="p-4 sm:p-6"
+          ref={(element) => {
+            if (element === null || onBack === undefined) {
+              return undefined;
+            }
+            const handleKeyDown = (event: KeyboardEvent) => {
+              if (event.key !== "Escape" || event.defaultPrevented) {
+                return;
+              }
+              event.preventDefault();
+              onBack();
+            };
+            element.addEventListener("keydown", handleKeyDown);
+            return () => element.removeEventListener("keydown", handleKeyDown);
           }}
         >
-          <main
-            dir={direction}
-            data-display-mode={mode}
-            className="p-4 sm:p-6"
-            ref={(element) => {
-              if (element === null || onBack === undefined) {
-                return undefined;
-              }
-              const handleKeyDown = (event: KeyboardEvent) => {
-                if (event.key !== "Escape" || event.defaultPrevented) {
+          {onBack !== undefined && (
+            <Button
+              variant="ghost"
+              onClick={containedEventHandler(() => onBack())}
+              ref={focusReaderBack}
+            >
+              {presentation["common.back"]}
+            </Button>
+          )}
+          <McpDecisionMetadata
+            metadata={metadata}
+            host={host}
+            formattingLocale={formattingLocale}
+            openInStella={messages.openInStella}
+          />
+          {(state.requestStatus === "conflict" ||
+            state.documentRevision > 0) && (
+            <p role="status" className="text-muted-foreground text-sm">
+              {presentation["caseLaw.reader.documentUpdated"]}
+            </p>
+          )}
+          {error && (
+            <div
+              role={state.requestStatus === "conflict" ? undefined : "alert"}
+            >
+              {state.requestStatus !== "conflict" && <p>{messages.error}</p>}
+              <Button
+                variant="outline"
+                onClick={() =>
+                  host.bridge.detached(host.retry(), "decisionReader.retry")
+                }
+              >
+                {messages.retry}
+              </Button>
+            </div>
+          )}
+          {state.document?.status === "available" && (
+            <article
+              data-slot="reader-text-root"
+              className="reader-body mx-auto max-w-[var(--reader-measure)]"
+              dir="ltr"
+              lang={state.document.metadata.language}
+              ref={(article) => {
+                if (
+                  article === null ||
+                  resolution?.type !== "found" ||
+                  state.document?.status !== "available"
+                ) {
                   return;
                 }
-                event.preventDefault();
-                onBack();
-              };
-              element.addEventListener("keydown", handleKeyDown);
-              return () =>
-                element.removeEventListener("keydown", handleKeyDown);
-            }}
-          >
-            {onBack !== undefined && (
+                const key = `${state.documentRevision}:${state.document.metadata.decisionId}:${resolution.firstAnchorId}`;
+                if (
+                  landing.current.key === key &&
+                  landing.current.opening === bridgeState.result
+                ) {
+                  return;
+                }
+                const anchor = article.querySelector(
+                  `#${CSS.escape(resolution.firstAnchorId)}`,
+                );
+                if (anchor !== null) {
+                  anchor.scrollIntoView({ block: "center" });
+                  landing.current = { opening: bridgeState.result, key };
+                }
+              }}
+            >
+              {state.document.blocks.map((block) => (
+                <BlockRenderer
+                  key={block.id}
+                  block={block}
+                  activeMatchIndex={-1}
+                  rangesByPieceId={{}}
+                  anchorsByPieceId={anchors}
+                  variant="case-law"
+                  landing={landingIds.has(block.anchorId)}
+                />
+              ))}
+            </article>
+          )}
+          <McpReaderStatus
+            state={state}
+            openingStatus={opened?.status}
+            bridgeStatus={bridgeState.result.status}
+            unavailable={presentation["caseLaw.viewer.textUnavailable"]}
+            loading={messages.loading}
+          />
+          {state.document?.status === "available" &&
+            !state.document.complete &&
+            state.requestStatus !== "error" &&
+            state.requestStatus !== "conflict" && (
               <Button
-                variant="ghost"
-                onClick={containedEventHandler(() => onBack())}
-                ref={focusReaderBack}
+                variant="outline"
+                disabled={state.requestStatus === "loading"}
+                onClick={() =>
+                  host.bridge.detached(
+                    host.loadNext(),
+                    "decisionReader.loadNextPage",
+                  )
+                }
               >
-                {presentation["common.back"]}
+                {messages.next}
               </Button>
             )}
-            <McpDecisionMetadata
-              metadata={metadata}
+          {preview !== null && (
+            <McpProvisionPreview
+              preview={preview}
               host={host}
-              formattingLocale={formattingLocale}
               openInStella={messages.openInStella}
             />
-            {(state.requestStatus === "conflict" ||
-              state.documentRevision > 0) && (
-              <p role="status" className="text-muted-foreground text-sm">
-                {presentation["caseLaw.reader.documentUpdated"]}
-              </p>
-            )}
-            {error && (
-              <div
-                role={state.requestStatus === "conflict" ? undefined : "alert"}
-              >
-                {state.requestStatus !== "conflict" && <p>{messages.error}</p>}
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    host.bridge.detached(host.retry(), "retry decision read")
-                  }
-                >
-                  {messages.retry}
-                </Button>
-              </div>
-            )}
-            {state.document?.status === "available" && (
-              <article
-                data-slot="reader-text-root"
-                className="reader-body mx-auto max-w-[var(--reader-measure)]"
-                dir="ltr"
-                lang={state.document.metadata.language}
-                ref={(article) => {
-                  if (
-                    article === null ||
-                    resolution?.type !== "found" ||
-                    state.document?.status !== "available"
-                  ) {
-                    return;
-                  }
-                  const key = `${state.documentRevision}:${state.document.metadata.decisionId}:${resolution.firstAnchorId}`;
-                  if (
-                    landing.current.key === key &&
-                    landing.current.opening === bridgeState.result
-                  ) {
-                    return;
-                  }
-                  const anchor = article.querySelector(
-                    `#${CSS.escape(resolution.firstAnchorId)}`,
-                  );
-                  if (anchor !== null) {
-                    anchor.scrollIntoView({ block: "center" });
-                    landing.current = { opening: bridgeState.result, key };
-                  }
-                }}
-              >
-                {state.document.blocks.map((block) => (
-                  <BlockRenderer
-                    key={block.id}
-                    block={block}
-                    activeMatchIndex={-1}
-                    rangesByPieceId={{}}
-                    anchorsByPieceId={anchors}
-                    variant="case-law"
-                    landing={landingIds.has(block.anchorId)}
-                  />
-                ))}
-              </article>
-            )}
-            <McpReaderStatus
-              state={state}
-              openingStatus={opened?.status}
-              bridgeStatus={bridgeState.result.status}
-              unavailable={presentation["caseLaw.viewer.textUnavailable"]}
-              loading={messages.loading}
-            />
-            {state.document?.status === "available" &&
-              !state.document.complete &&
-              state.requestStatus !== "error" &&
-              state.requestStatus !== "conflict" && (
-                <Button
-                  variant="outline"
-                  disabled={state.requestStatus === "loading"}
-                  onClick={() =>
-                    host.bridge.detached(
-                      host.loadNext(),
-                      "load next decision page",
-                    )
-                  }
-                >
-                  {messages.next}
-                </Button>
-              )}
-            {preview !== null && (
-              <McpProvisionPreview
-                preview={preview}
-                host={host}
-                openInStella={messages.openInStella}
-              />
-            )}
-          </main>
-        </ReaderPresentationProvider>
-      </TooltipProvider>
+          )}
+        </main>
+      </ReaderPresentationProvider>
     </DirectionProvider>
   );
 };

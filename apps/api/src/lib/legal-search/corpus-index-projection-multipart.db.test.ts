@@ -23,16 +23,16 @@ import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/co
 import { legislationProjectionInputFromCanonical } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import {
   censusCorpusProjectionRevisions,
+  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   corpusIndexUnknownAppendBarrierAt,
   corpusProjectionRevisionsQuery,
-  CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   deleteCorpusProjectionRevisions,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { executeCorpusProjectionAppendCycle } from "@/api/lib/legal-search/corpus-index-projection-executor";
 import { CORPUS_PROJECTION_GENERATION_SCOPE } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
-import { startFakeS3, type FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

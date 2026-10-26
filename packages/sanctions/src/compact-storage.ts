@@ -55,13 +55,6 @@ export class NumberColumn {
     );
   }
 
-  byteChunk(index: number): Uint8Array {
-    const chunk = this.chunks[index >>> COLUMN_CHUNK_SHIFT];
-    return chunk instanceof Uint8Array
-      ? chunk
-      : panic("Missing compact byte chunk");
-  }
-
   bytes(from: number, to: number): Uint8Array {
     const chunk = this.chunks[from >>> COLUMN_CHUNK_SHIFT];
     if (!(chunk instanceof Uint8Array)) {
@@ -202,7 +195,7 @@ export class SpellingColumn {
 
 export function* spellingColumnSteps(
   strings: ObjectColumn<string>,
-): Generator<void, SpellingColumn, void> {
+): Generator<undefined, SpellingColumn, void> {
   const packed = new SpellingColumn();
   for (const text of strings) {
     packed.push(text);
@@ -274,7 +267,7 @@ class StringIds {
 
 export function* stringIdsSteps(
   strings: IndexedStrings,
-): Generator<void, StringIds, void> {
+): Generator<undefined, StringIds, void> {
   const capacity = lookupCapacity(strings.length);
   const slots = new NumberColumn();
   for (let position = 0; position < capacity; position += 1) {
@@ -301,134 +294,19 @@ export function* stringIdsSteps(
   return new StringIds(strings, slots);
 }
 
-export const appendUnsigned = (bytes: NumberColumn, value: number): void => {
-  let rest = value;
-  while (rest >= 128) {
-    bytes.push((rest % 128) + 128);
-    rest = Math.floor(rest / 128);
-  }
-  bytes.push(rest);
-};
-
-type UnsignedReaderOptions = { bytes: NumberColumn; from: number; to: number };
-export class UnsignedReader {
-  private readonly bytes;
-  private readonly to;
-  offset;
-  private chunk;
-  private localOffset;
-  constructor({ bytes, from, to }: UnsignedReaderOptions) {
-    this.bytes = bytes;
-    this.offset = from;
-    this.to = to;
-    this.localOffset = from & COLUMN_CHUNK_MASK;
-    this.chunk = from === to ? new Uint8Array(0) : bytes.byteChunk(from);
-  }
-  get done(): boolean {
-    return this.offset === this.to;
-  }
-  read(): number {
-    let value = 0;
-    let factor = 1;
-    for (;;) {
-      if (this.offset >= this.to) {
-        return panic("Truncated unsigned column value");
-      }
-      if (this.localOffset === COLUMN_CHUNK_SIZE) {
-        this.chunk = this.bytes.byteChunk(this.offset);
-        this.localOffset = 0;
-      }
-      const byte =
-        this.chunk[this.localOffset] ?? panic("Missing unsigned byte");
-      this.localOffset += 1;
-      this.offset += 1;
-      value += (byte % 128) * factor;
-      if (byte < 128) {
-        return value;
-      }
-      factor *= 128;
-    }
-  }
-}
-
-class DeltaReader {
-  private readonly bytes;
-  private value = 0;
-  constructor(bytes: UnsignedReader) {
-    this.bytes = bytes;
-  }
-  read(): number | undefined {
-    if (this.bytes.done) {
-      return undefined;
-    }
-    this.value += this.bytes.read();
-    return this.value;
-  }
-}
-
-class DeltaIterator implements IterableIterator<number> {
-  private readonly reader;
-  constructor(reader: DeltaReader) {
-    this.reader = reader;
-  }
-  [Symbol.iterator](): IterableIterator<number> {
-    return this;
-  }
-  next(): IteratorResult<number, void> {
-    const value = this.reader.read();
-    return value === undefined ? { done: true, value } : { done: false, value };
-  }
-}
-
-type PackedPostingsOptions = {
-  offsets: NumberColumn;
-  sizes: NumberColumn;
-  values: NumberColumn;
-};
-
-export class PackedPostings {
-  private readonly offsets;
-  private readonly values;
-  private readonly sizes;
-  constructor({ offsets, sizes, values }: PackedPostingsOptions) {
-    this.offsets = offsets;
-    this.values = values;
-    this.sizes = sizes;
-  }
-
-  size(id: number): number {
-    return this.sizes.get(id);
-  }
-
-  reader(id: number): DeltaReader {
-    return new DeltaReader(
-      new UnsignedReader({
-        bytes: this.values,
-        from: this.offsets.get(id),
-        to: this.offsets.get(id + 1),
-      }),
-    );
-  }
-
-  get(id: number): IterableIterator<number> {
-    return new DeltaIterator(this.reader(id));
-  }
-}
-
 /** Append-only linked postings preserve insertion order without per-key arrays. */
 const NO_NODE = 0xff_ff_ff_ff;
 
 export class PostingColumn {
   private readonly heads = new NumberColumn();
   private readonly tails = new NumberColumn();
-  private readonly sizes = new NumberColumn();
   private readonly values = new NumberColumn();
   private readonly next = new NumberColumn();
 
   addList(): number {
     this.heads.push(NO_NODE);
     this.tails.push(NO_NODE);
-    return this.sizes.push(0);
+    return this.heads.length - 1;
   }
 
   push(id: number, value: number): void {
@@ -441,39 +319,6 @@ export class PostingColumn {
       this.next.set(tail, node);
     }
     this.tails.set(id, node);
-    this.sizes.set(id, this.sizes.get(id) + 1);
-  }
-
-  *compact(): Generator<void, PackedPostings, void> {
-    const offsets = new NumberColumn();
-    const values = new NumberColumn("byte");
-    const sizes = new NumberColumn();
-    let processed = 0;
-    offsets.push(0);
-    for (let id = 0; id < this.heads.length; id += 1) {
-      let previous = 0;
-      for (const value of this.get(id)) {
-        if (value < previous) {
-          panic("Unordered compact postings");
-        }
-        appendUnsigned(values, value - previous);
-        previous = value;
-        processed += 1;
-        if (processed % COLUMN_CHUNK_SIZE === 0) {
-          yield;
-        }
-      }
-      sizes.push(this.sizes.get(id));
-      offsets.push(values.length);
-      if (id % COLUMN_CHUNK_SIZE === 0) {
-        yield;
-      }
-    }
-    return new PackedPostings({ offsets, sizes, values });
-  }
-
-  size(id: number): number {
-    return this.sizes.get(id);
   }
 
   *get(id: number): Generator<number, void, void> {
@@ -483,89 +328,6 @@ export class PostingColumn {
       node = this.next.get(node)
     ) {
       yield this.values.get(node);
-    }
-  }
-}
-
-/**
- * A cache with a fixed entry cap that evicts the least recently used entry.
- * Screening caches live as long as the index, so an unbounded one would grow
- * with every distinct query token and undo the compact layout.
- */
-type CacheEntry<K, V> = {
-  key: K;
-  value: V;
-  previous: CacheEntry<K, V> | undefined;
-  next: CacheEntry<K, V> | undefined;
-};
-
-export class BoundedCache<K, V> {
-  private readonly entries = new Map<K, CacheEntry<K, V>>();
-  private readonly limit: number;
-  private oldest: CacheEntry<K, V> | undefined;
-  private newest: CacheEntry<K, V> | undefined;
-
-  constructor(limit: number) {
-    if (!Number.isSafeInteger(limit) || limit <= 0) {
-      panic("A bounded cache needs a positive entry limit");
-    }
-    this.limit = limit;
-  }
-
-  get size(): number {
-    return this.entries.size;
-  }
-
-  private touch(entry: CacheEntry<K, V>): void {
-    if (this.newest === entry) {
-      return;
-    }
-    if (entry.previous !== undefined) {
-      entry.previous.next = entry.next;
-    } else if (this.oldest === entry) {
-      this.oldest = entry.next;
-    }
-    if (entry.next !== undefined) {
-      entry.next.previous = entry.previous;
-    }
-    entry.previous = this.newest;
-    entry.next = undefined;
-    if (this.newest !== undefined) {
-      this.newest.next = entry;
-    }
-    this.newest = entry;
-    this.oldest ??= entry;
-  }
-
-  get(key: K): V | undefined {
-    const entry = this.entries.get(key);
-    if (entry === undefined) {
-      return undefined;
-    }
-    this.touch(entry);
-    return entry.value;
-  }
-
-  set(key: K, value: V): void {
-    const known = this.entries.get(key);
-    if (known !== undefined) {
-      known.value = value;
-      this.touch(known);
-      return;
-    }
-    const entry = { key, value, previous: undefined, next: undefined };
-    this.entries.set(key, entry);
-    this.touch(entry);
-    if (this.entries.size <= this.limit) {
-      return;
-    }
-    // Map.keys().next() repeatedly walks deleted buckets in JSC. Keep the
-    // eviction order separately so churn costs constant work per lookup.
-    const oldest = this.oldest ?? panic("Missing oldest cache entry");
-    this.entries.delete(oldest.key);
-    this.oldest = oldest.next;
-    if (this.oldest !== undefined) {
-      this.oldest.previous = undefined;
     }
   }
 }

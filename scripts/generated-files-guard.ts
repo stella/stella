@@ -2,11 +2,11 @@ import { panic, Result } from "better-result";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
+  type Generator,
   GENERATORS,
   GUARD_A_EXCLUSIONS,
   matchesGeneratedGlob,
   orderGenerators,
-  type Generator,
 } from "./generated-files";
 
 const ROOT = new URL("..", import.meta.url);
@@ -207,8 +207,10 @@ const checkManifest = async () => {
 
 // These commands only compare committed outputs or write private temporary
 // directories. Changed/new commands, compiler/AST guards and WASM builds stay
-// exclusive until audited. Reservations bound scheduling, not actual child RSS;
-// leave runner memory outside this 2 GiB budget for the parent and the OS.
+// exclusive until audited. A check whose peak RSS (its largest process, as the
+// kernel reports for the child and each descendant it waited for) exceeds its
+// reservation fails under its own name, so the reservations stay true; leave
+// runner memory outside this 2 GiB budget for the parent and the OS.
 const LIGHT_CHECK_COMMANDS = [
   ["bun", "scripts/generate-cloud-setup.ts"],
   ["bun", "scripts/generate-bun-toolchain.ts"],
@@ -257,18 +259,45 @@ const GENERATOR_MEMORY_BUDGET_MIB = 2048;
 const LIGHT_CHECK_MEMORY_MIB = 1024;
 const MAX_GENERATOR_PROCESSES = 2;
 
-const checkGenerator = async ({ id, check }: Generator) => {
+const MIB = 1024 * 1024;
+
+/** A finished check: its exit status and its peak RSS in MiB. */
+export type CheckOutcome = { exit: number; peakMiB: number };
+
+const checkGenerator = async ({
+  id,
+  check,
+}: Generator): Promise<CheckOutcome> => {
   if (check === null) {
-    return 0;
+    return { exit: 0, peakMiB: 0 };
   }
   console.log(`Checking ${id}`);
+  const started = performance.now();
   const child = Bun.spawn([...check], {
     cwd: ROOT.pathname,
     stdout: "inherit",
     stderr: "inherit",
   });
   await child.exited;
-  return childExitStatus(child);
+  // Bun reports maxRSS in bytes on every platform.
+  const peakMiB = Math.ceil((child.resourceUsage()?.maxRSS ?? 0) / MIB);
+  const seconds = ((performance.now() - started) / 1000).toFixed(1);
+  console.log(`Checked ${id} in ${seconds} s, peak RSS ${peakMiB} MiB`);
+  return { exit: childExitStatus(child), peakMiB };
+};
+
+/** Why a finished check fails: a non-zero exit, a peak above its reservation. */
+export const checkFailure = (
+  { exit, peakMiB }: CheckOutcome,
+  reservedMiB: number,
+): string | undefined => {
+  const reasons = [
+    ...(exit === 0 ? [] : [`exit ${exit}`]),
+    ...(peakMiB <= reservedMiB
+      ? []
+      : [`peak RSS ${peakMiB} MiB exceeds its ${reservedMiB} MiB reservation`]),
+  ];
+  return reasons.length === 0 ? undefined : reasons.join("; ");
 };
 
 export const runGeneratorChecks = async (
@@ -284,10 +313,11 @@ export const runGeneratorChecks = async (
   let reservedMemory = 0;
   const runReserved = async (generator: Generator, memory: number) => {
     const result = await Result.tryPromise(async () => run(generator));
-    if (Result.isError(result)) {
-      failures.set(generator.id, result.error.message);
-    } else if (result.value !== 0) {
-      failures.set(generator.id, `exit ${result.value}`);
+    const failure = Result.isError(result)
+      ? result.error.message
+      : checkFailure(result.value, memory);
+    if (failure !== undefined) {
+      failures.set(generator.id, failure);
     }
     reservedMemory -= memory;
     completed.add(generator.id);
@@ -336,14 +366,12 @@ export const runGeneratorChecks = async (
 };
 
 export const DELEGATED_CHECKS_ENV = "GENERATED_CHECKS_IN_OTHER_JOBS";
+export const UNCHANGED_CHECKS_ENV = "GENERATED_CHECKS_UNCHANGED";
 
-// CI names families whose `checkedBy` step runs the same check on the same
-// commit in another job of this run, so Guard B does not repeat that work.
-// Unset means none; an empty entry (a condition that did not hold) names none;
-// anything that cannot be proven delegated panics.
-export const delegatedGeneratorIds = (value: string | undefined) => {
+// Unset means none; an empty entry (a condition that did not hold) names none.
+const generatorIdList = (env: string, value: string | undefined) => {
   if (value === undefined) {
-    return new Set<string>();
+    return [];
   }
   const parsed = Result.try((): unknown => JSON.parse(value));
   if (
@@ -351,9 +379,16 @@ export const delegatedGeneratorIds = (value: string | undefined) => {
     !Array.isArray(parsed.value) ||
     !parsed.value.every((id): id is string => typeof id === "string")
   ) {
-    panic(`${DELEGATED_CHECKS_ENV} must be a JSON array of generator ids`);
+    panic(`${env} must be a JSON array of generator ids`);
   }
-  const ids = parsed.value.filter((id) => id !== "");
+  return parsed.value.filter((id) => id !== "");
+};
+
+// CI names families whose `checkedBy` step runs the same check on the same
+// commit in another job of this run, so Guard B does not repeat that work.
+// Anything that cannot be proven delegated panics.
+export const delegatedGeneratorIds = (value: string | undefined) => {
+  const ids = generatorIdList(DELEGATED_CHECKS_ENV, value);
   for (const id of ids) {
     const generator = GENERATORS.find((candidate) => candidate.id === id);
     if (generator?.checkedBy === undefined || generator.check === null) {
@@ -363,16 +398,39 @@ export const delegatedGeneratorIds = (value: string | undefined) => {
   return new Set(ids);
 };
 
+// CI names families whose inputs, outputs and check the run's plan proved
+// unchanged against its base, so the committed outputs are the ones the
+// owning job proved when they last changed and Guard B does not rebuild them.
+// scripts/generated-files-guard.test.ts binds each entry to the plan output
+// whose paths cover the family.
+export const unchangedGeneratorIds = (value: string | undefined) => {
+  const ids = generatorIdList(UNCHANGED_CHECKS_ENV, value);
+  for (const id of ids) {
+    const generator = GENERATORS.find((candidate) => candidate.id === id);
+    if (generator?.checkedBy === undefined || generator.check === null) {
+      panic(`Generator ${id} has no owning CI step to prove its outputs`);
+    }
+  }
+  return new Set(ids);
+};
+
 const guardB = async () => {
   const delegated = delegatedGeneratorIds(process.env[DELEGATED_CHECKS_ENV]);
+  const unchanged = unchangedGeneratorIds(process.env[UNCHANGED_CHECKS_ENV]);
   const failures = await runGeneratorChecks(GENERATORS, async (generator) => {
-    if (!delegated.has(generator.id)) {
-      return checkGenerator(generator);
+    if (delegated.has(generator.id)) {
+      console.log(
+        `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
+      );
+      return { exit: 0, peakMiB: 0 };
     }
-    console.log(
-      `Skipping ${generator.id}: checked in this run by "${String(generator.checkedBy)}"`,
-    );
-    return 0;
+    if (unchanged.has(generator.id)) {
+      console.log(
+        `Skipping ${generator.id}: its inputs are unchanged in this run; "${String(generator.checkedBy)}" checks it when they change`,
+      );
+      return { exit: 0, peakMiB: 0 };
+    }
+    return checkGenerator(generator);
   });
   if (failures.length > 0) {
     panic(

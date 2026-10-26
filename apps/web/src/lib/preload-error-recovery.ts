@@ -33,6 +33,11 @@ const STALE_DEPLOYMENT_ERROR_PREFIXES = Object.freeze([
   "Setting up fake worker failed",
 ]);
 
+const isHtmlModuleResponseError = (message: string): boolean =>
+  containsSearchMatchKey(message, "module script") &&
+  containsSearchMatchKey(message, "MIME type") &&
+  containsSearchMatchKey(message, "text/html");
+
 const getErrorMessage = (error: unknown): string | undefined => {
   if (typeof error !== "object" || error === null || !("message" in error)) {
     return undefined;
@@ -45,9 +50,10 @@ export const isStaleDeploymentLoadError = (error: unknown): boolean => {
   const message = getErrorMessage(error);
   return (
     message !== undefined &&
-    STALE_DEPLOYMENT_ERROR_PREFIXES.some((prefix) =>
+    (STALE_DEPLOYMENT_ERROR_PREFIXES.some((prefix) =>
       containsSearchMatchKey(message.slice(0, prefix.length), prefix),
-    )
+    ) ||
+      isHtmlModuleResponseError(message))
   );
 };
 
@@ -96,11 +102,16 @@ export const reloadForStaleDeployment = (): boolean => {
   return true;
 };
 
+/** Route lazy imports and Vite preload failures share this recovery owner. */
+export const recoverFromStaleDeploymentLoad = (error: unknown): boolean =>
+  isStaleDeploymentLoadError(error) && reloadForStaleDeployment();
+
 // Typed as Event: the WindowEventMap augmentation for "vite:preloadError" is
 // not guaranteed in scope, and we only need preventDefault() + the reload.
 export const installPreloadErrorRecovery = (): void => {
   window.addEventListener("vite:preloadError", (event: Event) => {
-    if (reloadForStaleDeployment()) {
+    const error = "payload" in event ? event.payload : undefined;
+    if (recoverFromStaleDeploymentLoad(error)) {
       // Cancel Vite's default rethrow; the reload fetches the fresh chunk.
       event.preventDefault();
     }

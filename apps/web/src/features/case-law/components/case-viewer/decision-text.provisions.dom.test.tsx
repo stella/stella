@@ -842,11 +842,11 @@ describe("the provision card header", () => {
     const summary =
       header.querySelector('[data-slot="provision-card-summary"]') ??
       panic("The header has no summary");
+    // Each separator lives inside the part after it, so a part that gives
+    // way entirely leaves no stray dot behind.
     expect(headerParts(summary)).toEqual([
       "provision-card-label",
-      "span",
       "provision-card-act",
-      "span",
       "provision-card-date",
     ]);
     const classesOf = (slot: string) =>
@@ -862,7 +862,8 @@ describe("the provision card header", () => {
     expect(header.classList.contains("overflow-hidden")).toBe(false);
     expect(header.classList.contains("flex-wrap")).toBe(false);
     // The act takes only the room left over, so it gives way first; the
-    // label shrinks after it; the date never shrinks, only clips last.
+    // date shrinks after it; the label never shrinks, only clips when it
+    // alone is wider than the row.
     for (const token of [
       "flex-1",
       "basis-0",
@@ -873,9 +874,11 @@ describe("the provision card header", () => {
       expect(classesOf("provision-card-act").contains(token)).toBe(true);
     }
     for (const token of ["min-w-0", "truncate"]) {
+      expect(classesOf("provision-card-date").contains(token)).toBe(true);
+    }
+    for (const token of ["shrink-0", "max-w-full", "truncate"]) {
       expect(classesOf("provision-card-label").contains(token)).toBe(true);
     }
-    expect(classesOf("provision-card-date").contains("shrink-0")).toBe(true);
     const label =
       header.querySelector('[data-slot="provision-card-label"]') ??
       panic("No label");

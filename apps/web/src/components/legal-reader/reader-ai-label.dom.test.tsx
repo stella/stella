@@ -235,18 +235,24 @@ describe("the AI mark at each place the reader marks generated text", () => {
 
   test("each layer in the margin carries the mark under its own name", async () => {
     const analysis = {
-      version: 3,
+      version: 4,
       generatedAt: "2026-02-01T00:00:00.000Z",
       model: "test-model",
       inputFingerprint: "fingerprint-1",
       tree: [],
-      holding: { anchors: [], language: "cs", text: "Model holding sentence." },
-      abstract: { language: "cs", text: "Model abstract sentence." },
+      holding: {
+        spans: [{ text: "Model holding sentence.", anchors: [] }],
+        language: "cs",
+      },
+      abstract: {
+        spans: [{ text: "Model abstract sentence.", anchors: [] }],
+        language: "cs",
+      },
       topics: ["Limitation periods"],
     } satisfies DecisionAnalysis;
     render(
       <Providers>
-        <AnalysisLayers analysis={analysis} />
+        <AnalysisLayers analysis={analysis} citedLater={false} />
       </Providers>,
     );
 

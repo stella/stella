@@ -8,8 +8,8 @@ import {
   lte,
   notInArray,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
@@ -45,9 +45,9 @@ import {
 import { lockCorpusIndexProjectionMutationsTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
 import {
   CORPUS_PROJECTION_GENERATION_SCOPE,
+  type CorpusProjectionAppendScopedWorkOptions,
   entityIdsForCorpusProjectionWorkScope,
   indexIdForCorpusProjectionWorkScope,
-  type CorpusProjectionAppendScopedWorkOptions,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
 import {
   corpusIndexProjectionIntentIsOutstanding,
@@ -1149,9 +1149,7 @@ export type UnparkCorpusProjectionAppendOptions = {
 };
 
 export type CorpusProjectionAppendUnparkResult =
-  | "unparked"
-  | "not_blocked"
-  | "cleanup_pending";
+  "unparked" | "not_blocked" | "cleanup_pending";
 
 /** Unpark one blocked entity after cleanup settles; retain singleton retry. */
 export const unparkCorpusProjectionAppendTx = async (
@@ -1492,10 +1490,7 @@ export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MIN = 1;
 export const CORPUS_PROJECTION_RETRY_ATTEMPT_LIMIT_MAX = 100;
 
 export type CorpusProjectionReservationFailureResult =
-  | "retry_scheduled"
-  | "blocked"
-  | "stale_cancelled"
-  | "lease_lost";
+  "retry_scheduled" | "blocked" | "stale_cancelled" | "lease_lost";
 
 /**
  * Finish one unattempted revision and durably move its exact desired state out

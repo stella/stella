@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+import type { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
 import { normalizeIban } from "@stll/invoicing";
 
 import type { SellerProfileInput } from "@/lib/organization/seller-profiles";
@@ -7,33 +9,20 @@ import type { SellerProfileInput } from "@/lib/organization/seller-profiles";
 /** The profile's text fields; whether it is a VAT payer is a switch. */
 type SellerProfileTextField = Exclude<keyof SellerProfileInput, "vatPayer">;
 
-export const SELLER_PROFILE_FIELDS = [
-  "legalName",
-  "registrationId",
-  "vatId",
-  "addressLine1",
-  "addressLine2",
-  "city",
-  "postalCode",
-  "country",
-  "iban",
-  "bic",
-  "accountNumber",
-  "defaultCurrency",
-  "footerNotes",
-] as const;
-
 true satisfies Exclude<
   SellerProfileTextField,
-  (typeof SELLER_PROFILE_FIELDS)[number]
+  (typeof SELLER_PROFILE_TEXT_FIELDS)[number]
 > extends never
   ? true
   : never;
 
 export const SELLER_PROFILE_LIMITS = {
   legalName: 512,
-  registrationId: 64,
-  vatId: 64,
+  registrationId: PARTY_IDENTIFIER_MAX_LENGTH,
+  taxId: PARTY_IDENTIFIER_MAX_LENGTH,
+  vatId: PARTY_IDENTIFIER_MAX_LENGTH,
+  registerEntry: 10_000,
+  barRegistration: 10_000,
   addressLine1: 512,
   addressLine2: 512,
   city: 256,
@@ -74,7 +63,10 @@ export const sellerProfileFormSchema = (
         v.maxLength(SELLER_PROFILE_LIMITS.legalName, messages.invalidField),
       ),
       registrationId: optionalText(SELLER_PROFILE_LIMITS.registrationId),
+      taxId: optionalText(SELLER_PROFILE_LIMITS.taxId),
       vatId: optionalText(SELLER_PROFILE_LIMITS.vatId),
+      registerEntry: optionalText(SELLER_PROFILE_LIMITS.registerEntry),
+      barRegistration: optionalText(SELLER_PROFILE_LIMITS.barRegistration),
       vatPayer: v.boolean(),
       addressLine1: optionalText(SELLER_PROFILE_LIMITS.addressLine1),
       addressLine2: optionalText(SELLER_PROFILE_LIMITS.addressLine2),
@@ -128,7 +120,10 @@ export const sellerProfileFormSchema = (
       ({
         legalName,
         registrationId,
+        taxId,
         vatId,
+        registerEntry,
+        barRegistration,
         vatPayer,
         addressLine1,
         addressLine2,
@@ -146,7 +141,10 @@ export const sellerProfileFormSchema = (
           defaultCurrency,
           vatPayer,
           ...(registrationId === undefined ? {} : { registrationId }),
+          ...(taxId === undefined ? {} : { taxId }),
           ...(vatId === undefined ? {} : { vatId }),
+          ...(registerEntry === undefined ? {} : { registerEntry }),
+          ...(barRegistration === undefined ? {} : { barRegistration }),
           ...(addressLine1 === undefined ? {} : { addressLine1 }),
           ...(addressLine2 === undefined ? {} : { addressLine2 }),
           ...(city === undefined ? {} : { city }),

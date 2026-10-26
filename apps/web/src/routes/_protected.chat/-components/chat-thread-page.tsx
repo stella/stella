@@ -11,7 +11,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { Button, buttonVariants } from "@stll/ui/button";
 import { Minimize2Icon, NewChatIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -23,10 +23,14 @@ import {
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import {
-  ChatSubmitPreservedError,
+  CHAT_SEND_KEPT,
+  CHAT_SEND_SENT,
   useChatEditor,
 } from "@/components/chat-editor-provider";
-import type { ChatInputDraft } from "@/components/chat-editor-provider";
+import type {
+  ChatInputDraft,
+  ChatSendOutcome,
+} from "@/components/chat-editor-provider";
 import {
   composerStoredMarkdown,
   composerText,
@@ -81,15 +85,15 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import {
+  type ChatThreadRef,
   createChatThreadId,
   getChatThreadKey,
   resolveChatContextMatterIds,
-  type ChatThreadRef,
 } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -141,7 +145,7 @@ export const ChatThreadPage = ({
     staleTime: Number.POSITIVE_INFINITY,
   });
   const currentUserRoleView = useQueryView(currentUserRoleQuery);
-  useQueryViewError(currentUserRoleView);
+  useQueryViewError(currentUserRoleView, "ChatThreadPage:query");
   const currentUserRole =
     currentUserRoleView.type === "items" &&
     currentUserRoleView.refetchError === undefined
@@ -229,7 +233,7 @@ export const ChatThreadPage = ({
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
   const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
-  useQueryViewError(usageEntitlementDataView);
+  useQueryViewError(usageEntitlementDataView, "ChatThreadPage:query-2");
   const usageEntitlementData =
     usageEntitlementDataView.type === "items"
       ? usageEntitlementDataView.items
@@ -280,6 +284,7 @@ export const ChatThreadPage = ({
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
+    exceptionScope: { type: "handler", handlerId: "chat-session.thread-page" },
     chat,
     timingSurface: "chat-thread",
     conversationId: threadRef.threadId,
@@ -476,122 +481,123 @@ export const ChatThreadPage = ({
 
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.
-  const handleSubmit = useLatestCallback(async (draft: ChatInputDraft) => {
-    const newThreadMessages: string[] = [];
-    const handledReserved = runReservedChatCommand(draft.html, {
-      new: (args) => {
-        if (args.length > 0) {
-          newThreadMessages.push(args);
-          return;
-        }
-        // Abort any live stream first: `chatThreadOptions` keeps the
-        // in-flight Chat alive in the query cache, so navigating away
-        // would leave it streaming against the abandoned thread.
-        leave();
-        controller.setContent(composerText(""));
-        if (threadRef.scope === "workspace") {
-          detached(
-            navigate({
-              to: "/chat/workspaces/$workspaceId/new",
-              params: { workspaceId: threadRef.workspaceId },
-              replace: true,
-            }),
-            "chat-thread-page.navigate",
-          );
-        } else {
-          detached(
-            navigate({
-              to: "/chat/new",
-              replace: true,
-            }),
-            "chat-thread-page.navigate",
-          );
-        }
-      },
-      "rename-chat": (args) => {
-        controller.setContent(composerText(""));
-        if (messages.length === 0) {
-          stellaToast.add({
-            title: t("chat.renameUnavailableEmptyThread"),
-            type: "info",
+  const handleSubmit = useLatestCallback(
+    async (draft: ChatInputDraft): Promise<ChatSendOutcome> => {
+      const newThreadMessages: string[] = [];
+      const handledReserved = runReservedChatCommand(draft.html, {
+        new: (args) => {
+          if (args.length > 0) {
+            newThreadMessages.push(args);
+            return;
+          }
+          // Abort any live stream first: `chatThreadOptions` keeps the
+          // in-flight Chat alive in the query cache, so navigating away
+          // would leave it streaming against the abandoned thread.
+          leave();
+          controller.setContent(composerText(""));
+          if (threadRef.scope === "workspace") {
+            detached(
+              navigate({
+                to: "/chat/workspaces/$workspaceId/new",
+                params: { workspaceId: threadRef.workspaceId },
+                replace: true,
+              }),
+              "chat-thread-page.navigate",
+            );
+          } else {
+            detached(
+              navigate({
+                to: "/chat/new",
+                replace: true,
+              }),
+              "chat-thread-page.navigate",
+            );
+          }
+        },
+        "rename-chat": (args) => {
+          controller.setContent(composerText(""));
+          if (messages.length === 0) {
+            stellaToast.add({
+              title: t("chat.renameUnavailableEmptyThread"),
+              type: "info",
+            });
+            return;
+          }
+          // The breadcrumb owns this route's rename editor; hand the command
+          // over through the store. `/rename-chat <title>` commits that title
+          // directly; the bare form opens the editor with a suggestion.
+          useChatRenameCommandStore.getState().requestRename({
+            threadId: threadRef.threadId,
+            title: args.length > 0 ? args : null,
           });
-          return;
+        },
+      });
+      if (handledReserved) {
+        const newThreadMessage = newThreadMessages.at(0);
+        if (newThreadMessage === undefined) {
+          return CHAT_SEND_SENT;
         }
-        // The breadcrumb owns this route's rename editor; hand the command
-        // over through the store. `/rename-chat <title>` commits that title
-        // directly; the bare form opens the editor with a suggestion.
-        useChatRenameCommandStore.getState().requestRename({
-          threadId: threadRef.threadId,
-          title: args.length > 0 ? args : null,
+        if (!(await ensureAIAvailable())) {
+          return CHAT_SEND_KEPT;
+        }
+        if (Result.isError(await modelSelection.awaitPendingSelection())) {
+          return CHAT_SEND_KEPT;
+        }
+        const newThreadRef: ChatThreadRef =
+          threadRef.scope === "workspace"
+            ? {
+                scope: "workspace",
+                threadId: createChatThreadId(),
+                workspaceId: threadRef.workspaceId,
+              }
+            : { scope: "global", threadId: createChatThreadId() };
+        await startNewThreadCommandHandoff({
+          activeOrganizationId,
+          context: {
+            ...chatThreadContext,
+            getContextMatterIds: () => selectedContextMatterIds,
+            getSendMode: () => getChatSendMode(newThreadRef),
+          },
+          files: draft.files,
+          html: newThreadMessage,
+          queryClient,
+          threadRef: newThreadRef,
         });
-      },
-    });
-    if (handledReserved) {
-      const newThreadMessage = newThreadMessages.at(0);
-      if (newThreadMessage === undefined) {
-        return;
+        leave();
+        if (newThreadRef.scope === "workspace") {
+          await navigate({
+            params: {
+              threadId: newThreadRef.threadId,
+              workspaceId: newThreadRef.workspaceId,
+            },
+            replace: true,
+            to: "/chat/workspaces/$workspaceId/$threadId",
+          });
+        } else {
+          await navigate({
+            params: { threadId: newThreadRef.threadId },
+            replace: true,
+            to: "/chat/$threadId",
+          });
+        }
+        return CHAT_SEND_SENT;
       }
       if (!(await ensureAIAvailable())) {
-        throw new ChatSubmitPreservedError({ message: "AI is unavailable" });
+        return CHAT_SEND_KEPT;
       }
+      // A model just picked in the (+) menu may still be
+      // mid-PATCH: wait for it to settle so the send can
+      // never race onto the thread's previous model. On
+      // failure the hook has already toasted; abort instead
+      // of sending with a model that may not match what the
+      // server has persisted.
       if (Result.isError(await modelSelection.awaitPendingSelection())) {
-        throw new ChatSubmitPreservedError({
-          message: "Model selection failed",
-        });
+        return CHAT_SEND_KEPT;
       }
-      const newThreadRef: ChatThreadRef =
-        threadRef.scope === "workspace"
-          ? {
-              scope: "workspace",
-              threadId: createChatThreadId(),
-              workspaceId: threadRef.workspaceId,
-            }
-          : { scope: "global", threadId: createChatThreadId() };
-      await startNewThreadCommandHandoff({
-        activeOrganizationId,
-        context: {
-          ...chatThreadContext,
-          getContextMatterIds: () => selectedContextMatterIds,
-          getSendMode: () => getChatSendMode(newThreadRef),
-        },
-        files: draft.files,
-        html: newThreadMessage,
-        queryClient,
-        threadRef: newThreadRef,
-      });
-      leave();
-      if (newThreadRef.scope === "workspace") {
-        await navigate({
-          params: {
-            threadId: newThreadRef.threadId,
-            workspaceId: newThreadRef.workspaceId,
-          },
-          replace: true,
-          to: "/chat/workspaces/$workspaceId/$threadId",
-        });
-      } else {
-        await navigate({
-          params: { threadId: newThreadRef.threadId },
-          replace: true,
-          to: "/chat/$threadId",
-        });
-      }
-      return;
-    }
-    if (!(await ensureAIAvailable())) {
-      return;
-    }
-    // A model just picked in the (+) menu may still be
-    // mid-PATCH: wait for it to settle so the send can
-    // never race onto the thread's previous model. On
-    // failure the hook has already toasted; abort instead
-    // of sending with a model that may not match what the
-    // server has persisted.
-    if (Result.isError(await modelSelection.awaitPendingSelection())) {
-      return;
-    }
-    await sendMessage(await buildChatRequestMessage(draft));
-  });
+      await sendMessage(await buildChatRequestMessage(draft));
+      return CHAT_SEND_SENT;
+    },
+  );
 
   return (
     <RenderStormRegion name="chat-thread-page">
@@ -777,9 +783,10 @@ export const ChatThreadPage = ({
                     detached(
                       controller.submit(async (draft) => {
                         if (!(await ensureAIAvailable())) {
-                          return;
+                          return CHAT_SEND_KEPT;
                         }
                         await sendMessage(await buildChatRequestMessage(draft));
+                        return CHAT_SEND_SENT;
                       }),
                       "chat-thread-page.submit",
                     );
@@ -926,10 +933,10 @@ const useChatWebSearchSeed = ({
               : {},
         },
       );
-      // Eden returns `{ error }` on non-2xx responses; without this
+      // The API client returns `{ error }` on non-2xx responses; without this
       // throw onSuccess fires and the thread is marked seeded for
       // the session, leaving web search silently off.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(
@@ -939,7 +946,10 @@ const useChatWebSearchSeed = ({
       onSettled(threadRef.threadId, true);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useChatWebSearchSeed:failure",
+        scope: { type: "handler", handlerId: "useChatWebSearchSeed:failure" },
+      });
       onSettled(threadRef.threadId, false);
     },
   });

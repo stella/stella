@@ -7,10 +7,10 @@ import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
 import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
-import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear, formatYear } from "@/features/case-law/citation-format";
 import {
   citationSummaryIsCapped,
+  hasIncomingCitations,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
@@ -76,7 +76,7 @@ export const CitationHeader = ({
   const now = useNow();
   const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
   const summaryView = useQueryView(summaryQuery);
-  useQueryViewError(summaryView);
+  useQueryViewError(summaryView, "CitationHeader:query");
   const summary = summaryView.type === "items" ? summaryView.items : undefined;
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the strip waits for hydration to stay identical.
@@ -85,10 +85,10 @@ export const CitationHeader = ({
   if (!hydrated || summary === undefined) {
     return null;
   }
-  const total = totalCitations(summary.incoming);
-  if (total === 0 && !citationSummaryIsCapped(summary, "incoming")) {
+  if (!hasIncomingCitations(summary)) {
     return null;
   }
+  const total = totalCitations(summary.incoming);
 
   const currentYear = Temporal.Instant.fromEpochMilliseconds(
     now.getTime(),
@@ -122,10 +122,6 @@ export const CitationHeader = ({
       className={cn(
         "reader-chrome flex text-xs print:hidden",
         compact ? "justify-center" : "mb-3",
-        // The zoom bar floats over this first row at the opposite corner; the
-        // row keeps that corner free at every reader width and on every scroll
-        // position, since the bar does not move with the text.
-        !compact && VIEWER_OVERLAY_BAR_CLEARANCE,
       )}
     >
       <Popover>

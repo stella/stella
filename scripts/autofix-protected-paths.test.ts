@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -29,6 +29,12 @@ test("every committed baseline and decision ledger is protected", () => {
         /(?:baseline|backlog|ledger|waiver|bailouts)[^/]*\.(?:json|txt)$|[.-]allowlist\.json$/u.test(
           file,
         ) || file.startsWith("scripts/ratchet-allowances/"),
+    )
+    // Per-job classification decisions are named after their job (a job
+    // called `network-baseline-record` is no baseline); the digest generator
+    // owns them, and a reclassified job still needs a human review.
+    .filter(
+      (file) => !file.startsWith(".github/ci-job-classification-decisions/"),
     );
   expect(candidates.length).toBeGreaterThan(0);
   expect(candidates.filter((file) => !isAutofixProtectedPath(file))).toEqual(

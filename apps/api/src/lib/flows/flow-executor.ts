@@ -18,17 +18,17 @@ import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
-  workspaces,
   flowRunSteps,
   WORK_OBLIGATION_SOURCE,
   workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
 import {
   loadManagedAIResidency,
   loadOrgAIConfig,
 } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   AUDIT_ACTION,
@@ -38,7 +38,10 @@ import {
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
+import {
+  loadCurrentExtractedContents,
+  loadCurrentExtractedSources,
+} from "@/api/lib/document-content-provenance";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
@@ -81,6 +84,7 @@ import {
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NotificationPing } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -96,6 +100,10 @@ import type { TaskDeploymentFeatures } from "@/api/lib/tasks/deployment-features
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 import { settleWorkObligation } from "@/api/lib/work-obligations/settle-work-obligation";
 import { WORK_OBLIGATION_SOURCE_SETTLEMENT } from "@/api/lib/work-obligations/transitions";
+import {
+  type AuthorizedWorkspaceIds,
+  authorizedWorkspaceIds,
+} from "@/api/lib/workspaces/authorized-workspace-ids";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -450,7 +458,19 @@ const runAiStep = async ({
     async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
-    ? await loadInputDocuments(scopedDb, organizationId, run.inputEntityIds)
+    ? await loadInputDocuments(
+        scopedDb,
+        organizationId,
+        await scopedDb(async (tx) =>
+          (
+            await authorizedWorkspaceIds(tx, {
+              organizationId,
+              workspaceIds: [run.workspaceId],
+            })
+          ).unwrap("The scoped workspace authorization read must succeed"),
+        ),
+        run.inputEntityIds,
+      )
     : [];
 
   const prompt = buildAiStepPrompt({
@@ -598,28 +618,18 @@ const readPriorAiMarkdown = async (
 export const loadInputDocuments = async (
   scopedDb: ReturnType<typeof createRootScopedDb>,
   organizationId: SafeId<"organization">,
+  workspaceIds: AuthorizedWorkspaceIds,
   entityIds: SafeId<"entity">[],
 ): Promise<FlowStepDocument[]> => {
   if (entityIds.length === 0) {
     return [];
   }
 
-  // Detect unavailable inputs before reading or decrypting any content. A
-  // selected input without an `extracted_content` row (extraction still pending
-  // or failed, or a non-extraction entity that the summaries picker surfaced)
-  // would otherwise drop out silently and let the step generate legal output
-  // from an incomplete document set. Fail the step, naming the unavailable
-  // inputs, instead of proceeding with fewer documents.
-  const available = await scopedDb((tx) =>
-    tx.query.extractedContent.findMany({
-      where: { entityId: { in: entityIds } },
-      columns: { entityId: true },
-      limit: entityIds.length,
-    }),
-  );
-  if (available.length < entityIds.length) {
-    const loaded = new Set(available.map((row) => row.entityId));
-    const missingIds = entityIds.filter((id) => !loaded.has(id));
+  const refuseUnavailable = async (loadedIds: ReadonlySet<string>) => {
+    const missingIds = entityIds.filter((id) => !loadedIds.has(id));
+    if (missingIds.length === 0) {
+      return;
+    }
     const missingEntities = await scopedDb((tx) =>
       tx.query.entities.findMany({
         where: { id: { in: missingIds } },
@@ -634,26 +644,39 @@ export const loadInputDocuments = async (
     throw new FlowStepError({
       message: `${missingIds.length} selected input document(s) could not be loaded because their content is not available yet (extraction is still pending or has failed)${named}. Re-run this workflow once the document(s) have finished processing.`,
     });
-  }
+  };
 
-  const rows = await scopedDb((tx) =>
-    tx.query.extractedContent.findMany({
-      where: { entityId: { in: entityIds } },
-      columns: { ciphertext: true, iv: true },
-      with: { entity: { columns: { name: true } } },
-      limit: entityIds.length,
-    }),
+  // Availability is decided from provenance alone; text is decrypted only for
+  // a complete input set, and a document that became unavailable in between
+  // gets the same refusal.
+  const sources = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedSources(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
   );
+  await refuseUnavailable(new Set(sources.map((row) => row.entityId)));
+  const available = await scopedDb(
+    async (tx) =>
+      await loadCurrentExtractedContents(tx, {
+        entityIds,
+        organizationId,
+        workspaceIds,
+      }),
+  );
+  await refuseUnavailable(new Set(available.map((row) => row.entityId)));
 
   const drained = await drainFanOut({
-    items: rows,
+    items: available,
     signal: new AbortController().signal,
     operation: async (row, signal) => {
       signal.throwIfAborted();
-      return {
-        label: row.entity?.name ?? "Document",
-        text: await decryptContent(organizationId, row.ciphertext, row.iv),
-      };
+      return await Promise.resolve({
+        label: row.name,
+        text: row.text,
+      });
     },
   });
   if (Result.isError(drained)) {
@@ -1184,7 +1207,11 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch(
+    createErrorCapture(
+      handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+    ),
+  );
 };
 
 const readRunProgress = async (

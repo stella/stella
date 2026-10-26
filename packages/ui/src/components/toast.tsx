@@ -3,7 +3,7 @@
 import * as React from "react";
 
 import { Toast } from "@base-ui/react/toast";
-import type { ToastManagerAddOptions } from "@base-ui/react/toast";
+import type { ToastManagerAddOptions, ToastObject } from "@base-ui/react/toast";
 
 import {
   CircleAlertIcon,
@@ -20,12 +20,14 @@ import { ScrollArea } from "./scroll-area";
 
 type ToastData = {
   tooltipStyle?: boolean;
+  timeoutPolicy?: { type: "automatic" } | { type: "explicit"; timeout: number };
 };
 
 const toastManager = Toast.createToastManager<ToastData>();
 const anchoredToastManager = Toast.createToastManager<ToastData>();
 
 const TOAST_RIGHT_OFFSET_VAR = "--stella-toast-right-offset";
+const ERROR_TOAST_TIMEOUT_MS = 8000;
 
 const TOAST_ICONS = {
   error: <CircleAlertIcon className="text-destructive" />,
@@ -49,7 +51,7 @@ type ToastOptions = Omit<
   ToastManagerAddOptions<ToastData>,
   "actionProps" | "title" | "type"
 > & {
-  action?: ToastAction;
+  action?: ToastAction | undefined;
   actionProps?: ToastActionProps;
 };
 
@@ -104,7 +106,12 @@ const stellaToast: ToastApi = Object.assign(
     addToast(title, undefined, options),
   {
     add: (options: ToastAddOptions) =>
-      toastManager.add(normalizeToastAddOptions(options)),
+      toastManager.add(
+        normalizeToastAddOptions({
+          ...options,
+          id: options.id ?? toastDedupeId(options),
+        }),
+      ),
     close: (id?: string) => {
       toastManager.close(id);
     },
@@ -152,7 +159,9 @@ const stellaToast: ToastApi = Object.assign(
     success: (title: React.ReactNode, options?: ToastOptions) =>
       addToast(title, "success", options),
     update: (id: string, options: ToastUpdateOptions) => {
-      toastManager.update(id, normalizeToastUpdateOptions(options));
+      toastManager.update(id, (previous) =>
+        normalizeToastUpdateOptions(options, previous),
+      );
     },
     warning: (title: React.ReactNode, options?: ToastOptions) =>
       addToast(title, "warning", options),
@@ -173,6 +182,11 @@ const ToastProvider = ({
 const Toasts = ({ position }: { position: ToastPosition }) => {
   const { toasts } = Toast.useToastManager<ToastData>();
   const isTop = position.startsWith("top");
+  const windowFocused = React.useSyncExternalStore(
+    subscribeWindowFocus,
+    readWindowFocus,
+    readServerWindowFocus,
+  );
 
   return (
     <Toast.Portal data-slot="toast-portal">
@@ -191,6 +205,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
         )}
         data-position={position}
         data-slot="toast-viewport"
+        data-window-blurred={windowFocused ? undefined : ""}
       >
         {toasts.map((toastItem) => (
           <Toast.Root
@@ -288,11 +303,41 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
                   <XIcon className="size-4" />
                 </Toast.Close>
               </div>
+              <ToastCountdown toast={toastItem} />
             </Toast.Content>
           </Toast.Root>
         ))}
       </Toast.Viewport>
     </Toast.Portal>
+  );
+};
+
+/**
+ * A faint line along the bottom edge that shrinks over the toast's lifetime
+ * and holds still whenever Base UI holds the timer (hover, focus, blurred
+ * window). Keyed on `updateKey`, so a refreshed toast starts it again.
+ */
+const ToastCountdown = ({
+  toast,
+}: {
+  toast: {
+    timeout?: number | undefined;
+    type?: string | undefined;
+    updateKey?: number | undefined;
+  };
+}) => {
+  const countdownMs = toastCountdownMs(toast);
+  if (countdownMs === undefined) {
+    return null;
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className="bg-foreground/10 animate-toast-countdown pointer-events-none absolute inset-x-3 bottom-1 h-0.5 rounded-full in-data-expanded:[animation-play-state:paused] in-data-window-blurred:[animation-play-state:paused] motion-reduce:hidden ltr:origin-left rtl:origin-right"
+      data-slot="toast-countdown"
+      key={toast.updateKey ?? 0}
+      style={{ animationDuration: `${String(countdownMs)}ms` }}
+    />
   );
 };
 
@@ -401,38 +446,93 @@ function addToast(
   type: ToastType | undefined,
   options?: ToastOptions,
 ) {
+  const addOptions = { ...options, title, type };
   return toastManager.add(
     normalizeToastAddOptions({
-      ...options,
-      title,
-      type,
+      ...addOptions,
+      id: addOptions.id ?? toastDedupeId(addOptions),
     }),
   );
 }
 
-function normalizeToastAddOptions({
+/**
+ * The same message raised again refreshes the toast already on screen (and
+ * restarts its timer) instead of stacking a copy. Only plain-text messages
+ * without an action merge: an action belongs to the call that raised it, and
+ * a loading toast is owned by the promise that will settle it.
+ */
+function toastDedupeId({
   action,
   actionProps,
+  description,
+  title,
+  type,
+}: Pick<
+  ToastAddOptions,
+  "action" | "actionProps" | "description" | "title" | "type"
+>): string | undefined {
+  if (
+    type === "loading" ||
+    action !== undefined ||
+    actionProps !== undefined ||
+    typeof title !== "string" ||
+    (description !== undefined &&
+      description !== null &&
+      typeof description !== "string")
+  ) {
+    return undefined;
+  }
+  return `toast-dedupe:${JSON.stringify([type ?? "neutral", title, description ?? ""])}`;
+}
+
+/**
+ * How long the countdown runs, or `undefined` when the toast stays until
+ * dismissed (errors, loading, timeout 0).
+ */
+function toastCountdownMs({
   timeout,
   type,
-  ...options
-}: ToastUpdateOptions) {
+}: {
+  timeout?: number | undefined;
+  type?: string | undefined;
+}): number | undefined {
+  return type === "loading" || timeout === undefined || timeout <= 0
+    ? undefined
+    : timeout;
+}
+
+// Base UI pauses toast timers while the window is blurred; the countdown bar
+// pauses with them. The viewport's hover and focus pause shows as
+// `data-expanded` on each toast.
+const subscribeWindowFocus = (onChange: () => void) => {
+  window.addEventListener("focus", onChange);
+  window.addEventListener("blur", onChange);
+  return () => {
+    window.removeEventListener("focus", onChange);
+    window.removeEventListener("blur", onChange);
+  };
+};
+const readWindowFocus = () => document.hasFocus();
+const readServerWindowFocus = () => true;
+
+function normalizeToastAddOptions(options: ToastUpdateOptions) {
+  const { action, actionProps, data, timeout, type, ...addOptions } = options;
   return {
-    ...options,
+    ...addOptions,
     ...normalizeToastActionProps({ action, actionProps }),
-    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(type)),
+    data: { ...data, timeoutPolicy: toastTimeoutPolicy(timeout) },
+    timeout: normalizeToastTimeout(timeout ?? getDefaultToastTimeout(options)),
     type,
   };
 }
 
-function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
-  const { action, actionProps, timeout, type, ...updateOptions } = options;
-  const normalizedTimeout =
-    timeout === undefined
-      ? normalizeDefaultToastUpdateTimeout(type)
-      : normalizeToastTimeout(timeout);
-
-  return {
+function normalizeToastUpdateOptions(
+  options: ToastUpdateOptions,
+  previous: ToastObject<ToastData>,
+) {
+  const { action, actionProps, data, timeout, type, ...updateOptions } =
+    options;
+  const update = {
     ...updateOptions,
     ...normalizeToastActionProps({
       action,
@@ -442,16 +542,30 @@ function normalizeToastUpdateOptions(options: ToastUpdateOptions) {
         Object.hasOwn(options, "actionProps"),
     }),
     ...(type === undefined ? {} : { type }),
-    ...(normalizedTimeout === undefined ? {} : { timeout: normalizedTimeout }),
+  };
+  const timeoutPolicy =
+    timeout === undefined
+      ? (previous.data?.timeoutPolicy ?? toastTimeoutPolicy(undefined))
+      : toastTimeoutPolicy(timeout);
+  return {
+    ...update,
+    data: {
+      ...(Object.hasOwn(options, "data") ? data : previous.data),
+      timeoutPolicy,
+    },
+    timeout:
+      timeoutPolicy.type === "explicit"
+        ? timeoutPolicy.timeout
+        : getDefaultToastTimeout({ ...previous, ...update }),
   };
 }
 
-function normalizeDefaultToastUpdateTimeout(type: ToastType | undefined) {
-  if (type === undefined) {
-    return undefined;
-  }
-
-  return normalizeToastTimeout(getDefaultToastTimeout(type));
+function toastTimeoutPolicy(
+  timeout: number | undefined,
+): NonNullable<ToastData["timeoutPolicy"]> {
+  return timeout === undefined
+    ? { type: "automatic" }
+    : { type: "explicit", timeout: normalizeToastTimeout(timeout) };
 }
 
 function normalizeToastActionProps({
@@ -478,9 +592,33 @@ function normalizeToastActionProps({
   };
 }
 
-function getDefaultToastTimeout(type: ToastType | undefined) {
-  if (type === "loading" || type === "error") {
+/**
+ * A short plain error closes on its own like any notice. An error that carries
+ * detail (a description, rich content such as a provider reason to copy) or an
+ * action stays until dismissed, so it is never gone before it can be read.
+ */
+function getDefaultToastTimeout({
+  action,
+  actionProps,
+  description,
+  title,
+  type,
+}: Pick<
+  ToastManagerAddOptions<ToastData>,
+  "title" | "description" | "type" | "actionProps"
+> &
+  Pick<ToastOptions, "action">) {
+  if (type === "loading") {
     return 0;
+  }
+
+  if (type === "error") {
+    const plain =
+      typeof title === "string" &&
+      (description === undefined || description === null) &&
+      action === undefined &&
+      actionProps === undefined;
+    return plain ? ERROR_TOAST_TIMEOUT_MS : 0;
   }
 
   if (type === "warning") {
@@ -490,7 +628,7 @@ function getDefaultToastTimeout(type: ToastType | undefined) {
   return 4000;
 }
 
-function normalizeToastTimeout(timeout: number | undefined) {
+function normalizeToastTimeout(timeout: number) {
   if (timeout === Number.POSITIVE_INFINITY) {
     return 0;
   }
@@ -588,4 +726,6 @@ export {
   TOAST_RIGHT_OFFSET_VAR,
   stellaToast,
   AnchoredToastProvider,
+  toastCountdownMs,
+  toastDedupeId,
 };

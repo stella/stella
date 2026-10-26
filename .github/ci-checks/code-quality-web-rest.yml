@@ -1,0 +1,126 @@
+# Independent checks from `code-quality-web-rest` in .github/workflows/ci.yml.
+# The pool evaluates their original conditions, runs them concurrently and
+# prints their logs in this manifest order.
+# A check that ran as an ordinary step (implicit `success()`) is `!cancelled()`
+# here: the pool step itself runs only after every earlier step succeeded, and
+# the pool decides `cancelled()` but not `success()`.
+checks:
+  - name: Code quality (web)
+    if: ${{ !cancelled() }}
+    timeout-minutes: 20
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      STELLA_VERIFY: check
+      CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
+      BASE_REF: ${{ github.base_ref || 'main' }}
+      EVENT_NAME: ${{ github.event_name }}
+    run: |
+      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+        bun run code-check -- --leg web
+        exit 0
+      fi
+      bun run code-check:affected -- --leg web --base "$CHECK_BASE_REF"
+
+  - name: Result consumption (web)
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      BASE_REF: ${{ github.base_ref || 'main' }}
+      EVENT_NAME: ${{ github.event_name }}
+    run: |
+      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+        bun run check:result-consumption -- --all --leg web
+      else
+        bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
+      fi
+
+  - name: Code quality (rest)
+    if: ${{ !cancelled() }}
+    timeout-minutes: 20
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      STELLA_VERIFY: check
+      CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
+      BASE_REF: ${{ github.base_ref || 'main' }}
+      EVENT_NAME: ${{ github.event_name }}
+    run: |
+      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+        bun run code-check -- --leg rest
+        exit 0
+      fi
+      bun run code-check:affected -- --leg rest --base "$CHECK_BASE_REF"
+
+  - name: Query cache types
+    if: ${{ needs.ci-plan.outputs.package_checks_required == 'true' }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: bun run check:query-cache-types
+
+  - name: Dead columns
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: bun run check:dead-columns
+
+  - name: Projection totality
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: bun run check:projection-totality
+
+  - name: Aggregate ownership
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: |
+      bun run check:aggregate-locks
+      bun run check:aggregate-mutations
+      bun run check:write-contracts
+
+  - name: Split-button census
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: |
+      bun run --cwd packages/scripts test ../../scripts/check-split-buttons.test.ts
+      bun run check:split-buttons
+
+  - name: Database awaits in loops
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: |
+      bun test scripts/db-await-in-loop.test.ts
+      bun run check:db-await-in-loop
+
+  - name: API timeout mutation guard
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs in a job without reusable static check receipts."
+    run: |
+      bun test scripts/check-api-timeout-mutations.test.ts
+      bun run check:api-timeout-mutations
+
+  - name: Result consumption (rest)
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+      BASE_REF: ${{ github.base_ref || 'main' }}
+      EVENT_NAME: ${{ github.event_name }}
+    run: |
+      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+        bun run check:result-consumption -- --all --leg rest
+      else
+        bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
+      fi

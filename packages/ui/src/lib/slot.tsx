@@ -21,7 +21,7 @@
 
 /* oxlint-disable react/no-react-children, react/no-clone-element -- children-walking/slot primitive; the React.Children traversal IS the component's API */
 
-import { Children, Fragment, cloneElement, isValidElement } from "react";
+import { Children, cloneElement, Fragment, isValidElement } from "react";
 
 import { cn } from "./utils";
 

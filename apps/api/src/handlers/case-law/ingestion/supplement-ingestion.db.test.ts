@@ -18,8 +18,8 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
   relations,
 } from "@/api/db/schema";

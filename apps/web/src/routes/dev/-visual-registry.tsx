@@ -4,6 +4,8 @@ import type { ComponentType, ReactElement, ReactNode } from "react";
 import { panic } from "better-result";
 import * as v from "valibot";
 
+import { routeSearchSchema } from "@/route-search-params";
+
 import { visualRegistry } from "./-visual-metadata";
 import type { VisualName } from "./-visual-metadata";
 
@@ -12,6 +14,27 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "task-metadata": {
+    load: async () => {
+      const { TaskMetadataPlayground } =
+        await import("./-components/task-metadata-playground");
+      return { default: TaskMetadataPlayground };
+    },
+  },
+  "column-composer": {
+    load: async () => {
+      const { ColumnComposerPlayground } =
+        await import("./-components/column-composer-playground");
+      return { default: ColumnComposerPlayground };
+    },
+  },
+  "handoff-confirmation": {
+    load: async () => {
+      const { HandoffConfirmationPlayground } =
+        await import("./-components/handoff-confirmation-playground");
+      return { default: HandoffConfirmationPlayground };
+    },
+  },
   "hungarian-decision": {
     load: async () => {
       const { HungarianDecisionPlayground } =
@@ -33,6 +56,13 @@ const visualLoaders = {
       return { default: OAuthConsentPlayground };
     },
   },
+  "upload-rejections": {
+    load: async () => {
+      const { UploadRejectionsPlayground } =
+        await import("./-components/upload-rejections-playground");
+      return { default: UploadRejectionsPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
@@ -47,6 +77,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-continuation-error": {
+    load: async () => {
+      const { ChatContinuationErrorPlayground } =
+        await import("./-components/chat-continuation-error-playground");
+      return { default: ChatContinuationErrorPlayground };
+    },
+  },
   "chat-status": {
     load: async () => {
       const { ChatStatusPlayground } =
@@ -59,6 +96,20 @@ const visualLoaders = {
       const { ChatCitationsPlayground } =
         await import("./-components/chat-citations-playground");
       return { default: ChatCitationsPlayground };
+    },
+  },
+  "chat-statute-citations": {
+    load: async () => {
+      const [{ ChatCitationsPlayground }, { CHAT_STATUTE_CITATIONS_CASSETTE }] =
+        await Promise.all([
+          import("./-components/chat-citations-playground"),
+          import("./-components/chat-statute-citations-cassette"),
+        ]);
+      return {
+        default: () => (
+          <ChatCitationsPlayground cassette={CHAT_STATUTE_CITATIONS_CASSETTE} />
+        ),
+      };
     },
   },
   "chat-link-icons": {
@@ -163,7 +214,7 @@ const visualLoaders = {
 const isVisualName = (input: unknown): input is VisualName =>
   typeof input === "string" && Object.hasOwn(visualRegistry, input);
 
-export const visualSearchSchema = v.object({
+export const visualSearchSchema = routeSearchSchema({
   visual: v.optional(v.custom<VisualName>(isVisualName)),
 });
 

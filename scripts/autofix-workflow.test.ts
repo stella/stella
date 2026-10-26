@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
@@ -82,7 +82,7 @@ test("every workflow edit selects the classification digest refresh", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
-    ".github/ci-job-classification-decisions.json",
+    ".github/ci-job-classification-decisions/**",
     "scripts/ci-job-classification/yaml.ts",
   ]) {
     expect(
@@ -108,9 +108,17 @@ const namedCiStep = (workflow: unknown, name: string) => {
     if (!isRecord(job) || !Array.isArray(job["steps"])) {
       return [];
     }
-    return workflowJobSteps(workflow, jobId);
+    const jobSteps = workflowJobSteps(workflow, jobId);
+    return jobSteps.some((step) => step["name"] === name)
+      ? [workflowStepByName(jobSteps, name)]
+      : [];
   });
-  return workflowStepByName(steps, name);
+  const step = workflowStepByName(steps.slice(0, 1), name);
+  // The same anchored guard runs in mutually exclusive event carriers.
+  for (const match of steps.slice(1)) {
+    expect(match).toEqual(step);
+  }
+  return step;
 };
 
 describe("Dependabot Bun autofix boundary", () => {
@@ -339,6 +347,52 @@ describe("changed-file autofix boundary", () => {
     );
   });
 
+  test("shared CI guards preserve identical commands and inputs in every carrier", () => {
+    const source = `jobs:
+  pull-request:
+    steps: &shared
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: check
+  other-events:
+    steps: *shared
+`;
+    expect(
+      namedCiStep(Bun.YAML.parse(source), "Generated files manifest guard")[
+        "run"
+      ],
+    ).toBe("bun scripts/generated-files-guard.ts --guard-b");
+    const changed = `jobs:
+  pull-request:
+    steps:
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: check
+  other-events:
+    steps:
+      - name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+        env:
+          MODE: write
+`;
+    expect(() =>
+      namedCiStep(Bun.YAML.parse(changed), "Generated files manifest guard"),
+    ).toThrow("toEqual");
+    const duplicate = `jobs:
+  check:
+    steps:
+      - &guard
+        name: Generated files manifest guard
+        run: bun scripts/generated-files-guard.ts --guard-b
+      - *guard
+`;
+    expect(() =>
+      namedCiStep(Bun.YAML.parse(duplicate), "Generated files manifest guard"),
+    ).toThrow("Expected one workflow step");
+  });
+
   test("every selected generator finishes after every source-rewriting fixer", async () => {
     const steps = workflowJobSteps(
       Bun.YAML.parse(await Bun.file(WORKFLOW_URL).text()),
@@ -348,7 +402,7 @@ describe("changed-file autofix boundary", () => {
       ({ write }) => write.join(" "),
     );
     const sourceFixer =
-      /\boxlint\b[^\n]*--fix\b|\boxfmt\b|scripts\/fix-[\w-]+\.ts|scripts\/typecheck-coverage\.ts[^\n]*--autofix\b/u;
+      /\boxlint\b[^\n]*--fix\b|\bbun fmt\b|scripts\/fix-[\w-]+\.ts|scripts\/typecheck-coverage\.ts[^\n]*--autofix\b/u;
     const isGenerator = (run: string) =>
       /scripts\/autofix-plan\.ts run\b/u.test(run) ||
       generatorCommands.some((command) => run.includes(command));
@@ -590,9 +644,7 @@ describe("changed-file autofix boundary", () => {
     expect(fix.slice(typecheck)).toContain("restore_lint_paths");
     expect(fix.slice(typecheck)).not.toContain('exit "$typecheck_status"');
     expect(fix).toContain("set -euo pipefail");
-    expect(fix).toContain(
-      `bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "\${format_paths[@]}"`,
-    );
+    expect(fix).toContain(`bun fmt --ignore-unknown "\${format_paths[@]}"`);
     for (const unsafe of ["--fix-suggestions", "--fix-dangerously"]) {
       expect(fix).not.toContain(unsafe);
     }

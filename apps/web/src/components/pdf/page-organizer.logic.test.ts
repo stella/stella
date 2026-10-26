@@ -4,9 +4,9 @@ import {
   createPageOrganizerState,
   getPageMoveDestination,
   isPageOrganizerDirty,
-  reducePageOrganizer,
   type OrganizerPage,
   type PageOrganizerState,
+  reducePageOrganizer,
 } from "./page-organizer.logic";
 
 const pages = (count: number): OrganizerPage[] =>

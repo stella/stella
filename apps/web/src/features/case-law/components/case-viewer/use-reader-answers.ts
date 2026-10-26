@@ -35,6 +35,7 @@ import {
   applyReaderAnswerEvent,
   ReaderAnswerFailure,
 } from "./reader-answers.logic";
+import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 
 // oxlint-disable-next-line no-restricted-properties -- Claim clock is used by query fetch/interval callbacks for client recovery; it does not determine rendered SSR or hydration snapshots.
 const readerPollingNow = () => Temporal.Now.instant().epochMilliseconds;
@@ -71,25 +72,95 @@ const createReaderAnswerRuntime = (scope: string) => {
   };
 };
 type ReaderAnswerErrorOrigin =
-  | { type: "operation" }
-  | { type: "stream"; messageId: string };
+  { type: "operation" } | { type: "stream"; messageId: string };
 type ReaderAnswerErrors = ReadonlyMap<
   string,
   ReaderAnswerErrorOrigin & { error: APIError | ReaderAnswerFailure }
 >;
+type ReaderAnswerFailureNoticesOptions = {
+  answers: readonly ReaderAnswer[];
+  failures: ReaderAnswerErrors;
+  queryError: Error | null;
+};
+const readerAnswerFailureNotices = ({
+  answers,
+  failures,
+  queryError,
+}: ReaderAnswerFailureNoticesOptions): ReaderAnswerFailureNotice[] => {
+  const notices: ReaderAnswerFailureNotice[] = [];
+  const transientMessages = new Set<string>();
+  for (const failure of failures.values()) {
+    switch (failure.type) {
+      case "operation":
+        notices.push({ type: "operation", error: failure.error });
+        break;
+      case "stream":
+        transientMessages.add(failure.messageId);
+        notices.push({
+          type: "message",
+          messageId: failure.messageId,
+          error: failure.error,
+        });
+        break;
+      default:
+        failure satisfies never;
+        panic("Unknown reader answer error origin");
+    }
+  }
+  for (const answer of answers) {
+    const message = answer.messages.findLast(
+      (candidate) => candidate.role === "assistant",
+    );
+    if (
+      message?.status !== "failed" ||
+      message.errorCode === null ||
+      transientMessages.has(message.id)
+    ) {
+      continue;
+    }
+    notices.push({
+      type: "message",
+      messageId: message.id,
+      error: new ReaderAnswerFailure({
+        kind: "model",
+        code: message.errorCode,
+        message: "Reader answer generation failed",
+      }),
+    });
+  }
+  if (queryError !== null) {
+    notices.push({ type: "operation", error: queryError });
+  }
+  return notices;
+};
+type ReaderAnswerOperation =
+  | "explain"
+  | "follow-up"
+  | "regenerate"
+  | "remove"
+  | `visibility.${ReaderAnswer["visibility"]}`;
+
 type RecordReaderAnswerErrorOptions = {
+  operation: ReaderAnswerOperation;
   key: string;
   cause: unknown;
   origin: ReaderAnswerErrorOrigin;
   setErrors: Dispatch<SetStateAction<ReaderAnswerErrors>>;
 };
 const recordReaderAnswerError = ({
+  operation,
   key,
   cause,
   origin,
   setErrors,
 }: RecordReaderAnswerErrorOptions) => {
-  getAnalytics().captureError(cause);
+  getAnalytics().captureError(cause, {
+    fingerprintKey: "recordReaderAnswerError:cause",
+    scope: {
+      type: "handler",
+      handlerId: `reader-answer.${origin.type}.${operation}`,
+    },
+  });
   const error =
     APIError.is(cause) || ReaderAnswerFailure.is(cause)
       ? cause
@@ -118,6 +189,7 @@ const recordReaderAnswerError = ({
   }
 };
 type StreamAnswerOptions = {
+  operation: "explain" | "follow-up" | "regenerate";
   answerId: string | null;
   path: string;
   body: object;
@@ -138,6 +210,7 @@ const runStreamAnswer = async (
   queryKey: DataTag<readonly unknown[], ReaderAnswer[], Error>,
   {
     answerId,
+    operation,
     path,
     body,
     anchor,
@@ -237,6 +310,7 @@ const runStreamAnswer = async (
     const failedId = currentAnswerId;
     if (ownership.messageId !== null) {
       recordReaderAnswerError({
+        operation,
         key: failedId,
         cause: streaming.error,
         origin: { type: "stream", messageId: ownership.messageId },
@@ -283,6 +357,7 @@ type PerformReaderAnswerOperationOptions = Pick<
   "runtime" | "queryClient" | "setBusyAnswerIds" | "setErrors"
 > & {
   id: string | null;
+  operationId: ReaderAnswerOperation;
   operation: (signal: AbortSignal) => Promise<void | Result<void, Error>>;
   enabled: boolean;
   authenticated: boolean;
@@ -292,6 +367,7 @@ const performReaderAnswerOperation = async (
   queryKey: DataTag<readonly unknown[], ReaderAnswer[], Error>,
   {
     id,
+    operationId,
     operation,
     enabled,
     authenticated,
@@ -347,6 +423,7 @@ const performReaderAnswerOperation = async (
   const result = outcome.andThen((value) => value ?? Result.ok(undefined));
   if (result.isErr()) {
     recordReaderAnswerError({
+      operation: operationId,
       key: busyKey,
       cause: result.error,
       origin: { type: "operation" },
@@ -454,7 +531,13 @@ const readerAnswersRecoveryOptions = ({
       if (context.signal.aborted || runtime.isCancelled()) {
         return readQueryResult(fetched);
       }
-      getAnalytics().captureError(fetched.error);
+      getAnalytics().captureError(fetched.error, {
+        fingerprintKey: "readerAnswersRecoveryOptions.queryFn:failure",
+        scope: {
+          type: "handler",
+          handlerId: "readerAnswersRecoveryOptions.queryFn:failure",
+        },
+      });
       // A failed recovery may time out expired claims, but must preserve newer terminal cache data.
       const current = {
         ...polling,
@@ -530,12 +613,17 @@ export const useReaderAnswers = ({
     return () => runtime.cancel();
   }, [runtime]);
 
+  type PerformReaderAnswerArgs = {
+    operationId: ReaderAnswerOperation;
+    run: PerformReaderAnswerOperationOptions["operation"];
+  };
   const perform = async (
     id: string | null,
-    operation: (signal: AbortSignal) => Promise<void | Result<void, Error>>,
+    { operationId, run: operation }: PerformReaderAnswerArgs,
   ) =>
     await performReaderAnswerOperation(options.queryKey, {
       id,
+      operationId,
       operation,
       enabled: generationMode === "enabled",
       authenticated: user !== null,
@@ -546,9 +634,9 @@ export const useReaderAnswers = ({
       setErrors,
     });
   const run = async (input: StreamAnswerOptions) =>
-    await perform(
-      input.answerId,
-      async (signal) =>
+    await perform(input.answerId, {
+      operationId: input.operation,
+      run: async (signal) =>
         await runStreamAnswer(options.queryKey, {
           ...input,
           signal,
@@ -560,9 +648,15 @@ export const useReaderAnswers = ({
           setBusyAnswerIds,
           setErrors,
         }),
-    );
+    });
+  const answers = query.data ?? [];
   return {
-    answers: query.data ?? [],
+    answers,
+    failureNotices: readerAnswerFailureNotices({
+      answers,
+      failures,
+      queryError: query.error,
+    }),
     activeAnswerId: activation.id,
     openRevision: activation.revision,
     activateAnswer,
@@ -574,6 +668,7 @@ export const useReaderAnswers = ({
     createExplain: async (anchor: ReaderAnswerAnchor) =>
       await run({
         answerId: null,
+        operation: "explain",
         path: "",
         body: {
           decisionId: toSafeId<"caseLawDecision">(decisionId),
@@ -587,6 +682,7 @@ export const useReaderAnswers = ({
     followUp: async (answerId: string, question: string) =>
       await run({
         answerId,
+        operation: "follow-up",
         path: `/${encodeURIComponent(answerId)}/messages`,
         body: { question, locale },
         regenerate: false,
@@ -594,43 +690,50 @@ export const useReaderAnswers = ({
     regenerate: async (answerId: string) =>
       await run({
         answerId,
+        operation: "regenerate",
         path: `/${encodeURIComponent(answerId)}/regenerate`,
         body: { locale },
         regenerate: true,
       }),
     remove: async (answerId: string) =>
-      await perform(answerId, async (signal) => {
-        await deleteReaderAnswer(answerId, signal);
-        if (runtime.isCancelled() || signal.aborted) {
-          return;
-        }
-        queryClient.setQueryData(
-          options.queryKey,
-          (current: ReaderAnswer[] | undefined) =>
-            current?.filter((answer) => answer.id !== answerId),
-        );
-        setActivation((current) =>
-          current.id === answerId
-            ? { id: null, revision: current.revision }
-            : current,
-        );
+      await perform(answerId, {
+        operationId: "remove",
+        run: async (signal) => {
+          await deleteReaderAnswer(answerId, signal);
+          if (runtime.isCancelled() || signal.aborted) {
+            return;
+          }
+          queryClient.setQueryData(
+            options.queryKey,
+            (current: ReaderAnswer[] | undefined) =>
+              current?.filter((answer) => answer.id !== answerId),
+          );
+          setActivation((current) =>
+            current.id === answerId
+              ? { id: null, revision: current.revision }
+              : current,
+          );
+        },
       }),
     setVisibility: async (
       answerId: string,
       visibility: ReaderAnswer["visibility"],
     ) =>
-      await perform(answerId, async (signal) => {
-        await changeReaderAnswerVisibility(answerId, visibility, signal);
-        if (runtime.isCancelled() || signal.aborted) {
-          return;
-        }
-        queryClient.setQueryData(
-          options.queryKey,
-          (current: ReaderAnswer[] | undefined) =>
-            current?.map((answer) =>
-              answer.id === answerId ? { ...answer, visibility } : answer,
-            ),
-        );
+      await perform(answerId, {
+        operationId: `visibility.${visibility}`,
+        run: async (signal) => {
+          await changeReaderAnswerVisibility(answerId, visibility, signal);
+          if (runtime.isCancelled() || signal.aborted) {
+            return;
+          }
+          queryClient.setQueryData(
+            options.queryKey,
+            (current: ReaderAnswer[] | undefined) =>
+              current?.map((answer) =>
+                answer.id === answerId ? { ...answer, visibility } : answer,
+              ),
+          );
+        },
       }),
   };
 };

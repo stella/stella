@@ -48,7 +48,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -241,11 +241,7 @@ const InvoiceDetail = ({
   };
 
   type TransitionAction =
-    | "finalize"
-    | "send"
-    | "mark_paid"
-    | "void"
-    | "revert_to_draft";
+    "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
 
   const transitionMutation = useMutation({
     mutationFn: async (action: TransitionAction) => {
@@ -256,7 +252,7 @@ const InvoiceDetail = ({
         .transition.post({
           action,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       invalidateAll();
@@ -273,7 +269,7 @@ const InvoiceDetail = ({
           invoiceId: toSafeId<"invoice">(invoiceId),
         })
         .delete({});
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async () => {
       invalidateAll();
@@ -296,7 +292,7 @@ const InvoiceDetail = ({
         .entries.delete({
           timeEntryIds: [toSafeId<"timeEntry">(timeEntryId)],
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       invalidateAll();
@@ -315,7 +311,7 @@ const InvoiceDetail = ({
         .entries.delete({
           expenseIds: [toSafeId<"expense">(expenseId)],
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       invalidateAll();

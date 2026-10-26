@@ -2,8 +2,8 @@ import { Result } from "better-result";
 
 import {
   isPublicCaseLawCountry,
-  publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
+  publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type {
   CaseLawBrowserCountry,

@@ -88,8 +88,8 @@ export type FeedbackReceiptView = Pick<
 >;
 
 /**
- * The public intake answers with a hand-built `Response`, so Eden cannot type
- * its body; the receipt is validated here rather than trusted.
+ * The public intake answers with a hand-built `Response`, so the API client
+ * cannot type its body; the receipt is validated here rather than trusted.
  */
 export const feedbackReceiptSchema = v.object({
   deduplicated: v.boolean(),

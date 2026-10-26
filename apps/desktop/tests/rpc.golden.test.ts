@@ -5,10 +5,10 @@ import path from "node:path";
 import { DESKTOP_EDIT_FILE_TYPES } from "@stll/api-contract";
 
 import {
-  isAppSnapshot,
   type AppSnapshot,
   type DesktopNotificationPreferences,
   type DesktopUpdateSnapshot,
+  isAppSnapshot,
   type LinkedAccountSnapshot,
   type OpenFileRequest,
   type OpenFileResponse,

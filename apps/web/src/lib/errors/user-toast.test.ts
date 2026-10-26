@@ -4,9 +4,39 @@ import { sleep } from "@stll/concurrency/sleep";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { detachedUserAction } from "@/lib/errors/user-toast";
+import { reportErrorOnce } from "@/lib/analytics/reported-error";
+import { toAPIError } from "@/lib/errors/api";
+import {
+  detachedUserAction,
+  notifyUserError,
+  resetUserErrorReportDedupeForTests,
+} from "@/lib/errors/user-toast";
 
 const FAILURE = "That did not work";
+
+/**
+ * The reports this module makes. Other work in the process may report through
+ * the same analytics singleton, so assertions count only user-visible reports.
+ */
+const userVisibleReports = (capture: {
+  mock: { calls: readonly (readonly unknown[])[] };
+}) =>
+  capture.mock.calls.filter(([, options]) => {
+    if (
+      typeof options !== "object" ||
+      options === null ||
+      !("context" in options)
+    ) {
+      return false;
+    }
+    const { context } = options;
+    return (
+      typeof context === "object" &&
+      context !== null &&
+      "type" in context &&
+      context.type === "user-visible"
+    );
+  });
 
 /** Let the detached rejection handler run. */
 const settle = async () => {
@@ -14,6 +44,7 @@ const settle = async () => {
 };
 
 afterEach(() => {
+  resetUserErrorReportDedupeForTests();
   mock.restore();
 });
 
@@ -32,8 +63,13 @@ describe("detachedUserAction", () => {
     await settle();
 
     expect(capture).toHaveBeenCalledWith(failure, {
-      type: "detached",
-      operation: "test.press",
+      fingerprintKey: "reportUserVisibleError:failure",
+      scope: { type: "request", method: "GET", routeTemplate: "unknown" },
+      context: {
+        feature: "web",
+        routeTemplate: "unknown",
+        type: "user-visible",
+      },
     });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls.at(0)?.[0]).toMatchObject({ type: "error" });
@@ -51,7 +87,112 @@ describe("detachedUserAction", () => {
     });
     await settle();
 
-    expect(capture).not.toHaveBeenCalled();
+    expect(userVisibleReports(capture)).toEqual([]);
     expect(add).not.toHaveBeenCalled();
+  });
+});
+
+describe("notifyUserError", () => {
+  test("reports two different notices without errors", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, "First notice");
+    notifyUserError(undefined, "Second notice");
+
+    expect(userVisibleReports(capture)).toHaveLength(2);
+  });
+
+  test("reports the same notice without an error once", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, FAILURE);
+    notifyUserError(undefined, FAILURE);
+
+    expect(userVisibleReports(capture)).toHaveLength(1);
+  });
+
+  test("reports the same notice once per occurrence", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+
+    notifyUserError(undefined, FAILURE, { occurrence: "first" });
+    notifyUserError(undefined, FAILURE, { occurrence: "first" });
+    notifyUserError(undefined, FAILURE, { occurrence: "second" });
+
+    expect(userVisibleReports(capture)).toHaveLength(2);
+  });
+
+  test("does not report a boundary error again at the root", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const failure = new Error("render failed");
+    const report = (error: unknown) =>
+      capture(error, {
+        fingerprintKey: "notifyUserError:boundary",
+        scope: { type: "handler", handlerId: "notifyUserError:boundary" },
+      });
+
+    reportErrorOnce(failure, report);
+    reportErrorOnce(failure, report);
+
+    expect(
+      capture.mock.calls.filter(([reported]) => reported === failure),
+    ).toHaveLength(1);
+  });
+
+  test("reports a visible error once with explicit route metadata", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const failure = new Error("private detail");
+
+    notifyUserError(failure, FAILURE, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+    });
+    notifyUserError(failure, FAILURE, {
+      feature: "auth",
+      routeTemplate: "/auth/error",
+    });
+
+    expect(userVisibleReports(capture)).toHaveLength(1);
+    expect(capture).toHaveBeenCalledWith(failure, {
+      fingerprintKey: "reportUserVisibleError:failure",
+      scope: { type: "request", method: "GET", routeTemplate: "/auth/error" },
+      context: {
+        feature: "auth",
+        routeTemplate: "/auth/error",
+        type: "user-visible",
+      },
+    });
+  });
+
+  test("reports an admission refusal while keeping its own notice", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("refusal-toast");
+    const refusal = toAPIError({
+      status: 403,
+      value: { code: "action_not_enabled", message: "private detail" },
+    });
+
+    expect(notifyUserError(refusal, FAILURE)).toBe(false);
+
+    expect(userVisibleReports(capture)).toHaveLength(1);
+    expect(add.mock.calls.at(0)?.at(0)).toMatchObject({
+      id: "action_not_enabled",
+      type: "info",
+    });
   });
 });

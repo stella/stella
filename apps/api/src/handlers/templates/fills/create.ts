@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -11,28 +11,32 @@ import {
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
-import { tJsonObject, tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import {
+  jsonObjectSchema,
+  resourceIdSchema,
+  workspaceParams,
+} from "@/api/lib/custom-schema";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import {
-  DocumentWriteRefusedError,
   documentWriteRefusalHandlerError,
+  DocumentWriteRefusedError,
 } from "@/api/lib/entities/authorize-document-write";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
 import {
-  createModelActionAdmitter,
   type AdmittedModelAction,
+  createModelActionAdmitter,
 } from "@/api/lib/rate-limit/model-action-admission";
 import {
   DOCX_EXT_RE,
-  sanitizeFilename,
   type SanitizedFileName,
+  sanitizeFilename,
 } from "@/api/lib/sanitize-filename";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { recordTemplateFill } from "@/api/lib/templates/record-use";
@@ -42,29 +46,22 @@ import {
   templateFillStatus,
 } from "@/api/lib/templates/template-fill-completion";
 import {
+  type AiFillAdmission,
   fillTemplateDocx,
   loadStoredTemplateSource,
-  type AiFillAdmission,
 } from "@/api/lib/templates/template-fill-service";
 import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
-  templateId: tSafeId("template"),
+  templateId: resourceIdSchema("template"),
 });
 
-const fillToWorkspaceBodySchema = t.Object({
-  /** Field-path → value map, same contract as the fill route. */
-  values: tJsonObject,
-  /** Per-fill clause edits keyed by slot patch key (`@clause:Name`), same
-   *  contract as the fill route; the override body is inserted for a matching
-   *  slot instead of the linked clause's resolved body. */
-  clauseOverrides: t.Optional(t.Record(t.String(), clauseBodySchema)),
-  /** Display name for the created document; defaults to the template's
-   *  file name. The `.docx` extension is appended when missing. */
-  name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
-  /** Target folder inside the workspace; root when absent. */
-  parentId: t.Optional(tSafeId("entity")),
+const fillToWorkspaceBodySchema = v.object({
+  values: jsonObjectSchema,
+  clauseOverrides: v.optional(v.record(v.string(), clauseBodySchema)),
+  name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
+  parentId: v.optional(resourceIdSchema("entity")),
 });
 
 /** The created document's file name: the caller's sanitized name (extension

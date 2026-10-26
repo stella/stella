@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import type { Static } from "elysia";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -26,13 +25,13 @@ import {
   validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
@@ -43,11 +42,12 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import {
   extractFieldFileRefs,
-  filterUnreferencedFieldFileRefs,
   type FieldFileRef,
+  filterUnreferencedFieldFileRefs,
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/lib/properties/create-schema";
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -58,15 +58,15 @@ import {
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
-const copyToWorkspaceBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  targetWorkspaceId: tSafeId("workspace"),
-  targetParentId: t.Nullable(tSafeId("entity")),
-  deleteSource: t.Boolean(),
-  sourceFieldId: t.Optional(tSafeId("field")),
+const copyToWorkspaceBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  targetWorkspaceId: resourceIdSchema("workspace"),
+  targetParentId: v.nullable(resourceIdSchema("entity")),
+  deleteSource: v.boolean(),
+  sourceFieldId: v.optional(resourceIdSchema("field")),
 });
 
-type CopyToWorkspaceBody = Static<typeof copyToWorkspaceBodySchema>;
+type CopyToWorkspaceBody = v.InferOutput<typeof copyToWorkspaceBodySchema>;
 
 type CopyToWorkspaceHandlerProps = {
   safeDb: SafeDb;
@@ -326,11 +326,17 @@ const cleanupMovedSourceFiles = async ({
   );
 
   if (Result.isError(unreferencedSourceFileRefsResult)) {
-    captureError(unreferencedSourceFileRefsResult.error, {
-      operation: "move-cleanup",
-      sourceWorkspaceId,
-      sourceEntityId,
-    });
+    captureError(
+      unreferencedSourceFileRefsResult.error,
+      handlerErrorContext(
+        "entities.cleanupMovedSourceFiles.unreferencedSourceFileRefsResult_error",
+        {
+          operation: "move-cleanup",
+          sourceWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
     return;
   }
 
@@ -341,11 +347,17 @@ const cleanupMovedSourceFiles = async ({
   });
 
   if (Result.isError(deleteResult)) {
-    captureError(deleteResult.error, {
-      operation: "move-cleanup",
-      sourceWorkspaceId,
-      sourceEntityId,
-    });
+    captureError(
+      deleteResult.error,
+      handlerErrorContext(
+        "entities.cleanupMovedSourceFiles.deleteResult_error",
+        {
+          operation: "move-cleanup",
+          sourceWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
   }
 };
 
@@ -534,11 +546,17 @@ const copyToWorkspaceHandler = async function* ({
   });
   if (Result.isError(fileMappings)) {
     await rollbackS3Copies(copiedS3Keys);
-    captureError(fileMappings.error, {
-      sourceWorkspaceId,
-      targetWorkspaceId,
-      sourceEntityId,
-    });
+    captureError(
+      fileMappings.error,
+      handlerErrorContext(
+        "entities.copyToWorkspaceHandler.fileMappings_error",
+        {
+          sourceWorkspaceId,
+          targetWorkspaceId,
+          sourceEntityId,
+        },
+      ),
+    );
     return Result.err(
       new HandlerError({ status: 500, message: "Failed to copy files" }),
     );
@@ -636,16 +654,25 @@ const copyToWorkspaceHandler = async function* ({
   // Acceleration only: the marks are already committed, and the standing
   // drain repairs whatever a lost flush leaves behind.
   dependencies
-    .flushEntitySearchRepairs(
-      txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
-    )
-    .catch(captureError);
+    .flushEntitySearchRepairs([
+      ...txResult.entityIdsBySearchIndexOwner[SEARCH_INDEX_OWNER.searchMark],
+      ...txResult.entityIdsBySearchIndexOwner[
+        SEARCH_INDEX_OWNER.durableExtraction
+      ],
+    ])
+    .catch(createErrorCapture(handlerErrorContext("entityCopy.flushSearch")));
 
   // Acceleration only: each run already committed with its copied source.
   handoffCommittedDocumentProcessingRuns({
     enqueue: dependencies.enqueueDocumentProcessingRun,
     runIds: txResult.nativeExtractionRunIds,
-  }).catch(captureError);
+  }).catch(
+    createErrorCapture(
+      handlerErrorContext(
+        "copyToWorkspaceHandler.handoffCommittedDocumentProcessingRuns",
+      ),
+    ),
+  );
 
   // Enqueue PDF derivative generation for copied file fields
   for (const fileField of txResult.fileFields) {
@@ -659,7 +686,11 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch(captureError);
+      .catch(
+        createErrorCapture(
+          handlerErrorContext("entityCopy.enqueuePdfDerivative"),
+        ),
+      );
     dependencies
       .enqueueImageThumbnailOrMarkFailed({
         entityId: fileField.entityId,
@@ -670,17 +701,23 @@ const copyToWorkspaceHandler = async function* ({
         userId,
         workspaceId: targetWorkspaceId,
       })
-      .catch(captureError);
+      .catch(
+        createErrorCapture(handlerErrorContext("entityCopy.enqueueThumbnail")),
+      );
   }
 
   // Sync search indexes
   dependencies
     .syncWorkspaceSearchActivity(targetWorkspaceId)
-    .catch(captureError);
+    .catch(
+      createErrorCapture(handlerErrorContext("entityCopy.syncTargetSearch")),
+    );
   if (deleteSource) {
     dependencies
       .syncWorkspaceSearchActivity(sourceWorkspaceId)
-      .catch(captureError);
+      .catch(
+        createErrorCapture(handlerErrorContext("entityCopy.syncSourceSearch")),
+      );
   }
 
   // The source workspace event is emitted by the route macro. This explicit

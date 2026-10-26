@@ -161,12 +161,64 @@ export const AppBreadcrumbs = () => {
     ),
     defineBreadcrumb(
       ["/admin"],
-      <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>,
+      <BreadcrumbLink to="/admin">{t("common.organization")}</BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/general"],
+      <BreadcrumbLink to="/admin/general">{t("admin.general")}</BreadcrumbLink>,
     ),
     defineBreadcrumb(
       ["/admin/members"],
       <BreadcrumbLink to="/admin/members">
         {t("common.members")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/usage"],
+      <BreadcrumbLink to="/admin/usage">
+        {t("admin.planAndUsage")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/audit-logs"],
+      <BreadcrumbLink to="/admin/audit-logs">
+        {t("settings.organization.auditLogs")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/ai"],
+      <BreadcrumbLink to="/admin/ai">
+        {t("admin.modelsAndProviders")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/anonymization"],
+      <BreadcrumbLink to="/admin/anonymization">
+        {t("settings.organization.anonymization.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/tools"],
+      <BreadcrumbLink to="/admin/tools">
+        {t("knowledge.sections.tools.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/matter-numbering"],
+      <BreadcrumbLink to="/admin/matter-numbering">
+        {t("settings.organization.matterNumbering")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/document-types"],
+      <BreadcrumbLink to="/admin/document-types">
+        {t("settings.organization.documentTypes.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/admin/time-policy"],
+      <BreadcrumbLink to="/admin/time-policy">
+        {t("settings.organization.timePolicy.title")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
@@ -184,19 +236,7 @@ export const AppBreadcrumbs = () => {
     defineBreadcrumb(
       ["/admin/billing"],
       <BreadcrumbLink to="/admin/billing">
-        {t("billing.settingsTitle")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/matter-numbering"],
-      <BreadcrumbLink to="/admin/matter-numbering">
-        {t("settings.organization.matterNumbering")}
-      </BreadcrumbLink>,
-    ),
-    defineBreadcrumb(
-      ["/admin/ai"],
-      <BreadcrumbLink to="/admin/ai">
-        {t("settings.organization.ai")}
+        {t("admin.billingProfiles")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(

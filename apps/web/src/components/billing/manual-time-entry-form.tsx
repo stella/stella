@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -15,6 +15,7 @@ import {
 } from "@/components/billing/time-entry-date.logic";
 import { TimeEntryNarrativeField } from "@/components/billing/time-entry-narrative-field";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 

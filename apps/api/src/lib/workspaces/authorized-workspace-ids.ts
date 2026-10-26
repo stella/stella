@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
@@ -24,12 +24,40 @@ import type { SafeId } from "@/api/lib/branded-types";
 
 type AuthorizedWorkspaceReader = Pick<Transaction, "select" | "selectDistinct">;
 
+declare const authorizedWorkspaceIdsBrand: unique symbol;
+
 export type AuthorizedWorkspaceSet = {
   /** Every authorized workspace with its status, including `deleting`. */
   readonly workspaces: AccessibleWorkspace[];
-  /** Authorized workspaces that are not being deleted. */
-  readonly activeIds: SafeId<"workspace">[];
 };
+
+/** Workspace ids produced only after the matter-access owner has checked them. */
+class AuthorizedWorkspaceIdList extends Array<SafeId<"workspace">> {
+  declare readonly [authorizedWorkspaceIdsBrand]: true;
+
+  private constructor(ids: readonly SafeId<"workspace">[]) {
+    super(...ids);
+    Object.freeze(this);
+  }
+
+  static override get [Symbol.species](): ArrayConstructor {
+    return Array;
+  }
+
+  static fromPermissionCheck(
+    ids: readonly SafeId<"workspace">[],
+  ): AuthorizedWorkspaceIdList {
+    return new AuthorizedWorkspaceIdList(ids);
+  }
+}
+
+export type AuthorizedWorkspaceIds = readonly SafeId<"workspace">[] & {
+  readonly [authorizedWorkspaceIdsBrand]: true;
+};
+
+const mintAuthorizedWorkspaceIds = (
+  ids: readonly SafeId<"workspace">[],
+): AuthorizedWorkspaceIds => AuthorizedWorkspaceIdList.fromPermissionCheck(ids);
 
 export class AuthorizedWorkspaceReadError extends TaggedError(
   "AuthorizedWorkspaceReadError",
@@ -70,19 +98,48 @@ export const readAuthorizedWorkspaces = async (
           .where(eq(workspaces.organizationId, organizationId)),
       catch: readFailure,
     })
-  ).map((rows) => ({
-    workspaces: rows,
-    activeIds: rows
-      .filter((row) => row.status !== "deleting")
-      .map((row) => row.id),
-  }));
+  ).map((authorizedWorkspaces) => ({ workspaces: authorizedWorkspaces }));
 
-/** The active authorized workspace ids, for callers that need only the ids. */
+type RequestedWorkspaceScope = OrganizationScope & {
+  workspaceIds: readonly SafeId<"workspace">[];
+};
+
+/**
+ * Keep only requested, active workspace ids admitted by the transaction's
+ * matter-access rules. This is the sole production mint for the branded list.
+ */
 export const authorizedWorkspaceIds = async (
   tx: AuthorizedWorkspaceReader,
-  scope: OrganizationScope,
-): Promise<Result<SafeId<"workspace">[], AuthorizedWorkspaceReadError>> =>
-  (await readAuthorizedWorkspaces(tx, scope)).map((set) => set.activeIds);
+  {
+    organizationId,
+    workspaceIds: requestedWorkspaceIds,
+  }: RequestedWorkspaceScope,
+): Promise<Result<AuthorizedWorkspaceIds, AuthorizedWorkspaceReadError>> =>
+  requestedWorkspaceIds.length === 0
+    ? Result.ok(mintAuthorizedWorkspaceIds([]))
+    : (
+        await Result.tryPromise({
+          try: async () =>
+            await tx
+              .selectDistinct({ id: workspaces.id })
+              .from(stellaAuthorizedWorkspaces)
+              .innerJoin(
+                workspaces,
+                eq(
+                  workspaces.id,
+                  stellaAuthorizedWorkspaces.authorizedWorkspaceId,
+                ),
+              )
+              .where(
+                and(
+                  eq(workspaces.organizationId, organizationId),
+                  ne(workspaces.status, "deleting"),
+                  inArray(workspaces.id, requestedWorkspaceIds),
+                ),
+              ),
+          catch: readFailure,
+        })
+      ).map((rows) => mintAuthorizedWorkspaceIds(rows.map((row) => row.id)));
 
 /**
  * The statement that finds one active workspace in the transaction's

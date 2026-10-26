@@ -9,9 +9,10 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import type {
-  ReaderAnswerStreamEvent,
   ReaderAnswer,
+  ReaderAnswerStreamEvent,
 } from "@stll/api-contract/reader-answers";
 import {
   type DecisionAnalysis,
@@ -20,6 +21,7 @@ import {
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
+import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
@@ -236,10 +238,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: passage,
-    startOffset: 0,
-    endOffset: passage.length,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: passage,
+        startOffset: 0,
+        endOffset: passage.length,
+      },
+    ],
   },
   messages: [
     {
@@ -333,7 +339,7 @@ const fakeReaderServer = (initialAnswers: ReaderAnswer[] = [answer]) => {
         return Response.json({ items: [], nextCursor: null, workspaces: [] });
       }
       if (path.endsWith("/organization-settings/ai-availability")) {
-        return Response.json({ available: true });
+        return Response.json(aiAvailableResponse());
       }
       throw new TypeError(`Unexpected request: ${request.method} ${path}`);
     },
@@ -391,7 +397,7 @@ const renderWorkspace = async (
                 role: "member",
                 ai: true,
                 deepl: false,
-                ocr: false,
+                ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                 desktop: "none",
                 settings: undefined,
               })}

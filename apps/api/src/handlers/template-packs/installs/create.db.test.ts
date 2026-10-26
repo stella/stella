@@ -88,7 +88,7 @@ const createStoredTemplateMock = async function* ({
     organizationId,
     name,
     fileName,
-    s3Key: `templates/${id}.docx`,
+    s3Key: `${organizationId}/templates/${id}.docx`,
     sizeBytes: 1,
     createdBy: userId,
     originType: origin?.type ?? "authored",
@@ -256,7 +256,7 @@ const declareOmissionCase = (
         INSERT INTO templates
           (id, organization_id, name, file_name, s3_key, size_bytes, created_by, origin_type, origin)
         VALUES
-          (${id}, ${ids.orgA}, 'Incomplete', 'x.docx', ${`templates/${id}.docx`},
+          (${id}, ${ids.orgA}, 'Incomplete', 'x.docx', ${`${ids.orgA}/templates/${id}.docx`},
            1, ${ids.userAdmin}, 'bundled-pack', ${payload}::text::jsonb)
       `);
     };
@@ -364,7 +364,7 @@ describe("template pack install", () => {
         organizationId: ids.orgA,
         name: "Duplicate",
         fileName: "duplicate.docx",
-        s3Key: `templates/${duplicate}.docx`,
+        s3Key: `${ids.orgA}/templates/${duplicate}.docx`,
         sizeBytes: 1,
         createdBy: ids.userAdmin,
         originType: "bundled-pack",
@@ -390,7 +390,7 @@ describe("template pack install", () => {
         INSERT INTO templates
           (id, organization_id, name, file_name, s3_key, size_bytes, created_by, origin_type, origin)
         VALUES
-          (${id}, ${ids.orgA}, 'Mismatched', 'x.docx', ${`templates/${id}.docx`},
+          (${id}, ${ids.orgA}, 'Mismatched', 'x.docx', ${`${ids.orgA}/templates/${id}.docx`},
            1, ${ids.userAdmin}, 'authored', ${payload}::text::jsonb)
       `);
     };
@@ -414,7 +414,7 @@ describe("template pack install", () => {
         organizationId: ids.orgA,
         name: "Same slug, other pack",
         fileName: "other.docx",
-        s3Key: `templates/${other}.docx`,
+        s3Key: `${ids.orgA}/templates/${other}.docx`,
         sizeBytes: 1,
         createdBy: ids.userAdmin,
         originType: "bundled-pack",

@@ -10,9 +10,9 @@ import os from "node:os";
 import path from "node:path";
 
 import {
-  NETWORK_DEPTH_METHOD,
   diffNetworkBaseline,
   mergeNetworkBaseline,
+  NETWORK_DEPTH_METHOD,
 } from "../apps/web/e2e/helpers/network";
 import { generateRevisionRouteTree } from "../apps/web/scripts/network-baseline-route-tree";
 import { prepareComparisonBaseline } from "./network-baseline-scope";

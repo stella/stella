@@ -7,9 +7,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
-import Elysia from "elysia";
-import type { Context } from "elysia";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
@@ -19,6 +17,7 @@ import {
   SIGNAL_KIND_ORIGIN,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
@@ -32,32 +31,32 @@ import {
   chatThreads,
   chatToolGrants,
   chatTurns,
-  documentTranslationRuns,
   desktopPresence,
   desktopTimeEntryBatches,
-  templateLookupFormats,
+  documentTranslationRuns,
   entities,
-  entityViews,
   entityVersions,
+  entityViews,
+  featureEnrolments,
   fields,
   invoiceLines,
   invoices,
   legalLists,
   legalReaderAnnotations,
   legalReaderAnswers,
-  numberSeries,
   notifications,
-  savedTimeNarratives,
+  numberSeries,
   savedSearches,
+  savedTimeNarratives,
   searchHistoryEntries,
   sellerProfiles,
   signals,
+  templateLookupFormats,
   timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
   workObligations,
-  featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -121,7 +120,9 @@ import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entrie
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
-import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/list";
+import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
+import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import readEntityById from "@/api/handlers/entities/get";
 import readVersionById from "@/api/handlers/entities/versions/get";
 import readVersions from "@/api/handlers/entities/versions/list";
@@ -138,7 +139,9 @@ import updateReaderAnswer from "@/api/handlers/legal-reader/answers/update";
 import listLegalLists from "@/api/handlers/lists/list";
 import deleteMemory from "@/api/handlers/memories/delete";
 import listMemories from "@/api/handlers/memories/list";
+import updateMemory from "@/api/handlers/memories/update";
 import listNotifications from "@/api/handlers/notifications/list";
+import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
@@ -159,13 +162,21 @@ import listMyTimeTimers from "@/api/handlers/time-timers/list";
 import readUserFileContent from "@/api/handlers/user-files/read-content";
 import readUserFileThumbnail from "@/api/handlers/user-files/read-thumbnail";
 import listVatRates from "@/api/handlers/vat-rates/list";
+import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";
 import listMyWork from "@/api/handlers/work-obligations/queues/list";
+import { createHttpApp } from "@/api/http/app";
+import { createResponseSet } from "@/api/http/context";
+import type { ResponseSet } from "@/api/http/context";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DESKTOP_REGISTRY_REQUEST_USER_AGENT } from "@/api/lib/business-registries/desktop/request-contract";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   createFeatureAccessSnapshot,
@@ -178,6 +189,7 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
@@ -185,6 +197,8 @@ import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";
@@ -222,7 +236,11 @@ type TestHandlerContext = {
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
-  set: Context["set"];
+  set: ResponseSet;
+  server: null;
+  path: string;
+  headers: Record<string, string>;
+  status: typeof status;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   workspaceId: SafeId<"workspace">;
@@ -665,6 +683,24 @@ const countChatMessages = async (threadId: SafeId<"chatThread">) =>
       .where(eq(chatMessages.threadId, threadId))
   ).length;
 
+const CZECH_PRESET_CODES = [
+  ...new Set(VAT_RATE_PRESETS.CZ.map(({ code }) => code)),
+];
+
+/** An organization's Czech preset rows, read past RLS after a handler ran. */
+const countCzechPresetRates = async (organizationId: SafeId<"organization">) =>
+  (
+    await testDb
+      .select({ id: vatRates.id })
+      .from(vatRates)
+      .where(
+        and(
+          eq(vatRates.organizationId, organizationId),
+          inArray(vatRates.code, CZECH_PRESET_CODES),
+        ),
+      )
+  ).length;
+
 const readChatTurnRow = async (turnId: SafeId<"chatTurn">) =>
   (
     await testDb
@@ -976,6 +1012,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -994,6 +1032,8 @@ const isolationCases: IsolationCase[] = [
             baseVersionId: testIds.entityVersionB1,
             targetVersionIds: [compareTargetVersionB],
           },
+          mode: "strict",
+          granularity: "word",
           baseTrackedChanges: "keep",
           targetTrackedChanges: "keep",
           output: { type: "version" },
@@ -1073,6 +1113,52 @@ const isolationCases: IsolationCase[] = [
     expectDenied: expectStatus(404),
     expectPositive: (result, { ids: testIds }) =>
       expectPageContainsId(result, testIds.docxSuggestionB1),
+  },
+  {
+    // The positive run rejects B's suggestion; the revert case below returns
+    // it to pending, so the fixture leaves the matrix as it entered.
+    name: "docx suggestion resolve",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(resolveDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(resolveDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+        body: { status: "rejected" },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
+  },
+  {
+    name: "docx suggestion revert",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(revertDocxSuggestion, workspaceA, {
+        params: {
+          workspaceId: testIds.wsA1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(revertDocxSuggestion, workspaceB, {
+        params: {
+          workspaceId: testIds.wsB1,
+          entityId: testIds.entityB1,
+          suggestionId: testIds.docxSuggestionB1,
+        },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ updated: true }),
   },
   {
     name: "document review source list",
@@ -1293,6 +1379,38 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "VAT rate preset applies only to the active organization",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+      const otherBefore = await countCzechPresetRates(testIds.orgB);
+      const result = await runHandler(applyVatRatePreset, workspaceA, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgA),
+        otherUnchanged:
+          (await countCzechPresetRates(testIds.orgB)) === otherBefore,
+      };
+    },
+    runBPositive: async ({ ids: testIds, workspaceB }) => {
+      const result = await runHandler(applyVatRatePreset, workspaceB, {
+        body: { country: "CZ" },
+      });
+      return {
+        added: recordField(result, "added"),
+        activeRows: await countCzechPresetRates(testIds.orgB),
+      };
+    },
+    expectDenied: (outcome) =>
+      expect(outcome).toEqual({
+        added: 5,
+        activeRows: 5,
+        otherUnchanged: true,
+      }),
+    expectPositive: (outcome) =>
+      expect(outcome).toEqual({ added: 5, activeRows: 5 }),
   },
   {
     name: "time entry read by id",
@@ -1590,6 +1708,26 @@ const isolationCases: IsolationCase[] = [
       expectPageContainsId(result, testIds.aiMemoryFirmB),
   },
   {
+    // `pinned: false` matches the fixture, so the positive run reaches the
+    // locked row without writing.
+    name: "memory update",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(updateMemory, workspaceA, {
+        featureAccessSnapshot: memoryAccess(workspaceA),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(updateMemory, workspaceB, {
+        featureAccessSnapshot: memoryAccess(workspaceB),
+        params: { memoryId: testIds.aiMemoryFirmB },
+        body: { pinned: false },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result, { ids: testIds }) =>
+      expectRecordFieldEquals(result, "id", testIds.aiMemoryFirmB),
+  },
+  {
     name: "memory delete",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(deleteMemory, workspaceA, {
@@ -1708,6 +1846,21 @@ const isolationCases: IsolationCase[] = [
       expectPageExcludesField(result, "id", notificationB),
     expectPositive: (result) =>
       expectPageContainsField(result, "id", notificationB),
+  },
+  {
+    // Same organization, other recipient: only the recipient predicate stands
+    // between user A1 and user B1's notification.
+    name: "notification mark read",
+    runAAgainstB: async ({ sameUserWorkspaceB }) =>
+      await runHandler(markNotificationRead, sameUserWorkspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(markNotificationRead, workspaceB, {
+        params: { notificationId: notificationB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => expect(result).toEqual({ unreadCount: 0 }),
   },
   {
     name: "chat thread list",
@@ -3176,7 +3329,11 @@ const createWorkspaceContext = ({
     route: "/security/cross-tenant-handler",
     safeDb,
     scopedDb,
-    set: { headers: {} },
+    set: createResponseSet(),
+    server: null,
+    path: `/workspaces/${workspaceId}`,
+    headers: {},
+    status,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -3196,7 +3353,7 @@ const runHandler = async <TContext>(
 
   try {
     return await handler(
-      asTestRaw<TContext>({
+      asTestRaw<TContext & SafeHandlerLogContext>({
         ...context,
         ...requestShape,
       }),
@@ -3475,7 +3632,7 @@ testState.beforeAll(() => {
   });
 });
 
-const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+const desktopServer = (): TestServer => {
   const authorize = desktopCredentials.authorizeDesktopAccount;
   const registry = createDesktopRegistryRequestEndpoint({
     config: authorize,
@@ -3490,44 +3647,53 @@ const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
   const candidates = createDesktopMatterCandidatesEndpoint(authorize);
   const matters = createDesktopMattersEndpoint(authorize);
   const batch = createDesktopTimeEntryBatchEndpoint(authorize);
-  const status = createDesktopTimeEntryBatchStatusEndpoint(authorize);
+  const batchStatus = createDesktopTimeEntryBatchStatusEndpoint(authorize);
   const single = createDesktopTimeEntryEndpoint(authorize);
-  const app = new Elysia()
-    .put("/registry", registry.handler, { body: registry.config.body })
-    .get("/features", feature.handler, { response: feature.config.response })
-    .get("/candidates", candidates.handler, {
-      response: candidates.config.response,
-    })
-    .get("/matters", matters.handler, {
-      query: matters.config.query,
-      response: matters.config.response,
-    })
-    .put("/batch", batch.handler, {
-      body: batch.config.body,
-      response: batch.config.response,
-    })
-    .put("/status", status.handler, {
-      body: status.config.body,
-      response: status.config.response,
-    })
-    .put("/single/:workspaceId", single.handler, {
-      params: single.config.params,
-      body: single.config.body,
-      response: single.config.response,
-    });
-  const credential =
-    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
-  return await app.handle(await credential.signRequest(request));
+  // The real routes on the real HTTP core: each definition decodes its own
+  // input and answers through its own response schemas.
+  return serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        "/registry": { PUT: registry },
+        "/features": { GET: feature },
+        "/candidates": { GET: candidates },
+        "/matters": { GET: matters },
+        "/batch": { PUT: batch },
+        "/status": { PUT: batchStatus },
+        "/single/:workspaceId": { PUT: single },
+      }),
+    }),
+  );
 };
 
+// One server answers both tenants; the credential decides who is calling.
+let desktopRoutes: TestServer | undefined;
+
+afterAll(async () => {
+  await desktopRoutes?.stop();
+});
+
+const desktopCaller = (tenant: "a" | "b") => async (request: Request) => {
+  desktopRoutes ??= desktopServer();
+  const credential =
+    tenant === "a" ? desktopCredentials.a : desktopCredentials.b;
+  return await desktopRoutes.fetch(await credential.signRequest(request));
+};
+
+/** A request as the desktop app sends it: its HTTP client names itself on
+ *  every call, and the registry route admits no other agent. */
 const desktopRequest = (path: string, body?: unknown) =>
   new Request(
     `http://localhost${path}`,
     body === undefined
-      ? {}
+      ? { headers: { "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT } }
       : {
           method: "PUT",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+          },
           body: JSON.stringify(body),
         },
   );

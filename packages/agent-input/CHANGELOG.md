@@ -1,5 +1,17 @@
 # @stll/agent-input
 
+## 0.2.0
+
+### Minor Changes
+
+- [#5894](https://github.com/stella/stella/pull/5894) [`678a9d5`](https://github.com/stella/stella/commit/678a9d5c93cd72ff4d94d0bdb23c159982f710c9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add strict whole-token numeric parsers for machine input. Reject malformed CLI pagination tokens while preserving localized tool-value normalization.
+
+## 0.1.8
+
+### Patch Changes
+
+- [#6011](https://github.com/stella/stella/pull/6011) [`6f9f7d4`](https://github.com/stella/stella/commit/6f9f7d46bd87eda5bf37efc402e7611f21044633) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the fuzzy-search dependency to 1.4.0.
+
 ## 0.1.7
 
 ### Patch Changes

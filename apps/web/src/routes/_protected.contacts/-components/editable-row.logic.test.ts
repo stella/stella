@@ -5,8 +5,8 @@ import { cents } from "@stll/money";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
-  contactRateInput,
   buildTextContactPayload,
+  contactRateInput,
   getEditableFieldInputAttributes,
 } from "@/routes/_protected.contacts/-components/editable-row.logic";
 

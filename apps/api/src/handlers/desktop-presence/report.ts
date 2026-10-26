@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { desktopPresenceReportSchema } from "@stll/api-contract/desktop-presence";
 
@@ -20,7 +20,7 @@ const config = {
   cache: { kind: "none" },
   body: desktopPresenceReportSchema,
   response: safePublicHandlerResponseSchemasWithStatusText(
-    t.Object({ reported: t.Boolean() }, { additionalProperties: false }),
+    v.object({ reported: v.boolean() }),
   ),
 } satisfies PublicHandlerConfig;
 

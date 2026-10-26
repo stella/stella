@@ -10,8 +10,8 @@ import type { BilingualAIDocumentContext } from "@/api/lib/bilingual/ai";
 import {
   buildBilingualDocumentRequest,
   SOURCE_DOCUMENT_CACHE_CHARS_MAX,
-  translationLanguageInstruction,
   translateFormattedBatch,
+  translationLanguageInstruction,
 } from "@/api/lib/bilingual/ai";
 import type { FormattedBilingualUnit } from "@/api/lib/bilingual/formatting";
 import { toSafeId } from "@/api/lib/branded-types";

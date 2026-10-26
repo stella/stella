@@ -9,12 +9,12 @@ import {
   czechVatBandOf,
   effectiveVatRateBps,
   invoiceDescriptionOf,
+  type InvoiceExportLine,
+  type InvoiceExportRecord,
   quantityText,
   splitCzechAccountNumber,
   streetOf,
   variableSymbolOf,
-  type InvoiceExportLine,
-  type InvoiceExportRecord,
 } from "./record";
 import { el, text, XML_DECLARATION } from "./xml";
 

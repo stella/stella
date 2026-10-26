@@ -47,6 +47,17 @@ export const ShortcutSetting = () => {
     return null;
   }
 
+  if (snapshot.registration === "managed") {
+    return (
+      <div className="px-4 py-3">
+        <p className="text-sm font-medium">{t("title")}</p>
+        <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
+          {t("managed")}
+        </p>
+      </div>
+    );
+  }
+
   const label = (keys: ShortcutKeys) =>
     formatShortcut({ keys, layout, locale, platform: DESKTOP_PLATFORM });
   const changed = !sameShortcut(snapshot.keys, snapshot.defaultKeys);

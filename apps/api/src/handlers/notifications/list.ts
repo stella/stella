@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { notifications } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  paginationLimitSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -27,11 +32,18 @@ const config = {
     "no work state; they are read or unread and nothing else.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "native_tool_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "notification_inbox",
+    consumesServices: false,
+  },
   access: "read",
-  query: t.Object({
-    limit: t.Optional(tPaginationLimit(LIMITS.notificationsPageSizeMax)),
-    cursor: t.Optional(tPaginationCursor()),
+  query: v.object({
+    limit: v.optional(
+      numberFromString(paginationLimitSchema(LIMITS.notificationsPageSizeMax)),
+    ),
+    cursor: v.optional(paginationCursorSchema()),
   }),
 } satisfies HandlerConfig;
 

@@ -8,7 +8,7 @@
  * difference is between a reviewer watching a spinner and a reviewer reading
  * the list while it fills.
  *
- * Eden types the blocking call but cannot type a stream, so the frames are
+ * The API client types the blocking call but not a stream's frames, so they are
  * parsed here: the event name against a closed union (a rename on the server
  * is one edit in `REVIEW_PROPOSAL_EVENT`), the payload against the shape each
  * one carries.
@@ -80,7 +80,8 @@ const isProposalEventName = (name: string): name is ReviewProposalEventName =>
  * and re-stating its whole schema here would be a hand-kept mirror that drifts
  * the first time the server adds a field. What this guards against is a frame
  * that is not a position — a truncated body, a version skew that changed the
- * envelope — not a field-level disagreement Eden would not catch either.
+ * envelope — not a field-level disagreement the API client's types would not
+ * catch either.
  */
 const isProposedPosition = (value: unknown): boolean =>
   typeof value === "object" &&
@@ -255,8 +256,7 @@ export type StreamReviewProposalArgs = {
  * so it reaches the caller here rather than as an `error` frame.
  */
 export type StreamReviewProposalResult =
-  | { ok: true }
-  | { ok: false; error: ToAPIErrorProps | null };
+  { ok: true } | { ok: false; error: ToAPIErrorProps | null };
 
 const proposalStreamUrl = (workspaceId: string): `/${string}` =>
   `/workspaces/${workspaceId}/document-reviews/positions/stream`;

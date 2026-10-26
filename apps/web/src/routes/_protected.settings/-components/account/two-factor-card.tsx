@@ -7,18 +7,17 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -34,10 +33,11 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@stll/ui/input-otp";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import { linkedAccountsOptions } from "@/lib/account/queries";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import {
@@ -47,12 +47,26 @@ import {
 } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { detached } from "@/lib/detached";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
+
+const ERROR_CAPTURE = {
+  enable: {
+    fingerprintKey: "EnableTwoFactorDialog:failure",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure" },
+  },
+  verify: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-2",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-2" },
+  },
+  backup: {
+    fingerprintKey: "EnableTwoFactorDialog:failure-3",
+    scope: { type: "handler", handlerId: "EnableTwoFactorDialog:failure-3" },
+  },
+} as const;
 
 const TOTP_LENGTH = 6;
 const HTTP_BAD_REQUEST = 400;
@@ -95,10 +109,10 @@ export const TwoFactorCard = () => {
       : undefined;
 
   // Transactional email is optional, and a deployment without it cannot send
-  // the emailed confirmation step. Enrollment there rests on the account
-  // password instead (see `requireTwoFactorManageOtp` in
-  // apps/api/src/lib/auth.ts), so the enable dialog must not ask for a code it
-  // will never receive. `undefined` while unresolved, like `requiresPassword`.
+  // the emailed confirmation step. A credential account can use its password
+  // instead; the API refuses passwordless enrollment because the active session
+  // alone is not an independent step-up. `undefined` while unresolved, like
+  // `requiresPassword`.
   const capabilitiesQuery = useQuery({
     ...authCapabilitiesOptions,
     enabled: isAnyDialogOpen,
@@ -277,16 +291,6 @@ const downloadBackupCodes = (codes: readonly string[]) => {
 const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
   const t = useTranslations();
 
-  const handleCopyAll = async () => {
-    const copied = await copyToClipboard(codes.join("\n"));
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("errors.actionFailed"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
   return (
     <div className="flex flex-col gap-3">
       <div className="bg-muted grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md p-3 font-mono text-sm">
@@ -295,15 +299,12 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
         ))}
       </div>
       <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            detached(handleCopyAll(), "two-factor-card.copy-all");
-          }}
+        <CopyActionButton
+          label={t("settings.account.twoFactor.copyAllCodes")}
           size="sm"
+          text={codes.join("\n")}
           variant="outline"
-        >
-          {t("settings.account.twoFactor.copyAllCodes")}
-        </Button>
+        />
         <Button
           onClick={() => downloadBackupCodes(codes)}
           size="sm"
@@ -374,7 +375,7 @@ const EnableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.enable);
     },
   });
 
@@ -393,7 +394,8 @@ const EnableTwoFactorDialog = ({
       // mirroring the disable and regenerate dialogs. Better Auth's own
       // `enable` endpoint additionally requires the account password for
       // credential accounts; omit it for passwordless users. `otp` is absent
-      // on a deployment that cannot email one, where the gate stands down.
+      // on a deployment that cannot email one; only credential accounts can
+      // use that fallback because the plugin independently verifies password.
       const { data, error } = await authClient.$fetch("/two-factor/enable", {
         method: "POST",
         body: {
@@ -422,7 +424,7 @@ const EnableTwoFactorDialog = ({
       // rejected password can be retyped).
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.verify);
     },
   });
 
@@ -454,7 +456,7 @@ const EnableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, ERROR_CAPTURE.backup);
     },
   });
 
@@ -462,6 +464,9 @@ const EnableTwoFactorDialog = ({
   const backupCodes = enrollment?.backupCodes ?? null;
   const secret = totpURI ? getTotpSecret(totpURI) : null;
   const qrSvg = totpURI ? renderSVG(totpURI, { pixelSize: 6 }) : null;
+  const qrImageSrc = qrSvg
+    ? `data:image/svg+xml,${encodeURIComponent(qrSvg)}`
+    : null;
 
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
@@ -523,21 +528,12 @@ const EnableTwoFactorDialog = ({
               </InputOTP>
             </div>
           )}
-          {step === "setup" && qrSvg && (
+          {step === "setup" && qrImageSrc && (
             <div className="flex flex-col items-center gap-3">
-              {/* `qrSvg` is rendered locally by `renderSVG` (uqr) from the
-                 `totpURI` our own backend just returned; it is never
-                 user-controlled input. The SVG already paints its own solid
-                 white/black background rect so the code stays scannable
-                 regardless of the app's light/dark theme. */}
-              <div
-                // uqr emits `<svg viewBox=...>` with no width/height, so the
-                // element has an intrinsic ratio but no intrinsic size. Inside
-                // a shrink-to-fit flex item that resolves to a collapsed box
-                // and the code renders blank; pin the size explicitly.
-                className="rounded-md p-3 [&>svg]:size-48"
-                // safe-html: locally generated by uqr's renderSVG from our own totpURI, not user input
-                dangerouslySetInnerHTML={{ __html: qrSvg }}
+              <img
+                alt={t("settings.account.twoFactor.scanQrDescription")}
+                className="size-48 rounded-md p-3"
+                src={qrImageSrc}
               />
               {secret && (
                 <div className="flex flex-col items-center gap-1">
@@ -703,7 +699,10 @@ const DisableTwoFactorDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure",
+        scope: { type: "handler", handlerId: "DisableTwoFactorDialog:failure" },
+      });
     },
   });
 
@@ -750,7 +749,13 @@ const DisableTwoFactorDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "DisableTwoFactorDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "DisableTwoFactorDialog:failure-2",
+        },
+      });
     },
   });
 
@@ -895,7 +900,13 @@ const RegenerateBackupCodesDialog = ({
         error,
         APIError.is(error) ? error.message : t("errors.actionFailed"),
       );
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure",
+        },
+      });
     },
   });
 
@@ -947,7 +958,13 @@ const RegenerateBackupCodesDialog = ({
       // requests a fresh one instead of leaving an input nothing can satisfy.
       setCode("");
       setStep("confirm");
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RegenerateBackupCodesDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "RegenerateBackupCodesDialog:failure-2",
+        },
+      });
     },
   });
 

@@ -1,13 +1,12 @@
 import { panic } from "better-result";
-import { SQL } from "bun";
-import type { ReservedSQL } from "bun";
-import { drizzle } from "drizzle-orm/bun-sql";
+import type { ReservedSQL, SQL } from "bun";
 
 import { databaseRelations } from "@/api/db/database-relations";
 import {
   createDedicatedConnectionOwner,
   DEDICATED_CONNECTIONS_PER_PROCESS,
 } from "@/api/db/dedicated-connection-slots";
+import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { terminateReserved } from "@/api/db/sql-close";
 import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -17,7 +16,7 @@ import { isRecord } from "@/api/lib/type-guards";
 // The existing transport owner opens every dedicated session, including cancellation.
 const dedicatedConnectionOwner = createDedicatedConnectionOwner({
   capacity: DEDICATED_CONNECTIONS_PER_PROCESS,
-  openClient: (options) => new SQL({ ...options, max: 1 }),
+  openClient: (options) => createSqlClient({ ...options, max: 1 }),
 });
 const { openLongRunningSql } = dedicatedConnectionOwner;
 export const { openMaintenanceSql } = dedicatedConnectionOwner;
@@ -46,7 +45,7 @@ const positiveMilliseconds = (value: number, name: string): number => {
 
 type ReservableSession = {
   unsafe: (query: string, params?: unknown[]) => PromiseLike<unknown>;
-  release: () => void;
+  release: () => Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -151,7 +150,7 @@ export const withDedicatedReservedSession = async <
     signal.removeEventListener("abort", onAbort);
   }
   if (cancelling === undefined) {
-    reserved.release();
+    await reserved.release();
   } else {
     await cancelling;
     await terminateReserved(reserved);
@@ -160,7 +159,7 @@ export const withDedicatedReservedSession = async <
 };
 
 const databaseFor = (client: SQL) =>
-  drizzle({ client, relations: databaseRelations });
+  createDatabase({ client, relations: databaseRelations });
 
 type LongRunningHandle = {
   /** Drizzle is bound to the reserved session, not an application pool. */

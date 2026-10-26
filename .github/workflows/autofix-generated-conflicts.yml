@@ -101,19 +101,46 @@ jobs:
             // Only an accepted dispatch takes one of the 8 slots: a branch
             // that refuses the dispatch never starts a run, so it would stay
             // unplanned and sort first again on every push.
+            // A dispatch names its run only when asked for run details, and even
+            // then the answer may omit it. The run is then found by listing: this
+            // workflow and branch, dispatched at or after the request, matching the
+            // expected title, and not one already claimed. Undefined after the bounded
+            // search; the caller decides what a missing run means.
+            const dispatchRun = async ({ title, claimed, ...request }) => {
+              const since = new Date(Date.now() - 5_000).toISOString();
+              const { data } = await github.rest.actions.createWorkflowDispatch({
+                owner, repo, ...request, return_run_details: true,
+              });
+              const named = data?.workflow_run_id;
+              if (Number.isSafeInteger(named) && named > 0) return named;
+              for (let attempt = 0; attempt < 6; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, 5_000));
+                const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id: request.workflow_id, branch: request.ref,
+                  event: 'workflow_dispatch', created: `>=${since}`, per_page: 100,
+                });
+                const found = runs
+                  .filter(run => Number.isSafeInteger(run.id) && run.id > 0 && !claimed.has(run.id)
+                    && (title === undefined || run.display_title === title))
+                  .sort((a, b) => a.id - b.id)[0];
+                if (found !== undefined) return found.id;
+              }
+              return undefined;
+            };
             const started = [];
             for (const pull of pulls) {
               if (started.length === 8) break;
-              let data;
+              let id;
               try {
                 // `ref` is the pull request's branch: the run, its caches and
                 // its artifacts belong to that branch alone.
-                ({ data } = await github.rest.actions.createWorkflowDispatch({
-                  owner, repo,
+                id = await dispatchRun({
                   workflow_id: 'generated-conflicts-resolve.yml',
                   ref: pull.headRefName,
                   inputs: { head: pull.headRefOid, main: branch.commit.sha },
-                }));
+                  title: `Resolve generated-only conflicts on ${pull.headRefName}`,
+                  claimed: new Set(started),
+                });
               } catch (error) {
                 // 422: a branch that predates the resolve workflow cannot run
                 // it. Any other failure (auth, rate limit, server) affects every
@@ -122,11 +149,11 @@ jobs:
                 core.notice(`#${pull.number}: not dispatched (422)`);
                 continue;
               }
-              // The dispatch answers with the run it created; the next step
-              // follows exactly these runs.
-              const id = data?.workflow_run_id;
-              if (!Number.isSafeInteger(id) || id <= 0) {
-                throw new Error(`#${pull.number}: the dispatch returned no run id`);
+              // The next step follows exactly these runs. A run that cannot be
+              // found is left unfollowed; the next push plans the branch again.
+              if (id === undefined) {
+                core.warning(`#${pull.number}: the dispatched resolve run was not found`);
+                continue;
               }
               started.push(id);
             }
@@ -158,6 +185,32 @@ jobs:
                 await new Promise(resolve => setTimeout(resolve, POLL_MS));
               }
             };
+            // A dispatch names its run only when asked for run details, and even
+            // then the answer may omit it. The run is then found by listing: this
+            // workflow and branch, dispatched at or after the request, matching the
+            // expected title, and not one already claimed. Undefined after the bounded
+            // search; the caller decides what a missing run means.
+            const dispatchRun = async ({ title, claimed, ...request }) => {
+              const since = new Date(Date.now() - 5_000).toISOString();
+              const { data } = await github.rest.actions.createWorkflowDispatch({
+                owner, repo, ...request, return_run_details: true,
+              });
+              const named = data?.workflow_run_id;
+              if (Number.isSafeInteger(named) && named > 0) return named;
+              for (let attempt = 0; attempt < 6; attempt += 1) {
+                await new Promise(resolve => setTimeout(resolve, 5_000));
+                const { data: { workflow_runs: runs } } = await github.rest.actions.listWorkflowRuns({
+                  owner, repo, workflow_id: request.workflow_id, branch: request.ref,
+                  event: 'workflow_dispatch', created: `>=${since}`, per_page: 100,
+                });
+                const found = runs
+                  .filter(run => Number.isSafeInteger(run.id) && run.id > 0 && !claimed.has(run.id)
+                    && (title === undefined || run.display_title === title))
+                  .sort((a, b) => a.id - b.id)[0];
+                if (found !== undefined) return found.id;
+              }
+              return undefined;
+            };
             const failures = [];
             const resolved = await settle(ids, 45);
             const publishes = [];
@@ -175,15 +228,16 @@ jobs:
                 owner, repo, run_id: id, name: 'generated-conflicts',
               });
               if (artifacts.length === 0) continue;
-              const { data } = await github.rest.actions.createWorkflowDispatch({
-                owner, repo,
+              const publish = await dispatchRun({
                 workflow_id: 'generated-conflicts-publish.yml',
                 ref: 'main',
                 inputs: { resolve_run_id: String(id) },
+                title: `Publish generated-only conflict resolution of run ${id}`,
+                claimed: new Set(publishes),
               });
-              const publish = data?.workflow_run_id;
-              if (!Number.isSafeInteger(publish) || publish <= 0) {
-                throw new Error(`Publishing resolve run ${id} returned no run id`);
+              if (publish === undefined) {
+                core.warning(`The publish run for resolve run ${id} was not found`);
+                continue;
               }
               publishes.push(publish);
             }

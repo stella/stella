@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import * as v from "valibot";
 
 import { checkCiEventPolicies, workflowSchema } from "./check-ci-event-policy";
@@ -585,7 +585,7 @@ test("ci-result keeps failed cheap gates strict when gated jobs skip", () => {
   );
   const fastRequired = JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? "null");
   expect(fastRequired).toEqual(
-    expect.arrayContaining(CHEAP_PULL_REQUEST_GATES),
+    expect.arrayContaining(["code-quality-api", "pr-heavy-gate"]),
   );
   expect(outcome?.run).toContain(
     'if $result == "success" then empty else "\\($job) (planned, \\($result))" end',

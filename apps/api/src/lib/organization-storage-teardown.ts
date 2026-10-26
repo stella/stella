@@ -10,8 +10,8 @@ import {
   chatThreadCompactions,
   chatThreads,
   desktopEditSessions,
-  docxSuggestions,
   documentProcessingRuns,
+  docxSuggestions,
   entityDeletionCleanupRequests,
   fields,
   fileComparisonUploads,
@@ -19,8 +19,8 @@ import {
   pendingUploads,
   propertyDependencies,
   styleSets,
-  templateVersions,
   templates,
+  templateVersions,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -35,10 +35,9 @@ import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-type
 import {
   createFileKey,
   createOcrSearchablePdfKey,
-  createUserFileKey,
+  createUserFileThumbnailKey,
 } from "@/api/lib/file-key";
 import { extractFieldFileRefs } from "@/api/lib/files/field-file-refs";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -567,18 +566,21 @@ const recordChatAttachmentPage = async (
 
   await record(
     teardownScope.type === "workspace" ? teardownScope.workspaceId : null,
-    attachments.flatMap((attachment) =>
-      attachment.thumbnailFileId === null
-        ? [attachment.s3Key]
-        : [
-            attachment.s3Key,
-            createUserFileKey({
-              fileId: attachment.thumbnailFileId,
-              mimeType: THUMBNAIL_MIME_TYPE,
-              userId: attachment.userId,
-            }),
-          ],
-    ),
+    attachments
+      .flatMap((attachment) =>
+        attachment.thumbnailFileId === null
+          ? [attachment.s3Key]
+          : [
+              attachment.s3Key,
+              createUserFileThumbnailKey({
+                sourceKey: attachment.s3Key,
+                thumbnailFileId: attachment.thumbnailFileId,
+                organizationId: scope.organizationId,
+                uploaderUserId: attachment.userId,
+              }),
+            ],
+      )
+      .filter((key) => key !== null),
   );
 
   const lastRow = page.length < TEARDOWN_PAGE_SIZE ? undefined : page.at(-1);

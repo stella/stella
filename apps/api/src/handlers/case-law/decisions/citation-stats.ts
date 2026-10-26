@@ -1,10 +1,10 @@
 import { panic } from "better-result";
-import { asc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  caseLawDecisions,
   caseLawDecisionCitationStatsState,
+  caseLawDecisions,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withDecisionCitationStatsLocks } from "@/api/lib/db/aggregate-lock";

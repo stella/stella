@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -27,10 +28,10 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
   sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
   storedSourceSurface,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -55,8 +56,8 @@ import {
   PublisherRateLimitRefusalError,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
-  INGESTION_USER_AGENT,
   adapterCatch,
+  INGESTION_USER_AGENT,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
@@ -88,11 +89,11 @@ import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   checkedDecisionMetadata,
-  splitStoredDecisionTextMetadata,
   type DecisionTextFields,
+  splitStoredDecisionTextMetadata,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   AdapterFetchError,
@@ -107,6 +108,7 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1065,6 +1067,7 @@ const parseManifestation = (
         message: `[eu-ecj] parse failed for ${input.celex}`,
         cause: error,
       }),
+      handlerErrorContext("adapters.parseManifestation"),
     );
   }
 
@@ -2175,7 +2178,7 @@ export const buildDecision = async (
       error instanceof AdapterFetchError &&
       !(error.cause instanceof DOMException)
     ) {
-      captureError(error);
+      captureError(error, handlerErrorContext("adapters.buildDecision"));
     }
     // The adapter and fixture callers expose a rejecting promise contract.
     throw error;

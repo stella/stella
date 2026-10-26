@@ -111,6 +111,11 @@ const RAIL_MAX_TICKS = 40;
 // fractional scrollHeight would otherwise leave a wheel stuck at an edge that
 // reads as one pixel short of its own end.
 const WHEEL_EDGE_TOLERANCE = 1;
+// How long the pointer rests on the tick strip before the panel opens. A
+// pointer crossing the strip on its way elsewhere (the scrollbar, a control
+// beside it) passes in less, so only a reader who stops there opens it.
+// Focus and a click open it at once.
+const HOVER_OPEN_DWELL_MS = 150;
 // Marks the active row for the reveal below: the rows are rendered by a
 // recursive walk, so the one to scroll to is found in the committed DOM
 // rather than held in a ref the walk would have to thread through.
@@ -223,6 +228,7 @@ export const OutlineRail = ({
   const panelId = useId();
   const panelOpen = presentation === "panel" || hovered || focusWithin;
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const manualLockUntil = useRef(0);
   const panelRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
@@ -466,13 +472,30 @@ export const OutlineRail = ({
     }
   }, [activeIndex, panelOpen]);
 
+  const cancelOpen = useCallback(() => {
+    if (openTimer.current !== null) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+  }, []);
+
   const openPanel = useCallback(() => {
+    cancelOpen();
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current);
       closeTimer.current = null;
     }
     setHovered(true);
-  }, []);
+  }, [cancelOpen]);
+
+  const scheduleOpen = useCallback(() => {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    cancelOpen();
+    openTimer.current = setTimeout(openPanel, HOVER_OPEN_DWELL_MS);
+  }, [cancelOpen, openPanel]);
 
   const scheduleClose = useCallback(() => {
     if (closeTimer.current !== null) {
@@ -494,6 +517,9 @@ export const OutlineRail = ({
     () => () => {
       if (closeTimer.current !== null) {
         clearTimeout(closeTimer.current);
+      }
+      if (openTimer.current !== null) {
+        clearTimeout(openTimer.current);
       }
     },
     [],
@@ -667,8 +693,11 @@ export const OutlineRail = ({
         <div
           className="relative min-h-0 flex-1"
           data-outline-ticks
-          onMouseEnter={openPanel}
-          onMouseLeave={scheduleClose}
+          onMouseEnter={scheduleOpen}
+          onMouseLeave={() => {
+            cancelOpen();
+            scheduleClose();
+          }}
           onWheel={(event) => {
             scrollContainerRef.current?.scrollBy(0, event.deltaY);
           }}

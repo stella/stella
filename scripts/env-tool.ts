@@ -30,9 +30,9 @@ import { collabEnvInvariantViolation } from "../apps/collab/src/env-schema";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
   BUILD_KIND,
-  secretExampleInvariantViolation,
   LOCAL_DEV_OPT_IN,
   resolveRuntimeMode,
+  secretExampleInvariantViolation,
 } from "../packages/runtime-mode/src/index";
 import {
   AMBIENT_ENV_KEYS,
@@ -646,9 +646,7 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
   };
 
   type HelperDeclaration =
-    | ts.ArrowFunction
-    | ts.FunctionDeclaration
-    | ts.FunctionExpression;
+    ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
 
   const isHelperDeclaration = (node: ts.Node): node is HelperDeclaration =>
     ts.isArrowFunction(node) ||

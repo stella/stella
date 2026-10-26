@@ -2,11 +2,12 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
+  mcpConnectorAuthorizationReviews,
   mcpOAuthState,
   mcpUserConnections,
-  mcpConnectorAuthorizationReviews,
 } from "@/api/db/schema";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -110,7 +111,7 @@ const setup = (
     request: new Request(
       "https://api.example.com/v1/mcp/connectors/example/connect",
     ),
-    route: "/v1/mcp/connectors/:slug/connect",
+    route: "/v1/mcp/connectors/:slug/connect" satisfies ApiRoutePath,
   });
   return {
     context,
@@ -189,8 +190,11 @@ test("members connect with organization-approved authorization", async () => {
     approvedIssuer: issuer,
     status: "approved",
   });
-  fixture.context.memberRole = sessionMemberRole("member");
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+  const context = {
+    ...fixture.context,
+    memberRole: sessionMemberRole("member"),
+  };
+  expect(await fixture.handler.handler(context)).toMatchObject({
     type: "oauth2",
   });
   expect(fixture.states).toHaveLength(1);
@@ -209,8 +213,11 @@ test("pending authorization requires administrator approval", async () => {
 
 test("a connector without an approved issuer awaits administrator review", async () => {
   const fixture = setup(null);
-  fixture.context.memberRole = sessionMemberRole("member");
-  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+  const context = {
+    ...fixture.context,
+    memberRole: sessionMemberRole("member"),
+  };
+  expect(await fixture.handler.handler(context)).toMatchObject({
     code: 409,
     response: { code: "mcp_authorization_approval_required" },
   });

@@ -18,8 +18,8 @@ import {
 import {
   dispatchEvent,
   handleHostedAllocation,
-  handleUsageEntitlementStatusChange,
   handleHostedEntitlementUpsert,
+  handleUsageEntitlementStatusChange,
 } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,6 +27,7 @@ import type {
   HostedUsageAllocationPayload,
   HostedUsageWebhookEvent,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   assertUsageAvailable,
   getRemainingUsageUnits,
@@ -78,6 +79,10 @@ const setupFixture = async (tx: Transaction): Promise<Fixture> => {
     name: "Test Org",
     slug: organizationId,
     createdAt: PERIOD_START,
+  });
+  await recordNewOrganizationAccessState(tx, {
+    organizationId,
+    now: PERIOD_START,
   });
   await tx.insert(user).values({
     id: userId,

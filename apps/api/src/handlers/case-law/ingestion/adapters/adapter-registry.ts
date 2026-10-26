@@ -36,8 +36,8 @@ import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-c
 import { skUsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import {
   ADAPTER_KEYS,
-  IMPORT_SOURCE_KEYS,
   type AdapterKey,
+  IMPORT_SOURCE_KEYS,
   type ImportSourceKey,
 } from "@/api/lib/legal-search/ingestion-constants";
 

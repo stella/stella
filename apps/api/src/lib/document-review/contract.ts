@@ -1,5 +1,5 @@
 // Plain vocabulary shared by the document-review engine and the surfaces that
-// read a run. Plain types, not Elysia schemas: the engine runs from handlers
+// read a run. Plain types, not route schemas: the engine runs from handlers
 // and from a background worker, and lib may not import a handler slice. The
 // wire schemas in `handlers/document-reviews/schemas.ts` are bound to these
 // types, so a request-shape change that stops matching the engine fails
@@ -25,8 +25,7 @@ export type ReviewParty = { role: string; name: string | null };
 // means no side was chosen, and the comparison then reports impact as
 // `unknown`.
 export type ReviewPerspective =
-  | { type: "neutral" }
-  | ({ type: "party" } & ReviewParty);
+  { type: "neutral" } | ({ type: "party" } & ReviewParty);
 
 export const NEUTRAL_PERSPECTIVE: ReviewPerspective = { type: "neutral" };
 

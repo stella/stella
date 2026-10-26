@@ -18,12 +18,12 @@ import {
   checkChangesetPackages,
   decideChangesetGate,
   findCatalogInputs,
-  withoutReleasedPackages,
   isChangesetEntry,
   loadChangesetPolicy,
   parseChangesetPolicy,
   parseReleasePathspec,
   readChangesetDiff,
+  withoutReleasedPackages,
 } from "./changeset-guard";
 import { staticReuseCondition } from "./ci-static-checks";
 import {

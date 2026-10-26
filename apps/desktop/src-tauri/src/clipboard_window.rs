@@ -230,6 +230,10 @@ pub fn show_on_launch(app: &AppHandle) {
 /// `created_kind` labels the trace when the window has to be created; an
 /// existing window is always a reopen.
 fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
+  // Every way in (tray, shortcut, links, launch) ends here.
+  if crate::managed_policy::current().clipboard_disabled {
+    return;
+  }
   let requested = Instant::now();
 
   if let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL) {
@@ -450,7 +454,9 @@ impl ClipboardEditorSessions {
     item_id: String,
     open_kind: ClipboardOpenKind,
   ) -> Result<u64, String> {
-    let mut sessions = self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?;
+    let mut sessions = self.0.lock().map_err(crate::logging::with_cause_logged(
+      EDITOR_SESSIONS_UNAVAILABLE,
+    ))?;
     sessions.last += 1;
     let session = sessions.last;
     sessions.open = Some(OpenEditor {
@@ -464,7 +470,13 @@ impl ClipboardEditorSessions {
   }
 
   fn end(&self) -> Result<(), String> {
-    self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?.open = None;
+    self
+      .0
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        EDITOR_SESSIONS_UNAVAILABLE,
+      ))?
+      .open = None;
     Ok(())
   }
 
@@ -474,7 +486,9 @@ impl ClipboardEditorSessions {
 
   /// `None` while no clip is open: a prewarmed window reads before any open.
   pub fn read(&self) -> Result<Option<EditorRead>, String> {
-    let mut sessions = self.0.lock().map_err(|_| EDITOR_SESSIONS_UNAVAILABLE)?;
+    let mut sessions = self.0.lock().map_err(crate::logging::with_cause_logged(
+      EDITOR_SESSIONS_UNAVAILABLE,
+    ))?;
     let read = sessions.open.as_mut().map(|open| {
       let first_read = (!open.read).then(|| (open.requested.elapsed(), open.open_kind));
       open.read = true;

@@ -1,4 +1,3 @@
-import { defaultParseSearch } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -11,6 +10,7 @@ import {
   readStatuteIntent,
   statutesIndexSearchSchema,
 } from "@/features/statutes/statute-index-search.logic";
+import { parseRouteSearch } from "@/route-search-params";
 
 describe("statute search mode transitions", () => {
   for (const country of ["cze", "svk"]) {
@@ -72,16 +72,16 @@ describe("statute search mode transitions", () => {
 });
 
 describe("statute publication year search", () => {
-  test("normalizes numeric router search and quoted string search to the same year", () => {
-    const numericSearch = defaultParseSearch("?year=2026");
-    const stringSearch = defaultParseSearch('?year="2026"');
-    if (!("year" in numericSearch) || !("year" in stringSearch)) {
+  test("reads a plain and a quoted year link as the same year", () => {
+    const plainSearch = parseRouteSearch("?year=2026");
+    const quotedSearch = parseRouteSearch('?year="2026"');
+    if (!("year" in plainSearch) || !("year" in quotedSearch)) {
       panic("The router omitted the year search parameter");
     }
-    expect(numericSearch.year).toBe(2026);
-    expect(stringSearch.year).toBe("2026");
-    expect(v.parse(lawYearSearchSchema, numericSearch.year)).toBe("2026");
-    expect(v.parse(lawYearSearchSchema, stringSearch.year)).toBe("2026");
+    expect(plainSearch["year"]).toBe("2026");
+    expect(quotedSearch["year"]).toBe("2026");
+    expect(v.parse(lawYearSearchSchema, plainSearch["year"])).toBe("2026");
+    expect(v.parse(lawYearSearchSchema, quotedSearch["year"])).toBe("2026");
   });
   test.each([1000, "1000", 2012, "2012", 9999, "9999"])(
     "normalizes a four-digit year: %j",
@@ -102,10 +102,8 @@ describe("statute publication year search", () => {
     "2026\n",
     2012.5,
     -2012,
-  ])("rejects a malformed publication year: %j", (year) => {
-    expect(v.safeParse(statutesIndexSearchSchema, { year }).success).toBe(
-      false,
-    );
+  ])("drops a malformed publication year: %j", (year) => {
+    expect(v.parse(statutesIndexSearchSchema, { year }).year).toBeUndefined();
   });
 
   test("preserves the publication year when a query resets pagination", () => {

@@ -22,6 +22,7 @@
 import { isSafeFieldPath, resolvePath } from "@stll/template-conditions";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { omitSourceBoundValues } from "./ai-visible-values";
@@ -35,10 +36,7 @@ import type { FieldMeta } from "./types";
  * reporting a finish at all (a cancelled fill, a lifecycle regression).
  */
 type AiFieldFailureReason =
-  | "empty"
-  | "generation-failed"
-  | "interrupted"
-  | "truncated";
+  "empty" | "generation-failed" | "interrupted" | "truncated";
 
 export const AI_FIELD_GENERATION_FAILURE_MESSAGE =
   "AI field generation failed. Retry or provide the value yourself.";
@@ -390,7 +388,7 @@ const draftRow = async ({
       maxLength,
     });
   } catch (error) {
-    captureError(error);
+    captureError(error, handlerErrorContext("docx.draftRow"));
     return {
       type: "failed",
       reason: "generation-failed",

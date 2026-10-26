@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  normalizeMcpConnectorUrl,
   mcpConnectorUrlIdentity,
+  normalizeMcpConnectorUrl,
 } from "@/api/handlers/mcp-connectors/url-normalization";
 
 test("normalizes repeated root slashes consistently", () => {

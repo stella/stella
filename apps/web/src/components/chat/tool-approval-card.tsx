@@ -21,8 +21,8 @@ import { cn } from "@stll/ui/utils";
 import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required-dialog";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
-  getChatToolTitleKey,
   getApprovalToolName,
+  getChatToolTitleKey,
   isApprovalOnceChatToolName,
   isExternalInputChatToolName,
   isExternalMcpToolName,
@@ -48,8 +48,8 @@ import {
   findCachedReaderAnnotationRows,
   findReaderAnnotationMark,
   formatReadableInputValue,
-  getReaderAnnotationEditTargetId,
   getReadableInputRows,
+  getReaderAnnotationEditTargetId,
   humanizeIdentifier,
 } from "@/components/chat/tool-approval-summary";
 import type { ReaderAnnotationMark } from "@/components/chat/tool-approval-summary";
@@ -60,6 +60,7 @@ import {
 } from "@/components/chat/tool-call-card";
 import type { ToolCallAction } from "@/components/chat/tool-call-card";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,
@@ -67,8 +68,8 @@ import {
   useBrowserCommandAutoApproved,
 } from "@/features/chat/browser-control/browser-approval-mode";
 import {
-  getBrowserApprovalDetails,
   type BrowserApprovalDetail,
+  getBrowserApprovalDetails,
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useMountEffect } from "@/hooks/use-effect";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
@@ -868,7 +869,7 @@ const useMattersById = (): ReadonlyMap<string, SummaryMatter> => {
     enabled: user !== null,
   });
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useMattersById:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const byId = new Map<string, SummaryMatter>();
   if (!data) {
@@ -1300,14 +1301,15 @@ const ToolApprovalLeadingIcon = ({
   iconHref?: string | undefined;
   toolName?: ApprovalToolName | undefined;
 }) => {
-  if (iconHref) {
+  const proxiedIconSrc = useProxiedIconSrc(iconHref);
+  if (proxiedIconSrc) {
     return (
       <span className="bg-background flex size-4 shrink-0 items-center justify-center rounded-sm border">
         <img
           alt=""
           className="size-3 rounded-xs object-contain"
           height={12}
-          src={iconHref}
+          src={proxiedIconSrc}
           width={12}
         />
       </span>

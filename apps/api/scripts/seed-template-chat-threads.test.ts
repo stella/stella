@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import {
@@ -12,6 +12,8 @@ import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
+import type { TestIds } from "@/api/tests/security/rls-helpers";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import {
   buildTemplateChatSeedRows,
@@ -43,6 +45,22 @@ const seedRows = (templateRows: typeof templates) =>
     templates: templateRows,
     authorIds,
   });
+
+let testDb: TestDatabase;
+let ids: TestIds;
+
+beforeAll(
+  async () => {
+    const fixture = await getRlsFixture();
+    testDb = fixture.testDb;
+    ids = fixture.ids;
+  },
+  { timeout: 30_000 },
+);
+
+afterAll(async () => {
+  await releaseRlsFixture();
+});
 
 describe("seeded Template Studio chat associations", () => {
   test("creates stable global threads for every template and author", () => {
@@ -87,77 +105,70 @@ describe("seeded Template Studio chat associations", () => {
     );
   });
   test("seeding twice preserves an existing association without creating orphan threads", async () => {
-    const { testDb, ids } = await getRlsFixture();
-    try {
-      const input = {
-        organizationId: ids.orgA,
-        templates: [
-          {
-            id: ids.templateA,
-            label: "existing-template",
-            name: "Seeded template",
-          },
-        ],
-        authorIds: [ids.userA1, ids.userA2],
-      };
-      const rows = buildTemplateChatSeedRows(input);
-      const existingScope = and(
-        eq(templateChatThreads.organizationId, ids.orgA),
-        eq(templateChatThreads.templateId, ids.templateA),
-        eq(templateChatThreads.userId, ids.userA1),
+    const input = {
+      organizationId: ids.orgA,
+      templates: [
+        {
+          id: ids.templateA,
+          label: "existing-template",
+          name: "Seeded template",
+        },
+      ],
+      authorIds: [ids.userA1, ids.userA2],
+    };
+    const rows = buildTemplateChatSeedRows(input);
+    const existingScope = and(
+      eq(templateChatThreads.organizationId, ids.orgA),
+      eq(templateChatThreads.templateId, ids.templateA),
+      eq(templateChatThreads.userId, ids.userA1),
+    );
+    const readExistingAssociation = async () =>
+      await testDb.select().from(templateChatThreads).where(existingScope);
+    const readThreads = async () =>
+      await testDb
+        .select()
+        .from(chatThreads)
+        .where(eq(chatThreads.organizationId, ids.orgA))
+        .orderBy(chatThreads.id);
+    const beforeAssociation = await readExistingAssociation();
+    expect(beforeAssociation).toHaveLength(1);
+    expect(beforeAssociation.at(0)?.chatThreadId).toBe(ids.chatThreadGlobalA1);
+    const existingSeedThread = rows.threads.find(
+      ({ userId }) => userId === ids.userA1,
+    );
+    expect(existingSeedThread).toBeDefined();
+    expect(existingSeedThread?.id).not.toBe(ids.chatThreadGlobalA1);
+    const beforeThreads = await readThreads();
+    const newSeedThread = rows.threads.find(
+      ({ userId }) => userId === ids.userA2,
+    );
+    expect(newSeedThread).toBeDefined();
+    for (let pass = 0; pass < 2; pass += 1) {
+      await withAggregateTransaction(
+        testDb,
+        async (tx) => await seedTemplateChatThreads(tx, input),
       );
-      const readExistingAssociation = async () =>
-        await testDb.select().from(templateChatThreads).where(existingScope);
-      const readThreads = async () =>
-        await testDb
-          .select()
-          .from(chatThreads)
-          .where(eq(chatThreads.organizationId, ids.orgA))
-          .orderBy(chatThreads.id);
-      const beforeAssociation = await readExistingAssociation();
-      expect(beforeAssociation).toHaveLength(1);
-      expect(beforeAssociation.at(0)?.chatThreadId).toBe(
-        ids.chatThreadGlobalA1,
+      expect(await readExistingAssociation()).toEqual(beforeAssociation);
+      const afterThreads = await readThreads();
+      expect(afterThreads.filter(({ id }) => id !== newSeedThread?.id)).toEqual(
+        beforeThreads,
       );
-      const existingSeedThread = rows.threads.find(
-        ({ userId }) => userId === ids.userA1,
+      expect(afterThreads).toHaveLength(beforeThreads.length + 1);
+      expect(afterThreads.some(({ id }) => id === existingSeedThread?.id)).toBe(
+        false,
       );
-      expect(existingSeedThread).toBeDefined();
-      expect(existingSeedThread?.id).not.toBe(ids.chatThreadGlobalA1);
-      const beforeThreads = await readThreads();
-      const newSeedThread = rows.threads.find(
-        ({ userId }) => userId === ids.userA2,
-      );
-      expect(newSeedThread).toBeDefined();
-      for (let pass = 0; pass < 2; pass += 1) {
-        await withAggregateTransaction(
-          testDb,
-          async (tx) => await seedTemplateChatThreads(tx, input),
+      const newAssociation = await testDb
+        .select()
+        .from(templateChatThreads)
+        .where(
+          and(
+            eq(templateChatThreads.organizationId, ids.orgA),
+            eq(templateChatThreads.templateId, ids.templateA),
+            eq(templateChatThreads.userId, ids.userA2),
+          ),
         );
-        expect(await readExistingAssociation()).toEqual(beforeAssociation);
-        const afterThreads = await readThreads();
-        expect(
-          afterThreads.filter(({ id }) => id !== newSeedThread?.id),
-        ).toEqual(beforeThreads);
-        expect(afterThreads).toHaveLength(beforeThreads.length + 1);
-        expect(
-          afterThreads.some(({ id }) => id === existingSeedThread?.id),
-        ).toBe(false);
-        const newAssociation = await testDb
-          .select()
-          .from(templateChatThreads)
-          .where(
-            and(
-              eq(templateChatThreads.organizationId, ids.orgA),
-              eq(templateChatThreads.templateId, ids.templateA),
-              eq(templateChatThreads.userId, ids.userA2),
-            ),
-          );
-        expect(newAssociation).toHaveLength(1);
-        expect(newAssociation.at(0)?.chatThreadId).toBe(newSeedThread?.id);
-      }
-    } finally {
-      await releaseRlsFixture();
+      expect(newAssociation).toHaveLength(1);
+      expect(newAssociation.at(0)?.chatThreadId).toBe(newSeedThread?.id);
     }
   });
 });

@@ -5,8 +5,8 @@ import { validateSkillPackage } from "@stll/skills/format";
 
 import { pinnedLicenseMismatchError } from "../scripts/check-pinned-content";
 import {
-  PinnedContentError,
   assertCompleteGithubContentsListing,
+  PinnedContentError,
   syntheticSkillSource,
 } from "../scripts/pinned-content-facts";
 import {

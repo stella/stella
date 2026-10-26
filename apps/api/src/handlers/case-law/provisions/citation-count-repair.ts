@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { asc, eq, gt, sql, type SQL } from "drizzle-orm";
+import { asc, eq, gt, type SQL, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {

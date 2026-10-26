@@ -14,7 +14,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { createAuditRecorder, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_RESOURCE_TYPE, createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
@@ -23,15 +23,16 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit";
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.get";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
 import {
-  NO_DB,
   createTestHandlerContext,
+  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
 import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
@@ -54,6 +55,10 @@ const seed = async (db: GatedTestDb) => {
     name: "Read audit firm",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values(
     [actor, otherActor].map((id) => ({
@@ -225,7 +230,7 @@ const seed = async (db: GatedTestDb) => {
           userId: actor,
         }),
     );
-    const context = {
+    const context = authorizedMcpContextForTest({
       organizationId,
       userId: actor,
       userEmail: `${actor}@example.test`,
@@ -257,7 +262,7 @@ const seed = async (db: GatedTestDb) => {
             managedAIResidency: "eu",
           }),
       },
-    } satisfies McpRequestContext;
+    });
     return context;
   };
   const capabilityRead = async () =>
@@ -357,7 +362,10 @@ const seed = async (db: GatedTestDb) => {
       },
     });
     const encode = (value: object) =>
-      Buffer.from(JSON.stringify(value)).toString("base64url");
+      Buffer.from(JSON.stringify(value)).toBase64({
+        alphabet: "base64url",
+        omitPadding: true,
+      });
     const token = `${encode({ alg: "none", typ: "JWT" })}.${encode({
       sub: actor,
       scope: "stella:read",

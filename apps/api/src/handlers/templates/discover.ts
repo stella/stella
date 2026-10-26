@@ -1,17 +1,17 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { mergeManifestWithDiscovery } from "@/api/lib/docx/template-manifest";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { scanTemplateUpload } from "@/api/lib/templates/scan-template-upload";
 import {
   discoverTemplateSource,
@@ -19,9 +19,9 @@ import {
 } from "@/api/lib/templates/template-fill-service";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const discoverBodySchema = t.Object({
-  file: t.Optional(t.File({ maxSize: FILE_SIZE_LIMITS.document })),
-  templateId: t.Optional(tSafeId("template")),
+const discoverBodySchema = v.object({
+  file: v.optional(fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document })),
+  templateId: v.optional(resourceIdSchema("template")),
 });
 
 type DiscoverProps = {

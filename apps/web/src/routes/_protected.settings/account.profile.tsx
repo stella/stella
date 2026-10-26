@@ -18,13 +18,13 @@ import {
 } from "@stll/ui/destructive-action-confirmation";
 import {
   Dialog,
-  DialogFormState,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
-  DialogTitle,
   DialogPanel,
   DialogPopup,
+  DialogTitle,
 } from "@stll/ui/dialog";
 import {
   Frame,
@@ -64,7 +64,7 @@ import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -262,7 +262,7 @@ function ProfilePageBody() {
     mutationFn: async () => {
       setOtpError(null);
       const res = await api.me.delete["send-otp"].post();
-      return unwrapEden(res);
+      return unwrapApiResponse(res);
     },
     onSuccess: () => {
       setStep("otp");
@@ -289,7 +289,7 @@ function ProfilePageBody() {
       // Named before the delete: afterwards the session may name no one.
       const deletedUserId = authenticatedUser.id;
       const res = await api.me.delete.verify.post(payload);
-      unwrapEden(res);
+      unwrapApiResponse(res);
       return { deletedUserId };
     },
     onSuccess: async ({ deletedUserId }) => {
@@ -419,11 +419,7 @@ function ProfilePageBody() {
     reassignments,
   });
   let dialogStep:
-    | "loading"
-    | "tasks"
-    | "confirm"
-    | "otp"
-    | "pendingTasksError" = step;
+    "loading" | "tasks" | "confirm" | "otp" | "pendingTasksError" = step;
   if (step === "loading" && pendingTasksError) {
     dialogStep = "pendingTasksError";
   }
@@ -481,7 +477,13 @@ function ProfilePageBody() {
               try {
                 await updateDisplayName.mutateAsync();
               } catch (error) {
-                getAnalytics().captureError(error);
+                getAnalytics().captureError(error, {
+                  fingerprintKey: "ProfilePageBody:failure",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ProfilePageBody:failure",
+                  },
+                });
               }
             }}
             className="flex flex-col gap-4 p-4"
@@ -543,7 +545,13 @@ function ProfilePageBody() {
               try {
                 await updateWordEditIdentity.mutateAsync();
               } catch (error) {
-                getAnalytics().captureError(error);
+                getAnalytics().captureError(error, {
+                  fingerprintKey: "ProfilePageBody:failure-2",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ProfilePageBody:failure-2",
+                  },
+                });
               }
             }}
             className="border-border flex flex-col gap-4 border-t p-4"

@@ -11,7 +11,7 @@ import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { NodeType, Node as PMNode, ResolvedPos } from "@tiptap/pm/model";
+import type { Node as PMNode, NodeType, ResolvedPos } from "@tiptap/pm/model";
 import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { TextSelection } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
@@ -65,12 +65,12 @@ import {
 import type { UnplacedField } from "@/routes/knowledge/-components/template-field-filters";
 import {
   clauseSlotMarker,
+  CONDITION_CLOSE_TAG,
   conditionBranchTag,
   conditionOpenTag,
-  CONDITION_CLOSE_TAG,
   fieldMarker,
-  loopOpenTag,
   LOOP_CLOSE_TAG,
+  loopOpenTag,
   rewriteFieldMarkerPath,
 } from "@/routes/knowledge/-components/template-markers";
 import { TemplateStudioChat } from "@/routes/knowledge/-components/template-studio-chat";
@@ -97,9 +97,9 @@ import {
 } from "@/routes/knowledge/-components/template-studio-slash-menu";
 import {
   defaultStudioField,
-  useTemplateStudioStore,
   type StudioActions,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 import { filledByForFieldMeta } from "@/routes/knowledge/-components/template-studio-suggestions";
 
@@ -1260,7 +1260,13 @@ export const TemplateStudioPage = ({
       // unmount's store reset.
       return slotRenameErrorMessage === null;
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "TemplateStudioPage.handleSave:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TemplateStudioPage.handleSave:failure",
+        },
+      });
       notifyUserError(error, t("templates.saveFailed"));
       return false;
     } finally {

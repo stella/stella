@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -175,16 +175,16 @@ describe("screenshot regeneration trust boundary", () => {
       ],
       [
         "Download regenerated baselines",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
       ],
       ["Stage validated baselines", "run"],
       [
         "Mint App token",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+        "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
       ],
       [
         "Push regenerated baselines",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+        "stella/.github/.github/actions/signed-commit@a6a6cd30646c18321ef71e344bf0af6b8d3634b8",
       ],
     ]);
     for (const step of publish) {
@@ -610,6 +610,8 @@ describe("update follows the capture to its publish", () => {
     // States each run reports on successive polls; the last one repeats.
     polls: Record<number, Run[]>;
     runIds: Record<string, number | undefined>;
+    // Runs a listing shows when a dispatch named none.
+    listed: Record<string, { id: number; display_title: string }[]>;
   };
   const scenario = (): Scenario => ({
     polls: {
@@ -620,6 +622,7 @@ describe("update follows the capture to its publish", () => {
       "marketing-screenshots-capture.yml": CAPTURE,
       "marketing-screenshots-publish.yml": PUBLISH,
     },
+    listed: {},
   });
   const updateFor = async (input: Scenario) => {
     const dispatches: Record<string, unknown>[] = [];
@@ -647,13 +650,24 @@ describe("update follows the capture to its publish", () => {
               createWorkflowDispatch: async (
                 request: Record<string, unknown>,
               ) => {
-                dispatches.push(request);
+                expect(request["return_run_details"]).toBe(true);
+                const { return_run_details: _, ...accepted } = request;
+                dispatches.push(accepted);
                 const id = input.runIds[String(request["workflow_id"])];
                 return {
                   data:
                     id === undefined
                       ? undefined
                       : { workflow_run_id: id, html_url: `run/${String(id)}` },
+                };
+              },
+              listWorkflowRuns: async (params: Record<string, unknown>) => {
+                expect(params["event"]).toBe("workflow_dispatch");
+                return {
+                  data: {
+                    workflow_runs:
+                      input.listed[String(params["workflow_id"])] ?? [],
+                  },
                 };
               },
               getWorkflowRun: async (params: Record<string, unknown>) => {
@@ -736,14 +750,36 @@ describe("update follows the capture to its publish", () => {
     "marketing-screenshots-capture.yml",
     "marketing-screenshots-publish.yml",
   ]) {
-    test(`a ${workflow} dispatch without a run id fails the update`, async () => {
+    test(`a ${workflow} run the dispatch did not name is found by listing`, async () => {
+      const input = scenario();
+      input.runIds[workflow] = undefined;
+      input.listed = {
+        "marketing-screenshots-capture.yml": [
+          { id: CAPTURE, display_title: "Capture marketing screenshots" },
+        ],
+        "marketing-screenshots-publish.yml": [
+          { id: 1, display_title: "Publish marketing screenshots of run 1" },
+          {
+            id: PUBLISH,
+            display_title: `Publish marketing screenshots of run ${String(CAPTURE)}`,
+          },
+        ],
+      };
+      const result = await updateFor(input);
+      expect(result.error).toBeUndefined();
+      expect(result.failures).toEqual([]);
+      expect(result.dispatches).toHaveLength(2);
+    });
+
+    test(`a ${workflow} run never found fails the update without publishing`, async () => {
       const input = scenario();
       input.runIds[workflow] = undefined;
       const result = await updateFor(input);
-      // The script's Error belongs to the script's realm.
-      expect(result.error).toMatchObject({
-        message: `Dispatching ${workflow} returned no run id`,
-      });
+      expect(result.error).toBeUndefined();
+      expect(result.failures).toEqual([
+        `The dispatched ${workflow} run was not found`,
+      ]);
+      expect(result.dispatches.at(-1)?.["workflow_id"]).toBe(workflow);
     });
   }
 

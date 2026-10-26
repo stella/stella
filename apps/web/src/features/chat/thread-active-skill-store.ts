@@ -4,8 +4,8 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type { BuiltInSkillId } from "@stll/skills";
 
 import {
-  isActiveSkillContext,
   type ActiveSkillChatContext,
+  isActiveSkillContext,
 } from "@/components/inspector/inspector-active-skill";
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import {

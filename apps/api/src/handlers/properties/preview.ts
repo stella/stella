@@ -1,6 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { matchError, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { propertyContentSchema } from "@/api/db/schema-validators";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
@@ -13,7 +12,7 @@ import {
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { serializeAITool } from "@/api/lib/markdown/ai-tool";
@@ -24,30 +23,30 @@ import type {
   PropertyBatch,
 } from "@/api/lib/workflow/get-execution-plan";
 
-const previewableContentType = t.Union([
-  t.Literal("text"),
-  t.Literal("single-select"),
-  t.Literal("multi-select"),
-  t.Literal("date"),
-  t.Literal("int"),
+const previewableContentType = v.picklist([
+  "text",
+  "single-select",
+  "multi-select",
+  "date",
+  "int",
 ]);
 
-const optionSchema = t.Object({
-  color: t.String({ minLength: 1, maxLength: 64 }),
-  value: t.String({ minLength: 1, maxLength: 1000 }),
+const optionSchema = v.object({
+  color: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  value: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
 });
 
-const dependencySchema = t.Object({
-  dependsOnPropertyId: tSafeId("property"),
+const dependencySchema = v.object({
+  dependsOnPropertyId: resourceIdSchema("property"),
 });
 
-const previewBodySchema = t.Object({
-  prompt: t.String({ minLength: 1, maxLength: 1000 }),
+const previewBodySchema = v.object({
+  prompt: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   contentType: previewableContentType,
-  entityId: tSafeId("entity"),
-  options: t.Optional(t.Array(optionSchema)),
-  dependencies: t.Optional(
-    t.Array(dependencySchema, { maxItems: LIMITS.propertiesCount }),
+  entityId: resourceIdSchema("entity"),
+  options: v.optional(v.array(optionSchema)),
+  dependencies: v.optional(
+    v.pipe(v.array(dependencySchema), v.maxLength(LIMITS.propertiesCount)),
   ),
 });
 
@@ -155,7 +154,7 @@ const previewProperty = createSafeHandler(
       body.contentType === "single-select" ||
       body.contentType === "multi-select"
     ) {
-      const optionsValid = Value.Check(propertyContentSchema, {
+      const optionsValid = v.is(propertyContentSchema, {
         version: 1,
         type: body.contentType,
         options: arrayOrEmpty(body.options),

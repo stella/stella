@@ -69,7 +69,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -109,8 +109,7 @@ type ChatHistoryPageProps = {
 };
 
 type DeleteDialog =
-  | { type: "closed" }
-  | { type: "confirm"; thread: ChatHistoryItem };
+  { type: "closed" } | { type: "confirm"; thread: ChatHistoryItem };
 
 /**
  * Every chat the reader has started, newest first, grouped by when it was
@@ -175,7 +174,7 @@ export const ChatHistoryPage = ({
     placeholderData: keepPreviousData,
   });
   const threadsView = useQueryView(threadsQuery);
-  useQueryViewError(threadsView);
+  useQueryViewError(threadsView, "ChatHistoryPage:query");
   const matterUnavailable =
     threadsView.type === "error" &&
     isMatterUnavailable({ error: threadsView.error, matter: search.matter });
@@ -188,7 +187,7 @@ export const ChatHistoryPage = ({
     }),
   );
   const mattersView = useQueryView(mattersQuery);
-  useQueryViewError(mattersView);
+  useQueryViewError(mattersView, "ChatHistoryPage:query-2");
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per
   // selection rather than a fresh copy on every render.
@@ -209,7 +208,7 @@ export const ChatHistoryPage = ({
 
   return (
     <ScrollArea axis="vertical" className="min-h-0 w-full flex-1">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6">
         <h1 className="text-foreground text-lg font-semibold text-balance">
           {t("common.history")}
         </h1>
@@ -393,10 +392,10 @@ type ChatHistoryRowProps = {
 };
 
 /**
- * One chat: the title links to it, the line below names where it came from,
- * what it drew on and when it was last active. Rename and delete trail the
- * row; they stay visible on narrow screens and reveal on hover or focus where
- * there is room.
+ * One chat: the title links to it, the line below names where it came from
+ * and what it drew on, and the trailing date says when it was last active.
+ * Rename and delete stay visible on narrow screens; where there is room they
+ * take the date's place on hover or focus.
  */
 function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
   const t = useTranslations();
@@ -417,17 +416,10 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
         <ChatThreadDecisionLabel decision={decision} />
       )}
       <ThreadContextLine context={thread.context} />
-      <time
-        className="shrink-0 tabular-nums"
-        dateTime={updatedAt.toISOString()}
-        title={format.dateTime(updatedAt, MEDIUM_DATE_SHORT_TIME_FORMAT)}
-      >
-        {relativeTime(updatedAt)}
-      </time>
     </span>
   );
   const revealClass =
-    "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100";
+    "md:hidden md:group-focus-within:inline-flex md:group-hover:inline-flex";
 
   return (
     <ListItem className="group">
@@ -477,6 +469,13 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
               </BidiText>
               {contextLine}
             </Tooltip>
+            <time
+              className="text-muted-foreground shrink-0 text-xs tabular-nums md:group-focus-within:hidden md:group-hover:hidden"
+              dateTime={updatedAt.toISOString()}
+              title={format.dateTime(updatedAt, MEDIUM_DATE_SHORT_TIME_FORMAT)}
+            >
+              {relativeTime(updatedAt)}
+            </time>
             <ChatTitleSuggestButton
               className={revealClass}
               hasMessages
@@ -536,7 +535,7 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
                 : {},
           },
         );
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
@@ -618,6 +617,7 @@ function ChatHistorySkeleton() {
                 <Skeleton className="h-3.5 w-56 max-w-full" />
                 <Skeleton className="h-3 w-40 max-w-full" />
               </div>
+              <Skeleton className="h-3 w-12" />
             </li>
           ))}
         </List>

@@ -142,6 +142,8 @@ describe("pruneUserStorage", () => {
 
   test("a tab's drafts go on from a visitor into their account, and never past a signed-in user", () => {
     session.setItem("stella.provision-question:doc:anchor", "Why?");
+    session.setItem("legal-reader-guest-annotations:v2", '{"items":[]}');
+    session.setItem("case-law-guest-annotations:v1", '{"items":[]}');
     session.setItem(
       userStorageKey("stella.chat.browserApprovalMode", USER_A),
       "ask",
@@ -149,6 +151,8 @@ describe("pruneUserStorage", () => {
 
     pruneUserStorage(areas(), VISITOR, USER_A);
     expect(keys(session)).toEqual([
+      "case-law-guest-annotations:v1",
+      "legal-reader-guest-annotations:v2",
       "stella.chat.browserApprovalMode:u:user-a",
       "stella.provision-question:doc:anchor",
       "stella.storage-owner",
