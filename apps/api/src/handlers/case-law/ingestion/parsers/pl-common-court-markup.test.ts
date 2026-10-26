@@ -145,6 +145,20 @@ describe("markup that only looks like the serializer's is the court's", () => {
 });
 
 describe("text straight in a frame is read as a paragraph", () => {
+  test("a cell spanning rows keeps its following data row in the table", () => {
+    const blocks = read(
+      '<table><tr><td rowspan="2">A</td><td>B</td></tr><tr><td>C</td></tr></table>',
+    );
+    expect(blocks).toHaveLength(1);
+    expect(blocks.at(0)).toMatchObject({
+      type: "table",
+      rows: [
+        [{ plainText: "A", rowSpan: 2 }, { plainText: "B" }],
+        [{ plainText: "C" }],
+      ],
+    });
+  });
+
   test("a one-cell row keeps its inline marks in one paragraph", () => {
     const blocks = read(
       "<table><tr><td>art. 353<sup>1</sup> k.c.</td></tr></table>",

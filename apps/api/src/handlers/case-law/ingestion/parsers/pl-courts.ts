@@ -758,13 +758,24 @@ const parseTableElement = (
     rows = [];
   };
 
-  ownTableRows(node).each((_, row) => {
+  const tableRows = ownTableRows(node);
+  const hasSpanningRows = tableRows.toArray().some((row) =>
+    $(row)
+      .children("th, td")
+      .toArray()
+      .some((cell) => {
+        const span = integerAttribute(cell.attribs["rowspan"]);
+        return span === 0 || (span !== undefined && span > 1);
+      }),
+  );
+  tableRows.each((_, row) => {
     const rowCells = $(row).children("th, td");
     // The courts' editor frames text in a table: a judgment's reasons in one
-    // cell, a form's part heading across a whole row. A row of one cell holds
-    // no data to line up, so its text is read where it stands.
+    // cell, a form's part heading across a whole row. A single explicit cell
+    // is prose only when no spanning cell links the table's rows.
     if (
       state.markup === PL_DECISION_MARKUP.COMMON_COURT &&
+      !hasSpanningRows &&
       rowCells.length === 1
     ) {
       flushRows();
@@ -775,7 +786,18 @@ const parseTableElement = (
     rowCells.each((__, cell) => {
       const inlines = walkInlines($, $(cell), state);
       const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
-      cells.push({ inlines, plainText });
+      const colSpan = integerAttribute(cell.attribs["colspan"]);
+      const rowSpan = integerAttribute(cell.attribs["rowspan"]);
+      const parsed: TableCell = { inlines, plainText };
+      if (state.markup === PL_DECISION_MARKUP.COMMON_COURT) {
+        if (colSpan !== undefined && colSpan > 1) {
+          parsed.colSpan = colSpan;
+        }
+        if (rowSpan !== undefined && rowSpan > 1) {
+          parsed.rowSpan = rowSpan;
+        }
+      }
+      cells.push(parsed);
     });
 
     if (cells.length > 0) {
