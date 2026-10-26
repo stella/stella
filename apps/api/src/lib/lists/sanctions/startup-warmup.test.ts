@@ -14,7 +14,7 @@ const list = (
   loaderState,
 });
 
-const screened = (...lists: ReturnType<typeof list>[]) =>
+const screened = async (...lists: ReturnType<typeof list>[]) =>
   Promise.resolve(Result.ok(lists));
 
 test("a list stuck warming becomes a named terminal failure at the bound", async () => {
