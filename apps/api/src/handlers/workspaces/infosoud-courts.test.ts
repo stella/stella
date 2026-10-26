@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { InfoSoudClient } from "@stll/infosoud";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -94,7 +95,7 @@ const createContext = (): InfosoudCourtsContext =>
     memberRole: sessionMemberRole("owner"),
     query: {},
     request: new Request("https://example.test/infosoud-courts"),
-    route: "/infosoud-courts",
+    route: "/v1/workspaces/:workspaceId/infosoud/courts" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: toSafeId<"organization">(
         "019e7000-0000-7000-8000-000000000002",
