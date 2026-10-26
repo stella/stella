@@ -1485,6 +1485,12 @@ const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
   if (handler === deleteExpense.handler) {
     return "/v1/expenses/:workspaceId";
   }
+  if (handler === removeEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === deleteInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
   return panic("Invoice test context received an unregistered handler");
 };
 
