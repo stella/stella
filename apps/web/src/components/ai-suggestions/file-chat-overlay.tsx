@@ -149,6 +149,7 @@ import { useChatModelSelection } from "@/components/chat/use-chat-model-selectio
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getLiveEditor } from "@/components/live-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -2100,8 +2101,10 @@ const FileChatOverlayInner = ({
     };
   }, [panelOpen]);
   // A draft handed over from another surface (a review finding's "Ask in
-  // chat"): it lands in this file's composer, opens the thread, and is
-  // acknowledged so a later mount does not replay it.
+  // chat", a passage selected in the document): it lands in this file's
+  // composer, opens the thread, and is acknowledged so a later mount does not
+  // replay it. It replaces whatever was unsent there, as every handoff into a
+  // document's chat does.
   const pendingFileChatDraft = useInspectorCommandStore(
     (state) => state.pendingFileChatDraft,
   );
@@ -2114,14 +2117,43 @@ const FileChatOverlayInner = ({
     ) {
       return undefined;
     }
+    // The composer of a chunk that just loaded has no editor yet, and writing
+    // into none drops the draft; the controller changes once it exists.
+    if (getLiveEditor(editorController.editor) === null) {
+      return undefined;
+    }
     editorController.setContent(pendingFileChatDraft.markdown);
-    editorController.focus();
-    setPanelOpen(true);
+    switch (pendingFileChatDraft.delivery) {
+      case FILE_CHAT_DRAFT_DELIVERY.draft: {
+        editorController.focus();
+        setPanelOpen(true);
+        break;
+      }
+      case FILE_CHAT_DRAFT_DELIVERY.send: {
+        detached(
+          editorController.submit(
+            async ({ files, html }) =>
+              await handlePromptSubmit({ files, prompt: html }),
+          ),
+          "file-chat-overlay.handoff-send",
+        );
+        break;
+      }
+      default: {
+        pendingFileChatDraft.delivery satisfies never;
+        panic("Unhandled file chat draft delivery");
+      }
+    }
     useInspectorCommandStore
       .getState()
       .clearFileChatDraft(pendingFileChatDraft.sequence);
     return undefined;
-  }, [activeFileFieldId, editorController, pendingFileChatDraft]);
+  }, [
+    activeFileFieldId,
+    editorController,
+    handlePromptSubmit,
+    pendingFileChatDraft,
+  ]);
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
   });

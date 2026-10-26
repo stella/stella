@@ -16,6 +16,7 @@ import {
 import type { WorkObligationStatus } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import myWork from "@/api/handlers/work-obligations/queues/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -184,7 +185,7 @@ const queuePage = async ({
         limit,
       },
       request: new Request("https://example.test/my-work"),
-      route: "/test/my-work",
+      route: "/v1/my-work" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },
