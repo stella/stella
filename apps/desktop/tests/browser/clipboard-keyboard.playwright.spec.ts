@@ -983,7 +983,7 @@ const hoverMenuItem = async (item: Locator) => {
 test("hovering a plain-text paste option previews the clip without formatting", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   await expectPastePreview(page, "original");
 
   await cards.first().click({ button: "right" });
@@ -1026,7 +1026,7 @@ test("hovering a plain-text paste option previews the clip without formatting", 
 test("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
   page,
 }) => {
-  await openClipboard(page, "en");
+  await openClipboard(page, { language: "en" });
   await page
     .locator(
       `[data-clipboard-id="${FORMATTED_CLIP.id}"] [data-clipboard-more-trigger]`,
@@ -1060,6 +1060,7 @@ test("arrow-highlighting a plain-text paste option previews the clip without for
   await expectPastePreview(page, "original");
 
   await page.keyboard.press("ArrowRight");
+  await expect(original).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(plainText).toBeFocused();
   await expectPastePreview(page, "plainText");
@@ -1072,7 +1073,7 @@ test("arrow-highlighting a plain-text paste option previews the clip without for
 test("the plain-text format shortcut previews the clip until it is left", async ({
   page,
 }) => {
-  const cards = await openClipboard(page, "en");
+  const cards = await openClipboard(page, { language: "en" });
   const shortcuts = page.locator("[data-clipboard-format-shortcuts]");
   const plainText = shortcuts.getByRole("button", { name: "Plain text" });
 
@@ -1748,7 +1749,7 @@ for (const colorScheme of ["light", "dark"] as const) {
     page,
   }) => {
     await page.emulateMedia({ colorScheme });
-    await installNativeBoundary(page, {
+    await openClipboard(page, {
       language: "en",
       groups: [
         ...SNAPSHOT.groups,
@@ -1759,10 +1760,6 @@ for (const colorScheme of ["light", "dark"] as const) {
         })),
       ],
     });
-    await page.goto("/");
-    await expect(
-      page.locator("[data-clipboard-card-trigger]").first(),
-    ).toBeFocused();
     const rail = page.locator(".clipboard-groups-rail");
     expect(
       await rail
