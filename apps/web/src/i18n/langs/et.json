@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "Kirjuta kommentaar…",
       "commentText": "Kommentaari tekst",
       "commentedPassage": "Kommenteeritud lõik",
+      "editComment": "Muuda kommentaari",
+      "editedAt": "Muudetud {time}",
       "guestAuthor": "Teie",
       "guestLimitReached": "See vahekaart mahutab kuni {count} esiletõstmist ja märkust. Rohkema salvestamiseks looge konto.",
       "guestMigrationComplete": "Esiletõstmised ja märkused salvestati.",

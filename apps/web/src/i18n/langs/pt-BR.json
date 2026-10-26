@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "Escreva um comentário…",
       "commentText": "Texto do comentário",
       "commentedPassage": "Passagem comentada",
+      "editComment": "Editar comentário",
+      "editedAt": "Editado {time}",
       "guestAuthor": "Você",
       "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
       "guestMigrationComplete": "Destaques e notas salvos.",

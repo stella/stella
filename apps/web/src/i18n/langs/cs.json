@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "Napište komentář…",
       "commentText": "Text komentáře",
       "commentedPassage": "Okomentovaná pasáž",
+      "editComment": "Upravit komentář",
+      "editedAt": "Upraveno {time}",
       "guestAuthor": "Vy",
       "guestLimitReached": "Tato karta může obsahovat nejvýše {count} zvýraznění a poznámek. Vytvořte si účet a uložte další.",
       "guestMigrationComplete": "Zvýraznění a poznámky byly uloženy.",

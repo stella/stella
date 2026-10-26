@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "Kommentar schreiben…",
       "commentText": "Kommentartext",
       "commentedPassage": "Kommentierte Textstelle",
+      "editComment": "Kommentar bearbeiten",
+      "editedAt": "Bearbeitet {time}",
       "guestAuthor": "Sie",
       "guestLimitReached": "Dieser Tab kann bis zu {count} Hervorhebungen und Notizen speichern. Erstellen Sie ein Konto, um mehr zu speichern.",
       "guestMigrationComplete": "Hervorhebungen und Notizen gespeichert.",

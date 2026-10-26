@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "اكتب تعليقًا…",
       "commentText": "نص التعليق",
       "commentedPassage": "المقطع المعلَّق عليه",
+      "editComment": "تعديل التعليق",
+      "editedAt": "عُدِّل {time}",
       "guestAuthor": "أنت",
       "guestLimitReached": "يمكن أن يحتوي هذا التبويب على ما يصل إلى {count} من التمييزات والملاحظات. أنشئ حسابًا لحفظ المزيد.",
       "guestMigrationComplete": "تم حفظ التمييزات والملاحظات.",

@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "Écrire un commentaire…",
       "commentText": "Texte du commentaire",
       "commentedPassage": "Passage commenté",
+      "editComment": "Modifier le commentaire",
+      "editedAt": "Modifié {time}",
       "guestAuthor": "Vous",
       "guestLimitReached": "Cet onglet peut contenir jusqu’à {count} surlignages et notes. Créez un compte pour en enregistrer davantage.",
       "guestMigrationComplete": "Surlignages et notes enregistrés.",

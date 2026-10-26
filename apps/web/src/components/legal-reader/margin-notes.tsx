@@ -19,6 +19,8 @@ import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { commentWasEdited } from "@/components/legal-reader/annotations/comment-edit";
+import type { CommentEdit } from "@/components/legal-reader/annotations/comment-edit";
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import { CitedProvisionExpansion } from "@/components/legal-reader/cited-provision-link";
 import Tooltip from "@/components/tooltip";
@@ -27,6 +29,7 @@ import { AnnotationVisibilityToggle } from "@/features/case-law/components/case-
 import { ReaderAnswerCard } from "@/features/case-law/components/case-viewer/reader-answer-card";
 import type { ReaderAnswerCardProps } from "@/features/case-law/components/case-viewer/reader-answer-card";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useRelativeTime } from "@/i18n/formatting-context";
 import { forceReflow } from "@/lib/utils";
 
 import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
@@ -63,15 +66,15 @@ export type AnalysisMarginItem = AnalysisMarginItemBase &
       }
   );
 
-/** What the author saved: the comment's words and who sees it, together. */
-export type CommentEdit = { body: string; visibility: "private" | "shared" };
-
 export type CommentMarginItem = {
   kind: "comment";
   id: string;
   text: string;
   startAnchorId: string;
   author: { image: string | null; name: string | null };
+  /** When it was written and last changed, as ISO instants. */
+  createdAt: string;
+  updatedAt: string;
   /** The current reader wrote it, so they may change or remove it. */
   mine: boolean;
   visibility: "private" | "shared";
@@ -89,9 +92,6 @@ export type ComposerMarginItem = {
   kind: "composer";
   id: string;
   startAnchorId: string;
-  /** The words and audience the composer opens with, when editing. */
-  initialBody?: string | undefined;
-  initialVisibility?: "private" | "shared" | undefined;
   onCancel: () => void;
   onSubmit: (body: string, visibility: "private" | "shared") => void;
 };
@@ -482,6 +482,7 @@ const MarginNoteBody = ({
     case "composer": {
       return (
         <ComposerNote
+          draft={NEW_COMMENT_DRAFT}
           item={item}
           measureRef={measureRef}
           placement={placement}
@@ -677,25 +678,42 @@ const AnalysisNote = ({
   );
 };
 
+/** What the composer opens with: a blank comment, or one being edited. */
+type ComposerDraft =
+  | { type: "new" }
+  | {
+      type: "edit";
+      body: string;
+      visibility: "private" | "shared";
+      /** Emptied words do not save; the author removes the comment instead. */
+      onDelete: () => void;
+    };
+
+const NEW_COMMENT_DRAFT = { type: "new" } as const satisfies ComposerDraft;
+
 /**
  * The comment being written, in the margin beside its paragraph so the text
- * stays uncovered. Enter sends, Shift+Enter breaks a line, Escape cancels.
+ * stays uncovered. Enter (with or without Cmd or Ctrl) sends, Shift+Enter
+ * breaks a line, Escape cancels.
  */
 const ComposerNote = ({
+  draft,
   item,
   measureRef,
   placement,
 }: {
+  draft: ComposerDraft;
   item: ComposerMarginItem;
   measureRef?: ((el: HTMLElement | null, id: string) => void) | undefined;
   placement: NotePlacement;
 }) => {
   const t = useTranslations();
   const position = notePlacementPresentation(placement);
-  const [body, setBody] = useState(item.initialBody ?? "");
+  const [body, setBody] = useState(draft.type === "edit" ? draft.body : "");
   const [visibility, setVisibility] = useState<"private" | "shared">(
-    item.initialVisibility ?? "private",
+    draft.type === "edit" ? draft.visibility : "private",
   );
+  const empty = body.trim() === "";
   const submit = () => {
     const trimmed = body.trim();
     if (trimmed !== "") {
@@ -758,17 +776,50 @@ const ComposerNote = ({
           >
             {t("common.cancel")}
           </Button>
-          <Button
-            className="text-2xs h-6 px-2"
-            disabled={body.trim() === ""}
-            size="sm"
-            type="submit"
-          >
-            {t("common.save")}
-          </Button>
+          {draft.type === "edit" && empty ? (
+            <Button
+              className="text-2xs h-6 px-2"
+              onClick={draft.onDelete}
+              size="sm"
+              type="button"
+              variant="destructive-ghost"
+            >
+              {t("common.delete")}
+            </Button>
+          ) : (
+            <Button
+              className="text-2xs h-6 px-2"
+              disabled={empty}
+              size="sm"
+              type="submit"
+            >
+              {t("common.save")}
+            </Button>
+          )}
         </div>
       </div>
     </form>
+  );
+};
+
+/** Says a comment changed after it was written, and when. */
+const EditedMark = ({ updatedAt }: { updatedAt: string }) => {
+  const t = useTranslations();
+  const relativeTime = useRelativeTime();
+  return (
+    <Tooltip
+      content={t("legalReader.annotations.editedAt", {
+        time: relativeTime(updatedAt),
+      })}
+      render={
+        <time
+          className="text-foreground-disabled text-[calc(0.7rem*var(--reader-text-scale))]"
+          dateTime={updatedAt}
+        />
+      }
+    >
+      {t("common.edited")}
+    </Tooltip>
   );
 };
 
@@ -786,6 +837,9 @@ const CommentNote = ({
 }: NoteProps<CommentMarginItem>) => {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
+  // Leaving the editor hands focus back to the Edit button it came from; the
+  // button mounts again only once the editor has gone.
+  const refocusEdit = useRef(false);
   const shared = item.visibility === "shared";
   const position = notePlacementPresentation(placement);
   // A comment the server has not stored yet has no id to change or remove it
@@ -794,20 +848,28 @@ const CommentNote = ({
   const onEdit = controllable ? item.onEdit : undefined;
 
   if (editing && onEdit !== undefined) {
+    const stopEditing = () => {
+      refocusEdit.current = true;
+      setEditing(false);
+    };
     return (
       <ComposerNote
+        draft={{
+          type: "edit",
+          body: item.text,
+          visibility: item.visibility,
+          onDelete: item.onDelete,
+        }}
         item={{
           id: item.id,
           kind: "composer",
           startAnchorId: item.startAnchorId,
-          initialBody: item.text,
-          initialVisibility: item.visibility,
-          onCancel: () => setEditing(false),
+          onCancel: stopEditing,
           onSubmit: (body, visibility) => {
             if (body !== item.text || visibility !== item.visibility) {
               onEdit({ body, visibility });
             }
-            setEditing(false);
+            stopEditing();
           },
         }}
         measureRef={measureRef}
@@ -859,6 +921,7 @@ const CommentNote = ({
             <Building2Icon className="size-3" />
           </Tooltip>
         )}
+        {commentWasEdited(item) && <EditedMark updatedAt={item.updatedAt} />}
       </div>
       {onJump === undefined ? (
         <p className="text-foreground-muted mt-0.5 text-start text-[calc(0.75rem*var(--reader-text-scale))] leading-snug">
@@ -891,12 +954,20 @@ const CommentNote = ({
           />
           {onEdit !== undefined && (
             <Tooltip
-              content={t("common.edit")}
+              content={t("legalReader.annotations.editComment")}
               render={
                 <button
-                  aria-label={t("common.edit")}
+                  aria-label={t("legalReader.annotations.editComment")}
                   className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
-                  onClick={() => setEditing(true)}
+                  // The ref only returns focus; an icon has no portaled
+                  // descendants to contain.
+                  onClick={containedHandler(null, () => setEditing(true))}
+                  ref={(button) => {
+                    if (button !== null && refocusEdit.current) {
+                      refocusEdit.current = false;
+                      button.focus();
+                    }
+                  }}
                   type="button"
                 />
               }

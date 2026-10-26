@@ -4253,6 +4253,8 @@
       "commentPlaceholder": "Write a comment…",
       "commentText": "Comment text",
       "commentedPassage": "Commented passage",
+      "editComment": "Edit comment",
+      "editedAt": "Edited {time}",
       "guestAuthor": "You",
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.",
       "guestMigrationComplete": "Highlights and notes saved.",

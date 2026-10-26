@@ -1,5 +1,7 @@
 import { useRef } from "react";
 
+import { Result } from "better-result";
+
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
@@ -33,11 +35,11 @@ export const ReaderSelectionPlayground = () => {
         activeAnnotation={null}
         activeSpans={[]}
         controller={{
-          create: async () => await Promise.resolve(),
+          create: async () => Result.ok(undefined),
           redo: async () => await Promise.resolve(),
-          remove: async () => await Promise.resolve(),
+          remove: async () => Result.ok(undefined),
           undo: async () => await Promise.resolve(),
-          update: async () => await Promise.resolve(),
+          update: async () => Result.ok(undefined),
         }}
         mode="authenticated"
         onActivateAnnotation={() => undefined}
