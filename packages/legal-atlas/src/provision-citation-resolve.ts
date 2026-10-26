@@ -860,7 +860,40 @@ const trimNameEdges = (text: string): string => {
   return text.slice(start, end);
 };
 
-const actNameOf = (text: string) => trimNameEdges(normalize(text));
+/**
+ * Where a version statement (`ve znění pozdějších předpisů`, `ve znění zákona
+ * č. …`, `ve znění účinném do …`) starts, or the text's end: the act's name
+ * comes before it, and a corpus lookup with it attached misses the name.
+ */
+const versionStatementStart = (
+  text: string,
+  { versionGrammar }: JurisdictionProfile,
+): number => {
+  const lower = text.toLowerCase();
+  let start = text.length;
+  for (const phrase of [
+    ...versionGrammar.currentVersionMarkers,
+    ...versionGrammar.amendmentPrefixes,
+    ...versionGrammar.dateStatements.map(({ prefix }) => prefix),
+  ]) {
+    const at = lower.indexOf(phrase.toLowerCase());
+    if (
+      at !== -1 &&
+      at < start &&
+      (at === 0 || /[\s,;(]/u.test(lower.charAt(at - 1)))
+    ) {
+      start = at;
+    }
+  }
+  return start;
+};
+
+const actNameOf = (text: string, profile: JurisdictionProfile) => {
+  const normalized = normalize(text);
+  return trimNameEdges(
+    normalized.slice(0, versionStatementStart(normalized, profile)),
+  );
+};
 
 /**
  * The act a citation names, read as `resolveProvisionCitation` reads it: by
@@ -900,10 +933,10 @@ export const resolveActCitation = ({
     case "no_act": {
       // An act's name follows the provision it is cited for (`§ 2 zákona
       // o …`); what precedes it is a lead-in (`Z § 2 …`, `ustanovení § 2`).
-      const named = actNameOf(after);
+      const named = actNameOf(after, profile);
       return {
         status: "no_act",
-        actName: named === "" ? actNameOf(before) : named,
+        actName: named === "" ? actNameOf(before, profile) : named,
       };
     }
     case "ambiguous_act":

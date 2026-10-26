@@ -218,6 +218,11 @@ export type VersionGrammar = {
     >["relation"];
   }[];
   amendmentPrefixes: readonly string[];
+  /**
+   * Phrases that cite an act as amended to date (`ve znění pozdějších
+   * předpisů`); like a date or an amendment, they follow the act's name.
+   */
+  currentVersionMarkers: readonly string[];
   /** Inflected month spellings, mapped to calendar month numbers. */
   monthNames: Readonly<Record<string, number>>;
 };

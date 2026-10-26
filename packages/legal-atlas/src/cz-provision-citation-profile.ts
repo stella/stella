@@ -224,6 +224,11 @@ export const CZ_PROFILE = {
       { prefix: "ve znění účinném od", relation: "from" },
     ],
     amendmentPrefixes: ["ve znění zákona č.", "ve znění novely č."],
+    currentVersionMarkers: [
+      "ve znění pozdějších předpisů",
+      "v platném znění",
+      "v aktuálním znění",
+    ],
     monthNames: {
       ledna: 1,
       února: 2,

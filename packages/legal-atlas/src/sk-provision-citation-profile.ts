@@ -94,6 +94,11 @@ export const SK_PROFILE = {
       { prefix: "v znení účinnom od", relation: "from" },
     ],
     amendmentPrefixes: ["v znení zákona č.", "v znení novely č."],
+    currentVersionMarkers: [
+      "v znení neskorších predpisov",
+      "v platnom znení",
+      "v aktuálnom znení",
+    ],
     monthNames: {
       januára: 1,
       februára: 2,

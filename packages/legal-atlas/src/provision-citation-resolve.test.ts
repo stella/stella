@@ -546,6 +546,17 @@ describe("resolveActCitation", () => {
     ).toEqual({ status: "no_act", actName: "zákona o obětech trestných činů" });
   });
 
+  test.each([
+    "§ 2 zákona o obětech trestných činů, ve znění pozdějších předpisů",
+    "§ 2 zákona o obětech trestných činů v platném znění",
+    "§ 2 zákona o obětech trestných činů ve znění účinném do 31. 12. 2019",
+  ])("%s names the act without its version statement", (text) => {
+    expect(readAct(text)).toEqual({
+      status: "no_act",
+      actName: "zákona o obětech trestných činů",
+    });
+  });
+
   test("two named acts are refused, never guessed", () => {
     expect(readAct("zákoníku práce a zákona o Ústavním soudu").status).toBe(
       "ambiguous_act",
