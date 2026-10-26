@@ -22,10 +22,10 @@ import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { resolveStatuteExpression } from "@/api/handlers/legislation/by-eli";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
-import { captureError } from "@/api/lib/analytics/capture";
 import { readNamedLegislationWorks } from "@/api/lib/legal-search/legislation-work-names";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 const CZE = "CZE";
 
@@ -55,22 +55,27 @@ class UnresolvedActCitationError extends TaggedError(
   message: string;
 }> {}
 
-/** Longest act name a miss reports; a name is a few words. */
-const REPORTED_ACT_NAME_MAX_CHARS = 160;
+const UNRESOLVED_ACT_CITATION = failureSink({
+  event: "legal_resolve.czech_law.unresolved_act",
+  expected: [],
+});
 
 /**
  * A citation that names its act in words and still names no act: either
  * the profile and the corpus's titles both miss a name courts write, or the
  * corpus lacks the act. Both are data to fix, so the miss is reported.
+ * The name stays out of telemetry, which carries no free text a request
+ * supplied; the count per jurisdiction is the signal.
  */
-const reportUnresolvedActCitation = (actName: string) => {
-  captureError(
+const reportUnresolvedActCitation = () => {
+  observeFailure(
     new UnresolvedActCitationError({
       message: "A Czech act citation named no act",
     }),
-    handlerErrorContext("legalResolve.czechLaw.unresolvedAct", {
-      actName: actName.slice(0, REPORTED_ACT_NAME_MAX_CHARS),
-    }),
+    {
+      sink: UNRESOLVED_ACT_CITATION,
+      ctx: { feature: "legal-resolve", jurisdiction: CZE },
+    },
   );
 };
 
