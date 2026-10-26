@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import ts from "typescript6";
+
+import { parseSource } from "@stll/scripts/src/syntax-tree.ts";
 
 import {
   declaredAppFrameScope,
@@ -10,36 +11,23 @@ import {
 test.each(["member", "knowledge", "none"])(
   "reads declared %s scope independently of route names",
   (scope) => {
-    const source = ts.createSourceFile(
+    const source = parseSource(
       "renamed-route.tsx",
       `import { APP_FRAME_SCOPE as scope } from "@/routes/-app-frame-scope";
 export const Route = createFileRoute("/unrelated-name")({ staticData: { appFrame: scope.${scope} } });`,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
     );
-    expect(declaredAppFrameScope(source)).toBe(scope);
+    expect(declaredAppFrameScope(source, "renamed-route.tsx")).toBe(scope);
   },
 );
 
 test("absent metadata inherits while unsupported metadata fails", () => {
-  const parse = (source: string) =>
-    ts.createSourceFile(
-      "route.tsx",
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    );
+  const scopeOf = (source: string) =>
+    declaredAppFrameScope(parseSource("route.tsx", source), "route.tsx");
   expect(
-    declaredAppFrameScope(
-      parse('export const Route = createFileRoute("/_protected")({});'),
-    ),
+    scopeOf('export const Route = createFileRoute("/_protected")({});'),
   ).toBeUndefined();
   expect(() =>
-    declaredAppFrameScope(
-      parse("const value = { staticData: { appFrame: arbitrary } };"),
-    ),
+    scopeOf("const value = { staticData: { appFrame: arbitrary } };"),
   ).toThrow("Unsupported appFrame metadata");
 });
 
@@ -95,13 +83,10 @@ test("docked chat census follows the frame a route's parent layout selects", () 
 test("a preview-only PDF viewer is not followed into its docked chat reader", () => {
   const imports = (mode: string) =>
     renderedImports(
-      ts.createSourceFile(
+      parseSource(
         "preview.tsx",
         `import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
 export const Preview = () => <PeekPdfViewer interactionMode="${mode}" />;`,
-        ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TSX,
       ),
     );
   expect(imports("preview-only")).toEqual([]);
