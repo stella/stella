@@ -274,11 +274,9 @@ for (const fixture of surfaces) {
                     }}
                     onEditPages={undefined}
                     onOpenVersionHistory={undefined}
-                    onSign={undefined}
                     onTranslate={() => {
                       calls += 1;
                     }}
-                    signLabel="Sign"
                     translationTarget={
                       fixture.name === "file context menu"
                         ? {

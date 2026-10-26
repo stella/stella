@@ -112,7 +112,12 @@ const listRepositoryFiles = (rootDir: string): string[] | null => {
         "apps",
         "packages",
       ],
-      { cwd: rootDir, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] },
+      {
+        maxBuffer: 2 ** 30,
+        cwd: rootDir,
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
     );
     return output
       .split("\n")
@@ -551,6 +556,7 @@ export type AppBoundaryOptions = {
 
 const runGit: GitRunner = (rootDir, arguments_) => {
   const result = spawnSync("git", arguments_, {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
     encoding: "utf-8",
     // Untranslated diagnostics, so a failure can be told apart by its stderr.
