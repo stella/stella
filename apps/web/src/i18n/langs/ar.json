@@ -507,6 +507,24 @@
     "addEntry": "إضافة إدخال",
     "amount": "المبلغ",
     "amountMustBePositive": "يجب أن يكون المبلغ أكبر من صفر",
+    "approval": {
+      "approveSelected": "اعتماد {count, plural, zero {لا قيود محددة} one {قيد محدد واحد} two {قيدين محددين} few {# قيود محددة} many {# قيدًا محددًا} other {# قيد محدد}}",
+      "empty": "لا يوجد ما ينتظر الاعتماد في هذا الملف القانوني.",
+      "failed": "لم يُحفظ التغيير. حاول مرة أخرى.",
+      "myTime": "وقتي",
+      "refusals": {
+        "invalidEntry": "أضف وصفًا وتحقق من تاريخ العمل، ثم اعتمد القيد.",
+        "notApprover": "لا يعتمد هذا القيد إلا المعتمِد المعيّن له أو مسؤول.",
+        "notFound": "هذا القيد لم يعد موجودًا. حدّث القائمة.",
+        "runningTimer": "أوقف المؤقّت الجاري قبل اعتماد هذا القيد.",
+        "unpriced": "لا يوجد سعر لهذا القيد. اضبط سعرًا لهذا الملف القانوني ثم اعتمد القيد.",
+        "wrongStatus": "هذا القيد لم يعد مسودة. حدّث القائمة."
+      },
+      "returnComment": "سبب الإرجاع",
+      "selectEntry": "تحديد القيد",
+      "timeEntries": "قيود الوقت",
+      "title": "الاعتماد"
+    },
     "approve": "اعتماد",
     "approveSelected": "اعتماد المحدد",
     "batchActions": "إجراءات جماعية",
@@ -594,6 +612,7 @@
       "openInvoice": "فتح الفاتورة",
       "otherCurrency": "{count, plural, zero {لا توجد بنود مسجلة} one {بند واحد مسجل} two {بندان مسجلان} few {# بنود مسجلة} many {# بندًا مسجلًا} other {# بند مسجل}} بعملة غير {currency}، وتبقى لفاتورة منفصلة.",
       "outsideScope": "خارج نطاق ضريبة القيمة المضافة، 0 %",
+      "pendingApprovals": "{count, plural, zero {لا توجد عناصر بانتظار الاعتماد} one {عنصر واحد بانتظار الاعتماد} two {عنصران بانتظار الاعتماد} few {# عناصر بانتظار الاعتماد} many {# عنصرًا بانتظار الاعتماد} other {# عنصر بانتظار الاعتماد}}. راجع ما ينتظر الاعتماد.",
       "rate": "السعر",
       "readyDescription": "عند الإصدار تحصل الفاتورة على الرقم التالي من سلسلة الترقيم لديك وتُقفل. يمكن مواصلة تعديل المسودة.",
       "readyTitle": "جاهزة للإصدار",
@@ -1024,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "ذكاء اصطناعي",
-      "human": "بشرية"
+      "human": "بشرية",
+      "toggleState": "{label}: {state, select, on {تشغيل} other {إيقاف}}"
     },
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
@@ -1147,6 +1167,7 @@
       "citedDecisionPassage": "مقطع من القرار",
       "cites": "يستشهد بـ",
       "dissentByline": "رأي مخالف: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {الانتقال إلى الفقرات} one {الانتقال إلى الفقرة} two {الانتقال إلى الفقرتين} few {الانتقال إلى الفقرات} many {الانتقال إلى الفقرات} other {الانتقال إلى الفقرات}}",
       "judgeRole": {
         "advocateGeneral": "المحامي العام",
         "dissenting": "رأي مخالف",
@@ -2056,7 +2077,6 @@
       "orLetUsKnowAt": "أو أخبرنا عبر",
       "viewDocumentation": "عرض التوثيق"
     },
-    "enterKey": "↵",
     "error": "خطأ",
     "expenses": "المصروفات",
     "export": {
@@ -2205,10 +2225,12 @@
     "scrollToTop": "التمرير إلى الأعلى",
     "search": "بحث...",
     "searchIn": "البحث في",
+    "searchMembers": "البحث عن الأعضاء…",
     "selectAMatter": "اختر ملفًا",
     "selectARole": "اختر دورًا",
     "selectAll": "تحديد الكل",
     "selectDate": "اختر تاريخًا…",
+    "selected": "محدد",
     "sessions": "الجلسات",
     "settings": "الإعدادات",
     "showAll": "عرض الكل",
@@ -6210,8 +6232,7 @@
         "lead": "المسؤول الرئيسي",
         "leadActive": "المسؤول الرئيسي",
         "leadInactive": "تعيين مسؤول رئيسي",
-        "noLead": "لا يوجد مسؤول رئيسي",
-        "searchMembers": "البحث عن الأعضاء…"
+        "noLead": "لا يوجد مسؤول رئيسي"
       },
       "to": "إلى"
     },
@@ -6273,6 +6294,7 @@
       "deleteAll": "حذف الكل",
       "deleteAllConfirm": "هل تريد حذف جميع العناصر البالغ عددها {count} في «{column}»؟",
       "hideColumn": "إخفاء العمود",
+      "moveFailed": "{failed, plural, zero {تعذّر نقل # من أصل {total} عنصر.} one {تعذّر نقل عنصر واحد من أصل {total}.} two {تعذّر نقل عنصرين من أصل {total}.} few {تعذّر نقل # عناصر من أصل {total}.} many {تعذّر نقل # عنصرًا من أصل {total}.} other {تعذّر نقل # عنصر من أصل {total}.}}",
       "readOnlyGrouping": "هذا التجميع للقراءة فقط",
       "selectPropertyHint": "اختر خاصية للتجميع بحسبها من شريط الأدوات",
       "uploadDocument": "رفع مستند",
@@ -6291,10 +6313,10 @@
       "addMember": "إضافة إلى الملف القانوني",
       "addMemberDescription": "اختر عضو فريق موجودًا لإضافته إلى هذا الملف القانوني",
       "alreadyMember": "المستخدم عضو بالفعل",
+      "alreadyOnMatter": "مُضاف بالفعل إلى هذا الملف القانوني",
       "cannotRemoveLast": "لا يمكن إزالة العضو الأخير",
       "noMembersFound": "لم يُعثر على أعضاء",
-      "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف القانوني؟",
-      "selectMember": "اختر عضوًا"
+      "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف القانوني؟"
     },
     "newDocument": "مستند جديد",
     "newFolder": "مجلد جديد",
@@ -6332,7 +6354,6 @@
           "approvedBy": "وافق عليها",
           "channel": "القناة",
           "dateTime": "التاريخ والوقت",
-          "eventId": "معرّف الحدث",
           "notAvailable": "غير متاح",
           "openTarget": "فتح العنصر",
           "runId": "معرّف التشغيل",
@@ -6515,6 +6536,11 @@
       },
       "passwordLabel": "أدخل كلمة مرور ملف PDF",
       "previousPage": "الصفحة السابقة",
+      "selection": {
+        "explainPassagePrompt": "اشرح هذا المقطع من {citation}:\n\n«{quote}»",
+        "pageLocator": "ص. {page}",
+        "pageRangeLocator": "ص. {start}–{end}"
+      },
       "showOriginal": "عرض الصفحات الأصلية",
       "unlock": "إلغاء القفل"
     },
