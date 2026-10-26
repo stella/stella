@@ -360,7 +360,7 @@ describe("a replacement reaches the owner's enforcement", () => {
     expect(enforcementOf(guarded)).toEqual([]);
     // Mutation: removing only the comparison leaves the handler intact.
     expect(
-      enforcementOf(guarded.replace(/enforce\(\{type:[^;]+;/u, "")),
+      enforcementOf(guarded.replace(/enforce\(\{type:[^;]+;/u, "null;")),
     ).toContainEqual(
       expect.stringContaining(
         "Replacement must reach owner enforcement for expectedUpdatedAt",
@@ -531,7 +531,7 @@ describe("a replacement reaches the owner's enforcement", () => {
       run(
         guarded.replace(
           /enforceWritePrecondition\(\{type: 'revision', field: 'selectedTextHash'[^;]+;/u,
-          "",
+          "null;",
         ),
       ),
     ).toContainEqual(
