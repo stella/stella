@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Merge wrapped decision titles and assign unique anchors to repeated section headings across the complete parser output.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {

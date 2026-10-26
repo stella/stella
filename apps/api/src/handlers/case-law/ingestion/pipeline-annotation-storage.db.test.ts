@@ -991,4 +991,30 @@ test("a pending mirror replay removes unreadable structure while retaining store
   ).at(0);
   expect(row?.fulltext).toBe("Decision text.");
   expect(row?.documentAst).toEqual({});
+  const refreshed = await processDecision({
+    input: plainTextIngestionResult({
+      ...decision,
+      rawHash: `second-refresh-${documentId}`,
+      fulltext: undefined,
+      documentAst: {},
+      citationScopes: undefined,
+    }),
+    sourceId,
+    scopedDb,
+    observedAt: new Date("2026-10-26T10:02:00Z"),
+    observationOrder: 3n,
+    corpus: inlineCorpus,
+    refresh: DECISION_REFRESH.ALWAYS,
+  });
+  expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+  expect(row?.metadata?.[CITATION_SCOPE_METADATA_KEY]).toBeUndefined();
+  const afterRefresh = (
+    await db
+      .select()
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+  ).at(0);
+  expect(afterRefresh?.fulltext).toBe("Decision text.");
+  expect(afterRefresh?.documentAst).toEqual({});
+  expect(afterRefresh?.metadata?.[CITATION_SCOPE_METADATA_KEY]).toBeUndefined();
 });

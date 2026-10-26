@@ -279,7 +279,9 @@ describe("reader-compatible Slovak heading identities", () => {
   test("consecutive bold title lines form one reader heading", () => {
     const ast = build(["ROZSUDOK V MENE", "SLOVENSKEJ REPUBLIKY", "rozhodol:"]);
     expect(
-      ast.blocks.filter((block) => block.role === "decision-title"),
+      ast.blocks.filter(
+        (block) => block.type === "heading" && block.role === "decision-title",
+      ),
     ).toMatchObject([
       {
         type: "heading",
