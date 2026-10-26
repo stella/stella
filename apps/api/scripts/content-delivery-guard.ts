@@ -164,18 +164,6 @@ const RUNTIME_TYPESCRIPT = new Set([
   "TSAbstractAccessorProperty",
   "TSIndexSignature",
 ]);
-/** A node's direct children in source order. */
-const children = (node: Node) => {
-  const found: Node[] = [];
-  walk(node, (child) => {
-    if (child === node) {
-      return undefined;
-    }
-    found.push(child);
-    return "skip-children";
-  });
-  return found;
-};
 const isPatternPart = (node: Node, parent: Node | undefined) =>
   node.type === "ObjectPattern" ||
   node.type === "ArrayPattern" ||
@@ -225,12 +213,35 @@ class ContentDeliveryInspector {
     }
     return current ?? panic("Content delivery guard lost a node's scope");
   };
-  private readonly bindingScope = (binding: Binding) =>
-    this.scope(
-      binding.kind === "function"
-        ? (this.parents.get(binding.node) ?? binding.node)
-        : binding.node,
-    );
+  // A binding's scope never changes; lookups compare it for every candidate.
+  private readonly bindingScopes = new Map<Binding, Node>();
+  private readonly bindingScope = (binding: Binding) => {
+    let found = this.bindingScopes.get(binding);
+    if (found === undefined) {
+      found = this.scope(
+        binding.kind === "function"
+          ? (this.parents.get(binding.node) ?? binding.node)
+          : binding.node,
+      );
+      this.bindingScopes.set(binding, found);
+    }
+    return found;
+  };
+  // Each node's direct children in source order, recorded while loading.
+  private readonly childNodes = new Map<Node, Node[]>();
+  private readonly children = (node: Node): readonly Node[] =>
+    this.childNodes.get(node) ?? [];
+  // Resolution reads the file system; one import resolves once per source.
+  private readonly resolutions = new Map<string, string | undefined>();
+  private readonly resolveImport = (specifier: string, from: string) => {
+    const key = `${from}\0${specifier}`;
+    if (this.resolutions.has(key)) {
+      return this.resolutions.get(key);
+    }
+    const resolved = this.options.resolveImport(specifier, from);
+    this.resolutions.set(key, resolved);
+    return resolved;
+  };
   private readonly encloses = (outer: Node, inner: Node) =>
     this.fileOf(outer) === this.fileOf(inner) &&
     outer.start <= inner.start &&
@@ -419,6 +430,12 @@ class ContentDeliveryInspector {
       const parent = ancestors.at(-1);
       if (parent) {
         this.parents.set(node, parent);
+        const siblings = this.childNodes.get(parent);
+        if (siblings === undefined) {
+          this.childNodes.set(parent, [node]);
+        } else {
+          siblings.push(node);
+        }
       }
       this.files.set(node, parsed);
     });
@@ -436,23 +453,24 @@ class ContentDeliveryInspector {
   private readonly lookup = (reference: Node & { name: string }) => {
     const availableBindings =
       this.bindings.get(this.fileOf(reference))?.get(reference.name) ?? [];
-    return availableBindings
-      .filter((candidate) =>
-        this.encloses(this.bindingScope(candidate), reference),
-      )
-      .toSorted(
-        (a, b) =>
-          this.bindingScope(a).end -
-          this.bindingScope(a).start -
-          (this.bindingScope(b).end - this.bindingScope(b).start),
-      )
-      .at(0);
+    // The enclosing binding with the narrowest scope; the first on a tie.
+    let nearest: Binding | undefined;
+    let nearestWidth = Number.POSITIVE_INFINITY;
+    for (const candidate of availableBindings) {
+      const scope = this.bindingScope(candidate);
+      const width = scope.end - scope.start;
+      if (width < nearestWidth && this.encloses(scope, reference)) {
+        nearest = candidate;
+        nearestWidth = width;
+      }
+    }
+    return nearest;
   };
   private readonly importFile = (specifier: string, from: string) => {
     if (/\.(?:json|ttf|otf|woff2?|png|svg|docx)$/u.test(specifier)) {
       return undefined;
     }
-    const resolved = this.options.resolveImport(specifier, from);
+    const resolved = this.resolveImport(specifier, from);
     if (
       !resolved &&
       (specifier.startsWith(".") || specifier.startsWith("@/"))
@@ -661,7 +679,7 @@ class ContentDeliveryInspector {
     }
     const name = member ?? definition.importedName ?? "default";
     const from = this.fileOf(current).fileName;
-    const resolved = this.options.resolveImport(current.source.value, from);
+    const resolved = this.resolveImport(current.source.value, from);
     if (resolved && TERMINAL.test(name) && isDeliveryOwner(resolved)) {
       this.terminals.add(name);
       return;
@@ -681,7 +699,7 @@ class ContentDeliveryInspector {
       if (current.kind === "namespace" && declaration) {
         const specifier = declaration.source.value;
         const from = this.fileOf(declaration).fileName;
-        if (this.options.resolveImport(specifier, from)) {
+        if (this.resolveImport(specifier, from)) {
           this.errors.add(
             `Unresolved namespace member ${propertyName(current.name) ?? ""} in ${from}`,
           );
@@ -762,7 +780,7 @@ class ContentDeliveryInspector {
         return;
       case "function":
       case "class":
-        for (const child of children(current.node)) {
+        for (const child of this.children(current.node)) {
           this.trace(child);
         }
     }
@@ -810,7 +828,7 @@ class ContentDeliveryInspector {
       }
       return;
     }
-    for (const child of children(current)) {
+    for (const child of this.children(current)) {
       this.trace(child);
     }
   };
@@ -836,7 +854,7 @@ class ContentDeliveryInspector {
     if (!current) {
       return false;
     }
-    const resolved = this.options.resolveImport(
+    const resolved = this.resolveImport(
       current.source.value,
       this.fileOf(current).fileName,
     );
