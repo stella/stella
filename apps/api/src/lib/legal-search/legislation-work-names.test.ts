@@ -75,7 +75,9 @@ describe("legislationNameQueryKeys", () => {
       "zákona o obětech trestných činů",
       "zákon o obětech trestných činů",
     ]);
-    expect(keys).toContain(stated.at(0));
+    for (const key of stated) {
+      expect(keys).toContain(key);
+    }
   });
 
   test("a query in the nominative, without a title head, or without a jurisdiction is its own key", () => {
