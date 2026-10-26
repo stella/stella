@@ -315,7 +315,7 @@ test("a placed mark is drawn on its page, a detached one is listed with its quot
       await Promise.resolve({ type: "located" as const, spans: [] }),
     remove: async (id) => {
       removed.push(id);
-      return await Promise.resolve(undefined);
+      await Promise.resolve(undefined);
     },
     update: async () => await Promise.resolve(undefined),
   };
