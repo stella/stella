@@ -19,6 +19,20 @@ const byUser = <Select>{members.map((m) => <SelectItem value={m.user.id}>{m.name
   ).toEqual([3, 4]);
 });
 
+test("rejects a user id behind a fallback, a conditional, a cast or a conversion", async () => {
+  expect(
+    await lintSingleRule(
+      "no-person-select",
+      `${IMPORTS}
+const fallback = <Select>{members.map((m) => <SelectItem value={m.user?.id ?? ""}>{m.name}</SelectItem>)}</Select>;
+const conditional = <Select>{members.map((m) => <SelectItem value={m.active ? m.userId : ""}>{m.name}</SelectItem>)}</Select>;
+const cast = <Select>{members.map((m) => <SelectItem value={m.userId as string}>{m.name}</SelectItem>)}</Select>;
+const converted = <Select>{members.map((m) => <SelectItem value={String(m.userId)}>{m.name}</SelectItem>)}</Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([3, 4, 5, 6]);
+});
+
 test("rejects a Select that renders a user identity", async () => {
   expect(
     await lintSingleRule(

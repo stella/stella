@@ -9,6 +9,7 @@
 // `@/components/user-avatar`) or offers an item whose value is a user id:
 //   <Select>…<SelectItem value={member.userId}>…</SelectItem>…</Select>
 //   <Select>…<SelectItem value={m.user.id}>…</SelectItem>…</Select>
+//   <Select>…<SelectItem value={m.user?.id ?? ""}>…</SelectItem>…</Select>
 //   <Select>…<UserIdentity name={member.name} />…</Select>
 // Allowed: a Select over anything else (a language, a time zone, a role),
 // and every person picker built on MemberCombobox.
@@ -63,9 +64,39 @@ const importLocals = (
   return locals;
 };
 
-// `member.userId`, `user.id` and `m.user.id`, optionally chained.
+// `member.userId`, `user.id` and `m.user.id`, optionally chained, and the
+// same id behind a fallback (`m.user?.id ?? ""`), either branch of a
+// conditional, a type assertion, or a one-argument conversion
+// (`String(member.userId)`).
 const isUserIdExpression = (node: unknown): boolean => {
-  let current = node;
+  if (!isAstNode(node)) {
+    return false;
+  }
+  switch (node.type) {
+    case "LogicalExpression":
+      return isUserIdExpression(node.left) || isUserIdExpression(node.right);
+    case "ConditionalExpression":
+      return (
+        isUserIdExpression(node.consequent) ||
+        isUserIdExpression(node.alternate)
+      );
+    case "TSAsExpression":
+    case "TSSatisfiesExpression":
+    case "TSNonNullExpression":
+      return isUserIdExpression(node.expression);
+    case "CallExpression":
+      return (
+        Array.isArray(node.arguments) &&
+        node.arguments.length === 1 &&
+        isUserIdExpression(node.arguments[0])
+      );
+    default:
+      return isUserIdAccess(node);
+  }
+};
+
+const isUserIdAccess = (node: AstNode): boolean => {
+  let current: unknown = node;
   if (isAstNode(current) && current.type === "ChainExpression") {
     current = current.expression;
   }
