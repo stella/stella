@@ -158,7 +158,8 @@ export const MatterCombobox = ({
       <Combobox
         // While the input still shows the chosen matter's name, Base UI
         // skips the filter and keeps every matter in view.
-        filter={matchesMatterOption}
+        // A callback, so the combobox takes its item type from `items`.
+        filter={(matter, typed) => matchesMatterOption(matter, typed)}
         isItemEqualToValue={(item, selected) => item.id === selected.id}
         items={items}
         itemToStringLabel={(matter) => matter.name}

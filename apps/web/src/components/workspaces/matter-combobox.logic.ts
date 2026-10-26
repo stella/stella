@@ -7,11 +7,10 @@ type SearchableMatterOption = {
 
 /**
  * A matter matches on its name or its client's, accent- and
- * case-insensitively, so "novak" finds "Novák v. Horák". Generic, so a
- * combobox handed it as `filter` takes its item type from `items`.
+ * case-insensitively, so "novak" finds "Novák v. Horák".
  */
-export const matchesMatterOption = <TMatter extends SearchableMatterOption>(
-  { clientName, name }: TMatter,
+export const matchesMatterOption = (
+  { clientName, name }: SearchableMatterOption,
   query: string,
 ): boolean => {
   const matches = createSearchQueryMatcher(query);
