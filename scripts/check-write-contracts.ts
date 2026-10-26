@@ -18,8 +18,8 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import { RAW_WRITE_CONTRACTS } from "../apps/api/src/lib/raw-write-contracts";
 import { SAFE_HANDLER_FACTORIES } from "../apps/api/src/lib/safe-handler-factories";
-import { RAW_WRITE_CONTRACTS } from "../apps/api/src/lib/write-contract";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const ROOT = path.resolve(import.meta.dir, "..");
