@@ -103,7 +103,7 @@ export type RowMenuSection =
   | "upload-version";
 
 /** The kinds of table cell a review decision is made for. */
-export type CellReviewKind = "file" | "value";
+type CellReviewKind = "file" | "value";
 
 /**
  * Whether a cell kind offers review (retry, lock and flags), in its row menu
@@ -111,7 +111,7 @@ export type CellReviewKind = "file" | "value";
  * automated column runs and retry, which never write a file cell, and approving
  * a file duplicates the document review flow.
  */
-export const CELL_REVIEW_BY_KIND = {
+const CELL_REVIEW_BY_KIND = {
   file: "none",
   value: "review",
 } as const satisfies Record<CellReviewKind, "none" | "review">;
