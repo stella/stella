@@ -262,6 +262,190 @@ export const nameTokens = (
   return tokens.map((token) => ({ raw: token, folded: fold(token) }));
 };
 
+// Lists and parties write one name with a bracketed qualifier ("KOREA KWANGSON
+// BANKING CORPORATION (KKBC)", "AL-HARAMAYN FOUNDATION (KENYA)") or join
+// several names with " ; ", while another list or a party writes the same name
+// without them. Every name, listed or queried, is therefore read whole, per
+// joined name, and without its bracketed parts. A bracketed part that is
+// itself a name is also read on its own, as a weak alias: an acronym of the
+// rest, text marked as an alias, or the name in another script. Places, notes
+// and spelling variants in brackets never stand alone.
+const OPENERS = new Set(["(", "[", "（", "［"]);
+const CLOSERS = new Set([")", "]", "）", "］"]);
+const ALIAS_MARKER =
+  /^(?:previously\s+listed\s+as|previously\s+known\s+as|formerly\s+known\s+as|also\s+known\s+as|known\s+as|original\s+script|former\s+name|formerly|previously|a\.?\s*k\.?\s*a|f\.?\s*k\.?\s*a|n\.?\s*k\.?\s*a)(?:[\s.:,-]+|$)/iu;
+const ACRONYM_SHAPE = /^[\p{L}\s.&/'’-]+$/u;
+const MAX_ACRONYM_LETTERS = 10;
+const LATIN = /\p{Script=Latin}/u;
+const NAME_CHARACTER = /[\p{L}\p{N}]/u;
+
+const tidy = (text: string): string => text.replaceAll(/\s+/gu, " ").trim();
+
+type NameSegment = { text: string; base: string; qualifiers: string[] };
+
+/**
+ * Splits a name at top-level semicolons and lifts its top-level bracketed
+ * parts out. Nested brackets stay inside their part; an unclosed bracket runs
+ * to the end of the name and a stray closing one separates words.
+ */
+const nameSegments = (name: string): NameSegment[] => {
+  const segments: NameSegment[] = [];
+  let segment: NameSegment = { text: "", base: "", qualifiers: [] };
+  let group = "";
+  let depth = 0;
+  for (const char of name) {
+    if (depth === 0 && char === ";") {
+      segments.push(segment);
+      segment = { text: "", base: "", qualifiers: [] };
+      continue;
+    }
+    segment.text += char;
+    if (OPENERS.has(char)) {
+      depth += 1;
+      if (depth === 1) {
+        segment.base += " ";
+      } else {
+        group += " ";
+      }
+    } else if (CLOSERS.has(char)) {
+      if (depth === 0) {
+        segment.base += " ";
+      } else if (depth === 1) {
+        depth = 0;
+        segment.qualifiers.push(group);
+        group = "";
+      } else {
+        depth -= 1;
+        group += " ";
+      }
+    } else if (depth > 0) {
+      group += char;
+    } else {
+      segment.base += char;
+    }
+  }
+  if (depth > 0) {
+    segment.qualifiers.push(group);
+  }
+  segments.push(segment);
+  return segments;
+};
+
+/**
+ * Whether `letters` abbreviate `words`: each letter, in order, either starts
+ * one of the following words or continues the word the previous letter came
+ * from ("SAPICO" for "SAhand Aluminum Parts Industrial COmpany"), drawing on
+ * at least two words.
+ */
+const abbreviates = (letters: string, words: readonly string[]): boolean => {
+  const failed = new Set<string>();
+  const visit = (at: number, from: number, used: number): boolean => {
+    if (at === letters.length) {
+      return used >= 2;
+    }
+    const state = `${at}:${from}:${Math.min(used, 2)}`;
+    if (failed.has(state)) {
+      return false;
+    }
+    for (let word = from; word < words.length; word += 1) {
+      const text = words[word] ?? "";
+      if (text[0] !== letters[at]) {
+        continue;
+      }
+      let spelled = 1;
+      for (
+        let index = 1;
+        index < text.length && at + spelled < letters.length;
+        index += 1
+      ) {
+        if (text[index] === letters[at + spelled]) {
+          spelled += 1;
+        }
+      }
+      for (let take = spelled; take >= 1; take -= 1) {
+        if (visit(at + take, word + 1, used + 1)) {
+          return true;
+        }
+      }
+    }
+    failed.add(state);
+    return false;
+  };
+  return visit(0, 0, 0);
+};
+
+const isAcronymOf = (candidate: string, base: string): boolean => {
+  if (!ACRONYM_SHAPE.test(candidate)) {
+    return false;
+  }
+  const letters = toLatin(candidate).replaceAll(/[^\p{L}]/gu, "");
+  if (letters.length < 2 || letters.length > MAX_ACRONYM_LETTERS) {
+    return false;
+  }
+  const words = toLatin(base)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word !== "");
+  return abbreviates(letters, words);
+};
+
+/** The names a bracketed part stands for on its own, if any. */
+const qualifierNames = (qualifier: string, base: string): string[] => {
+  const marked = ALIAS_MARKER.exec(tidy(qualifier));
+  if (marked !== null) {
+    return tidy(qualifier).slice(marked[0].length).split(";").map(tidy);
+  }
+  return qualifier
+    .split(/[;,]/u)
+    .map(tidy)
+    .filter(
+      (candidate) =>
+        isAcronymOf(candidate, base) ||
+        (NAME_CHARACTER.test(candidate) &&
+          NAME_CHARACTER.test(base) &&
+          LATIN.test(candidate) !== LATIN.test(base)),
+    );
+};
+
+/**
+ * One spelling a name stands for. `qualifier` marks a bracketed part read on
+ * its own, which counts as a weak alias wherever it matches.
+ */
+export type NameVariant = { text: string; qualifier: boolean };
+
+/**
+ * Every spelling a listed or queried name stands for: the name itself, each
+ * semicolon-joined name, each without its bracketed parts, then the bracketed
+ * parts that are names in their own right. The one owner of bracket handling,
+ * applied identically to list aliases and queries.
+ */
+export const nameVariants = (name: string): NameVariant[] => {
+  const variants = new Map<string, boolean>();
+  const add = (text: string, qualifier: boolean) => {
+    const tidied = tidy(text);
+    if (NAME_CHARACTER.test(tidied) && !variants.has(tidied)) {
+      variants.set(tidied, qualifier);
+    }
+  };
+  add(name, false);
+  const segments = nameSegments(name);
+  if (segments.length > 1) {
+    for (const segment of segments) {
+      add(segment.text, false);
+    }
+  }
+  for (const segment of segments) {
+    add(segment.base, false);
+  }
+  for (const segment of segments) {
+    for (const qualifier of segment.qualifiers) {
+      for (const text of qualifierNames(qualifier, segment.base)) {
+        add(text, true);
+      }
+    }
+  }
+  return Array.from(variants, ([text, qualifier]) => ({ text, qualifier }));
+};
+
 /** Maximum normalized input count, before repeated spellings are deduplicated. */
 export const MAX_QUERY_CHARACTERS = 512;
 export const MAX_QUERY_TOKENS = 24;
@@ -303,4 +487,29 @@ export const nameReading = (
     previous = position;
   }
   return { tokens, adjacent };
+};
+
+/** Identity of a reading: two readings with one key score identically. */
+export const readingKey = ({ tokens, adjacent }: NameReading): string =>
+  `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
+
+export type NameVariantReading = { reading: NameReading; qualifier: boolean };
+
+/**
+ * The distinct non-empty readings of every variant of a name, the whole name
+ * first. A reading shared by the name and a bracketed part stays full weight.
+ */
+export const nameReadings = (
+  name: string,
+  entityType: EntityType,
+): NameVariantReading[] => {
+  const readings = new Map<string, NameVariantReading>();
+  for (const { text, qualifier } of nameVariants(name)) {
+    const reading = nameReading(text, entityType);
+    const key = readingKey(reading);
+    if (reading.tokens.length > 0 && !readings.has(key)) {
+      readings.set(key, { reading, qualifier });
+    }
+  }
+  return [...readings.values()];
 };

@@ -1,4 +1,6 @@
-// Independent equivalence oracle captured from f3efe8009a.
+// Independent equivalence oracle captured from f3efe8009a. Name variants
+// (bracketed parts, joined names) come from the shared normaliser, as in the
+// compact index.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { CountryCode } from "@stll/country-codes";
@@ -14,9 +16,10 @@ import {
   hasExcessQueryTokens,
   MAX_QUERY_CHARACTERS,
   MAX_QUERY_TOKENS,
-  nameReading,
+  nameReadings,
+  readingKey,
 } from "../normalise";
-import type { NameReading } from "../normalise";
+import type { NameVariantReading } from "../normalise";
 import { isCalendarDate } from "../values";
 import {
   matchNames,
@@ -24,6 +27,7 @@ import {
   nameIndexSteps,
   runSteps,
   spendScreeningWork,
+  WEAK_ALIAS_FACTOR,
 } from "./legacy-name-match";
 import type {
   NameIndex,
@@ -442,7 +446,7 @@ const scoreEntry = ({
 
 type ScreenNameReadingsOptions = {
   index: NameIndex;
-  readings: readonly NameReading[];
+  readings: readonly NameVariantReading[];
   ceiling: (queryShare: number) => number;
   rankEntry: (entry: number, nameScore: number) => number | undefined;
   cutoff: number;
@@ -460,16 +464,15 @@ const screenNameReadings = ({
 }: ScreenNameReadingsOptions): Result<NameMatches, ScreeningWorkLimitError> => {
   const nameMatches = new Map<number, NameMatch>();
   let truncated = false;
-  const distinctReadings = new Map(
-    readings.map((reading) => [
-      `${reading.tokens.map((token) => token.raw).join(" ")}|${reading.adjacent.join(";")}`,
-      reading,
-    ]),
-  );
-  for (const reading of distinctReadings.values()) {
-    if (reading.tokens.length === 0) {
-      continue;
+  const distinctReadings = new Map<string, NameVariantReading>();
+  for (const variant of readings) {
+    const key = readingKey(variant.reading);
+    const known = distinctReadings.get(key);
+    if (known === undefined || (known.qualifier && !variant.qualifier)) {
+      distinctReadings.set(key, variant);
     }
+  }
+  for (const { reading, qualifier } of distinctReadings.values()) {
     const matched = matchNames({
       index,
       reading,
@@ -482,7 +485,10 @@ const screenNameReadings = ({
       return workLimit();
     }
     truncated ||= matched.truncated;
-    for (const [entryIndex, match] of matched.matches) {
+    for (const [entryIndex, found] of matched.matches) {
+      const match = qualifier
+        ? { ...found, score: found.score * WEAK_ALIAS_FACTOR }
+        : found;
       const known = nameMatches.get(entryIndex);
       if (known === undefined || match.score > known.score) {
         nameMatches.set(entryIndex, match);
@@ -493,7 +499,7 @@ const screenNameReadings = ({
 };
 
 type PreparedScreeningQuery = {
-  readings: NameReading[];
+  readings: NameVariantReading[];
   identifierKeys: Set<string>;
 };
 type PreparedScreeningQueryResult = Result<
@@ -537,14 +543,13 @@ const prepareScreeningQuery = (
       }),
     );
   }
-  const readings = kinds.map((kind) => nameReading(query.name, kind));
-  const tokens = readings.at(0)?.tokens ?? [];
+  const readings = kinds.flatMap((kind) => nameReadings(query.name, kind));
   const identifierKeys = new Set(
     (query.identifiers ?? [])
       .map(identifierKey)
       .filter((key) => key.length >= MIN_IDENTIFIER_LENGTH),
   );
-  if (tokens.length === 0 && identifierKeys.size === 0) {
+  if (readings.length === 0 && identifierKeys.size === 0) {
     return Result.err(
       new ScreeningQueryError({
         code: "empty-query",

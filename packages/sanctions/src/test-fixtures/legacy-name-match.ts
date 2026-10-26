@@ -1,10 +1,12 @@
-// Independent equivalence oracle captured from f3efe8009a.
+// Independent equivalence oracle captured from f3efe8009a. Name variants
+// (bracketed parts, joined names) come from the shared normaliser, as in the
+// compact index.
 import { panic } from "better-result";
 
 import { distance } from "@stll/fuzzy-search";
 
 import type { AliasQuality, EntityType, SanctionsEntry } from "../entry";
-import { nameReading } from "../normalise";
+import { nameReadings, readingKey } from "../normalise";
 import type { NameReading, NameToken } from "../normalise";
 
 // One budget covers vocabulary lookups, postings and scoring across readings.
@@ -42,7 +44,7 @@ const INITIAL_SIMILARITY = 0.8;
 // A listed middle name, patronymic or particle the query omits costs a quarter
 // of its weight; any other listed token the query omits costs all of it.
 const MIDDLE_NAME_DISCOUNT = 0.25;
-const WEAK_ALIAS_FACTOR = 0.9;
+export const WEAK_ALIAS_FACTOR = 0.9;
 const PATRONYMIC = /(?:ov|ev)(?:ic|ici|iti|na)$/u;
 // Name particles, in folded form, that a query often drops.
 const PARTICLES = new Set([
@@ -250,8 +252,8 @@ export function* nameIndexSteps(
   let canShareVocabularies = true;
   for (const { names, entityType } of entries) {
     canShareVocabularies = names.every(({ name }) =>
-      nameReading(name, entityType).tokens.every(
-        ({ raw, folded }) => raw === folded,
+      nameReadings(name, entityType).every(({ reading }) =>
+        reading.tokens.every(({ raw, folded }) => raw === folded),
       ),
     );
     if (!canShareVocabularies) {
@@ -267,9 +269,16 @@ export function* nameIndexSteps(
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, IndexedAlias>();
     const entryTokens = new Set<number>();
-    for (const { name, quality } of entry.names) {
-      const { tokens, adjacent } = nameReading(name, entry.entityType);
-      const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
+    const variants = entry.names.flatMap(({ name, quality }) =>
+      nameReadings(name, entry.entityType).map(({ reading, qualifier }) => ({
+        name,
+        reading,
+        quality: qualifier ? ("weak" as const) : quality,
+      })),
+    );
+    for (const { name, reading, quality } of variants) {
+      const { tokens, adjacent } = reading;
+      const key = readingKey(reading);
       const existing = byKey.get(key);
       if (tokens.length === 0 || existing?.quality === "strong") {
         continue;

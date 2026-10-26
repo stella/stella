@@ -16,7 +16,7 @@ import {
   StringMap,
 } from "./compact-storage";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
-import { nameReading } from "./normalise";
+import { nameReadings, readingKey } from "./normalise";
 import type { NameReading, NameToken } from "./normalise";
 
 export type ScreeningWorkBudget = { remaining: number; exhausted: boolean };
@@ -40,7 +40,8 @@ const INITIAL_SIMILARITY = 0.8;
 // A listed middle name, patronymic or particle the query omits costs a quarter
 // of its weight; any other listed token the query omits costs all of it.
 const MIDDLE_NAME_DISCOUNT = 0.25;
-const WEAK_ALIAS_FACTOR = 0.9;
+/** A weak alias, or a bracketed part read on its own, scores this share. */
+export const WEAK_ALIAS_FACTOR = 0.9;
 const PATRONYMIC = /(?:ov|ev)(?:ic|ici|iti|na)$/u;
 // Name particles, in folded form, that a query often drops.
 const PARTICLES = new Set([
@@ -362,8 +363,8 @@ export function* nameIndexSteps(
   for (const entry of entries) {
     if (
       entry.names.some(({ name }) =>
-        nameReading(name, entry.entityType).tokens.some(
-          ({ raw, folded }) => raw !== folded,
+        nameReadings(name, entry.entityType).some(({ reading }) =>
+          reading.tokens.some(({ raw, folded }) => raw !== folded),
         ),
       )
     ) {
@@ -384,9 +385,18 @@ export function* nameIndexSteps(
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
     const entryTokens = new Set<number>();
-    for (const { name, quality } of entry.names) {
-      const { tokens, adjacent } = nameReading(name, entry.entityType);
-      const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
+    // Every variant of a listed name indexes under the listed name itself, so
+    // a match on "KKBC" or on the name without "(KKBC)" shows what was listed.
+    const variants = entry.names.flatMap(({ name, quality }) =>
+      nameReadings(name, entry.entityType).map(({ reading, qualifier }) => ({
+        name,
+        reading,
+        quality: qualifier ? ("weak" as const) : quality,
+      })),
+    );
+    for (const { name, reading, quality } of variants) {
+      const { tokens, adjacent } = reading;
+      const key = readingKey(reading);
       const existing = byKey.get(key);
       if (tokens.length === 0 || existing?.alias.quality === "strong") {
         continue;
