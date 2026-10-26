@@ -95,6 +95,25 @@ test("every workflow edit selects the classification digest refresh", () => {
   ).not.toContain("ci-job-classification-digests");
 });
 
+test("classification snapshots use read-only, bounded pinned source checkouts", async () => {
+  const workflow = await Bun.file(WORKFLOW_URL).text();
+  const sourceJob = workflow.slice(
+    workflow.indexOf("  checkout-classification-sources:"),
+    workflow.indexOf("  regenerate-derived-files:"),
+  );
+  expect(sourceJob).toContain("permissions:\n      contents: read");
+  expect(sourceJob).toContain(
+    "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+  );
+  expect(sourceJob).toContain("timeout-minutes: 2");
+  expect(sourceJob).toMatch(/repository: \$\{\{ matrix\.repository \}\}/u);
+  expect(sourceJob).toMatch(/ref: \$\{\{ matrix\.sha \}\}/u);
+  expect(sourceJob).toContain("persist-credentials: false");
+  expect(workflow).toMatch(
+    /bun scripts\/ci-job-classification\/snapshots\.ts --write "\$\{source_args\[@\]\}"/u,
+  );
+});
+
 const namedCiStep = (workflow: unknown, name: string) => {
   if (!isRecord(workflow)) {
     throw new TypeError("CI workflow must declare jobs");

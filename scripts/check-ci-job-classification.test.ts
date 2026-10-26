@@ -18,12 +18,15 @@ import {
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
 
-test("the autofix generator reads every classification input and writes only the decisions", () => {
+test("the autofix generator reads and writes every classification input it owns", () => {
   const generator = GENERATORS.find(
     ({ id }) => id === "ci-job-classification-digests",
   );
   expect(generator?.inputs).toEqual(CLASSIFICATION_INPUT_GLOBS);
-  expect(generator?.outputs).toEqual([`${CLASSIFICATION_DECISIONS_PATH}/**`]);
+  expect(generator?.outputs).toEqual([
+    `${CLASSIFICATION_DECISIONS_PATH}/**`,
+    ".github/ci-job-classification-sources.json",
+  ]);
   expect(generator?.autofix).toBe(true);
   expect(generator?.write).toEqual([
     "bun",
