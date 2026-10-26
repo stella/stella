@@ -2,6 +2,7 @@
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
 // parser-output-unchanged: HTML validation reuses the unmodified parsed source while legacy plain text retains its synthetic document; diagnostics and stored output remain unchanged.
+// parser-output-unchanged: the `superscripts` input is opt-in and only the Supreme Court reader passes it; every other caller parses `<sup>` as before.
 /**
  * Polish Courts (SAOS) parser.
  *
@@ -64,6 +65,12 @@ type ParsePlDecisionInput = {
    * the publisher this parser was written against.
    */
   sourceSystem?: string | undefined;
+  /**
+   * Read `<sup>` as a superscript. The Supreme Court's reader writes one for
+   * every index it lifts out of the PDF (`art. 394¹`); other publishers'
+   * markup keeps the unwrapped reading their stored documents were made with.
+   */
+  superscripts?: boolean | undefined;
 };
 
 type ParsePlDecisionOutput = {
@@ -116,6 +123,7 @@ type ParserState = {
   section: ParserSection;
   sawDecisionTitle: boolean;
   decisionTitle: string | undefined;
+  superscripts: boolean;
 };
 
 const hasHtmlTags = (content: string): boolean =>
@@ -155,13 +163,14 @@ const normalizeDecisionTitle = (
   return undefined;
 };
 
-const createState = (): ParserState => ({
+const createState = (superscripts: boolean): ParserState => ({
   blocks: [],
   blockIndex: 0,
   blockIdCounter: 0,
   section: "preamble",
   sawDecisionTitle: false,
   decisionTitle: undefined,
+  superscripts,
 });
 
 const nextBlockId = (state: ParserState): string => {
@@ -235,9 +244,13 @@ const textInline = (text: string, anonymized = false): Inline[] =>
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-  anonymized = false,
+  state: ParserState,
 ): Inline[] =>
-  walkInlinesShared($, el, { sanitizeHref: sanitizeUrl, anonymized });
+  walkInlinesShared($, el, {
+    sanitizeHref: sanitizeUrl,
+    anonymized: false,
+    superscripts: state.superscripts,
+  });
 
 const inferParagraphRole = (
   state: ParserState,
@@ -328,7 +341,7 @@ const parseParagraphElement = (
   state: ParserState,
   node: cheerio.Cheerio<AnyNode>,
 ): void => {
-  const inlines = walkInlines($, node);
+  const inlines = walkInlines($, node, state);
   const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
 
   if (!plainText) {
@@ -358,7 +371,7 @@ const parseTableElement = (
   node: cheerio.Cheerio<AnyNode>,
 ): void => {
   node.children("caption").each((_, caption) => {
-    const inlines = walkInlines($, $(caption));
+    const inlines = walkInlines($, $(caption), state);
     const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
     if (plainText) {
       pushParagraph(state, plainText, inlines);
@@ -371,7 +384,7 @@ const parseTableElement = (
     $(row)
       .children("th, td")
       .each((__, cell) => {
-        const inlines = walkInlines($, $(cell));
+        const inlines = walkInlines($, $(cell), state);
         const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
         cells.push({ inlines, plainText });
       });
@@ -430,7 +443,7 @@ const parseChildren = (
     }
 
     if (/^h[1-6]$/u.test(tag)) {
-      const inlines = walkInlines($, $node);
+      const inlines = walkInlines($, $node, state);
       const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
       if (!plainText) {
         return;
@@ -535,7 +548,7 @@ export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
   const loadHtml = input.loadHtml ?? cheerio.load;
-  const state = createState();
+  const state = createState(input.superscripts === true);
   const title = normalizeDecisionTitle(input.decisionType);
 
   if (title) {

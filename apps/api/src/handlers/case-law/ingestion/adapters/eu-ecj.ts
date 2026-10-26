@@ -1,4 +1,5 @@
 // parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
+// parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -108,6 +109,7 @@ import {
 } from "@/api/lib/legal-search/metadata-urls";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1077,6 +1079,7 @@ const parseManifestation = (
         message: `[eu-ecj] parse failed for ${input.celex}`,
         cause: error,
       }),
+      handlerErrorContext("adapters.parseManifestation"),
     );
   }
 
@@ -2187,7 +2190,7 @@ export const buildDecision = async (
       error instanceof AdapterFetchError &&
       !(error.cause instanceof DOMException)
     ) {
-      captureError(error);
+      captureError(error, handlerErrorContext("adapters.buildDecision"));
     }
     // The adapter and fixture callers expose a rejecting promise contract.
     throw error;

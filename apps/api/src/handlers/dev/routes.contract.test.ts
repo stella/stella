@@ -1,29 +1,17 @@
 import { expectTypeOf, test } from "bun:test";
 
+import type { RoutesOf } from "@/api/http/route";
+import type { RouteTree } from "@/api/http/route-types";
+
 import type { devRoute } from "./routes";
 
-type FirmKnowledgeResponses =
-  (typeof devRoute)["~Routes"]["dev"]["seed-firm-knowledge"]["post"]["response"];
-type FirmKnowledgeErrorResponses = Pick<FirmKnowledgeResponses, 403 | 409>;
-type FirmKnowledgeForbiddenText = Extract<
-  FirmKnowledgeErrorResponses[403],
-  string
->;
-type FirmKnowledgeForbiddenMacroError = Extract<
-  FirmKnowledgeErrorResponses[403],
-  { code: string; message: string }
->;
-type FirmKnowledgeConflictText = Extract<
-  FirmKnowledgeErrorResponses[409],
-  string
->;
+type FirmKnowledgeResponses = RouteTree<
+  RoutesOf<typeof devRoute>
+>["dev"]["seed-firm-knowledge"]["post"]["response"];
 
-test("firm-knowledge text errors coexist with auth macro rejection bodies", () => {
-  expectTypeOf<FirmKnowledgeForbiddenText>().not.toBeNever();
-  expectTypeOf<FirmKnowledgeForbiddenText>().toBeString();
-  expectTypeOf<FirmKnowledgeForbiddenMacroError>().not.toBeNever();
-  expectTypeOf<FirmKnowledgeForbiddenMacroError["code"]>().toBeString();
-  expectTypeOf<FirmKnowledgeForbiddenMacroError["message"]>().toBeString();
-  expectTypeOf<FirmKnowledgeConflictText>().not.toBeNever();
-  expectTypeOf<FirmKnowledgeConflictText>().toBeString();
+test("firm-knowledge text errors keep their statuses in the route type", () => {
+  expectTypeOf<FirmKnowledgeResponses[403]>().not.toBeNever();
+  expectTypeOf<FirmKnowledgeResponses[403]>().toBeString();
+  expectTypeOf<FirmKnowledgeResponses[409]>().not.toBeNever();
+  expectTypeOf<FirmKnowledgeResponses[409]>().toBeString();
 });

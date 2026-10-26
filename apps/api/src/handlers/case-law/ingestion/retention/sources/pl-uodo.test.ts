@@ -132,7 +132,7 @@ describe("pl-uodo retention projection", () => {
 
   test("a raw that is not the adapter's envelope is unreadable", async () => {
     if (plUodoRetention.type !== "checked") {
-      return panic("pl-uodo is declared checked");
+      panic("pl-uodo is declared checked");
     }
     expect(await plUodoRetention.project("<xPart/>")).toEqual({
       type: "unreadable",
@@ -142,7 +142,7 @@ describe("pl-uodo retention projection", () => {
 
   test("a body without the decision root is unreadable", async () => {
     if (plUodoRetention.type !== "checked") {
-      return panic("pl-uodo is declared checked");
+      panic("pl-uodo is declared checked");
     }
     expect(
       await plUodoRetention.project(

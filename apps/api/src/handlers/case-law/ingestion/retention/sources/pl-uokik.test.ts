@@ -111,7 +111,7 @@ describe("pl-uokik retention projection", () => {
 
   test("a raw that is not the adapter's envelope is unreadable", async () => {
     if (plUokikRetention.type !== "checked") {
-      return panic("pl-uokik is declared checked");
+      panic("pl-uokik is declared checked");
     }
     expect(await plUokikRetention.project("%PDF-1.4")).toEqual({
       type: "unreadable",

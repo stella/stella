@@ -22,6 +22,7 @@ import {
   type FetchDecisionDocumentOptions,
   type SkDocumentRetentionCheck,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 
 /**
  * The drain stores Slovak documents outside the pipeline, so it starts the
@@ -57,11 +58,15 @@ type DeferredDocumentProcessor = (
 
 export const DEFERRED_DOCUMENT_PROCESSORS = {
   [ADAPTER_KEYS.SK_COURTS]: async (options) =>
-    await fetchDecisionDocument({
-      ...options,
-      fetchDocument: skCourtsDocumentFetch,
-      checkRetention: skCourtsDocumentRetention,
-    }),
+    await withExceptionScope(
+      { type: "ingestion", adapterKey: ADAPTER_KEYS.SK_COURTS },
+      async () =>
+        await fetchDecisionDocument({
+          ...options,
+          fetchDocument: skCourtsDocumentFetch,
+          checkRetention: skCourtsDocumentRetention,
+        }),
+    ),
 } as const satisfies Record<
   DeferredDocumentAdapterKey,
   DeferredDocumentProcessor

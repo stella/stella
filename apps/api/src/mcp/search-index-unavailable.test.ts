@@ -1,11 +1,11 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ElysiaCustomStatusResponse } from "elysia";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { env } from "@/api/env";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import { HttpStatusResponse } from "@/api/http/status";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -330,7 +330,7 @@ describe("search_index_unavailable", () => {
 
       expect(requested).toEqual([]);
       for (const outcome of outcomes) {
-        expect(outcome).toBeInstanceOf(ElysiaCustomStatusResponse);
+        expect(outcome).toBeInstanceOf(HttpStatusResponse);
         expect(outcome).toMatchObject({
           code: thrown.status,
           response: {
@@ -384,7 +384,7 @@ describe("search_index_unavailable", () => {
     const refusal = searchIndexUnavailableError(new Error("refused"));
     const response = mapHandlerResult({
       id: "legislation.search",
-      result: new ElysiaCustomStatusResponse(503, {
+      result: new HttpStatusResponse(503, {
         code: refusal.code,
         message: refusal.message,
         hint: refusal.hint,
@@ -400,6 +400,7 @@ describe("search_index_unavailable", () => {
       new UnhandledException({
         cause: searchIndexUnavailableError(new Error("refused")),
       }),
+      "mcp.response.failure",
     );
 
     expect(payloadOf(serialized(response))).toEqual(EXPECTED_ENVELOPE);
@@ -413,7 +414,9 @@ describe("search_index_unavailable", () => {
         message: "Search is temporarily unavailable",
       }),
     ]) {
-      const payload = payloadOf(serialized(internalFailureResult(error)));
+      const payload = payloadOf(
+        serialized(internalFailureResult(error, "mcp.payload.error")),
+      );
       expect(payload).toEqual({
         error: {
           code: "internal_error",

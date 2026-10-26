@@ -279,9 +279,8 @@ const inFlight = new Set<Promise<void>>();
 /**
  * Start a check off the caller's path and return its promise, which never
  * rejects; a writer hands it to `detached` and goes on. The check begins on
- * a later turn, so not even the synchronous part of a projection (a PDF
- * parse) runs inside the write that started it, and no abort signal or
- * deadline of that write reaches it.
+ * a later turn; PDF projections parse in the shared PDF subprocess. No
+ * abort signal or deadline of the write reaches the check.
  */
 const startCheck = async (
   subject: ValidationSubject,

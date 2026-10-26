@@ -49,6 +49,12 @@ const paragraph = (text: string): Block => ({
   inlines: [{ type: "text", text }],
 });
 
+const completionOf = async (promise: Promise<void>) =>
+  await promise.then(
+    () => "resolved",
+    () => "rejected",
+  );
+
 const documentAst = (blocks: Block[]): DocumentAst => ({
   version: 1,
   source: { system: "test", documentId: "d1", webUrl: "", printUrl: "" },
@@ -101,12 +107,10 @@ describe("checkDecisionRetention", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-regional",
-        policy: checked(async () =>
-          Promise.resolve({
-            type: "source",
-            source: buildValidationHtml([TEXT]),
-          }),
-        ),
+        policy: checked(async () => ({
+          type: "source",
+          source: buildValidationHtml([TEXT]),
+        })),
         result: decision("<p>stored</p>"),
       }),
     );
@@ -121,12 +125,10 @@ describe("checkDecisionRetention", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-regional",
-        policy: checked(async () =>
-          Promise.resolve({
-            type: "source",
-            source: buildValidationHtml([TEXT, LOST_PARAGRAPH]),
-          }),
-        ),
+        policy: checked(async () => ({
+          type: "source",
+          source: buildValidationHtml([TEXT, LOST_PARAGRAPH]),
+        })),
         result: decision("<p>stored</p>"),
       }),
     );
@@ -137,12 +139,10 @@ describe("checkDecisionRetention", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-uohs",
-        policy: checked(async () =>
-          Promise.resolve({
-            type: "no-text",
-            reason: RETENTION_TEXT_ABSENCE.SEPARATE_DOCUMENT,
-          }),
-        ),
+        policy: checked(async () => ({
+          type: "no-text",
+          reason: RETENTION_TEXT_ABSENCE.SEPARATE_DOCUMENT,
+        })),
         result: decision("{}"),
       }),
     );
@@ -163,12 +163,10 @@ describe("checkDecisionRetention", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "pl-sn",
-        policy: checked(async () =>
-          Promise.resolve({
-            type: "no-text",
-            reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED,
-          }),
-        ),
+        policy: checked(async () => ({
+          type: "no-text",
+          reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED,
+        })),
         result: decision("{}"),
       }),
     );
@@ -188,12 +186,10 @@ describe("checkDecisionRetention", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "pl-sn",
-        policy: checked(async () =>
-          Promise.resolve({
-            type: "unreadable",
-            reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT,
-          }),
-        ),
+        policy: checked(async () => ({
+          type: "unreadable",
+          reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT,
+        })),
         result: decision("{}"),
       }),
     );
@@ -207,7 +203,9 @@ describe("checkDecisionRetention", () => {
 
   test("a projection that rejects or throws is reported, never raised", async () => {
     for (const project of [
-      async () => Promise.reject(new TypeError("the reader broke")),
+      async () => {
+        throw new TypeError("the reader broke");
+      },
       async (): Promise<RetentionProjection> => {
         throw new RangeError("the reader broke before its promise");
       },
@@ -237,9 +235,7 @@ describe("checkDecisionRetention", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "cz-regional",
-        policy: checked(async () =>
-          Promise.resolve({ type: "source", source: TEXT }),
-        ),
+        policy: checked(async () => ({ type: "source", source: TEXT })),
         result: decision(undefined),
       }),
     );
@@ -271,14 +267,13 @@ describe("checkProjectedRetention", () => {
       checkProjectedRetention({
         adapterKey: "sk-courts",
         subject: { caseNumber: "1Co/1/2026", language: "sk" },
-        project: async () =>
-          Promise.resolve({
-            type: "source",
-            source: {
-              type: "paragraphs",
-              paragraphs: [TEXT, LOST_PARAGRAPH],
-            },
-          }),
+        project: async () => ({
+          type: "source",
+          source: {
+            type: "paragraphs",
+            paragraphs: [TEXT, LOST_PARAGRAPH],
+          },
+        }),
         blocks: [paragraph(TEXT)],
       }),
     );
@@ -297,51 +292,57 @@ describe("a log sink that throws", () => {
 
   test("never rejects a decision check, on any branch", async () => {
     throwingSink();
-    const notPublished = checked(async () =>
-      Promise.resolve({
-        type: "no-text",
-        reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED,
-      }),
-    );
+    const notPublished = checked(async () => ({
+      type: "no-text",
+      reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED,
+    }));
     const policies: RetentionPolicy[] = [
       { type: "unparsed", reason: RETENTION_UNPARSED_REASON.METADATA_ONLY },
       notPublished,
-      checked(async () => Promise.reject(new TypeError("the reader broke"))),
-      checked(async () =>
-        Promise.resolve({
-          type: "source",
-          source: buildValidationHtml([TEXT, LOST_PARAGRAPH]),
-        }),
-      ),
+      checked(async () => {
+        throw new TypeError("the reader broke");
+      }),
+      checked(async () => ({
+        type: "source",
+        source: buildValidationHtml([TEXT, LOST_PARAGRAPH]),
+      })),
     ];
     for (const policy of policies) {
       expect(
-        await checkDecisionRetention({
-          adapterKey: "cz-regional",
-          policy,
-          result: decision("{}"),
-        }),
-      ).toBeUndefined();
+        await completionOf(
+          checkDecisionRetention({
+            adapterKey: "cz-regional",
+            policy,
+            result: decision("{}"),
+          }),
+        ),
+      ).toBe("resolved");
     }
     expect(
-      await checkDecisionRetention({
-        adapterKey: "cz-regional",
-        policy: notPublished,
-        result: decision(undefined),
-      }),
-    ).toBeUndefined();
+      await completionOf(
+        checkDecisionRetention({
+          adapterKey: "cz-regional",
+          policy: notPublished,
+          result: decision(undefined),
+        }),
+      ),
+    ).toBe("resolved");
   });
 
   test("never rejects a projected check", async () => {
     throwingSink();
     expect(
-      await checkProjectedRetention({
-        adapterKey: "sk-courts",
-        subject: { caseNumber: "1Co/1/2026" },
-        project: async () => Promise.reject(new TypeError("the reader broke")),
-        blocks: [paragraph(TEXT)],
-      }),
-    ).toBeUndefined();
+      await completionOf(
+        checkProjectedRetention({
+          adapterKey: "sk-courts",
+          subject: { caseNumber: "1Co/1/2026" },
+          project: async () => {
+            throw new TypeError("the reader broke");
+          },
+          blocks: [paragraph(TEXT)],
+        }),
+      ),
+    ).toBe("resolved");
   });
 });
 
@@ -352,10 +353,10 @@ describe("startDecisionRetentionCheck", () => {
       adapterKey: "cz-regional",
       policy: checked(async () => {
         projected += 1;
-        return Promise.resolve({
+        return {
           type: "source",
           source: buildValidationHtml([TEXT]),
-        });
+        };
       }),
       result: decision("<p>stored</p>"),
     });
@@ -405,12 +406,10 @@ describe("startDecisionRetentionCheck", () => {
     const records = await logged(async () =>
       checkDecisionRetention({
         adapterKey: "pl-sn",
-        policy: checked(async () =>
-          Promise.resolve({
-            type: "no-text",
-            reason: RETENTION_TEXT_ABSENCE.OVER_CHECK_BUDGET,
-          }),
-        ),
+        policy: checked(async () => ({
+          type: "no-text",
+          reason: RETENTION_TEXT_ABSENCE.OVER_CHECK_BUDGET,
+        })),
         result: decision("{}"),
       }),
     );

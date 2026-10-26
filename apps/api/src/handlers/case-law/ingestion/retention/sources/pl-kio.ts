@@ -35,5 +35,5 @@ const projectPlKio = (sourceRaw: string): RetentionProjection => {
 
 export const plKioRetention: RetentionPolicy = {
   type: "checked",
-  project: async (sourceRaw) => Promise.resolve(projectPlKio(sourceRaw)),
+  project: async (sourceRaw) => await Promise.resolve(projectPlKio(sourceRaw)),
 };

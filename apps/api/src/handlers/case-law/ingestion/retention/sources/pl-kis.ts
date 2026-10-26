@@ -79,5 +79,5 @@ const projectPlKis = (sourceRaw: string): RetentionProjection => {
 
 export const plKisRetention: RetentionPolicy = {
   type: "checked",
-  project: async (sourceRaw) => Promise.resolve(projectPlKis(sourceRaw)),
+  project: async (sourceRaw) => await Promise.resolve(projectPlKis(sourceRaw)),
 };

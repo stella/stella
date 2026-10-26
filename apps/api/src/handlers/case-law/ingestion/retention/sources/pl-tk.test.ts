@@ -91,7 +91,7 @@ describe("pl-tk retention", () => {
       for (const ruling of rulings) {
         const projection = await project(ruling.sourceRaw);
         if (projection.type !== "source") {
-          return panic(`${name} ${ruling.documentId}: ${projection.type}`);
+          panic(`${name} ${ruling.documentId}: ${projection.type}`);
         }
         const result = validateAst(
           projection.source,
@@ -114,7 +114,7 @@ describe("pl-tk retention", () => {
     const whole = ruling ?? panic("the case page built no ruling");
     const projection = await project(whole.sourceRaw);
     if (projection.type !== "source") {
-      return panic(`projection: ${projection.type}`);
+      panic(`projection: ${projection.type}`);
     }
     const truncated = validateAst(
       projection.source,

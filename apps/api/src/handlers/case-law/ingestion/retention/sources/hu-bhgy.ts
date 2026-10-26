@@ -55,5 +55,5 @@ const projectHuBhgy = (sourceRaw: string): RetentionProjection => {
 
 export const huBhgyRetention = {
   type: "checked",
-  project: async (sourceRaw) => Promise.resolve(projectHuBhgy(sourceRaw)),
+  project: async (sourceRaw) => await Promise.resolve(projectHuBhgy(sourceRaw)),
 } as const satisfies RetentionPolicy;

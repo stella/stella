@@ -1,6 +1,5 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
@@ -14,6 +13,10 @@ import { CHAT_PROMPT_IMPROVEMENT_STRATEGIES } from "@stll/api-contract/chat";
 
 import { env } from "@/api/env";
 import improvePrompt from "@/api/handlers/chat/improve-prompt";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -28,6 +31,7 @@ import {
   killSwitchesEnvSchema,
   type KillSwitchId,
 } from "@/api/lib/kill-switches/registry";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import {
@@ -38,6 +42,7 @@ import {
 import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
 import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -231,32 +236,46 @@ describe("kill switch admission", () => {
 });
 
 describe("kill switch at an AI endpoint", () => {
+  // The handler core under a member context the test builds, answered
+  // through the HTTP layer so the refusal is read off the wire.
+  const improvePromptRoute: RouteDefinition = {
+    access: "public",
+    config: {},
+    run: async ({ ctx: { set } }) =>
+      await improvePrompt.handler(
+        asTestRaw({
+          set,
+          request: new Request("https://example.test/v1/chat/improve-prompt"),
+          route: "/v1/chat/improve-prompt" satisfies ApiRoutePath,
+          user: { id: userId },
+          session: { activeOrganizationId: organizationId },
+          memberRole: sessionMemberRole("owner"),
+          orgAIConfig: null,
+          orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+          managedAIResidency: "eu",
+          body: {
+            prompt: "Summarize the lease",
+            strategy: CHAT_PROMPT_IMPROVEMENT_STRATEGIES[0],
+            sendMode: CHAT_SEND_MODE.rawOverride,
+          },
+        }),
+      ),
+  };
   const request = async () => {
-    const app = new Elysia().post(
-      "/chat/improve-prompt",
-      async ({ set }) =>
-        await improvePrompt.handler(
-          asTestRaw({
-            set,
-            request: new Request("https://example.test/chat/improve-prompt"),
-            route: "/chat/improve-prompt",
-            user: { id: userId },
-            session: { activeOrganizationId: organizationId },
-            memberRole: sessionMemberRole("owner"),
-            orgAIConfig: null,
-            orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-            managedAIResidency: "eu",
-            body: {
-              prompt: "Summarize the lease",
-              strategy: CHAT_PROMPT_IMPROVEMENT_STRATEGIES[0],
-              sendMode: CHAT_SEND_MODE.rawOverride,
-            },
-          }),
-        ),
+    await using server = serveForTest(
+      createHttpApp({
+        routes: routes({
+          "/v1/chat/improve-prompt": { POST: improvePromptRoute },
+        }),
+        middleware: [errorBoundary],
+      }),
     );
-    return await app.handle(
-      new Request("http://localhost/chat/improve-prompt", { method: "POST" }),
+    const response = await server.fetch(
+      new Request("http://localhost/v1/chat/improve-prompt", {
+        method: "POST",
+      }),
     );
+    return { status: response.status, body: await response.json() };
   };
 
   test("switching chat off answers the typed disabled outcome before admission coordination", async () => {
@@ -267,7 +286,7 @@ describe("kill switch at an AI endpoint", () => {
     const response = await request();
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({
+    expect(response.body).toEqual({
       code: ACTION_ADMISSION_CODES.featureDisabled,
       message:
         ACTION_ADMISSION_REFUSALS[ACTION_ADMISSION_CODES.featureDisabled]

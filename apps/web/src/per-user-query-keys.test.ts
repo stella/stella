@@ -132,10 +132,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       lawHistoryKeys.list({
         scope: { organizationId: ORG, userId: USER },
         filter: "all",
+        country: "CZE",
       }),
     ],
     opaqueKeys: {
-      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
         KEY_TYPE_HAS_USER,
     },
   },
@@ -491,7 +492,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   // Filtered by row-level security rather than in the handler.
   "memories/list.ts": {
     kind: "keyed",
-    calls: ["memoriesApi.get", "fetchMemoriesPage"],
+    calls: ["api.memories.get", "fetchMemoriesPage"],
     files: [
       "lib/memory-api.ts",
       "routes/_protected.settings/-queries/memories.ts",
@@ -642,7 +643,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
-    calls: ["myTimeEntriesApi.get"],
+    calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
       myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
@@ -1322,11 +1323,11 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
   infiniteQueryOptions({
     queryKey: myTimeEntriesKeys.day(organizationId, date),
     queryFn: async ({ signal }) =>
-      unwrapEden(await myTimeEntriesApi.get({ query: { date }, fetch: { signal } })),
+      unwrapApiResponse(await api["time-entries"].me.get({ query: { date }, fetch: { signal } })),
   });
 `;
 
-    expect(unkeyedQueries(source, ["myTimeEntriesApi.get"])).toEqual([
+    expect(unkeyedQueries(source, ['api["time-entries"].me.get'])).toEqual([
       "myTimeEntriesKeys.day(organizationId, date)",
     ]);
     expect(
@@ -1335,7 +1336,7 @@ export const myTimeEntriesInfiniteOptions = (organizationId: string, date: strin
           "(organizationId, date)",
           "(organizationId, userId, date)",
         ),
-        ["myTimeEntriesApi.get"],
+        ['api["time-entries"].me.get'],
       ),
     ).toEqual([]);
   });

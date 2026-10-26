@@ -7,11 +7,14 @@
  * section the court's own portal labels: the thesis (`Tezy`), the operative
  * part (`Sentencja`), the reasons (`Uzasadnienie`) and a dissenting opinion
  * (`Zdanie odrębne`). Paragraphs inside a column are separated by a blank
- * line. That is all the structure there is, and it is the publisher's, so the
- * document is built from it directly: a heading per present section, its
+ * line, and so is every line the court's document broke, which is read back
+ * below. That is all the structure there is, and it is the publisher's, so
+ * the document is built from it directly: a heading per present section, its
  * paragraphs under it with the role the section gives them. No wording is
  * matched to find a boundary (rule 9).
  */
+
+import { panic } from "better-result";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
@@ -105,27 +108,425 @@ type ParsePlNsaDecisionOutput = {
   /** The completeness check of the document as returned; it always runs. */
   validation: ValidationResult;
   textSource: PlNsaTextSource;
+  /** The thesis as the document carries it, for the headnote; `null` absent. */
+  thesis: string | null;
 };
 
-/** Paragraphs of one section, as the dataset separates them. */
-const plNsaParagraphs = (text: string): string[] =>
+/** Paragraphs of one column, as the dataset separates them. */
+const splitParagraphs = (text: string): string[] =>
   text
     .replaceAll("\r\n", "\n")
     .split(/\n{2,}/u)
     .map((paragraph) => paragraph.replaceAll(" ", " ").trim())
     .filter((paragraph) => paragraph.length > 0);
 
+// ── Layout residue ───────────────────────────────────────
+//
+// The dataset turns every line break of the court's document into a
+// paragraph break. Authors break lines by hand before a one-letter word,
+// which Polish typesetting keeps off a line's end ("Kolegium decyzją" /
+// "z dnia …"), and older documents break at the page margin, so a sentence
+// reads as several paragraphs. After the rule that closes the document's
+// body come its notes and page furniture: footnotes, running headers and
+// page numbers. Only punctuation, letter case and the shape of a paragraph
+// are read here; the one wording matched is the "Strona 2 z 9" a page
+// number prints as.
+
+/** The rule the court's document closes its body with. */
+const CLOSING_RULE_RE = /^-{5,}$/u;
+
+/** A page number only a page prints: "#/32", "4/31", "Strona 2 z 9". */
+const PAGE_OF_PAGES_RE =
+  /^(?:#|[#\d]{0,4}\/\d{1,4}|[Ss]trona [#\d]{1,4} z \d{1,4})$/u;
+
+/**
+ * A bare number, "2" or "ii": a page number at the end of the notes, a
+ * note's label when its note follows.
+ */
+const BARE_NUMBER_RE = /^(?:\d{1,4}|[ivxl]{1,5})$/u;
+
+/**
+ * The closing rule's notes less their page numbers: every "page of pages",
+ * and the bare numbers the notes end with. A bare number before a note is
+ * that note's label and stays.
+ */
+const notesOf = (paragraphs: readonly string[]): string[] => {
+  const notes = paragraphs.filter(
+    (paragraph) => !PAGE_OF_PAGES_RE.test(paragraph),
+  );
+  let end = notes.length;
+  while (end > 0 && BARE_NUMBER_RE.test(notes[end - 1] ?? "")) {
+    end -= 1;
+  }
+  return notes.slice(0, end);
+};
+
+/**
+ * The text less the page numbers after its closing rule, and less the rule
+ * itself when nothing else follows it, in which case the rule before it
+ * closes the text. A footnote or a running header after a rule stays.
+ */
+const withoutPageFurniture = (paragraphs: readonly string[]): string[] => {
+  let body = [...paragraphs];
+  for (;;) {
+    const rule = body.findLastIndex((paragraph) =>
+      CLOSING_RULE_RE.test(paragraph),
+    );
+    if (rule === -1) {
+      return body;
+    }
+    const notes = notesOf(body.slice(rule + 1));
+    if (notes.length > 0) {
+      return [...body.slice(0, rule + 1), ...notes];
+    }
+    body = body.slice(0, rule);
+  }
+};
+
+/** Closing quotes and brackets that may follow a line's last punctuation. */
+const CLOSERS = new Set(['"', "'", "”", "’", "»", ")", "]"]);
+
+/** The line's last word, less the quotes and brackets closing it. */
+const lastWordOf = (line: string): string => {
+  let end = line.length;
+  while (end > 0 && CLOSERS.has(line.charAt(end - 1))) {
+    end -= 1;
+  }
+  return line.slice(line.lastIndexOf(" ", end - 1) + 1, end);
+};
+
+/** A colon, semicolon, question or exclamation mark ends the line's clause. */
+const CLOSES_CLAUSE_RE = /[:;!?…]$/u;
+
+/** A full stop ends the sentence, though not the dots of "[...]"… */
+const CLOSES_SENTENCE_RE = /[^.]\.$/u;
+
+/**
+ * …unless it closes an abbreviation: a dotted chain ("p.p.s.a.", "m.in."),
+ * an initial ("M. D."), or a word of this list ("r.", "2021r.", "zm.)",
+ * "w zw.").
+ */
+const DOTTED_ABBREVIATION_RE = /^[([„"]?(?:\p{L}{1,5}\.){2,}$|^\p{L}\.$/u;
+
+const ABBREVIATED_WORD_RE = /^[^\p{L}]*(\p{L}+)\.$/u;
+
+/** Abbreviations a sentence goes on after, as Polish decisions write them. */
+const LINE_END_ABBREVIATIONS = new Set([
+  "al",
+  "art",
+  "cyt",
+  "dot",
+  "dz",
+  "gm",
+  "godz",
+  "in",
+  "jedn",
+  "lit",
+  "nast",
+  "np",
+  "ok",
+  "par",
+  "pkt",
+  "por",
+  "poz",
+  "pow",
+  "publ",
+  "późn",
+  "r",
+  "sp",
+  "sygn",
+  "tj",
+  "tzn",
+  "tzw",
+  "ul",
+  "urz",
+  "ust",
+  "wg",
+  "woj",
+  "ww",
+  "zd",
+  "zm",
+  "zob",
+  "zw",
+  "zł",
+]);
+
+const closesAbbreviation = (word: string): boolean => {
+  if (DOTTED_ABBREVIATION_RE.test(word)) {
+    return true;
+  }
+  const abbreviated = ABBREVIATED_WORD_RE.exec(word)?.[1];
+  return (
+    abbreviated !== undefined &&
+    LINE_END_ABBREVIATIONS.has(abbreviated.toLocaleLowerCase("pl-PL"))
+  );
+};
+
+/**
+ * "a)", "c/", "3)", "2b)", "3.2.7.", "4 -": the next item of a list, not an
+ * abbreviation such as "m.in." or a date such as "30.12.1992".
+ */
+const LIST_ITEM_RE =
+  /^(?:\p{Ll}[.)/](?!\p{L})|\d{1,3}(?:\.\d{1,3})*\p{Ll}?[.)/](?!\d)|\d{1,3} ?[-–] )/u;
+
+/** "ii)", "xviii.": a lowercase Roman numeral marking a list item. */
+const ROMAN_ITEM_RE = /^([ivxlcdm]{2,12})[.)/](?!\p{L})/u;
+
+const ROMAN_NUMERAL_RE =
+  /^m{0,3}(?:cm|cd|d?c{0,3})(?:xc|xl|l?x{0,3})(?:ix|iv|v?i{0,3})$/u;
+
+const opensListItem = (line: string): boolean => {
+  if (LIST_ITEM_RE.test(line)) {
+    return true;
+  }
+  const roman = ROMAN_ITEM_RE.exec(line)?.[1];
+  return roman !== undefined && ROMAN_NUMERAL_RE.test(roman);
+};
+
+/**
+ * A page number, a bullet or a typist's initials ("ds", "a.bł.", "r p"):
+ * a paragraph of its own, never part of a sentence.
+ */
+const NOT_PROSE_RE =
+  /^(?:\d+|[^\p{L}\p{N}]+|(?:\p{Ll}{1,3}\.\s*|\p{Ll}{1,2}(?:\s+|$)){1,3})$/u;
+
+/** How a paragraph continues into the next one. */
+const PARAGRAPH_JOINS = {
+  BREAK: "break",
+  /** The line broke between two words. */
+  SPACE: "space",
+  /** The line broke after a hyphen, which stays: "rolno-" / "środowiskowe". */
+  HYPHEN: "hyphen",
+} as const;
+
+type ParagraphJoin = (typeof PARAGRAPH_JOINS)[keyof typeof PARAGRAPH_JOINS];
+
+/** How the line above a break continues into the line after it. */
+const joinOf = (above: string, next: string): ParagraphJoin => {
+  const lastWord = lastWordOf(above);
+  if (
+    CLOSING_RULE_RE.test(above) ||
+    CLOSES_CLAUSE_RE.test(lastWord) ||
+    (CLOSES_SENTENCE_RE.test(lastWord) && !closesAbbreviation(lastWord)) ||
+    opensListItem(next) ||
+    NOT_PROSE_RE.test(above) ||
+    NOT_PROSE_RE.test(next)
+  ) {
+    return PARAGRAPH_JOINS.BREAK;
+  }
+  if (/^\p{Ll}/u.test(next)) {
+    return /\p{L}-$/u.test(above)
+      ? PARAGRAPH_JOINS.HYPHEN
+      : PARAGRAPH_JOINS.SPACE;
+  }
+  // A date or a figure the line broke before: "z dnia 14 lipca" / "2021 r.".
+  return /^\d/u.test(next) && /[\p{Ll},]$/u.test(above)
+    ? PARAGRAPH_JOINS.SPACE
+    : PARAGRAPH_JOINS.BREAK;
+};
+
+/**
+ * Paragraphs whose sentence the dataset broke, joined back into one. Each
+ * join is read off the two lines either side of the break.
+ */
+const withSentencesJoined = (paragraphs: readonly string[]): string[] => {
+  const [first, ...rest] = paragraphs;
+  if (first === undefined) {
+    return [];
+  }
+  const joined: string[] = [];
+  let current = first;
+  let above = first;
+  for (const line of rest) {
+    const join = joinOf(above, line);
+    switch (join) {
+      case PARAGRAPH_JOINS.BREAK:
+        joined.push(current);
+        current = line;
+        break;
+      case PARAGRAPH_JOINS.SPACE:
+        current = `${current} ${line}`;
+        break;
+      case PARAGRAPH_JOINS.HYPHEN:
+        current = `${current}${line}`;
+        break;
+      default: {
+        join satisfies never;
+        panic("Unhandled paragraph join");
+      }
+    }
+    above = line;
+  }
+  joined.push(current);
+  return joined;
+};
+
+// ── Superscript article numbers ──────────────────────────
+//
+// Article numbers such as 23¹ reach the dataset in several forms. Two keep a
+// mark of the superscript. The digit set apart ("art. 23 ¹") always joins its
+// number. A prime in its place ("art. 23' Kodeksu pracy") becomes the
+// superscript only where the document writes the same article of the same
+// statute with one superscript, and only where the prime does not close a
+// quotation ("‘art. 23’"). A superscript merged into the number
+// ("art. 231") left no mark, and 231 is an article number in its own right,
+// so it stays as published.
+
+/** An article number, then a space before its superscript. */
+const SPACED_SUPERSCRIPT_RE = /(\bart\.\s?\d+) (?=[⁰¹²³⁴⁵⁶⁷⁸⁹])/gu;
+
+/** An article number and the superscript written on it: "art. 23¹". */
+const ARTICLE_SUPERSCRIPT_RE = /\bart\.\s?(\d+)([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/gu;
+
+/** A prime after an article number, not part of a word: "art. 23' §". */
+const PRIMED_ARTICLE_RE = /(?<=\bart\.\s?)(\d+)(['’`´])(?![\p{L}\p{N}])/gu;
+
+/** A part of an article between it and its statute: "§ 1", "ust. 2". */
+const SUBDIVISION_RE =
+  /^\s*(?:§|par\.|ust\.|pkt|zd\.|lit\.)\s*[\d\p{Ll}]{1,4}[).]?/u;
+
+/** A statute named by its abbreviation: "k.p.", "K. p.", "u.p.d.o.f.". */
+const STATUTE_ABBREVIATION_RE = /^\s*((?:\p{L}{1,6}\.\s?)+)/u;
+
+/** The words of a statute's name: "Kodeksu pracy", "ustawy … 1997". */
+const STATUTE_WORD_RE = /\p{L}{3,}|\d+/gu;
+
+/** How far after an article its statute is read. */
+const STATUTE_WINDOW = 120;
+
+/**
+ * The statute an article names, from the text after it: its abbreviation,
+ * or the first two words of its name. Spaces, dots and case do not count.
+ */
+const statuteAfter = (text: string): string => {
+  let rest = text.slice(0, STATUTE_WINDOW);
+  for (
+    let subdivision = SUBDIVISION_RE.exec(rest);
+    subdivision !== null;
+    subdivision = SUBDIVISION_RE.exec(rest)
+  ) {
+    rest = rest.slice(subdivision[0].length);
+  }
+  const abbreviation = STATUTE_ABBREVIATION_RE.exec(rest)?.[1];
+  const name =
+    abbreviation ??
+    Array.from(
+      (rest.split(/[;:,()„"”‘’]/u).at(0) ?? "").matchAll(STATUTE_WORD_RE),
+      ([word]) => word,
+    )
+      .slice(0, 2)
+      .join("");
+  return name.replaceAll(/[\s.]/gu, "").toLocaleLowerCase("pl-PL");
+};
+
+/** The quotation mark a prime closes, when it can close one. */
+const QUOTE_OPENERS = new Map([
+  ["’", "‘"],
+  ["´", "`"],
+]);
+
+const occurrences = (text: string, mark: string): number =>
+  text.split(mark).length - 1;
+
+/**
+ * Whether a prime closes a quotation opened earlier in the paragraph. The
+ * primes of other article numbers are not quotation marks, read or not.
+ */
+const closesQuotation = (prime: string, before: string): boolean => {
+  const quoted = before.replaceAll(PRIMED_ARTICLE_RE, "$1");
+  if (prime === "'") {
+    return occurrences(quoted, "'") % 2 === 1;
+  }
+  const opener = QUOTE_OPENERS.get(prime);
+  return (
+    opener !== undefined &&
+    occurrences(quoted, opener) > occurrences(quoted, prime)
+  );
+};
+
+/** "<article> <statute>" to the one superscript the document writes on it. */
+type PlNsaStatedSuperscripts = ReadonlyMap<string, string>;
+
+const articleKey = (number: string, statute: string): string =>
+  `${number} ${statute}`;
+
+/**
+ * The superscript each article of each statute carries where the document
+ * writes it properly. An article written with two different superscripts
+ * names neither.
+ */
+export const plNsaStatedSuperscripts = (
+  texts: readonly (string | null)[],
+): PlNsaStatedSuperscripts => {
+  const stated = new Map<string, Set<string>>();
+  for (const text of texts) {
+    const written = (text ?? "").replaceAll(SPACED_SUPERSCRIPT_RE, "$1");
+    for (const match of written.matchAll(ARTICLE_SUPERSCRIPT_RE)) {
+      const [whole, number, superscript] = match;
+      if (number !== undefined && superscript !== undefined) {
+        const key = articleKey(
+          number,
+          statuteAfter(written.slice(match.index + whole.length)),
+        );
+        stated.set(key, (stated.get(key) ?? new Set()).add(superscript));
+      }
+    }
+  }
+  const unambiguous = new Map<string, string>();
+  for (const [key, superscripts] of stated) {
+    const [only, ...others] = superscripts;
+    if (only !== undefined && others.length === 0) {
+      unambiguous.set(key, only);
+    }
+  }
+  return unambiguous;
+};
+
+const withSuperscripts = (
+  paragraph: string,
+  stated: PlNsaStatedSuperscripts,
+): string => {
+  const written = paragraph.replaceAll(SPACED_SUPERSCRIPT_RE, "$1");
+  return written.replaceAll(
+    PRIMED_ARTICLE_RE,
+    (primed, number: string, prime: string, offset: number) => {
+      if (closesQuotation(prime, written.slice(0, offset))) {
+        return primed;
+      }
+      const superscript = stated.get(
+        articleKey(number, statuteAfter(written.slice(offset + primed.length))),
+      );
+      return superscript === undefined ? primed : `${number}${superscript}`;
+    },
+  );
+};
+
+/**
+ * Paragraphs of one column as the court wrote them: page furniture dropped,
+ * broken sentences joined, the superscripts the dataset marked restored.
+ */
+export const plNsaParagraphs = (
+  text: string,
+  stated: PlNsaStatedSuperscripts,
+): string[] =>
+  withSentencesJoined(withoutPageFurniture(splitParagraphs(text))).map(
+    (paragraph) => withSuperscripts(paragraph, stated),
+  );
+
 const escapeHtml = (text: string): string =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
 type Built = { blocks: Block[]; sections: DecisionSection[] };
 
-const fromSections = (sectionTexts: PlNsaSectionTexts): Built => {
+const fromSections = (
+  sectionTexts: PlNsaSectionTexts,
+  stated: PlNsaStatedSuperscripts,
+): Built => {
   const blocks: Block[] = [];
   const sections: DecisionSection[] = [];
   for (const section of PL_NSA_TEXT_SECTIONS) {
     const text = sectionTexts[section];
-    const paragraphs = text === null ? [] : plNsaParagraphs(text);
+    const paragraphs = text === null ? [] : plNsaParagraphs(text, stated);
     if (paragraphs.length === 0) {
       continue;
     }
@@ -184,25 +585,47 @@ const fromReference = (paragraphs: readonly string[]): Built => ({
 export const parsePlNsaDecision = (
   input: ParsePlNsaDecisionInput,
 ): ParsePlNsaDecisionOutput => {
-  const structured = fromSections(input.sections);
+  const stated = plNsaStatedSuperscripts(
+    input.reference === null
+      ? PL_NSA_TEXT_SECTIONS.map((section) => input.sections[section])
+      : [input.reference],
+  );
+  const structured = fromSections(input.sections, stated);
+  const structuredParagraphs = structured.blocks.flatMap((block) =>
+    block.type === "paragraph" ? [block.plainText] : [],
+  );
   // The reference is the dataset's own full rendering where it states one,
   // so text the sections do not carry reads as lost rather than passing a
-  // check of the input against itself.
+  // check of the input against itself. It is read as published, less only
+  // its page numbers, so a word the reading drops shows as lost.
   const referenceParagraphs =
     input.reference === null
-      ? structured.blocks.flatMap((block) =>
-          block.type === "paragraph" ? [block.plainText] : [],
-        )
-      : plNsaParagraphs(input.reference);
+      ? structuredParagraphs
+      : withoutPageFurniture(splitParagraphs(input.reference));
   const referenceHtml = buildValidationHtml(
     referenceParagraphs.map(escapeHtml),
   );
+  // Words as the reading joins them ("rolno-" / "środowiskowych" is one
+  // word): the source's own characters, so a word it drops still shows.
+  const comparison = {
+    wordComparisonText: withSentencesJoined(referenceParagraphs).join("\n\n"),
+  };
 
   const sectionsHoldEverything =
     structured.blocks.length > 0 &&
-    validateAst(referenceHtml, structured.blocks).ok;
+    validateAst(referenceHtml, structured.blocks, comparison).ok;
   const fallBack = !sectionsHoldEverything && referenceParagraphs.length > 0;
-  const chosen = fallBack ? fromReference(referenceParagraphs) : structured;
+  const chosen = fallBack
+    ? fromReference(
+        input.reference === null
+          ? structuredParagraphs
+          : plNsaParagraphs(input.reference, stated),
+      )
+    : structured;
+  const thesis =
+    input.sections.thesis === null
+      ? null
+      : plNsaParagraphs(input.sections.thesis, stated).join("\n\n");
   let textSource: PlNsaTextSource = "none";
   if (fallBack) {
     textSource = "full-text";
@@ -229,7 +652,7 @@ export const parsePlNsaDecision = (
   // Measured, not logged: the verdict becomes the `textComplete` metadata,
   // and the pipeline reports retention (and an empty decision) for what is
   // stored.
-  const validation = validateAst(referenceHtml, blocks);
+  const validation = validateAst(referenceHtml, blocks, comparison);
 
   if (blocks.length === 0) {
     return {
@@ -238,6 +661,7 @@ export const parsePlNsaDecision = (
       sections: [],
       validation,
       textSource,
+      thesis,
     };
   }
 
@@ -265,5 +689,6 @@ export const parsePlNsaDecision = (
     sections: chosen.sections,
     validation,
     textSource,
+    thesis,
   };
 };

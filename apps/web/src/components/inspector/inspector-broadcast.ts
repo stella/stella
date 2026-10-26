@@ -790,8 +790,15 @@ export const createInspectorBroadcastSession = (
       });
     } catch (error) {
       getAnalytics().captureError(error, {
-        type: "detached",
-        operation: "inspector-tabs.broadcast",
+        fingerprintKey: "createInspectorBroadcastSession.postTabs:failure",
+        scope: {
+          type: "handler",
+          handlerId: "createInspectorBroadcastSession.postTabs:failure",
+        },
+        context: {
+          type: "detached",
+          operation: "inspector-tabs.broadcast",
+        },
       });
     }
   };

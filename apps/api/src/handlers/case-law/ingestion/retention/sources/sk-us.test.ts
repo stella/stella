@@ -49,10 +49,10 @@ const RECORDED = [
 
 /** The page's shared reads, answered absent: only the document matters here. */
 const ABSENT_PAGE: SkUsPageContext = {
-  collectionListing: async () => await Promise.resolve(readAbsent("http-404")),
-  codelist: async () => await Promise.resolve(readAbsent("http-404")),
-  facets: async () => await Promise.resolve(readAbsent("http-404")),
-  courtFile: async () => await Promise.resolve(readAbsent("http-404")),
+  collectionListing: async () => readAbsent("http-404"),
+  codelist: async () => readAbsent("http-404"),
+  facets: async () => readAbsent("http-404"),
+  courtFile: async () => readAbsent("http-404"),
 };
 
 const recordedContent = async (url: URL): Promise<string> => {
@@ -71,22 +71,18 @@ const crawledDecision = async (
   globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.pathname === "/o/v1/dms/content") {
-      return Promise.resolve(
-        new Response(JSON.stringify({ content }), {
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
+      return new Response(JSON.stringify({ content }), {
+        headers: { "Content-Type": "application/json" },
+      });
     }
     if (url.pathname.startsWith("/docDownload/")) {
-      return Promise.resolve(
-        new Response(new TextEncoder().encode("%PDF-1.4\n"), {
-          headers: { "Content-Type": "application/pdf" },
-        }),
-      );
+      return new Response(new TextEncoder().encode("%PDF-1.4\n"), {
+        headers: { "Content-Type": "application/pdf" },
+      });
     }
-    return Promise.resolve(
-      new Response(`unexpected request: ${url.toString()}`, { status: 500 }),
-    );
+    return new Response(`unexpected request: ${url.toString()}`, {
+      status: 500,
+    });
   });
   const built = await buildSkUsDecision(fixture.listing, {
     context: ABSENT_PAGE,

@@ -8,6 +8,8 @@ import { normalizeStatuteVersionSegment } from "@stll/api-contract/statute-route
 import { parsePlainDate } from "@stll/time";
 
 import { isStatuteCompareShow } from "@/features/statutes/statute-compare-search";
+import { optionalIntegerSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
 /**
  * A calendar day, not merely a date-shaped string: `2026-02-30` matches the
@@ -38,14 +40,10 @@ const provisionCitingSearchSchema = v.object({
       v.maxLength(PROVISION_CITING_FILTER_LIMITS.courtChars),
     ),
   ),
-  citingYear: v.optional(
-    v.pipe(
-      v.number(),
-      v.integer(),
-      v.minValue(PROVISION_CITING_FILTER_LIMITS.yearMin),
-      v.maxValue(PROVISION_CITING_FILTER_LIMITS.yearMax),
-    ),
-  ),
+  citingYear: optionalIntegerSearchSchema({
+    min: PROVISION_CITING_FILTER_LIMITS.yearMin,
+    max: PROVISION_CITING_FILTER_LIMITS.yearMax,
+  }),
   citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS), "newest"),
 });
 
@@ -80,7 +78,7 @@ export const updateProvisionCitingSearch = <T extends Record<string, unknown>>(
   };
 };
 
-export const publicStatuteSearchSchema = v.object({
+export const publicStatuteSearchSchema = routeSearchSchema({
   ...provisionCitingSearchSchema.entries,
   citingSort: v.optional(v.picklist(PROVISION_CITING_DECISION_SORTS)),
   q: v.optional(v.pipe(v.string(), v.trim())),

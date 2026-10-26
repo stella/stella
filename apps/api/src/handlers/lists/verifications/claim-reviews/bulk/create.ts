@@ -5,14 +5,14 @@
  */
 
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { legalListClaimReviewEvents } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
@@ -29,13 +29,14 @@ import {
   reviewedView,
 } from "@/api/lib/lists/verification/review-fold";
 
-const bodySchema = t.Object({
-  runId: tSafeId("legalListVerificationRun"),
-  claimIds: t.Array(tSafeId("legalListClaim"), {
-    minItems: 1,
-    maxItems: VERIFICATION_LIMITS.BULK_CLAIMS_MAX,
-    uniqueItems: true,
-  }),
+const bodySchema = v.object({
+  runId: resourceIdSchema("legalListVerificationRun"),
+  claimIds: v.pipe(
+    v.array(resourceIdSchema("legalListClaim")),
+    v.minLength(1),
+    v.maxLength(VERIFICATION_LIMITS.BULK_CLAIMS_MAX),
+    uniqueItems(),
+  ),
 });
 
 const config = {

@@ -323,7 +323,7 @@
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
       // Turbo hashes each workspace dependency closure from bun.lock. Root
-      // tools (typescript and bun-types) enter its global dependency hash;
+      // tools (tsrs and bun-types) enter its global dependency hash;
       // The narrow generated Bun pin is a global input. Hash shared source separately.
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -428,7 +428,7 @@
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
-      // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, typescript and
+      // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, tsrs and
       // better-result are covered by Turbo's global root dependency hash.
       // Type-aware lint reads the same external install and compiler inputs as
       // TypeScript, in addition to Oxlint's root config and plugins.
@@ -1021,7 +1021,7 @@
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
         "$TURBO_ROOT$/{apps,packages}/**/package.json",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
@@ -1094,7 +1094,7 @@
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
         "$TURBO_ROOT$/{apps,packages}/**/package.json",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
@@ -1134,7 +1134,6 @@
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
-        "$TURBO_ROOT$/packages/fetch/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
@@ -1165,7 +1164,7 @@
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
         "$TURBO_ROOT$/{apps,packages}/**/package.json",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
@@ -1248,7 +1247,7 @@
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
         "$TURBO_ROOT$/{apps,packages}/**/package.json",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
@@ -1323,7 +1322,7 @@
         "$TURBO_ROOT$/patches/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
         "$TURBO_ROOT$/{apps,packages}/**/package.json",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
@@ -1348,6 +1347,7 @@
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/api-contract/**",
+        "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
@@ -1361,7 +1361,7 @@
         "$TURBO_ROOT$/types/**",
         "$TURBO_ROOT$/packages/typescript-config/**",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,tsgo-compiler-options,child-exit-status,turbo-typecheck-inputs}.ts",
+        "$TURBO_ROOT$/packages/scripts/src/{api-typecheck-*,tsc-native,child-exit-status,turbo-typecheck-inputs}.ts",
         "$TURBO_ROOT$/{apps,packages}/**/package.json",
         "$TURBO_ROOT$/tsconfig*.json",
         "$TURBO_ROOT$/{apps,packages}/*/tsconfig*.json",
@@ -1470,8 +1470,6 @@
         "$TURBO_ROOT$/packages/skills/blueprints/**",
         "$TURBO_ROOT$/packages/skills/skills/**",
         "$TURBO_ROOT$/oxlint.config.ts",
-        "$TURBO_ROOT$/scripts/check-aggregate-mutations.ts",
-        "$TURBO_ROOT$/scripts/check-write-contracts.ts",
         "$TURBO_ROOT$/scripts/ledger-membership.ts",
         "$TURBO_ROOT$/scripts/ownership/**",
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"

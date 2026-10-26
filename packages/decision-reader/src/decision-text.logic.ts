@@ -36,7 +36,6 @@ import {
 } from "@stll/legal-ast/line-wrap";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 
-import { buildFulltextParagraphBlocks } from "./document-ast-text";
 import type { HeadnoteOrigin } from "./headnote-block";
 import type { ReaderDecision } from "./reader-types";
 
@@ -247,38 +246,6 @@ export const decisionDisplayReference = ({
     (block) => block.type === "paragraph" && block.role === "case-number",
   );
   return caseNumberBlock?.plainText ?? caseNumber;
-};
-
-/**
- * Remove structural metadata that the reader renders elsewhere. Content is
- * never hidden by matching its words: a court's title and constitutional
- * formula are part of the decision and remain visible as AST headings. The
- * case-number header is the reference line only for a docket primary; under
- * any other primary it is the docket, which nothing else shows, so it stays.
- */
-export const visibleDecisionBlocks = (
-  ast: DocumentAst | null,
-  caseNumberType: DecisionPrimaryReferenceType,
-  fulltext?: string | null,
-): Block[] => {
-  const docketIsReferenceLine =
-    caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER;
-  const visible: Block[] = [];
-  for (const block of ast?.blocks ?? []) {
-    if (
-      (docketIsReferenceLine &&
-        block.type === "paragraph" &&
-        block.role === "case-number") ||
-      (block.type === "table" && block.role === "related-proceedings")
-    ) {
-      continue;
-    }
-    visible.push(block);
-  }
-  if (visible.length > 0 || !fulltext) {
-    return visible;
-  }
-  return buildFulltextParagraphBlocks(fulltext);
 };
 
 /** Search-piece ids for publisher text the reader renders from a field. */
@@ -520,6 +487,10 @@ export type WrappedParagraphRuns = {
  * back into paragraphs. Planned over the blocks in document order, so a
  * block the top matter lifts out still breaks the runs around it; for a
  * document that is not fixed-width wrapped there are none.
+ *
+ * A fallback for rows stored before their parser rebuilt paragraphs at
+ * ingestion, deleted with the planner once the corpus is re-parsed (see
+ * `@stll/legal-ast/line-wrap`).
  */
 export const wrappedParagraphRuns = (
   blocks: readonly Block[],

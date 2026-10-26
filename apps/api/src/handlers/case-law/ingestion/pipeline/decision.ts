@@ -187,6 +187,14 @@ const runDecisionAttempt = async ({
       }),
   );
   const { existing, decisionId, composition } = identity;
+  const abandonRawWrite = async () =>
+    await recordAbandonedRawWrite({
+      scopedDb,
+      existing,
+      rawWrites,
+      decisionId,
+      sourceId,
+    });
 
   if (existing?.redactedAt) {
     return {
@@ -234,13 +242,7 @@ const runDecisionAttempt = async ({
     rawWrites,
   });
   if (sourceRawArtifact.type === "retry") {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
+    await abandonRawWrite();
     return sourceRawArtifact.outcome;
   }
   const rawArtifact = sourceRawArtifact.artifact;
@@ -306,13 +308,7 @@ const runDecisionAttempt = async ({
   const rowWrite = attempted.andThen((outcome) => outcome);
 
   if (Result.isError(rowWrite)) {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
+    await abandonRawWrite();
     if (isConcurrentIdentityInsert(rowWrite.error)) {
       return RECONCILE_CONTENTION;
     }
@@ -320,13 +316,7 @@ const runDecisionAttempt = async ({
   }
 
   if ("status" in rowWrite.value) {
-    await recordAbandonedRawWrite({
-      scopedDb,
-      existing,
-      rawWrites,
-      decisionId,
-      sourceId,
-    });
+    await abandonRawWrite();
     return RECONCILE_CONTENTION;
   }
   const { write, writeStatus } = rowWrite.value;
@@ -346,8 +336,8 @@ const runDecisionAttempt = async ({
   // it reads the adapter's own observation, before any supplement joined it,
   // since the projection reads what this decision's publisher served. It
   // runs once per applied write, so an unchanged decision or a retried
-  // contention is not reported again, and nothing it does (a PDF parse, a
-  // failure, this write's abort) can delay or fail the write's outcome.
+  // contention is not reported again. PDF parsing runs in a subprocess;
+  // check failures and this write's abort never reject the write.
   if (shape.incomingCarriesDocument) {
     detached(
       startDecisionRetentionCheck({

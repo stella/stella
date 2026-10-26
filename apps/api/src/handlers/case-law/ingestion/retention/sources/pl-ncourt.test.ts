@@ -118,11 +118,11 @@ describe("pl-ncourt retention", () => {
       const decision = observed(await build());
       const ast = decision.documentAst;
       if (!hasUsableAst(ast)) {
-        return panic(`${id} built no document`);
+        panic(`${id} built no document`);
       }
       const projection = await project(decision.sourceRaw);
       if (projection.type !== "source") {
-        return panic(`${id}: ${projection.type}`);
+        panic(`${id}: ${projection.type}`);
       }
       const result = validateAst(
         projection.source,

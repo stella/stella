@@ -91,5 +91,5 @@ export const projectPlTkSourceRaw = (
 export const plTkRetention: RetentionPolicy = {
   type: "checked",
   project: async (sourceRaw) =>
-    Promise.resolve(projectPlTkSourceRaw(sourceRaw)),
+    await Promise.resolve(projectPlTkSourceRaw(sourceRaw)),
 };

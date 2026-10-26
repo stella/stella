@@ -12,7 +12,6 @@
  * break, so the projection asks the oracle to read the source either way
  * (`hyphenatedLineBreaks`) rather than inventing the joined word itself.
  */
-import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 
 import {
@@ -20,6 +19,8 @@ import {
   RETENTION_TEXT_ABSENCE,
   type RetentionProjection,
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
+import { readPdfTextLines } from "@/api/lib/files/pdf-text-lines";
+import { PDF_WORKER_PARSE_ERROR_EXIT_CODE } from "@/api/lib/files/pdf-worker-protocol";
 
 /**
  * The largest PDF a projection reads. Loading and extracting a PDF is
@@ -29,6 +30,7 @@ import {
  * a fifth of the budget; a larger file is stored unchecked and logged.
  */
 export const PDF_PROJECTION_MAX_BYTES = 2 * 1024 * 1024;
+const PDF_PROJECTION_TIMEOUT_MS = 30_000;
 
 /**
  * The PDF's text as a projection: every line of every page. Bytes no PDF
@@ -45,15 +47,7 @@ export const projectPdfText = async (
       reason: RETENTION_TEXT_ABSENCE.OVER_CHECK_BUDGET,
     };
   }
-  const read = await Result.tryPromise({
-    try: async () => {
-      const pdf = await PDF.load(bytes);
-      return pdf
-        .getPages()
-        .flatMap((page) => page.extractText().lines.map(({ text }) => text));
-    },
-    catch: (cause) => cause,
-  });
+  const read = await readPdfTextLines(bytes, PDF_PROJECTION_TIMEOUT_MS);
   return Result.isOk(read)
     ? {
         type: "source",
@@ -62,6 +56,9 @@ export const projectPdfText = async (
       }
     : {
         type: "unreadable",
-        reason: RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT,
+        reason:
+          read.error.exitCode === PDF_WORKER_PARSE_ERROR_EXIT_CODE
+            ? RETENTION_PROJECTION_FAILURE.UNREADABLE_DOCUMENT
+            : RETENTION_PROJECTION_FAILURE.WORKER_FAILED,
       };
 };

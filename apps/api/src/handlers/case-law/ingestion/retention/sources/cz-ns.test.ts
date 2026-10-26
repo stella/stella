@@ -105,10 +105,14 @@ describe("cz-ns retention against the print page the court served", () => {
   test("the metadata table is the record's metadata, not decision text", async () => {
     const decision = await czNsFixture().buildDecision();
     const projection = await projectionOf(decision.sourceRaw ?? "");
-    expect(projection.type).toBe("source");
-    expect(
-      projection.type === "source" ? String(projection.source) : "",
-    ).not.toContain("box-table-a");
+    if (projection.type !== "source") {
+      panic(`expected projected text, got ${projection.type}`);
+    }
+    const sourceText =
+      typeof projection.source === "string"
+        ? projection.source
+        : projection.source.paragraphs.join("\n");
+    expect(sourceText).not.toContain("box-table-a");
   });
 
   test("a row stored before the envelope projects the same text", async () => {
@@ -135,7 +139,7 @@ describe("cz-ns retention against the print page the court served", () => {
       metadata: decision.metadata,
     });
     if (replay?.type !== "parsed") {
-      return panic(`the legacy row did not replay: ${replay?.type}`);
+      panic(`the legacy row did not replay: ${replay?.type ?? "missing"}`);
     }
     expect(replay.result.sourceRaw).toBe(legacyRaw);
     const result = await retentionOf(replay.result);

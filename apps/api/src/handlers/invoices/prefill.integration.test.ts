@@ -23,7 +23,9 @@ import {
   vatRates,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { cents } from "@/api/lib/money";
@@ -113,7 +115,7 @@ afterEach(async () => {
 });
 afterAll(releaseRlsFixture);
 
-const context = <TContext>(
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   body: unknown,
   {
@@ -136,7 +138,7 @@ const context = <TContext>(
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     request: new Request("https://example.test/invoices", { method: "PUT" }),
-    route: "/test/invoice-prefill",
+    route: "/v1/invoices/:workspaceId/prefill" satisfies ApiRoutePath,
     memberRole: sessionMemberRole(role),
     getWorkspaceAccess: async () => ({ id: ids.wsA2, status: "active" }),
     getActiveWorkspaceIds: async () => [ids.wsA2],

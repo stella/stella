@@ -100,5 +100,6 @@ const projectCzRegional = (sourceRaw: string): RetentionProjection => {
 
 export const czRegionalRetention: RetentionPolicy = {
   type: "checked",
-  project: async (sourceRaw) => Promise.resolve(projectCzRegional(sourceRaw)),
+  project: async (sourceRaw) =>
+    await Promise.resolve(projectCzRegional(sourceRaw)),
 };

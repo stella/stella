@@ -86,13 +86,13 @@ describe("pl-sn retention projection", () => {
     const decision = await rebuilt(await recordedDecision());
     const ast = decision.documentAst;
     if (!hasUsableAst(ast)) {
-      return panic("the adapter built no document");
+      panic("the adapter built no document");
     }
     const projection = await project(
       decision.sourceRaw ?? panic("no sourceRaw"),
     );
     if (projection.type !== "source") {
-      return panic(`projection answered ${projection.type}`);
+      panic(`projection answered ${projection.type}`);
     }
     const result = validateAst(
       projection.source,
@@ -109,13 +109,13 @@ describe("pl-sn retention projection", () => {
     const decision = await rebuilt(await recordedDecision());
     const ast = decision.documentAst;
     if (!hasUsableAst(ast)) {
-      return panic("the adapter built no document");
+      panic("the adapter built no document");
     }
     const projection = await project(
       decision.sourceRaw ?? panic("no sourceRaw"),
     );
     if (projection.type !== "source") {
-      return panic(`projection answered ${projection.type}`);
+      panic(`projection answered ${projection.type}`);
     }
     const longest = ast.blocks
       .toSorted((left, right) => right.plainText.length - left.plainText.length)

@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { createHmac } from "node:crypto";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type { FetchWithTimeoutInit } from "@stll/fetch";
@@ -101,7 +100,10 @@ describe("authenticated account status", () => {
     });
     expect(headers).toEqual({
       "x-stella-bridge-time": timestamp,
-      "x-stella-bridge-proof": createHmac("sha256", challenge.portSecret)
+      "x-stella-bridge-proof": new Bun.CryptoHasher(
+        "sha256",
+        challenge.portSecret,
+      )
         .update(`${timestamp}\nGET\n${path}`)
         .digest("hex"),
     });
@@ -128,7 +130,7 @@ describe("authenticated account status", () => {
         correlationId: challenge.correlationId,
         status,
         timestamp,
-        proof: createHmac("sha256", challenge.portSecret)
+        proof: new Bun.CryptoHasher("sha256", challenge.portSecret)
           .update(`${challenge.correlationId}\n${status}\n${timestamp}`)
           .digest("hex"),
       };

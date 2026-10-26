@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
@@ -29,13 +29,13 @@ import type {
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -47,6 +47,7 @@ import {
   OrganizationFileUsageError,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { isMissingS3ObjectError } from "@/api/lib/s3";
 import {
   copyObject,
@@ -83,13 +84,11 @@ const config = {
     reason: "assistant_chat",
     consumesServices: false,
   },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-  }),
-  body: t.Object({
-    newThreadId: tSafeId("chatThread"),
-    upToMessageId: tSafeId("chatMessage"),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
+  body: v.object({
+    newThreadId: resourceIdSchema("chatThread"),
+    upToMessageId: resourceIdSchema("chatMessage"),
   }),
 } satisfies HandlerConfig;
 
@@ -571,7 +570,12 @@ const rollbackCopiedS3Keys = async (
   });
   const completed = Result.flatten(deleted);
   if (Result.isError(completed)) {
-    captureError(completed.error, { source: "chat-fork-rollback" });
+    captureError(
+      completed.error,
+      handlerErrorContext("fork.rollbackCopiedS3Keys.completed_error", {
+        source: "chat-fork-rollback",
+      }),
+    );
   }
 };
 
@@ -801,10 +805,10 @@ export const createForkThread = ({
             message:
               "Chat fork prefix references attachments with no user_files row",
           }),
-          {
+          handlerErrorContext("chat.fork.missingAttachmentRow", {
             fileIds: unresolvedFileIds.join(","),
             threadId: params.threadId,
-          },
+          }),
         );
       }
       const forkWorkspaceId = source.workspaceId;
@@ -850,11 +854,11 @@ export const createForkThread = ({
             message:
               "Chat fork prefix references attachments whose storage objects are gone",
           }),
-          {
+          handlerErrorContext("chat.fork.missingAttachmentObject", {
             fileIds: missingObjectFileIds.join(","),
             threadId: params.threadId,
             thumbnailFileIds: missingThumbnailFileIds.join(","),
-          },
+          }),
         );
       }
       const copiedFileIds = new Map(
@@ -1007,7 +1011,11 @@ export const createForkThread = ({
       // Fire-and-forget after the fork commits: indexing must never block or
       // fail it. Rebuilds both the thread and message search documents for the
       // new thread. Mirrors rename-thread.ts and send-message.ts.
-      indexChatThread(newThreadId).catch(captureError);
+      indexChatThread(newThreadId).catch(
+        createErrorCapture(
+          handlerErrorContext("createForkThread.indexChatThread"),
+        ),
+      );
 
       return Result.ok({ threadId: newThreadId, title: source.title });
     },

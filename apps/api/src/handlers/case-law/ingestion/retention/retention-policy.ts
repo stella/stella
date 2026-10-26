@@ -57,6 +57,8 @@ export type RetentionTextAbsence =
 
 /** Why a source's stored raw cannot be read as the projection expects. */
 export const RETENTION_PROJECTION_FAILURE = {
+  /** The isolated projection could not complete; not a verdict on the file. */
+  WORKER_FAILED: "projection-worker-failed",
   /** The stored raw is not the envelope the source writes (bad JSON, say). */
   UNREADABLE_ENVELOPE: "unreadable-envelope",
   /** The envelope parses but lacks the part that holds the decision text. */

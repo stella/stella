@@ -1,5 +1,5 @@
 import { PDF } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -103,6 +103,26 @@ describe("projectPdfText", () => {
     expect(validateAst(projection.source, lost, projection.options).ok).toBe(
       false,
     );
+  });
+
+  test("PDF projection never parses in the writer process at either input size", async () => {
+    const inputs = await Promise.all(
+      [1, 10].map(
+        async (size) =>
+          await pdfOf(Array.from({ length: size }, () => LINES).flat()),
+      ),
+    );
+    const parentParse = spyOn(PDF, "load").mockImplementation(() => {
+      throw new TypeError("PDF parsing ran in the writer process");
+    });
+    try {
+      for (const bytes of inputs) {
+        expect((await projectPdfText(bytes)).type).toBe("source");
+        expect(parentParse).not.toHaveBeenCalled();
+      }
+    } finally {
+      parentParse.mockRestore();
+    }
   });
 
   test("a file over the budget is left unchecked without being read", async () => {

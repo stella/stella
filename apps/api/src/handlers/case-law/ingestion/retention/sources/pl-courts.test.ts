@@ -115,7 +115,7 @@ describe("pl-courts retention projection", () => {
         decision.sourceRaw ?? panic("no sourceRaw"),
       );
       if (projection.type !== "source") {
-        return panic(`unexpected projection ${projection.type}`);
+        panic(`unexpected projection ${projection.type}`);
       }
       const result = validateAst(
         projection.source,

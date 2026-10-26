@@ -92,5 +92,5 @@ const projectPlUodo = (sourceRaw: string): RetentionProjection => {
 
 export const plUodoRetention: RetentionPolicy = {
   type: "checked",
-  project: async (sourceRaw) => Promise.resolve(projectPlUodo(sourceRaw)),
+  project: async (sourceRaw) => await Promise.resolve(projectPlUodo(sourceRaw)),
 };

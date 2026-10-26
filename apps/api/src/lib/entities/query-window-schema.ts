@@ -1,71 +1,87 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { tFind } from "@/api/lib/entities/find-schema";
 import { ENTITIES_WINDOW_CURSOR_MAX_LENGTH } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
-export const entityQueryWindowBodySchema = t.Object({
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+export const entityQueryWindowBodySchema = v.object({
+  filters: v.optional(
+    v.pipe(v.array(tConditionNode), v.maxLength(LIMITS.viewFiltersCount)),
   ),
-  sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
+  sorts: v.optional(
+    v.pipe(v.array(tViewSortSchema), v.maxLength(LIMITS.viewSortsCount)),
   ),
-  search: t.Optional(
-    t.String({
-      maxLength: LIMITS.searchQueryMaxLength,
-      description:
+  search: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description(
         "Rank rows by relevance against the asynchronous document-title " +
-        "index, and sort by that relevance. For a literal substring filter " +
-        "over the rendered rows, use `find`.",
-    }),
+          "index, and sort by that relevance. For a literal substring filter " +
+          "over the rendered rows, use `find`.",
+      ),
+    ),
   ),
-  find: t.Optional(tFind),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.entitiesWindowSizeMax,
-    }),
+  find: v.optional(tFind),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(LIMITS.entitiesWindowSizeMax),
+    ),
   ),
-  cursor: t.Optional(
-    tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
+  cursor: v.optional(
+    paginationCursorSchema({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
   ),
-  excludedKinds: t.Optional(
-    t.Array(t.UnionEnum([...ENTITY_KINDS]), {
-      maxItems: ENTITY_KINDS.length,
-    }),
+  excludedKinds: v.optional(
+    v.pipe(
+      v.array(v.picklist([...ENTITY_KINDS])),
+      v.maxLength(ENTITY_KINDS.length),
+    ),
   ),
-  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
-  fieldIds: t.Optional(
-    t.Array(tSafeId("property"), {
-      maxItems: LIMITS.propertiesCount,
-    }),
+  fieldMode: v.optional(v.picklist(["full", "visible"])),
+  fieldIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("property")),
+      v.maxLength(LIMITS.propertiesCount),
+    ),
   ),
-  previewableForAi: t.Optional(t.Boolean()),
-  // Opt in when a view renders or groups by task assignees.
-  includeAssignees: t.Optional(t.Boolean()),
+  previewableForAi: v.optional(v.boolean()),
+  includeAssignees: v.optional(v.boolean()),
 });
 
-export const entityReadPageBodySchema = t.Object({
-  ...t.Pick(entityQueryWindowBodySchema, [
+export const entityReadPageBodySchema = v.object({
+  ...v.pick(entityQueryWindowBodySchema, [
     "filters",
     "sorts",
-    "search",
     "cursor",
     "fieldMode",
     "fieldIds",
-  ]).properties,
-  search: {
-    ...entityQueryWindowBodySchema.properties.search,
-    description:
-      "Rank rows by relevance against the asynchronous document-title index.",
-  },
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.entitiesPageSizeMax }),
+  ]).entries,
+  search: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+      v.description(
+        "Rank rows by relevance against the asynchronous document-title index.",
+      ),
+    ),
+  ),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(LIMITS.entitiesPageSizeMax),
+    ),
   ),
 });

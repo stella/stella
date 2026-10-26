@@ -67,5 +67,5 @@ const projectFindokDecision = (sourceRaw: string): RetentionProjection => {
 export const atFindokRetention: RetentionPolicy = {
   type: "checked",
   project: async (sourceRaw) =>
-    Promise.resolve(projectFindokDecision(sourceRaw)),
+    await Promise.resolve(projectFindokDecision(sourceRaw)),
 };

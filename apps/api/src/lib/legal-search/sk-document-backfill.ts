@@ -142,6 +142,7 @@ import {
   DOCUMENT_SCAN_PAGE_LIMIT,
   DOCUMENT_SCAN_REPROBE_MS,
 } from "@/api/lib/legal-search/sk-document-remaining-scan";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -1055,10 +1056,16 @@ const storedForCorpusOutcome = (
       if (isDeferredDocumentOwnershipLost(outcome.error)) {
         throw outcome.error;
       }
-      captureError(outcome.error, {
-        decisionId,
-        step: "storeBackfilledDocument.corpusBatchWrite",
-      });
+      captureError(
+        outcome.error,
+        handlerErrorContext(
+          "legalsearch.storedForCorpusOutcome.outcome_error",
+          {
+            decisionId,
+            step: "storeBackfilledDocument.corpusBatchWrite",
+          },
+        ),
+      );
       return false;
     default:
       outcome satisfies never;
@@ -1278,10 +1285,16 @@ const storeBackfilledDocumentOwned = async ({
     // backfill reselects while the row is missing. Failing the store here
     // would make the queue fetch and parse the document again only to find
     // the row already filled.
-    captureError(indexed.error, {
-      decisionId: decision.id,
-      step: "storeBackfilledDocument.indexDecision",
-    });
+    captureError(
+      indexed.error,
+      handlerErrorContext(
+        "legalsearch.storeBackfilledDocumentOwned.indexed_error",
+        {
+          decisionId: decision.id,
+          step: "storeBackfilledDocument.indexDecision",
+        },
+      ),
+    );
     logger.error("case_law.search_index.store_projection_failed", {
       decisionId: decision.id,
       ...errorSystemFields(indexed.error),

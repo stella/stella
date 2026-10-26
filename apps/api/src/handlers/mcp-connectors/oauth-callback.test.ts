@@ -5,11 +5,13 @@ import mcpOAuthCallback, {
   buildCallbackRedirectUrl,
   createMcpOAuthCallbackHandler,
 } from "@/api/handlers/mcp-connectors/oauth-callback";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   getRequestId,
-  initRequestContext,
+  openRequestContext,
+  runWithRequestIdScope,
 } from "@/api/lib/observability/request-context";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -98,6 +100,8 @@ const callbackContext = (
   },
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    request: new Request("https://api.example.com/v1/mcp/oauth/callback"),
+    route: "/v1/mcp/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(
       async (operation: (tx: unknown) => unknown) => {
@@ -353,17 +357,12 @@ describe("mcpOAuthCallback identity binding", () => {
   });
 });
 
-const scopedRequest = (): Request => {
-  const request = new Request("https://api.test/mcp/oauth/callback");
-  initRequestContext(request);
-  return request;
-};
-
 const failingLookupContext = (
   error: unknown,
-  request: Request = scopedRequest(),
+  request: Request = new Request("https://api.test/mcp/oauth/callback"),
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
+    route: "/v1/mcp/oauth/callback" satisfies ApiRoutePath,
     query: { code: "auth-code", state: "state-token" },
     request,
     safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => Result.err(error)),
@@ -421,17 +420,18 @@ describe("mcpOAuthCallback failure reporting", () => {
   });
 
   test("logs the failure with the request id", async () => {
-    const request = scopedRequest();
-    await mcpOAuthCallback.handler(
-      failingLookupContext(
-        new HandlerError({ status: 500, message: "db down" }),
-        request,
-      ),
-    );
+    await runWithRequestIdScope(async () => {
+      openRequestContext();
+      await mcpOAuthCallback.handler(
+        failingLookupContext(
+          new HandlerError({ status: 500, message: "db down" }),
+        ),
+      );
 
-    expect(failureRecords().map((record) => record.attributes)).toMatchObject([
-      { "request.id": getRequestId(request), operation: "mcp_oauth_callback" },
-    ]);
+      expect(failureRecords().map((record) => record.attributes)).toMatchObject(
+        [{ "request.id": getRequestId(), operation: "mcp_oauth_callback" }],
+      );
+    });
   });
 
   test("logs a transient network failure as a warning without reporting it", async () => {

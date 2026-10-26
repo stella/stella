@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
@@ -140,7 +141,7 @@ const mount = async () => {
                   ai: false,
                   deepl: false,
                   desktop: "none",
-                  ocr: false,
+                  ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                   role: "member",
                   settings: undefined,
                 })}

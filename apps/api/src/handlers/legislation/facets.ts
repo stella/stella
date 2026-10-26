@@ -1,7 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
@@ -16,6 +15,7 @@ import {
   projectLegislationFacets,
 } from "@/api/handlers/legislation/catalog-response";
 import { readNonRedistributableLegislationSourceIdsQuery } from "@/api/handlers/legislation/non-redistributable-sources";
+import { status } from "@/api/http/status";
 import { errorTag } from "@/api/lib/errors/utils";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
@@ -40,11 +40,13 @@ import { logger } from "@/api/lib/observability/logger";
  * and slow-moving, so it is read from a snapshot the scheduler refreshes.
  */
 
-export const legislationFacetsQuerySchema = t.Object({
+export const legislationFacetsQuerySchema = v.object({
   country: tPublicLawCountry,
 });
 
-type LegislationFacetsQuery = Static<typeof legislationFacetsQuerySchema>;
+type LegislationFacetsQuery = v.InferOutput<
+  typeof legislationFacetsQuerySchema
+>;
 
 type LegislationFacetBucket = { value: string; count: number };
 

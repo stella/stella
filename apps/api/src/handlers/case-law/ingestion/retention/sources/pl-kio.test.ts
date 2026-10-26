@@ -55,7 +55,7 @@ describe("pl-kio retention projection", () => {
         decision.sourceRaw ?? panic("no sourceRaw"),
       );
       if (projection.type !== "source" || !("blocks" in ast)) {
-        return panic(`unexpected projection ${projection.type}`);
+        panic(`unexpected projection ${projection.type}`);
       }
       const result = validateAst(
         projection.source,
