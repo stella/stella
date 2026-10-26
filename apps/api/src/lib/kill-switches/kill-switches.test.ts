@@ -245,7 +245,7 @@ describe("kill switch at an AI endpoint", () => {
       await improvePrompt.handler(
         asTestRaw({
           set,
-          request: new Request("https://example.test/chat/improve-prompt"),
+          request: new Request("https://example.test/v1/chat/improve-prompt"),
           route: "/v1/chat/improve-prompt" satisfies ApiRoutePath,
           user: { id: userId },
           session: { activeOrganizationId: organizationId },
@@ -271,7 +271,9 @@ describe("kill switch at an AI endpoint", () => {
       }),
     );
     const response = await server.fetch(
-      new Request("http://localhost/chat/improve-prompt", { method: "POST" }),
+      new Request("http://localhost/v1/chat/improve-prompt", {
+        method: "POST",
+      }),
     );
     return { status: response.status, body: await response.json() };
   };

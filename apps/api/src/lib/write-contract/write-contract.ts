@@ -1,15 +1,15 @@
 import { panic } from "better-result";
 
-import { HandlerError } from "./errors/tagged-errors";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   isValibotSchema,
   toRouteJsonSchema,
-} from "./json-schema/valibot-to-json-schema";
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 import {
   assertUnchangedSince,
   VERSION_CONFLICT_ERROR_CODE,
-} from "./optimistic-concurrency";
-import { isRecord, isUnknownArray } from "./type-guards";
+} from "@/api/lib/optimistic-concurrency";
+import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
 /** Exact migration identities; the route census binds these to the reasoned baseline. */
 const REPLACE_CONTRACT_DEBT_IDS = [

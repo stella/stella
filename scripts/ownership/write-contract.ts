@@ -4,8 +4,8 @@ export default {
   id: "write-contract",
   capability: "Declaring whole-value replacement preconditions",
   owner: [
-    "apps/api/src/lib/write-contract.ts",
-    "apps/api/src/lib/raw-write-contracts.ts",
+    "apps/api/src/lib/write-contract/write-contract.ts",
+    "apps/api/src/lib/write-contract/raw-write-contracts.ts",
   ],
   summary:
     "Safe factories require a patch or replace declaration. Replacement schemas " +
@@ -24,7 +24,7 @@ export default {
           "The safe factories register each constructed handler at their shared boundary.",
       },
       {
-        path: "apps/api/src/lib/write-contract.test.ts",
+        path: "apps/api/src/lib/write-contract/write-contract.test.ts",
         reason:
           "Exercises schema rejection and handler identity registration with synthetic inputs.",
       },

@@ -1,5 +1,5 @@
 import type { ApiRouteKey } from "@/api/http/api-route-types";
-import type { WriteContract } from "@/api/lib/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 
 /**
  * Routes whose definitions no safe factory built declare their contract here,
