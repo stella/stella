@@ -1,14 +1,18 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { parseSync } from "oxc-parser";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 import {
   type ArrayExpression,
+  type ArrowFunctionExpression,
   type CallExpression,
+  type Function as SyntaxFunction,
   type Node,
   type ObjectExpression,
   type ObjectProperty,
@@ -44,7 +48,7 @@ export type TestRetryFinding = {
 
 type SourceMap = ReadonlyMap<string, string>;
 
-type Source = { file: string; program: Program; text: string };
+type Source = { file: string; program: Program; root: string; text: string };
 
 type Wrapper =
   "ParenthesizedExpression" | "TSAsExpression" | "TSSatisfiesExpression";
@@ -103,7 +107,7 @@ const isPropertyAssignment = (property: ObjectProperty): boolean =>
 const isObjectExpression = (node: Node): node is ObjectExpression =>
   node.type === "ObjectExpression";
 
-const configObject = (statement: Node): ObjectExpression | undefined => {
+const exportedExpression = (statement: Node): Node | undefined => {
   let expression: Node;
   if (statement.type === "ExportDefaultDeclaration") {
     expression = statement.declaration;
@@ -113,12 +117,53 @@ const configObject = (statement: Node): ObjectExpression | undefined => {
     return undefined;
   }
   expression = unwrap(expression, ["TSAsExpression", "TSSatisfiesExpression"]);
-  const call =
-    expression.type === "ChainExpression" ? expression.expression : expression;
-  if (call.type === "CallExpression") {
-    return call.arguments.toReversed().find(isObjectExpression);
+  return expression.type === "ChainExpression"
+    ? expression.expression
+    : expression;
+};
+
+// `defineConfig({...})` or a bare object literal.
+const configObjectOf = (expression: Node): ObjectExpression | undefined => {
+  if (expression.type === "CallExpression") {
+    return expression.arguments.toReversed().find(isObjectExpression);
   }
   return isObjectExpression(expression) ? expression : undefined;
+};
+
+const configObject = (statement: Node): ObjectExpression | undefined => {
+  const expression = exportedExpression(statement);
+  return expression === undefined ? undefined : configObjectOf(expression);
+};
+
+const devicesByPackage = new Map<string, Record<string, unknown> | undefined>();
+
+/**
+ * The `devices` export of the `@playwright/test` the file resolves. Reading
+ * the public export keeps presets readable across Playwright releases, which
+ * move the data behind it.
+ */
+export const playwrightDevices = (
+  source: Pick<Source, "file" | "root">,
+): Record<string, unknown> | undefined => {
+  // Dependency resolution and module loading are filesystem boundaries.
+  try {
+    const entry = createRequire(path.resolve(source.root, source.file)).resolve(
+      "@playwright/test",
+    );
+    if (!devicesByPackage.has(entry)) {
+      // The CommonJS entry exports the `test` function with the rest of the
+      // API, `devices` included, as its properties.
+      const playwrightTest: unknown = createRequire(entry)(entry);
+      const devices =
+        typeof playwrightTest === "function" || isRecord(playwrightTest)
+          ? Reflect.get(playwrightTest, "devices")
+          : undefined;
+      devicesByPackage.set(entry, isRecord(devices) ? devices : undefined);
+    }
+    return devicesByPackage.get(entry);
+  } catch {
+    return undefined;
+  }
 };
 
 // Resolve imported device presets from the pinned package's literal data,
@@ -156,28 +201,12 @@ const resolveDevicePreset = (
   if (!imported) {
     return undefined;
   }
-  // Dependency resolution and descriptor reads are filesystem boundaries.
+  const descriptor = playwrightDevices(source)?.[presetName];
+  if (!isRecord(descriptor)) {
+    return undefined;
+  }
+  // The descriptor is plain data; read it as the object literal it equals.
   try {
-    const requireConfig = createRequire(path.resolve(REPO_ROOT, source.file));
-    const testEntry = requireConfig.resolve("@playwright/test");
-    const playwrightEntry = createRequire(testEntry).resolve("playwright");
-    const coreEntry = createRequire(playwrightEntry).resolve("playwright-core");
-    const descriptors: unknown = JSON.parse(
-      readFileSync(
-        path.join(
-          path.dirname(coreEntry),
-          "lib/server/deviceDescriptorsSource.json",
-        ),
-        "utf-8",
-      ),
-    );
-    if (!isRecord(descriptors)) {
-      return undefined;
-    }
-    const descriptor = descriptors[presetName];
-    if (!isRecord(descriptor)) {
-      return undefined;
-    }
     const literal = parseSource(
       "device-preset.ts",
       `export default ${JSON.stringify(descriptor)};`,
@@ -464,6 +493,18 @@ const nestedObjectLiterals = (
     collect = true,
     projectElements = false,
   ): void => {
+    // Either branch of a conditional may be the configuration; both must be
+    // readable.
+    const branch = unwrap(value, [
+      "ParenthesizedExpression",
+      "TSAsExpression",
+      "TSSatisfiesExpression",
+    ]);
+    if (branch.type === "ConditionalExpression") {
+      visitExpression(branch.consequent, failClosed, collect, projectElements);
+      visitExpression(branch.alternate, failClosed, collect, projectElements);
+      return;
+    }
     const resolved =
       resolveArray(value, source) ?? resolveObject(value, source);
     if (resolved !== undefined) {
@@ -528,21 +569,224 @@ const nestedObjectLiterals = (
   return { objects, unknownConfig };
 };
 
-const scanConfig = (file: string, sourceText: string): TestRetryFinding[] => {
-  // Syntax errors are a finding here, so read them as data.
-  const parsed = parseSync(file, sourceText);
-  if (
-    parsed.errors.some((error) => {
-      // oxc-parser declares Severity as an ambient const enum of strings.
-      const severity: string = error.severity;
-      return severity === "Error";
-    })
-  ) {
+// Syntax errors are a finding for configs, so they are read as data here.
+const parseConfigSource = (
+  file: string,
+  text: string,
+  root: string,
+): Source | undefined => {
+  const parsed = parseSync(file, text);
+  const hasErrors = parsed.errors.some((error) => {
+    // oxc-parser declares Severity as an ambient const enum of strings.
+    const severity: string = error.severity;
+    return severity === "Error";
+  });
+  return hasErrors ? undefined : { file, program: parsed.program, root, text };
+};
+
+const importedBinding = (
+  source: Source,
+  local: string,
+): { module: string; name: string } | undefined => {
+  for (const statement of source.program.body) {
+    if (
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
+    ) {
+      continue;
+    }
+    for (const specifier of statement.specifiers) {
+      if (
+        specifier.type === "ImportSpecifier" &&
+        specifier.importKind !== "type" &&
+        specifier.local.name === local
+      ) {
+        const name =
+          specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : specifier.imported.value;
+        return { module: statement.source.value, name };
+      }
+    }
+  }
+  return undefined;
+};
+
+// A config helper declared at the top level: `const helper = () => ...`,
+// `function helper() {}`, exported or not.
+const topLevelFunction = (
+  source: Source,
+  name: string,
+): SyntaxFunction | ArrowFunctionExpression | undefined => {
+  for (const statement of source.program.body) {
+    const declaration =
+      statement.type === "ExportNamedDeclaration"
+        ? statement.declaration
+        : statement;
+    if (
+      declaration?.type === "FunctionDeclaration" &&
+      declaration.id?.name === name
+    ) {
+      return declaration;
+    }
+    if (declaration?.type !== "VariableDeclaration") {
+      continue;
+    }
+    for (const declarator of declaration.declarations) {
+      const init =
+        declarator.init === null
+          ? undefined
+          : unwrap(declarator.init, [
+              "ParenthesizedExpression",
+              "TSAsExpression",
+              "TSSatisfiesExpression",
+            ]);
+      if (
+        declarator.id.type === "Identifier" &&
+        declarator.id.name === name &&
+        (init?.type === "ArrowFunctionExpression" ||
+          init?.type === "FunctionExpression")
+      ) {
+        return init;
+      }
+    }
+  }
+  return undefined;
+};
+
+// What a helper returns: an arrow's expression body, or the one `return` its
+// body ends with.
+const returnedExpression = (
+  helper: SyntaxFunction | ArrowFunctionExpression,
+): Node | undefined => {
+  const { body } = helper;
+  if (body === null) {
+    return undefined;
+  }
+  if (body.type !== "BlockStatement") {
+    return body;
+  }
+  const returns = body.body.filter(
+    (statement) => statement.type === "ReturnStatement",
+  );
+  const last = body.body.at(-1);
+  return returns.length === 1 &&
+    last?.type === "ReturnStatement" &&
+    last.argument !== null
+    ? last.argument
+    : undefined;
+};
+
+type ConfigTarget = { object: ObjectExpression; source: Source };
+
+const helperConfig = (
+  helper: SyntaxFunction | ArrowFunctionExpression,
+  source: Source,
+): ConfigTarget | undefined => {
+  const returned = returnedExpression(helper);
+  const expression =
+    returned === undefined
+      ? undefined
+      : unwrap(returned, [
+          "ParenthesizedExpression",
+          "TSAsExpression",
+          "TSSatisfiesExpression",
+        ]);
+  const object =
+    expression === undefined ? undefined : configObjectOf(expression);
+  return object === undefined ? undefined : { object, source };
+};
+
+/**
+ * The source of a repository module a config imports, or undefined for a
+ * package outside the repository (such as `@playwright/test` itself).
+ */
+const repositoryModule = (
+  source: Source,
+  specifier: string,
+): Source | null | undefined => {
+  // Module resolution and reads are filesystem boundaries.
+  try {
+    const root = realpathSync(source.root);
+    const resolved = realpathSync(
+      Bun.resolveSync(
+        specifier,
+        path.dirname(path.resolve(source.root, source.file)),
+      ),
+    );
+    if (!isPathInside(root, resolved)) {
+      return undefined;
+    }
+    const file = repoRelativePath(root, resolved);
+    if (file.split("/").includes("node_modules")) {
+      return undefined;
+    }
+    return (
+      parseConfigSource(file, readFileSync(resolved, "utf-8"), source.root) ??
+      null
+    );
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * The object a config exports. A config built by a helper in this repository
+ * (`export default sharedConfig({...})`) is read from the object the helper
+ * returns; a helper the reader cannot follow yields no config, which fails
+ * closed.
+ */
+const configTarget = (source: Source): ConfigTarget | undefined => {
+  for (const statement of source.program.body) {
+    const expression = exportedExpression(statement);
+    if (expression === undefined) {
+      continue;
+    }
+    if (
+      expression.type === "CallExpression" &&
+      expression.callee.type === "Identifier"
+    ) {
+      const local = expression.callee.name;
+      const imported = importedBinding(source, local);
+      let module: Source | null | undefined = source;
+      if (imported !== undefined) {
+        module =
+          imported.module === "@playwright/test"
+            ? undefined
+            : repositoryModule(source, imported.module);
+      }
+      if (module === null) {
+        return undefined;
+      }
+      if (module !== undefined) {
+        const helper = topLevelFunction(module, imported?.name ?? local);
+        if (helper !== undefined) {
+          return helperConfig(helper, module);
+        }
+        if (imported !== undefined) {
+          return undefined;
+        }
+      }
+    }
+    const object = configObjectOf(expression);
+    if (object !== undefined) {
+      return { object, source };
+    }
+  }
+  return undefined;
+};
+
+const scanConfig = (
+  file: string,
+  sourceText: string,
+  root: string,
+): TestRetryFinding[] => {
+  const parsed = parseConfigSource(file, sourceText, root);
+  if (parsed === undefined) {
     return [{ file, message: "Playwright config has TypeScript parse errors" }];
   }
-  const source: Source = { file, program: parsed.program, text: sourceText };
-  const object = source.program.body.map(configObject).find(Boolean);
-  if (object === undefined) {
+  const target = configTarget(parsed);
+  if (target === undefined) {
     return [
       {
         file,
@@ -550,6 +794,7 @@ const scanConfig = (file: string, sourceText: string): TestRetryFinding[] => {
       },
     ];
   }
+  const { object, source } = target;
   const retries = effectiveRetries(object, source);
   const findings: TestRetryFinding[] = [];
   if (!retries.explicit || retries.value !== 0 || retries.unknownOverride) {
@@ -581,10 +826,12 @@ const scanConfig = (file: string, sourceText: string): TestRetryFinding[] => {
 const scanTestSource = (
   file: string,
   sourceText: string,
+  root: string,
 ): TestRetryFinding[] => {
   const source: Source = {
     file,
     program: parseSource(file, sourceText).program,
+    root,
     text: sourceText,
   };
   const findings: TestRetryFinding[] = [];
@@ -764,14 +1011,15 @@ const scanWorkflow = (file: string, sourceText: string): TestRetryFinding[] => {
 
 export const findTestRetryViolations = (
   sources: SourceMap,
+  root = REPO_ROOT,
 ): TestRetryFinding[] => {
   const findings: TestRetryFinding[] = [];
   for (const [file, source] of sources) {
     if (isPlaywrightConfig(file)) {
-      findings.push(...scanConfig(file, source));
+      findings.push(...scanConfig(file, source, root));
     }
     if (isSourceFile(file) && hasRetryRelevantSyntax(source)) {
-      findings.push(...scanTestSource(file, source));
+      findings.push(...scanTestSource(file, source, root));
     }
     if (file.endsWith(".sh")) {
       const commands = source
@@ -790,10 +1038,10 @@ export const findTestRetryViolations = (
   return findings;
 };
 
-const trackedSources = (): Map<string, string> => {
+const trackedSources = (root: string): Map<string, string> => {
   const files = execFileSync("git", ["ls-files", "-z"], {
     maxBuffer: 2 ** 30,
-    cwd: REPO_ROOT,
+    cwd: root,
     encoding: "utf-8",
   })
     .split("\0")
@@ -807,8 +1055,14 @@ const trackedSources = (): Map<string, string> => {
     );
   const sources = new Map<string, string>();
   for (const file of files) {
-    const source = readFileSync(path.join(REPO_ROOT, file), "utf-8");
-    if (isSourceFile(file) && !hasRetryRelevantSyntax(source)) {
+    const source = readFileSync(path.join(root, file), "utf-8");
+    // Only sources that spawn or configure tests are scanned as code; every
+    // Playwright config is read, since its top-level retries is the policy.
+    if (
+      isSourceFile(file) &&
+      !isPlaywrightConfig(file) &&
+      !hasRetryRelevantSyntax(source)
+    ) {
       continue;
     }
     sources.set(file, source);
@@ -816,8 +1070,8 @@ const trackedSources = (): Map<string, string> => {
   return sources;
 };
 
-export const checkTestRetries = (): TestRetryFinding[] =>
-  findTestRetryViolations(trackedSources());
+export const checkTestRetries = (root = REPO_ROOT): TestRetryFinding[] =>
+  findTestRetryViolations(trackedSources(root), root);
 
 if (import.meta.main) {
   const findings = checkTestRetries();
