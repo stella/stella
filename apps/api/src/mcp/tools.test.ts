@@ -5689,6 +5689,18 @@ describe("OpenAI-compatible MCP tools", () => {
           letter: "a",
         },
       ],
+      // A padded paragraph reads in the stored spelling, in the seek anchor
+      // as in the compared level.
+      [
+        "Article 6(01)(a) GDPR",
+        {
+          jurisdiction: "EU",
+          work: "32016R0679",
+          anchor: "art_6-par_1-pt_a",
+          subsection: "1",
+          letter: "a",
+        },
+      ],
     ])(
       "reads the provision %s onto every phrasing's search",
       async (provision, expected) => {

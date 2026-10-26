@@ -4,6 +4,9 @@ import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DEFAULT_SEARCH_EXCERPT } from "@stll/api-contract/search";
+import { euProvisionAnchor } from "@stll/legal-atlas/eu-provision-citations";
+import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
+import { renderProvisionAnchor } from "@stll/legal-atlas/provision-citation-resolve";
 
 import {
   caseLawDecisions,
@@ -477,87 +480,114 @@ test("a level the citation leaves out stays a wildcard while the read seeks the 
       workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
     },
   ]);
-  const citing = async (
-    path: Omit<
-      Parameters<typeof caseLawProvisionFilterOf>[0],
-      "citingJurisdiction"
-    >,
-  ) =>
-    await withPublicLawReaderRole(db, async (roleTx) => {
+  const czech = provisionCitationProfileFor("CZE") ?? panic("CZE profile");
+  const citing = async ({
+    jurisdiction,
+    work,
+    ...levels
+  }: {
+    jurisdiction?: "EU";
+    work: string;
+    unit: "section" | "article";
+    section: number;
+    sectionSuffix?: string;
+    subsection?: string;
+    letter?: string;
+    point?: string;
+  }) => {
+    const path = {
+      sectionSuffix: null,
+      subsection: null,
+      letter: null,
+      point: null,
+      ...levels,
+    };
+    // The grammar's own anchor minter, as the agent tool passes it.
+    const provision =
+      jurisdiction === "EU"
+        ? caseLawProvisionFilterOf({
+            jurisdiction,
+            work,
+            path,
+            anchorOf: (named) =>
+              euProvisionAnchor({ ...named, openEnded: false, sentence: null }),
+          })
+        : caseLawProvisionFilterOf({
+            work,
+            path,
+            anchorOf: (named) => renderProvisionAnchor(czech, named),
+          });
+    return await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
       const tx = roleTx as unknown as CaseLawPublicReadTransaction;
       const scope = await readCaseLawProvisionScope(tx, {
         jurisdiction: "CZE",
-        provision: caseLawProvisionFilterOf({
-          citingJurisdiction: "CZE",
-          ...path,
-        }),
+        provision,
       });
       return scope.type === "decisions"
         ? scope.decisionIds.map(String).toSorted()
         : panic("expected the citing set");
     });
-  // § 265b písm. g) as the resolver mints it: both stored shapes match.
+  };
+  const criminalProcedureSection = {
+    work: "141/1961 Sb.",
+    unit: "section",
+    section: 265,
+  } as const;
+  // § 265b písm. g): both stored shapes match.
   expect(
     await citing({
-      work: "141/1961 Sb.",
-      anchor: "par_265b-pism_g",
-      subsection: null,
+      ...criminalProcedureSection,
+      sectionSuffix: "b",
       letter: "g",
-      point: null,
     }),
   ).toEqual([underSubsection.id, directLetter.id].map(String).toSorted());
   // § 265b písm. h) does not match a link to písm. g).
   expect(
     await citing({
-      work: "141/1961 Sb.",
-      anchor: "par_265b-pism_h",
-      subsection: null,
+      ...criminalProcedureSection,
+      sectionSuffix: "b",
       letter: "h",
-      point: null,
     }),
   ).toEqual([String(otherLetter.id)]);
   // § 265b odst. 1 písm. g): named without a gap, so the seek is the letter.
   expect(
     await citing({
-      work: "141/1961 Sb.",
-      anchor: "par_265b-odst_1-pism_g",
+      ...criminalProcedureSection,
+      sectionSuffix: "b",
       subsection: "1",
       letter: "g",
-      point: null,
     }),
   ).toEqual([String(underSubsection.id)]);
   // § 265 písm. g) does not reach § 265b.
-  expect(
-    await citing({
-      work: "141/1961 Sb.",
-      anchor: "par_265-pism_g",
-      subsection: null,
-      letter: "g",
-      point: null,
-    }),
-  ).toEqual([String(unsuffixedSection.id)]);
+  expect(await citing({ ...criminalProcedureSection, letter: "g" })).toEqual([
+    String(unsuffixedSection.id),
+  ]);
+  const gdpr = {
+    jurisdiction: "EU",
+    work: "32016R0679",
+    unit: "article",
+    section: 6,
+  } as const;
   // Article 6(a) GDPR reaches the point stored under paragraph 1.
+  expect(await citing({ ...gdpr, letter: "a" })).toEqual([
+    String(euUnderParagraph.id),
+  ]);
+  expect(await citing({ ...gdpr, letter: "b" })).toEqual([]);
+  // Article 6(01)(A) GDPR: the seek and the levels are read in the stored
+  // spelling, so a padded or capitalised value still reaches the link.
+  expect(await citing({ ...gdpr, subsection: "01", letter: "A" })).toEqual([
+    String(euUnderParagraph.id),
+  ]);
+  // § 265B odst. 01 písm. G) likewise.
   expect(
     await citing({
-      jurisdiction: "EU",
-      work: "32016R0679",
-      anchor: "art_6-pt_a",
-      subsection: null,
-      letter: "a",
-      point: null,
+      ...criminalProcedureSection,
+      sectionSuffix: "B",
+      subsection: "01",
+      letter: "G",
     }),
-  ).toEqual([String(euUnderParagraph.id)]);
-  expect(
-    await citing({
-      jurisdiction: "EU",
-      work: "32016R0679",
-      anchor: "art_6-pt_b",
-      subsection: null,
-      letter: "b",
-      point: null,
-    }),
-  ).toEqual([]);
+  ).toEqual([String(underSubsection.id)]);
   await client.close();
 }, 60_000);

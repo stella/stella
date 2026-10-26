@@ -43,12 +43,8 @@ for (const grammar of Object.values(PROVISION_CITATION_GRAMMARS)) {
   ANCHOR_SEPARATORS.set(grammar.jurisdiction, grammar.anchorSeparator);
 }
 
-/**
- * The separator between the levels of an anchor, or null when none is minted.
- * A reader that cuts an anchor into levels uses this one, so the cut and the
- * subtree range below agree.
- */
-export const provisionAnchorSeparator = (jurisdiction: string): string | null =>
+/** The separator between the levels of an anchor, or null when none is minted. */
+const provisionAnchorSeparator = (jurisdiction: string): string | null =>
   ANCHOR_SEPARATORS.get(jurisdiction) ?? null;
 
 type ProvisionAnchorTarget = {

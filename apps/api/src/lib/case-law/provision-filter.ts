@@ -10,10 +10,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
-import {
-  provisionAnchorSeparator,
-  provisionAnchorSubtreeSql,
-} from "@/api/lib/case-law/provision-anchor-lineage";
+import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -66,61 +63,71 @@ const linkJurisdictionOf = ({
 }: ProvisionScopeOptions): string => provision.jurisdiction ?? jurisdiction;
 
 /**
- * The filter for a resolved citation. `anchor` is the anchor the citation
- * grammar minted for the whole path, one segment per named level from the
- * section down; the seek keeps the segments up to the first level the
- * citation leaves out, so a gap never narrows the range past the links
- * stored with the level filled in.
- */
-export const caseLawProvisionFilterOf = ({
-  citingJurisdiction,
-  jurisdiction,
-  work,
-  anchor,
-  subsection,
-  letter,
-  point,
-}: {
-  /** The citing decisions' country. */
-  citingJurisdiction: string;
-  jurisdiction?: "EU";
-  work: string;
-  anchor: string;
-  subsection: string | null;
-  letter: string | null;
-  point: string | null;
-}): CaseLawProvisionFilter => {
-  // The subtree read's own separator, so the cut and the range agree.
-  const separator = provisionAnchorSeparator(
-    jurisdiction ?? citingJurisdiction,
-  );
-  const levels = [subsection, letter, point];
-  const contiguous = levels.indexOf(null);
-  const named = contiguous === -1 ? levels.length : contiguous;
-  return {
-    ...(jurisdiction === undefined ? {} : { jurisdiction }),
-    work,
-    // A jurisdiction without a separator mints whole anchors: no level can
-    // be cut off, and its anchors are compared whole.
-    anchor:
-      separator === null
-        ? anchor
-        : anchor
-            .split(separator)
-            .slice(0, 1 + named)
-            .join(separator),
-    ...(subsection === null ? {} : { subsection }),
-    ...(letter === null ? {} : { letter }),
-    ...(point === null ? {} : { point }),
-  };
-};
-
-/**
  * A path value as links store it: lowercase, no leading zeros, the form the
  * citation resolver mints. A caller spelling `G` or `02` reads the same link.
  */
 const canonicalPathValue = (value: string) =>
   value.toLowerCase().replace(/^0+(?=\d)/u, "");
+
+const canonicalLevel = (value: string | null) =>
+  value === null ? null : canonicalPathValue(value);
+
+/** A cited provision path, outermost level first. */
+export type CitedProvisionPath = {
+  unit: "article" | "section";
+  section: number;
+  sectionSuffix: string | null;
+  subsection: string | null;
+  letter: string | null;
+  point: string | null;
+};
+
+/**
+ * The filter for a resolved citation. The path is canonicalised here, once,
+ * before anything is derived from it, so the seek anchor and the compared
+ * levels always spell a value the way links store it (`(01)` reads as `1`);
+ * no caller can hand over an anchor minted from another spelling.
+ *
+ * The seek anchor is minted, by the citation grammar's own `anchorOf`, from
+ * the levels named from the section down without a gap; a level after the
+ * first one the citation leaves out is compared by column instead, so a gap
+ * never narrows the range past the links stored with the level filled in.
+ */
+export const caseLawProvisionFilterOf = ({
+  jurisdiction,
+  work,
+  path,
+  anchorOf,
+}: {
+  jurisdiction?: "EU";
+  work: string;
+  path: CitedProvisionPath;
+  /** The citation grammar's anchor for a canonical path. */
+  anchorOf: (path: CitedProvisionPath) => string;
+}): CaseLawProvisionFilter => {
+  const canonical: CitedProvisionPath = {
+    unit: path.unit,
+    section: path.section,
+    sectionSuffix: canonicalLevel(path.sectionSuffix),
+    subsection: canonicalLevel(path.subsection),
+    letter: canonicalLevel(path.letter),
+    point: canonicalLevel(path.point),
+  };
+  const { subsection, letter, point } = canonical;
+  const seek: CitedProvisionPath = {
+    ...canonical,
+    letter: subsection === null ? null : letter,
+    point: subsection === null || letter === null ? null : point,
+  };
+  return {
+    ...(jurisdiction === undefined ? {} : { jurisdiction }),
+    work,
+    anchor: anchorOf(seek),
+    ...(subsection === null ? {} : { subsection }),
+    ...(letter === null ? {} : { letter }),
+    ...(point === null ? {} : { point }),
+  };
+};
 
 /**
  * The link rows that cite the provision or one under it. The jurisdiction,

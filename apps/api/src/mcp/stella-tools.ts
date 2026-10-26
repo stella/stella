@@ -41,7 +41,10 @@ import {
   locateEuProvisionCitations,
 } from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
+import {
+  renderProvisionAnchor,
+  resolveProvisionCitation,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -2251,13 +2254,11 @@ const resolveSearchProvision = (
     return {
       type: "resolved",
       provision: caseLawProvisionFilterOf({
-        citingJurisdiction: country,
         jurisdiction: "EU",
         work: euCitation.act.celex,
-        anchor: euProvisionAnchor(reference),
-        subsection: reference.subsection,
-        letter: reference.letter,
-        point: reference.point,
+        path: reference,
+        anchorOf: (named) =>
+          euProvisionAnchor({ ...named, openEnded: false, sentence: null }),
       }),
     };
   }
@@ -2278,12 +2279,9 @@ const resolveSearchProvision = (
       return {
         type: "resolved",
         provision: caseLawProvisionFilterOf({
-          citingJurisdiction: country,
           work: read.workIdentifier,
-          anchor: read.anchor,
-          subsection: read.subsection,
-          letter: read.letter,
-          point: read.point,
+          path: read,
+          anchorOf: (path) => renderProvisionAnchor(profile, path),
         }),
       };
     case "no_provision":

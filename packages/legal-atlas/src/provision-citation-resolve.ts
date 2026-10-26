@@ -457,10 +457,14 @@ const renderCitation = (
   return `${parts.join(" ")} ${workIdentifier}`;
 };
 
-const renderAnchor = (
+/**
+ * The publisher anchor of a provision path, in the profile's scheme: one
+ * segment per named level, the same anchor a resolved citation carries.
+ */
+export const renderProvisionAnchor = (
   profile: JurisdictionProfile,
   resolved: ProvisionPath,
-) => {
+): string => {
   const { render, join } = profile.anchor;
   const segments = [
     render[resolved.unit](
@@ -522,7 +526,7 @@ const parseAnchor = (
     letter: subdivisions["letter"] ?? null,
     point: subdivisions["point"] ?? null,
   };
-  return renderAnchor(profile, path) === anchor ? path : null;
+  return renderProvisionAnchor(profile, path) === anchor ? path : null;
 };
 
 /**
@@ -817,7 +821,7 @@ export const resolveProvisionCitation = ({
   return {
     status: "resolved",
     ...resolved,
-    anchor: renderAnchor(profile, resolved),
+    anchor: renderProvisionAnchor(profile, resolved),
     citation: renderCitation(profile, resolved, resolved.workIdentifier),
   };
 };
