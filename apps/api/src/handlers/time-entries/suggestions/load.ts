@@ -172,12 +172,10 @@ const signalIdentityKey = (identity: ActivitySignal["identity"]) =>
 // parse, or names no signal identities, covers no signals.
 const decidedSignalKeys = (storedEvidence: unknown) =>
   Array.isArray(storedEvidence)
-    ? storedEvidence.flatMap(
-        (item) =>
-          parseTimeEntrySuggestionEvidence(item)?.signals.map(
-            signalIdentityKey,
-          ) ?? [],
-      )
+    ? storedEvidence.flatMap((item) => {
+        const parsed = parseTimeEntrySuggestionEvidence(item);
+        return parsed === null ? [] : parsed.signals.map(signalIdentityKey);
+      })
     : [];
 
 const excludeDecidedSignals = (

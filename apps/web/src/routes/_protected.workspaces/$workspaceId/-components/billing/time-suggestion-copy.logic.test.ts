@@ -18,6 +18,7 @@ const evidence: TimeEntrySuggestionEvidence[] = [
     id: "t1",
     title: " Lease negotiation ",
     messageCount: 2,
+    signals: [],
   },
   {
     type: "resource",
@@ -25,12 +26,14 @@ const evidence: TimeEntrySuggestionEvidence[] = [
     resourceType: "entity",
     name: "Lease v2",
     actions: ["update"],
+    signals: [],
   },
   {
     type: "chat_thread",
     id: "t2",
     title: "Lease negotiation",
     messageCount: 1,
+    signals: [],
   },
   {
     type: "resource",
@@ -38,6 +41,7 @@ const evidence: TimeEntrySuggestionEvidence[] = [
     resourceType: "work_obligation",
     name: null,
     actions: ["create"],
+    signals: [],
   },
 ];
 
