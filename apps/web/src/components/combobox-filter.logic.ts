@@ -1,5 +1,16 @@
 import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
+/** A string or number as text; anything else carries no text to match. */
+const primitiveText = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "bigint") {
+    return String(value);
+  }
+  return null;
+};
+
 /**
  * The text Base UI reads for an item when it filters: the item-to-string
  * function, else an object's `label`, else its `value`, else a primitive.
@@ -11,19 +22,13 @@ const itemText = <Item>(
   if (itemToString !== undefined) {
     return itemToString(item);
   }
-  if (typeof item === "string") {
-    return item;
-  }
-  if (typeof item === "number" || typeof item === "bigint") {
-    return String(item);
-  }
   if (typeof item !== "object" || item === null) {
-    return null;
+    return primitiveText(item);
   }
   if ("label" in item && item.label !== null && item.label !== undefined) {
-    return String(item.label);
+    return primitiveText(item.label);
   }
-  return "value" in item ? String(item.value) : null;
+  return "value" in item ? primitiveText(item.value) : null;
 };
 
 /**
