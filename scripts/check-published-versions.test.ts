@@ -14,7 +14,6 @@ import {
   readPackageManifest,
   readPublishablePackages,
   type RegistryFetch,
-  type RegistryResult,
   versionBumpTime,
 } from "./check-npm-publish-lag";
 import {
@@ -249,7 +248,8 @@ describe("promoted CLI publication", () => {
     const result = await runJourney({
       promotionFetch: async (url) => {
         requests += 1;
-        expect(String(url)).toContain(`page=${requests}`);
+        const requestUrl = new URL(url instanceof Request ? url.url : url);
+        expect(requestUrl.searchParams.get("page")).toBe(requests.toString());
         return Response.json(
           requests === 1 ? older : [releaseEntry(NOW - 1, "v2.0.0")],
         );
@@ -811,10 +811,12 @@ describe("published repository provenance", () => {
   });
 });
 
+type RegistryCheckResult = Awaited<ReturnType<typeof checkRegistry>>;
+
 const policyResult = (
-  status: RegistryResult["status"],
+  status: RegistryCheckResult["status"],
   latest: string,
-): RegistryResult => {
+): RegistryCheckResult => {
   switch (status) {
     case "passed":
       return { status: "passed", reason: "ok" };
