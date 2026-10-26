@@ -937,6 +937,149 @@ test("formatted clips advertise and execute both keyboard paste formats", async 
   await expect(shortcuts).toHaveCount(0);
 });
 
+const FORMATTED_CLIP = { id: "clip-1", plainText: "Clipboard item 1" } as const;
+
+const expectPastePreview = async (
+  page: Page,
+  format: "original" | "plainText",
+) => {
+  const card = page.locator(`[data-clipboard-id="${FORMATTED_CLIP.id}"]`);
+  const content = card.locator("[data-clipboard-card-trigger]");
+  const label = card.locator("[data-clipboard-paste-preview-label]");
+  await expect(card).toHaveAttribute("data-clipboard-render-format", format);
+  await expect(content).toContainText(FORMATTED_CLIP.plainText);
+  if (format === "plainText") {
+    await expect(label).toHaveText(enMessages.clipboard.plainTextPreview);
+    await expect(content.locator("strong")).toHaveCount(0);
+    return;
+  }
+  await expect(label).toHaveCount(0);
+  await expect(content.locator("strong")).toHaveText(FORMATTED_CLIP.plainText);
+};
+
+test("hovering a plain-text paste option previews the clip without formatting", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  await expectPastePreview(page, "original");
+
+  await cards.first().click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
+  const plainText = page.getByRole("menuitem", { name: "Plain text" });
+  const original = page.getByRole("menuitem", {
+    name: "Original formatting",
+  });
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await original.hover();
+  await expectPastePreview(page, "original");
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await page.getByRole("menuitem", { name: "Edit clip" }).hover();
+  await expect(plainText).toBeHidden();
+  await expectPastePreview(page, "original");
+
+  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  // The first Escape closes only the submenu.
+  await page.keyboard.press("Escape");
+  await expect(plainText).toBeHidden();
+  await expectPastePreview(page, "original");
+  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectPastePreview(page, "original");
+
+  // Reopening the menu starts without the preview it closed with.
+  await cards.first().click({ button: "right" });
+  await expect(page.getByRole("menu")).toBeVisible();
+  await expectPastePreview(page, "original");
+});
+
+test("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+  await page
+    .locator(
+      `[data-clipboard-id="${FORMATTED_CLIP.id}"] [data-clipboard-more-trigger]`,
+    )
+    .focus();
+  await page.keyboard.press("Enter");
+  const pasteTextAs = page.getByRole("menuitem", { name: "Paste text as" });
+  await expect(pasteTextAs).toBeVisible();
+  await page.keyboard.press("Home");
+  await expect(pasteTextAs).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  const original = page.getByRole("menuitem", {
+    name: "Original formatting",
+  });
+  const plainText = page.getByRole("menuitem", { name: "Plain text" });
+  await expect(original).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.keyboard.press("ArrowDown");
+  await expect(plainText).toBeFocused();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("ArrowUp");
+  await expect(original).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.keyboard.press("ArrowDown");
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("ArrowLeft");
+  await expect(plainText).toBeHidden();
+  await expect(pasteTextAs).toBeFocused();
+  await expectPastePreview(page, "original");
+
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
+  await expect(plainText).toBeFocused();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectPastePreview(page, "original");
+});
+
+test("the plain-text format shortcut previews the clip until it is left", async ({
+  page,
+}) => {
+  const cards = await openClipboard(page, "en");
+  const shortcuts = page.locator("[data-clipboard-format-shortcuts]");
+  const plainText = shortcuts.getByRole("button", { name: "Plain text" });
+
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await shortcuts.getByRole("button", { name: "Original formatting" }).hover();
+  await expectPastePreview(page, "original");
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await page.mouse.move(0, 0);
+  await expectPastePreview(page, "original");
+
+  // The row unmounts under the pointer when the card stops being active; the
+  // preview must not come back with the row.
+  await plainText.hover();
+  await expectPastePreview(page, "plainText");
+  await cards.first().focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(cards.nth(1)).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.mouse.move(0, 0);
+  await page.keyboard.press("ArrowLeft");
+  await expect(cards.first()).toBeFocused();
+  await expect(shortcuts).toBeVisible();
+  await expectPastePreview(page, "original");
+
+  await plainText.focus();
+  await expectPastePreview(page, "plainText");
+  await cards.first().focus();
+  await expectPastePreview(page, "original");
+});
+
 test("source application names stay isolated inside RTL actions", async ({
   page,
 }) => {
