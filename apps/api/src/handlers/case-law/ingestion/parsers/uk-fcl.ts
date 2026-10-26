@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as slimdom from "slimdom";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type {
   Block,
   DecisionDocumentAst,
@@ -267,7 +268,9 @@ const blocksOf = ({ root, role, allocateId }: BlocksOptions) => {
       ?.textContent?.trim();
     const numericLabel =
       label !== undefined && /^\d+\.?$/u.test(label)
-        ? Number.parseInt(label, 10)
+        ? parseIntegerToken(label.replace(/\.$/u, ""), {
+            sign: "unsigned",
+          }).unwrapOr(undefined)
         : undefined;
     const context = {
       anchorId: node.getAttribute("eId") ?? inherited.anchorId,
