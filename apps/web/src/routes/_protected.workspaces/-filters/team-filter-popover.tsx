@@ -89,7 +89,7 @@ export const TeamFilterPopover = ({
         </p>
         <button
           className={cn(
-            "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
+            "hover:bg-accent flex items-center justify-between rounded-sm px-2 py-1.5 text-sm",
           )}
           onClick={() => onLeadChange(isLeadAny ? undefined : { type: "any" })}
           type="button"
@@ -99,7 +99,7 @@ export const TeamFilterPopover = ({
         </button>
         <button
           className={cn(
-            "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
+            "hover:bg-accent flex items-center justify-between rounded-sm px-2 py-1.5 text-sm",
           )}
           onClick={() =>
             onLeadChange(isLeadNone ? undefined : { type: "none" })
@@ -135,7 +135,7 @@ export const TeamFilterPopover = ({
                 leadValue?.type === "user" && leadValue.userId === m.userId;
               return (
                 <div
-                  className="hover:bg-accent flex items-center gap-2 rounded px-1 py-1"
+                  className="hover:bg-accent flex items-center gap-2 rounded-sm px-1 py-1"
                   key={m.userId}
                 >
                   <button
@@ -159,7 +159,7 @@ export const TeamFilterPopover = ({
                     render={
                       <button
                         className={cn(
-                          "text-muted-foreground hover:text-foreground text-3xs shrink-0 rounded px-1.5 py-0.5 tracking-tight uppercase",
+                          "text-muted-foreground hover:text-foreground text-3xs shrink-0 rounded-sm px-1.5 py-0.5 tracking-tight uppercase",
                           isLeadUser && "text-primary",
                         )}
                         onClick={() =>

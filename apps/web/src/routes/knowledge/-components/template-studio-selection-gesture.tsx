@@ -703,7 +703,7 @@ const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
             marker={
               <span>
                 {GESTURE_PREVIEW_SAMPLE.fieldBefore}
-                <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
+                <code className="bg-primary/10 text-primary rounded-sm px-1 py-0.5 text-xs">
                   {GESTURE_PREVIEW_SAMPLE.fieldMarker}
                 </code>
                 {GESTURE_PREVIEW_SAMPLE.fieldAfter}

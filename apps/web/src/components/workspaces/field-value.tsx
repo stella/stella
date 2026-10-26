@@ -190,7 +190,7 @@ const PersonFieldValue = ({
       className={cn(
         "flex max-w-full min-w-0 items-center truncate",
         resolvedVariant === "kanban"
-          ? "text-muted-foreground bg-muted/60 gap-1 rounded px-1.5 py-0.5 text-xs leading-none"
+          ? "text-muted-foreground bg-muted/60 gap-1 rounded-sm px-1.5 py-0.5 text-xs leading-none"
           : "gap-1.5 text-sm",
       )}
     >
@@ -350,7 +350,7 @@ const DateFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none">
+      <span className="text-muted-foreground bg-muted/60 rounded-sm px-1.5 py-0.5 text-xs leading-none">
         {formatted}
       </span>
     );
@@ -389,7 +389,7 @@ const SelectFieldValue = ({
     return (
       <BidiText
         as="span"
-        className="max-w-full truncate rounded px-1.5 py-0.5 text-xs leading-none font-medium"
+        className="max-w-full truncate rounded-sm px-1.5 py-0.5 text-xs leading-none font-medium"
         style={{
           backgroundColor: color?.background,
           color: color?.foreground,
@@ -404,8 +404,8 @@ const SelectFieldValue = ({
     <span
       className={cn(
         variant === "table"
-          ? "flex max-w-full items-center gap-x-1 rounded px-1 py-0.25 font-medium"
-          : "flex w-max max-w-full items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium",
+          ? "flex max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 font-medium"
+          : "flex w-max max-w-full items-center gap-x-1 rounded-sm px-1 py-0.25 text-sm font-medium",
       )}
       style={{
         backgroundColor: color?.background,

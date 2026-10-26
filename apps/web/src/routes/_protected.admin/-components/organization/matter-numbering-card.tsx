@@ -252,7 +252,7 @@ const MatterNumberingCardBody = ({
               <span className="text-muted-foreground text-xs">
                 {t("organization.matterNumber.nextPreview")}
               </span>
-              <span className="bg-muted rounded border px-2 py-1 font-mono text-sm">
+              <span className="bg-muted rounded-sm border px-2 py-1 font-mono text-sm">
                 {preview}
               </span>
             </div>

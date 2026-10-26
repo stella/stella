@@ -545,7 +545,7 @@ const EnableTwoFactorDialog = ({
                   <span className="text-muted-foreground text-xs">
                     {t("settings.account.twoFactor.manualSetupKey")}
                   </span>
-                  <code className="bg-muted rounded px-2 py-1 font-mono text-sm">
+                  <code className="bg-muted rounded-sm px-2 py-1 font-mono text-sm">
                     {secret}
                   </code>
                 </div>

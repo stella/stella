@@ -47,7 +47,7 @@ export const MentionNode = ({ workspaceId, ...props }: MentionNodeProps) => {
     <NodeViewWrapper className="inline w-fit">
       <span
         className={cn(
-          "bg-info/10 text-info-foreground rounded px-1 py-0.5 font-medium",
+          "bg-info/10 text-info-foreground rounded-sm px-1 py-0.5 font-medium",
         )}
       >
         {propertyName ?? attributes.label}

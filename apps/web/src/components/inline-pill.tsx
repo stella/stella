@@ -90,7 +90,7 @@ const SIZE: Record<InlinePillSize, string> = {
   inherit: "font-[inherit] text-[inherit] leading-[inherit] py-0.5",
 };
 
-const BASE = "inline-flex items-center gap-0.5 align-middle rounded px-1";
+const BASE = "inline-flex items-center gap-0.5 align-middle rounded-sm px-1";
 
 const INTERACTIVE_RESET =
   "appearance-none border-0 bg-clip-padding cursor-pointer focus-visible:outline-none focus-visible:ring-2";

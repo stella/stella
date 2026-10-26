@@ -383,7 +383,7 @@ const FindColumnRow = ({
   <button
     aria-pressed={checked}
     className={cn(
-      "flex items-center gap-2 rounded px-2 py-1 text-start text-sm",
+      "flex items-center gap-2 rounded-sm px-2 py-1 text-start text-sm",
       disabled ? "opacity-56" : "hover:bg-accent cursor-pointer",
     )}
     disabled={disabled}

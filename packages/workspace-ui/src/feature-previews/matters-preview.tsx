@@ -114,7 +114,7 @@ const PreviewTaskCard = ({ task, locale }: PreviewTaskCardProps) => {
           </span>
         )}
         <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 leading-none">
-          <span className="bg-muted/60 flex min-w-0 items-center gap-1 rounded px-1.5 py-0.5 whitespace-nowrap tabular-nums">
+          <span className="bg-muted/60 flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5 whitespace-nowrap tabular-nums">
             <CalendarIcon className="size-3 shrink-0" />
             {formatPreviewDate({
               locale,

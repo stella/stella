@@ -296,7 +296,7 @@ const Toasts = ({ position }: { position: ToastPosition }) => {
                   </Toast.Action>
                 )}
                 <Toast.Close
-                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded p-0.5 select-none"
+                  className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer rounded-sm p-0.5 select-none"
                   data-slot="toast-close"
                   aria-label="Close notification"
                 >

@@ -232,7 +232,7 @@ function CorrespondenceDetailPage() {
               </pre>
             ) : (
               <iframe
-                className="h-[28rem] w-full rounded border"
+                className="h-[28rem] w-full rounded-sm border"
                 referrerPolicy="no-referrer"
                 sandbox=""
                 // safe-html: sanitizeEmailBodyHtml in apps/api/src/lib/files/email-to-html.ts strips active content; the iframe sandbox omits script permission.

@@ -993,7 +993,7 @@ const SlashTextPreview = ({
   body: string;
 }) => (
   <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
-    <code className="bg-primary/10 text-primary text-3xs w-fit rounded px-1 py-0.5">
+    <code className="bg-primary/10 text-primary text-3xs w-fit rounded-sm px-1 py-0.5">
       {marker}
     </code>
     <p className="text-foreground font-medium">{title}</p>

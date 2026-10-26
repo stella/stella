@@ -692,7 +692,7 @@ export function UiPlayground() {
                     <Button variant="outline">
                       Color
                       <span
-                        className="size-4 rounded border"
+                        className="size-4 rounded-sm border"
                         style={{
                           backgroundColor: `var(--option-${colorValue})`,
                         }}

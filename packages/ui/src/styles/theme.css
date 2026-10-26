@@ -285,7 +285,9 @@
   --chart-7: color-mix(in oklch, var(--option-lime) 70%, var(--foreground));
   --chart-8: color-mix(in oklch, var(--option-fuchsia) 70%, var(--foreground));
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --radius: 0.625rem;
+  /* The corner radius generated visuals receive (`VISUAL_THEME_VARIABLES`);
+     app markup uses the `rounded-*` scale. Equal to `--radius-lg`. */
+  --radius: 0.5rem;
   --background: var(--color-white);
   --foreground: var(--color-neutral-800);
   --card: var(--color-white);

@@ -379,7 +379,7 @@ export const AssigneePicker = ({
             nameClassName="text-sm font-normal"
           />
           {hasDeletedAccount(a.user.deletedAt) ? (
-            <span className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5">
+            <span className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5">
               {t("deletedAccount")}
             </span>
           ) : null}

@@ -403,7 +403,7 @@ export const DecisionKeywords = ({
           // same class, so a change to how the hook is set moves both.
           className={cn(
             SUMMARY_TEXT_CLASS_NAME,
-            "bg-muted shrink-0 rounded px-1.5 py-0.5",
+            "bg-muted shrink-0 rounded-sm px-1.5 py-0.5",
           )}
           key={item}
         >
@@ -784,7 +784,7 @@ const DecisionLanguageMenu = ({
 };
 
 export const CountryPill = ({ country }: { country: string }) => (
-  <span className="bg-muted rounded px-1.5 py-0.5 text-xs">
+  <span className="bg-muted rounded-sm px-1.5 py-0.5 text-xs">
     <HighlightedText columnId="country" text={country} />
   </span>
 );

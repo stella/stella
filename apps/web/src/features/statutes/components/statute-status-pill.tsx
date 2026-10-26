@@ -27,7 +27,7 @@ export const StatuteStatusPill = ({ status }: { status: string }) => {
 
   if (!isStatuteStatus(status)) {
     return (
-      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+      <span className="bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 text-xs">
         {status}
       </span>
     );
@@ -36,7 +36,7 @@ export const StatuteStatusPill = ({ status }: { status: string }) => {
   return (
     <span
       className={cn(
-        "rounded px-1.5 py-0.5 text-xs font-medium",
+        "rounded-sm px-1.5 py-0.5 text-xs font-medium",
         STATUS_CLASS[status],
       )}
     >

@@ -247,7 +247,7 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
 };
 
 const DocumentThumbnail = () => (
-  <div className="bg-background border-border/60 flex h-16 w-12 shrink-0 items-center justify-center rounded border shadow-sm">
+  <div className="bg-background border-border/60 flex h-16 w-12 shrink-0 items-center justify-center rounded-sm border shadow-sm">
     <DocumentIcon
       className="size-9"
       fileName="document.docx"

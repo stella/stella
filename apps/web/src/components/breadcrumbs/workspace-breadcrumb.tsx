@@ -186,7 +186,7 @@ export const WorkspaceBreadcrumb = ({
         render={
           <button
             aria-label={changeColorLabel}
-            className="hover:bg-muted cursor-pointer rounded p-0.5"
+            className="hover:bg-muted cursor-pointer rounded-sm p-0.5"
             type="button"
           >
             <MatterIcon

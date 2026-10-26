@@ -385,7 +385,7 @@ const KanbanEntityMetadataBadges = ({
   return (
     <div className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-1.5 text-xs leading-none">
       {status && (
-        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
+        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           {StatusIcon && (
             <StatusIcon
               className={cn(
@@ -398,7 +398,7 @@ const KanbanEntityMetadataBadges = ({
         </span>
       )}
       {priority && priority !== "none" && (
-        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
+        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           {PriorityIcon && (
             <PriorityIcon
               className={cn(
@@ -411,7 +411,7 @@ const KanbanEntityMetadataBadges = ({
         </span>
       )}
       {dueDate && (
-        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
+        <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5">
           <CalendarIcon className="size-3 shrink-0" />
           <span className="truncate">
             {format.dateTime(

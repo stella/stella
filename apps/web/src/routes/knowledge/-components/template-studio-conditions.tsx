@@ -753,7 +753,7 @@ const ConditionReusePicker = ({
         {options.map((option) => (
           <li key={option.ref}>
             <button
-              className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-start text-sm"
+              className="hover:bg-muted flex w-full items-center gap-2 rounded-sm px-1.5 py-1.5 text-start text-sm"
               onClick={() => {
                 if (!onRewrite(option.ref)) {
                   notifyUserError(

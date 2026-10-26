@@ -171,8 +171,8 @@ export const SidebarPreview = ({
           </div>
         ) : (
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5">
-            <div className="bg-muted size-3.5 rounded" />
-            <div className="bg-muted h-3 w-24 rounded" />
+            <div className="bg-muted size-3.5 rounded-sm" />
+            <div className="bg-muted h-3 w-24 rounded-sm" />
           </div>
         )}
       </div>

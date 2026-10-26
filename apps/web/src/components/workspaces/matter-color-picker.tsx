@@ -99,7 +99,7 @@ const MatterColorContextPicker = ({
   };
 
   const triggerClassName = cn(
-    "relative flex shrink-0 items-center justify-center rounded",
+    "relative flex shrink-0 items-center justify-center rounded-sm",
     className,
   );
   const content = (

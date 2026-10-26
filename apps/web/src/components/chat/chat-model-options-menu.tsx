@@ -323,7 +323,7 @@ const ModelOptionRow = ({
                 {option.displayName}
               </BidiText>
               {recommendation === "new" && (
-                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-px font-medium">
+                <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded-sm px-1.5 py-px font-medium">
                   {t("chat.modelSelector.newModel")}
                 </span>
               )}

@@ -304,7 +304,7 @@ const FolderDragDropRow = ({
           render={
             <button
               className={cn(
-                "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded border shadow-sm",
+                "border-border/70 bg-background text-muted-foreground ms-auto flex size-6 shrink-0 touch-none items-center justify-center rounded-sm border shadow-sm",
                 handleEnabled
                   ? "hover:text-foreground cursor-grab active:cursor-grabbing"
                   : "cursor-not-allowed opacity-50",
@@ -356,7 +356,7 @@ const FolderSelectionButton = ({
 }: FolderSelectionButtonProps) => (
   <button
     className={cn(
-      "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
+      "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded-sm px-2 py-1 text-start text-sm",
       selected && "bg-accent",
     )}
     onClick={onSelect}
@@ -502,7 +502,7 @@ export const MatterTargetPicker = ({
                 return (
                   <button
                     className={cn(
-                      "hover:bg-accent flex w-full items-center gap-2 rounded px-2 py-1.5 text-start text-sm",
+                      "hover:bg-accent flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-start text-sm",
                       isSelected && "bg-accent",
                     )}
                     key={workspace.id}
@@ -822,7 +822,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               render={
                 <button
                   aria-label={t("common.edit")}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-sm"
                   onClick={() => {
                     draftCancelledRef.current = false;
                     setFolderDraft({
@@ -841,7 +841,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
               render={
                 <button
                   aria-label={t("common.remove")}
-                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded"
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 shrink-0 items-center justify-center rounded-sm"
                   onClick={() =>
                     onChange(discardPendingMatterFolder(pendingFolder))
                   }
@@ -861,7 +861,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
   const newFolderButton =
     canCreate && folderDraft === null && pendingFolder === null ? (
       <button
-        className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-accent text-muted-foreground flex w-full items-center gap-1 rounded-sm px-2 py-1 text-start text-sm"
         onClick={() => {
           draftCancelledRef.current = false;
           setFolderDraft({ type: "create", name: "" });
@@ -904,7 +904,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           {({ isDropTarget, dragHandle }) => (
             <div
               className={cn(
-                "flex items-center gap-1 rounded",
+                "flex items-center gap-1 rounded-sm",
                 isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
               )}
               style={{ paddingInlineStart: `${depth * 16 + 8}px` }}
@@ -918,7 +918,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
                   }
                   render={
                     <button
-                      className="hover:bg-muted rounded p-0.5"
+                      className="hover:bg-muted rounded-sm p-0.5"
                       aria-expanded={isExpanded}
                       aria-label={
                         isExpanded
@@ -996,7 +996,7 @@ const FolderPicker = ({ value, onChange }: FolderPickerProps) => {
           {({ isDropTarget }) => (
             <button
               className={cn(
-                "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
+                "hover:bg-accent flex w-full items-center gap-1 rounded-sm px-2 py-1 text-start text-sm",
                 selectedExistingParentId === null && "bg-accent",
                 isDropTarget && "bg-primary/8 ring-primary/40 ring-1",
               )}

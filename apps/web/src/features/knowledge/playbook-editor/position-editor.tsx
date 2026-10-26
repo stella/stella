@@ -1002,7 +1002,7 @@ const TierSection = ({
       <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span
           className={cn(
-            "flex size-4.5 items-center justify-center rounded",
+            "flex size-4.5 items-center justify-center rounded-sm",
             TIER_MARK_CLASS[tone],
           )}
         >

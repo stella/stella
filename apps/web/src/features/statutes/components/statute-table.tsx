@@ -354,7 +354,7 @@ const StatuteValidityPill = ({
   return (
     <span
       className={cn(
-        "rounded px-1.5 py-0.5 text-xs font-medium",
+        "rounded-sm px-1.5 py-0.5 text-xs font-medium",
         VALIDITY_PILL_CLASS[validity],
       )}
     >

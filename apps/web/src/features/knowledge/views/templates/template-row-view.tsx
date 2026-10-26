@@ -298,7 +298,7 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
           {template.languages.map((tag) => (
             <span
               aria-label={languageDisplayName(tag, lang)}
-              className="bg-muted text-3xs rounded px-1.5 py-0.5 font-medium uppercase"
+              className="bg-muted text-3xs rounded-sm px-1.5 py-0.5 font-medium uppercase"
               key={tag}
               role="group"
             >

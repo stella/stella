@@ -567,7 +567,7 @@ const PENDING_OVERVIEW_CARD_KEYS = ["o1", "o2", "o3", "o4"];
 const PendingTableBody = () => (
   <div className="flex flex-col">
     <div className="flex items-center gap-4 border-b px-3 py-2">
-      <Skeleton className="size-4 rounded" />
+      <Skeleton className="size-4 rounded-sm" />
       {PENDING_TABLE_CELLS.map((cell) => (
         <Skeleton className={cn("h-3", cell.width)} key={cell.key} />
       ))}
@@ -577,7 +577,7 @@ const PendingTableBody = () => (
         className="flex items-center gap-4 border-b px-3 py-2.5"
         key={rowKey}
       >
-        <Skeleton className="size-4 rounded" />
+        <Skeleton className="size-4 rounded-sm" />
         {PENDING_TABLE_CELLS.map((cell) => (
           <Skeleton className={cn("h-4", cell.width)} key={cell.key} />
         ))}

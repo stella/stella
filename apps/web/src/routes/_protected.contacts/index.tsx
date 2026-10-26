@@ -510,7 +510,7 @@ const renderContactSkeletonCell = (
   column: Column<ContactTableFeatures, ContactItem>,
 ): ReactNode => {
   if (column.id === "icon") {
-    return <Skeleton className="size-4 rounded" />;
+    return <Skeleton className="size-4 rounded-sm" />;
   }
   if (column.id === "matters") {
     return <Skeleton className="ms-auto h-4 w-6" />;

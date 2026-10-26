@@ -319,11 +319,11 @@ const PreviewPopupContent = ({
       <div className="min-w-0 flex-1">
         {(preview.documentCount > 0 || preview.taskCount > 0) && (
           <div className="mb-2 flex gap-1">
-            <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+            <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
               {t("workspaces.documentsCount", { count: preview.documentCount })}
             </div>
             {preview.taskCount > 0 && (
-              <div className="bg-muted flex-1 rounded px-2 py-1 text-center text-xs tabular-nums">
+              <div className="bg-muted flex-1 rounded-sm px-2 py-1 text-center text-xs tabular-nums">
                 {t("workspaces.tasksCount", { count: preview.taskCount })}
               </div>
             )}

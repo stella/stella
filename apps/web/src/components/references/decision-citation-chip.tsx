@@ -127,7 +127,7 @@ const triggerShapeClassName = ({
     // Inline, so a long reference still wraps with the prose.
     return "rounded-sm";
   }
-  return "inline-flex rounded align-baseline";
+  return "inline-flex rounded-sm align-baseline";
 };
 
 /** The same decision annotation in answers, provenance cards and reader text. */

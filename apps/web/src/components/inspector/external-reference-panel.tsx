@@ -471,12 +471,12 @@ const GenericExternalReferencePanel = ({
                   </p>
                 )}
                 {connectorSlug && (
-                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded px-1.5 py-0.5 font-mono">
+                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded-sm px-1.5 py-0.5 font-mono">
                     {connectorSlug}
                   </span>
                 )}
                 {sourceToolName && (
-                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded px-1.5 py-0.5 font-mono">
+                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded-sm px-1.5 py-0.5 font-mono">
                     {sourceToolName}
                   </span>
                 )}

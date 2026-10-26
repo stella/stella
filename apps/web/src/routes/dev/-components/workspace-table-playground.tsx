@@ -122,7 +122,7 @@ export const WorkspaceTablePlayground = () => {
     >
       <div className="flex shrink-0 items-center gap-2">
         <button
-          className="rounded border px-2 py-1 text-xs"
+          className="rounded-sm border px-2 py-1 text-xs"
           data-playground-content-mode="tight"
           onClick={() =>
             setLayout((current) => ({ ...current, contentMode: "tight" }))
@@ -132,7 +132,7 @@ export const WorkspaceTablePlayground = () => {
           tight
         </button>
         <button
-          className="rounded border px-2 py-1 text-xs"
+          className="rounded-sm border px-2 py-1 text-xs"
           data-playground-content-mode="fit-content"
           onClick={() =>
             setLayout((current) => ({ ...current, contentMode: "fit-content" }))

@@ -80,7 +80,7 @@ export const AnalysisLayers = ({
           <ul className="flex flex-wrap gap-1">
             {topics.map((topic) => (
               <li
-                className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5"
+                className="bg-muted text-muted-foreground text-3xs rounded-sm px-1.5 py-0.5"
                 key={topic}
               >
                 {topic}

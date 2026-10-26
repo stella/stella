@@ -175,7 +175,7 @@ const CaseLawSourceRow = ({
       <span className="flex min-w-0 items-start gap-2">
         <span
           aria-label={caseLaw.court}
-          className="bg-muted shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
+          className="bg-muted shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium"
         >
           {caseLaw.courtShortCode}
         </span>

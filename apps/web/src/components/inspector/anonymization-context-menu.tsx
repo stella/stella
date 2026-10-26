@@ -97,7 +97,7 @@ export const AnonymizationContextMenu = ({
       tabIndex={-1}
     >
       <button
-        className="hover:bg-accent hover:text-accent-foreground flex w-full items-center rounded px-2 py-1.5 text-start"
+        className="hover:bg-accent hover:text-accent-foreground flex w-full items-center rounded-sm px-2 py-1.5 text-start"
         onClick={(event) => {
           event.stopPropagation();
           onAnonymize(menu.selection);

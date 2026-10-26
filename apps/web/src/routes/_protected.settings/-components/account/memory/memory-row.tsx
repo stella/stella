@@ -134,7 +134,7 @@ export const MemoryRow = ({
         title={t("deleteTitle")}
       />
       <div className="flex items-start justify-between gap-2">
-        <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium">
+        <span className="bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5 text-xs font-medium">
           {tRoot(MEMORY_KIND_KEYS[memory.kind])}
         </span>
         <MemoryActions
