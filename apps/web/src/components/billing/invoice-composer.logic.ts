@@ -133,6 +133,34 @@ export const includedExpenseIdsOf = (
     .filter((expense) => includedExpenseIds.has(expense.id))
     .map((expense) => expense.id);
 
+/**
+ * The currencies the billable items are recorded in, the one with the largest
+ * unbilled amount first. An invoice has one currency, so these are the
+ * invoices the items can go on. Equal amounts keep the order the matters list
+ * their items in, so the first matter's currency wins a tie.
+ */
+export const billableCurrencies = (
+  prefills: readonly {
+    timeEntries: readonly ComposerEntry[];
+    expenses: readonly ComposerExpense[];
+  }[],
+): string[] => {
+  const amounts = new Map<string, number>();
+  const add = (currency: string, amount: number) =>
+    amounts.set(currency, (amounts.get(currency) ?? 0) + amount);
+  for (const { timeEntries, expenses } of prefills) {
+    for (const entry of timeEntries) {
+      add(entry.currency, entryAmount(entry, initialEntryChoice(entry)));
+    }
+    for (const expense of expenses) {
+      add(expense.currency, expenseAmount(expense));
+    }
+  }
+  return [...amounts]
+    .toSorted(([, left], [, right]) => right - left)
+    .map(([currency]) => currency);
+};
+
 export const hasBillableItems = ({
   flatFeeAmount,
   includedEntryCount,

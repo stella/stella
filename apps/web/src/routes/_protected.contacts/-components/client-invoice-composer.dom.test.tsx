@@ -48,13 +48,17 @@ const prefill = ({
   entryId,
   dateWorked,
   vatRateBps,
+  currency = "EUR",
+  billedMinutes = 60,
 }: {
   entryId: typeof FIRST_ENTRY_ID;
   dateWorked: string;
   vatRateBps: number;
+  currency?: string;
+  billedMinutes?: number;
 }) =>
   ({
-    currency: "EUR",
+    currency,
     language: "sk",
     invoiceDate: "2025-02-01",
     taxableSupplyDate: dateWorked,
@@ -100,10 +104,10 @@ const prefill = ({
         id: entryId,
         userId: null,
         dateWorked,
-        durationMinutes: 60,
-        billedMinutes: 60,
+        durationMinutes: billedMinutes,
+        billedMinutes,
         rateAtEntry: cents(10_000),
-        currency: "EUR",
+        currency,
         narrative: "Legal services",
         invoiceNarrative: null,
         noCharge: false,
@@ -141,6 +145,36 @@ const data = {
   ],
 } satisfies ClientInvoicePrefill;
 
+// The euro matter holds more unbilled work, so euros are the default.
+const mixedCurrencyData = {
+  clientId: CLIENT_ID,
+  matters: [
+    {
+      workspaceId: FIRST_MATTER_ID,
+      name: FIRST_NAME,
+      color: null,
+      prefill: prefill({
+        entryId: FIRST_ENTRY_ID,
+        dateWorked: "2025-01-01",
+        vatRateBps: 2300,
+        billedMinutes: 120,
+      }),
+    },
+    {
+      workspaceId: LATER_MATTER_ID,
+      name: LATER_NAME,
+      color: null,
+      prefill: prefill({
+        entryId: LATER_ENTRY_ID,
+        dateWorked: "2025-01-01",
+        vatRateBps: 2300,
+        currency: "CZK",
+      }),
+    },
+  ],
+} satisfies ClientInvoicePrefill;
+
+let served: ClientInvoicePrefill = data;
 const originalFetch = globalThis.fetch;
 const requests: Record<string, unknown>[] = [];
 globalThis.fetch = Object.assign(
@@ -151,7 +185,7 @@ globalThis.fetch = Object.assign(
       request.method === "GET" &&
       path.endsWith(`/client-invoices/${CLIENT_ID}/prefill`)
     ) {
-      return Response.json(data);
+      return Response.json(served);
     }
     if (
       request.method === "PUT" &&
@@ -169,16 +203,13 @@ globalThis.fetch = Object.assign(
         workspaceId: FIRST_MATTER_ID,
       });
     }
-    if (
-      request.method === "GET" &&
-      path.endsWith(`/invoices/${FIRST_MATTER_ID}/${INVOICE_ID}`)
-    ) {
+    if (request.method === "GET" && path.endsWith(`/${INVOICE_ID}`)) {
       return Response.json({
         id: INVOICE_ID,
         status: "draft",
         invoiceNumber: null,
         totalAmount: requests.at(-1)?.["expectedTotalAmount"],
-        currency: "EUR",
+        currency: requests.at(-1)?.["currency"],
         dueDate: "2025-02-15",
       });
     }
@@ -200,6 +231,7 @@ afterEach(async () => {
   }
   clients.length = 0;
   requests.length = 0;
+  served = data;
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -349,3 +381,45 @@ test.each([
     });
   },
 );
+
+test("work in two currencies bills only the chosen currency's matters", async () => {
+  served = mixedCurrencyData;
+  await mount();
+  const currency = await screen.findByRole("combobox", {
+    name: messages.common.currency,
+  });
+  // Euros hold more unbilled work, so the composer opens on them.
+  expect(currency.textContent).toBe("EUR");
+  expect(screen.getByRole("heading", { name: FIRST_NAME })).toBeDefined();
+  expect(screen.queryByRole("heading", { name: LATER_NAME })).toBeNull();
+  await act(async () => {
+    fireEvent.mouseDown(currency, { button: 0 });
+  });
+  const czk = await screen.findByRole("option", { name: "CZK" });
+  await act(async () => {
+    fireEvent.pointerDown(czk, { button: 0, pointerType: "mouse" });
+    fireEvent.pointerUp(czk, { button: 0, pointerType: "mouse" });
+    fireEvent.click(czk, { button: 0, detail: 1 });
+  });
+  await screen.findByRole("heading", { name: LATER_NAME });
+  expect(screen.queryByRole("heading", { name: FIRST_NAME })).toBeNull();
+  await click(messages.billing.invoiceComposer.continueToDetails);
+  await click(messages.billing.invoiceComposer.continueToIssue);
+  await click(messages.billing.invoiceComposer.saveDraft);
+  await waitFor(() => expect(requests).toHaveLength(1));
+  expect(requests.at(0)).toMatchObject({
+    currency: "CZK",
+    // One hour at 100.00 plus 23 % VAT.
+    expectedTotalAmount: 12_300,
+  });
+  expect(requests.at(0)?.["matters"]).toEqual([
+    {
+      workspaceId: LATER_MATTER_ID,
+      timeEntryIds: [LATER_ENTRY_ID],
+      expenseIds: [],
+    },
+  ]);
+  await screen.findByRole("heading", {
+    name: messages.billing.invoiceComposer.draftSavedTitle,
+  });
+});

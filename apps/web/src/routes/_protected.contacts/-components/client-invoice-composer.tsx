@@ -6,6 +6,13 @@ import { useTranslations } from "use-intl";
 
 import { ScrollArea } from "@stll/ui/scroll-area";
 import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/select";
+import {
   Sheet,
   SheetDescription,
   SheetHeader,
@@ -15,6 +22,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { InvoiceComposer } from "@/components/billing/invoice-composer";
+import { billableCurrencies } from "@/components/billing/invoice-composer.logic";
 import { ContactReadError } from "@/components/contact-read-error";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { detached } from "@/lib/detached";
@@ -55,6 +63,7 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
   const t = useTranslations();
   const [periodStart, setPeriodStart] = useState<string | null>(null);
   const [periodEnd, setPeriodEnd] = useState<string | null>(null);
+  const [chosenCurrency, setChosenCurrency] = useState<string | null>(null);
   const query = useQuery(
     clientInvoicePrefillOptions(clientId, { periodStart, periodEnd }),
   );
@@ -65,11 +74,22 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
     query.data?.matters.some(
       (matter) => matter.prefill.billingMode === "flat_fee",
     ) ?? false;
-  const first = matters?.find(
+  const currencies =
+    matters === undefined
+      ? []
+      : billableCurrencies(matters.map((matter) => matter.prefill));
+  // A choice the refreshed work no longer offers falls back to the default.
+  const currency =
+    chosenCurrency !== null && currencies.includes(chosenCurrency)
+      ? chosenCurrency
+      : currencies.at(0);
+  // An invoice has one currency: only the matters with work in it take part.
+  const currencyMatters = matters?.filter(
     (matter) =>
-      matter.prefill.currency !== null &&
-      matter.prefill.timeEntries.length + matter.prefill.expenses.length > 0,
+      matter.prefill.timeEntries.some((entry) => entry.currency === currency) ||
+      matter.prefill.expenses.some((expense) => expense.currency === currency),
   );
+  const first = currencyMatters?.at(0);
   const validPeriod =
     periodStart === null || periodEnd === null || periodStart <= periodEnd;
   let content: ReactNode;
@@ -95,7 +115,11 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
         }
       />
     );
-  } else if (first === undefined || matters === undefined) {
+  } else if (
+    first === undefined ||
+    currency === undefined ||
+    currencyMatters === undefined
+  ) {
     content = (
       <p className="text-muted-foreground p-6 text-sm">
         {t("billing.invoiceComposer.nothingToBill")}
@@ -104,15 +128,20 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
   } else {
     content = (
       <InvoiceComposer
-        key={`${clientId}:${periodStart ?? ""}:${periodEnd ?? ""}`}
+        key={`${clientId}:${periodStart ?? ""}:${periodEnd ?? ""}:${currency}`}
         workspaceId={first.workspaceId}
-        client={{ clientId, matters }}
+        client={{ clientId, matters: currencyMatters }}
         prefill={{
           ...first.prefill,
+          currency,
           billingMode: "hourly",
           flatFeeAmount: null,
-          timeEntries: matters.flatMap((matter) => matter.prefill.timeEntries),
-          expenses: matters.flatMap((matter) => matter.prefill.expenses),
+          timeEntries: currencyMatters.flatMap(
+            (matter) => matter.prefill.timeEntries,
+          ),
+          expenses: currencyMatters.flatMap(
+            (matter) => matter.prefill.expenses,
+          ),
         }}
       />
     );
@@ -146,6 +175,36 @@ const ClientInvoiceSelection = ({ clientId }: { clientId: string }) => {
             onChange={setPeriodEnd}
           />
         </div>
+        {currency !== undefined && currencies.length > 1 && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor="client-invoice-currency"
+              className="text-sm font-medium"
+            >
+              {t("common.currency")}
+            </label>
+            <Select
+              onValueChange={(value) => {
+                const next = currencies.find((option) => option === value);
+                if (next !== undefined) {
+                  setChosenCurrency(next);
+                }
+              }}
+              value={currency}
+            >
+              <SelectTrigger className="w-28" id="client-invoice-currency">
+                <SelectValue>{currency}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup>
+                {currencies.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+        )}
       </div>
       {hasFlatFeeMatters && (
         <p className="text-muted-foreground px-4 text-sm sm:px-6">
