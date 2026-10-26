@@ -30,18 +30,22 @@ export type CheckpointLeaveAction =
   | { type: "report"; error: unknown };
 
 /**
- * `close` leaves without a word: with no session there is nothing to save
- * into. `stay` keeps the document on screen behind the released banner, which
- * already explains itself. Only a checkpoint with a cause is reported.
+ * `close` leaves without a word, and only when no session means nothing was
+ * lost: the user typed nothing here. A session can also vanish because a
+ * concurrent checkpoint was taken over while this one serialized; the user's
+ * edits then live only on screen, so the document `stay`s behind the released
+ * banner, which already explains itself. Only a checkpoint with a cause is
+ * reported.
  */
 export const checkpointLeaveAction = (
   outcome: CheckpointOutcome,
+  { userEdited }: { userEdited: boolean },
 ): CheckpointLeaveAction => {
   switch (outcome.type) {
     case "saved":
       return { type: "finalize" };
     case "noSession":
-      return { type: "close" };
+      return userEdited ? { type: "stay" } : { type: "close" };
     case "released":
       return { type: "stay" };
     case "refused":

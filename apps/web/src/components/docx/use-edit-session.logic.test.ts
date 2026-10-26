@@ -9,34 +9,51 @@ import {
 } from "./use-edit-session.logic";
 
 describe("leaving after the final checkpoint", () => {
+  const untouched = { userEdited: false };
+  const edited = { userEdited: true };
+
   test("a saved checkpoint goes on to finalize", () => {
-    expect(checkpointLeaveAction({ type: "saved" })).toEqual({
-      type: "finalize",
-    });
+    for (const edits of [untouched, edited]) {
+      expect(checkpointLeaveAction({ type: "saved" }, edits)).toEqual({
+        type: "finalize",
+      });
+    }
   });
 
-  test("no session to save into closes without an error", () => {
-    expect(checkpointLeaveAction({ type: "noSession" })).toEqual({
+  test("no session and nothing typed closes without an error", () => {
+    expect(checkpointLeaveAction({ type: "noSession" }, untouched)).toEqual({
       type: "close",
     });
   });
 
-  test("a released session stays behind its banner without an error", () => {
-    expect(checkpointLeaveAction({ type: "released" })).toEqual({
+  test("no session after the user typed keeps the document open", () => {
+    // A concurrent checkpoint was taken over while this one serialized: the
+    // session is gone and the edits exist only on screen.
+    expect(checkpointLeaveAction({ type: "noSession" }, edited)).toEqual({
       type: "stay",
     });
+  });
+
+  test("a released session stays behind its banner without an error", () => {
+    for (const edits of [untouched, edited]) {
+      expect(checkpointLeaveAction({ type: "released" }, edits)).toEqual({
+        type: "stay",
+      });
+    }
   });
 
   test("a refused or unreachable checkpoint is reported with its cause", () => {
     const refused = toAPIError({ status: 500, value: { message: "boom" } });
     const unreachable = new TypeError("Failed to fetch");
 
-    expect(checkpointLeaveAction({ type: "refused", error: refused })).toEqual({
-      type: "report",
-      error: refused,
-    });
     expect(
-      checkpointLeaveAction({ type: "unreachable", error: unreachable }),
+      checkpointLeaveAction({ type: "refused", error: refused }, edited),
+    ).toEqual({ type: "report", error: refused });
+    expect(
+      checkpointLeaveAction(
+        { type: "unreachable", error: unreachable },
+        edited,
+      ),
     ).toEqual({ type: "report", error: unreachable });
   });
 });

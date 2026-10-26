@@ -259,26 +259,20 @@ export const useDocxSessionFinish = ({
     clearQueuedChangeCheckpoint();
 
     const ref = editorRef.current;
-    if (!ref) {
-      // An editor that never mounted holds nothing the user typed.
-      if (!isDirty && !hasSessionChangesRef.current) {
-        await cancelActiveSession();
-        return true;
-      }
-      notifySaveUnavailable("editorUnmounted");
-      return false;
-    }
-
-    const hasPendingEditorChanges = ref.hasPendingChanges();
     if (
       !shouldFinalizeEditSession({
         isDirty,
         hasSessionChanges: hasSessionChangesRef.current,
-        hasPendingEditorChanges,
+        hasPendingEditorChanges: ref?.hasPendingChanges() ?? false,
       })
     ) {
       await cancelActiveSession();
       return true;
+    }
+    // Changes were made, but the editor holding them is gone.
+    if (!ref) {
+      notifySaveUnavailable("editorUnmounted");
+      return false;
     }
 
     const buffer = await ref.save({ selective: true });
@@ -288,7 +282,9 @@ export const useDocxSessionFinish = ({
     }
 
     setAutosaveStatus("syncing");
-    const leave = checkpointLeaveAction(await saveActiveCheckpoint(buffer));
+    const leave = checkpointLeaveAction(await saveActiveCheckpoint(buffer), {
+      userEdited: hasSessionChangesRef.current,
+    });
     switch (leave.type) {
       case "finalize":
         break;
