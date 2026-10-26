@@ -18,6 +18,7 @@ import createClientInvoice from "@/api/handlers/client-invoices/create";
 import readInvoice from "@/api/handlers/invoices/get";
 import deleteLine from "@/api/handlers/invoices/lines/delete";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -118,7 +119,7 @@ afterAll(async () => {
   }
 });
 
-const context = <TContext>(
+const context = <TContext extends SafeHandlerLogContext>(
   _handler: (context: TContext) => unknown,
   body: unknown,
   params: Record<string, unknown>,

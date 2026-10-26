@@ -60,6 +60,7 @@ import {
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import { getPgErrorCode } from "@/api/lib/pg-error";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
@@ -207,6 +208,10 @@ if (!databaseUrl || !runPostgres) {
         name: "Invoice visibility",
         slug: orgId,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgId,
+        now: new Date(),
       });
       await db.insert(member).values(
         Object.entries(actors).map(([kind, userId]) => ({
