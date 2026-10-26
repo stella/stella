@@ -12,7 +12,6 @@ import {
   beforeEach,
   describe,
   expect,
-  type Mock,
   mock,
   setDefaultTimeout,
   spyOn,
@@ -109,9 +108,14 @@ const actor = createRootRunActor(
 );
 const outputEntityId = createSafeId<"entity">();
 
-let settingsSpy: Mock<typeof aiConfigLoader.loadOrgAISettings>;
-let translateSpy: Mock<typeof translationAI.translateTaggedSegments>;
-let writeSpy: Mock<typeof entityWriter.createEntityFromBuffer>;
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let settingsSpy: SpyOn<typeof aiConfigLoader, "loadOrgAISettings">;
+let translateSpy: SpyOn<typeof translationAI, "translateTaggedSegments">;
+let writeSpy: SpyOn<typeof entityWriter, "createEntityFromBuffer">;
 
 const readRun = async () =>
   (

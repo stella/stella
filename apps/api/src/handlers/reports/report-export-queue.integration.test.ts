@@ -11,7 +11,6 @@ import {
   beforeEach,
   describe,
   expect,
-  type Mock,
   mock,
   setDefaultTimeout,
   spyOn,
@@ -99,13 +98,21 @@ const actor = {
   exportId,
 };
 
-let reportDataSpy: Mock<typeof reportData.buildReportData>;
-let textModelSpy: Mock<typeof modelTransport.generateTanStackTextForTask>;
-let objectModelSpy: Mock<typeof modelTransport.generateTanStackObjectForTask>;
-let chatObjectSpy: Mock<typeof chatRuntime.generateChatObject>;
+// Spies typed through spyOn itself, naming each module as a whole: a typed
+// member access here would leave the module's other exports looking unused.
+type SpyOn<T extends object, K extends keyof T> = ReturnType<
+  typeof spyOn<T, K>
+>;
+let reportDataSpy: SpyOn<typeof reportData, "buildReportData">;
+let textModelSpy: SpyOn<typeof modelTransport, "generateTanStackTextForTask">;
+let objectModelSpy: SpyOn<
+  typeof modelTransport,
+  "generateTanStackObjectForTask"
+>;
+let chatObjectSpy: SpyOn<typeof chatRuntime, "generateChatObject">;
 // Every model run resolves its model here, and every AI condition decides here.
-let resolveModelSpy: Mock<typeof modelTransport.resolveTanStackTextModel>;
-let decideSpy: Mock<typeof decisions.decide>;
+let resolveModelSpy: SpyOn<typeof modelTransport, "resolveTanStackTextModel">;
+let decideSpy: SpyOn<typeof decisions, "decide">;
 
 const readExport = async () =>
   (
