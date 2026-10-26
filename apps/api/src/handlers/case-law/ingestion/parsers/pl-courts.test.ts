@@ -494,7 +494,6 @@ describe("ordered list items print the number a browser gives them", () => {
     }
     if (!ownsContents(contentsOwner)) {
       expect.unreachable("cheerio defines no contents method");
-      return;
     }
     const owner = contentsOwner;
     const listed = (runs: number): number => {
