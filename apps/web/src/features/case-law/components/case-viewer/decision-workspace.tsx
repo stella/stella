@@ -472,13 +472,19 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const answerCitations = visibleAnswers.flatMap((answer) =>
     answer.messages.flatMap((message) => message.citations),
   );
-  // Every drawn card's chips name the decisions they cite, so each one is
-  // read; the open action reads the same cache entries.
+  // These observers only watch the cache. A cited decision is fetched by the
+  // chip that shows it, and chips render only in an expanded card, which
+  // minimises once scrolled away: one read per distinct decision cited by the
+  // cards on screen, never one for every answer the filter keeps. The open
+  // action reads the same cache entries.
   const foreignDecisionIds = [
     ...new Set(answerCitations.map((citation) => citation.decisionId)),
   ].filter((id) => id !== decisionId);
   const foreignDecisions = useQueries({
-    queries: foreignDecisionIds.map((id) => decisionOptions(id)),
+    queries: foreignDecisionIds.map((id) => ({
+      ...decisionOptions(id),
+      enabled: false,
+    })),
   });
   const foreignDecisionError = foreignDecisions.find(
     (query) => query.error !== null,

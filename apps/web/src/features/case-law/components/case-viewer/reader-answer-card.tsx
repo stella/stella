@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -16,6 +17,7 @@ import { cn } from "@stll/ui/utils";
 
 import { CopyActionButton } from "@/components/copy-action-button";
 import { CitationChip } from "@/components/references/citation-chip";
+import { decisionOptions } from "@/features/case-law/queries/decisions";
 
 import { AnnotationVisibilityToggle } from "./analysis/annotation-visibility-toggle";
 import type { ReaderAnswerCitationTarget } from "./reader-answer-citation.logic";
@@ -26,6 +28,15 @@ type ReaderAnswerCitationChipProps = {
   language: string;
   onCitation: (citation: ReaderAnswerCitation) => void;
   target: ReaderAnswerCitationTarget;
+};
+
+/**
+ * Fetches a cited decision while its chip is on screen; the workspace observes
+ * the same cache entry and redraws the chip once the decision arrives.
+ */
+const PendingCitedDecisionChip = ({ decisionId }: { decisionId: string }) => {
+  useQuery(decisionOptions(decisionId));
+  return <Skeleton className="h-4 w-16 rounded-sm" />;
 };
 
 /** Both chips follow the citation the way the card always has. */
@@ -56,7 +67,7 @@ const ReaderAnswerCitationChip = ({
         />
       );
     case "pending":
-      return <Skeleton className="h-4 w-16 rounded-sm" />;
+      return <PendingCitedDecisionChip decisionId={citation.decisionId} />;
     case "unresolved":
       return null;
     default:
