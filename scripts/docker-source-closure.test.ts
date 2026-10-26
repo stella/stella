@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
@@ -9,10 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   BUN_FLAGS,
@@ -43,14 +40,11 @@ const tree = (files: readonly string[]): SourceTree =>
   new Map(files.map((file) => [`/app/${file}`, file]));
 
 describe("Docker source closure", () => {
-  test("API install tooling COPY lines match the complete runtime import closure", async () => {
-    await updateInstallToolingCopies(
-      path.resolve(import.meta.dir, ".."),
-      false,
-    );
+  test("API install tooling COPY lines match the complete runtime import closure", () => {
+    updateInstallToolingCopies(path.resolve(import.meta.dir, ".."), false);
   });
 
-  test("install tooling copies derive transitive imports and reject omitted modules", async () => {
+  test("install tooling copies derive transitive imports and reject omitted modules", () => {
     const entry = put(
       "install-tooling/entry.ts",
       'import { value } from "./store"; import type { Options } from "./types"; console.log(value);',
@@ -64,7 +58,7 @@ describe("Docker source closure", () => {
       'import "node:crypto"; export const value = "ready";',
     );
     const files = tree([entry, store, hash]);
-    const copies = await installToolingCopies({
+    const copies = installToolingCopies({
       root,
       files,
       entry: `/app/${entry}`,
@@ -74,33 +68,25 @@ describe("Docker source closure", () => {
     );
     const context = new Map([...files].map(([, file]) => [`/${file}`, file]));
     const source = `FROM oven/bun AS base\nWORKDIR /app\n${copies}\nRUN bun ${entry}\n`;
-    expect(await checkDockerSource(root, source, context, new Map())).toEqual(
-      [],
-    );
+    expect(checkDockerSource(root, source, context, new Map())).toEqual([]);
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         source.replace(`COPY ${hash} ${hash}\n`, ""),
         context,
         new Map(),
       ),
     ).toEqual([`${store} imports ./hash, unavailable in Docker stage`]);
-    expect(
-      await rejectionOf(
-        installToolingCopies({
-          root,
-          files: tree([entry, store]),
-          entry: `/app/${entry}`,
-        }),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining(
-        "imports ./hash, unavailable in Docker stage",
-      ),
-    });
+    expect(() =>
+      installToolingCopies({
+        root,
+        files: tree([entry, store]),
+        entry: `/app/${entry}`,
+      }),
+    ).toThrow("imports ./hash, unavailable in Docker stage");
   });
 
-  test("preinstall copy generation refuses imports that need an install or runtime discovery", async () => {
+  test("preinstall copy generation refuses imports that need an install or runtime discovery", () => {
     for (const [file, source, error] of [
       [
         "install-tooling/external.ts",
@@ -114,15 +100,13 @@ describe("Docker source closure", () => {
       ],
     ] as const) {
       const entry = put(file, source);
-      expect(
-        await rejectionOf(
-          installToolingCopies({
-            root,
-            files: tree([entry]),
-            entry: `/app/${entry}`,
-          }),
-        ),
-      ).toMatchObject({ message: expect.stringContaining(error) });
+      expect(() =>
+        installToolingCopies({
+          root,
+          files: tree([entry]),
+          entry: `/app/${entry}`,
+        }),
+      ).toThrow(error);
     }
   });
   test("every API image install uses the bounded installer owner", () => {
@@ -177,7 +161,7 @@ describe("Docker source closure", () => {
       expect(unboundedInstalls(`${source}\nRUN ${command}`)).toEqual([command]);
     }
   });
-  test("checks the sandbox install and cache commands without hiding source runners", async () => {
+  test("checks the sandbox install and cache commands without hiding source runners", () => {
     const source = readFileSync(
       new URL(
         "../packages/agent-engine/docker/sandbox.Dockerfile",
@@ -185,11 +169,9 @@ describe("Docker source closure", () => {
       ),
       "utf-8",
     );
-    expect(await checkDockerSource(root, source, new Map(), new Map())).toEqual(
-      [],
-    );
+    expect(checkDockerSource(root, source, new Map(), new Map())).toEqual([]);
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${source}\nRUN bun absent.ts`,
         new Map(),
@@ -203,11 +185,9 @@ describe("Docker source closure", () => {
       "npm cache verify",
       'npm "cache clean --force"',
     ]) {
-      expect(
-        await rejectionOf(commandEntries(root, new Map(), command, "/app")),
-      ).toMatchObject({
-        message: expect.stringContaining("Unsupported source runner: npm"),
-      });
+      expect(() => commandEntries(root, new Map(), command, "/app")).toThrow(
+        "Unsupported source runner: npm",
+      );
     }
   });
   test("keeps commands after comment lines in a continued instruction", () => {
@@ -222,7 +202,7 @@ describe("Docker source closure", () => {
     }
   });
 
-  test("continued instructions retain commands across whitespace and blank lines", async () => {
+  test("continued instructions retain commands across whitespace and blank lines", () => {
     for (const newline of ["\n", "\r\n"]) {
       for (const suffix of [" ", "\t", " \t"]) {
         const source = [
@@ -234,21 +214,21 @@ describe("Docker source closure", () => {
           " \t",
           "  && bun absent.ts",
         ].join(newline);
-        expect(
-          await checkDockerSource(root, source, new Map(), new Map()),
-        ).toEqual(["Entry is unavailable: /app/absent.ts"]);
+        expect(checkDockerSource(root, source, new Map(), new Map())).toEqual([
+          "Entry is unavailable: /app/absent.ts",
+        ]);
       }
     }
   });
 
-  test("a packaged build output copied from another stage runs without a source closure", async () => {
+  test("a packaged build output copied from another stage runs without a source closure", () => {
     const stages = [
       "FROM bun AS builder",
       "FROM bun AS runner",
       "COPY --from=builder /app/bundles/ /app/",
     ];
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         [...stages, "FROM runner AS smoke", "RUN bun /app/smoke.js"].join("\n"),
         new Map(),
@@ -256,7 +236,7 @@ describe("Docker source closure", () => {
       ),
     ).toEqual([]);
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         [...stages, "RUN bun /opt/absent.js"].join("\n"),
         new Map(),
@@ -267,10 +247,10 @@ describe("Docker source closure", () => {
 
   test.each(["/", "/./", "/nested/.."])(
     "root-copied packaged artifacts retain a single separator: %s",
-    async (destination) => {
+    (destination) => {
       for (const entry of ["/smoke.js", "/app/smoke.js"]) {
         expect(
-          await checkDockerSource(
+          checkDockerSource(
             root,
             [
               "FROM bun AS builder",
@@ -287,7 +267,7 @@ describe("Docker source closure", () => {
     },
   );
 
-  test("source wrappers check their inner reads without splitting quoted arguments", async () => {
+  test("source wrappers check their inner reads without splitting quoted arguments", () => {
     const entry = put("wrapper/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);
     for (const prefix of [
@@ -300,7 +280,7 @@ describe("Docker source closure", () => {
       "env VAR=x timeout 10s nice -n 3 exec",
     ]) {
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `FROM bun AS builder\nWORKDIR /app\nCOPY entry.ts .\nRUN ${prefix} bun entry.ts`,
           context,
@@ -310,7 +290,7 @@ describe("Docker source closure", () => {
         "wrapper/entry.ts imports ./missing, unavailable in Docker stage",
       ]);
       expect(
-        await commandEntries(
+        commandEntries(
           root,
           tree(["entry.ts"]),
           `${prefix} bun absent.ts`,
@@ -318,7 +298,7 @@ describe("Docker source closure", () => {
         ),
       ).toEqual(["/app/absent.ts"]);
       expect(
-        await commandEntries(
+        commandEntries(
           root,
           tree(["entry.ts"]),
           `${prefix} bun 'entry with spaces.ts'`,
@@ -328,7 +308,7 @@ describe("Docker source closure", () => {
     }
     for (const shell of ["sh", "bash"]) {
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `FROM bun AS builder\nWORKDIR /app\nCOPY entry.ts .\nRUN ${shell} -c 'bun entry.ts'`,
           context,
@@ -338,7 +318,7 @@ describe("Docker source closure", () => {
         "wrapper/entry.ts imports ./missing, unavailable in Docker stage",
       ]);
       expect(
-        await commandEntries(
+        commandEntries(
           root,
           new Map(),
           `${shell} -c 'true && bun absent.ts'`,
@@ -353,24 +333,18 @@ describe("Docker source closure", () => {
       "timeout --unknown bun entry.ts",
       "nice --unknown bun entry.ts",
     ]) {
-      expect(
-        await rejectionOf(
-          commandEntries(root, tree(["entry.ts"]), command, "/app"),
-        ),
-      ).toMatchObject({
-        message: expect.stringMatching(/Unsupported source wrapper/u),
-      });
+      expect(() =>
+        commandEntries(root, tree(["entry.ts"]), command, "/app"),
+      ).toThrow(/Unsupported source wrapper/u);
     }
   });
 
-  test("external COPY assets are opaque and cannot supply source inventory", async () => {
+  test("external COPY assets are opaque and cannot supply source inventory", () => {
     for (const from of ["oven/bun:1", "unmodelled", "0"]) {
       const source = `FROM bun AS builder\nWORKDIR /app\nCOPY --from=${from} /usr/bin/bun /usr/bin/bun`;
+      expect(checkDockerSource(root, source, new Map(), new Map())).toEqual([]);
       expect(
-        await checkDockerSource(root, source, new Map(), new Map()),
-      ).toEqual([]);
-      expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `${source}\nRUN bun entry.ts`,
           new Map(),
@@ -378,21 +352,17 @@ describe("Docker source closure", () => {
         ),
       ).toEqual(["Entry is unavailable: /app/entry.ts"]);
     }
-    expect(
-      await rejectionOf(
-        checkDockerSource(
-          root,
-          "FROM bun AS builder\nCOPY --from=pruner /app/src /app/src",
-          new Map(),
-          new Map(),
-        ),
+    expect(() =>
+      checkDockerSource(
+        root,
+        "FROM bun AS builder\nCOPY --from=pruner /app/src /app/src",
+        new Map(),
+        new Map(),
       ),
-    ).toMatchObject({
-      message: expect.stringContaining("Unknown COPY stage: pruner"),
-    });
+    ).toThrow("Unknown COPY stage: pruner");
   });
 
-  test("copies multiple source contents into one destination", async () => {
+  test("copies multiple source contents into one destination", () => {
     const entry = put("multi-copy/apps/entry.ts", 'import "./dependency";');
     const dependency = put(
       "multi-copy/packages/dependency.ts",
@@ -406,25 +376,17 @@ describe("Docker source closure", () => {
     ]);
     const dockerfile =
       "FROM bun AS builder\nWORKDIR /app\nCOPY apps packages data.json ./\nRUN bun entry.ts";
-    expect(
-      await checkDockerSource(root, dockerfile, context, new Map()),
-    ).toEqual([]);
-    expect(
-      await rejectionOf(
-        checkDockerSource(
-          root,
-          dockerfile.replace("./", "destination"),
-          context,
-          new Map(),
-        ),
+    expect(checkDockerSource(root, dockerfile, context, new Map())).toEqual([]);
+    expect(() =>
+      checkDockerSource(
+        root,
+        dockerfile.replace("./", "destination"),
+        context,
+        new Map(),
       ),
-    ).toMatchObject({
-      message: expect.stringContaining(
-        "Multiple COPY sources require a directory destination",
-      ),
-    });
+    ).toThrow("Multiple COPY sources require a directory destination");
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         dockerfile.replace("bun entry.ts", "bun apps/entry.ts"),
         context,
@@ -433,7 +395,7 @@ describe("Docker source closure", () => {
     ).toEqual(["Entry is unavailable: /app/apps/entry.ts"]);
   });
 
-  test("COPY and ADD infer existing destination directories for single and multiple files", async () => {
+  test("COPY and ADD infer existing destination directories for single and multiple files", () => {
     const entry = put(
       "existing-directory/src/entry.ts",
       'import "./helper"; import "./second";',
@@ -457,40 +419,32 @@ describe("Docker source closure", () => {
         `${operation} helper.ts second.ts /app/src`,
       ]) {
         const dockerfile = `FROM bun\nWORKDIR /app\n${operation} src /app/src\n${copies}\nRUN bun src/entry.ts`;
-        expect(
-          await checkDockerSource(root, dockerfile, context, new Map()),
-        ).toEqual([]);
+        expect(checkDockerSource(root, dockerfile, context, new Map())).toEqual(
+          [],
+        );
       }
+      expect(() =>
+        checkDockerSource(
+          root,
+          `FROM bun\nWORKDIR /app\n${operation} helper.ts second.ts /app/not-a-directory`,
+          context,
+          new Map(),
+        ),
+      ).toThrow(
+        `Multiple ${operation} sources require a directory destination`,
+      );
+      expect(() =>
+        checkDockerSource(
+          root,
+          `FROM bun\nWORKDIR /app\n${operation} helper.ts /app/not-a-directory\n${operation} helper.ts second.ts /app/not-a-directory`,
+          context,
+          new Map(),
+        ),
+      ).toThrow(
+        `Multiple ${operation} sources require a directory destination`,
+      );
       expect(
-        await rejectionOf(
-          checkDockerSource(
-            root,
-            `FROM bun\nWORKDIR /app\n${operation} helper.ts second.ts /app/not-a-directory`,
-            context,
-            new Map(),
-          ),
-        ),
-      ).toMatchObject({
-        message: expect.stringContaining(
-          `Multiple ${operation} sources require a directory destination`,
-        ),
-      });
-      expect(
-        await rejectionOf(
-          checkDockerSource(
-            root,
-            `FROM bun\nWORKDIR /app\n${operation} helper.ts /app/not-a-directory\n${operation} helper.ts second.ts /app/not-a-directory`,
-            context,
-            new Map(),
-          ),
-        ),
-      ).toMatchObject({
-        message: expect.stringContaining(
-          `Multiple ${operation} sources require a directory destination`,
-        ),
-      });
-      expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `FROM bun\nWORKDIR /app\n${operation} helper.ts second.ts /app\nRUN bun helper.ts`,
           context,
@@ -504,7 +458,7 @@ describe("Docker source closure", () => {
     expect(destination.has("/app/src")).toBe(false);
   });
 
-  test("cached import edges retain content and stage inventory boundaries", async () => {
+  test("cached import edges retain content and stage inventory boundaries", () => {
     const first = put("import-cache/first.ts", 'import "./first-dependency";');
     const second = put(
       "import-cache/second.ts",
@@ -520,22 +474,18 @@ describe("Docker source closure", () => {
     ]);
     const omitted: SourceTree = new Map([["/app/entry.ts", first]]);
     const replaced: SourceTree = new Map([["/app/entry.ts", second]]);
-    expect(
-      await sourceClosureProblems(root, complete, ["/app/entry.ts"]),
-    ).toEqual([]);
-    expect(
-      await sourceClosureProblems(root, omitted, ["/app/entry.ts"]),
-    ).toEqual([
+    expect(sourceClosureProblems(root, complete, ["/app/entry.ts"])).toEqual(
+      [],
+    );
+    expect(sourceClosureProblems(root, omitted, ["/app/entry.ts"])).toEqual([
       "import-cache/first.ts imports ./first-dependency, unavailable in Docker stage",
     ]);
-    expect(
-      await sourceClosureProblems(root, replaced, ["/app/entry.ts"]),
-    ).toEqual([
+    expect(sourceClosureProblems(root, replaced, ["/app/entry.ts"])).toEqual([
       "import-cache/second.ts imports ./second-dependency, unavailable in Docker stage",
     ]);
   });
 
-  test("conditional workspace exports reject unmodeled custom Bun conditions", async () => {
+  test("conditional workspace exports reject unmodeled custom Bun conditions", () => {
     const files = [
       put(
         "conditions/package.json",
@@ -555,9 +505,7 @@ describe("Docker source closure", () => {
     put("conditions/production.ts", 'import "./production-only-missing";');
     const inventory = tree(files);
     expect(
-      await sourceClosureProblems(root, inventory, [
-        "/app/conditions-entry.ts",
-      ]),
+      sourceClosureProblems(root, inventory, ["/app/conditions-entry.ts"]),
     ).toEqual([]);
     for (const mode of ["run", "build"]) {
       for (const flag of [
@@ -565,23 +513,19 @@ describe("Docker source closure", () => {
         "--conditions production",
         "-C production",
       ]) {
-        expect(
-          await rejectionOf(
-            commandEntries(
-              root,
-              inventory,
-              `bun ${mode} ${flag} conditions-entry.ts`,
-              "/app",
-            ),
+        expect(() =>
+          commandEntries(
+            root,
+            inventory,
+            `bun ${mode} ${flag} conditions-entry.ts`,
+            "/app",
           ),
-        ).toMatchObject({
-          message: expect.stringContaining("Unsupported Bun flag semantics"),
-        });
+        ).toThrow("Unsupported Bun flag semantics");
       }
     }
   });
 
-  test("source mutations remove inventory and unknown writers fail closed before runners", async () => {
+  test("source mutations remove inventory and unknown writers fail closed before runners", () => {
     const entry = put("mutation/entry.ts", 'import "./helper";');
     const helper = put("mutation/helper.ts", "export const value = 1;");
     const context: SourceTree = new Map([
@@ -598,13 +542,13 @@ describe("Docker source closure", () => {
       "rmdir /app && bun entry.ts",
     ]) {
       expect(
-        (
-          await checkDockerSource(root, prefix + command, context, new Map())
-        ).join("\n"),
+        checkDockerSource(root, prefix + command, context, new Map()).join(
+          "\n",
+        ),
       ).toMatch(/unavailable in Docker stage|Entry is unavailable/u);
     }
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${prefix}mv helper.ts moved.ts && bun moved.ts`,
         context,
@@ -612,7 +556,7 @@ describe("Docker source closure", () => {
       ),
     ).toEqual([]);
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${prefix}false && mv helper.ts moved.ts; bun moved.ts`,
         context,
@@ -620,7 +564,7 @@ describe("Docker source closure", () => {
       ),
     ).toEqual(["Entry is unavailable: /app/moved.ts"]);
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${prefix}cp helper.ts copied.ts && bun copied.ts`,
         context,
@@ -628,57 +572,39 @@ describe("Docker source closure", () => {
       ),
     ).toEqual([]);
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${prefix}false && cp helper.ts copied.ts; bun copied.ts`,
         context,
         new Map(),
       ),
     ).toEqual(["Entry is unavailable: /app/copied.ts"]);
-    expect(
-      await rejectionOf(
-        checkDockerSource(
-          root,
-          `${prefix}cp absent.ts helper.ts && bun entry.ts`,
-          context,
-          new Map(),
-        ),
+    expect(() =>
+      checkDockerSource(
+        root,
+        `${prefix}cp absent.ts helper.ts && bun entry.ts`,
+        context,
+        new Map(),
       ),
-    ).toMatchObject({
-      message: expect.stringContaining(
-        "cp source is unavailable: /app/absent.ts",
+    ).toThrow("cp source is unavailable: /app/absent.ts");
+    expect(() =>
+      checkDockerSource(
+        root,
+        `${prefix}cp --unknown helper.ts copied.ts && bun entry.ts`,
+        context,
+        new Map(),
       ),
-    });
-    expect(
-      await rejectionOf(
-        checkDockerSource(
-          root,
-          `${prefix}cp --unknown helper.ts copied.ts && bun entry.ts`,
-          context,
-          new Map(),
-        ),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining(
-        "Unsupported source mutation: cp touches /app/helper.ts",
-      ),
-    });
+    ).toThrow("Unsupported source mutation: cp touches /app/helper.ts");
     for (const command of [
       "sed -i helper.ts && bun entry.ts",
       "sed -i helper.ts\nRUN bun entry.ts",
     ]) {
-      expect(
-        await rejectionOf(
-          checkDockerSource(root, prefix + command, context, new Map()),
-        ),
-      ).toMatchObject({
-        message: expect.stringContaining(
-          "Unsupported source mutation: sed touches /app/helper.ts",
-        ),
-      });
+      expect(() =>
+        checkDockerSource(root, prefix + command, context, new Map()),
+      ).toThrow("Unsupported source mutation: sed touches /app/helper.ts");
     }
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${
           prefix
@@ -689,7 +615,7 @@ describe("Docker source closure", () => {
     ).toEqual([]);
   });
 
-  test("literal cp supports source reads, overwrites, directories and preservation flags", async () => {
+  test("literal cp supports source reads, overwrites, directories and preservation flags", () => {
     const entry = put("literal-cp/entry.ts", 'import "./helper";');
     const helper = put("literal-cp/helper.ts", "export const value = 1;");
     const replacement = put("literal-cp/replacement.ts", 'import "./absent";');
@@ -703,7 +629,7 @@ describe("Docker source closure", () => {
     ]);
     const prefix = "FROM bun\nWORKDIR /app\nCOPY . .\nRUN ";
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${prefix}cp apps/api/src/lib/ocr-local/latin-v5-dict.txt /app/runtime-workers/latin-v5-dict.txt && bun entry.ts`,
         context,
@@ -712,7 +638,7 @@ describe("Docker source closure", () => {
     ).toEqual([]);
     for (const flag of ["-r", "-R", "-a", "-p"]) {
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `${prefix}cp ${flag} helper.ts copied.ts && bun copied.ts`,
           context,
@@ -722,7 +648,7 @@ describe("Docker source closure", () => {
     }
     for (const flag of ["-r", "-R", "-a"]) {
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `${prefix}cp ${flag} folder src && bun src/folder/helper.ts`,
           context,
@@ -731,7 +657,7 @@ describe("Docker source closure", () => {
       ).toEqual([]);
     }
     expect(
-      await checkDockerSource(
+      checkDockerSource(
         root,
         `${prefix}cp helper.ts replacement.ts src && bun src/helper.ts`,
         context,
@@ -739,52 +665,38 @@ describe("Docker source closure", () => {
       ),
     ).toEqual([]);
     expect(
-      (
-        await checkDockerSource(
-          root,
-          `${prefix}bun entry.ts && cp replacement.ts helper.ts && bun entry.ts`,
-          context,
-          new Map(),
-        )
+      checkDockerSource(
+        root,
+        `${prefix}bun entry.ts && cp replacement.ts helper.ts && bun entry.ts`,
+        context,
+        new Map(),
       ).join("\n"),
     ).toContain("literal-cp/replacement.ts imports ./absent");
-    expect(
-      await rejectionOf(
-        checkDockerSource(
-          root,
-          `${prefix}cp missing.ts helper.ts && bun entry.ts`,
-          context,
-          new Map(),
-        ),
+    expect(() =>
+      checkDockerSource(
+        root,
+        `${prefix}cp missing.ts helper.ts && bun entry.ts`,
+        context,
+        new Map(),
       ),
-    ).toMatchObject({
-      message: expect.stringContaining(
-        "cp source is unavailable: /app/missing.ts",
-      ),
-    });
+    ).toThrow("cp source is unavailable: /app/missing.ts");
     for (const command of [
       "cp helper*.ts copied.ts",
       "cp -t src helper.ts",
       "cp --parents helper.ts src",
     ]) {
-      expect(
-        await rejectionOf(
-          checkDockerSource(
-            root,
-            `${prefix}${command} && bun entry.ts`,
-            context,
-            new Map(),
-          ),
+      expect(() =>
+        checkDockerSource(
+          root,
+          `${prefix}${command} && bun entry.ts`,
+          context,
+          new Map(),
         ),
-      ).toMatchObject({
-        message: expect.stringContaining(
-          "Unsupported source mutation: cp touches",
-        ),
-      });
+      ).toThrow("Unsupported source mutation: cp touches");
     }
   });
 
-  test("checks builds following installs in the same instruction", async () => {
+  test("checks builds following installs in the same instruction", () => {
     const entry = put("after-install/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);
     for (const install of [
@@ -793,13 +705,13 @@ describe("Docker source closure", () => {
       "bun add example",
     ]) {
       const source = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN ${install} && bun entry.ts`;
-      expect(await checkDockerSource(root, source, context, new Map())).toEqual(
-        [`${entry} imports ./missing, unavailable in Docker stage`],
-      );
+      expect(checkDockerSource(root, source, context, new Map())).toEqual([
+        `${entry} imports ./missing, unavailable in Docker stage`,
+      ]);
     }
   });
 
-  test("declared generated sources enter a stage only after their available producer runs", async () => {
+  test("declared generated sources enter a stage only after their available producer runs", () => {
     const generator = GENERATORS.find(({ id }) => id === "capability-runtime");
     if (generator === undefined) {
       throw new Error("Capability runtime generator is missing");
@@ -896,7 +808,7 @@ describe("Docker source closure", () => {
         "COPY . .",
         ...commands,
       ].join("\n");
-      const problems = await checkDockerSource(
+      const problems = checkDockerSource(
         fixtureRoot,
         source,
         context,
@@ -924,7 +836,7 @@ describe("Docker source closure", () => {
     }
   });
 
-  test("cached generators require their declared inputs and expand output globs", async () => {
+  test("cached generators require their declared inputs and expand output globs", () => {
     for (const includeInput of [true, false]) {
       const fixtureRoot = mkdtempSync(path.join(root, "cached-generator-"));
       const files = {
@@ -977,7 +889,7 @@ describe("Docker source closure", () => {
         "RUN bun scripts/prepare-mcp-apps.ts",
         "RUN bun entry.ts",
       ].join("\n");
-      const problems = await checkDockerSource(
+      const problems = checkDockerSource(
         fixtureRoot,
         source,
         context,
@@ -1161,7 +1073,7 @@ describe("Docker source closure", () => {
     ]),
   ])(
     "filtered build scripts require a decidable producer chain: %j",
-    async ({ kind, declaration, form, operator, generated }) => {
+    ({ kind, declaration, form, operator, generated }) => {
       const fixtureRoot = mkdtempSync(path.join(root, "generated-filter-"));
       const write = (file: string, source: string) => {
         const target = path.join(fixtureRoot, file);
@@ -1208,7 +1120,7 @@ describe("Docker source closure", () => {
         [producer, manifest, entry].map((file) => [`/${file}`, file]),
       );
       const source = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\n${declaration}\nRUN ${kind === "inline" ? "TURBO_HASH=x " : ""}bun --filter @stll/web build`;
-      const problems = await checkDockerSource(
+      const problems = checkDockerSource(
         fixtureRoot,
         source,
         context,
@@ -1220,16 +1132,14 @@ describe("Docker source closure", () => {
         expect(problems.join("\n")).toContain("routeTree.gen");
       }
       expect(
-        (
-          await checkDockerSource(
-            fixtureRoot,
-            source.replace(
-              "bun --filter @stll/web build",
-              "bun apps/web/src/entry.ts",
-            ),
-            context,
-            new Map(),
-          )
+        checkDockerSource(
+          fixtureRoot,
+          source.replace(
+            "bun --filter @stll/web build",
+            "bun apps/web/src/entry.ts",
+          ),
+          context,
+          new Map(),
         ).join("\n"),
       ).toContain("routeTree.gen");
       for (const command of [
@@ -1238,20 +1148,18 @@ describe("Docker source closure", () => {
       ]) {
         const validationOnly = `FROM bun AS builder\nWORKDIR /app\nCOPY . .\nRUN ${command}\nRUN bun apps/web/src/entry.ts`;
         expect(
-          (
-            await checkDockerSource(
-              fixtureRoot,
-              validationOnly,
-              context,
-              new Map(),
-            )
+          checkDockerSource(
+            fixtureRoot,
+            validationOnly,
+            context,
+            new Map(),
           ).join("\n"),
         ).toContain("routeTree.gen");
       }
     },
   );
 
-  test("later COPY instructions refresh checked entries and alias resolution", async () => {
+  test("later COPY instructions refresh checked entries and alias resolution", () => {
     for (const laterEntry of ["entry.ts", "other.ts"]) {
       const prefix = `refresh-${laterEntry}`;
       const entry = put(`${prefix}/entry.ts`, 'import "@/dependency";');
@@ -1279,19 +1187,17 @@ describe("Docker source closure", () => {
       ]);
       const beforeCopy =
         "FROM bun AS builder\nWORKDIR /app\nCOPY entry.ts other.ts dependency.ts ./\nCOPY initial.json tsconfig.json\nRUN bun entry.ts";
-      expect(
-        await checkDockerSource(root, beforeCopy, context, new Map()),
-      ).toEqual([]);
+      expect(checkDockerSource(root, beforeCopy, context, new Map())).toEqual(
+        [],
+      );
       const afterCopy = `${beforeCopy}\nCOPY replacement.json tsconfig.json\nRUN bun ${laterEntry}`;
-      expect(
-        await checkDockerSource(root, afterCopy, context, new Map()),
-      ).toEqual([
+      expect(checkDockerSource(root, afterCopy, context, new Map())).toEqual([
         `${laterEntry === "entry.ts" ? entry : other} imports @/dependency, unavailable in Docker stage`,
       ]);
     }
   });
 
-  test("source-run arguments are distinct from Bun options and build entrypoints", async () => {
+  test("source-run arguments are distinct from Bun options and build entrypoints", () => {
     const context: SourceTree = new Map([
       ["/app/entry.ts", "entry.ts"],
       ["/app/argument.ts", "argument.ts"],
@@ -1301,28 +1207,19 @@ describe("Docker source closure", () => {
       "bun entry.ts argument.ts --check",
       "bun entry.ts --unknown-script-argument",
     ]) {
-      expect(await commandEntries(root, context, command, "/app")).toEqual([
+      expect(commandEntries(root, context, command, "/app")).toEqual([
         "/app/entry.ts",
       ]);
     }
     expect(
-      await commandEntries(
-        root,
-        context,
-        "bun build entry.ts argument.ts",
-        "/app",
-      ),
+      commandEntries(root, context, "bun build entry.ts argument.ts", "/app"),
     ).toEqual(["/app/entry.ts", "/app/argument.ts"]);
-    expect(
-      await rejectionOf(
-        commandEntries(root, context, "bun --unknown entry.ts", "/app"),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining("Unsupported Bun flag: --unknown"),
-    });
+    expect(() =>
+      commandEntries(root, context, "bun --unknown entry.ts", "/app"),
+    ).toThrow("Unsupported Bun flag: --unknown");
   });
 
-  test("Bun build format and output flags cannot become source entrypoints", async () => {
+  test("Bun build format and output flags cannot become source entrypoints", () => {
     const context = tree(["entry.ts"]);
     for (const command of [
       "bun build entry.ts --format=esm --target=node --outfile=output.ts",
@@ -1331,7 +1228,7 @@ describe("Docker source closure", () => {
       "bun build entry.ts --sourcemap",
       "bun build --external excluded.ts --define CONSTANT:1 --root src entry.ts --entry-naming '[name].js' --sourcemap=external --minify-syntax --minify-whitespace --minify-identifiers --splitting",
     ]) {
-      expect(await commandEntries(root, context, command, "/app")).toEqual([
+      expect(commandEntries(root, context, command, "/app")).toEqual([
         "/app/entry.ts",
       ]);
     }
@@ -1341,13 +1238,13 @@ describe("Docker source closure", () => {
       "bun build entry.ts --format=",
       "bun build entry.ts --minify=true",
     ]) {
-      expect(
-        await rejectionOf(commandEntries(root, context, command, "/app")),
-      ).toMatchObject({ message: expect.stringMatching(/(?:Bun|source)/u) });
+      expect(() => commandEntries(root, context, command, "/app")).toThrow(
+        /(?:Bun|source)/u,
+      );
     }
   });
 
-  test("every Bun CLI flag has an explicit arity and source-effect decision", async () => {
+  test("every Bun CLI flag has an explicit arity and source-effect decision", () => {
     for (const mode of ["build", "run"] as const) {
       const help = Bun.spawnSync([process.execPath, mode, "--help"]);
       expect(help.exitCode).toBe(0);
@@ -1370,35 +1267,25 @@ describe("Docker source closure", () => {
       const context = tree(["entry.ts", "preload.ts"]);
       for (const [flag, policy] of Object.entries(BUN_FLAGS[mode])) {
         if (policy === "workspace") {
-          expect(
-            await rejectionOf(
-              commandEntries(
-                root,
-                context,
-                `bun ${mode} ${flag} unknown entry.ts`,
-                "/app",
-              ),
+          expect(() =>
+            commandEntries(
+              root,
+              context,
+              `bun ${mode} ${flag} unknown entry.ts`,
+              "/app",
             ),
-          ).toMatchObject({
-            message: expect.stringContaining(
-              "Filtered workspace is unavailable",
-            ),
-          });
+          ).toThrow("Filtered workspace is unavailable");
           continue;
         }
         if (policy === "unsupported") {
-          expect(
-            await rejectionOf(
-              commandEntries(
-                root,
-                context,
-                `bun ${mode} ${flag} value.ts entry.ts`,
-                "/app",
-              ),
+          expect(() =>
+            commandEntries(
+              root,
+              context,
+              `bun ${mode} ${flag} value.ts entry.ts`,
+              "/app",
             ),
-          ).toMatchObject({
-            message: expect.stringContaining("Unsupported Bun flag semantics"),
-          });
+          ).toThrow("Unsupported Bun flag semantics");
           continue;
         }
         for (const spelling of ["separate", "equals"]) {
@@ -1414,7 +1301,7 @@ describe("Docker source closure", () => {
               spelling === "equals" ? `${flag}=${value}` : `${flag} ${value}`;
           }
           expect(
-            await commandEntries(
+            commandEntries(
               root,
               context,
               `bun ${mode} ${argument} entry.ts`,
@@ -1431,7 +1318,7 @@ describe("Docker source closure", () => {
     }
   });
 
-  test("Bun preloads enter the stage closure and cwd changes source resolution", async () => {
+  test("Bun preloads enter the stage closure and cwd changes source resolution", () => {
     const entry = put("flags/entry.ts", "export const value = 1;");
     const preload = put("flags/preload.ts", "export const preloaded = 1;");
     const context: SourceTree = new Map([
@@ -1441,41 +1328,33 @@ describe("Docker source closure", () => {
     const source =
       "FROM bun\nWORKDIR /app\nCOPY flags/entry.ts flags/entry.ts\nRUN bun run --cwd /app/flags --preload preload.ts entry.ts";
     expect(
-      (await checkDockerSource(root, source, context, new Map())).join("\n"),
+      checkDockerSource(root, source, context, new Map()).join("\n"),
     ).toContain("preload.ts");
-    expect(
-      await rejectionOf(
+    expect(() =>
+      commandEntries(
+        root,
+        context,
+        "bun run --tsconfig-override config.json flags/entry.ts",
+        "/app",
+      ),
+    ).toThrow("Unsupported Bun flag semantics");
+  });
+
+  test("late source-resolution flags fail closed instead of reusing an earlier preload path", () => {
+    const context = tree(["preload.ts", "entry.ts"]);
+    for (const flag of ["--cwd=/other", "--filter=@stll/other"]) {
+      expect(() =>
         commandEntries(
           root,
           context,
-          "bun run --tsconfig-override config.json flags/entry.ts",
+          `bun run --preload preload.ts ${flag} entry.ts`,
           "/app",
         ),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining("Unsupported Bun flag semantics"),
-    });
-  });
-
-  test("late source-resolution flags fail closed instead of reusing an earlier preload path", async () => {
-    const context = tree(["preload.ts", "entry.ts"]);
-    for (const flag of ["--cwd=/other", "--filter=@stll/other"]) {
-      expect(
-        await rejectionOf(
-          commandEntries(
-            root,
-            context,
-            `bun run --preload preload.ts ${flag} entry.ts`,
-            "/app",
-          ),
-        ),
-      ).toMatchObject({
-        message: expect.stringContaining("after a source entry"),
-      });
+      ).toThrow("after a source entry");
     }
   });
 
-  test("Bun runtime options preserve explicit and filtered package scripts", async () => {
+  test("Bun runtime options preserve explicit and filtered package scripts", () => {
     const manifest = put(
       "flagged/package.json",
       JSON.stringify({
@@ -1491,64 +1370,45 @@ describe("Docker source closure", () => {
       "bun --filter=@stll/flagged generate",
       "bun run -F @stll/flagged generate",
     ]) {
-      expect(await commandEntries(root, context, command, "/app")).toEqual([
+      expect(commandEntries(root, context, command, "/app")).toEqual([
         "/app/flagged/entry.ts",
       ]);
     }
   });
 
-  test("the bootstrap metadata expression requires its exact stage input", async () => {
+  test("the bootstrap metadata expression requires its exact stage input", () => {
     const context: SourceTree = new Map([
       ["/app/package.json", "package.json"],
     ]);
     for (const flag of ["-p", "--print"]) {
       const command = `bun ${flag} 'require("./package.json").devDependencies.turbo'`;
-      expect(await commandEntries(root, context, command, "/app")).toEqual([]);
-      expect(
-        await rejectionOf(commandEntries(root, new Map(), command, "/app")),
-      ).toMatchObject({
-        message: expect.stringContaining("Bun metadata input is unavailable"),
-      });
+      expect(commandEntries(root, context, command, "/app")).toEqual([]);
+      expect(() => commandEntries(root, new Map(), command, "/app")).toThrow(
+        "Bun metadata input is unavailable",
+      );
     }
-    expect(
-      await rejectionOf(
-        commandEntries(
-          root,
-          context,
-          `bun -p 'require("./missing.ts")'`,
-          "/app",
-        ),
-      ),
-    ).toMatchObject({
-      message: expect.stringContaining("Unsupported Bun flag semantics"),
-    });
+    expect(() =>
+      commandEntries(root, context, `bun -p 'require("./missing.ts")'`, "/app"),
+    ).toThrow("Unsupported Bun flag semantics");
   });
 
-  test("remote native archives never manufacture copied or generated source modules", async () => {
+  test("remote native archives never manufacture copied or generated source modules", () => {
     const entry = put("native-add/entry.ts", 'import "./missing";');
     const context: SourceTree = new Map([["/entry.ts", entry]]);
     const checksum = "a".repeat(64);
     const prefix = `FROM bun\nWORKDIR /app\nCOPY entry.ts .\nADD --checksum=sha256:${checksum} https://example.invalid/native.tar /native.tar`;
-    expect(await checkDockerSource(root, prefix, context, new Map())).toEqual(
-      [],
-    );
-    expect(
-      await rejectionOf(
-        checkDockerSource(
-          root,
-          `${prefix}\nRUN tar -xf /native.tar -C /app && bun entry.ts`,
-          context,
-          new Map(),
-        ),
+    expect(checkDockerSource(root, prefix, context, new Map())).toEqual([]);
+    expect(() =>
+      checkDockerSource(
+        root,
+        `${prefix}\nRUN tar -xf /native.tar -C /app && bun entry.ts`,
+        context,
+        new Map(),
       ),
-    ).toMatchObject({
-      message: expect.stringContaining(
-        "Unsupported source mutation: tar touches /app",
-      ),
-    });
+    ).toThrow("Unsupported source mutation: tar touches /app");
     for (const target of ["/app", "/app/"]) {
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `FROM bun\nWORKDIR /app\nCOPY entry.ts .\nADD https://example.invalid/native.tar ${target}`,
           context,
@@ -1562,13 +1422,9 @@ describe("Docker source closure", () => {
       "ADD https://example.invalid/native.tar /app/package.json",
       "ADD --unknown=yes https://example.invalid/native.tar /native.tar",
     ]) {
-      expect(
-        await rejectionOf(
-          checkDockerSource(root, `FROM bun\n${add}`, context, new Map()),
-        ),
-      ).toMatchObject({
-        message: expect.stringContaining("Unsupported source instruction"),
-      });
+      expect(() =>
+        checkDockerSource(root, `FROM bun\n${add}`, context, new Map()),
+      ).toThrow("Unsupported source instruction");
     }
   });
 
@@ -1577,7 +1433,7 @@ describe("Docker source closure", () => {
     { rootIgnore: "", specificIgnore: "entry.ts", available: false },
     { rootIgnore: "entry.ts", specificIgnore: undefined, available: false },
     { rootIgnore: "", specificIgnore: undefined, available: true },
-  ])("Dockerfile ignore rules replace the root rules: %j", async (fixture) => {
+  ])("Dockerfile ignore rules replace the root rules: %j", (fixture) => {
     const fixtureRoot = mkdtempSync(path.join(root, "specific-ignore-"));
     writeFileSync(path.join(fixtureRoot, ".dockerignore"), fixture.rootIgnore);
     writeFileSync(
@@ -1602,7 +1458,7 @@ describe("Docker source closure", () => {
         Bun.spawnSync(["git", ...args], { cwd: fixtureRoot }).exitCode,
       ).toBe(0);
     }
-    expect(await checkRepositoryDockerSources(fixtureRoot)).toEqual(
+    expect(checkRepositoryDockerSources(fixtureRoot)).toEqual(
       fixture.available
         ? []
         : ["Dockerfile: Entry is unavailable: /app/entry.ts"],
@@ -1610,9 +1466,9 @@ describe("Docker source closure", () => {
   });
 
   // Measured p95: 17.6 s; this must hydrate and inspect every tracked Dockerfile.
-  test("every tracked Dockerfile passes the full hydrated repository check", async () => {
+  test("every tracked Dockerfile passes the full hydrated repository check", () => {
     expect(
-      await checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
+      checkRepositoryDockerSources(path.resolve(import.meta.dir, "..")),
     ).toEqual([]);
   }, 40_000);
 
@@ -1653,7 +1509,7 @@ describe("Docker source closure", () => {
     );
   });
 
-  test("rejects the omitted root helper even when it exists in the checkout", async () => {
+  test("rejects the omitted root helper even when it exists in the checkout", () => {
     const helper = "packages/scripts/src/prepared-generated-sources.ts";
     const actual = readFileSync(
       new URL(`../${helper}`, import.meta.url),
@@ -1672,34 +1528,32 @@ describe("Docker source closure", () => {
       "export const generatedInputGit = () => ''; export const generatedInputTreeHash = () => '';",
     );
     const available = tree([helper, identity]);
-    expect(
-      await sourceClosureProblems(root, available, [`/app/${helper}`]),
-    ).toEqual([
+    expect(sourceClosureProblems(root, available, [`/app/${helper}`])).toEqual([
       `${helper} imports ../../../scripts/generated-files, unavailable in Docker stage`,
     ]);
     available.set(
       "/app/scripts/generated-files.ts",
       "scripts/generated-files.ts",
     );
-    expect(
-      await sourceClosureProblems(root, available, [`/app/${helper}`]),
-    ).toEqual([]);
+    expect(sourceClosureProblems(root, available, [`/app/${helper}`])).toEqual(
+      [],
+    );
   });
 
-  test("follows transitive and dynamic literal imports with cycles", async () => {
+  test("follows transitive and dynamic literal imports with cycles", () => {
     const files = [
       put("cycle/a.ts", 'import "./b"; import("./dynamic");'),
       put("cycle/b.ts", 'export * from "./a"; import "./missing.json";'),
       put("cycle/dynamic.ts", 'import "./b";'),
     ];
     expect(
-      await sourceClosureProblems(root, tree(files), ["/app/cycle/a.ts"]),
+      sourceClosureProblems(root, tree(files), ["/app/cycle/a.ts"]),
     ).toEqual([
       "cycle/b.ts imports ./missing.json, unavailable in Docker stage",
     ]);
   });
 
-  test("removing any discovered source leaf makes the closure fail", async () => {
+  test("removing any discovered source leaf makes the closure fail", () => {
     const leaves = Array.from({ length: 8 }, (_, index) =>
       put(`enumerated/leaf-${index}.ts`, "export const value = 1;"),
     );
@@ -1709,26 +1563,24 @@ describe("Docker source closure", () => {
     );
     const sources = tree([entry, ...leaves]);
     expect(
-      await sourceClosureProblems(root, sources, ["/app/enumerated/entry.ts"]),
+      sourceClosureProblems(root, sources, ["/app/enumerated/entry.ts"]),
     ).toEqual([]);
     for (const leaf of leaves) {
       const missing = new Map(sources);
       missing.delete(`/app/${leaf}`);
       expect(
-        await sourceClosureProblems(root, missing, [
-          "/app/enumerated/entry.ts",
-        ]),
+        sourceClosureProblems(root, missing, ["/app/enumerated/entry.ts"]),
       ).toHaveLength(1);
     }
   });
 
-  test("only value edges from imports and named exports enter a runtime closure", async () => {
+  test("only value edges from imports and named exports enter a runtime closure", () => {
     const file = put(
       "types.ts",
       'import type { A } from "./absent"; import { type B } from "./absent"; export type { C } from "./absent"; export { type D, type E } from "./absent";',
     );
     expect(
-      await sourceClosureProblems(root, tree([file]), ["/app/types.ts"]),
+      sourceClosureProblems(root, tree([file]), ["/app/types.ts"]),
     ).toEqual([]);
     for (const [index, statement] of [
       'export { type A, value } from "./absent";',
@@ -1737,12 +1589,12 @@ describe("Docker source closure", () => {
     ].entries()) {
       const entry = put(`mixed-types-${index}.ts`, statement);
       expect(
-        await sourceClosureProblems(root, tree([entry]), [`/app/${entry}`]),
+        sourceClosureProblems(root, tree([entry]), [`/app/${entry}`]),
       ).toEqual([`${entry} imports ./absent, unavailable in Docker stage`]);
     }
   });
 
-  test("declarations cannot satisfy a runtime source import", async () => {
+  test("declarations cannot satisfy a runtime source import", () => {
     const config = put(
       "apps/declarations/tsconfig.json",
       JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
@@ -1761,14 +1613,14 @@ describe("Docker source closure", () => {
         `import "${specifier}";`,
       );
       expect(
-        await sourceClosureProblems(root, tree([config, declaration, entry]), [
+        sourceClosureProblems(root, tree([config, declaration, entry]), [
           `/app/${entry}`,
         ]),
       ).toEqual([`${entry} imports ${specifier}, unavailable in Docker stage`]);
     }
   });
 
-  test("resolves dotted module basenames only from stage sources", async () => {
+  test("resolves dotted module basenames only from stage sources", () => {
     const config = put(
       "apps/dotted/tsconfig.json",
       JSON.stringify({ compilerOptions: { paths: { "@/*": ["./src/*"] } } }),
@@ -1792,14 +1644,12 @@ describe("Docker source closure", () => {
           `import "${specifier}";`,
         );
         expect(
-          await sourceClosureProblems(root, tree([config, entry, dependency]), [
+          sourceClosureProblems(root, tree([config, entry, dependency]), [
             `/app/${entry}`,
           ]),
         ).toEqual([]);
         expect(
-          await sourceClosureProblems(root, tree([config, entry]), [
-            `/app/${entry}`,
-          ]),
+          sourceClosureProblems(root, tree([config, entry]), [`/app/${entry}`]),
         ).toEqual([
           `${entry} imports ${specifier}, unavailable in Docker stage`,
         ]);
@@ -1807,7 +1657,7 @@ describe("Docker source closure", () => {
     }
   });
 
-  test("Bun runtime and bundling tolerate a missing inherited tsconfig", async () => {
+  test("Bun runtime and bundling tolerate a missing inherited tsconfig", () => {
     const directory = "missing-inherited-config";
     const config = put(
       `${directory}/tsconfig.json`,
@@ -1830,18 +1680,16 @@ describe("Docker source closure", () => {
       expect(result.exitCode, result.stderr.toString()).toBe(0);
     }
     expect(
-      await sourceClosureProblems(root, tree([config, entry, target]), [
+      sourceClosureProblems(root, tree([config, entry, target]), [
         `/app/${entry}`,
       ]),
     ).toEqual([]);
     expect(
-      await sourceClosureProblems(root, tree([config, entry]), [
-        `/app/${entry}`,
-      ]),
+      sourceClosureProblems(root, tree([config, entry]), [`/app/${entry}`]),
     ).toEqual([`${entry} imports ~/value, unavailable in Docker stage`]);
   });
 
-  test("every tracked tsconfig alias and custom alias requires its stage source", async () => {
+  test("every tracked tsconfig alias and custom alias requires its stage source", () => {
     const repositoryRoot = path.resolve(import.meta.dir, "..");
     const listed = Bun.spawnSync(
       ["git", "ls-files", "-z", "--", "*tsconfig*.json"],
@@ -1852,17 +1700,12 @@ describe("Docker source closure", () => {
     expect(configurations.length).toBeGreaterThan(0);
     const patterns = new Set<string>();
     for (const configuration of configurations) {
-      const api = new API({ cwd: repositoryRoot });
-      const parsed = await (async () => {
-        try {
-          return await api.readConfigFile(
-            path.join(repositoryRoot, configuration),
-          );
-        } finally {
-          await api.close();
-        }
-      })();
-      expect(parsed.error, configuration).toBeUndefined();
+      const parsed = Result.try(() =>
+        Bun.JSONC.parse(
+          readFileSync(path.join(repositoryRoot, configuration), "utf-8"),
+        ),
+      );
+      expect(parsed.isOk(), configuration).toBe(true);
       const config = v.parse(
         v.looseObject({
           compilerOptions: v.optional(
@@ -1871,7 +1714,7 @@ describe("Docker source closure", () => {
             }),
           ),
         }),
-        parsed.config,
+        parsed.unwrapOr(undefined),
       );
       for (const pattern of Object.keys(config.compilerOptions?.paths ?? {})) {
         patterns.add(pattern);
@@ -1895,21 +1738,19 @@ describe("Docker source closure", () => {
       );
       const target = put(`${directory}/target.ts`, "export const value = 1;");
       expect(
-        await sourceClosureProblems(root, tree([config, entry, target]), [
+        sourceClosureProblems(root, tree([config, entry, target]), [
           `/app/${entry}`,
         ]),
         pattern,
       ).toEqual([]);
       expect(
-        await sourceClosureProblems(root, tree([config, entry]), [
-          `/app/${entry}`,
-        ]),
+        sourceClosureProblems(root, tree([config, entry]), [`/app/${entry}`]),
         pattern,
       ).toEqual([`${entry} imports ${specifier}, unavailable in Docker stage`]);
     }
   });
 
-  test("resolves aliases using only stage sources", async () => {
+  test("resolves aliases using only stage sources", () => {
     const files = [
       put(
         "apps/example/tsconfig.json",
@@ -1919,18 +1760,16 @@ describe("Docker source closure", () => {
       put("apps/example/src/b.ts", "export const b = 1;"),
     ];
     expect(
-      await sourceClosureProblems(root, tree(files), [
-        "/app/apps/example/src/a.ts",
-      ]),
+      sourceClosureProblems(root, tree(files), ["/app/apps/example/src/a.ts"]),
     ).toEqual([]);
     expect(
-      await sourceClosureProblems(root, tree(files.slice(0, 2)), [
+      sourceClosureProblems(root, tree(files.slice(0, 2)), [
         "/app/apps/example/src/a.ts",
       ]),
     ).toHaveLength(1);
   });
 
-  test("only the most specific alias supplies targets regardless of declaration order", async () => {
+  test("only the most specific alias supplies targets regardless of declaration order", () => {
     for (const exact of [false, true]) {
       for (const reversed of [false, true]) {
         const directory = `apps/alias-priority-${exact}-${reversed}`;
@@ -1960,15 +1799,13 @@ describe("Docker source closure", () => {
           "export const value = 2;",
         );
         const sources = tree([config, entry, broad]);
-        expect(
-          await sourceClosureProblems(root, sources, [`/app/${entry}`]),
-        ).toEqual([
-          `${entry} imports @/special/value, unavailable in Docker stage`,
-        ]);
+        expect(sourceClosureProblems(root, sources, [`/app/${entry}`])).toEqual(
+          [`${entry} imports @/special/value, unavailable in Docker stage`],
+        );
         sources.set(`/app/${specific}`, specific);
-        expect(
-          await sourceClosureProblems(root, sources, [`/app/${entry}`]),
-        ).toEqual([]);
+        expect(sourceClosureProblems(root, sources, [`/app/${entry}`])).toEqual(
+          [],
+        );
       }
     }
     const config = put(
@@ -1983,13 +1820,13 @@ describe("Docker source closure", () => {
       "export const value = 1;",
     );
     expect(
-      await sourceClosureProblems(root, tree([config, entry, fallback]), [
+      sourceClosureProblems(root, tree([config, entry, fallback]), [
         `/app/${entry}`,
       ]),
     ).toEqual([]);
   });
 
-  test("retains the declaration directory of inherited aliases", async () => {
+  test("retains the declaration directory of inherited aliases", () => {
     const files = [
       put(
         "apps/inherited/tsconfig.json",
@@ -2005,13 +1842,13 @@ describe("Docker source closure", () => {
       put("apps/inherited/src/value.ts", "export const value = 1;"),
     ];
     expect(
-      await sourceClosureProblems(root, tree(files), [
+      sourceClosureProblems(root, tree(files), [
         "/app/apps/inherited/scripts/entry.ts",
       ]),
     ).toEqual([]);
   });
 
-  test("checks Vite worker sources and imported assets", async () => {
+  test("checks Vite worker sources and imported assets", () => {
     const files = [
       put(
         "worker-entry.ts",
@@ -2021,11 +1858,11 @@ describe("Docker source closure", () => {
       put("data.txt", "asset"),
     ];
     expect(
-      await sourceClosureProblems(root, tree(files), ["/app/worker-entry.ts"]),
+      sourceClosureProblems(root, tree(files), ["/app/worker-entry.ts"]),
     ).toEqual(["worker.ts imports ./missing, unavailable in Docker stage"]);
   });
 
-  test("resolves a workspace export without checkout symlinks", async () => {
+  test("resolves a workspace export without checkout symlinks", () => {
     const files = [
       put(
         "packages/example/package.json",
@@ -2038,15 +1875,13 @@ describe("Docker source closure", () => {
       put("workspace-entry.ts", 'import "@stll/example";'),
     ];
     expect(
-      await sourceClosureProblems(root, tree(files), [
-        "/app/workspace-entry.ts",
-      ]),
+      sourceClosureProblems(root, tree(files), ["/app/workspace-entry.ts"]),
     ).toEqual([
       "packages/example/src/index.ts imports ./absent, unavailable in Docker stage",
     ]);
   });
 
-  test("resolves a workspace asset export only when the stage holds it", async () => {
+  test("resolves a workspace asset export only when the stage holds it", () => {
     const files = [
       put(
         "packages/asset-example/package.json",
@@ -2065,7 +1900,7 @@ describe("Docker source closure", () => {
       ),
     ];
     expect(
-      await sourceClosureProblems(root, tree(files), ["/app/asset-entry.ts"]),
+      sourceClosureProblems(root, tree(files), ["/app/asset-entry.ts"]),
     ).toEqual([
       "asset-entry.ts imports @stll/asset-example/absent.css, unavailable in Docker stage",
     ]);
@@ -2105,7 +1940,7 @@ describe("Docker source closure", () => {
     ).toThrow("unavailable");
   });
 
-  test("checks a consumer after its actual pruned COPY, not the full context", async () => {
+  test("checks a consumer after its actual pruned COPY, not the full context", () => {
     const entry = put("stage-entry.ts", 'import "./root-helper";');
     const helper = put("root-helper.ts", "export const value = 1;");
     const context: SourceTree = new Map([
@@ -2115,16 +1950,14 @@ describe("Docker source closure", () => {
     const pruned = tree([entry]);
     const dockerfile =
       "FROM bun AS pruner\nWORKDIR /app\nCOPY . .\nRUN turbo prune @stll/example --docker\nFROM bun AS builder\nWORKDIR /app\nCOPY --from=pruner /app/out/full/ .\nRUN bun stage-entry.ts";
-    expect(await checkDockerSource(root, dockerfile, context, pruned)).toEqual([
+    expect(checkDockerSource(root, dockerfile, context, pruned)).toEqual([
       "stage-entry.ts imports ./root-helper, unavailable in Docker stage",
     ]);
     pruned.set("/app/root-helper.ts", helper);
-    expect(await checkDockerSource(root, dockerfile, context, pruned)).toEqual(
-      [],
-    );
+    expect(checkDockerSource(root, dockerfile, context, pruned)).toEqual([]);
   });
 
-  test("checks every command following prune and preserves source production order", async () => {
+  test("checks every command following prune and preserves source production order", () => {
     const entry = put("prune-order/entry.ts", 'import "./out/full/value";');
     const value = put("prune-order/value.ts", "export const value = 1;");
     const context: SourceTree = new Map([["/entry.ts", entry]]);
@@ -2133,7 +1966,7 @@ describe("Docker source closure", () => {
     for (const separator of ["&&", ";", "||"]) {
       const prune = "turbo prune @stll/example --docker";
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `${base}${prune} ${separator} bun absent.ts`,
           context,
@@ -2141,7 +1974,7 @@ describe("Docker source closure", () => {
         ),
       ).toEqual(["Entry is unavailable: /app/absent.ts"]);
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `${base}${prune} ${separator} bun entry.ts`,
           context,
@@ -2153,7 +1986,7 @@ describe("Docker source closure", () => {
           : [`${entry} imports ./out/full/value, unavailable in Docker stage`],
       );
       expect(
-        await checkDockerSource(
+        checkDockerSource(
           root,
           `${base}bun entry.ts ${separator} ${prune}`,
           context,
@@ -2162,18 +1995,14 @@ describe("Docker source closure", () => {
       ).toEqual([
         `${entry} imports ./out/full/value, unavailable in Docker stage`,
       ]);
-      expect(
-        await rejectionOf(
-          checkDockerSource(
-            root,
-            `${base}${prune} ${separator} npm unknown`,
-            context,
-            pruned,
-          ),
+      expect(() =>
+        checkDockerSource(
+          root,
+          `${base}${prune} ${separator} npm unknown`,
+          context,
+          pruned,
         ),
-      ).toMatchObject({
-        message: expect.stringContaining("Unsupported source runner: npm"),
-      });
+      ).toThrow("Unsupported source runner: npm");
     }
   });
 
@@ -2199,7 +2028,7 @@ describe("Docker source closure", () => {
     );
   });
 
-  test("expands the named build script and nested generator", async () => {
+  test("expands the named build script and nested generator", () => {
     const files = [
       put(
         "apps/commands/package.json",
@@ -2214,7 +2043,7 @@ describe("Docker source closure", () => {
       ),
     ];
     expect(
-      await commandEntries(
+      commandEntries(
         root,
         tree(files),
         "bun --filter @stll/commands build",
@@ -2225,20 +2054,18 @@ describe("Docker source closure", () => {
       "/app/apps/commands/src/index.ts",
     ]);
     expect(
-      await commandEntries(
+      commandEntries(
         root,
         tree(files),
         "cd apps/commands && bun src/main.ts",
         "/app",
       ),
     ).toEqual(["/app/apps/commands/src/main.ts"]);
+    expect(() =>
+      commandEntries(root, tree(files), "bun $ENTRY", "/app"),
+    ).toThrow("Unsupported");
     expect(
-      await rejectionOf(
-        commandEntries(root, tree(files), "bun $ENTRY", "/app"),
-      ),
-    ).toMatchObject({ message: expect.stringContaining("Unsupported") });
-    expect(
-      await commandEntries(
+      commandEntries(
         root,
         tree(files),
         "bun --cwd=elsewhere src/main.ts",
@@ -2246,17 +2073,15 @@ describe("Docker source closure", () => {
       ),
     ).toEqual(["/app/elsewhere/src/main.ts"]);
     expect(
-      (
-        await commandEntries(
-          root,
-          tree(files),
-          "bun --filter @stll/commands build && bun root.ts",
-          "/app",
-        )
+      commandEntries(
+        root,
+        tree(files),
+        "bun --filter @stll/commands build && bun root.ts",
+        "/app",
       ).at(-1),
     ).toBe("/app/root.ts");
     expect(
-      await commandEntries(
+      commandEntries(
         root,
         tree(files),
         "(cd apps/commands && bun src/main.ts) && bun root.ts",

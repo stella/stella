@@ -10,18 +10,10 @@ import {
 } from "node:fs";
 import { builtinModules } from "node:module";
 import path from "node:path";
-import {
-  API,
-  type CompilerOptions,
-  ModuleKind,
-  ModuleResolutionKind,
-  type ModuleResolver,
-  type Snapshot,
-} from "tsrs/unstable/async";
-import { createFileSystem } from "tsrs/unstable/fs";
 import * as v from "valibot";
 
 import {
+  type ParsedSource,
   parseSource,
   walk as walkSyntax,
 } from "../packages/scripts/src/syntax-tree";
@@ -181,14 +173,11 @@ const importCache = new Map<
   { source: string; imports: string[]; unresolved: string[] }
 >();
 
-const readRuntimeImports = (file: string, source: string) => {
-  const cached = importCache.get(file);
-  if (cached?.source === source) {
-    return cached;
-  }
-  const parsed = parseSource(file, source);
-  const imports: string[] = [];
-  const unresolved: string[] = [];
+// A runtime edge in source order; a nonliteral specifier stays unknown.
+type RuntimeEdge = { start: number; specifier: string | undefined };
+
+const treeRuntimeEdges = (parsed: ParsedSource): RuntimeEdge[] => {
+  const edges: RuntimeEdge[] = [];
   walkSyntax(parsed.program, (node) => {
     if (node.type === "ImportDeclaration") {
       if (
@@ -202,7 +191,7 @@ const readRuntimeImports = (file: string, source: string) => {
       ) {
         return;
       }
-      imports.push(node.source.value);
+      edges.push({ start: node.start, specifier: node.source.value });
       return;
     }
     if (node.type === "ExportNamedDeclaration" && node.source !== null) {
@@ -213,12 +202,12 @@ const readRuntimeImports = (file: string, source: string) => {
       ) {
         return;
       }
-      imports.push(node.source.value);
+      edges.push({ start: node.start, specifier: node.source.value });
       return;
     }
     if (node.type === "ExportAllDeclaration") {
       if (node.exportKind !== "type") {
-        imports.push(node.source.value);
+        edges.push({ start: node.start, specifier: node.source.value });
       }
       return;
     }
@@ -240,14 +229,107 @@ const readRuntimeImports = (file: string, source: string) => {
     ) {
       specifier = argument.quasis.at(0)?.value.cooked ?? undefined;
     }
-    if (specifier !== undefined) {
-      imports.push(specifier);
-    } else {
-      unresolved.push(
-        `${file}:${parsed.locate(node.start).line}: nonliteral runtime import`,
-      );
-    }
+    edges.push({ start: node.start, specifier });
   });
+  return edges;
+};
+
+// oxc's module record lists static imports, re-exports and dynamic imports
+// without building the syntax tree. It returns undefined when the record
+// cannot decide an edge: a possible `require` call, an `export {} from` (the
+// record omits it), a statement with no bindings that may be type-only, or
+// an escaped dynamic specifier.
+const recordedRuntimeEdges = ({
+  module,
+  sourceText,
+}: ParsedSource): RuntimeEdge[] | undefined => {
+  if (
+    /\brequire\b/u.test(sourceText) ||
+    /\bexport\s*(?:type\s+)?\{(?:\s|\/\*[^]*?\*\/|\/\/[^\n]*\n)*\}\s*from\b/u.test(
+      sourceText,
+    )
+  ) {
+    return undefined;
+  }
+  const edges: RuntimeEdge[] = [];
+  for (const statement of module.staticImports) {
+    const { entries, moduleRequest } = statement;
+    if (entries.length === 0) {
+      // `import "x"` runs x; `import {} from` and `import type {} from` vary.
+      if (
+        !/^import\s*$/u.test(
+          sourceText.slice(statement.start, moduleRequest.start),
+        )
+      ) {
+        return undefined;
+      }
+    } else if (entries.every((entry) => entry.isType)) {
+      continue;
+    }
+    edges.push({ start: statement.start, specifier: moduleRequest.value });
+  }
+  for (const statement of module.staticExports) {
+    const [first] = statement.entries;
+    if (first === undefined) {
+      return undefined;
+    }
+    // The record also lists `export { x }` of an imported `x` under that
+    // import statement; only an `export … from` statement is an edge.
+    if (
+      first.moduleRequest !== null &&
+      sourceText.startsWith("export", statement.start) &&
+      !statement.entries.every((entry) => entry.isType)
+    ) {
+      edges.push({
+        start: statement.start,
+        specifier: first.moduleRequest.value,
+      });
+    }
+  }
+  // oxc records an import inside a parenthesized destructuring assignment
+  // (`({ x } = await import("y"))`) twice; one expression has one start.
+  const dynamicStarts = new Set<number>();
+  for (const expression of module.dynamicImports) {
+    if (dynamicStarts.has(expression.start)) {
+      continue;
+    }
+    dynamicStarts.add(expression.start);
+    const argument = sourceText.slice(
+      expression.moduleRequest.start,
+      expression.moduleRequest.end,
+    );
+    const literal = /^(?:"[^"\\\r\n]*"|'[^'\\\r\n]*'|`[^`\\$]*`)$/u.test(
+      argument,
+    );
+    if (!literal && /^["'`]/u.test(argument)) {
+      return undefined;
+    }
+    edges.push({
+      start: expression.start,
+      specifier: literal ? argument.slice(1, -1) : undefined,
+    });
+  }
+  return edges.toSorted((left, right) => left.start - right.start);
+};
+
+const readRuntimeImports = (file: string, source: string) => {
+  const cached = importCache.get(file);
+  if (cached?.source === source) {
+    return cached;
+  }
+  const parsed = parseSource(file, source);
+  const imports: string[] = [];
+  const unresolved: string[] = [];
+  for (const { start, specifier } of recordedRuntimeEdges(parsed) ??
+    treeRuntimeEdges(parsed)) {
+    if (specifier === undefined) {
+      unresolved.push(
+        `${file}:${parsed.locate(start).line}: nonliteral runtime import`,
+      );
+    } else {
+      imports.push(specifier);
+    }
+  }
   // Literal edges depend on file content; their resolution still uses each stage.
   const result = { source, imports, unresolved };
   importCache.set(file, result);
@@ -262,12 +344,12 @@ export const unresolvedRuntimeImports = (
   source: string,
 ): readonly string[] => readRuntimeImports(file, source).unresolved;
 
-const configurationOptions = (
+const configurationPaths = (
   root: string,
   tree: SourceTree,
   physical: (file: string) => string,
 ) => {
-  const optionCache = new Map<string, CompilerOptions>();
+  const pathCache = new Map<string, Record<string, string[]>>();
   const configCache = new Map<string, Record<string, string[]>>();
   const configPaths = (
     file: string,
@@ -331,97 +413,443 @@ const configurationOptions = (
     configCache.set(key, paths);
     return paths;
   };
-  const optionsFor = (file: string): CompilerOptions => {
-    const cached = optionCache.get(path.posix.dirname(file));
+  // The nearest tsconfig.json declares a file's path aliases.
+  const pathsFor = (file: string): Record<string, string[]> => {
+    const cached = pathCache.get(path.posix.dirname(file));
     if (cached !== undefined) {
       return cached;
     }
     let directory = path.posix.dirname(file);
-    const result: CompilerOptions = {
-      moduleResolution: ModuleResolutionKind.Bundler,
-      module: ModuleKind.Preserve,
-      resolveJsonModule: true,
-      allowJs: true,
-      customConditions: ["bun", "source"],
-    };
+    let result: Record<string, string[]> = {};
     while (directory !== "/") {
       if (tree.has(`${directory}/tsconfig.json`)) {
-        result.paths = configPaths(`${directory}/tsconfig.json`);
+        result = configPaths(`${directory}/tsconfig.json`);
         break;
       }
       directory = path.posix.dirname(directory);
     }
-    optionCache.set(path.posix.dirname(file), result);
+    pathCache.set(path.posix.dirname(file), result);
     return result;
   };
-  return optionsFor;
+  return pathsFor;
 };
 
-type SourceTreeResolverOptions = {
+// TypeScript's bundler resolution (allowJs, resolveJsonModule, the `bun` and
+// `source` conditions) over a stage inventory. It probes every location with
+// TypeScript extensions before it retries with JavaScript and JSON.
+// Declaration files never count as sources, so no declaration form is probed.
+type ResolutionPass = "typescript" | "javascript";
+const RESOLUTION_PASSES: readonly ResolutionPass[] = [
+  "typescript",
+  "javascript",
+];
+const EXPORT_CONDITIONS = new Set([
+  "import",
+  "types",
+  "bun",
+  "source",
+  "default",
+]);
+// Extensions TypeScript strips before it substitutes another, longest first.
+const REPLACEABLE_EXTENSIONS = [
+  ".d.ts",
+  ".d.mts",
+  ".d.cts",
+  ".mjs",
+  ".mts",
+  ".cjs",
+  ".cts",
+  ".ts",
+  ".js",
+  ".tsx",
+  ".jsx",
+  ".json",
+];
+const TYPESCRIPT_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+
+// The forms TypeScript probes for `stem` written with `extension`.
+const extensionForms = (
+  stem: string,
+  extension: string,
+  pass: ResolutionPass,
+): string[] => {
+  const typescript = pass === "typescript";
+  switch (extension) {
+    case ".mjs":
+    case ".mts":
+    case ".d.mts":
+      return [typescript ? `${stem}.mts` : `${stem}.mjs`];
+    case ".cjs":
+    case ".cts":
+    case ".d.cts":
+      return [typescript ? `${stem}.cts` : `${stem}.cjs`];
+    case ".json":
+      return typescript ? [] : [`${stem}.json`];
+    case ".tsx":
+    case ".jsx":
+      return typescript
+        ? [`${stem}.tsx`, `${stem}.ts`]
+        : [`${stem}.jsx`, `${stem}.js`];
+    case ".ts":
+    case ".d.ts":
+    case ".js":
+    case "":
+      return typescript
+        ? [`${stem}.ts`, `${stem}.tsx`]
+        : [`${stem}.js`, `${stem}.jsx`];
+    default:
+      return [];
+  }
+};
+
+const replaceableExtension = (file: string) =>
+  REPLACEABLE_EXTENSIONS.find(
+    (extension) => file.length > extension.length && file.endsWith(extension),
+  );
+
+// A written extension is replaced (`x.js` → `x.ts`); a dotted basename
+// without a known extension (`x.logic`) is replaced from its last dot.
+const replacedExtensionForms = (file: string, pass: ResolutionPass) => {
+  const base = path.posix.basename(file);
+  if (!base.includes(".")) {
+    return [];
+  }
+  const extension =
+    replaceableExtension(file) ?? base.slice(base.lastIndexOf("."));
+  return extensionForms(
+    file.slice(0, file.length - extension.length),
+    extension,
+    pass,
+  );
+};
+
+type ManifestFields = {
+  name: unknown;
+  exports: unknown;
+  hasExports: boolean;
+  main: unknown;
+  types: unknown;
+};
+
+// One resolution pass over one stage: which files count as sources and
+// what each package.json declares.
+type ModuleProbe = {
+  pass: ResolutionPass;
+  available: (file: string) => boolean;
+  manifest: (directory: string) => ManifestFields | undefined;
+};
+
+const firstAvailable = (probe: ModuleProbe, candidates: readonly string[]) =>
+  candidates.find(probe.available);
+
+const fromFile = (probe: ModuleProbe, candidate: string) =>
+  firstAvailable(probe, [
+    ...replacedExtensionForms(candidate, probe.pass),
+    ...extensionForms(candidate, "", probe.pass),
+  ]);
+
+// A package.json `main`, `types` or `exports` target names its file.
+const fromManifestField = (probe: ModuleProbe, candidate: string) =>
+  probe.pass === "typescript" &&
+  TYPESCRIPT_EXTENSIONS.some((extension) => candidate.endsWith(extension))
+    ? firstAvailable(probe, [candidate])
+    : firstAvailable(probe, replacedExtensionForms(candidate, probe.pass));
+
+const fromDirectory = (
+  probe: ModuleProbe,
+  directory: string,
+  fields: ManifestFields | undefined,
+) => {
+  const field =
+    probe.pass === "typescript" && typeof fields?.types === "string"
+      ? fields.types
+      : fields?.main;
+  if (typeof field === "string") {
+    const target = path.posix.join(directory, field);
+    const found =
+      fromManifestField(probe, target) ??
+      fromFile(probe, target) ??
+      fromFile(probe, path.posix.join(target, "index"));
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return fromFile(probe, path.posix.join(directory, "index"));
+};
+
+const fromRelative = (probe: ModuleProbe, candidate: string) =>
+  fromFile(probe, candidate) ??
+  fromDirectory(probe, candidate, probe.manifest(candidate));
+
+type ExportScope = { directory: string; subpath: string; pattern: boolean };
+const fromExportTarget = (
+  probe: ModuleProbe,
+  scope: ExportScope,
+  target: unknown,
+): string | undefined => {
+  const { directory, subpath, pattern } = scope;
+  if (typeof target === "string") {
+    const unsafe = (parts: string[]) =>
+      parts.some((part) => [".", "..", "node_modules"].includes(part));
+    if (
+      (!pattern && subpath.length > 0 && !target.endsWith("/")) ||
+      !target.startsWith("./") ||
+      unsafe(target.split("/").slice(1)) ||
+      unsafe(subpath.split("/"))
+    ) {
+      return undefined;
+    }
+    const resolved = path.posix.join(directory, target);
+    return fromManifestField(
+      probe,
+      pattern
+        ? resolved.replaceAll("*", () => subpath)
+        : `${resolved}${subpath}`,
+    );
+  }
+  if (typeof target !== "object" || target === null) {
+    return undefined;
+  }
+  // Array items and conditions (in manifest order) fall through when unmet.
+  const alternatives = Array.isArray(target)
+    ? target
+    : Object.entries(target)
+        .filter(([condition]) => EXPORT_CONDITIONS.has(condition))
+        .map(([, value]) => value);
+  for (const alternative of alternatives) {
+    const found = fromExportTarget(probe, scope, alternative);
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return undefined;
+};
+
+// TypeScript's order: the longer base first, then the pattern, then length.
+const patternKeyOrder = (left: string, right: string) => {
+  const leftStar = left.indexOf("*");
+  const rightStar = right.indexOf("*");
+  const leftBase = leftStar === -1 ? left.length : leftStar + 1;
+  const rightBase = rightStar === -1 ? right.length : rightStar + 1;
+  return (
+    rightBase - leftBase ||
+    (leftStar === -1 ? 1 : 0) - (rightStar === -1 ? 1 : 0) ||
+    right.length - left.length
+  );
+};
+
+const fromExports = (
+  probe: ModuleProbe,
+  directory: string,
+  exports: unknown,
+  subpath: string,
+) => {
+  const exact = (target: unknown) =>
+    fromExportTarget(probe, { directory, subpath: "", pattern: false }, target);
+  const table =
+    typeof exports === "object" && exports !== null && !Array.isArray(exports)
+      ? Object.entries(exports)
+      : undefined;
+  if (table === undefined || table.every(([key]) => !key.startsWith("."))) {
+    return subpath === "." ? exact(exports) : undefined;
+  }
+  const lookup = new Map(table);
+  if (subpath === "." && lookup.has(".")) {
+    return exact(lookup.get("."));
+  }
+  if (!table.every(([key]) => key.startsWith("."))) {
+    return undefined;
+  }
+  if (!subpath.endsWith("/") && !subpath.includes("*") && lookup.has(subpath)) {
+    return exact(lookup.get(subpath));
+  }
+  const expanding = [...lookup.keys()]
+    .filter((key) => key.endsWith("/") || key.split("*").length === 2)
+    .toSorted(patternKeyOrder);
+  // The first matching key decides.
+  for (const key of expanding) {
+    const star = key.indexOf("*");
+    const prefix = key.slice(0, star);
+    const suffix = key.slice(star + 1);
+    if (star !== -1 && subpath.startsWith(prefix) && subpath.endsWith(suffix)) {
+      return fromExportTarget(
+        probe,
+        {
+          directory,
+          subpath: subpath.slice(prefix.length, subpath.length - suffix.length),
+          pattern: true,
+        },
+        lookup.get(key),
+      );
+    }
+    if (subpath.startsWith(key)) {
+      return fromExportTarget(
+        probe,
+        { directory, subpath: subpath.slice(key.length), pattern: false },
+        lookup.get(key),
+      );
+    }
+  }
+  return undefined;
+};
+
+// A package importing its own name reads its own exports first.
+const fromSelfName = (probe: ModuleProbe, specifier: string, from: string) => {
+  for (let directory = from; ; directory = path.posix.dirname(directory)) {
+    const fields = probe.manifest(directory);
+    if (fields !== undefined) {
+      const { name } = fields;
+      if (
+        !fields.exports ||
+        typeof name !== "string" ||
+        (specifier !== name && !specifier.startsWith(`${name}/`))
+      ) {
+        return undefined;
+      }
+      const rest = specifier.slice(name.length + 1);
+      return fromExports(
+        probe,
+        directory,
+        fields.exports,
+        rest === "" ? "." : `./${rest}`,
+      );
+    }
+    if (directory === "/") {
+      return undefined;
+    }
+  }
+};
+
+const fromPackage = (
+  probe: ModuleProbe,
+  packageDirectory: string,
+  rest: string,
+) => {
+  const candidate = path.posix.join(packageDirectory, rest);
+  const fields = probe.manifest(packageDirectory);
+  const nested = rest === "" ? undefined : probe.manifest(candidate);
+  // A nested package.json applies only when the root declares no exports.
+  if (nested !== undefined && fields?.hasExports !== true) {
+    return (
+      fromFile(probe, candidate) ?? fromDirectory(probe, candidate, nested)
+    );
+  }
+  if (fields?.exports) {
+    return fromExports(
+      probe,
+      packageDirectory,
+      fields.exports,
+      rest === "" ? "." : `./${rest}`,
+    );
+  }
+  return fromFile(probe, candidate) ?? fromDirectory(probe, candidate, fields);
+};
+
+const fromNodeModules = (
+  probe: ModuleProbe,
+  specifier: string,
+  from: string,
+) => {
+  const parts = specifier.split("/");
+  const length = specifier.startsWith("@") ? 2 : 1;
+  const name = parts.slice(0, length).join("/");
+  const rest = parts.slice(length).join("/");
+  for (let directory = from; ; directory = path.posix.dirname(directory)) {
+    if (path.posix.basename(directory) !== "node_modules") {
+      const found = fromPackage(
+        probe,
+        path.posix.join(directory, "node_modules", name),
+        rest,
+      );
+      if (found !== undefined) {
+        return found;
+      }
+    }
+    if (directory === "/") {
+      return undefined;
+    }
+  }
+};
+
+type SourceTreeModulesOptions = {
   root: string;
   tree: SourceTree;
-  workspaces: ReadonlyMap<string, string>;
+  physical: (file: string) => string;
+  sourceAvailable: (file: string) => boolean;
 };
-const sourceTreeResolver = ({
+const sourceTreeModules = ({
   root,
   tree,
-  workspaces,
-}: SourceTreeResolverOptions) => {
-  let compiler: API | undefined;
-  let snapshot: Snapshot | undefined;
-  const resolvers = new Map<string, ModuleResolver>();
-  const resolveModule = async (
+  physical,
+  sourceAvailable,
+}: SourceTreeModulesOptions) => {
+  const manifestCache = new Map<string, ManifestFields | undefined>();
+  const manifest = (directory: string) => {
+    const file = physical(path.posix.join(directory, "package.json"));
+    if (manifestCache.has(file)) {
+      return manifestCache.get(file);
+    }
+    const origin = tree.get(file);
+    let fields: ManifestFields | undefined;
+    if (origin !== undefined) {
+      const parsed = Result.try(() =>
+        v.parse(
+          v.record(v.string(), v.unknown()),
+          JSON.parse(text(root, origin)),
+        ),
+      );
+      if (parsed.isErr()) {
+        panic(`Invalid package manifest: ${origin}`);
+      }
+      const { exports, main, name, types, typings } = parsed.value;
+      fields = {
+        name,
+        exports,
+        hasExports: Object.hasOwn(parsed.value, "exports"),
+        main,
+        types: typeof typings === "string" ? typings : types,
+      };
+    }
+    manifestCache.set(file, fields);
+    return fields;
+  };
+  const probes = RESOLUTION_PASSES.map((pass): ModuleProbe => ({
+    pass,
+    available: sourceAvailable,
+    manifest,
+  }));
+  // `aliases` are the substituted targets of the best-matching tsconfig path.
+  return (
     specifier: string,
     file: string,
-    options: CompilerOptions,
-  ) => {
-    compiler ??= new API({ cwd: "/app" });
-    // Module resolution reads package metadata and probes source existence;
-    // source bodies need no parsing. The full inventory cannot fall through
-    // to checkout files, and workspace links stay inside that inventory.
-    snapshot ??= await compiler.createSnapshot({
-      fileSystem: createFileSystem(
-        [...tree]
-          .filter(([filename]) => !/\.d\.[cm]?ts$/u.test(filename))
-          .map(([filename, origin]) => [
-            filename,
-            filename.endsWith("/package.json") ? text(root, origin) : "",
-          ]),
-        {
-          symlinks: Object.fromEntries(
-            [...workspaces].map(([name, target]) => [
-              `/app/node_modules/${name}`,
-              { target },
-            ]),
-          ),
-        },
-      ),
-    });
-    const key = JSON.stringify(options);
-    let resolver = resolvers.get(key);
-    if (resolver === undefined) {
-      resolver = await compiler.createModuleResolver(options);
-      resolvers.set(key, resolver);
+    aliases: readonly string[],
+  ): string | undefined => {
+    const from = path.posix.dirname(file);
+    for (const probe of probes) {
+      const found = specifier.startsWith("/")
+        ? fromRelative(probe, specifier)
+        : (aliases
+            .values()
+            .map(
+              (target) =>
+                (replaceableExtension(target) === undefined
+                  ? undefined
+                  : firstAvailable(probe, [target])) ??
+                fromRelative(probe, target),
+            )
+            .find((target) => target !== undefined) ??
+          fromSelfName(probe, specifier, from) ??
+          fromNodeModules(probe, specifier, from));
+      if (found !== undefined) {
+        return found;
+      }
     }
-    return (
-      await resolver.resolveModuleName(
-        specifier,
-        path.posix.dirname(file),
-        undefined,
-        { snapshot },
-      )
-    ).resolvedModule?.resolvedFileName;
-  };
-  return {
-    resolveModule,
-    close: async () => {
-      await compiler?.close();
-    },
+    return undefined;
   };
 };
 
-// Follow literal runtime imports (type-only imports vanish).
-// TypeScript resolves aliases and workspace exports against the virtual tree.
+// Follow literal runtime imports (type-only imports vanish). Aliases and
+// workspace exports resolve against the stage inventory only.
 const sourceClosureChecker = (root: string, tree: SourceTree) => {
   const manifests = [...tree].filter(([file]) =>
     /^\/app\/(?:apps|packages)\/[^/]+\/package\.json$/u.test(file),
@@ -483,8 +911,13 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
   };
   const sourceAvailable = (file: string) =>
     !/\.d\.[cm]?ts$/u.test(file) && tree.has(physical(file));
-  const resolver = sourceTreeResolver({ root, tree, workspaces });
-  const optionsFor = configurationOptions(root, tree, physical);
+  const pathsFor = configurationPaths(root, tree, physical);
+  const resolveModule = sourceTreeModules({
+    root,
+    tree,
+    physical,
+    sourceAvailable,
+  });
   // TypeScript resolves module extensions only, so a workspace export naming
   // an asset (`@stll/x/reader.css`) is read from the stage's own manifest.
   const workspaceAsset = (specifier: string, name: string) => {
@@ -510,10 +943,10 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     const file = path.posix.join(directory, target);
     return sourceAvailable(file) ? file : undefined;
   };
-  const check = async (
+  const check = (
     entries: readonly string[],
     seen = new Set<string>(),
-  ): Promise<string[]> => {
+  ): string[] => {
     const problems: string[] = [];
     const pending = [...entries];
     while (pending.length > 0) {
@@ -549,46 +982,42 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
           }
           continue;
         }
-        const options = optionsFor(file);
-        const aliases = Object.entries(options.paths ?? {}).filter(
-          ([pattern]) => {
-            const [prefix = "", suffix = ""] = pattern.split("*");
-            return pattern.includes("*")
-              ? clean.length >= prefix.length + suffix.length &&
-                  clean.startsWith(prefix) &&
-                  clean.endsWith(suffix)
-              : clean === pattern;
-          },
-        );
+        const paths = pathsFor(file);
+        const aliases = Object.entries(paths).filter(([pattern]) => {
+          const [prefix = "", suffix = ""] = pattern.split("*");
+          return pattern.includes("*")
+            ? clean.length >= prefix.length + suffix.length &&
+                clean.startsWith(prefix) &&
+                clean.endsWith(suffix)
+            : clean === pattern;
+        });
         // TypeScript gives exact keys priority, then the longest wildcard prefix.
         aliases.sort(
           ([left], [right]) =>
             Number(left.includes("*")) - Number(right.includes("*")) ||
             right.indexOf("*") - left.indexOf("*"),
         );
-        const aliasTargets = aliases
-          .slice(0, 1)
-          .flatMap(([pattern, targets]) => {
-            const [prefix, suffix] = pattern.split("*");
-            const wildcard = pattern.includes("*");
-            const middle = wildcard
-              ? clean.slice(
-                  (prefix ?? "").length,
-                  suffix === "" || suffix === undefined
-                    ? undefined
-                    : -suffix.length,
-                )
-              : "";
-            return targets.flatMap((target) =>
-              specifierCandidates(
-                "/entry.ts",
-                absolute(
-                  "/app",
-                  target.replace("*", () => middle),
-                ),
-              ),
-            );
-          });
+        const aliasPaths = aliases.slice(0, 1).flatMap(([pattern, targets]) => {
+          const [prefix, suffix] = pattern.split("*");
+          const wildcard = pattern.includes("*");
+          const middle = wildcard
+            ? clean.slice(
+                (prefix ?? "").length,
+                suffix === "" || suffix === undefined
+                  ? undefined
+                  : -suffix.length,
+              )
+            : "";
+          return targets.map((target) =>
+            absolute(
+              "/app",
+              target.replace("*", () => middle),
+            ),
+          );
+        });
+        const aliasTargets = aliasPaths.flatMap((target) =>
+          specifierCandidates("/entry.ts", target),
+        );
         // Match every declared alias before excluding installed dependencies:
         // an omitted alias target must still fail the source closure.
         const name = specifier.startsWith("@")
@@ -603,10 +1032,13 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
         if (!local) {
           continue;
         }
+        const aliased = aliasTargets.find(sourceAvailable);
+        const moduleFile =
+          aliased === undefined
+            ? resolveModule(clean, file, aliasPaths)
+            : undefined;
         const resolved =
-          aliasTargets.find(sourceAvailable) ??
-          (await resolver.resolveModule(clean, file, options)) ??
-          workspaceAsset(clean, name ?? "");
+          aliased ?? moduleFile ?? workspaceAsset(clean, name ?? "");
         if (resolved === undefined) {
           problems.push(
             `${origin} imports ${specifier}, unavailable in Docker stage`,
@@ -618,27 +1050,15 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     }
     return problems;
   };
-  return {
-    check,
-    close: async () => {
-      await resolver.close();
-    },
-  };
+  return check;
 };
 
-export const sourceClosureProblems = async (
+export const sourceClosureProblems = (
   root: string,
   tree: SourceTree,
   entries: readonly string[],
   seen = new Set<string>(),
-): Promise<string[]> => {
-  const checker = sourceClosureChecker(root, tree);
-  try {
-    return await checker.check(entries, seen);
-  } finally {
-    await checker.close();
-  }
-};
+): string[] => sourceClosureChecker(root, tree)(entries, seen);
 
 type InstallToolingCopiesOptions = {
   root: string;
@@ -646,13 +1066,13 @@ type InstallToolingCopiesOptions = {
   entry: string;
 };
 
-export const installToolingCopies = async ({
+export const installToolingCopies = ({
   root,
   files,
   entry,
-}: InstallToolingCopiesOptions): Promise<string> => {
+}: InstallToolingCopiesOptions): string => {
   const seen = new Set<string>();
-  const problems = await sourceClosureProblems(root, files, [entry], seen);
+  const problems = sourceClosureProblems(root, files, [entry], seen);
   for (const file of seen) {
     const origin = files.get(file);
     if (origin === undefined) {
@@ -689,10 +1109,7 @@ export const installToolingCopies = async ({
 
 const INSTALL_TOOLING_GENERATOR = "api-image-install-tooling";
 
-export const updateInstallToolingCopies = async (
-  root: string,
-  write: boolean,
-) => {
+export const updateInstallToolingCopies = (root: string, write: boolean) => {
   const generator = GENERATORS.find(
     ({ id }) => id === INSTALL_TOOLING_GENERATOR,
   );
@@ -711,7 +1128,7 @@ export const updateInstallToolingCopies = async (
       .filter(Boolean)
       .map((file) => [`/app/${file}`, file]),
   );
-  const copies = await installToolingCopies({
+  const copies = installToolingCopies({
     root,
     files,
     entry: "/app/scripts/ci-install.ts",
@@ -764,19 +1181,14 @@ type StageClosureOptions = {
   root: string;
   stage: Stage;
   entries: readonly string[];
-  checkers: Set<ReturnType<typeof sourceClosureChecker>>;
 };
-const stageClosureProblems = async ({
+const stageClosureProblems = ({
   root,
   stage,
   entries,
-  checkers,
 }: StageClosureOptions) => {
-  if (stage.checker === undefined) {
-    stage.checker = sourceClosureChecker(root, stage.files);
-    checkers.add(stage.checker);
-  }
-  return await stage.checker.check(entries, stage.seen);
+  stage.checker ??= sourceClosureChecker(root, stage.files);
+  return stage.checker(entries, stage.seen);
 };
 
 export const dockerPruneScopes = (source: string): string[][] =>
@@ -829,14 +1241,14 @@ type CommandContext = {
   consume?: (
     entry: SourceCommandEntry,
     production: "guaranteed" | "conditional",
-  ) => Promise<void>;
+  ) => void;
   command?: (options: ShellSourceCommand) => void;
 };
 type SourceCommandOptions = {
   command: string;
   words: string[];
   cwd: string;
-  expand: (command: string, cwd: string) => Promise<SourceCommandEntry[]>;
+  expand: (command: string, cwd: string) => SourceCommandEntry[];
 };
 type BunFlagPolicy =
   | "value"
@@ -1068,7 +1480,7 @@ type PackageScriptOptions = {
   cwd: string;
   expand: SourceCommandOptions["expand"];
 };
-const packageScriptEntries = async (
+const packageScriptEntries = (
   context: CommandContext,
   options: PackageScriptOptions,
 ) => {
@@ -1085,7 +1497,7 @@ const packageScriptEntries = async (
     panic(`Recursive build script: ${key}`);
   }
   context.active.add(key);
-  const entries = await options.expand(scripts[options.name], options.cwd);
+  const entries = options.expand(scripts[options.name], options.cwd);
   context.active.delete(key);
   return entries;
 };
@@ -1103,17 +1515,15 @@ const workspaceCwd = (context: CommandContext, name: string) => {
   return path.posix.dirname(owner[0]);
 };
 
-const consumeSourceEntry = async (
+const consumeSourceEntry = (
   context: CommandContext,
   entry: SourceCommandEntry,
-) => {
-  await context.consume?.(entry, context.production ?? "conditional");
-};
+) => context.consume?.(entry, context.production ?? "conditional");
 
-const sourceCommandEntries = async (
+const sourceCommandEntries = (
   context: CommandContext,
   options: SourceCommandOptions,
-): Promise<SourceCommandEntry[]> => {
+): SourceCommandEntry[] => {
   const { command } = options;
   const entries: SourceCommandEntry[] = [];
   let commandCwd = options.cwd;
@@ -1159,7 +1569,7 @@ const sourceCommandEntries = async (
           mode: "preload",
         } satisfies SourceCommandEntry;
         entries.push(preload);
-        await context.consume?.(preload, context.production ?? "conditional");
+        context.consume?.(preload, context.production ?? "conditional");
       }
       continue;
     }
@@ -1173,7 +1583,7 @@ const sourceCommandEntries = async (
       continue;
     }
     if (!found && (word !== "build" || packageScript)) {
-      const expanded = await packageScriptEntries(context, {
+      const expanded = packageScriptEntries(context, {
         name: word,
         cwd: commandCwd,
         expand: options.expand,
@@ -1195,7 +1605,7 @@ const sourceCommandEntries = async (
       mode,
     } satisfies SourceCommandEntry;
     entries.push(entry);
-    await consumeSourceEntry(context, entry);
+    consumeSourceEntry(context, entry);
     found = true;
     if (mode === "run") {
       break;
@@ -1408,11 +1818,11 @@ const unwrapSourceCommand = (
   }
 };
 
-const walkCommand = async (
+const walkCommand = (
   context: CommandContext,
   command: string,
   initialCwd: string,
-): Promise<SourceCommandEntry[]> => {
+): SourceCommandEntry[] => {
   const { tree } = context;
   const runContext = commandScope(context, command);
   let cwd = initialCwd;
@@ -1440,7 +1850,7 @@ const walkCommand = async (
       if (words.at(0) !== "-c" || script === undefined || words.length !== 2) {
         panic(`Unsupported source wrapper: ${program}`);
       }
-      entries.push(...(await walkCommand(runContext, script, cwd)));
+      entries.push(...walkCommand(runContext, script, cwd));
       continue;
     }
     runContext.command?.({
@@ -1473,7 +1883,7 @@ const walkCommand = async (
       ];
       entries.push(...viteEntries);
       for (const entry of viteEntries) {
-        await consumeSourceEntry(runContext, entry);
+        consumeSourceEntry(runContext, entry);
       }
       continue;
     }
@@ -1502,33 +1912,33 @@ const walkCommand = async (
       continue;
     }
     entries.push(
-      ...(await sourceCommandEntries(runContext, {
+      ...sourceCommandEntries(runContext, {
         command,
         words,
         cwd,
-        expand: async (source, directory) =>
-          await walkCommand(runContext, source, directory),
-      })),
+        expand: (source, directory) =>
+          walkCommand(runContext, source, directory),
+      }),
     );
   }
   return entries;
 };
 
-export const commandEntries = async (
+export const commandEntries = (
   root: string,
   tree: SourceTree,
   command: string,
   cwd: string,
-): Promise<string[]> =>
-  (await walkCommand({ root, tree, active: new Set() }, command, cwd)).map(
+): string[] =>
+  walkCommand({ root, tree, active: new Set() }, command, cwd).map(
     ({ file }) => file,
   );
 
-const generatorEntries = async (
+const generatorEntries = (
   root: string,
   context: SourceTree,
   generator: Generator,
-): Promise<readonly SourceCommandEntry[]> => {
+): readonly SourceCommandEntry[] => {
   const inventory: SourceTree = new Map(
     [...context].map(([file, origin]) => [`/app${file}`, origin]),
   );
@@ -1578,11 +1988,11 @@ const generatorEntries = async (
       continue;
     }
     result.push(
-      ...(await walkCommand(
+      ...walkCommand(
         { root, tree: inventory, active: new Set() },
         words.join(" "),
         cwd,
-      )),
+      ),
     );
   }
   return result;
@@ -1834,16 +2244,14 @@ const createStage = (parent?: Stage) =>
     environment: new Map(parent?.environment),
   }) satisfies Stage;
 
-const sourceProducers = async (root: string, context: SourceTree) =>
-  await Promise.all(
-    GENERATORS.filter(({ outputKind }) => outputKind === "derived").map(
-      async (generator) => ({
-        generator,
-        entries: await generatorEntries(root, context, generator),
-        inputGlobs: generator.inputs.map((input) => new Bun.Glob(input)),
-        outputGlobs: generator.outputs.map((output) => new Bun.Glob(output)),
-      }),
-    ),
+const sourceProducers = (root: string, context: SourceTree) =>
+  GENERATORS.filter(({ outputKind }) => outputKind === "derived").map(
+    (generator) => ({
+      generator,
+      entries: generatorEntries(root, context, generator),
+      inputGlobs: generator.inputs.map((input) => new Bun.Glob(input)),
+      outputGlobs: generator.outputs.map((output) => new Bun.Glob(output)),
+    }),
   );
 
 type HydrateStageSourcesOptions = {
@@ -1852,7 +2260,7 @@ type HydrateStageSourcesOptions = {
   context: SourceTree;
   entry: SourceCommandEntry;
   production: "guaranteed" | "conditional";
-  producers: Awaited<ReturnType<typeof sourceProducers>>;
+  producers: ReturnType<typeof sourceProducers>;
 };
 const hydrateStageSources = ({
   root,
@@ -1922,172 +2330,158 @@ const hydrateStageSources = ({
   return problems;
 };
 
-export const checkDockerSource = async (
+export const checkDockerSource = (
   root: string,
   source: string,
   context: SourceTree,
   pruned: SourceTree,
-): Promise<string[]> => {
-  const producers = await sourceProducers(root, context);
+): string[] => {
+  const producers = sourceProducers(root, context);
   const stages = new Map<string, Stage>();
   let stage: Stage = createStage();
   const problems: string[] = [];
   let index = 0;
-  const checkers = new Set<ReturnType<typeof sourceClosureChecker>>();
-  try {
-    for (const instruction of dockerInstructions(source)) {
-      const split = instruction.indexOf(" ");
-      const operation = instruction.slice(0, split);
-      const body = instruction.slice(split + 1);
-      if (operation === "FROM") {
-        const words = body
-          .split(/\s+/u)
-          .filter((word) => !word.startsWith("--"));
-        const parent = stages.get(words[0] ?? "");
-        stage = createStage(parent);
-        stages.set(words[2] ?? `stage-${index++}`, stage);
-      } else if (operation === "ENV" || operation === "ARG") {
-        declareEnvironment(stage, operation, body);
-      } else if (operation === "WORKDIR") {
-        stage.cwd = absolute(stage.cwd, body);
-      } else if (operation === "ADD") {
-        const words = body.split(/\s+/u);
-        const inputs = words.filter((word) => !word.startsWith("--"));
-        const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
-        const [url, target] = inputs;
-        if (url !== undefined && !/^https?:\/\//u.test(url)) {
-          if (inputs.some((input) => archive.test(input))) {
-            panic(`Unsupported source instruction: ${instruction}`);
-          }
-          copyInstruction({ stages, stage, context, body, operation: "ADD" });
-          continue;
-        }
-        const targetPath =
-          target === undefined ? "" : absolute(stage.cwd, target);
-        const directoryTarget =
-          target?.endsWith("/") ||
-          stage.cwd === targetPath ||
-          stage.cwd.startsWith(`${targetPath}/`) ||
-          hasDirectory(stage.files, targetPath);
-        if (
-          words.some(
-            (word) =>
-              word.startsWith("--") &&
-              !/^--checksum=sha256:[a-f0-9]{64}$/u.test(word),
-          ) ||
-          inputs.length !== 2 ||
-          url === undefined ||
-          target === undefined ||
-          !/^https?:\/\//u.test(url) ||
-          !archive.test(url) ||
-          (!archive.test(target) && !directoryTarget) ||
-          /[$\\]/u.test(body)
-        ) {
+  for (const instruction of dockerInstructions(source)) {
+    const split = instruction.indexOf(" ");
+    const operation = instruction.slice(0, split);
+    const body = instruction.slice(split + 1);
+    if (operation === "FROM") {
+      const words = body.split(/\s+/u).filter((word) => !word.startsWith("--"));
+      const parent = stages.get(words[0] ?? "");
+      stage = createStage(parent);
+      stages.set(words[2] ?? `stage-${index++}`, stage);
+    } else if (operation === "ENV" || operation === "ARG") {
+      declareEnvironment(stage, operation, body);
+    } else if (operation === "WORKDIR") {
+      stage.cwd = absolute(stage.cwd, body);
+    } else if (operation === "ADD") {
+      const words = body.split(/\s+/u);
+      const inputs = words.filter((word) => !word.startsWith("--"));
+      const archive = /\.(?:tar(?:\.(?:gz|xz|bz2))?|tgz|zip)$/iu;
+      const [url, target] = inputs;
+      if (url !== undefined && !/^https?:\/\//u.test(url)) {
+        if (inputs.some((input) => archive.test(input))) {
           panic(`Unsupported source instruction: ${instruction}`);
         }
-        // Remote archives stay opaque: neither ADD nor a later native unpack
-        // declares repository modules available to a Bun source runner.
-      } else if (operation === "COPY") {
-        copyInstruction({ stages, stage, context, body, operation: "COPY" });
-      } else if (operation === "RUN") {
-        const runStage = stage;
-        await walkCommand(
-          {
-            root,
-            tree: runStage.files,
-            active: new Set(),
-            environment: runStage.environment,
-            command: ({ program, words, cwd, production }) => {
-              if (program === "turbo" && words.at(0) === "prune") {
-                if (production !== "guaranteed") {
-                  return;
-                }
-                runStage.seen.clear();
-                delete runStage.checker;
-                for (const [file, origin] of pruned) {
-                  runStage.files.set(`/app/out/full${file.slice(4)}`, origin);
-                  if (file.endsWith("/package.json")) {
-                    runStage.files.set(`/app/out/json${file.slice(4)}`, origin);
-                  }
-                }
-              } else if (
-                program === "find" &&
-                words.at(0) === "apps" &&
-                words.at(1) === "packages" &&
-                words.some((word) => word.includes("/json/"))
-              ) {
-                runStage.seen.clear();
-                delete runStage.checker;
-                for (const [file, origin] of [...runStage.files]) {
-                  if (
-                    file === "/app/package.json" ||
-                    file === "/app/bun.lock" ||
-                    file.endsWith("/package.json") ||
-                    /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
-                  ) {
-                    runStage.files.set(`/json/${file.slice(5)}`, origin);
-                  }
-                }
-              } else {
-                sourceMutation({
-                  stage: runStage,
-                  program,
-                  words,
-                  cwd,
-                  production,
-                });
-              }
-            },
-            consume: async (entry, production) => {
-              if (runStage.hazards.size > 0) {
-                panic([...runStage.hazards].join("\n"));
-              }
-              if (entry.file.includes("/dist/")) {
+        copyInstruction({ stages, stage, context, body, operation: "ADD" });
+        continue;
+      }
+      const targetPath =
+        target === undefined ? "" : absolute(stage.cwd, target);
+      const directoryTarget =
+        target?.endsWith("/") ||
+        stage.cwd === targetPath ||
+        stage.cwd.startsWith(`${targetPath}/`) ||
+        hasDirectory(stage.files, targetPath);
+      if (
+        words.some(
+          (word) =>
+            word.startsWith("--") &&
+            !/^--checksum=sha256:[a-f0-9]{64}$/u.test(word),
+        ) ||
+        inputs.length !== 2 ||
+        url === undefined ||
+        target === undefined ||
+        !/^https?:\/\//u.test(url) ||
+        !archive.test(url) ||
+        (!archive.test(target) && !directoryTarget) ||
+        /[$\\]/u.test(body)
+      ) {
+        panic(`Unsupported source instruction: ${instruction}`);
+      }
+      // Remote archives stay opaque: neither ADD nor a later native unpack
+      // declares repository modules available to a Bun source runner.
+    } else if (operation === "COPY") {
+      copyInstruction({ stages, stage, context, body, operation: "COPY" });
+    } else if (operation === "RUN") {
+      const runStage = stage;
+      walkCommand(
+        {
+          root,
+          tree: runStage.files,
+          active: new Set(),
+          environment: runStage.environment,
+          command: ({ program, words, cwd, production }) => {
+            if (program === "turbo" && words.at(0) === "prune") {
+              if (production !== "guaranteed") {
                 return;
               }
-              if (isPackagedArtifact(runStage, entry.file)) {
-                return;
+              runStage.seen.clear();
+              delete runStage.checker;
+              for (const [file, origin] of pruned) {
+                runStage.files.set(`/app/out/full${file.slice(4)}`, origin);
+                if (file.endsWith("/package.json")) {
+                  runStage.files.set(`/app/out/json${file.slice(4)}`, origin);
+                }
               }
-              const closure = await stageClosureProblems({
+            } else if (
+              program === "find" &&
+              words.at(0) === "apps" &&
+              words.at(1) === "packages" &&
+              words.some((word) => word.includes("/json/"))
+            ) {
+              runStage.seen.clear();
+              delete runStage.checker;
+              for (const [file, origin] of [...runStage.files]) {
+                if (
+                  file === "/app/package.json" ||
+                  file === "/app/bun.lock" ||
+                  file.endsWith("/package.json") ||
+                  /^\/app\/(?:bunfig\.toml|\.npmrc|patches\/)/u.test(file)
+                ) {
+                  runStage.files.set(`/json/${file.slice(5)}`, origin);
+                }
+              }
+            } else {
+              sourceMutation({
+                stage: runStage,
+                program,
+                words,
+                cwd,
+                production,
+              });
+            }
+          },
+          consume: (entry, production) => {
+            if (runStage.hazards.size > 0) {
+              panic([...runStage.hazards].join("\n"));
+            }
+            if (entry.file.includes("/dist/")) {
+              return;
+            }
+            if (isPackagedArtifact(runStage, entry.file)) {
+              return;
+            }
+            const closure = stageClosureProblems({
+              root,
+              stage: runStage,
+              entries: [entry.file],
+            });
+            problems.push(...closure);
+            if (closure.length > 0) {
+              return;
+            }
+            problems.push(
+              ...hydrateStageSources({
                 root,
                 stage: runStage,
-                entries: [entry.file],
-                checkers,
-              });
-              problems.push(...closure);
-              if (closure.length > 0) {
-                return;
-              }
-              problems.push(
-                ...hydrateStageSources({
-                  root,
-                  stage: runStage,
-                  context,
-                  entry,
-                  production,
-                  producers,
-                }),
-              );
-            },
+                context,
+                entry,
+                production,
+                producers,
+              }),
+            );
           },
-          body,
-          runStage.cwd,
-        );
-      }
+        },
+        body,
+        runStage.cwd,
+      );
     }
-    return [...new Set(problems)];
-  } finally {
-    await Promise.all(
-      [...checkers].map(async (checker) => {
-        await checker.close();
-      }),
-    );
   }
+  return [...new Set(problems)];
 };
 
-export const checkRepositoryDockerSources = async (
-  root: string,
-): Promise<string[]> => {
+export const checkRepositoryDockerSources = (root: string): string[] => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   if (tracked.exitCode !== 0) {
     panic("Cannot enumerate Docker sources");
@@ -2148,7 +2542,7 @@ export const checkRepositoryDockerSources = async (
         }
       }
       problems.push(
-        ...(await checkDockerSource(root, source, context, pruned)).map(
+        ...checkDockerSource(root, source, context, pruned).map(
           (problem) => `${file}: ${problem}`,
         ),
       );
@@ -2165,14 +2559,14 @@ if (import.meta.main) {
     mode === "--write-install-tooling" ||
     mode === "--check-install-tooling"
   ) {
-    await updateInstallToolingCopies(
+    updateInstallToolingCopies(
       path.resolve(import.meta.dir, ".."),
       mode === "--write-install-tooling",
     );
     process.exit(0);
   }
   const start = performance.now();
-  const problems = await checkRepositoryDockerSources(
+  const problems = checkRepositoryDockerSources(
     path.resolve(import.meta.dir, ".."),
   );
   if (problems.length > 0) {
