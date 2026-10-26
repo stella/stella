@@ -1,9 +1,25 @@
 {
   "inputs": {
+    "scripts/api-dockerfile-entrypoints.test.ts": [
+      "apps/api/Dockerfile",
+      "apps/legal-atlas-runner/package.json",
+      "docs/self-hosting.md"
+    ],
+    "scripts/api-test-impact.test.ts": [
+      ".github/**",
+      ".oxlint-plugins/**",
+      "apps/**",
+      "docker/**",
+      "oxlint.config.*",
+      "packages/**",
+      "scripts/**"
+    ],
     "scripts/bundled-consumers.test.ts": [
       "apps/**",
       "packages/**",
-      "scripts/**"
+      "scripts/**",
+      ".github/**",
+      "docker/**"
     ],
     "scripts/check-actionlint-baseline.test.ts": [".github/**"],
     "scripts/check-ci-job-classification.test.ts": [".github/**"],
@@ -11,6 +27,10 @@
       "apps/**/*.{png,jpg,jpeg,webp,gif}"
     ],
     "scripts/check-migrations.test.ts": ["apps/api/drizzle/**"],
+    "scripts/check-npm-publish-lag.test.ts": [
+      ".github/workflows/publish-npm.yml",
+      ".github/workflows/release-tag.yml"
+    ],
     "scripts/check-rust-test-determinism.test.ts": [
       "apps/**",
       "packages/**",
@@ -27,19 +47,22 @@
     "scripts/ci-install-store.test.ts": [".github/**"],
     "scripts/ci-mirror-reconciliation.test.ts": [".github/**"],
     "scripts/ci-plan-bun.test.ts": [".github/**"],
-    "scripts/ci-plan-scope.test.ts": [".github/**"],
+    "scripts/ci-plan-scope.test.ts": ["apps/**", "packages/**", "patches/**"],
     "scripts/ci-plan-variables.test.ts": [".github/**"],
     "scripts/ci-postgres-selector-miss.test.ts": [".github/**"],
-    "scripts/ci-postgres-test-plan.test.ts": [".github/**"],
+    "scripts/ci-postgres-test-plan.test.ts": ["apps/api/**"],
     "scripts/ci-pr-depth-workflow.test.ts": [".github/**"],
     "scripts/ci-pr-pilot.test.ts": [".github/**"],
     "scripts/ci-result-supersession.test.ts": [".github/**"],
     "scripts/ci-root-check-inputs.test.ts": [".github/**"],
     "scripts/ci-root-checks.test.ts": [".github/**"],
     "scripts/ci-runner-loss.test.ts": [".github/**"],
-    "scripts/ci-scoped-install.test.ts": [".github/**"],
+    "scripts/ci-scoped-install.test.ts": ["{apps,packages}/*/package.json"],
     "scripts/ci-static-checks.test.ts": [".github/**"],
     "scripts/cla-workflow.test.ts": [".github/**"],
+    "scripts/code-quality-task-budget.test.ts": [
+      "{apps,packages}/*/package.json"
+    ],
     "scripts/decision-reader-surfaces.test.ts": [
       "apps/**",
       "packages/**",
@@ -49,8 +72,19 @@
     "scripts/dependency-review-workflow.test.ts": [".github/**"],
     "scripts/desktop-release-step.test.ts": [".github/**"],
     "scripts/detect-security-workflow-changes.test.ts": [".github/**"],
+    "scripts/dev-seeded-e2e-guard.test.ts": ["apps/web/e2e/specs/**/*.spec.ts"],
     "scripts/extension-release-step.test.ts": [".github/**"],
+    "scripts/failure-tags.test.ts": [
+      "apps/api/src/**/*.{ts,tsx}",
+      "packages/*/src/**/*.{ts,tsx}"
+    ],
+    "scripts/flake-gate-command.test.ts": [
+      "apps/*/package.json",
+      "packages/*/package.json"
+    ],
+    "scripts/flake-gate.test.ts": ["apps/**", "packages/**", "patches/**"],
     "scripts/generated-conflicts-workflows.test.ts": [".github/**"],
+    "scripts/generated-files.test.ts": ["apps/**", "packages/**", "patches/**"],
     "scripts/generated-markdown-merge.test.ts": [
       "docs/capability-coverage.md",
       "packages/cli/skills/**",
@@ -61,22 +95,25 @@
     "scripts/migration-catalog.test.ts": ["apps/api/drizzle/**"],
     "scripts/migration-lock-census.test.ts": ["apps/api/drizzle/**"],
     "scripts/online-ddl-lock-census.test.ts": ["apps/api/drizzle/**"],
+    "scripts/oxlint-tailwind-design-system.test.ts": [".tailwind-cache/**"],
     "scripts/postgres-test-maintenance-workflow.test.ts": [".github/**"],
     "scripts/product-media.test.ts": [
       "apps/landing/public/**",
       "apps/web/public/**"
     ],
     "scripts/public-law-surface-consumers.test.ts": [
-      "apps/**",
-      "packages/**",
+      "{apps,packages}/**",
       "scripts/**"
     ],
+    "scripts/publish-package-selection.test.ts": ["packages/*/package.json"],
     "scripts/release-health-workflow.test.ts": [".github/**"],
     "scripts/root-connection-shapes.test.ts": [
       "apps/**",
       "packages/**",
       "scripts/**"
     ],
+    "scripts/run-unlisted-script-tests.test.ts": ["scripts/**/*.test.{ts,sh}"],
+    "scripts/rust-toolchain-pins.test.ts": [".github/workflows/*.{yml,yaml}"],
     "scripts/status-write-shapes.test.ts": [
       "apps/**",
       "packages/**",
@@ -97,26 +134,19 @@
       "packages/**",
       "scripts/**"
     ],
-    "scripts/workflow-api-probes.test.ts": [".github/**"],
+    "scripts/workflow-api-probes.test.ts": [
+      ".github/**",
+      "apps/api/src/lib/file-scan/yara/*.yar"
+    ],
     "scripts/workflow-dispatch-run.test.ts": [".github/**"],
     "scripts/workflow-git-environment.test.ts": [".github/**"],
     "scripts/workflow-install-baseline.test.ts": [".github/**"],
     "scripts/workflow-runner-labels.test.ts": [".github/**"],
     "scripts/workflow-skipped-needs.test.ts": [".github/**"],
     "scripts/workflow-step-references.test.ts": [".github/**"],
-    "scripts/workflow-steps.test.ts": [".github/**"],
-    "scripts/api-dockerfile-entrypoints.test.ts": [
-      "apps/api/Dockerfile",
-      "apps/legal-atlas-runner/package.json",
-      "docs/self-hosting.md"
-    ],
-    "scripts/check-npm-publish-lag.test.ts": [
-      ".github/workflows/publish-npm.yml",
-      ".github/workflows/release-tag.yml"
-    ]
+    "scripts/workflow-steps.test.ts": [".github/**"]
   },
   "noTrackedInputs": {
-    "scripts/api-test-impact.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/audit-mutation-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/autofix-baseline-prune.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/autofix-pure-generators.test.ts": "Uses only temporary fixtures and its static import closure.",
@@ -146,20 +176,15 @@
     "scripts/check-tracked-cloud-reports.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-tracked-symlinks.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/code-quality-cache-inputs.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/code-quality-task-budget.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/codemod-icons.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/contract-domain-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/dependency-audit-acceptance.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/dev-seeded-e2e-guard.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/disarm-auto-merge.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/failure-tags.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/fast-required-predicates.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/fix-tests-on-base.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/flake-gate-command.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-process.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-rust-census.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-rust.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/flake-gate.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flaky-test-history.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flaky-test-quarantine-preload.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flaky-test-quarantine.test.ts": "Uses only temporary fixtures and its static import closure.",
@@ -168,7 +193,6 @@
     "scripts/generated-conflicts.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/generated-files-format.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/generated-files-guard.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/generated-files.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/generated-web-merge.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/gh-retry-processes.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/global-rule-inputs.test.ts": "Uses only temporary fixtures and its static import closure.",
@@ -183,7 +207,6 @@
     "scripts/oxlint-additional-guards.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/oxlint-rule-decisions.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/oxlint-safe-fixers.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/oxlint-tailwind-design-system.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/parser-output-diff.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/pr-regeneration.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/pre-push-affected.test.ts": "Uses only temporary fixtures and its static import closure.",
@@ -192,7 +215,6 @@
     "scripts/precommit-paths.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/prepare-maintenance-release-gates.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/production-e2e-inputs.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/publish-package-selection.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/query-perf-baseline.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/query-perf-scope.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/rehearse-exact-base-upgrade.test.ts": "Uses only temporary fixtures and its static import closure.",
@@ -207,8 +229,6 @@
     "scripts/require-json-import-attribute.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/resolution-ranges.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/retry-step-deadline.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/run-unlisted-script-tests.test.ts": "Uses only temporary fixtures and its static import closure.",
-    "scripts/rust-toolchain-pins.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/safe-chain-install.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/selfhost-contract.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/sha256-migration-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -8,7 +14,9 @@ import { comparisonBase } from "./ci-comparison-base";
 import {
   balanceTestFiles,
   parseScriptTestArguments,
+  prepareStrace,
   selectScriptTests,
+  uncoveredScans,
   undeclaredTracedFiles,
   unlistedTestCommands,
   unlistedTests,
@@ -318,6 +326,163 @@ test("the Dockerfile reader's trace is covered by its declaration", () => {
       tracked: new Set([dockerfile]),
     }),
   ).toEqual([]);
+});
+
+test("the YARA directory scan is covered by its repository declaration", () => {
+  const testFile = "scripts/workflow-api-probes.test.ts";
+  expect(
+    uncoveredScans({
+      scanLog: `${JSON.stringify({
+        directory: path.resolve("apps/api/src/lib/file-scan/yara"),
+        pattern: "*.yar",
+      })}\n`,
+      declared: scriptTestInputs.inputs[testFile],
+      tracked: new Set([
+        "apps/api/src/lib/file-scan/yara/executables.yar",
+        "apps/api/src/lib/file-scan/yara/office-macros.yar",
+      ]),
+    }),
+  ).toEqual([]);
+});
+
+describe("directory scan coverage", () => {
+  const withTrackedFixture = (
+    run: (fixture: { root: string; tracked: Set<string> }) => void,
+  ) => {
+    const root = mkdtempSync(path.join(tmpdir(), "script-scans-"));
+    mkdirSync(path.join(root, "data"));
+    writeFileSync(path.join(root, "data/a.txt"), "a");
+    writeFileSync(path.join(root, "data/b.txt"), "b");
+    try {
+      run({ root, tracked: new Set(["data/a.txt", "data/b.txt"]) });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  test("a directory scan needs a wildcard that covers files added there", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const scanLog = `${JSON.stringify({ directory: "data" })}\n`;
+      expect(
+        uncoveredScans({
+          scanLog,
+          declared: ["data/a.txt"],
+          tracked,
+          root,
+        }),
+      ).toEqual([{ directory: "data" }]);
+      expect(
+        uncoveredScans({
+          scanLog,
+          declared: ["data/*"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("a glob scan applies its pattern before checking its covering glob", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const scanLog = `${JSON.stringify({ directory: "data", pattern: "*.txt" })}\n`;
+      expect(
+        uncoveredScans({
+          scanLog,
+          declared: ["data/*.txt"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+      expect(
+        uncoveredScans({
+          scanLog,
+          declared: ["data/*.json"],
+          tracked,
+          root,
+        }),
+      ).toEqual([{ directory: "data", pattern: "*.txt" }]);
+    });
+  });
+
+  test("recognizes a subprocess git ls-files scan", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const trace =
+        '1 execve("/usr/bin/git", ["git", "ls-files", "--", "data"], 0x0) = 0';
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/a.txt"],
+          tracked,
+          root,
+        }),
+      ).toEqual([{ directory: "data" }]);
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: ["data/*"],
+          tracked,
+          root,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  test("the preload logs scans and returns the native results unchanged", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "scan-preload-"));
+    const log = path.join(root, "scans.log");
+    mkdirSync(path.join(root, "data"));
+    writeFileSync(path.join(root, "data/a.txt"), "a");
+    writeFileSync(
+      path.join(root, "subject.test.ts"),
+      [
+        'import { expect, test } from "bun:test";',
+        'import { readdirSync } from "node:fs";',
+        'test("calls through", () => {',
+        '  expect(readdirSync("data")).toEqual(["a.txt"]);',
+        '  expect([...new Bun.Glob("*.txt").scanSync({ cwd: "data" })]).toEqual(["a.txt"]);',
+        "});",
+      ].join("\n"),
+    );
+    try {
+      const result = Bun.spawnSync(
+        [
+          "bun",
+          "test",
+          "--preload",
+          path.resolve(import.meta.dir, "script-test-scan-preload.ts"),
+          "subject.test.ts",
+        ],
+        {
+          cwd: root,
+          env: { ...process.env, SCRIPT_TEST_SCAN_LOG: log },
+          stderr: "pipe",
+        },
+      );
+      expect(result.stderr.toString()).toContain("1 pass");
+      expect(result.exitCode).toBe(0);
+      expect(readFileSync(log, "utf-8")).toContain('"directory":"data"');
+      expect(readFileSync(log, "utf-8")).toContain('"pattern":"*.txt"');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test("CI does not require or install strace when no tests are selected", () => {
+  let installs = 0;
+  expect(
+    prepareStrace({
+      ci: true,
+      selectedTests: 0,
+      available: () => false,
+      install: () => {
+        installs += 1;
+      },
+    }),
+  ).toBe(false);
+  expect(installs).toBe(0);
 });
 
 describe("repository script test census", () => {

@@ -19,6 +19,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -167,8 +168,32 @@ const installStrace = () => {
     `Installed strace in ${((performance.now() - started) / 1000).toFixed(1)} s.`,
   );
 };
+
+export const prepareStrace = ({
+  ci,
+  selectedTests,
+  available,
+  install = installStrace,
+}: {
+  readonly ci: boolean;
+  readonly selectedTests: number;
+  readonly available: () => boolean;
+  readonly install?: () => void;
+}): boolean => {
+  if (ci && selectedTests > 0 && !available()) {
+    install();
+  }
+  const installed = available();
+  if (ci && selectedTests > 0 && !installed) {
+    panic(
+      "strace is required in CI; install it with: sudo apt-get install strace",
+    );
+  }
+  return installed;
+};
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
 const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
+const SCAN_PRELOAD_PATH = "scripts/script-test-scan-preload.ts";
 
 const SCRIPT_TEST_ALL_RULES = {
   manifest: /(?:^|\/)package\.json$/u,
@@ -337,6 +362,166 @@ export const undeclaredTracedFiles = ({
   return [...opened].toSorted();
 };
 
+type ScanRecord = {
+  readonly directory: string;
+  readonly pattern?: string;
+};
+
+const wildcardDepth = (pattern: string): number | undefined => {
+  const segments = pattern.split("/");
+  const index = segments.findIndex((segment) => /[*?{[]/u.test(segment));
+  return index === -1 ? undefined : index;
+};
+
+const hasRecursiveWildcardAt = (pattern: string, depth: number): boolean =>
+  pattern.split("/")[depth] === "**";
+
+const repositoryScan = (
+  directory: string,
+  root: string,
+): { readonly absolute: string; readonly relative: string } | undefined => {
+  const absolute = path.resolve(root, directory);
+  const relative = repoRelativePath(root, absolute).replace(/\/$/u, "");
+  if (
+    relative.startsWith("../") ||
+    relative === "node_modules" ||
+    relative.includes("/node_modules") ||
+    relative === ".git" ||
+    relative.startsWith(".git/")
+  ) {
+    return undefined;
+  }
+  return { absolute, relative: relative === "." ? "" : relative };
+};
+
+const scanCovered = ({
+  record,
+  declared,
+  tracked,
+  root,
+}: {
+  readonly record: ScanRecord;
+  readonly declared: readonly string[];
+  readonly tracked: ReadonlySet<string>;
+  readonly root: string;
+}): boolean => {
+  const repository = repositoryScan(record.directory, root);
+  if (repository === undefined) {
+    return true;
+  }
+  const directoryDepth = repository.relative
+    ? repository.relative.split("/").length
+    : 0;
+  const scannedGlob =
+    record.pattern === undefined ? undefined : new Bun.Glob(record.pattern);
+  const matchingFiles = [...tracked].filter((file) => {
+    if (
+      repository.relative &&
+      file !== repository.relative &&
+      !file.startsWith(`${repository.relative}/`)
+    ) {
+      return false;
+    }
+    if (scannedGlob === undefined) {
+      return true;
+    }
+    const scanRelative = repository.relative
+      ? file.slice(repository.relative.length + 1)
+      : file;
+    return scannedGlob.match(scanRelative);
+  });
+  return declared.some((pattern) => {
+    const depth = wildcardDepth(pattern);
+    if (
+      depth === undefined ||
+      (depth < directoryDepth && !hasRecursiveWildcardAt(pattern, depth))
+    ) {
+      return false;
+    }
+    const declaredGlob = new Bun.Glob(pattern);
+    return matchingFiles.every((file) => declaredGlob.match(file));
+  });
+};
+
+const commandScans = (trace: string): ScanRecord[] => {
+  const scans: ScanRecord[] = [];
+  for (const line of trace.split("\n")) {
+    const call = /execve\([^,]+, \[((?:.|\n)*?)\],/u.exec(line)?.[1];
+    if (call === undefined) {
+      continue;
+    }
+    const args = [...call.matchAll(/"((?:\\.|[^"\\])*)"/gu)].map((match) =>
+      (match[1] ?? "").replaceAll('\\"', '"'),
+    );
+    const executable = path.basename(args[0] ?? "");
+    const gitSubcommand = executable === "git" ? args[1] : undefined;
+    let operands: string[];
+    if (gitSubcommand === "ls-files") {
+      const separator = args.indexOf("--");
+      operands = (
+        separator === -1 ? args.slice(2) : args.slice(separator + 1)
+      ).filter((argument) => !argument.startsWith("-"));
+    } else if (gitSubcommand === "grep") {
+      const separator = args.indexOf("--");
+      operands = separator === -1 ? [] : args.slice(separator + 1);
+    } else if (gitSubcommand === "diff" && args.includes("--name-only")) {
+      const separator = args.indexOf("--");
+      operands = separator === -1 ? [] : args.slice(separator + 1);
+    } else if (executable === "find") {
+      const findArguments = args.slice(1);
+      const expression = findArguments.findIndex(
+        (argument) =>
+          argument.startsWith("-") || argument === "!" || argument === "(",
+      );
+      operands =
+        expression === -1 ? findArguments : findArguments.slice(0, expression);
+    } else if (executable === "ls") {
+      operands = args.slice(1).filter((arg) => !arg.startsWith("-"));
+    } else {
+      continue;
+    }
+    for (const directory of operands.length === 0 ? ["."] : operands) {
+      scans.push({ directory });
+    }
+  }
+  return scans;
+};
+
+export const uncoveredScans = ({
+  scanLog,
+  trace = "",
+  declared,
+  tracked,
+  root = REPO_ROOT,
+}: {
+  readonly scanLog: string;
+  readonly trace?: string;
+  readonly declared: readonly string[];
+  readonly tracked: ReadonlySet<string>;
+  readonly root?: string;
+}): ScanRecord[] => {
+  const parseRecord = (line: string): ScanRecord => {
+    const parsed: unknown = JSON.parse(line);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("directory" in parsed) ||
+      typeof parsed.directory !== "string" ||
+      ("pattern" in parsed && typeof parsed.pattern !== "string")
+    ) {
+      panic(`Invalid script test scan record: ${line}`);
+    }
+    if ("pattern" in parsed && typeof parsed.pattern === "string") {
+      return { directory: parsed.directory, pattern: parsed.pattern };
+    }
+    return { directory: parsed.directory };
+  };
+  const records = scanLog.split("\n").filter(Boolean).map(parseRecord);
+  return [...records, ...commandScans(trace)].filter(
+    (record) => !scanCovered({ record, declared, tracked, root }),
+  );
+};
+
 type RunOptions = {
   readonly command: readonly string[];
   readonly testFile: string;
@@ -357,6 +542,18 @@ const run = async ({
   const stderrPath = path.join(directory, "stderr.log");
   try {
     const tracePath = path.join(directory, "trace.log");
+    const scanLogPath = path.join(directory, "scans.log");
+    writeFileSync(scanLogPath, "");
+    const testCommand =
+      command[0] === "bun" && command[1] === "test"
+        ? [
+            command[0],
+            command[1],
+            "--preload",
+            path.join(REPO_ROOT, SCAN_PRELOAD_PATH),
+            ...command.slice(2),
+          ]
+        : [...command];
     const invoked = trace
       ? [
           "strace",
@@ -366,35 +563,49 @@ const run = async ({
           "trace=open,openat,openat2,execve",
           "-o",
           tracePath,
-          ...command,
+          ...testCommand,
         ]
-      : [...command];
+      : testCommand;
     const started = performance.now();
     const child = Bun.spawn(invoked, {
       cwd: REPO_ROOT,
       stdout: Bun.file(stdoutPath),
       stderr: Bun.file(stderrPath),
+      env: { ...process.env, SCRIPT_TEST_SCAN_LOG: scanLogPath },
     });
     const exitCode = await child.exited;
     console.log(`$ ${command.join(" ")}`);
     process.stdout.write(readFileSync(stdoutPath, "utf-8"));
     process.stderr.write(readFileSync(stderrPath, "utf-8"));
+    const traceText = trace ? readFileSync(tracePath, "utf-8") : "";
+    const undeclared = trace
+      ? undeclaredTracedFiles({
+          trace: traceText,
+          closure: graph.closure(testFile),
+          declared: declaredInputs.get(testFile) ?? [],
+          tracked,
+        })
+      : [];
     if (trace) {
       console.log(
         `Traced ${testFile} in ${Math.round(performance.now() - started)}ms.`,
       );
-      const undeclared = undeclaredTracedFiles({
-        trace: readFileSync(tracePath, "utf-8"),
-        closure: graph.closure(testFile),
-        declared: declaredInputs.get(testFile) ?? [],
-        tracked,
-      });
       for (const file of undeclared) {
         console.error(`${testFile} opened undeclared tracked file ${file}`);
       }
-      return exitCode === 0 && undeclared.length === 0;
     }
-    return exitCode === 0;
+    const scans = uncoveredScans({
+      scanLog: readFileSync(scanLogPath, "utf-8"),
+      trace: traceText,
+      declared: declaredInputs.get(testFile) ?? [],
+      tracked,
+    });
+    for (const uncovered of scans) {
+      console.error(
+        `${testFile}: scans ${uncovered.directory} (${uncovered.pattern ?? "directory entries"}) without a declared glob covering it`,
+      );
+    }
+    return exitCode === 0 && undeclared.length === 0 && scans.length === 0;
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -441,19 +652,11 @@ if (import.meta.main) {
         .exitCode === 0;
     // Hosted runner images ship without strace. CI installs it only when a
     // test will run, so a change that selects none pays nothing for it.
-    if (
-      process.env["CI"] === "true" &&
-      selection.files.length > 0 &&
-      !hasStrace()
-    ) {
-      installStrace();
-    }
-    const straceAvailable = hasStrace();
-    if (process.env["CI"] === "true" && !straceAvailable) {
-      panic(
-        "strace is required in CI; install it with: sudo apt-get install strace",
-      );
-    }
+    const straceAvailable = prepareStrace({
+      ci: process.env["CI"] === "true",
+      selectedTests: selection.files.length,
+      available: hasStrace,
+    });
     if (!straceAvailable) {
       console.log("Tracing skipped: strace is not installed.");
     }
