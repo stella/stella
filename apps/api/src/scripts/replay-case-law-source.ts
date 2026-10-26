@@ -41,6 +41,10 @@ import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter"
  *   bun run src/scripts/replay-case-law-source.ts --adapter eu-ecj \
  *     --after <decisionId> --apply
  *
+ *   # only the decisions one parser version wrote
+ *   bun run src/scripts/replay-case-law-source.ts --adapter sk-us \
+ *     --parser-version <n> --all --results-out <private path>
+ *
  *   # every row's outcome to a file, not only the summary's sample
  *   bun run src/scripts/replay-case-law-source.ts --adapter sk-courts --all \
  *     --results-out /tmp/sk-courts-replay.jsonl
@@ -220,6 +224,9 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   }
   if (scope.type === "court") {
     console.log(`targeting court:     ${scope.court}`);
+  }
+  if (scope.type === "parser-version") {
+    console.log(`targeting version:   ${scope.parserVersion}`);
   }
 
   // `null` only where the store confirmed it holds no such object, which is a

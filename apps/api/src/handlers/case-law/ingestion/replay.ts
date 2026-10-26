@@ -224,7 +224,12 @@ export type CaseLawReplayScope =
   | (typeof CASE_LAW_REPLAY_SCOPE)[keyof typeof CASE_LAW_REPLAY_SCOPE]
   | { type: "decision"; decisionId: SafeId<"caseLawDecision"> }
   | { type: "court"; court: string }
-  | { type: "celex"; celex: string };
+  | { type: "celex"; celex: string }
+  /**
+   * The decisions a parser version wrote. A version that stored a defect is
+   * a window of rows, and naming it replays that window and nothing else.
+   */
+  | { type: "parser-version"; parserVersion: number };
 
 const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
   switch (scope.type) {
@@ -236,6 +241,8 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
       return eq(caseLawDecisions.court, scope.court);
     case "celex":
       return sql`${caseLawDecisions.metadata}->>'celex' = ${scope.celex}`;
+    case "parser-version":
+      return eq(caseLawDecisions.parserVersion, scope.parserVersion);
     default:
       scope satisfies never;
       return panic(`Unhandled scope: ${String(scope)}`);
