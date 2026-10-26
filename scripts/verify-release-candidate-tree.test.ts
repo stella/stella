@@ -430,7 +430,15 @@ const withReleaseRange = (
         );
       }
       const versionParent = git(directory, "rev-parse", "HEAD");
-      git(directory, "merge", "--quiet", "--squash", "release");
+      // A squash after main moved is a real merge, which needs an identity.
+      commitAs(
+        directory,
+        { author: PERSON, committer: GITHUB },
+        "merge",
+        "--quiet",
+        "--squash",
+        "release",
+      );
       squash.mutate?.(directory);
       git(directory, "add", "-A");
       commitAs(

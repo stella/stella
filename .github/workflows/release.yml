@@ -73,11 +73,11 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
-          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
 
       - name: Preserve release candidate verifier across source checkouts
         run: |
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-candidate.sh" "$RUNNER_TEMP/check-release-candidate.sh"
           echo "RELEASE_CANDIDATE_CHECKER=$RUNNER_TEMP/check-release-candidate.sh" >> "$GITHUB_ENV"
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/verify-release-candidate-tree.mjs" "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
