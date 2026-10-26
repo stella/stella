@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { withDragAnnouncementData } from "@/components/drag-and-drop-live-region.logic";
+import { toSafeId } from "@/lib/safe-id";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { WorkspaceGroup } from "@/lib/workspaces/types";
 import { PERSONAL_GROUP_ID } from "@/lib/workspaces/types";
@@ -30,14 +31,14 @@ const NOVAK_GROUP = clientGroup("client-novak", "Novák s.r.o.");
 const BERGER_GROUP = clientGroup("client-berger", "Berger GmbH");
 
 const personalMatter = toMatterCardDragData({
-  id: "matter-lease",
+  id: toSafeId<"workspace">("matter-lease"),
   name: "Lease review",
   client: null,
 });
 const novakMatter = toMatterCardDragData({
-  id: "matter-merger",
+  id: toSafeId<"workspace">("matter-merger"),
   name: "Merger due diligence",
-  client: { id: NOVAK_GROUP.clientId },
+  client: { id: toSafeId<"contact">(NOVAK_GROUP.clientId) },
 });
 
 describe("dropping a matter card on a client group", () => {
