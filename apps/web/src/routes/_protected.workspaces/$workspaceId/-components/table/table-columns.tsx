@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import {
@@ -21,6 +21,8 @@ import {
   readDocumentProcessingStatus,
 } from "@/components/workspaces/document-extraction-status";
 import type { SortHint } from "@/components/workspaces/properties/sort-property";
+import { COLUMN_CONTEXT_MENU } from "@/components/workspaces/row-actions.logic";
+import type { ColumnContextMenu } from "@/components/workspaces/row-actions.logic";
 import { HighlightedText } from "@/components/workspaces/table/find-highlight";
 import { MetadataPopover } from "@/components/workspaces/table/metadata-popover";
 import type {
@@ -38,6 +40,7 @@ import {
   isTaskStatus,
   ITEM_TYPE_TRANSLATION_KEYS,
 } from "@/components/workspaces/tasks/task-detail-constants";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import {
   AuthorCell,
@@ -112,7 +115,7 @@ type ColumnBase = {
   enableHiding: boolean;
   enableResizing: boolean;
   enablePinning: boolean;
-  meta?: { muted: boolean };
+  meta: { contextMenu: ColumnContextMenu; muted?: true };
 };
 
 const columnBase = (column: WorkspaceColumnDescriptor): ColumnBase => ({
@@ -123,7 +126,10 @@ const columnBase = (column: WorkspaceColumnDescriptor): ColumnBase => ({
   enableHiding: column.capabilities.hide,
   enableResizing: column.capabilities.resize,
   enablePinning: column.capabilities.pin,
-  ...(column.emphasis === "metadata" ? { meta: { muted: true } } : {}),
+  meta: {
+    contextMenu: COLUMN_CONTEXT_MENU[column.render.type],
+    ...(column.emphasis === "metadata" ? { muted: true } : {}),
+  },
 });
 
 type ColumnDefFactory = (column: WorkspaceColumnDescriptor) => TableColumnDef;

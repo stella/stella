@@ -330,6 +330,7 @@ describe("confirmed file rename state", () => {
       ).toEqual(
         new Set([
           JSON.stringify(entitiesKeys.all("matter")),
+          JSON.stringify(entitiesKeys.detail("matter", "A")),
           JSON.stringify(entityViewKeys.all("org", "user")),
           JSON.stringify(inboxKeys.all("org", "user")),
           JSON.stringify(
