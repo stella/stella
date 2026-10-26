@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Puses"
     },
+    "switcher": {
+      "searchPlaceholder": "Atrast lietu…",
+      "trigger": "Mainīt lietu",
+      "viewAll": "Skatīt visas lietas",
+      "viewAllForClient": "Skatīt visas klienta {clientName} lietas"
+    },
     "table": {
       "clearFlags": "Notīrīt atzīmes",
       "collapseRow": "Sakļaut rindu",

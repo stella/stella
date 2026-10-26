@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Parties"
     },
+    "switcher": {
+      "searchPlaceholder": "Rechercher un dossier…",
+      "trigger": "Changer de dossier",
+      "viewAll": "Voir tous les dossiers",
+      "viewAllForClient": "Voir tous les dossiers du client {clientName}"
+    },
     "table": {
       "clearFlags": "Effacer les marqueurs",
       "collapseRow": "Réduire la ligne",

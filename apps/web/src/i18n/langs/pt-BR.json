@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Partes"
     },
+    "switcher": {
+      "searchPlaceholder": "Encontrar um caso…",
+      "trigger": "Trocar de caso",
+      "viewAll": "Ver todos os casos",
+      "viewAllForClient": "Ver todos os casos do cliente {clientName}"
+    },
     "table": {
       "clearFlags": "Limpar sinalizadores",
       "collapseRow": "Recolher linha",

@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Parties"
     },
+    "switcher": {
+      "searchPlaceholder": "Find a matter…",
+      "trigger": "Switch matter",
+      "viewAll": "View all matters",
+      "viewAllForClient": "View all matters for {clientName}"
+    },
     "table": {
       "clearFlags": "Clear flags",
       "collapseRow": "Collapse row",
