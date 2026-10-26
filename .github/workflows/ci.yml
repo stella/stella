@@ -2202,6 +2202,12 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
+      - name: Fetch and scan engine published export map guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.published_exports_required == 'true') }}
+        run: |
+          bun scripts/check-published-exports.ts packages/fetch
+          bun scripts/check-published-exports.ts packages/scan-engine
+
       - name: Load merge base measurement
         timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3063,6 +3069,11 @@ jobs:
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.
         run: |
+          # A changed test repeats in this shard, which never generates the API
+          # runtime; tests that bundle or import the API read it like their own
+          # jobs do.
+          bun --cwd=packages/cli run codegen:runtime
+          bun --cwd=apps/api run generate:capability-runtime
           cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'
           ${{ needs.ci-plan.outputs.changed_files }}
           CHANGED_FILES_JSON
