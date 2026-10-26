@@ -366,11 +366,25 @@ export const generatorInputCensus = (
   return [...new Set(failures)].toSorted();
 };
 
+const GUARD_ENTRY = "scripts/generated-files-guard.ts";
+/** This guard's own import closure: the manifest, the census and the selection. */
+export const guardSelectionSources = (root: string = ROOT.pathname) =>
+  buildImportGraph(root, [GUARD_ENTRY]).closure(GUARD_ENTRY);
+
+/**
+ * The families a change can affect. A change to the code that decides this
+ * (the manifest, this guard and their imports: `selectionSources`) can change
+ * any family's command or declarations, so it affects every family.
+ */
 export const affectedGeneratorIds = (
   generators: readonly Generator[],
   changedFiles: readonly string[] | null,
+  selectionSources: ReadonlySet<string> = new Set(),
 ) => {
-  if (changedFiles === null) {
+  if (
+    changedFiles === null ||
+    changedFiles.some((file) => selectionSources.has(file))
+  ) {
     return new Set(generators.map(({ id }) => id));
   }
   const affected = new Set(
@@ -668,7 +682,11 @@ const guardB = async () => {
   const unchanged = unchangedGeneratorIds(process.env[UNCHANGED_CHECKS_ENV]);
   const base = comparisonBase();
   const changed = base === undefined ? null : changedSince(base);
-  const affected = affectedGeneratorIds(GENERATORS, changed);
+  const affected = affectedGeneratorIds(
+    GENERATORS,
+    changed,
+    guardSelectionSources(),
+  );
   const shortBase = base?.slice(0, 7);
   const previousChanges =
     base === undefined

@@ -21,6 +21,7 @@ import {
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
   generatorInputCensus,
+  guardSelectionSources,
   runGeneratorChecks,
   UNCHANGED_CHECKS_ENV,
   unchangedGeneratorIds,
@@ -47,6 +48,31 @@ const checkedGenerator = (id: string) => {
 class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;
 }> {}
+
+test("a change to the guard's own sources selects every family", () => {
+  const sources = guardSelectionSources();
+  for (const file of [
+    "scripts/generated-files-guard.ts",
+    "scripts/generated-files.ts",
+    "packages/scripts/src/generated-files.ts",
+  ]) {
+    expect(sources.has(file), file).toBe(true);
+  }
+  // Only the manifest changed, for example one family's check command.
+  const affected = affectedGeneratorIds(
+    GENERATORS,
+    ["scripts/generated-files.ts"],
+    sources,
+  );
+  expect([...affected].toSorted()).toEqual(
+    GENERATORS.map(({ id }) => id).toSorted(),
+  );
+  // An unrelated file still selects none.
+  expect(
+    affectedGeneratorIds(GENERATORS, ["docs/changelog/example.md"], sources)
+      .size,
+  ).toBe(0);
+});
 
 test("selects direct, output, and transitive changes while unrelated files select none", () => {
   const direct = affectedGeneratorIds(GENERATORS, [
