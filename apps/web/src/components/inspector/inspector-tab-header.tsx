@@ -126,7 +126,6 @@ export const InspectorTabHeader = ({
           <InlineEdit
             className="text-xs font-medium"
             action={rename.action}
-            commitControl="keys"
             maxLength={rename.maxLength}
             onCancel={rename.onCancel}
             onChange={rename.onChange}

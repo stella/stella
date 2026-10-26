@@ -1,14 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { cn } from "@stll/ui/utils";
-
-/**
- * What the editor shows to commit besides Enter and blur: the "Done" button,
- * or nothing, for a row too narrow to give the field room beside one.
- */
-type InlineEditCommitControl = "done-button" | "keys";
 
 type InlineEditProps = {
   value: string;
@@ -18,7 +11,7 @@ type InlineEditProps = {
   /** Extra content after the input (e.g. file extension). */
   suffix?: React.ReactNode;
   /**
-   * Action button(s) between the input and Done (e.g. a suggest wand).
+   * Action button(s) after the input (e.g. a suggest wand).
    * Buttons placed here must call `preventDefault()` in `onMouseDown` and
    * trigger on `onClick`: the input commits on blur, so an unprevented
    * press's focus steal would close the editor before the action's result
@@ -32,11 +25,14 @@ type InlineEditProps = {
   inputAriaLabel?: string | undefined;
   /** Longest value the field accepts; typing and pasting stop there. */
   maxLength?: number | undefined;
-  commitControl?: InlineEditCommitControl;
   className?: string | undefined;
   inputClassName?: string | undefined;
 };
 
+/**
+ * `InlineRenameInput` plus a suffix and action slot. It adds no commit button:
+ * Enter and blur commit and Escape cancels, as on every other inline rename.
+ */
 export const InlineEdit = ({
   value,
   onChange,
@@ -46,7 +42,6 @@ export const InlineEdit = ({
   action,
   inputAriaLabel,
   maxLength,
-  commitControl = "done-button",
   className,
   inputClassName,
 }: InlineEditProps) => {
@@ -72,7 +67,6 @@ export const InlineEdit = ({
       <InlineRenameInput
         aria-label={inputAriaLabel ?? t("common.rename")}
         className={inputClassName}
-        enterKeyHint="done"
         maxLength={maxLength}
         onBlur={() => {
           // The group commits when focus leaves its action buttons too.
@@ -84,21 +78,6 @@ export const InlineEdit = ({
       />
       {suffix}
       {action}
-      {commitControl === "done-button" ? (
-        <Button
-          className="h-lh shrink-0 gap-0.5 px-2"
-          onClick={onCommit}
-          onMouseDown={(e) => {
-            e.preventDefault();
-          }}
-          size="xs"
-          type="button"
-          variant="default"
-        >
-          {t("common.done")}
-          <kbd className="text-3xs opacity-70">{t("common.enterKey")}</kbd>
-        </Button>
-      ) : null}
     </span>
   );
 };
