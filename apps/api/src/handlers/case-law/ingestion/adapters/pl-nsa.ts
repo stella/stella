@@ -782,7 +782,12 @@ export const plNsaFinality = (
 
 // ── Case symbols ─────────────────────────────────────────
 
-/** "6110 Podatek od towarów i usług": the court's case symbol and its name. */
+/**
+ * "6110 Podatek od towarów i usług": the court's case symbol and its name.
+ * The name stays as the dataset states it, cut short where it is cut
+ * ("…budowa obiektu, prz"); only its padding (a no-break space beside a
+ * space) is read away, and `asPublished` keeps the label as it stands.
+ */
 const CASE_SYMBOL = /^(?<code>\d{3,4})(?:\s(?<description>.*))?$/u;
 
 export type PlNsaCaseSymbol = {
@@ -795,7 +800,7 @@ const caseSymbol = (asPublished: string): PlNsaCaseSymbol => {
   const groups = CASE_SYMBOL.exec(asPublished.trim())?.groups;
   return {
     code: groups?.["code"] ?? null,
-    description: nonEmpty(groups?.["description"]),
+    description: nonEmpty(groups?.["description"]?.replaceAll(/\s+/gu, " ")),
     asPublished,
   };
 };
@@ -1153,7 +1158,7 @@ export const assemblePlNsaDecision = ({
       // above the decision; the source carries no other summary.
       textFields: {
         abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        headnote: sourceTextField(ADAPTER_KEYS.PL_NSA, row.thesis),
+        headnote: sourceTextField(ADAPTER_KEYS.PL_NSA, parsed.thesis),
         legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         summary: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       },

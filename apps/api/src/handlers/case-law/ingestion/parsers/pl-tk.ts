@@ -15,13 +15,7 @@
 
 import { panic } from "better-result";
 import * as cheerio from "cheerio";
-import {
-  type AnyNode,
-  type Element,
-  isTag,
-  isText,
-  type Text,
-} from "domhandler";
+import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
@@ -636,7 +630,7 @@ const INLINE_WRAPPERS = new Set([
 /** Punctuation that closes onto the word before it. */
 const CLOSING_PUNCTUATION = /^[)\]}.,;:!?…”’»]/u;
 
-const isIndentation = (node: AnyNode | null): node is Text =>
+const isIndentation = (node: AnyNode | null): boolean =>
   node !== null && isText(node) && INDENTATION.test(node.data);
 
 /** `node`, or the inline wrappers it is the only content of on `side`. */
@@ -699,7 +693,7 @@ const visibleAfter = ($: Root, node: AnyNode): string | undefined => {
 const tightenRaisedMark = ($: Root, mark: Element): void => {
   for (;;) {
     const before = outermostRun(mark, "prev").prev;
-    if (isIndentation(before)) {
+    if (before !== null && isIndentation(before)) {
       $(before).remove();
       continue;
     }
@@ -711,7 +705,7 @@ const tightenRaisedMark = ($: Root, mark: Element): void => {
   for (;;) {
     const after = outermostRun(mark, "next").next;
     const closes = CLOSING_PUNCTUATION.test(visibleAfter($, mark) ?? "");
-    if (!isIndentation(after) || !closes) {
+    if (after === null || !isIndentation(after) || !closes) {
       break;
     }
     $(after).remove();

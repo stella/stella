@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
@@ -19,6 +19,7 @@ import type {
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";

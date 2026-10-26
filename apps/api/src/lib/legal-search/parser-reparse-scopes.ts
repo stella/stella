@@ -133,11 +133,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_US]: {
-    version: 27,
+    version: 28,
     scope: {
       type: "all",
       reason:
-        "the bench read from the opening sentence is part of the judges every re-parse replaces, which have no feature storage of their own",
+        "paragraph text, ruling roles, separate-opinion headings and paragraph numbers are recomputed from the stored page, and none of them has feature storage of its own",
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
@@ -165,11 +165,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Re-read Supreme Court PDFs: running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
+        "Re-read Supreme Court PDFs: word spaces set by position alone, running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
@@ -185,14 +185,15 @@ export const PARSER_VERSION_SCOPES = {
     scope: {
       type: "all",
       reason:
-        "Re-read Constitutional Tribunal text: wrapped whitespace, superscripts, footnote references, dissent headings and dissent authors change inlines and metadata.",
+        "Re-read Tribunal exports with collapsed whitespace, attached superscripts, linked footnotes and named dissent authors.",
     },
   },
   [ADAPTER_KEYS.PL_NSA]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
-      reason: "scope declarations start with this contract",
+      reason:
+        "Rejoin sentences split across paragraphs, drop page numbers after the closing rule and join marked superscript article numbers.",
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {

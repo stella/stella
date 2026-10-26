@@ -1486,7 +1486,7 @@
       "label": "ذكاء اصطناعي مُحاكى"
     },
     "modelSelector": {
-      "allModels": "كل النماذج ({count, number})",
+      "allModels": "كل النماذج",
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",
       "belowFrontier": "دون أفضل الموازنات",
@@ -4770,6 +4770,7 @@
     "modelError": "لم يتمكن النموذج من إكمال هذه الإجابة.",
     "networkError": "انقطع الاتصال. حاول مرة أخرى.",
     "regenerate": "إعادة توليد الإجابة",
+    "selectionError": "حدِّد نصًّا من القرار نفسه.",
     "send": "إرسال سؤال المتابعة",
     "share": "مشاركة مع الفريق",
     "timeoutError": "انتهت مهلة توليد الإجابة. حاول مرة أخرى.",
@@ -5359,7 +5360,7 @@
     "importDescription": "تُستخرج الأنماط إلى ملف DOCX جديد خالٍ من المحتوى.",
     "importTitle": "استيراد مجموعة أنماط",
     "loadFailed": "تعذر تحميل مجموعات الأنماط",
-    "newDocument": "مستند جديد",
+    "newDocument": "مستند DOCX جديد",
     "pickerDescription": "اختر نظام التنسيق للملف الجديد.",
     "renameTitle": "إعادة تسمية مجموعة الأنماط",
     "replace": "استبدال المصدر",
@@ -5643,7 +5644,7 @@
     "moveToMatter": "حفظ في الملف القانوني",
     "moveToMatterAnyway": "حفظ على أي حال",
     "myDefaultLookupFormat": "تنسيقي الافتراضي",
-    "newFromTemplate": "مستند جديد من قالب",
+    "newFromTemplate": "مستند DOCX جديد من قالب",
     "newFromTemplateFillHint": "عبّئ الحقول؛ ويُنشأ المستند في هذا الملف القانوني.",
     "newTemplate": "قالب جديد",
     "noTemplates": "لا توجد قوالب بعد",
@@ -6014,6 +6015,7 @@
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
         "authRequiredTitle": "انتهت صلاحية جلستك",
+        "editInApplication": "التعديل في <bdi>{application}</bdi>",
         "editLocallyPrompt": "حرّر هذا الملف محليًا وزامن التغييرات مع stella.",
         "forceRelease": "فرض التحرير",
         "notOpenedDescription": "لم يؤكد تطبيق stella لسطح المكتب فتح <bdi>{application}</bdi>. شغّل تطبيق stella لسطح المكتب وحاول مرة أخرى.",
@@ -6037,13 +6039,15 @@
         "alreadyInstalled": "هل هو مثبّت بالفعل؟ اربطه",
         "connect": "ربط stella desktop",
         "connected": "stella desktop مرتبط",
+        "download": "تنزيل stella desktop",
         "editNone": "نزّل stella desktop لتعديل هذا الملف",
         "editOutdated": "حدّث stella desktop للتعديل",
         "editReason": "يفتح التعديل على الحاسوب الملف في تطبيق على حاسوبك عبر stella desktop.",
         "signCurrent": "التوقيع باستخدام stella desktop",
         "signNone": "نزّل stella desktop لتوقيع ملف PDF هذا",
         "signOutdated": "حدّث stella desktop للتوقيع",
-        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop."
+        "signReason": "يستخدم التوقيع الشهادة الموجودة على حاسوبك، لذا يتم داخل stella desktop.",
+        "update": "تحديث stella desktop"
       },
       "downloadAs": "تنزيل بصيغة…",
       "downloadAsZip": "تنزيل بصيغة ZIP",
@@ -6056,8 +6060,10 @@
       "itemLimitReached": "بلغ هذا الملف القانوني حد العناصر.",
       "maxEntitiesReached": "تم بلوغ الحد الأقصى لعدد العناصر",
       "ocrAlreadyProcessed": "اكتمل التعرّف على النص بالفعل",
+      "ocrBatchHelp": "تُعالَج المستندات في قائمة الانتظار ضمن دفعة OCR التالية.",
       "ocrQueueFailed": "تعذّرت جدولة التعرّف على النص",
-      "ocrQueued": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
+      "ocrQueued": "تمت إضافة التعرّف على النص إلى قائمة الانتظار",
+      "ocrQueuedForBatch": "تمت إضافة التعرّف على النص إلى دفعة OCR التالية",
       "pdfSigning": {
         "alreadySigningTitle": "التوقيع جارٍ بالفعل في stella desktop",
         "cancelledBaseVersionDescription": "تغيّر المستند أثناء التوقيع. افتح أحدث إصدار ووقّعه من جديد.",
@@ -6114,6 +6120,7 @@
         "waitingDescription": "اختر شهادة توقيع في تطبيق stella لسطح المكتب لتوقيع ملف PDF هذا.",
         "waitingTitle": "في انتظار تطبيق stella لسطح المكتب"
       },
+      "queueForOcr": "إضافة إلى قائمة انتظار OCR",
       "rateLimited": "تم تقييد المعدل؛ الاستئناف خلال {seconds, number} ثانية",
       "referencedUpload": {
         "choiceLabel": "ما العمل مع {fileName}",
@@ -6125,7 +6132,6 @@
       "removeMetadata": "إزالة البيانات الوصفية للمستند",
       "renamedToAvoidConflicts": "{count, plural, zero {لم تتم إعادة تسمية أي ملف لتجنب التعارضات} one {تمت إعادة تسمية ملف واحد لتجنب التعارضات} two {تمت إعادة تسمية ملفين لتجنب التعارضات} few {تمت إعادة تسمية # ملفات لتجنب التعارضات} many {تمت إعادة تسمية # ملفًا لتجنب التعارضات} other {تمت إعادة تسمية # ملف لتجنب التعارضات}}",
       "retryFailed": "إعادة محاولة {count, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}}",
-      "runOcr": "إضافة OCR إلى قائمة الانتظار",
       "scrubFailed": "تعذّرت إزالة البيانات الوصفية لهذا الملف، لذا لم يتم تنزيل أي شيء",
       "uploadedPartially": "فشل {failed, plural, zero {لا ملفات} one {ملف واحد} two {ملفين} few {# ملفات} many {# ملفًا} other {# ملف}} من أصل {total, number}",
       "uploadedSuccessfully": "تم رفع الملفات بنجاح",
@@ -6413,6 +6419,7 @@
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
       "client": "عميل",
+      "movedToClient": "تم نقل <bdi>{matterName}</bdi> إلى <bdi>{clientName}</bdi>",
       "noClient": "لم يُعيَّن أي عميل",
       "noClientOptional": "بلا عميل (اختياري)",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف القانوني.",
@@ -6431,7 +6438,9 @@
       "personalLabel": "شخصية",
       "promoteCta": "الترقية إلى عميل",
       "promoteDescription": "أرفِق عميلًا لمشاركة هذا الملف القانوني مع الفريق. هذا الإجراء أحادي الاتجاه — لا يمكن للملفات المُرقّاة العودة إلى الحالة الشخصية.",
+      "promoteToClientConfirm": "سيُسنَد <bdi>{matterName}</bdi> إلى <bdi>{clientName}</bdi> ويُشارَك مع الفريق. لا يمكن إعادته إلى الحالة الشخصية.",
       "promotedSuccess": "تمت ترقية الملف القانوني",
+      "recentClients": "العملاء الأخيرون",
       "removeClient": "إزالة العميل",
       "removeParty": "إزالة الطرف",
       "removePartyConfirm": "هل أنت متأكد من رغبتك في إزالة هذا الطرف من الملف القانوني؟",
@@ -6643,6 +6652,12 @@
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {
       "parties": "الأطراف"
+    },
+    "switcher": {
+      "searchPlaceholder": "ابحث عن ملف قانوني…",
+      "trigger": "تبديل الملف القانوني",
+      "viewAll": "عرض جميع الملفات القانونية",
+      "viewAllForClient": "عرض جميع الملفات القانونية للعميل {clientName}"
     },
     "table": {
       "clearFlags": "مسح العلامات",
