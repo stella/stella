@@ -118,9 +118,14 @@ const urlString = (url: string | URL | Request): string => {
 };
 
 describe("hosted customer erasure task", () => {
-  test.each([204, 404])(
-    "marks a %s response erased without storing its body",
-    async (status) => {
+  // A 204 carries no body by the Fetch standard; the 404 carries the private
+  // body that must never be stored.
+  test.each([
+    { status: 204, body: null },
+    { status: 404, body: "provider private response" },
+  ])(
+    "marks a $status response erased without storing its body",
+    async ({ status, body }) => {
       const intent = await insertIntent({
         externalCustomerRef: "stella_org_org/a b",
       });
@@ -128,7 +133,7 @@ describe("hosted customer erasure task", () => {
       installFetch(async (url, init) => {
         requestUrl = urlString(url);
         expect(init?.method).toBe("DELETE");
-        return new Response("provider private response", { status });
+        return new Response(body, { status });
       });
 
       await run();
