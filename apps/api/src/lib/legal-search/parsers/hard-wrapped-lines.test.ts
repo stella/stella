@@ -71,7 +71,7 @@ const ordinaryParagraph = fc
 describe("printed lines of a typescript", () => {
   test("wrapped at one margin are read back as the paragraphs printed", () => {
     assertProperty(
-      "hard-wrapped paragraphs reflow to their text",
+      "wrapped at one margin are read back as the paragraphs printed",
       fc.property(
         fc.array(sentence, { minLength: 2, maxLength: 6 }),
         (paragraphs) => {
@@ -91,7 +91,7 @@ describe("printed lines of a typescript", () => {
 
   test("of ordinary paragraphs of similar length stay as printed", () => {
     assertProperty(
-      "sentence paragraphs are not a typescript",
+      "of ordinary paragraphs of similar length stay as printed",
       fc.property(
         fc.array(
           fc.tuple(ordinaryParagraph, fc.boolean(), fc.nat({ max: 3 })),
@@ -125,7 +125,7 @@ describe("printed lines of a typescript", () => {
 
   test("that do not share a margin stay as printed", () => {
     assertProperty(
-      "unwrapped lines are kept",
+      "that do not share a margin stay as printed",
       fc.property(
         fc.array(
           fc

@@ -511,9 +511,16 @@ const reflowUsLines = (
       line.kind === "body" ? printedLine(plainTextOf(line.value)) : null,
     ),
   );
-  const joins = (reading?.joins ?? []).map((join, index) =>
-    printed[index]?.run === printed[index + 1]?.run ? join : LINE_JOINS.BREAK,
-  );
+  // Not a typescript: every line is its own paragraph, and an absent join
+  // below reads as a break.
+  const joins =
+    reading === null
+      ? []
+      : reading.joins.map((join, index) =>
+          printed[index]?.run === printed[index + 1]?.run
+            ? join
+            : LINE_JOINS.BREAK,
+        );
   const finish = (inlines: readonly Inline[]): ParsedLineData =>
     normalize(
       reading === null ? inlines : mapInlineText(inlines, reading.clean),

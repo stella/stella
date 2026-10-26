@@ -45,10 +45,10 @@ export const LINE_JOINS = {
   COMPOUND: "compound",
 } as const;
 
-export type LineJoin = (typeof LINE_JOINS)[keyof typeof LINE_JOINS];
+type PrintedLineJoin = (typeof LINE_JOINS)[keyof typeof LINE_JOINS];
 
 /** A join that continues the paragraph. */
-export type ContinuingJoin = Exclude<LineJoin, typeof LINE_JOINS.BREAK>;
+export type ContinuingJoin = Exclude<PrintedLineJoin, typeof LINE_JOINS.BREAK>;
 
 const HARD_WRAP = {
   /** Fewest printed lines that can show a margin. */
@@ -94,7 +94,7 @@ export type HardWrapReading = {
   /** The width the typescript's lines end at. */
   readonly margin: number;
   /** How each line continues into the next: one join per adjacent pair. */
-  readonly joins: readonly LineJoin[];
+  readonly joins: readonly PrintedLineJoin[];
   /**
    * Typewriter residue removed from the text of a reflowed paragraph: the
    * doubled spaces lines were justified with, and a hyphen a margin left
@@ -111,9 +111,42 @@ export type HardWrapReading = {
  */
 const SENTENCE_END_RE = /(?<!(?:^|[\s(])\p{Lu})[.!?:]["'“”’)]*$/u;
 const OPENS_SENTENCE_RE = /^["'„“(]*\p{Lu}/u;
-/** A line ending in a hyphen the margin may have put there. */
-const LINE_END_HYPHEN_RE = /(?<stem>\p{L}+)(?<mark>[-\u00ad])$/u;
 const SOFT_HYPHEN = "\u00ad";
+const LETTER_RE = /\p{L}/u;
+
+/** Where the run of letters ending just before `end` starts. */
+const lettersStartBefore = (text: string, end: number): number => {
+  let start = end;
+  while (start > 0 && LETTER_RE.test(text.charAt(start - 1))) {
+    start -= 1;
+  }
+  return start;
+};
+
+/** Where the run of letters starting at `start` ends. */
+const lettersEndAfter = (text: string, start: number): number => {
+  let end = start;
+  while (end < text.length && LETTER_RE.test(text.charAt(end))) {
+    end += 1;
+  }
+  return end;
+};
+
+type LineEndHyphen = { readonly stem: string; readonly soft: boolean };
+
+/**
+ * A line ending in a hyphen the margin may have put there, after a word.
+ * Read by scanning back from the end, so a long line costs its length once.
+ */
+const lineEndHyphenOf = (text: string): LineEndHyphen | null => {
+  const mark = text.at(-1);
+  if (mark !== "-" && mark !== SOFT_HYPHEN) {
+    return null;
+  }
+  const end = text.length - 1;
+  const stem = text.slice(lettersStartBefore(text, end), end);
+  return stem === "" ? null : { stem, soft: mark === SOFT_HYPHEN };
+};
 /** The typewriter stretched the line: words apart by more than a space. */
 const JUSTIFIED_RE = /\S {2,}\S/u;
 
@@ -135,7 +168,7 @@ const wrapsMidSentence = (
   line !== null &&
   line.text !== "" &&
   endsAtMargin(above, margin) &&
-  (LINE_END_HYPHEN_RE.test(above.text) ||
+  (lineEndHyphenOf(above.text) !== null ||
     (!SENTENCE_END_RE.test(above.text) && /^\p{Ll}/u.test(line.text)));
 
 /**
@@ -299,11 +332,19 @@ const vocabularyOf = (texts: readonly string[]): Vocabulary => {
   const compounds = new Set<string>();
   for (const text of texts) {
     const normalized = normalizeUnicode(text, "NFC");
-    for (const [word] of normalized.matchAll(/\p{L}+/gu)) {
+    let previous: { word: string; end: number } | null = null;
+    for (const match of normalized.matchAll(/\p{L}+/gu)) {
+      const [word] = match;
       words.add(wordKey(word));
-    }
-    for (const [compound] of normalized.matchAll(/\p{L}+-\p{L}+/gu)) {
-      compounds.add(wordKey(compound));
+      // Two words joined by a single hyphen and nothing else are a compound.
+      if (
+        previous !== null &&
+        match.index === previous.end + 1 &&
+        normalized.charAt(previous.end) === "-"
+      ) {
+        compounds.add(wordKey(`${previous.word}-${word}`));
+      }
+      previous = { word, end: match.index + word.length };
     }
   }
   return { words, compounds };
@@ -314,7 +355,7 @@ const hyphenatedJoin = (
   vocabulary: Vocabulary,
   stem: string,
   next: string,
-): LineJoin => {
+): PrintedLineJoin => {
   const rest = /^\p{L}+/u.exec(normalizeUnicode(next, "NFC"))?.[0] ?? "";
   if (SUSPENDED_HYPHEN_NEXT.has(rest)) {
     return LINE_JOINS.SPACE;
@@ -332,7 +373,7 @@ const joinOf = (
   line: PrintedLine | null,
   margin: number,
   vocabulary: Vocabulary,
-): LineJoin => {
+): PrintedLineJoin => {
   if (
     above === null ||
     line === null ||
@@ -343,27 +384,50 @@ const joinOf = (
   ) {
     return LINE_JOINS.BREAK;
   }
-  const hyphen = LINE_END_HYPHEN_RE.exec(above.text)?.groups;
-  if (hyphen === undefined || !/^\p{Ll}/u.test(line.text)) {
+  const hyphen = lineEndHyphenOf(above.text);
+  if (hyphen === null || !/^\p{Ll}/u.test(line.text)) {
     return LINE_JOINS.SPACE;
   }
-  return hyphen["mark"] === SOFT_HYPHEN
+  return hyphen.soft
     ? LINE_JOINS.WORD
-    : hyphenatedJoin(vocabulary, hyphen["stem"] ?? "", line.text);
+    : hyphenatedJoin(vocabulary, hyphen.stem, line.text);
+};
+
+const STRANDED_HYPHEN = "- ";
+const STEM_MIN_LETTERS = 2;
+
+/**
+ * Join "sou- du" where the text spells "soudu" whole: each "- " is read
+ * once, with the letters on either side of it.
+ */
+const joinStrandedHyphens = (vocabulary: Vocabulary, text: string): string => {
+  const parts: string[] = [];
+  let copied = 0;
+  let at = text.indexOf(STRANDED_HYPHEN);
+  while (at !== -1) {
+    const stemStart = lettersStartBefore(text, at);
+    const restStart = at + STRANDED_HYPHEN.length;
+    const restEnd = lettersEndAfter(text, restStart);
+    const stem = text.slice(stemStart, at);
+    const rest = text.slice(restStart, restEnd);
+    if (
+      stem.length >= STEM_MIN_LETTERS &&
+      /^\p{Ll}/u.test(rest) &&
+      hyphenatedJoin(vocabulary, stem, rest) === LINE_JOINS.WORD
+    ) {
+      parts.push(text.slice(copied, at));
+      copied = restStart;
+    }
+    at = text.indexOf(STRANDED_HYPHEN, restStart);
+  }
+  parts.push(text.slice(copied));
+  return parts.join("");
 };
 
 const cleanTypescript =
   (vocabulary: Vocabulary) =>
   (text: string): string =>
-    text
-      .replaceAll(/ {2,}/gu, " ")
-      .replaceAll(
-        /(?<stem>\p{L}{2,})- (?<rest>\p{Ll}+)/gu,
-        (match, stem: string, rest: string) =>
-          hyphenatedJoin(vocabulary, stem, rest) === LINE_JOINS.WORD
-            ? `${stem}${rest}`
-            : match,
-      );
+    joinStrandedHyphens(vocabulary, text.replaceAll(/ {2,}/gu, " "));
 
 /**
  * Read a text's printed lines as a typescript: `null` for a text that is

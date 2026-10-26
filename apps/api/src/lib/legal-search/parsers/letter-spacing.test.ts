@@ -7,7 +7,7 @@ import { collapseLetterSpacing } from "./letter-spacing";
 
 /** Spell words the way the court emphasises them: letters apart, words wider. */
 const spaceOut = (words: readonly string[]): string =>
-  words.map((word) => [...word].join(" ")).join("   ");
+  words.map((word) => word.split("").join(" ")).join("   ");
 
 const czechWord = fc.stringMatching(
   /^[A-Za-zÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž]{2,12}$/u,
@@ -40,12 +40,12 @@ describe("letter-spaced emphasis", () => {
 
   test("keeps every word boundary of a spaced phrase", () => {
     assertProperty(
-      "spaced phrases collapse to their words",
+      "keeps every word boundary of a spaced phrase",
       fc.property(
         fc.array(czechWord, { minLength: 1, maxLength: 5 }),
         fc.constantFrom("", ".", " .", ":", " :"),
         (words, end) => {
-          fc.pre(words.some((word) => [...word].length >= 4));
+          fc.pre(words.some((word) => word.length >= 4));
           expect(collapseLetterSpacing(`${spaceOut(words)}${end}`)).toBe(
             `${words.join(" ")}${end.trim()}`,
           );
@@ -67,7 +67,7 @@ describe("letter-spaced emphasis", () => {
 
   test("is idempotent", () => {
     assertProperty(
-      "collapsing twice changes nothing more",
+      "is idempotent",
       fc.property(
         fc.array(
           fc.tuple(
