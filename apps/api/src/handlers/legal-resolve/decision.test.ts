@@ -47,6 +47,7 @@ const row = (caseNumber = "3 Afs 41/2008 - 98") =>
     court: "Nejvyšší správní soud",
     courtAbbreviation: "NSS",
     decisionDate: "2008-10-30",
+    decisionType: "rozsudek",
     ecli: "ECLI:CZ:NSS:2008:3.AFS.41.2008.98",
     identifiers: [],
     language: "cs",
@@ -56,7 +57,7 @@ const row = (caseNumber = "3 Afs 41/2008 - 98") =>
 
 const lookupRows = (rows: DecisionIdentityRow[]) => async () => rows;
 
-const decisionAst = (texts = ["Text"]) =>
+const decisionAst = (texts = ["Text"], numbered = false) =>
   ({
     version: 1,
     source: {
@@ -80,6 +81,7 @@ const decisionAst = (texts = ["Text"]) =>
       anchorId: `paragraph-${String(index + 1)}`,
       plainText: text,
       inlines: [{ type: "text", text }],
+      ...(numbered ? { number: index + 1 } : {}),
     })),
   }) satisfies DocumentAst;
 
@@ -306,8 +308,11 @@ describe("decision legal resolution", () => {
           fc.string({ minLength: 1, maxLength: MCP_CONTENT_MAX_CHARS + 20 }),
           { minLength: 1, maxLength: 4 },
         ),
-        async (texts) => {
-          const source = decisionAst(texts);
+        // Court-numbered paragraphs are served with their number, which the
+        // extent has to count like the text does.
+        fc.boolean(),
+        async (texts, numbered) => {
+          const source = decisionAst(texts, numbered);
           const fullBlocks = parseCaseLawDecisionAst(source)?.blocks ?? [];
           const totalChars =
             toPlainCorpusText({ blocks: fullBlocks, fulltext: null })?.length ??
@@ -413,6 +418,51 @@ describe("decision legal resolution", () => {
       candidates: [
         { decisionId: brno.id, label: expect.stringContaining("Brně") },
         { decisionId: ostrava.id, label: expect.stringContaining("Ostravě") },
+      ],
+    });
+  });
+
+  test("tells a judgment from the opinion on the same docket", async () => {
+    // One CJEU docket holds both, from the same court; before the kind was
+    // in the label the two candidates differed only by date.
+    const eu = {
+      ...row("C-144/04"),
+      country: "EU",
+      court: "Court of Justice",
+      courtAbbreviation: null,
+      language: "en",
+    };
+    const opinion = {
+      ...eu,
+      id: createSafeId<"caseLawDecision">(),
+      decisionDate: "2005-06-30",
+      decisionType: "opinion",
+      ecli: "ECLI:EU:C:2005:420",
+    };
+    const judgment = {
+      ...eu,
+      decisionDate: "2005-11-22",
+      decisionType: "judgment",
+      ecli: "ECLI:EU:C:2005:709",
+    };
+    expect(
+      await resolveDecision({
+        admission,
+        country: "EU",
+        identifier: "C-144/04",
+        dependencies: { lookup: lookupRows([opinion, judgment]) },
+      }),
+    ).toMatchObject({
+      status: "ambiguous",
+      candidates: [
+        {
+          decisionId: opinion.id,
+          label: "Court of Justice, opinion, 2005-06-30",
+        },
+        {
+          decisionId: judgment.id,
+          label: "Court of Justice, judgment, 2005-11-22",
+        },
       ],
     });
   });

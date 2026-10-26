@@ -30,6 +30,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   MCP_CONTENT_MAX_CHARS,
   resolveTextWindowBounds,
+  servedBlockText,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
 
@@ -75,14 +76,22 @@ const decisionText = (
     for (const block of blocks) {
       const separatorChars =
         returnedChars > 0 && block.plainText !== "" ? 2 : 0;
+      // Counted as the served text prints the block, number and all, so the
+      // extent agrees with `totalChars`.
       const candidateChars =
-        returnedChars + separatorChars + block.plainText.length;
+        returnedChars +
+        separatorChars +
+        (block.plainText === "" ? 0 : servedBlockText(block).length);
       if (candidateChars > MCP_CONTENT_MAX_CHARS) {
         if (returnedChars === 0) {
+          // The number the served text prints before the block shares the
+          // window with its words.
+          const numberChars =
+            servedBlockText(block).length - block.plainText.length;
           const { end } = resolveTextWindowBounds({
             text: block.plainText,
             offset: 0,
-            size: MCP_CONTENT_MAX_CHARS,
+            size: MCP_CONTENT_MAX_CHARS - numberChars,
           });
           const text = block.plainText.slice(0, end);
           switch (block.type) {
@@ -110,7 +119,7 @@ const decisionText = (
               block satisfies never;
               return panic("Unhandled decision block type");
           }
-          returnedChars = text.length;
+          returnedChars = text.length + numberChars;
         }
         break;
       }
@@ -126,10 +135,20 @@ const decisionText = (
   return { status: "withheld", reason: "licence" };
 };
 
+/**
+ * A candidate's label: court, kind of decision and date. One docket can
+ * hold a judgment and the Advocate General's opinion on it, decided by the
+ * same court, so without the kind two candidates differ only by date.
+ */
+const candidateLabel = (row: DecisionIdentityRow): string =>
+  [row.court, row.decisionType, row.decisionDate ?? row.caseNumber]
+    .filter((part) => part !== null && part !== "")
+    .join(", ");
+
 const candidate = (row: DecisionIdentityRow) => ({
   decisionId: row.id,
   identifier: row.ecli ?? row.caseNumber,
-  label: `${row.court}, ${row.decisionDate ?? row.caseNumber}`,
+  label: candidateLabel(row),
   readerUrl: buildCaseLawDecisionUrl({
     caseNumber: row.caseNumber,
     country: row.country,

@@ -14,6 +14,7 @@ import {
 } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { declareFailureClass } from "@stll/errors";
+import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import {
   closestNames,
   MAX_TOOL_NAME_CHARS,
@@ -1218,7 +1219,7 @@ export const toPlainCorpusText = ({
   blocks,
   fulltext,
 }: {
-  blocks: readonly { plainText: string }[] | null;
+  blocks: readonly CorpusTextBlock[] | null;
   fulltext: string | null;
 }): string | null => {
   if (typeof fulltext === "string" && fulltext.length > 0) {
@@ -1229,8 +1230,37 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .flatMap((block) =>
+      block.plainText === "" ? [] : [servedBlockText(block)],
+    )
     .join("\n\n");
+};
+
+type CorpusTextBlock = {
+  plainText: string;
+  type: string;
+  number?: number | undefined;
+};
+
+/** The sign the served text prints before a court's paragraph number. */
+const COURT_PARAGRAPH_SIGN = "¶";
+
+/**
+ * One block as the served text prints it: a paragraph the court numbered
+ * opens with that number (`¶ 134 It follows…`).
+ *
+ * Parsers keep the court's number as structure (`ParagraphBlock.number`)
+ * rather than in `plainText`, so that a search for the paragraph's words
+ * does not also find its number. Text read without the structure beside it
+ * would then carry no number at all, and a paragraph could be quoted but
+ * not cited. `¶` keeps the number apart from text that itself opens with a
+ * figure, in every court's numbering style.
+ */
+export const servedBlockText = (block: CorpusTextBlock): string => {
+  const number = courtParagraphNumber(block);
+  return number === null
+    ? block.plainText
+    : `${COURT_PARAGRAPH_SIGN} ${String(number)} ${block.plainText}`;
 };
 
 /**
