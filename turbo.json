@@ -962,6 +962,7 @@
       ],
       "inputs": [
         "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/apps/web/**",
         "$TURBO_ROOT$/packages/agent-engine/**",
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/ai-catalog/**",
