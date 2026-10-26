@@ -121,7 +121,7 @@ describe("the margin's citation filter", () => {
     const { listed, view } = renderReader();
     const eighth = view.container.querySelector('[data-anchor="p-8"]');
     if (!(eighth instanceof HTMLElement)) {
-      return panic("No eighth paragraph");
+      panic("No eighth paragraph");
     }
     fireEvent.click(within(eighth).getByRole("link", { name: "¶" }));
     expect(listed()).toEqual(["§ 72", "§ 257"]);
