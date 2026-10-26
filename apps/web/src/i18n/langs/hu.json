@@ -2223,6 +2223,7 @@
     "scrollToTop": "Görgetés a tetejére",
     "search": "Keresés...",
     "searchIn": "Keresés itt",
+    "searchMembers": "Tagok keresése…",
     "selectAMatter": "Válasszon ügyet",
     "selectARole": "Válasszon szerepkört",
     "selectAll": "Összes kijelölése",
@@ -6228,8 +6229,7 @@
         "lead": "Felelős",
         "leadActive": "Felelős",
         "leadInactive": "Felelős beállítása",
-        "noLead": "Nincs felelős",
-        "searchMembers": "Tagok keresése…"
+        "noLead": "Nincs felelős"
       },
       "to": "Ig"
     },
@@ -6309,10 +6309,10 @@
       "addMember": "Tag hozzáadása",
       "addMemberDescription": "Csapattag hozzáadása ehhez az ügyhöz",
       "alreadyMember": "A felhasználó már tag",
+      "alreadyOnMatter": "Már tagja ennek az ügynek",
       "cannotRemoveLast": "Az utolsó tag nem távolítható el",
       "noMembersFound": "Nem található tag",
-      "removeMemberConfirm": "Eltávolítja ezt a tagot az ügyből?",
-      "selectMember": "Tag kiválasztása"
+      "removeMemberConfirm": "Eltávolítja ezt a tagot az ügyből?"
     },
     "newDocument": "Új dokumentum",
     "newFolder": "Új mappa",

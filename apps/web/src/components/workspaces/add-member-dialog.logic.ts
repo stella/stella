@@ -1,27 +1,33 @@
 import { panic } from "better-result";
 
+import type { MemberOption } from "@/components/member-combobox";
 import type { QueryView } from "@/lib/query-view.logic";
 
 type OrganizationMember = {
   userId: string;
   user: { email: string; image?: string | null | undefined; name: string };
 };
-type MemberItem = {
-  email: string;
-  image: string | null | undefined;
-  name: string;
-  value: string;
-};
-type AddableMembersView =
+type AddMemberCandidates =
   | { type: "pending" }
   | { type: "error" }
   | { type: "empty" }
-  | { type: "items"; items: MemberItem[] };
+  | {
+      type: "items";
+      /** Every organization member, those already on the matter included. */
+      members: MemberOption[];
+      /** Who is already on the matter, listed but not choosable. */
+      existingUserIds: ReadonlySet<string>;
+    };
 
-export const addableMembersView = <TError>(
+/**
+ * The organization's members as candidates for one matter. People already on
+ * the matter stay in the list so a search for them explains why they cannot
+ * be added; the list is empty only when nobody is left to add.
+ */
+export const addMemberCandidates = <TError>(
   organization: QueryView<{ members: OrganizationMember[] } | null, TError>,
   members: QueryView<{ userId: string }[], TError>,
-): AddableMembersView => {
+): AddMemberCandidates => {
   if (organization.type === "error" || members.type === "error") {
     return { type: "error" };
   }
@@ -53,20 +59,21 @@ export const addableMembersView = <TError>(
       organization satisfies never;
       return panic("Unhandled organization query state");
   }
-  const ids = new Set(existing.map((member) => member.userId));
-  const items = organizationMembers
-    .filter((member) => !ids.has(member.userId))
-    .map((member) => ({
-      email: member.user.email,
-      image: member.user.image,
-      name: member.user.name,
-      value: member.userId,
-    }));
+  const existingUserIds = new Set(existing.map((member) => member.userId));
+  const candidates = organizationMembers.map((member) => ({
+    email: member.user.email,
+    image: member.user.image ?? null,
+    name: member.user.name,
+    userId: member.userId,
+  }));
   const hasRefetchError =
     (organization.type === "items" &&
       organization.refetchError !== undefined) ||
     (members.type === "items" && members.refetchError !== undefined);
-  return items.length || hasRefetchError
-    ? { type: "items", items }
+  const anyoneToAdd = candidates.some(
+    (candidate) => !existingUserIds.has(candidate.userId),
+  );
+  return anyoneToAdd || hasRefetchError
+    ? { type: "items", members: candidates, existingUserIds }
     : { type: "empty" };
 };

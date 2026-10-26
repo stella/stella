@@ -2223,6 +2223,7 @@
     "scrollToTop": "Scroll to top",
     "search": "Search...",
     "searchIn": "Search in",
+    "searchMembers": "Search members…",
     "selectAMatter": "Select a matter",
     "selectARole": "Select a role",
     "selectAll": "Select all",
@@ -6228,8 +6229,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Set lead",
-        "noLead": "No lead",
-        "searchMembers": "Search members…"
+        "noLead": "No lead"
       },
       "to": "To"
     },
@@ -6309,10 +6309,10 @@
       "addMember": "Add to matter",
       "addMemberDescription": "Choose an existing team member to add to this matter",
       "alreadyMember": "User is already a member",
+      "alreadyOnMatter": "Already on this matter",
       "cannotRemoveLast": "Cannot remove the last member",
       "noMembersFound": "No members found",
-      "removeMemberConfirm": "Remove this member from the matter?",
-      "selectMember": "Select a member"
+      "removeMemberConfirm": "Remove this member from the matter?"
     },
     "newDocument": "New document",
     "newFolder": "New folder",

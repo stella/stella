@@ -2223,6 +2223,7 @@
     "scrollToTop": "Przewiń do góry",
     "search": "Szukaj...",
     "searchIn": "Szukaj w",
+    "searchMembers": "Szukaj członków…",
     "selectAMatter": "Wybierz sprawę",
     "selectARole": "Wybierz rolę",
     "selectAll": "Zaznacz wszystkie",
@@ -6228,8 +6229,7 @@
         "lead": "Prowadzący",
         "leadActive": "Prowadzący",
         "leadInactive": "Ustaw prowadzącego",
-        "noLead": "Brak prowadzącego",
-        "searchMembers": "Szukaj członków…"
+        "noLead": "Brak prowadzącego"
       },
       "to": "Do"
     },
@@ -6309,10 +6309,10 @@
       "addMember": "Dodaj członka",
       "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
+      "alreadyOnMatter": "Już należy do tej sprawy",
       "cannotRemoveLast": "Nie można usunąć ostatniego członka",
       "noMembersFound": "Nie znaleziono członków",
-      "removeMemberConfirm": "Usunąć tego członka ze sprawy?",
-      "selectMember": "Wybierz członka"
+      "removeMemberConfirm": "Usunąć tego członka ze sprawy?"
     },
     "newDocument": "Nowy dokument",
     "newFolder": "Nowy folder",
