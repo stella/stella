@@ -78,6 +78,54 @@ describe("reading the converter's layout", () => {
     expect(visibleText(annex)).toContain("12");
   });
 
+  test.each([" / ", " /", "/ ", "/"])(
+    "font shorthand parses line-height spacing %j and quoted families",
+    (separator) => {
+      const sameFamily = cheerio.load(
+        `<html><body style="font: italic 12pt${separator}1.2 'Arial Narrow', sans-serif">` +
+          `<p>Document text.</p>` +
+          `<p style="font: 400 12pt 'Arial Narrow', sans-serif">42</p>` +
+          `</body></html>`,
+      );
+      expect(readPlKioLayout(sameFamily).pageNumbers).toEqual([]);
+      expect(visibleText(sameFamily)).toContain("42");
+
+      const differentFamily = cheerio.load(
+        `<html><body style="font: italic 12pt${separator}1.2 'Arial Narrow', sans-serif">` +
+          `<p>Document text.</p>` +
+          `<p style="font: 400 12pt 'Times New Roman', serif">42</p>` +
+          `</body></html>`,
+      );
+      expect(readPlKioLayout(differentFamily).pageNumbers).toEqual(["42"]);
+      expect(visibleText(differentFamily)).not.toContain("42");
+
+      const explicitFamilyWins = cheerio.load(
+        `<html><body style="font: italic 12pt${separator}1.2 'Times New Roman', serif; ` +
+          `font-family: 'Arial Narrow', sans-serif">` +
+          `<p>Document text.</p>` +
+          `<p style="font: 400 12pt 'Arial Narrow', sans-serif">42</p>` +
+          `</body></html>`,
+      );
+      expect(readPlKioLayout(explicitFamilyWins).pageNumbers).toEqual([]);
+      expect(visibleText(explicitFamilyWins)).toContain("42");
+    },
+  );
+
+  test("fractional bold font weights retain their printed width", () => {
+    const textWithWeight = (weight: string): string => {
+      const $ = cheerio.load(
+        `<body style="font-size:10pt"><p style="padding-left:20pt">` +
+          `<span style="font-weight:${weight}">${"W".repeat(20)}</span>` +
+          `<br>Aaaa nnnnnn</p><p>${"A".repeat(37)}<br>end</p></body>`,
+      );
+      readPlKioLayout($);
+      return $("p").first().text();
+    };
+    expect(textWithWeight("600.5")).toBe(textWithWeight("bold"));
+    expect(textWithWeight("600.5")).toBe(`${"W".repeat(20)} Aaaa nnnnnn`);
+    expect(textWithWeight("400")).toBe(`${"W".repeat(20)}Aaaa nnnnnn`);
+  });
+
   test("a paragraph runs on across a page only when page furniture alone lies between", () => {
     const $ = cheerio.load(
       [

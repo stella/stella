@@ -38,6 +38,10 @@
 import type { CheerioAPI } from "cheerio";
 import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
 
+import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import {
@@ -65,7 +69,7 @@ const SMALL_TYPE_RATIO = 0.75;
 const SUPERSCRIPT_TEXT = /^\d{1,3}$/u;
 
 /** A page number as the converter prints it: the page's last line. */
-const PAGE_NUMBER = /^\d{1,3}$/u;
+const MAX_PAGE_NUMBER_DIGITS = 3;
 
 /** Where full justified lines end, read from the longest of them. */
 const RIGHT_EDGE_QUANTILE = 0.95;
@@ -162,53 +166,134 @@ const naturalWidth = (text: string, { size, bold }: Font): number => {
   return ((total * size) / 1000) * (bold ? BOLD_WIDTH_RATIO : 1);
 };
 
-const POINTS = String.raw`(-?\d+(?:\.\d+)?)pt`;
-const FONT_SIZE = new RegExp(
-  String.raw`(?:^|;)\s*font(?:-size)?\s*:\s*(?:[^;]*?\s)?${POINTS}`,
-  "iu",
-);
-const PADDING_LEFT = new RegExp(
-  String.raw`(?:^|;)\s*padding-left\s*:\s*${POINTS}`,
-  "iu",
-);
-const PADDING = /(?:^|;)\s*padding\s*:\s*(?<values>[^;]+)/iu;
-const TEXT_INDENT = new RegExp(
-  String.raw`(?:^|;)\s*text-indent\s*:\s*${POINTS}`,
-  "iu",
-);
+type CssDeclaration = { readonly property: string; readonly value: string };
+
+const cssDeclarations = (style: string): readonly CssDeclaration[] =>
+  style.split(";").flatMap((declaration) => {
+    const separator = declaration.indexOf(":");
+    if (separator === -1) {
+      return [];
+    }
+    return [
+      {
+        property: declaration.slice(0, separator).trim().toLowerCase(),
+        value: declaration.slice(separator + 1).trim(),
+      },
+    ];
+  });
+
+const POINT_SIZE_TOKEN = /^(-?\d+(?:\.\d+)?)pt$/iu;
+
+const pointsToken = (token: string | undefined): number | undefined => {
+  if (token === undefined) {
+    return undefined;
+  }
+  const numeric = POINT_SIZE_TOKEN.exec(token)?.at(1);
+  return numeric === undefined
+    ? undefined
+    : parseDecimalToken(numeric).unwrapOr(undefined);
+};
+
+const firstPointToken = (value: string): number | undefined =>
+  pointsToken(value.trim().split(/\s+/u).at(0));
+
+type FontStyle = {
+  readonly size: number | undefined;
+  readonly family: string | undefined;
+};
+
+/** Read shorthand size and family tokens in one linear declaration scan. */
+const fontStyleOf = (style: string): FontStyle => {
+  let size: number | undefined;
+  let shorthandFamily: string | undefined;
+  let explicitFamily: string | undefined;
+
+  for (const { property, value } of cssDeclarations(style)) {
+    if (property === "font-family" && explicitFamily === undefined) {
+      explicitFamily = value
+        .split(",")
+        .at(0)
+        ?.replace(/["']/gu, "")
+        .trim()
+        .toLowerCase();
+      continue;
+    }
+    if (property === "font-size" && size === undefined) {
+      size = firstPointToken(value);
+      continue;
+    }
+    if (property !== "font") {
+      continue;
+    }
+    const tokens = [...value.matchAll(/\S+/gu)];
+    for (const [index, match] of tokens.entries()) {
+      const token = match[0];
+      const offset = match.index;
+      const numericSize = pointsToken(token.split("/", 1).at(0));
+      if (numericSize === undefined) {
+        continue;
+      }
+      size ??= numericSize;
+      const lineHeightSlash = tokens[index + 1];
+      const lineHeight = tokens[index + 2];
+      let familyOffset = offset + token.length;
+      if (token.endsWith("/") && lineHeightSlash !== undefined) {
+        familyOffset = lineHeightSlash.index + lineHeightSlash[0].length;
+      } else if (lineHeightSlash?.[0] === "/" && lineHeight !== undefined) {
+        familyOffset = lineHeight.index + lineHeight[0].length;
+      } else if (lineHeightSlash?.[0].startsWith("/") === true) {
+        familyOffset = lineHeightSlash.index + lineHeightSlash[0].length;
+      }
+      shorthandFamily ??= /^\s+(?<families>[^;]+)/u
+        .exec(value.slice(familyOffset))
+        ?.groups?.["families"]?.split(",")
+        .at(0)
+        ?.replace(/["']/gu, "")
+        .trim()
+        .toLowerCase();
+      break;
+    }
+  }
+  return { size, family: explicitFamily ?? shorthandFamily };
+};
 
 const styleOf = (element: Element): string => element.attribs["style"] ?? "";
-
-const FONT_WEIGHT = /(?:^|;)\s*font-weight\s*:\s*(?<weight>[a-z\d]+)/iu;
 
 /** The font an element sets its text in, given the one it inherits. */
 const fontOf = (element: Element, inherited: Font): Font => {
   const style = styleOf(element);
-  const weight = FONT_WEIGHT.exec(style)?.groups?.["weight"]?.toLowerCase();
+  const weight = cssDeclarations(style).find(
+    ({ property }) => property === "font-weight",
+  )?.value;
   let bold = inherited.bold;
   if (element.name === "b" || element.name === "strong") {
     bold = true;
   } else if (weight !== undefined) {
-    bold = weight === "bold" || weight === "bolder" || Number(weight) >= 600;
+    const normalizedWeight = weight.trim().split(/\s+/u).at(0)?.toLowerCase();
+    bold =
+      normalizedWeight === "bold" ||
+      normalizedWeight === "bolder" ||
+      parseDecimalToken(normalizedWeight).unwrapOr(0) >= 600;
   }
-  return { size: pointsOf(style, FONT_SIZE) ?? inherited.size, bold };
+  return { size: fontStyleOf(style).size ?? inherited.size, bold };
 };
 
-const pointsOf = (style: string, pattern: RegExp): number | undefined => {
-  const value = pattern.exec(style)?.at(1);
-  return value === undefined ? undefined : Number(value);
-};
+const pointsOf = (style: string, property: string): number | undefined =>
+  firstPointToken(
+    cssDeclarations(style).find(
+      (declaration) => declaration.property === property,
+    )?.value ?? "",
+  );
 
 /** The four sides of a `padding` shorthand, in points, CSS's order. */
 const paddingOf = (
   style: string,
 ): readonly [number, number, number, number] | undefined => {
-  const values = PADDING.exec(style)
-    ?.groups?.["values"]?.trim()
+  const values = cssDeclarations(style)
+    .find((declaration) => declaration.property === "padding")
+    ?.value.trim()
     .split(/\s+/u)
-    .map((value) =>
-      /^-?\d+(?:\.\d+)?pt$/u.test(value) ? Number.parseFloat(value) : 0,
-    );
+    .map((value) => pointsToken(value) ?? 0);
   if (values === undefined) {
     return undefined;
   }
@@ -217,7 +302,7 @@ const paddingOf = (
 };
 
 const leftPaddingOf = (style: string): number =>
-  pointsOf(style, PADDING_LEFT) ?? paddingOf(style)?.[3] ?? 0;
+  pointsOf(style, "padding-left") ?? paddingOf(style)?.[3] ?? 0;
 
 const isBlank = (node: AnyNode): boolean =>
   isText(node) && node.data.trim().length === 0;
@@ -229,21 +314,9 @@ const textOf = (node: AnyNode): string => {
   return isTag(node) ? node.children.map(textOf).join("") : "";
 };
 
-const FONT_FAMILY = /(?:^|;)\s*font-family\s*:\s*(?<families>[^;]+)/iu;
-const FONT_SHORTHAND_FAMILY =
-  /(?:^|;)\s*font\s*:\s*(?:[^;]*?\s)?-?\d+(?:\.\d+)?pt(?:\/\S+)?\s+(?<families>[^;]+)/iu;
-
 /** The first family a style names, as a key: `'Arial','sans-serif'` → `arial`. */
 const familyOf = (style: string): string | undefined =>
-  (
-    FONT_FAMILY.exec(style)?.groups?.["families"] ??
-    FONT_SHORTHAND_FAMILY.exec(style)?.groups?.["families"]
-  )
-    ?.split(",")
-    .at(0)
-    ?.replace(/["']/gu, "")
-    .trim()
-    .toLowerCase();
+  fontStyleOf(style).family;
 
 /** The size and family a stretch of text is set in, where its markup says. */
 type Typeface = {
@@ -273,7 +346,7 @@ const typefacesOf = (
     }
     const style = styleOf(node);
     const own = {
-      size: pointsOf(style, FONT_SIZE) ?? type.size,
+      size: fontStyleOf(style).size ?? type.size,
       family: familyOf(style) ?? type.family,
     };
     for (const child of node.children) {
@@ -308,7 +381,7 @@ const previousContent = (node: AnyNode): AnyNode | null => {
 
 const liftSmallTypeIndices = ($: CheerioAPI, bodySize: number): void => {
   $("span").each((_, span) => {
-    const size = pointsOf(styleOf(span), FONT_SIZE);
+    const size = fontStyleOf(styleOf(span)).size;
     const text = textOf(span).trim();
     if (
       size === undefined ||
@@ -401,7 +474,7 @@ const readBlockLines = ({
 }: ReadBlockLinesOptions): BlockLine[] => {
   const blockStyle = styleOf(block);
   const blockLeft = leftPaddingOf(blockStyle);
-  const firstIndent = pointsOf(blockStyle, TEXT_INDENT) ?? 0;
+  const firstIndent = pointsOf(blockStyle, "text-indent") ?? 0;
   const lines: BlockLine[] = [];
   let text = "";
   let width = 0;
@@ -437,7 +510,7 @@ const readBlockLines = ({
     }
     const style = styleOf(node);
     if (lineIndent === undefined && text.trim().length === 0) {
-      const padding = pointsOf(style, PADDING_LEFT);
+      const padding = pointsOf(style, "padding-left");
       if (padding !== undefined) {
         lineIndent = padding;
       }
@@ -686,9 +759,15 @@ const pageNumberCandidateOf = (
   const line = block.lines[index];
   if (
     line === undefined ||
-    !PAGE_NUMBER.test(line.text) ||
+    line.text.length > MAX_PAGE_NUMBER_DIGITS ||
     !closesPage(block)
   ) {
+    return undefined;
+  }
+  const value = parseIntegerToken(line.text, { sign: "unsigned" }).unwrapOr(
+    undefined,
+  );
+  if (value === undefined) {
     return undefined;
   }
   const inBlock = block.lines
@@ -703,7 +782,7 @@ const pageNumberCandidateOf = (
   }
   return {
     block,
-    value: Number(line.text),
+    value,
     alone: inBlock === undefined,
     afterCitation: above !== undefined && citesANumber(above.text),
   };
