@@ -15,6 +15,15 @@ import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
+import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
+import {
+  changePartnerOAuthClientInTransaction,
+  createPartnerOAuthClientInTransaction,
+} from "@/api/lib/db/partner-client-operator";
+import type {
+  ChangePartnerOAuthClientOptions,
+  CreatePartnerOAuthClientOptions,
+} from "@/api/lib/db/partner-client-operator";
 import type { createReviewAccountOrganizationStore } from "@/api/lib/db/review-account-organization-store";
 import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservation";
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
@@ -210,6 +219,27 @@ export const changeServiceOAuthClient = async (
     rootDb,
     async (tx) =>
       await changeServiceOAuthClientInTransaction({ ...options, tx }),
+  );
+/** Whether a client is an operator-registered partner client. */
+export const isPartnerOAuthClient = async (clientId: string) =>
+  (await readOAuthClientBinding(rootDb, clientId))?.type ===
+  PARTNER_CLIENT_TYPE;
+/** Partner clients are global (no organization); each user consents. */
+export const createPartnerOAuthClient = async (
+  options: CreatePartnerOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await createPartnerOAuthClientInTransaction({ ...options, tx }),
+  );
+export const changePartnerOAuthClient = async (
+  options: ChangePartnerOAuthClientOptions,
+) =>
+  await withAggregateTransaction(
+    rootDb,
+    async (tx) =>
+      await changePartnerOAuthClientInTransaction({ ...options, tx }),
   );
 export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
   await withAggregateTransaction(

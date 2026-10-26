@@ -35,24 +35,23 @@ import {
 } from "@/api/mcp/metadata";
 import { MCP_LAW_RESOURCE_SCOPES } from "@/api/mcp/resource-policy-contract";
 import { runtimeMode } from "@/api/runtime-mode";
+import { sendServedRequest } from "@/api/tests/helpers/served-request";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 type HandleMcpHttpRequest = Parameters<
   typeof createMcpRoute
 >[0]["handleMcpHttpRequest"];
 
+/** The MCP routes with a stand-in transport. */
+const mcpRouteApp = (handleMcpHttpRequest: HandleMcpHttpRequest) =>
+  createHttpApp({
+    routes: createMcpRoute({ handleMcpHttpRequest }),
+    middleware: [responseCachePolicy, mcpTransportMethodRefusal, errorBoundary],
+  });
+
 /** The MCP routes over a real socket with a stand-in transport. */
 const serveMcpRoute = (handleMcpHttpRequest: HandleMcpHttpRequest) =>
-  serveForTest(
-    createHttpApp({
-      routes: createMcpRoute({ handleMcpHttpRequest }),
-      middleware: [
-        responseCachePolicy,
-        mcpTransportMethodRefusal,
-        errorBoundary,
-      ],
-    }),
-  );
+  serveForTest(mcpRouteApp(handleMcpHttpRequest));
 
 const mcpRoute = serveMcpRoute(
   async () => new Response("Unexpected MCP transport"),
@@ -204,19 +203,17 @@ describe("MCP protected resource discovery routes", () => {
       params: {},
     });
     const forwarded: { body: string; mode: string | undefined }[] = [];
-    await using route = serveMcpRoute(async (request, options) => {
+    const app = mcpRouteApp(async (request, options) => {
       forwarded.push({ body: await request.text(), mode: options?.mode });
       return new Response("ok");
     });
 
     for (const path of [MCP_HTTP_PATH, MCP_DOCUMENTS_HTTP_PATH]) {
-      const response = await route.fetch(
-        new Request(`http://localhost${path}`, {
-          body: jsonRpcBody,
-          headers: { "content-type": "application/json" },
-          method: "POST",
-        }),
-      );
+      const response = await sendServedRequest(app, {
+        path,
+        headers: { "content-type": "application/json" },
+        body: jsonRpcBody,
+      });
 
       expect(response.status).toBe(200);
     }

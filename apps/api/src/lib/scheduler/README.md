@@ -5,6 +5,23 @@ configuration feature gates on every boot. Operator control uses only
 `paused_by`, `paused_since`, `paused_until`, and `pause_reason`, which survive that refresh.
 New jobs are enabled by default unless their configuration gate disables them.
 
+## Stopping a runaway job
+
+Run the guarded operator command from `apps/api`. Start without `--apply` to
+review the current row and resulting deadline, then repeat the same command
+with `--apply` using an authorized operator database connection:
+
+```sh
+bun run scheduler:job-pause -- pause --job documentProcessing.dispatchOcr.configuredInterval --for 24h --reason "Runaway queue growth" --actor operator-id
+bun run scheduler:job-pause -- pause --job documentProcessing.dispatchOcr.configuredInterval --for 24h --reason "Runaway queue growth" --actor operator-id --apply
+bun run scheduler:job-pause -- status --job documentProcessing.dispatchOcr.configuredInterval
+bun run scheduler:job-pause -- resume --job documentProcessing.dispatchOcr.configuredInterval --reason "Queue is stable" --actor operator-id --apply
+```
+
+The pause auto-resumes at its deadline. The hourly audit flags an active pause
+older than 24 hours. If the script is unavailable, use the SQL below as the
+fallback.
+
 A job can run when `enabled` is true and `paused_until` is either `NULL` or in
 the past. `NULL` means unpaused. A pause may be at most 72 hours from the time
 it is written. An elapsed pause resumes automatically. The runner clears expired

@@ -6,6 +6,7 @@ import {
   type CopyToMatterEntity,
   getCopyToMatterRootEntities,
 } from "@/components/workspaces/copy-to-matter-dialog.logic";
+import type { WorkspaceEntityColumnRender } from "@/components/workspaces/table/table-schema";
 import { PDF_MIME_TYPE } from "@/consts";
 import type {
   FieldId,
@@ -24,6 +25,136 @@ export type OcrSource = {
 
 export type RowActionContext = "bulk" | "cell" | "row";
 export type OcrExportFormat = "searchable-pdf" | "text";
+
+/**
+ * What right-clicking a table cell opens. A `row` column is the row's handle
+ * (the select gutter, a list item's name) and opens the row's menu; a `cell`
+ * column holds a property value and opens that cell's menu; a `native` column
+ * shows a value no menu action applies to, so the browser's own menu (copy,
+ * look up) stays.
+ */
+export type ColumnContextMenu = "cell" | "native" | "row";
+
+export const COLUMN_CONTEXT_MENU = {
+  select: "row",
+  "add-property": "row",
+  name: "row",
+  "list-item-type": "native",
+  "task-status": "native",
+  "task-priority": "native",
+  "task-due-date": "native",
+  "created-by": "native",
+  "updated-at": "native",
+  version: "native",
+  property: "cell",
+} as const satisfies Record<
+  WorkspaceEntityColumnRender["type"],
+  ColumnContextMenu
+>;
+
+/**
+ * What a row menu acts on: the row (its ⋮ trigger or handle), a bulk
+ * selection, the cell holding the file the row's file actions act on, another
+ * file cell, or a cell holding any other value.
+ */
+export type RowMenuSubject =
+  "bulk" | "file-cell" | "row" | "row-file-cell" | "value-cell";
+
+type ResolveRowMenuSubjectOptions = {
+  cellPropertyId: PropertyId | null;
+  fields: WorkspaceEntity["fields"];
+  isBulk: boolean;
+  rowFilePropertyId: PropertyId | null;
+};
+
+export const resolveRowMenuSubject = ({
+  cellPropertyId,
+  fields,
+  isBulk,
+  rowFilePropertyId,
+}: ResolveRowMenuSubjectOptions): RowMenuSubject => {
+  if (isBulk) {
+    return "bulk";
+  }
+  if (cellPropertyId === null) {
+    return "row";
+  }
+  if (fields[cellPropertyId]?.content.type !== "file") {
+    return "value-cell";
+  }
+  return cellPropertyId === rowFilePropertyId ? "row-file-cell" : "file-cell";
+};
+
+export type RowMenuSection =
+  | "cell-ocr-export"
+  | "cell-review"
+  | "chat"
+  | "desktop-edit"
+  | "edit-pages"
+  | "file-operations"
+  | "new-folder-from-selection"
+  | "new-subfolder"
+  | "open"
+  | "preview"
+  | "rename"
+  | "run-ocr"
+  | "sign"
+  | "translate"
+  | "upload-version";
+
+// Every action on the row's file or entity. `cell-review` (retry, lock, flags)
+// is a property's, so a cell offers it and the row does not.
+const ROW_FILE_SECTIONS = [
+  "preview",
+  "upload-version",
+  "run-ocr",
+  "desktop-edit",
+  "open",
+  "edit-pages",
+  "sign",
+  "chat",
+  "translate",
+  "file-operations",
+] satisfies readonly RowMenuSection[];
+
+const ROW_SECTIONS = [
+  ...ROW_FILE_SECTIONS,
+  "rename",
+  "new-subfolder",
+] satisfies readonly RowMenuSection[];
+
+/**
+ * The sections a row menu may show for each subject; each section still hides
+ * itself when it does not apply to the entity (no file, read-only, …). A cell
+ * offers only what acts on that cell: file actions belong to the row and the
+ * cell holding the row's file, and another file cell keeps the actions that
+ * take its own file.
+ */
+export const ROW_MENU_SECTIONS = {
+  row: ROW_SECTIONS,
+  bulk: [...ROW_SECTIONS, "new-folder-from-selection"],
+  "row-file-cell": [...ROW_FILE_SECTIONS, "cell-review"],
+  "file-cell": [
+    "run-ocr",
+    "edit-pages",
+    "translate",
+    "cell-ocr-export",
+    "cell-review",
+  ],
+  "value-cell": ["cell-review"],
+} as const satisfies Record<RowMenuSubject, readonly RowMenuSection[]>;
+
+export const getRowMenuSections = (
+  subject: RowMenuSubject,
+): ReadonlySet<RowMenuSection> => new Set(ROW_MENU_SECTIONS[subject]);
+
+export const ROW_MENU_ACTION_CONTEXT = {
+  row: "row",
+  bulk: "bulk",
+  "row-file-cell": "row",
+  "file-cell": "cell",
+  "value-cell": "cell",
+} as const satisfies Record<RowMenuSubject, RowActionContext>;
 
 /**
  * The searchable PDF is a stored derivative that can lag or fail behind the
