@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
 // A sign-in destination can carry an OAuth request in its fragment, and a
 // navigation by `to` drops the fragment: the client then never gets its code.
@@ -19,11 +20,11 @@ const BY_HELPER = /\bdestinationNavigation\(/u;
 const HINT =
   "moves on to a destination by `to`, which drops its fragment; use destinationNavigation(...)";
 
-const sources = [...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: SOURCE })]
-  .filter((file) => !/\.test\.tsx?$/u.test(file))
-  .map((file) => ({
-    file,
-    text: readFileSync(nodePath.join(SOURCE, file), "utf-8"),
+const sources = sourceFileIndex(SOURCE)
+  .filter(({ relativePath }) => !/\.test\.tsx?$/u.test(relativePath))
+  .map(({ relativePath, sourceText }) => ({
+    file: relativePath,
+    text: sourceText,
   }));
 
 /** Each navigation by `to` in a text, as `<file>:<line>` with the hint. */
