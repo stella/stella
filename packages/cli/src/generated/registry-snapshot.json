@@ -327,7 +327,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus. A requested country with no recorded coverage returns status unavailable with its reason.",
+    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus. A listed country not yet admitted that has no recorded coverage returns status unavailable with its reason.",
     "inputSchema": {
       "type": "object",
       "required": [],
