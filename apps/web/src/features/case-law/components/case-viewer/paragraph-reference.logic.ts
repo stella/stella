@@ -103,14 +103,31 @@ type ParagraphPreview = {
   truncated: boolean;
 };
 
-/** The last whitespace run and the partial word after it. */
-const TRAILING_PARTIAL_WORD = /\s+\S*$/u;
+const WHITESPACE = /\s/u;
 /** A high surrogate whose pair the cut dropped. */
 const DANGLING_HIGH_SURROGATE = /[\uD800-\uDBFF]$/u;
 
+/**
+ * Where the last whitespace run before the cut's trailing partial word starts,
+ * or -1 without one. One backward scan, so a long run costs linear time.
+ */
+const trailingPartialWordStart = (text: string): number => {
+  let index = text.length;
+  while (index > 0 && !WHITESPACE.test(text.charAt(index - 1))) {
+    index -= 1;
+  }
+  if (index === 0) {
+    return -1;
+  }
+  while (index > 0 && WHITESPACE.test(text.charAt(index - 1))) {
+    index -= 1;
+  }
+  return index;
+};
+
 const cutAtWord = (text: string, budget: number): string => {
   const cut = text.slice(0, budget);
-  const wordEnd = cut.search(TRAILING_PARTIAL_WORD);
+  const wordEnd = trailingPartialWordStart(cut);
   return wordEnd > 0
     ? cut.slice(0, wordEnd)
     : cut.replace(DANGLING_HIGH_SURROGATE, "");

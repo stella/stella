@@ -58,9 +58,9 @@ export const AiHeadnotes = ({
   const { abstract, holding } = analysisLayersOf(analysis);
   useUnresolvedCitationTelemetry({
     blocks,
-    ranges: [...(holding?.spans ?? []), ...(abstract?.spans ?? [])].flatMap(
-      ({ anchors }) => anchors,
-    ),
+    ranges: [holding, abstract]
+      .flatMap((layer) => (layer === null ? [] : layer.spans))
+      .flatMap(({ anchors }) => anchors),
     source: analysis.inputFingerprint,
   });
 
