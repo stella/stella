@@ -44,6 +44,7 @@ export const TAGGED_FAILURE_REASON = {
   BufferIntentWorkspaceUnavailableError: "tagged_failure",
   CanaryRateLimitError: "tagged_failure",
   CanaryTargetError: "tagged_failure",
+  CalendarGraphError: "tagged_failure",
   CapabilityRequestMismatchError: "tagged_failure",
   CaseLawBatchApplyError: "tagged_failure",
   CaseLawBatchBoundsError: "tagged_failure",

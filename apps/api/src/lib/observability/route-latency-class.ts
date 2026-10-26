@@ -821,6 +821,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/rates/:workspaceId": "crud",
   "PUT /v1/rates/:workspaceId/:rateTableId/entries": "crud",
   "PUT /v1/rates/:workspaceId/arrangement": "crud",
+  "PUT /v1/sharepoint/capabilities": "crud",
   "PUT /v1/sharepoint/enablement": "crud",
   "PUT /v1/style-sets": "crud",
   "PUT /v1/style-sets/editor": "crud",

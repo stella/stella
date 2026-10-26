@@ -6,12 +6,11 @@ import { numberFromString } from "@stll/api-contract/http-input";
 
 import { sharepointConnections } from "@/api/db/schema";
 import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
-import {
-  ensureSharepointAccessToken,
-  listDriveRootChildren,
-} from "@/api/handlers/sharepoint/graph-client";
+import { listDriveRootChildren } from "@/api/handlers/sharepoint/graph-client";
+import { ensureSharepointAccessToken } from "@/api/handlers/sharepoint/graph-token";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -43,7 +42,14 @@ const config = {
 // pipeline are separate, later slices.
 const listSharepointDriveRoot = createSafeRootHandler(
   config,
-  async function* ({ query: input, safeDb, session, user }) {
+  async function* ({
+    query: input,
+    request,
+    safeDb,
+    session,
+    user,
+    recordAuditEvent,
+  }) {
     yield* Result.await(
       assertSharepointConnectionEnabled({
         organizationId: session.activeOrganizationId,
@@ -64,6 +70,7 @@ const listSharepointDriveRoot = createSafeRootHandler(
             refreshTokenIv: sharepointConnections.refreshTokenIv,
             expiresAt: sharepointConnections.expiresAt,
             status: sharepointConnections.status,
+            scope: sharepointConnections.scope,
           })
           .from(sharepointConnections)
           .where(
@@ -89,6 +96,7 @@ const listSharepointDriveRoot = createSafeRootHandler(
       );
     }
 
+    const permit = grantThirdPartyOutboundPermit();
     const accessToken = yield* Result.await(
       ensureSharepointAccessToken({
         // `user_id` is stored as plain text; brand it at this boundary so the
@@ -98,14 +106,20 @@ const listSharepointDriveRoot = createSafeRootHandler(
           userId: brandPersistedUserId(connection.userId),
         },
         safeDb,
+        capability: "files.read",
+        permit,
+        recordAuditEvent,
+        signal: request.signal,
       }),
     );
 
     const page = yield* Result.await(
       listDriveRootChildren({
         accessToken,
+        permit,
         cursor: input.cursor ?? null,
         limit: normalizeTenantPageLimit(input.limit ?? DEFAULT_PAGE_SIZE),
+        signal: request.signal,
       }),
     );
 

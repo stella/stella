@@ -192,6 +192,28 @@ describe("sharepoint_oauth_state RLS", () => {
     expect(rows.map((r) => r.state)).toEqual([stateOrgAUserA1]);
   });
 
+  test("the application cannot update even its own pending state", async () => {
+    const updated = await scopedQuery(
+      noWorkspaces,
+      ids.orgA,
+      (tx) =>
+        tx
+          .update(sharepointOAuthState)
+          .set({ redirectUri: "https://changed.example.test/callback" })
+          .where(eq(sharepointOAuthState.state, stateOrgAUserA1))
+          .returning({ state: sharepointOAuthState.state }),
+      ids.userA1,
+    );
+    expect(updated).toHaveLength(0);
+    const stored = await testDb
+      .select({ redirectUri: sharepointOAuthState.redirectUri })
+      .from(sharepointOAuthState)
+      .where(eq(sharepointOAuthState.state, stateOrgAUserA1));
+    expect(stored[0]?.redirectUri).toBe(
+      "https://api.example.test/v1/sharepoint/oauth/callback",
+    );
+  });
+
   test("a same-org non-owner cannot delete the owner's pending state", async () => {
     const deleted = await scopedQuery(
       noWorkspaces,

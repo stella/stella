@@ -58,6 +58,8 @@ export const AGGREGATE_LOCKS = {
   accountExport: { rank: -10, kind: "row" },
   organization: { rank: 0, kind: "row" },
   professionalUseAcceptance: { rank: 5, kind: "advisory" },
+  sharepointPolicy: { rank: 6, kind: "row" },
+  sharepointConnection: { rank: 7, kind: "row" },
   orgFeatureAdmission: { rank: 10, kind: "advisory" },
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
@@ -168,6 +170,7 @@ export const AGGREGATE_CHAINS = {
   ],
   accountExport: ["account", "accountExport"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
+  sharepointConsent: ["sharepointPolicy", "sharepointConnection"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
@@ -241,6 +244,11 @@ type AggregateIdentities = {
   accountExport: { id: string; userId: SafeId<"user"> };
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organization: SafeId<"organization">;
+  sharepointPolicy: SafeId<"organization">;
+  sharepointConnection: {
+    id: SafeId<"sharepointConnection">;
+    organizationId: SafeId<"organization">;
+  };
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -787,6 +795,13 @@ type RowResource = {
   scopeColumns: readonly string[];
   scopeValues: readonly (string | number)[];
 };
+const byId = (table: string, id: string): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: [],
+  scopeValues: [],
+});
 // Most row aggregates are one row found by id inside a single owning scope.
 const byIdWithin = (
   table: string,
@@ -818,17 +833,44 @@ const memberCleanupRowResource = (
       return panic("Unknown member cleanup resource");
   }
 };
-const rowResource = (options: RowIdentityOptions): RowResource => {
+const sharepointRowResource = (
+  options: Extract<
+    RowIdentityOptions,
+    { aggregate: "sharepointPolicy" | "sharepointConnection" }
+  >,
+): RowResource => {
   switch (options.aggregate) {
-    case "account":
-    case "organization":
+    case "sharepointPolicy":
       return {
-        table: options.aggregate === "account" ? "user" : "organization",
-        columns: ["id"],
+        table: "organization_settings",
+        columns: ["organization_id"],
         values: [options.id],
         scopeColumns: [],
         scopeValues: [],
       };
+    case "sharepointConnection":
+      return byIdWithin(
+        "sharepoint_connections",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
+    default:
+      options satisfies never;
+      return panic("Unknown SharePoint row resource");
+  }
+};
+const rowResource = (options: RowIdentityOptions): RowResource => {
+  switch (options.aggregate) {
+    case "account":
+    case "organization":
+      return byId(
+        options.aggregate === "account" ? "user" : "organization",
+        options.id,
+      );
+    case "sharepointPolicy":
+    case "sharepointConnection":
+      return sharepointRowResource(options);
     case "accountExport":
       return byIdWithin(
         "account_exports",

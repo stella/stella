@@ -224,6 +224,8 @@ export const isSuggestChangesApplyOutput = (
   typeof output.success === "boolean";
 
 const CHAT_TOOL_TITLE_KEYS = {
+  calendar_list_events: "chat.tool.calendar_list_events",
+  calendar_free_busy: "chat.tool.calendar_free_busy",
   show_visual: "chat.generatedView",
   add_comment: "chat.tool.add_comment",
   "ask-user": "chat.tool.ask-user",
@@ -426,6 +428,8 @@ export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
  * renders the write summary before it typechecks.
  */
 const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  calendar_list_events: false,
+  calendar_free_busy: false,
   add_comment: false,
   boe_search_legislation: false,
   "create-current-skill-resource": false,

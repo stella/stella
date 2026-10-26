@@ -26,6 +26,7 @@ import {
   IntegrationsGroup,
   useIntegrations,
 } from "@/routes/_protected.settings/-components/account/connections/integrations-group";
+import { SharepointGroup } from "@/routes/_protected.settings/-components/account/connections/sharepoint-group";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
 export const Route = createFileRoute(
@@ -85,6 +86,7 @@ function ConnectionsPage() {
       </div>
       {!isSearching && <AssistantSetup />}
       {showIntegrations && <IntegrationsGroup integrations={integrations} />}
+      {!isSearching && <SharepointGroup />}
       {showApps && <AppsGroup apps={apps} />}
       {!isSearching && <ClientSetupGroups apiOrigin={externalApiOrigin()} />}
       {!showIntegrations && !showApps && (

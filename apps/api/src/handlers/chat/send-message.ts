@@ -170,6 +170,10 @@ import {
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { hasSuggestChangesApprovalResponse } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
+import {
+  createCalendarTools,
+  loadCalendarTools,
+} from "@/api/handlers/chat/tools/calendar-tools";
 import { resolveChatDocumentClients } from "@/api/handlers/chat/tools/chat-document-clients";
 import {
   applyChatToolGrants,
@@ -1824,6 +1828,16 @@ const prepareValidatedIncomingMessage = async ({
     // still honor thread/org gates for tools whose presence is an
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
+      // Validation never executes tools. Keep the schema available for
+      // persisted calls even after this user's calendar grant is revoked.
+      calendarTools: createCalendarTools({
+        safeDb,
+        recordAuditEvent,
+        organizationId,
+        userId,
+        createAbortSignal: () =>
+          panic("Validation-only calendar tools must not execute"),
+      }),
       featureAccessSnapshot,
       organizationId,
       memberRole,
@@ -2888,7 +2902,17 @@ export const createSendMessage = (
             workspaceId,
           }),
         };
+        const calendarTools = yield* Result.await(
+          loadCalendarTools({
+            safeDb,
+            recordAuditEvent,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            createAbortSignal: createMeteredAIAbortSignal,
+          }),
+        );
         const chatToolContext = {
+          calendarTools,
           visualTools,
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,

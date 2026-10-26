@@ -11,6 +11,7 @@
     "./conversion-refusal": "./src/conversion-refusal.ts",
     "./mcp": "./src/mcp.ts",
     "./mcp-web-handoff": "./src/mcp-web-handoff.ts",
+    "./microsoft365": "./src/microsoft365.ts",
     "./redirect-path": "./src/redirect-path.ts",
     "./search-history-identity": "./src/search-history-identity.ts",
     "./search-history-title": "./src/search-history-title.ts",

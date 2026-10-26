@@ -12,51 +12,26 @@ import { Result } from "better-result";
  * Every requested scope is READ-ONLY and delegated (the user's own grant):
  * Microsoft enforces the ACLs on every downstream read, so the system never
  * mirrors a permission model. The read-only property is enforced at compile
- * time (see `readOnlyScope`), not by discipline.
+ * time in the capability scope catalogue, not by discipline.
  */
 import * as v from "valibot";
 
-import { fetchWithTimeout } from "@stll/fetch";
 import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
+import {
+  delegatedReadScopes,
+  LEGACY_FILE_CAPABILITIES,
+} from "@/api/handlers/sharepoint/capabilities";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import type { RefreshToken } from "@/api/lib/secret-brands";
 
 const GRAPH_OAUTH_TIMEOUT_MS = 10_000;
-
-// A scope is read-only unless its (case-insensitive) name contains "write".
-// Passing a write scope to `readOnlyScope` makes the argument type `never`,
-// so a `*.ReadWrite.*` scope cannot be added to the set below — the bug class
-// is structurally impossible rather than caught by a lint or a test.
-type ReadOnlyGraphScope<S extends string> =
-  Lowercase<S> extends `${string}write${string}` ? never : S;
-
-const readOnlyScope = <const S extends string>(
-  scope: ReadOnlyGraphScope<S>,
-): S => scope;
-
-/**
- * The delegated scopes requested from Microsoft, all read-only.
- *
- * Admin-consent status of the delegated variants (Microsoft Graph
- * permissions reference, verified 2026-07-28):
- *   - offline_access                          — no admin consent (issues the refresh token)
- *   - https://graph.microsoft.com/User.Read   — no admin consent
- *   - https://graph.microsoft.com/Files.Read.All — admin consent required
- *   - https://graph.microsoft.com/Sites.Read.All — admin consent required (high-impact since 2025)
- *
- * Files.Read.All and Sites.Read.All therefore need a tenant admin to grant
- * consent for the app registration; requesting them here does not change that
- * (it surfaces the consent prompt). No write scope is ever requested.
- */
-const SHAREPOINT_DELEGATED_SCOPES = [
-  readOnlyScope("offline_access"),
-  readOnlyScope("https://graph.microsoft.com/User.Read"),
-  readOnlyScope("https://graph.microsoft.com/Files.Read.All"),
-  readOnlyScope("https://graph.microsoft.com/Sites.Read.All"),
-] as const;
+const GRAPH_TOKEN_RESPONSE_MAX_BYTES = 64 * 1024;
+const FILE_DELEGATED_SCOPES = delegatedReadScopes(LEGACY_FILE_CAPABILITIES);
 
 type SharepointOAuthConfig = {
   clientId: string;
@@ -65,8 +40,8 @@ type SharepointOAuthConfig = {
 };
 
 /**
- * Resolve the Microsoft app registration. Returns a 503 when the deployment
- * has not configured it, so the feature fails closed rather than throwing.
+ * Resolve the Microsoft app registration. Missing configuration fails closed
+ * through a typed handler error rather than throwing at module import.
  */
 export const getSharepointOAuthConfig = (): Result<
   SharepointOAuthConfig,
@@ -123,12 +98,14 @@ export const buildAuthorizeUrl = ({
   clientId,
   codeChallenge,
   redirectUri,
+  scope = FILE_DELEGATED_SCOPES,
   state,
   tenantId,
 }: {
   clientId: string;
   codeChallenge: string;
   redirectUri: string;
+  scope?: string;
   state: string;
   tenantId: string;
 }): string => {
@@ -137,7 +114,7 @@ export const buildAuthorizeUrl = ({
   url.searchParams.set("response_type", "code");
   url.searchParams.set("response_mode", "query");
   url.searchParams.set("redirect_uri", redirectUri);
-  url.searchParams.set("scope", SHAREPOINT_DELEGATED_SCOPES.join(" "));
+  url.searchParams.set("scope", scope);
   url.searchParams.set("state", state);
   url.searchParams.set("code_challenge", codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
@@ -159,31 +136,58 @@ export type GraphTokenResponse = v.InferOutput<typeof graphTokenResponseSchema>;
 
 const requestToken = async ({
   body,
+  fetchBytes = safeOutboundFetchBytes,
+  permit,
+  signal,
   tenantId,
 }: {
   body: URLSearchParams;
+  fetchBytes?: typeof safeOutboundFetchBytes;
+  permit: ThirdPartyOutboundPermit;
+  signal?: AbortSignal | undefined;
   tenantId: string;
 }): Promise<Result<GraphTokenResponse, HandlerError<502>>> =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetchWithTimeout(tokenEndpoint(tenantId), {
+      const response = await fetchBytes({
+        url: tokenEndpoint(tenantId),
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
           Accept: "application/json",
         },
         body,
+        maxBytes: GRAPH_TOKEN_RESPONSE_MAX_BYTES,
+        permit,
+        signal,
         timeoutMs: GRAPH_OAUTH_TIMEOUT_MS,
+        redirect: "error",
       });
-
-      if (!response.ok) {
+      if (Result.isError(response)) {
+        throw response.error;
+      }
+      if (!response.value.ok) {
         throw new HandlerError({
           status: 502,
-          message: `Microsoft token endpoint returned HTTP ${response.status}`,
+          code: "upstream_unavailable",
+          message: `Microsoft token endpoint returned HTTP ${response.value.status}`,
         });
       }
 
-      return v.parse(graphTokenResponseSchema, await response.json());
+      const json = Result.try((): unknown =>
+        JSON.parse(new TextDecoder().decode(response.value.body)),
+      );
+      const parsed = Result.isError(json)
+        ? null
+        : v.safeParse(graphTokenResponseSchema, json.value);
+      if (!parsed?.success) {
+        throw new HandlerError({
+          status: 502,
+          code: "upstream_unavailable",
+          message: "Invalid Microsoft token response",
+        });
+      }
+      return parsed.output;
     },
     // Always surface a 502 so the Result error channel unifies to
     // HandlerError<502>; preserve the message when the failure is our own
@@ -191,6 +195,7 @@ const requestToken = async ({
     catch: (cause): HandlerError<502> =>
       new HandlerError({
         status: 502,
+        code: "upstream_unavailable",
         message: HandlerError.is(cause)
           ? cause.message
           : "Failed to reach the Microsoft token endpoint",
@@ -203,18 +208,29 @@ export const exchangeAuthorizationCode = async ({
   clientSecret,
   code,
   codeVerifier,
+  fetchBytes,
+  permit,
   redirectUri,
+  scope = FILE_DELEGATED_SCOPES,
+  signal,
   tenantId,
 }: {
   clientId: string;
   clientSecret: string;
   code: string;
   codeVerifier: string;
+  fetchBytes?: typeof safeOutboundFetchBytes;
+  permit: ThirdPartyOutboundPermit;
   redirectUri: string;
+  scope?: string;
+  signal?: AbortSignal | undefined;
   tenantId: string;
 }): Promise<Result<GraphTokenResponse, HandlerError<502>>> =>
   await requestToken({
     tenantId,
+    permit,
+    ...(fetchBytes ? { fetchBytes } : {}),
+    signal,
     body: new URLSearchParams({
       grant_type: "authorization_code",
       client_id: clientId,
@@ -222,29 +238,40 @@ export const exchangeAuthorizationCode = async ({
       code,
       code_verifier: codeVerifier,
       redirect_uri: redirectUri,
-      scope: SHAREPOINT_DELEGATED_SCOPES.join(" "),
+      scope,
     }),
   });
 
 export const refreshAccessToken = async ({
   clientId,
   clientSecret,
+  fetchBytes,
+  permit,
   refreshToken,
+  scope,
+  signal,
   tenantId,
 }: {
   clientId: string;
   clientSecret: string;
+  fetchBytes?: typeof safeOutboundFetchBytes;
+  permit: ThirdPartyOutboundPermit;
   refreshToken: RefreshToken;
+  scope: string;
+  signal?: AbortSignal | undefined;
   tenantId: string;
 }): Promise<Result<GraphTokenResponse, HandlerError<502>>> =>
   await requestToken({
     tenantId,
+    permit,
+    ...(fetchBytes ? { fetchBytes } : {}),
+    signal,
     body: new URLSearchParams({
       grant_type: "refresh_token",
       client_id: clientId,
       client_secret: clientSecret,
       refresh_token: refreshToken,
-      scope: SHAREPOINT_DELEGATED_SCOPES.join(" "),
+      scope,
     }),
   });
 

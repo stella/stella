@@ -1,10 +1,17 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
+
 import { sharepointConnections } from "@/api/db/schema";
-import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
+import {
+  capabilityEnabled,
+  grantedCapabilities,
+} from "@/api/handlers/sharepoint/capabilities";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   contract: "patch",
@@ -19,11 +26,22 @@ const config = {
 const sharepointConnectionStatus = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user }) {
-    yield* Result.await(
-      assertSharepointConnectionEnabled({
-        organizationId: session.activeOrganizationId,
-        safeDb,
-      }),
+    if (!isDeploymentFeatureEnabled("FEATURE_SHAREPOINT")) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Not found" }),
+      );
+    }
+
+    const policy = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.organizationSettings.findFirst({
+          where: { organizationId: { eq: session.activeOrganizationId } },
+          columns: {
+            sharepointConnectionEnabled: true,
+            microsoft365CalendarReadEnabled: true,
+          },
+        }),
+      ),
     );
 
     const rows = yield* Result.await(
@@ -52,7 +70,29 @@ const sharepointConnectionStatus = createSafeRootHandler(
       ),
     );
 
-    return Result.ok({ connection: rows.at(0) ?? null });
+    const connection = rows.at(0);
+    const currentPolicy = policy ?? {
+      sharepointConnectionEnabled: false,
+      microsoft365CalendarReadEnabled: false,
+    };
+    return Result.ok({
+      policy: currentPolicy,
+      enabledCapabilities: MICROSOFT365_CAPABILITIES.filter((capability) =>
+        capabilityEnabled(currentPolicy, capability),
+      ),
+      connection: connection
+        ? {
+            ...connection,
+            // A legacy row without stored provider scopes cannot prove any
+            // capability, even if its pre-migration status was connected.
+            status:
+              connection.scope === null
+                ? ("reconnect_required" as const)
+                : connection.status,
+            capabilities: grantedCapabilities(connection.scope),
+          }
+        : null,
+    });
   },
 );
 

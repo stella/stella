@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
@@ -6,10 +7,10 @@ import { sharepointRealtimeUpdates } from "@/api/handlers/realtime-resource-sets
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { disableAndPurgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
+import { lockSharepointPolicy } from "@/api/lib/sharepoint-policy-lock";
 
 const requestBody = v.object({ enabled: v.boolean() });
 
@@ -63,22 +64,15 @@ const setSharepointEnablement = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: organizationId } },
-          columns: { sharepointConnectionEnabled: true },
+        const existing = await lockSharepointPolicy({
+          tx,
+          organizationId,
+          recordAuditEvent,
         });
-
         await tx
-          .insert(organizationSettings)
-          .values({
-            id: createSafeId<"organizationSettings">(),
-            organizationId,
-            sharepointConnectionEnabled: true,
-          })
-          .onConflictDoUpdate({
-            target: organizationSettings.organizationId,
-            set: { sharepointConnectionEnabled: true, updatedAt: new Date() },
-          });
+          .update(organizationSettings)
+          .set({ sharepointConnectionEnabled: true, updatedAt: new Date() })
+          .where(eq(organizationSettings.organizationId, organizationId));
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
@@ -87,7 +81,7 @@ const setSharepointEnablement = createSafeRootHandler(
           workspaceId: null,
           changes: {
             sharepointConnectionEnabled: {
-              old: existing?.sharepointConnectionEnabled ?? false,
+              old: existing.sharepointConnectionEnabled,
               new: true,
             },
           },

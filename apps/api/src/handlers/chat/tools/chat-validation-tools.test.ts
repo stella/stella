@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
@@ -11,6 +12,10 @@ import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
+import {
+  createCalendarTools,
+  loadCalendarTools,
+} from "@/api/handlers/chat/tools/calendar-tools";
 import {
   getChatTools,
   getChatValidationTools,
@@ -41,7 +46,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { ChatToolError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -548,4 +553,110 @@ test("pending feature-bound write approvals use current caller access for valida
       expect(result.error.cause.message).toBe(`Unknown chat tool: ${toolName}`);
     }
   }
+});
+
+test("revoked calendar reads leave persisted calls valid without advertising or executing them", async () => {
+  const run =
+    buildRunScenarios().at(0) ?? expect.unreachable("No chat scenario");
+  let calendarEnabled = true;
+  const safeDb: SafeDb = async (read) =>
+    Result.ok(
+      await read(
+        asTestRaw({
+          query: {
+            organizationSettings: {
+              findFirst: async () => ({
+                sharepointConnectionEnabled: false,
+                microsoft365CalendarReadEnabled: calendarEnabled,
+              }),
+            },
+            sharepointConnections: {
+              findFirst: async () => ({
+                organizationId,
+                userId,
+                status: "connected",
+                scope: "Calendars.Read",
+              }),
+            },
+          },
+        }),
+      ),
+    );
+  const context = {
+    safeDb,
+    organizationId,
+    userId,
+    recordAuditEvent: noopAuditRecorder,
+    createAbortSignal: () => new AbortController().signal,
+  };
+  const offered = (await loadCalendarTools(context, () => true)).unwrap();
+  expect(
+    registeredToolNames(getChatTools({ ...run, calendarTools: offered })),
+  ).toContain("calendar_list_events");
+
+  calendarEnabled = false;
+  const revoked = (await loadCalendarTools(context, () => true)).unwrap();
+  expect(revoked).toBeUndefined();
+  expect(
+    registeredToolNames(getChatTools({ ...run, calendarTools: revoked })),
+  ).not.toContain("calendar_list_events");
+  const validationTools = validationToolsFor({
+    ...run,
+    calendarTools: createCalendarTools(context),
+  });
+  expect(registeredToolNames(validationTools)).toContain(
+    "calendar_list_events",
+  );
+
+  const input = {
+    start: "2026-10-01T00:00:00Z",
+    end: "2026-10-02T00:00:00Z",
+  };
+  const original = {
+    type: "tool-call",
+    id: "calendar-approval-call",
+    name: "calendar_list_events",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    input,
+    arguments: JSON.stringify(input),
+    state: "approval-requested",
+    approval: { id: "calendar-approval", needsApproval: true },
+  } satisfies ChatPart;
+  const resumed = {
+    ...original,
+    state: "approval-responded",
+    approval: { ...original.approval, approved: true },
+  } satisfies ChatPart;
+  const validated = await validateMessage({
+    message: {
+      id: toSafeId<"chatMessage">("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
+      role: "assistant",
+      parts: [resumed],
+    },
+    persistedMessage: {
+      role: "assistant",
+      content: toPersistedChatMessageContentV3({ data: [original] }),
+    },
+    resume: [
+      {
+        interruptId: original.approval.id,
+        payload: { approved: true },
+        status: "resolved",
+      },
+    ],
+    safeDb: unusedSafeDb,
+    threadId,
+    tools: validationTools,
+    userId,
+  });
+  expect(Result.isOk(validated)).toBe(true);
+  expect(
+    await rejectionOf(
+      Promise.resolve(
+        validationTools["calendar_list_events"]?.execute?.(input, {
+          toolCallId: "revoked",
+        }),
+      ),
+    ),
+  ).toBeInstanceOf(ChatToolError);
 });

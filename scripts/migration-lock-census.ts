@@ -700,6 +700,36 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261026140000_sharepoint_calendar_capability",
+    form: "add-column",
+    reason:
+      "The constant-false calendar policy uses PostgreSQL's fast-default catalog path and requested_scope is nullable without a default; neither addition scans or rewrites existing rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026140000_sharepoint_calendar_capability",
+    form: "create-trigger",
+    reason:
+      "The legacy disable fence installs trigger metadata without scanning organization settings; lock acquisition is bounded by 1s lock_timeout and execution by 5s statement_timeout.",
+  },
+  {
+    migration: "20261026140000_sharepoint_calendar_capability",
+    form: "row-level-security",
+    reason:
+      "FORCE RLS changes catalog flags on the existing delegated connection and OAuth state tables; owner-only policies are installed in the same transaction, with 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026140000_sharepoint_calendar_capability",
+    form: "drop-policy",
+    reason:
+      "The OAuth-state UPDATE policy is replaced in the same short transaction with an explicit restrictive denial; connection SELECT/INSERT/DELETE policies remain, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026140000_sharepoint_calendar_capability",
+    form: "create-policy",
+    reason:
+      "The restrictive OAuth-state UPDATE denial and two exact table-owner policies install only catalog metadata, with no row scan, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261025130000_reader_answer_continuation_spans",
     form: "add-column",
     reason:

@@ -1,7 +1,11 @@
 import { queryOptions } from "@tanstack/react-query";
+import * as v from "valibot";
+
+import { MICROSOFT365_CAPABILITIES } from "@stll/api-contract/microsoft365";
 
 import { api } from "@/lib/api";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const connectedAppsKeys = {
@@ -36,4 +40,61 @@ export const connectedAppsOptions = (userId: string) =>
     queryKey: connectedAppsKeys.list(userId),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: fetchConnectedApps,
+  });
+
+// Older API tasks return exactly { connection }. That shape cannot prove
+// calendar policy or stored grants, so it is never interpreted as enabled.
+// Remove this branch after those API tasks have drained.
+const isLegacySharepointConnectionResponse = (value: unknown): boolean =>
+  typeof value === "object" &&
+  value !== null &&
+  Object.keys(value).length === 1 &&
+  Object.hasOwn(value, "connection");
+
+const capabilityListSchema = v.array(v.picklist(MICROSOFT365_CAPABILITIES));
+const currentSharepointFields = v.object({
+  policy: v.object({
+    sharepointConnectionEnabled: v.boolean(),
+    microsoft365CalendarReadEnabled: v.boolean(),
+  }),
+  enabledCapabilities: capabilityListSchema,
+  connection: v.nullable(v.object({ capabilities: capabilityListSchema })),
+});
+
+export const classifySharepointConnectionResponse = <T>(data: T) => {
+  if (isLegacySharepointConnectionResponse(data)) {
+    return { type: "upgrade_required" } as const;
+  }
+  if (!v.safeParse(currentSharepointFields, data).success) {
+    throw new ClientOperationError({
+      action: "read-sharepoint-connection",
+      message: "Invalid SharePoint connection response",
+    });
+  }
+  return { type: "ready", value: data } as const;
+};
+
+export const sharepointConnectionOptions = ({
+  organizationId,
+  userId,
+}: {
+  organizationId: string;
+  userId: string;
+}) =>
+  queryOptions({
+    queryKey: [
+      "settings",
+      "connections",
+      "sharepoint",
+      organizationId,
+      userId,
+    ] as const,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
+    queryFn: async ({ signal }) => {
+      const data = unwrapApiResponse(
+        await api.sharepoint.connection.get({ fetch: { signal } }),
+      );
+      return classifySharepointConnectionResponse(data);
+    },
   });

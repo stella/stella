@@ -32,6 +32,7 @@ export const FAILURE_TAGS = [
   "BilingualFormattingError",
   "BufferIntentOwnershipError",
   "BufferIntentWorkspaceUnavailableError",
+  "CalendarGraphError",
   "CanaryRateLimitError",
   "CanaryTargetError",
   "CapabilityRequestMismatchError",

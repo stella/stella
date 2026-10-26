@@ -62,7 +62,10 @@ import {
   organizationSettingsOptions,
 } from "@/queries/organization-settings";
 import { auditLogOptions } from "@/routes/_protected.admin/-queries/audit-logs";
-import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
+import {
+  connectedAppsOptions,
+  sharepointConnectionOptions,
+} from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 import { memoryMattersOptions } from "@/routes/_protected.settings/-queries/memory-matters";
 
@@ -583,8 +586,13 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     reason: OAUTH_REDIRECT,
   },
   "sharepoint/status.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ["api.sharepoint.connection.get"],
+    files: ["routes/_protected.settings/-queries/connections.ts"],
+    keys: () => [
+      sharepointConnectionOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+    ],
   },
   "signals/count.ts": {
     kind: "keyed",

@@ -31,6 +31,8 @@ type ManualGrantToolName = Exclude<
 
 /** Grant policy for approval-gated built-in tools that do not project from MCP. */
 const MANUAL_CHAT_TOOL_GRANT_POLICY = {
+  calendar_list_events: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
+  calendar_free_busy: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   add_comment: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   boe_search_legislation: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "create-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,

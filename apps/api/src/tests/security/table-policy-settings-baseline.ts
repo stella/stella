@@ -171,8 +171,6 @@ export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [
   "search_documents",
   "search_projection_repair_queue",
   "session",
-  "sharepoint_connections",
-  "sharepoint_oauth_state",
   "signal_events",
   "signals",
   "style_sets",
