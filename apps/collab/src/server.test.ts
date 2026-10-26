@@ -1155,9 +1155,9 @@ describe("collaboration server", () => {
       fakeApi.setLoadResponse({
         generation: 0,
         loadOutcome: "loaded",
-        snapshotBase64: Buffer.from(encodeStateAsUpdate(replacement)).toString(
-          "base64",
-        ),
+        snapshotBase64: Buffer.from(
+          encodeStateAsUpdate(replacement),
+        ).toBase64(),
         snapshotRevision: 1,
       });
       fakeApi.releaseFirstStore();
@@ -1833,6 +1833,7 @@ describe("collaboration server", () => {
       );
 
       ydoc.getText("body").insert(0, "read-only local edit");
+      // real-time: absence of persistence must outlast the configured debounce window.
       await Bun.sleep(150);
 
       expect(fakeApi.storeRequests()).toBe(0);
@@ -2022,6 +2023,7 @@ describe.skipIf(redisTestUrl === undefined)(
           () => fakeApi.storeRequests() > storesBeforeUpdate,
           "Redis-backed room was not persisted.",
         );
+        // real-time: observe that the other replica does not duplicate the debounced store.
         await Bun.sleep(150);
         expect(fakeApi.storeRequests() - storesBeforeUpdate).toBe(1);
 

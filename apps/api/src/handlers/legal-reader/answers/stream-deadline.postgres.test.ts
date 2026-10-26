@@ -65,7 +65,7 @@ const seedFixture = async (db: GatedTestDb) => {
   const answerId = createSafeId<"legalReaderAnswer">();
   const decisionId = createSafeId<"caseLawDecision">();
   const messageId = createSafeId<"legalReaderAnswerMessage">();
-  const anchor = {
+  const span = {
     paragraphId: "p-1",
     quote: "The holding",
     startOffset: 0,
@@ -100,7 +100,7 @@ const seedFixture = async (db: GatedTestDb) => {
             decisionId,
             kind: "explain",
             visibility: "private",
-            ...anchor,
+            ...span,
           })
           .returning()
       ).at(0) ?? panic("Reader deadline answer fixture is missing");
@@ -145,10 +145,10 @@ const seedFixture = async (db: GatedTestDb) => {
         court: "Test court",
         decisionDate: "2026-01-01",
         paragraphs: [
-          { paragraphId: anchor.paragraphId, text: "The holding follows." },
+          { paragraphId: span.paragraphId, text: "The holding follows." },
         ],
       },
-      anchor,
+      anchor: [span],
       locale: "cs-CZ",
       modelId: undefined,
     } satisfies PreparedReaderAnswer;

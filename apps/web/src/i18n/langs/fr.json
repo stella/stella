@@ -3830,6 +3830,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Un client",
+      "availabilityClientBadgeHelp": "Disponible uniquement dans les dossiers d’un client.",
+      "availabilityClientHelp": "Utilisable uniquement dans les dossiers de ce client. Ce choix ne pourra plus être modifié.",
+      "availabilityFixedHelp": "Défini à la création de la compétence. Ce choix ne peut pas être modifié.",
+      "availabilityLabel": "Disponible dans",
+      "availabilityMatter": "Un dossier",
+      "availabilityMatterBadgeHelp": "Disponible uniquement dans un dossier.",
+      "availabilityMatterHelp": "Utilisable uniquement dans ce dossier. Ce choix ne pourra plus être modifié.",
+      "availabilityOrganization": "Toute l’organisation",
+      "availabilityTeamNeedsMatter": "Pour partager une compétence avec l’équipe, choisissez le dossier auquel elle est destinée. Ce choix ne pourra plus être modifié.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
@@ -4760,7 +4770,6 @@
     "modelError": "Le modèle n’a pas pu terminer cette réponse.",
     "networkError": "La connexion a été interrompue. Réessayez.",
     "regenerate": "Régénérer la réponse",
-    "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
     "send": "Envoyer la question complémentaire",
     "share": "Partager avec l’équipe",
     "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",

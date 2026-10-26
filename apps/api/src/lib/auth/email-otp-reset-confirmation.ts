@@ -6,6 +6,7 @@ import { timingSafeEqual } from "node:crypto";
 import { AUTH_ACCESS_RESET_ERROR_CODE } from "@stll/auth-model";
 import { sha256Bytes } from "@stll/sha256/node";
 
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const EMAIL_OTP_ALLOWED_ATTEMPTS = 3;
@@ -32,17 +33,16 @@ export const requireEmailOtpResetConfirmation = async ({
   if (body["confirmReset"] === true) {
     return Result.ok(undefined);
   }
-  const email = body["email"];
+  const rawEmail = body["email"];
   const otp = body["otp"];
-  if (typeof email !== "string" || typeof otp !== "string") {
+  if (typeof rawEmail !== "string" || typeof otp !== "string") {
     return Result.ok(undefined);
   }
+  const email = normalizeEmail(rawEmail);
 
   const verifications = await adapter.findMany<Verification>({
     model: "verification",
-    where: [
-      { field: "identifier", value: `sign-in-otp-${email.toLowerCase()}` },
-    ],
+    where: [{ field: "identifier", value: `sign-in-otp-${email}` }],
     sortBy: { field: "createdAt", direction: "desc" },
     limit: 1,
   });
@@ -64,7 +64,7 @@ export const requireEmailOtpResetConfirmation = async ({
     return Result.ok(undefined);
   }
 
-  const account = await internalAdapter.findUserByEmail(email.toLowerCase(), {
+  const account = await internalAdapter.findUserByEmail(email, {
     includeAccounts: true,
   });
   if (!account || account.user.emailVerified || account.accounts.length === 0) {

@@ -281,6 +281,7 @@ const forkContext = ({
     query: workspaceId ? { workspaceId } : {},
     recordAuditEvent: async () => await Promise.resolve(),
     request: new Request("http://localhost/v1/chat/threads/fork"),
+    route: "/v1/chat/threads/:threadId/fork",
     safeDb: db,
     session: { activeOrganizationId: organizationId ?? ids.orgA },
     user: { id: userId ?? ids.userA1 },
@@ -288,6 +289,8 @@ const forkContext = ({
 
 const threadsContext = (): ThreadsCtx =>
   asTestRaw<ThreadsCtx>({
+    request: new Request("http://localhost/v1/chat/threads"),
+    route: "/v1/chat/threads",
     memberRole: sessionMemberRole("owner"),
     query: { limit: 100 },
     safeDb,
@@ -336,7 +339,7 @@ const messageTexts = (
   );
 
 /**
- * A safe handler returns its payload directly and an Elysia status response on
+ * A safe handler returns its payload directly and an HTTP core status response on
  * failure, so a `code` property is how a rejection presents itself here.
  */
 const expectForked = async (pending: ReturnType<typeof forkThread.handler>) => {
@@ -770,6 +773,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
         promptCachingEnabled: false,
         query: {},
         request: new Request("http://localhost/v1/chat/threads/messages"),
+        route: "/v1/chat/threads/:threadId/messages",
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -837,6 +841,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages",
       safeDb: narrowed,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -862,6 +867,7 @@ test("a thread that was never forked reports no provenance", async () => {
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages",
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

@@ -69,8 +69,10 @@ import {
   createPublicLawHead,
 } from "@/lib/public-law-seo";
 import { ensureRouteQueryData } from "@/lib/react-query";
+import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { routeSearchSchema } from "@/route-search-params";
 import {
   lawHomeDescriptor,
   type LawScope,
@@ -93,7 +95,7 @@ const ACTS_PER_SHELF_SIDE = 3;
 /** Rows per column while the route's own data is still in flight. */
 const PENDING_ROW_KEYS = ["a", "b", "c"] as const;
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   country: v.optional(
     v.pipe(
       v.string(),
@@ -103,7 +105,7 @@ const searchSchema = v.object({
     ),
   ),
   /** Set by a decision link that resolved to nothing; shown once, then cleared. */
-  notFound: v.optional(v.boolean()),
+  notFound: optionalFlagSearchSchema,
 });
 
 type LawHomeSearch = v.InferOutput<typeof searchSchema>;
@@ -309,7 +311,7 @@ function LawHome() {
     enabled: statuteCountry !== null,
   });
   const shelfView = useQueryView(shelfQuery);
-  useQueryViewError(shelfView);
+  useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
   /**

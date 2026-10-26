@@ -1,15 +1,15 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
 
 import { professionalUseOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { redirectToSchema } from "@/lib/redirect";
+import { routeSearchSchema } from "@/route-search-params";
 import { ProfessionalUsePanel } from "@/routes/auth/-components/professional-use-panel";
 
-const searchSchema = v.strictObject({
+const searchSchema = routeSearchSchema({
   redirectTo: redirectToSchema,
 });
 

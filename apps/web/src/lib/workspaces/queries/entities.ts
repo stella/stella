@@ -7,7 +7,7 @@ import { isListItemType } from "@stll/api-contract/entity-options";
 
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { shouldRetryAPIRequest, unwrapEden } from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed, visitCursorPages } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -189,7 +189,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
           { fetch: { signal } },
         );
 
-      const { items: rawEntities, ...rest } = unwrapEden(response);
+      const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -225,7 +225,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
           { fetch: { signal } },
         );
 
-      const { items: rawEntities, ...rest } = unwrapEden(response);
+      const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -268,7 +268,7 @@ export const filesystemEntitiesOptions = (
               { fetch: { signal } },
             );
 
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
         visit: (data) => {
           entities.push(...data.items.map(toWorkspaceEntity));
@@ -331,7 +331,7 @@ const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
           { fetch: { signal } },
         );
 
-      const { items: rawEntities, ...rest } = unwrapEden(response);
+      const { items: rawEntities, ...rest } = unwrapApiResponse(response);
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -371,7 +371,7 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
           { fetch: { signal } },
         );
 
-      return unwrapEden(response).counts;
+      return unwrapApiResponse(response).counts;
     },
   });
 
@@ -401,7 +401,7 @@ export const entityOptions = (workspaceId: string, entityId: string) =>
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -422,7 +422,7 @@ export const entitySummariesOptions = (workspaceId: string) =>
               },
             });
 
-          return unwrapEden(response);
+          return unwrapApiResponse(response);
         },
         visit: (data) => {
           summaries.push(...data.items.map(({ id, name }) => ({ id, name })));
@@ -441,7 +441,7 @@ export const entitySummariesCountOptions = (workspaceId: string) =>
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .summaries.count.get({ fetch: { signal }, query: {} });
 
-      return unwrapEden(response).totalCount;
+      return unwrapApiResponse(response).totalCount;
     },
   });
 
@@ -471,7 +471,7 @@ const fetchAllWorkspaceFolders = async ({
           },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     visit: (data) => {
       folders.push(
@@ -526,7 +526,7 @@ const fetchAllWorkspaceFiles = async ({
           },
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     visit: (data) => {
       files.push(

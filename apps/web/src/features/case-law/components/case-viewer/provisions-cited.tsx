@@ -10,6 +10,7 @@ import {
   versionCoversDate,
 } from "@stll/api-contract/statute-version";
 import { euProvisionSourceUrl } from "@stll/legal-atlas/eu-provision-citations";
+import { provisionAnchorSeparatorFor } from "@stll/legal-atlas/provision-citation-grammars";
 import {
   Accordion,
   AccordionItem,
@@ -33,7 +34,7 @@ import {
   type WorkGroup,
 } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { RenderProvisionPart } from "@/features/case-law/provision-label";
-import { formatProvisionReference } from "@/features/case-law/provision-label";
+import { formatProvisionLabel } from "@/features/case-law/provision-label";
 import {
   citedWorkAtDateKey,
   decisionProvisionsInfiniteOptions,
@@ -123,7 +124,7 @@ export const ProvisionsCited = ({
     enabled: open && citedWorkByGroup.size > 0,
   });
   const resolvedView = useQueryView(resolvedQuery);
-  useQueryViewError(resolvedView);
+  useQueryViewError(resolvedView, "ProvisionsCited:query");
   const resolved =
     resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
@@ -283,7 +284,7 @@ const WorkReferences = ({
       }),
   });
   const versionsView = useQueryView(versionsQuery);
-  useQueryViewError(versionsView);
+  useQueryViewError(versionsView, "WorkReferences:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
 
@@ -381,7 +382,14 @@ const WorkReferences = ({
                       }
                 }
                 key={provision.key}
-                label={formatProvisionReference(provision, renderPart)}
+                label={formatProvisionLabel(
+                  group.jurisdiction,
+                  provision,
+                  renderPart,
+                )}
+                anchorSeparator={provisionAnchorSeparatorFor(
+                  group.jurisdiction,
+                )}
                 provision={provision}
                 versionMarker={
                   exceptions.has(provision.key) ? "exception" : "group"

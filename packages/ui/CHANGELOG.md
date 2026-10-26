@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.52.0
+
+### Minor Changes
+
+- [#6309](https://github.com/stella/stella/pull/6309) [`4fe45ad`](https://github.com/stella/stella/commit/4fe45ad8fc654bb759207c22008d38bc15344091) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `Steps` renders an ordered sequence as a semantic list, numbered by the list itself.
+
 ## 0.51.0
 
 ### Minor Changes

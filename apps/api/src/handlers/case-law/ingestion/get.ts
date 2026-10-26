@@ -25,6 +25,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-constants";
 import {
   createUnrecognizedSourceReporter,
+  SOURCE_REPORT_FEATURE,
   sourceRegistryMembership,
 } from "@/api/lib/legal-search/source-registry-membership";
 
@@ -422,7 +423,7 @@ export const getIngestionStatus = async (
 
     const sourceStatuses: SourceStatus[] = [];
     const reportUnrecognizedSource = createUnrecognizedSourceReporter(
-      "case_law.ingestion_status",
+      SOURCE_REPORT_FEATURE.ingestionStatus,
     );
 
     for (const source of sources) {

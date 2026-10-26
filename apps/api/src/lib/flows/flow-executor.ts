@@ -28,7 +28,7 @@ import {
   loadManagedAIResidency,
   loadOrgAIConfig,
 } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   AUDIT_ACTION,
@@ -84,6 +84,7 @@ import {
   pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NotificationPing } from "@/api/lib/notifications";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -1206,7 +1207,11 @@ const pauseAtReviewGate = async ({
   const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
-  flushSearchRepairs([taskEntityId]).catch(captureError);
+  flushSearchRepairs([taskEntityId]).catch(
+    createErrorCapture(
+      handlerErrorContext("pauseAtReviewGate.flushSearchRepairs"),
+    ),
+  );
 };
 
 const readRunProgress = async (

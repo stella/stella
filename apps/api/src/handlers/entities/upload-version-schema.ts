@@ -1,11 +1,9 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
-import { tSafeId } from "@/api/lib/custom-schema";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
-export const uploadVersionBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  file: t.File({
-    maxSize: FILE_SIZE_LIMITS.document,
-  }),
+export const uploadVersionBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
