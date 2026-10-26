@@ -1,4 +1,4 @@
-// parser-output-unchanged: adds `renderHtmlWhiteSpace`, a pass over a parsed document; `collapseHtmlWhitespace` is unchanged, and only the Polish courts reader calls the new pass.
+// parser-output-unchanged: adds `renderHtmlWhiteSpace` and `isHtmlBlock`, which read a parsed document; `collapseHtmlWhitespace` is unchanged, and only the Polish courts reader calls the new functions.
 import { panic } from "better-result";
 import {
   type AnyNode,
@@ -180,6 +180,55 @@ const BLOCK_TAGS: ReadonlySet<string> = new Set([
   "ul",
 ]);
 
+/** CSS `display` outer types that lay an element out as a block. */
+const BLOCK_DISPLAYS: ReadonlySet<string> = new Set([
+  "block",
+  "flex",
+  "flow-root",
+  "grid",
+  "list-item",
+  "table",
+  "table-caption",
+  "table-cell",
+  "table-footer-group",
+  "table-header-group",
+  "table-row",
+  "table-row-group",
+]);
+
+/** CSS `display` values that keep an element in its line. */
+const INLINE_DISPLAYS: ReadonlySet<string> = new Set([
+  "contents",
+  "inline",
+  "inline-block",
+  "inline-flex",
+  "inline-grid",
+  "inline-table",
+  "none",
+  "ruby",
+]);
+
+/**
+ * Whether a browser lays an element out as a block, so that a line ends at
+ * either edge: its inline `display` where the cascade picks one this reader
+ * knows (`display: inline` makes a `<div>` part of its line), its tag's
+ * default otherwise.
+ */
+export const isHtmlBlock = (element: Element): boolean =>
+  inlineStyleValue(element, (property, value) => {
+    if (property !== "display") {
+      return undefined;
+    }
+    // Two-keyword values name the outer type first or alone (`inline flow-root`).
+    const parts = value.split(/\s+/u);
+    if (parts.includes("inline") || INLINE_DISPLAYS.has(value)) {
+      return { value: false };
+    }
+    return parts.some((part) => BLOCK_DISPLAYS.has(part))
+      ? { value: true }
+      : undefined;
+  })?.value ?? BLOCK_TAGS.has(element.tagName.toLowerCase());
+
 /** The `white-space` an element sets, or undefined where it inherits. */
 const ownWhiteSpace = (element: Element): WhiteSpace | undefined =>
   inlineStyleValue(element, (property, value) => {
@@ -286,7 +335,7 @@ export const renderHtmlWhiteSpace = (root: AnyNode): void => {
         continue;
       }
       whiteSpace = ownWhiteSpace(node) ?? whiteSpace;
-      if (BLOCK_TAGS.has(tag)) {
+      if (isHtmlBlock(node)) {
         endLine(true);
         pending.push({ type: "block-end" });
       }

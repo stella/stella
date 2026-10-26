@@ -18,7 +18,7 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+import { type AnyNode, Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
@@ -32,7 +32,10 @@ import type {
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
-import { renderHtmlWhiteSpace } from "@/api/lib/legal-search/document-builders/html-whitespace";
+import {
+  isHtmlBlock,
+  renderHtmlWhiteSpace,
+} from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 import {
   buildValidationHtml,
@@ -666,11 +669,12 @@ const parseTableElement = (
   pushTable(state, rows, plainText);
 };
 
-/** Children of a list item that a browser sets as blocks of their own. */
+/**
+ * Children of a list item read as blocks of their own: lists, paragraphs,
+ * headings, preformatted text and tables, unless an inline `display` keeps
+ * them in the line. Any other child is part of the item's text.
+ */
 const LIST_ITEM_BLOCK_TAGS: ReadonlySet<string> = new Set([
-  "blockquote",
-  "div",
-  "dl",
   "h1",
   "h2",
   "h3",
@@ -685,7 +689,9 @@ const LIST_ITEM_BLOCK_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 const isListItemBlock = (node: AnyNode): node is Element =>
-  isTag(node) && LIST_ITEM_BLOCK_TAGS.has(node.tagName.toLowerCase());
+  isTag(node) &&
+  LIST_ITEM_BLOCK_TAGS.has(node.tagName.toLowerCase()) &&
+  isHtmlBlock(node);
 
 /**
  * A list item: its number opens its first text. Text around a nested list or
@@ -704,16 +710,18 @@ const parseListItem = (
     return;
   }
   // The item's inline children from `start` up to `end`, read as one
-  // paragraph through a copy of the item that holds only them.
+  // paragraph through a detached element holding just those nodes. It does
+  // not adopt them (their parent stays the item), and nothing is copied, so
+  // reading every run of an item visits each child once.
   let start = 0;
   const readInline = (end: number): void => {
     if (end > start) {
-      const segment = $(item).clone();
-      segment
-        .contents()
-        .filter((index) => index < start || index >= end)
-        .remove();
-      if (parseParagraphElement($, state, segment, marker)) {
+      const segment = new Element(
+        item.name,
+        item.attribs,
+        children.slice(start, end),
+      );
+      if (parseParagraphElement($, state, $(segment), marker)) {
         marker = undefined;
       }
     }

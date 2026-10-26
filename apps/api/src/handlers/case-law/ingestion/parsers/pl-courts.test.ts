@@ -360,6 +360,19 @@ describe("markup whitespace", () => {
       '<p style="white-space:pre !important; white-space:normal">A  B</p>',
       ["A  B"],
     ],
+    // A block element its style keeps in the line ends no line.
+    [
+      '<table><tr><td>art. <div style="display:inline">3</div><div style="display:inline">94</div> k.p.c.</td></tr></table>',
+      ["art. 394 k.p.c."],
+    ],
+    [
+      '<table><tr><td>art. <div style="display: inline-block !important">3</div><span>94</span> k.p.c.</td></tr></table>',
+      ["art. 394 k.p.c."],
+    ],
+    [
+      '<table><tr><td><span style="display:block">A</span><span style="display:block">B</span></td></tr></table>',
+      ["A\nB"],
+    ],
   ])("%s keeps the whitespace its style preserves", (html, expected) => {
     expect(plainTextsOf(html)).toEqual(expected);
   });
@@ -460,9 +473,49 @@ describe("ordered list items print the number a browser gives them", () => {
       '<ol start="3"><li><p>One</p><p>More</p></li><li><ul><li>Deep</li></ul></li></ol>',
       ["3. One", "More", "4.", "Deep"],
     ],
+    ['<ol><li>a <p style="display:inline">b</p> c</li></ol>', ["1. a b c"]],
     ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
   ])("%s", (html, expected) => {
     expect(itemsOf(html)).toEqual(expected);
+  });
+
+  test("reading an item's runs around its blocks costs work linear in the item", () => {
+    // Every inline walk lists an element's children once; the total listed
+    // is the work. Copying the item per run made it quadratic.
+    let contentsOwner: object = Object.getPrototypeOf(
+      cheerio.load("<p></p>").root(),
+    );
+    while (!Object.hasOwn(contentsOwner, "contents")) {
+      contentsOwner = Object.getPrototypeOf(contentsOwner);
+    }
+    const listed = (runs: number): number => {
+      const spy = spyOn(
+        contentsOwner as { contents: () => { length: number } },
+        "contents",
+      );
+      try {
+        const { documentAst } = parsePlDecisionContent(
+          baseInput(
+            `<ol><li>${"text<p>paragraph</p>".repeat(runs)}</li></ol>`,
+            {
+              decisionType: undefined,
+            },
+          ),
+        );
+        expect(documentAst.blocks).toHaveLength(runs * 2);
+        let total = 0;
+        for (const result of spy.mock.results) {
+          total += result.type === "return" ? result.value.length : 0;
+        }
+        return total;
+      } finally {
+        spy.mockRestore();
+      }
+    };
+    const small = listed(100);
+    const large = listed(400);
+    // Four times the runs: about four times the work, never sixteen.
+    expect(large / small).toBeLessThan(5);
   });
 
   test("the number does not decide the item's role", () => {
