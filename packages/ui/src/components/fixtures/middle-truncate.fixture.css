@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "../../styles/theme.css";
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font: 14px/1.5 sans-serif;
+}
+main {
+  margin: 24px;
+}
+[data-testid="frame"] {
+  display: flex;
+  inline-size: 600px;
+}

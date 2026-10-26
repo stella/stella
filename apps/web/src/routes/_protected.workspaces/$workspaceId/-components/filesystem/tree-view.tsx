@@ -19,7 +19,6 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -33,6 +32,7 @@ import {
   FileIcon,
 } from "@stll/ui/icons";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { MiddleTruncate } from "@stll/ui/middle-truncate";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -1603,13 +1603,7 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText
-            as="span"
-            className="overflow-hidden text-ellipsis whitespace-pre"
-            title={name}
-          >
-            {name}
-          </BidiText>
+          <MiddleTruncate value={name} />
           {folderStatistics && formattedFolderSize && (
             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
               <span>
