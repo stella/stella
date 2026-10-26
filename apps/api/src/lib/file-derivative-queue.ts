@@ -78,6 +78,7 @@ import type {
   MemoryPressureGate,
   PressurePause,
 } from "@/api/lib/memory-pressure";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -194,7 +195,13 @@ const cleanupUnpublishedDerivative = async ({
     }),
   );
   if (Result.isError(cleanup)) {
-    captureError(cleanup.error, telemetry);
+    captureError(
+      cleanup.error,
+      handlerErrorContext(
+        "lib.cleanupUnpublishedDerivative.cleanup_error",
+        telemetry,
+      ),
+    );
   }
   const settlement = await settleObjectCleanupIntentsAfterWriter({
     intentIds: [intentId],
@@ -205,7 +212,13 @@ const cleanupUnpublishedDerivative = async ({
     safeDb,
   });
   if (Result.isError(settlement)) {
-    captureError(settlement.error, telemetry);
+    captureError(
+      settlement.error,
+      handlerErrorContext(
+        "lib.cleanupUnpublishedDerivative.settlement_error",
+        telemetry,
+      ),
+    );
   }
 };
 
@@ -301,11 +314,14 @@ export const enqueuePdfDerivativeOrMarkFailed = async (
       args,
       DERIVATIVE_FAILURE_REASON.ENQUEUE,
     ).catch((markError: unknown) => {
-      captureError(markError, {
-        entityId: args.entityId,
-        fieldId: args.fieldId,
-        workspaceId: args.workspaceId,
-      });
+      captureError(
+        markError,
+        handlerErrorContext("lib.enqueuePdfDerivativeOrMarkFailed.markError", {
+          entityId: args.entityId,
+          fieldId: args.fieldId,
+          workspaceId: args.workspaceId,
+        }),
+      );
     });
 
     throw error;
@@ -364,11 +380,14 @@ export const enqueueImageThumbnailOrMarkFailed = async (
       args,
       DERIVATIVE_FAILURE_REASON.ENQUEUE,
     ).catch((markError: unknown) => {
-      captureError(markError, {
-        entityId: args.entityId,
-        fieldId: args.fieldId,
-        workspaceId: args.workspaceId,
-      });
+      captureError(
+        markError,
+        handlerErrorContext("lib.enqueueImageThumbnailOrMarkFailed.markError", {
+          entityId: args.entityId,
+          fieldId: args.fieldId,
+          workspaceId: args.workspaceId,
+        }),
+      );
     });
 
     throw error;
@@ -458,30 +477,39 @@ export const initFileDerivativeWorker = () => {
         job.data,
         DERIVATIVE_FAILURE_REASON.PROCESSING,
       ).catch((markError: unknown) => {
-        captureError(markError, {
-          entityId: job.data.entityId,
-          fieldId: job.data.fieldId,
-          workspaceId: job.data.workspaceId,
-        });
+        captureError(
+          markError,
+          handlerErrorContext("fileDerivative.markThumbnailFailed", {
+            entityId: job.data.entityId,
+            fieldId: job.data.fieldId,
+            workspaceId: job.data.workspaceId,
+          }),
+        );
       });
     } else if (exhausted) {
       markPdfDerivativeFailed(
         job.data,
         DERIVATIVE_FAILURE_REASON.PROCESSING,
       ).catch((markError: unknown) => {
-        captureError(markError, {
-          entityId: job.data.entityId,
-          fieldId: job.data.fieldId,
-          workspaceId: job.data.workspaceId,
-        });
+        captureError(
+          markError,
+          handlerErrorContext("fileDerivative.markPdfFailed", {
+            entityId: job.data.entityId,
+            fieldId: job.data.fieldId,
+            workspaceId: job.data.workspaceId,
+          }),
+        );
       });
     }
 
-    captureError(error, {
-      entityId: job?.data.entityId ?? "",
-      fieldId: job?.data.fieldId ?? "",
-      workspaceId: job?.data.workspaceId ?? "",
-    });
+    captureError(
+      error,
+      handlerErrorContext("lib.initFileDerivativeWorker", {
+        entityId: job?.data.entityId ?? "",
+        fieldId: job?.data.fieldId ?? "",
+        workspaceId: job?.data.workspaceId ?? "",
+      }),
+    );
     logger.error("file_derivative.failed", {
       entityId: job?.data.entityId ?? "",
       "error.type": errorTag(error),
@@ -1502,7 +1530,14 @@ export const requeueFileDerivative = async (
   } catch (error) {
     await markFailed(kind, jobData, DERIVATIVE_FAILURE_REASON.ENQUEUE).catch(
       (markError: unknown) => {
-        captureError(markError, { entityId, fieldId, workspaceId });
+        captureError(
+          markError,
+          handlerErrorContext("lib.requeueFileDerivative.markError", {
+            entityId,
+            fieldId,
+            workspaceId,
+          }),
+        );
       },
     );
     throw error;

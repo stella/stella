@@ -123,6 +123,104 @@ describe("invoice PDF", () => {
     expect(text).toContain("CZ87654321");
   });
 
+  test.each([
+    {
+      country: "CZ",
+      language: "cs",
+      currency: "EUR",
+      homeCurrency: "CZK",
+      rate: "25",
+      source: "CNB",
+      rateLine: "1 EUR = 25 CZK",
+      homeVatMinor: 250_000,
+      totalLabel: "DPH v domácí měně celkem",
+    },
+    {
+      country: "SK",
+      language: "sk",
+      currency: "USD",
+      homeCurrency: "EUR",
+      // ECB quotes the foreign currency per euro, as published.
+      rate: "1.25",
+      source: "ECB",
+      rateLine: "1 EUR = 1,25 USD",
+      homeVatMinor: 8000,
+      totalLabel: "DPH v domácej mene spolu",
+    },
+    {
+      country: "PL",
+      language: "pl",
+      currency: "EUR",
+      homeCurrency: "PLN",
+      rate: "4.3",
+      source: "NBP",
+      rateLine: "1 EUR = 4,3 PLN",
+      homeVatMinor: 43_000,
+      totalLabel: "Łączny VAT w walucie krajowej",
+    },
+  ] as const)(
+    "prints home-currency VAT and the official rate for a $country seller",
+    async ({
+      country,
+      language,
+      currency,
+      homeCurrency,
+      rate,
+      source,
+      rateLine,
+      homeVatMinor,
+      totalLabel,
+    }) => {
+      const { text } = await textOf({
+        ...options,
+        invoice: {
+          ...options.invoice,
+          language,
+          currency,
+          vatExchangeRate: rate,
+          vatExchangeRateSource: source,
+          vatExchangeRateDate: "2026-09-29",
+          vatExchangeRateReference: null,
+          vatExchangeRateTaxPoint: "2026-09-30",
+          lines: [
+            {
+              ...sampleLine,
+              vatTreatment: "domestic_vat",
+              vatRateBps: 2000,
+              vatAmount: 10_000,
+              grossAmount: 65_555,
+            },
+          ],
+        },
+        seller: { ...options.seller, country, vatId: `${country}87654321` },
+        totals: {
+          netAmountMinor: cents(55_555),
+          vatAmountMinor: cents(10_000),
+          grossAmountMinor: cents(65_555),
+          vatBreakdown: [
+            {
+              vatTreatment: "domestic_vat",
+              vatRateBps: 2000,
+              netAmountMinor: cents(55_555),
+              vatAmountMinor: cents(10_000),
+              grossAmountMinor: cents(65_555),
+            },
+          ],
+        },
+      });
+      expect(text).toContain(totalLabel);
+      expect(text).toContain(source);
+      expect(text.replace(/[\u00a0\u202f]/gu, " ")).toContain(rateLine);
+      expect(text).toContain(
+        formatMoneyCents({
+          amountCents: homeVatMinor,
+          currency: homeCurrency,
+          locale: language,
+        }).replace(/[\u00a0\u202f]/gu, " "),
+      );
+    },
+  );
+
   test("prints each line's quantity, unit and unit price in the reader's number format", async () => {
     const { text } = await textOf({
       ...options,
@@ -141,12 +239,30 @@ describe("invoice PDF", () => {
         formatMoneyCents({ amountCents, currency: "CZK", locale: "cs-CZ" }),
       );
     const flat = spaced(text);
-    expect(flat).toContain("Množství: 2,5 h");
-    expect(flat).toContain(`Jednotková cena: ${price(22_222)}`);
-    expect(flat).toContain("Množství: 1 234,5");
-    expect(flat).toContain(`Jednotková cena: ${price(100)}`);
-    expect(flat).toContain("Množství: 3 ks");
-    expect(flat).toContain(`Jednotková cena: ${price(300)}`);
+    // One row per line: the figures sit under the column headers, which are
+    // printed once instead of being repeated inside every line.
+    expect(flat).toContain(`2,5 h ${price(22_222)}`);
+    expect(flat).toContain(`1 234,5 ${price(100)}`);
+    expect(flat).toContain(`3 ks ${price(300)}`);
+    expect(flat.match(/MNOŽSTVÍ/gu)).toHaveLength(1);
+    expect(flat).not.toContain("Množství:");
+  });
+
+  test("names countries in the invoice language and gives the payer amount, due date and reference", async () => {
+    const { text } = await textOf(options);
+    const flat = text.replace(/[  ]/gu, " ");
+    expect(flat).toContain("Česko");
+    expect(flat).toContain("Datum splatnosti: 14. 10. 2026");
+    expect(flat).toContain("Reference: 0987654321");
+  });
+
+  test("prints an unassigned country code as stored, not as an unknown region", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: { ...options.invoice, buyerCountry: "ZZ" },
+    });
+    expect(text).toContain("ZZ");
+    expect(text).not.toMatch(/neznám/iu);
   });
 
   test("prints a quantity a double cannot hold exactly as it is stored", async () => {
@@ -185,8 +301,10 @@ describe("invoice PDF", () => {
       },
     });
     expect(pdf.getPages().length).toBeGreaterThan(1);
-    expect(text).toContain("KONEC POPISU");
-    expect(text).toContain("KONEC POZNÁMEK");
+    // A wrapped cell breaks lines anywhere; the ending must survive, not its line breaks.
+    const flowing = text.replace(/\s+/gu, " ");
+    expect(flowing).toContain("KONEC POPISU");
+    expect(flowing).toContain("KONEC POZNÁMEK");
     expect(text).toContain(options.seller.footerNotes);
   });
 
@@ -388,6 +506,102 @@ describe("country invoice wording", () => {
     });
     expect(text).toContain("Dodanie je oslobodené od dane.");
     expect(text).toContain("§ 38");
+  });
+
+  test("prints Polish NIP labels, reverse charge wording, and exemption bases", async () => {
+    const polish = {
+      ...options,
+      seller: {
+        ...options.seller,
+        country: "PL",
+        taxId: "5260001246",
+        vatId: "PL5260001246",
+      },
+      invoice: {
+        ...options.invoice,
+        currency: "PLN",
+        language: "pl",
+        buyerCountry: "PL",
+        buyerTaxId: "7250018513",
+        buyerVatId: null,
+        lines: [
+          { ...sampleLine, vatTreatment: "reverse_charge" },
+          {
+            ...sampleLine,
+            vatTreatment: "exempt",
+            exemptionReason: "art. 43 ust. 1 pkt 29",
+          },
+        ],
+      },
+    } satisfies RenderInvoicePdfOptions;
+    const { text } = await textOf(polish);
+    expect(text.match(/NIP/gu)).toHaveLength(3);
+    expect(text).toContain("odwrotne obciążenie");
+    expect(text).toContain("art. 43 ust. 1 pkt 29");
+  });
+
+  test("keeps the EU VAT label for a foreign buyer on a Polish invoice", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: {
+        ...options.seller,
+        country: "PL",
+        taxId: null,
+        vatId: "PL5260001246",
+      },
+      invoice: {
+        ...options.invoice,
+        currency: "PLN",
+        language: "pl",
+        buyerCountry: "DE",
+        buyerTaxId: null,
+        buyerVatId: "DE123456789",
+      },
+    });
+    expect(text).toContain("NIP");
+    expect(text).toContain("Numer VAT");
+  });
+
+  test("prints a Czech exempt line's basis after the prescribed statement", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: {
+        ...options.invoice,
+        lines: [
+          {
+            ...sampleLine,
+            vatTreatment: "exempt",
+            exemptionReason: "§ 51 odst. 1 písm. a)",
+          },
+        ],
+      },
+    });
+    expect(text).toContain("Plnění osvobozené od daně.");
+    expect(text).toContain("§ 51 odst. 1 písm. a)");
+  });
+
+  test("labels a foreign buyer's tax ID as a tax ID, not a NIP, on a Polish invoice", async () => {
+    const { text } = await textOf({
+      ...options,
+      seller: {
+        ...options.seller,
+        country: "PL",
+        taxId: null,
+        vatId: "PL5260001246",
+      },
+      invoice: {
+        ...options.invoice,
+        currency: "PLN",
+        language: "pl",
+        buyerCountry: "DE",
+        buyerTaxId: "12/345/67890",
+        buyerVatId: "DE123456789",
+      },
+    });
+    // Only the Polish seller's identifier reads NIP.
+    expect(text.match(/NIP/gu)).toHaveLength(1);
+    expect(text).toContain("Numer identyfikacji podatkowej");
+    expect(text).toContain("12/345/67890");
   });
 
   test("keeps Czech labels while adding the Czech profile note", async () => {

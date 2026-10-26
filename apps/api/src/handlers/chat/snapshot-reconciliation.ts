@@ -12,6 +12,8 @@ import type {
 import { panic, TaggedError } from "better-result";
 import { deepEquals } from "bun";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import { TANSTACK_TOOL_RESULT_STATE_LIFECYCLE } from "@/api/handlers/chat/tanstack-chat-lifecycle";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -21,7 +23,11 @@ export class SnapshotReconciliationError extends TaggedError(
 )<{
   message: string;
   phase: "provenance" | "normalization" | "textual-delta";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["phase"]);
+  }
+}
 
 const SNAPSHOT_FAILURE_SINK = failureSink({
   event: "chat.snapshot_reconciliation.failed",

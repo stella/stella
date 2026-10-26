@@ -1950,6 +1950,8 @@ const REPLAY_SAFE_BEFORE_SPLIT: readonly RegExp[] = [
   /^DO\b/iu,
   /^(?:GRANT|REVOKE)\b/iu,
   /^COMMENT\s+ON\b/iu,
+  // Setting a policy's expressions again leaves the same policy; a rename does not.
+  /^ALTER\s+POLICY\b(?![\s\S]*\bRENAME\s+TO\b)/iu,
   /^CREATE\s+OR\s+REPLACE\b/iu,
   /^CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?IF\s+NOT\s+EXISTS\b/iu,
   /^CREATE\s+(?:TABLE|SEQUENCE|EXTENSION|SCHEMA)\s+IF\s+NOT\s+EXISTS\b/iu,
@@ -2099,7 +2101,7 @@ const isReplaySafeBeforeSplit = (
 const isRowScanningStatement = (relativePath: string, statement: string) => {
   if (
     /^CREATE(?:\s+OR\s+REPLACE)?\s+FUNCTION\b/iu.test(statement) ||
-    /^CREATE\s+POLICY\b/iu.test(statement) ||
+    /^(?:CREATE|ALTER)\s+POLICY\b/iu.test(statement) ||
     (/^DO\b/iu.test(statement) &&
       !isUnapprovedProceduralStatement(relativePath, statement))
   ) {
@@ -2203,6 +2205,8 @@ describe("split-transaction migrations", () => {
         false,
       ],
       [`CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`, [], false],
+      [`ALTER POLICY "p" ON "t" USING (true) WITH CHECK (true)`, [], true],
+      [`ALTER POLICY "p" ON "t" RENAME TO "q"`, [], false],
       [
         `CREATE POLICY "p" ON "t" FOR SELECT TO r USING (true)`,
         [`DROP POLICY IF EXISTS "p" ON "t"`],
@@ -2323,6 +2327,12 @@ describe("entity feature gate migration semantics", () => {
         "fixture/migration.sql",
         "CREATE POLICY gate_policy ON public.items AS RESTRICTIVE FOR ALL " +
           "USING (true) WITH CHECK (value > 0)",
+      ),
+    ).toBe(false);
+    expect(
+      isRowScanningStatement(
+        "fixture/migration.sql",
+        "ALTER POLICY gate_policy ON public.items WITH CHECK (value > 0)",
       ),
     ).toBe(false);
     expect(

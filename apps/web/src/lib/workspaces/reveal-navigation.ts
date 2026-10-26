@@ -5,10 +5,16 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import {
+  DEFAULT_WORKSPACE_VIEW_ID,
+  isWorkspaceViewId,
+} from "@/lib/workspaces/view-params.logic";
 
 type Navigate = ReturnType<typeof useNavigate>;
-const DEFAULT_WORKSPACE_VIEW_ID = "all";
 
+/** The view on screen in `workspaceId`, or null off its views. A matter's
+ *  other pages (reports, correspondence) sit at the same depth and name no
+ *  view. */
 export const getCurrentWorkspaceViewId = (
   pathname: string,
   workspaceId: string,
@@ -18,8 +24,8 @@ export const getCurrentWorkspaceViewId = (
     return null;
   }
 
-  const viewId = pathname.slice(prefix.length).split("/").at(0);
-  return viewId || null;
+  const segment = pathname.slice(prefix.length).split("/").at(0);
+  return segment !== undefined && isWorkspaceViewId(segment) ? segment : null;
 };
 
 type RevealTargetInput = {
@@ -90,7 +96,13 @@ export const navigateToWorkspaceReveal = async ({
     queryClient,
     viewsOptions(target.targetWorkspaceId),
   ).catch((error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "navigateToWorkspaceReveal:failure",
+      scope: {
+        type: "handler",
+        handlerId: "navigateToWorkspaceReveal:failure",
+      },
+    });
     return [];
   });
   await navigate(getWorkspaceRevealTarget({ ...target, views }));

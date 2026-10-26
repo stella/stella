@@ -1118,6 +1118,40 @@
         "temperature": false,
         "tool_call": true
       },
+      "au.anthropic.claude-sonnet-5-5": {
+        "cost": {
+          "cache_read": 0.11,
+          "cache_write": 2.75,
+          "input": 2.2,
+          "output": 11
+        },
+        "limit": {
+          "output": 128000
+        },
+        "modalities": {
+          "input": [
+            "text",
+            "image",
+            "pdf"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [
+          {
+            "type": "effort",
+            "values": [
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ]
+          }
+        ],
+        "release_date": "2026-09-28",
+        "temperature": false,
+        "tool_call": true
+      },
       "ca.amazon.nova-lite-v1:0": {
         "cost": {
           "cache_read": 0.016,
@@ -11907,9 +11941,9 @@
       },
       "deepseek/deepseek-v4-flash-0731": {
         "cost": {
-          "cache_read": 0.001414,
-          "input": 0.04444,
-          "output": 0.13332
+          "cache_read": 0.014,
+          "input": 0.44,
+          "output": 1.32
         },
         "limit": {
           "output": 131072
@@ -11968,9 +12002,9 @@
       },
       "deepseek/deepseek-v4-pro": {
         "cost": {
-          "cache_read": 0.04843,
-          "input": 0.58116,
-          "output": 1.16232
+          "cache_read": 0.079605,
+          "input": 0.95526,
+          "output": 1.91052
         },
         "limit": {
           "output": 384000
@@ -13080,11 +13114,12 @@
       },
       "google/gemma-4-31b-it": {
         "cost": {
-          "input": 0.2,
-          "output": 0.4
+          "cache_read": 0.1,
+          "input": 0.1,
+          "output": 0.34
         },
         "limit": {
-          "output": 16384
+          "output": 235929
         },
         "modalities": {
           "input": [
@@ -13433,6 +13468,26 @@
         "temperature": true,
         "tool_call": false
       },
+      "liquid/lfm-2.5-2.6b": {
+        "cost": {
+          "cache_read": 0.04,
+          "input": 0.35,
+          "output": 0.5
+        },
+        "limit": {
+          "output": 8192
+        },
+        "modalities": {
+          "input": [
+            "text"
+          ]
+        },
+        "reasoning": true,
+        "reasoning_options": [],
+        "release_date": "2026-08-11",
+        "temperature": true,
+        "tool_call": true
+      },
       "liquid/lfm-2.5-2.6b:free": {
         "cost": {
           "input": 0,
@@ -13574,11 +13629,11 @@
       },
       "meta-llama/llama-3.2-3b-instruct": {
         "cost": {
-          "input": 0.0509,
-          "output": 0.335
+          "input": 0.05,
+          "output": 0.33
         },
         "limit": {
-          "output": 72000
+          "output": 117964
         },
         "modalities": {
           "input": [
@@ -14060,11 +14115,11 @@
       "minimax/minimax-m2.5": {
         "cost": {
           "cache_read": 0.03,
-          "input": 0.27,
-          "output": 0.95
+          "input": 0.3,
+          "output": 1.2
         },
         "limit": {
-          "output": 32768
+          "output": 131072
         },
         "modalities": {
           "input": [
@@ -14758,9 +14813,9 @@
       },
       "moonshotai/kimi-k3": {
         "cost": {
-          "cache_read": 0.21,
-          "input": 0.239,
-          "output": 10.8
+          "cache_read": 0.181,
+          "input": 0.191,
+          "output": 16
         },
         "limit": {
           "output": 943718
@@ -15299,24 +15354,6 @@
         "temperature": true,
         "tool_call": true
       },
-      "openai/gpt-3.5-turbo": {
-        "cost": {
-          "input": 0.5,
-          "output": 1.5
-        },
-        "limit": {
-          "output": 4096
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2023-03-01",
-        "temperature": true,
-        "tool_call": true
-      },
       "openai/gpt-3.5-turbo-0613": {
         "cost": {
           "input": 1,
@@ -15352,24 +15389,6 @@
         "release_date": "2023-08-28",
         "temperature": true,
         "tool_call": true
-      },
-      "openai/gpt-3.5-turbo-instruct": {
-        "cost": {
-          "input": 1.5,
-          "output": 2
-        },
-        "limit": {
-          "output": 3685
-        },
-        "modalities": {
-          "input": [
-            "text"
-          ]
-        },
-        "reasoning": false,
-        "release_date": "2023-09-28",
-        "temperature": true,
-        "tool_call": false
       },
       "openai/gpt-4": {
         "cost": {
@@ -15452,12 +15471,12 @@
       },
       "openai/gpt-4.1-nano": {
         "cost": {
-          "cache_read": 0.025,
+          "cache_read": 0.03,
           "input": 0.1,
           "output": 0.4
         },
         "limit": {
-          "output": 32768
+          "output": 942818
         },
         "modalities": {
           "input": [
@@ -18239,8 +18258,8 @@
       },
       "qwen/qwen3.5-122b-a10b": {
         "cost": {
-          "input": 0.4,
-          "output": 3.2
+          "input": 0.26,
+          "output": 2.08
         },
         "limit": {
           "output": 65536
@@ -18473,12 +18492,11 @@
       },
       "qwen/qwen3.6-27b": {
         "cost": {
-          "cache_read": 0.025,
-          "input": 0.25,
-          "output": 2
+          "input": 0.32,
+          "output": 3.2
         },
         "limit": {
-          "output": 65536
+          "output": 81920
         },
         "modalities": {
           "input": [
@@ -20624,8 +20642,8 @@
       },
       "z-ai/glm-5.3": {
         "cost": {
-          "cache_read": 0.078,
-          "input": 0.079,
+          "cache_read": 0.0689,
+          "input": 0.0699,
           "output": 1.4
         },
         "limit": {
@@ -20950,8 +20968,8 @@
       },
       "~deepseek/deepseek-pro-latest": {
         "cost": {
-          "cache_read": 0.12,
-          "input": 0.1188,
+          "cache_read": 0.26,
+          "input": 0.2565,
           "output": 8
         },
         "limit": {
@@ -20981,8 +20999,8 @@
       "~deepseek/deepseek-v4-flash-latest": {
         "cost": {
           "cache_read": 0.028,
-          "input": 0.0422,
-          "output": 0.1694
+          "input": 0.0475,
+          "output": 0.1568
         },
         "limit": {
           "output": 943718
@@ -21098,9 +21116,9 @@
       },
       "~moonshotai/kimi-latest": {
         "cost": {
-          "cache_read": 0.228,
-          "input": 0.238,
-          "output": 16
+          "cache_read": 0.18,
+          "input": 0.1814,
+          "output": 8.5226
         },
         "limit": {
           "output": 943718
@@ -21441,9 +21459,9 @@
       },
       "~z-ai/glm-flash-latest": {
         "cost": {
-          "cache_read": 0.0262,
-          "input": 0.0262,
-          "output": 0.1028
+          "cache_read": 0.03,
+          "input": 0.0413,
+          "output": 0.0758
         },
         "limit": {
           "output": 131072
@@ -21472,8 +21490,8 @@
       },
       "~z-ai/glm-latest": {
         "cost": {
-          "cache_read": 0.078,
-          "input": 0.079,
+          "cache_read": 0.0689,
+          "input": 0.0699,
           "output": 1.4
         },
         "limit": {

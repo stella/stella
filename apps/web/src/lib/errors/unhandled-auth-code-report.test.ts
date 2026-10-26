@@ -7,7 +7,7 @@ import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
 import { sanitizeExceptionEvent } from "@/lib/analytics/posthog";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
-import { webApiClientOptions } from "@/lib/eden-client";
+import { webApiClientOptions } from "@/lib/api";
 import {
   reportUserVisibleError,
   resetUserErrorReportDedupeForTests,
@@ -61,7 +61,14 @@ test.each([
       Object.defineProperty(response, "url", {
         value: "https://api.test/v1/me/professional-use",
       });
-      await webApiClientOptions.onResponse(response);
+      await webApiClientOptions.onScopedResponse({
+        response,
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/v1/me/professional-use",
+        },
+      });
     },
   },
 ])("reports one user-visible auth error from the $name", async (path) => {
@@ -74,11 +81,20 @@ test.each([
   await path.replay();
 
   expect(capture).toHaveBeenCalledTimes(1);
-  const [, context] = capture.mock.calls.at(0) ?? [];
-  expect(context).toEqual({
-    feature: "auth",
-    routeTemplate: path.routeTemplate,
-    type: "user-visible",
+  const [, options] = capture.mock.calls.at(0) ?? [];
+  const context = options?.context;
+  expect(options).toEqual({
+    fingerprintKey: "reportUserVisibleError:failure",
+    scope: {
+      type: "request",
+      method: "GET",
+      routeTemplate: path.routeTemplate,
+    },
+    context: {
+      feature: "auth",
+      routeTemplate: path.routeTemplate,
+      type: "user-visible",
+    },
   });
   if (context?.type !== "user-visible") {
     throw new TypeError("Expected user-visible error context");

@@ -10,6 +10,7 @@ import { inArray, sql } from "drizzle-orm";
 
 import { correspondenceDropLogs } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -104,7 +105,8 @@ const read = async ({
       request: new Request(
         "https://api.example.test/v1/workspaces/correspondence/drops",
       ),
-      route: "/v1/workspaces/:workspaceId/correspondence/drops",
+      route:
+        "/v1/workspaces/:workspaceId/correspondence/drops" satisfies ApiRoutePath,
       query: {
         ...(cursor === undefined ? {} : { cursor }),
         ...(limit === undefined ? {} : { limit }),

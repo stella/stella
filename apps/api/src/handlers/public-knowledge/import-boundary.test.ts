@@ -16,12 +16,14 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const apiRoot = path.join(repoRoot, "apps/api/src");
 const routeFile = path.join(apiRoot, "handlers/public-knowledge/routes.ts");
 
-// The factory, env, the feature-flag owner, and error translator are trusted
-// boundary modules. Their broad shared dependency graphs do not grant a public
-// handler access to data.
+// The factory, env, the HTTP route core, the feature-flag owner and its route
+// gate, and error translator are trusted boundary modules. Their broad shared
+// dependency graphs do not grant a public handler access to data.
 const boundaryLeaves = new Set([
   "env.ts",
+  "http/route.ts",
   "lib/deployment-feature.ts",
+  "lib/deployment-feature-route.ts",
   "lib/api-handlers.ts",
   "lib/errors/tagged-errors.ts",
 ]);
@@ -82,14 +84,14 @@ const allowedExternal = new Set([
   "@stll/api-contract",
   "@stll/collation",
   "@stll/docx-utils",
+  // Pure error classifications do not expose storage or data access.
+  "@stll/errors/fingerprint-fields",
   "@stll/folio-core",
   "@stll/folio-core/server",
   "@stll/template-conditions",
   "@stll/template-packs",
   "@stll/text-normalize",
   "better-result",
-  "elysia",
-  "elysia/error",
   "jszip",
   "node:fs",
   "node:path",

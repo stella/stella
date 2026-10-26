@@ -5,7 +5,6 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MCP_MODES } from "@/api/mcp/constants";
 import type { McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import { getMcpInstructions, MCP_INSTRUCTIONS } from "@/api/mcp/instructions";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
@@ -23,6 +22,8 @@ import { MCP_INTERNAL_TOOL_FAILURE } from "@/api/mcp/tool-call-outcome";
 import { namedToolNames, scopeProseToSurface } from "@/api/mcp/tool-mentions";
 import * as toolUtils from "@/api/mcp/tool-utils";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -239,23 +240,26 @@ describe.each(MCP_MODES.map((mode) => ({ mode })))(
 describe("the dispatch boundary scopes the hints it emits", () => {
   // Every DB seam throws, so the handler fails on its first query and the
   // central pipeline answers with its internal-failure envelope.
-  const throwingScopedDb = asTestRaw<McpRequestContext["scopedDb"]>(() => {
-    throw new Error("database unavailable");
-  });
-  const failingContext = (): McpRequestContext => ({
-    accessibleWorkspaceIds: [],
-    accessibleWorkspaceIdSet: new Set(),
-    accessibleWorkspaceStatusById: new Map(),
-    accessibleWorkspaces: [],
-    grantedScopes: ["stella:search", "stella:read"],
-    memberRole: "owner",
-    organizationId: toSafeId<"organization">("org_1"),
-    recordAuditEvent: asTestRaw(async () => undefined),
-    safeDb: toSafeDbMock(throwingScopedDb),
-    scopedDb: throwingScopedDb,
-    userId: toSafeId<"user">("user_1"),
-    userEmail: "standard@example.test",
-  });
+  const throwingScopedDb = asTestRaw<AuthorizedMcpRequestContext["scopedDb"]>(
+    () => {
+      throw new Error("database unavailable");
+    },
+  );
+  const failingContext = (): AuthorizedMcpRequestContext =>
+    authorizedMcpContextForTest({
+      accessibleWorkspaceIds: [],
+      accessibleWorkspaceIdSet: new Set(),
+      accessibleWorkspaceStatusById: new Map(),
+      accessibleWorkspaces: [],
+      grantedScopes: ["stella:search", "stella:read"],
+      memberRole: "owner",
+      organizationId: toSafeId<"organization">("org_1"),
+      recordAuditEvent: asTestRaw(async () => undefined),
+      safeDb: toSafeDbMock(throwingScopedDb),
+      scopedDb: throwingScopedDb,
+      userId: toSafeId<"user">("user_1"),
+      userEmail: "standard@example.test",
+    });
 
   const INTERNAL_ERROR_ENVELOPE = v.object({
     error: v.object({

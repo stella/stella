@@ -1003,6 +1003,16 @@ export const invoices = p.pgTable(
     // stores them.
     netAmount: centsColumn("net_amount"),
     vatAmount: centsColumn("vat_amount"),
+    vatExchangeRate: p.numeric("vat_exchange_rate", {
+      precision: 24,
+      scale: 12,
+    }),
+    vatExchangeRateSource: p.varchar("vat_exchange_rate_source", { length: 8 }),
+    vatExchangeRateDate: p.date("vat_exchange_rate_date"),
+    vatExchangeRateReference: p.varchar("vat_exchange_rate_reference", {
+      length: 64,
+    }),
+    vatExchangeRateTaxPoint: p.date("vat_exchange_rate_tax_point"),
     // SAFETY: literal zero is a valid minor-unit integer default.
     totalAmount: centsColumn("total_amount").notNull().default(unsafeCents(0)),
     notes: p.text(),
@@ -1103,6 +1113,8 @@ export const invoiceLines = p.pgTable(
     unitPrice: centsColumn("unit_price").notNull(),
     vatRateBps: p.integer("vat_rate_bps").notNull(),
     vatTreatment: p.text("vat_treatment", { enum: VAT_TREATMENTS }).notNull(),
+    // The statutory basis printed for exempt and non-VAT-payer invoice lines.
+    exemptionReason: p.text("exemption_reason"),
     netAmount: centsColumn("net_amount").notNull(),
     vatAmount: centsColumn("vat_amount").notNull(),
     grossAmount: centsColumn("gross_amount").notNull(),

@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -15,7 +17,6 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const now = new Date("2026-09-29T12:00:00Z");
-const BLOCK_OBSERVATION_ATTEMPTS = 200;
 const CLAIM_INSPECTED = "Monitoring contact claim inspected";
 const errorSummary = (error: unknown): string => {
   if (!(error instanceof Error)) {
@@ -96,24 +97,23 @@ if (!databaseUrl || !runPostgresTests) {
           await observe.promise;
           // A competing claim must finish while this earlier row is still locked.
           // A server-observed dependency is an immediate failure, not a timeout oracle.
-          for (
-            let attempt = 0;
-            attempt < BLOCK_OBSERVATION_ATTEMPTS;
-            attempt += 1
-          ) {
-            if (claimFinished) {
-              break;
-            }
-            const blocked =
-              (
-                await tx.execute<{ blocked: boolean }>(sql`
-              SELECT pg_backend_pid() = ANY(pg_blocking_pids(${workerPid})) AS blocked
-            `)
-              ).at(0) ?? panic("Missing contact claim lock observation");
-            expect(blocked.blocked).toBe(false);
-            await Bun.sleep(10);
-          }
-          expect(claimFinished).toBe(true);
+          await waitForExternalState({
+            description:
+              "the competing claim finishes without waiting on this row",
+            read: async () => {
+              if (claimFinished) {
+                return true;
+              }
+              const blocked =
+                (
+                  await tx.execute<{ blocked: boolean }>(sql`
+                SELECT pg_backend_pid() = ANY(pg_blocking_pids(${workerPid})) AS blocked
+              `)
+                ).at(0) ?? panic("Missing contact claim lock observation");
+              expect(blocked.blocked).toBe(false);
+              return false;
+            },
+          });
           observed.resolve(undefined);
           await release.promise;
         });

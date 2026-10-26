@@ -224,7 +224,9 @@ standalone scheduler service to omit accidentally. OCR uses the CPU ONNX models
 bundled in the API image. AnyDoc first inspects each PDF and queues OCR only
 when the document has no usable text layer. Set
 `DOCUMENT_PROCESSING_IDLE_EXIT_MINUTES` on batch workers that should exit after
-the queue stays empty.
+the queue stays empty. Manual OCR requests are accepted while a worker is
+running or has run within the last two batch intervals; otherwise the action
+reports OCR as unavailable.
 The original PDF remains unchanged: stella stores and indexes only the derived
 searchable text.
 

@@ -1,16 +1,16 @@
-import type { Context } from "elysia";
 /**
- * The request lifecycle's failure and completion records, as the server's
- * `onError` and `onAfterHandle` hooks.
- *
- * Split out of `server.ts` so one test can drive the whole HTTP lifecycle
- * (handler, error hook, completion hook) through a real Elysia app and read
- * every record and response it produces, without starting the server.
+ * The request lifecycle's failure and completion records, as two pipeline
+ * stages: `errorBoundary` answers every failure the pipeline throws, and
+ * `requestCompletion` writes each request's one log record and duration
+ * metric from its final answer.
  */
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
+import type { RequestContext } from "@/api/http/context";
+import { setResponseHeaders } from "@/api/http/headers";
+import { toResponse } from "@/api/http/respond";
+import type { Middleware } from "@/api/http/route";
+import { status } from "@/api/http/status";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
@@ -20,10 +20,9 @@ import {
   DB_TRANSACTION_COUNT_HEADER,
 } from "@/api/lib/db-query-counter";
 import {
-  elysiaErrorAnswer,
-  elysiaErrorBody,
-  elysiaFailureReason,
-} from "@/api/lib/errors/elysia-error";
+  httpFailureAnswer,
+  httpFailureBody,
+} from "@/api/lib/errors/http-failure-answer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -35,12 +34,13 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  claimRequestRecord,
   getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
+  recordRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
-import { resolveResponseStatus } from "@/api/lib/observability/response-status";
 import { requestClassAtCompletion } from "@/api/lib/observability/route-latency-class";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -49,27 +49,6 @@ const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
 // guard can assert per-route budgets without other processes paying any
 // per-query cost. Must match the logger gate in db/root.ts.
 const DB_QUERY_COUNTER_ENABLED = isLocalDevOpen();
-
-const getRequestPath = (request: Request): string =>
-  new URL(request.url).pathname;
-
-// Stamp the per-request query count onto the outgoing response. Reads the
-// active counter store, so it is a no-op when the store was never started
-// (production, or a request that bypassed `onRequest`).
-const setDbQueryCountHeader = (set: Context["set"]) => {
-  if (!DB_QUERY_COUNTER_ENABLED) {
-    return;
-  }
-  const queryCount = currentQueryCount();
-  if (queryCount === undefined) {
-    return;
-  }
-  set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
-  const transactionCount = currentTransactionCount();
-  if (transactionCount !== undefined) {
-    set.headers[DB_TRANSACTION_COUNT_HEADER] = String(transactionCount);
-  }
-};
 
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
 
@@ -84,109 +63,89 @@ const buildRequestLogDetails = ({
   request,
   route,
   statusCode,
-  reqCtx,
-  elysiaCode,
+  failureKind,
 }: {
   durationMs: number;
   errorType?: string;
   request: Request;
-  route?: string | undefined;
+  route: string | undefined;
   statusCode: number;
-  reqCtx?: ReturnType<typeof getRequestContext>;
-  elysiaCode?: string;
+  failureKind?: string;
 }) => {
-  const details = {
+  const reqCtx = getRequestContext();
+  return {
     durationMs: Math.round(durationMs),
     method: request.method,
     route: getRouteName(route),
     statusCode,
+    ...(failureKind === undefined ? {} : { failureKind }),
+    ...(errorType === undefined ? {} : { errorType }),
+    ...(reqCtx?.requestId === undefined ? {} : { requestId: reqCtx.requestId }),
+    ...(reqCtx?.clientAddressSource
+      ? { clientAddressSource: reqCtx.clientAddressSource }
+      : {}),
   };
-
-  if (elysiaCode) {
-    Object.assign(details, { elysiaCode });
-  }
-
-  if (errorType) {
-    Object.assign(details, { errorType });
-  }
-
-  if (reqCtx?.requestId) {
-    Object.assign(details, { requestId: reqCtx.requestId });
-  }
-
-  if (reqCtx?.clientAddressSource) {
-    Object.assign(details, {
-      clientAddressSource: reqCtx.clientAddressSource,
-    });
-  }
-
-  return details;
 };
 
-type RequestErrorContext = {
-  error: unknown;
-  set: Context["set"];
-  code: number | string;
-  request: Request;
-  route: string | undefined;
+const elapsedMs = (): number => {
+  const reqCtx = getRequestContext();
+  return reqCtx === undefined ? 0 : performance.now() - reqCtx.startTime;
 };
 
-/** The server's `onError` hook: the framework-level failure record and answer. */
-export const answerRequestError = ({
-  error,
-  set,
-  code,
-  request,
-  route,
-}: RequestErrorContext) => {
-  delete set.headers["X-Powered-By"];
-  setDbQueryCountHeader(set);
-
-  const path = getRequestPath(request);
-  const reqCtx = getRequestContext(request);
-  const {
-    status: statusCode,
-    message: errorMessage,
-    issues,
-  } = elysiaErrorAnswer(code, error);
-  const logged = shouldLogRequest(path);
+/**
+ * The failure record and sanitized answer for an error the pipeline threw.
+ * Pipeline failures the caller caused (a rejected body, an unknown route, an
+ * unparseable request) are logged as WARN and never reach the exception
+ * tracker, which would otherwise fill with one issue per scanner probe; an
+ * internal error and an answer that broke its own schema are captured.
+ */
+const answerRequestError = (error: unknown, ctx: RequestContext): Response => {
+  const answer = httpFailureAnswer(error);
+  const statusCode = answer.status;
+  const logged = shouldLogRequest(ctx.path);
   const captured = statusCode >= 500;
-  const loggedSeverity = captured ? "ERROR" : "WARN";
+  const routeName = getRouteName(ctx.route);
+  const failedSeverity = captured ? "ERROR" : "WARN";
+  const scope = {
+    type: "request",
+    method: ctx.request.method,
+    routeTemplate: routeName,
+  } as const;
+  recordRequestExceptionScope(ctx.request, scope);
   const grading = observeShadow({
     error,
     sink: SHADOW_SINKS.framework,
     channel: legacyChannelOf({
-      severity: logged ? loggedSeverity : undefined,
+      severity: logged ? failedSeverity : undefined,
       capture: captured,
     }),
-    request,
-    route: getRouteName(route),
+    request: ctx.request,
+    route: routeName,
     requestState: {
       answeredStatus: statusCode,
-      framework: elysiaFailureReason(code, error),
+      framework: answer.framework,
     },
   });
 
-  if (logged) {
-    const durationMs = reqCtx ? performance.now() - reqCtx.startTime : 0;
-    const details = buildRequestLogDetails({
-      durationMs,
-      errorType: errorTag(error),
-      request,
-      route,
-      statusCode,
-      reqCtx,
-      elysiaCode: String(code),
-    });
-
+  if (logged && claimRequestRecord()) {
+    const durationMs = elapsedMs();
     const attributes = sanitizeErrorAttributesForOutput({
-      ...details,
-      ...(statusCode >= 500
+      ...buildRequestLogDetails({
+        durationMs,
+        errorType: errorTag(error),
+        request: ctx.request,
+        route: ctx.route,
+        statusCode,
+        ...(answer.framework === undefined
+          ? {}
+          : { failureKind: answer.framework }),
+      }),
+      ...(captured
         ? { errorFingerprint: identityFields(readEvidence(error)) }
         : {}),
       failure: grading,
       message: "request.failed",
-      severity: statusCode >= 500 ? "ERROR" : "WARN",
+      severity: failedSeverity,
     });
     logger.request({
       durationMs: 0,
@@ -196,161 +155,62 @@ export const answerRequestError = ({
       severity: "ERROR" as const,
       ...attributes,
     });
-
     emitRequestDurationMetric({
       durationMs,
       requestClass: requestClassAtCompletion({
-        method: request.method,
-        route: getRouteName(route),
+        method: ctx.request.method,
+        route: routeName,
       }),
       statusCode,
-      route: getRouteName(route),
+      route: routeName,
     });
   }
 
-  // A framework-answered client fault (a rejected body, an unknown route,
-  // an unparseable request) is the caller's own outcome: the WARN record
-  // above keeps it, and reporting it as an exception would fill the tracker
-  // with one issue per scanner probe and schema mismatch. A response-schema
-  // violation shares the VALIDATION code but is the handler's own fault, so
-  // it stays captured along with every other code.
   if (captured) {
     captureObservedError(error, {
-      request,
+      scope,
+      fingerprintKey: "observability.answerRequestError",
+      request: ctx.request,
       context: {
-        route: getRouteName(route),
-        method: request.method,
-        elysiaCode: String(code),
+        route: routeName,
+        method: ctx.request.method,
+        ...(answer.framework === undefined
+          ? {}
+          : { failureKind: answer.framework }),
       },
       observation: grading,
     });
   }
 
-  // Return a sanitized response for unhandled errors.
-  // Elysia's default would serialize error.message, which
-  // may contain DB internals, file names, or document content.
-  set.status = statusCode;
-  return elysiaErrorBody({ status: statusCode, message: errorMessage, issues });
+  if (answer.allow !== undefined) {
+    ctx.set.headers["Allow"] = answer.allow.join(", ");
+  }
+  return toResponse(status(statusCode, httpFailureBody(answer)), ctx.set);
 };
 
-type RequestCompletionContext = {
-  request: Request;
-  responseValue: unknown;
-  route: string | undefined;
-  set: Context["set"];
-};
-
-const finalResponseCompletion = new AsyncLocalStorage<{
-  context: RequestCompletionContext | undefined;
-}>();
-
-// Defer logging and flushing until outer response policies have settled.
-export const withFinalResponseCompletion = async (
-  request: Request,
-  run: () => Response | Promise<Response>,
-): Promise<Response> => {
-  const state: { context: RequestCompletionContext | undefined } = {
-    context: undefined,
-  };
-  const response = await finalResponseCompletion.run(state, run);
-  await completeRequest({
-    request,
-    route: state.context?.route,
-    set: state.context?.set ?? { headers: {} },
-    responseValue: response,
-  });
-  return response;
+/** Answers every failure thrown by the stages and route inside it. */
+export const errorBoundary: Middleware = async (ctx, inner) => {
+  try {
+    return await inner();
+  } catch (error) {
+    return answerRequestError(error, ctx);
+  }
 };
 
 // The completion record grades its answer by the failure the request
 // observed. A 5xx with none observed (a handler that returned the status
 // itself) is counted as such, at the severity it always had.
-const completionFailure = (
-  request: Request,
-  statusCode: number,
-  route: string | undefined,
-) =>
-  getRequestFailure(request) ??
+const completionFailure = (statusCode: number, route: string | undefined) =>
+  getRequestFailure() ??
   (statusCode >= 500 ? observeUnobserved5xx(getRouteName(route)) : undefined);
 
-/** The server's `onAfterHandle` hook: the completion record and flush. */
-export const completeRequest = async ({
-  request,
-  responseValue,
-  route,
-  set,
-}: RequestCompletionContext) => {
-  delete set.headers["X-Powered-By"];
-  setDbQueryCountHeader(set);
+type CompletionSeverity = "ERROR" | "WARN" | "INFO";
 
-  const deferred = finalResponseCompletion.getStore();
-  if (deferred !== undefined) {
-    deferred.context = { request, responseValue, route, set };
-    return;
+const severityFor = (statusCode: number): CompletionSeverity => {
+  if (statusCode >= 500) {
+    return "ERROR";
   }
-
-  const path = getRequestPath(request);
-  const reqCtx = getRequestContext(request);
-
-  if (shouldLogRequest(path) && reqCtx) {
-    const durationMs = performance.now() - reqCtx.startTime;
-    const statusCode = resolveResponseStatus({
-      response: responseValue,
-      set,
-    });
-    const details = buildRequestLogDetails({
-      durationMs,
-      request,
-      route,
-      statusCode,
-      reqCtx,
-    });
-    const failure =
-      statusCode >= 400
-        ? completionFailure(request, statusCode, route)
-        : undefined;
-
-    if (statusCode >= 500) {
-      logger.request({
-        ...details,
-        failure,
-        message: "request.completed",
-        severity: "ERROR",
-      });
-    } else if (statusCode >= 400) {
-      logger.request({
-        ...details,
-        failure,
-        message: "request.completed",
-        severity: "WARN",
-      });
-    } else {
-      logger.request({
-        ...details,
-        message: "request.completed",
-        severity: "INFO",
-      });
-    }
-
-    // Streaming responses (e.g. POST /v1/chat) settle this hook when the
-    // stream object is returned, not when generation ends, so their
-    // duration here understates the wall-clock. That is acceptable: the
-    // declared stream class excludes setup time from the CRUD p95 SLO,
-    // even when no model has started yet.
-    emitRequestDurationMetric({
-      durationMs,
-      requestClass: requestClassAtCompletion({
-        method: request.method,
-        route: getRouteName(route),
-      }),
-      statusCode,
-      route: getRouteName(route),
-    });
-  }
-
-  if (!isLocalDevOpen() && shouldLogRequest(path)) {
-    await flushAnalytics(route);
-  }
+  return statusCode >= 400 ? "WARN" : "INFO";
 };
 
 /**
@@ -367,4 +227,67 @@ export const flushAnalytics = async (route: string | undefined) => {
         "http.route": getRouteName(route),
       });
     });
+};
+
+/**
+ * Each request's completion record, from its final answer: the one log line
+ * and duration metric (unless the error boundary already wrote them), the
+ * development query-count header, and the analytics flush.
+ *
+ * A streaming answer (`POST /v1/chat`) completes when its stream is handed
+ * back, not when generation ends, so its duration understates the wall-clock.
+ * That is intended: the declared stream class keeps setup time out of the CRUD
+ * p95 SLO even when no model has started yet.
+ */
+export const requestCompletion: Middleware = async (ctx, inner) => {
+  const answered = await inner();
+  const queryCount = DB_QUERY_COUNTER_ENABLED ? currentQueryCount() : undefined;
+  const transactionCount = currentTransactionCount();
+  const response =
+    queryCount === undefined && transactionCount === undefined
+      ? answered
+      : setResponseHeaders(
+          answered,
+          {
+            ...(queryCount === undefined
+              ? {}
+              : { [DB_QUERY_COUNT_HEADER]: String(queryCount) }),
+            ...(transactionCount === undefined
+              ? {}
+              : { [DB_TRANSACTION_COUNT_HEADER]: String(transactionCount) }),
+          },
+          { overwrite: true },
+        );
+
+  if (shouldLogRequest(ctx.path) && claimRequestRecord()) {
+    const durationMs = elapsedMs();
+    const statusCode = response.status;
+    const failure =
+      statusCode >= 400 ? completionFailure(statusCode, ctx.route) : undefined;
+    logger.request({
+      ...buildRequestLogDetails({
+        durationMs,
+        request: ctx.request,
+        route: ctx.route,
+        statusCode,
+      }),
+      ...(failure === undefined ? {} : { failure }),
+      message: "request.completed",
+      severity: severityFor(statusCode),
+    });
+    emitRequestDurationMetric({
+      durationMs,
+      requestClass: requestClassAtCompletion({
+        method: ctx.request.method,
+        route: getRouteName(ctx.route),
+      }),
+      statusCode,
+      route: getRouteName(ctx.route),
+    });
+  }
+
+  if (!isLocalDevOpen() && shouldLogRequest(ctx.path)) {
+    await flushAnalytics(ctx.route);
+  }
+  return response;
 };

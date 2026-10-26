@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   BILLING_STATUS,
@@ -12,6 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -125,7 +128,8 @@ if (!databaseUrl || !runPostgresTests) {
               session: { activeOrganizationId: organizationId },
               memberRole: sessionMemberRole("owner"),
               request: new Request("https://example.test/billing"),
-              route: "/test/billing",
+              route:
+                "/v1/invoices/:workspaceId/:invoiceId/entries" satisfies ApiRoutePath,
               recordAuditEvent: async () => {},
             };
             attaching = addEntries.handler(
@@ -181,17 +185,15 @@ if (!databaseUrl || !runPostgresTests) {
                       body: { id: expenseId },
                     }),
                   );
-            let blocked = false;
-            for (let attempt = 0; attempt < 200 && !blocked; attempt += 1) {
-              const [row] = await setup.sql<
-                { blocked: boolean }[]
-              >`SELECT cardinality(pg_blocking_pids(${session.pid})) > 0 AS blocked`;
-              blocked = row?.blocked === true;
-              if (!blocked) {
-                await Bun.sleep(10);
-              }
-            }
-            expect(blocked).toBe(true);
+            await waitForExternalState({
+              description: "the mutation waits on the attaching transaction",
+              read: async () =>
+                (
+                  await setup.sql<
+                    { blocked: boolean }[]
+                  >`SELECT cardinality(pg_blocking_pids(${session.pid})) > 0 AS blocked`
+                ).at(0)?.blocked === true,
+            });
             release.resolve(undefined);
             expect(await attaching).toEqual({ totalAmount: cents(1000) });
             expect(await mutating).toMatchObject({ code: 400 });

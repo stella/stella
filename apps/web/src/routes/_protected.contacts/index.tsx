@@ -84,7 +84,7 @@ import { api } from "@/lib/api";
 import { useCreateContact, useDeleteContact } from "@/lib/contacts/mutations";
 import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
@@ -190,7 +190,7 @@ function ContactsPage() {
       const response = await api.contacts.export.get({
         query: { format: "csv" },
       });
-      const exportData = unwrapEden(response);
+      const exportData = unwrapApiResponse(response);
       return exportData instanceof Response
         ? await exportData.blob()
         : new Blob([String(exportData)], { type: "text/csv;charset=utf-8" });
@@ -225,7 +225,7 @@ function ContactsPage() {
           </InputGroup>
         </ResponsiveActionToolbarItem>
         <ResponsiveActionToolbarItem slot="secondary">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex flex-wrap gap-1">
             <FilterButton
               active={filter === "all"}
               label={t("common.all")}
@@ -243,7 +243,7 @@ function ContactsPage() {
             />
           </div>
         </ResponsiveActionToolbarItem>
-        <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+        <ResponsiveActionToolbarItem slot="action">
           <div className="flex gap-1">
             {canCreateContact && (
               <Button
@@ -441,10 +441,11 @@ const useContactColumns = () => {
           header: t("common.name"),
           cell: ({ row, getValue }) => (
             <Link
-              className="font-medium hover:underline"
+              className="block max-w-xs truncate font-medium hover:underline"
               dir="auto"
               onClick={(event) => event.stopPropagation()}
               params={{ contactId: row.original.id }}
+              title={getValue()}
               to="/contacts/$contactId"
             >
               {getValue()}
@@ -463,8 +464,9 @@ const useContactColumns = () => {
             }
             return (
               <a
-                className="text-muted-foreground hover:text-foreground hover:underline"
+                className="text-muted-foreground hover:text-foreground block max-w-xs truncate hover:underline"
                 href={`mailto:${primaryEmail.address}`}
+                title={primaryEmail.address}
               >
                 {primaryEmail.address}
               </a>
@@ -728,7 +730,7 @@ const ContactsToolbarPlaceholder = () => {
         </InputGroup>
       </ResponsiveActionToolbarItem>
       <ResponsiveActionToolbarItem slot="secondary">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex flex-wrap gap-1">
           <Button disabled size="sm" variant="default">
             {t("common.all")}
           </Button>
@@ -740,7 +742,7 @@ const ContactsToolbarPlaceholder = () => {
           </Button>
         </div>
       </ResponsiveActionToolbarItem>
-      <ResponsiveActionToolbarItem className="ms-auto sm:ms-0" slot="action">
+      <ResponsiveActionToolbarItem slot="action">
         <div className="flex gap-1">
           {canCreateContact && (
             <Button
@@ -900,7 +902,7 @@ const CreateContactDialog = ({
   const schema = createContactSchema(t("common.required"));
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
-  useQueryViewError(mcpCatalogView);
+  useQueryViewError(mcpCatalogView, "CreateContactDialog:query");
   const mcpCatalog =
     mcpCatalogView.type === "items" && mcpCatalogView.refetchError === undefined
       ? mcpCatalogView.items
@@ -992,7 +994,7 @@ const CreateContactDialog = ({
       const response = await api.contacts["business-registries"].get({
         query: { registry: "ares", q: ico },
       });
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       const hit = data.type === "lookup" ? data.hit : null;
 
@@ -1011,7 +1013,13 @@ const CreateContactDialog = ({
         type: "success",
       });
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "CreateContactDialog.handleAresLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CreateContactDialog.handleAresLookup:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsAresLoading(false);

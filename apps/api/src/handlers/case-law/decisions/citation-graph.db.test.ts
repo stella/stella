@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+import * as v from "valibot";
 
 import {
   caseLawCitationDoctrineReviews,
@@ -102,7 +102,7 @@ const summaryOf = async (
     throw new Error("expected a citation summary, got a status response");
   }
   const projected = projectResponseText(result, citationSummaryResponseSchema);
-  expect(Value.Check(citationSummaryResponseSchema, projected)).toBe(true);
+  expect(v.is(citationSummaryResponseSchema, projected)).toBe(true);
   return projected;
 };
 

@@ -261,6 +261,11 @@ export type Measurement = {
   // some trials and passed in others is a same-head flake for the quarantine
   // history (scripts/flaky-test-history.ts).
   failedTests: Record<string, number>;
+  // The first assertion or error line each failing test printed, and the
+  // exit status of a failing trial that named no test, so a red gate says
+  // what failed without the trial output.
+  failureDetails?: Record<string, string>;
+  unnamedFailureStatus?: number;
   durationMs: number;
   planned: number;
 };
@@ -305,6 +310,23 @@ export const renderReport = (report: Report) =>
       ({ file, reason }) =>
         `| ${markdown(file)} | 0 | 0 | ${markdown(reason)} |`,
     ),
+    ...report.results.flatMap(
+      ({ file, failures, failureDetails = {}, unnamedFailureStatus }) => {
+        if (failures === 0) {
+          return [];
+        }
+        const named = Object.entries(failureDetails).map(
+          ([name, detail]) =>
+            `- \`${markdown(file)}\` › ${markdown(name)}: ${markdown(detail || "no assertion line printed")}`,
+        );
+        return unnamedFailureStatus === undefined
+          ? named
+          : [
+              ...named,
+              `- \`${markdown(file)}\`: a trial failed with exit status ${String(unnamedFailureStatus)} and named no test; rerun the file to see its output`,
+            ];
+      },
+    ),
     ...report.errors.map((error) => `\nRunner error: ${markdown(error)}`),
     "",
   ].join("\n");
@@ -331,7 +353,12 @@ export const failureAnnotation = ({
     `${file} failed iteration${failedIterations.length === 1 ? "" : "s"} ${failedIterations.join(", ")}`,
   )}`;
 
-type RunOptions = { target: Target; seed: number; timeoutMs: number };
+type RunOptions = {
+  target: Target;
+  seed: number;
+  timeoutMs: number;
+  onFailureOutput?: ((output: string) => void) | undefined;
+};
 export type RunOutcome =
   | {
       type: "executed";
@@ -339,6 +366,7 @@ export type RunOutcome =
       status: number;
       ranTests: boolean;
       failedTests: readonly string[];
+      failureDetails?: readonly { name: string; detail: string }[];
     }
   | { type: "no-tests"; reason: string };
 
@@ -351,11 +379,21 @@ export const trialCommand = (target: BunTarget, seed: number) => [
   `--seed=${seed}`,
 ];
 
-const executionOutcome = (
-  runner: Target["runner"],
-  outcome: FlakeProcessOutcome,
-): Extract<RunOutcome, { type: "executed" }> => {
+type ExecutionOutcomeOptions = {
+  runner: Target["runner"];
+  outcome: FlakeProcessOutcome;
+  onFailureOutput?: ((output: string) => void) | undefined;
+};
+
+const executionOutcome = ({
+  runner,
+  outcome,
+  onFailureOutput,
+}: ExecutionOutcomeOptions): Extract<RunOutcome, { type: "executed" }> => {
   if (outcome.type === "timeout") {
+    onFailureOutput?.(
+      "Trial deadline expired; no completed output is available.",
+    );
     return {
       type: "executed",
       passed: false,
@@ -367,15 +405,23 @@ const executionOutcome = (
   const output = `${outcome.stdout}\n${outcome.stderr}`;
   let ranTests: boolean;
   let failedTests: readonly string[];
+  let failureDetails: { name: string; detail: string }[] = [];
   switch (runner) {
     case "bun":
     case "api":
-    case "web":
+    case "web": {
       ranTests = /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
-      failedTests = [
-        ...new Set(testFailures(output.split("\n")).map(({ name }) => name)),
-      ];
+      const failures = testFailures(output.split("\n"));
+      failedTests = [...new Set(failures.map(({ name }) => name))];
+      failureDetails = failures.map(({ name, detail }) => ({
+        name,
+        detail:
+          detail.find((line) => /\berror\b|Expected|Received/u.test(line)) ??
+          detail.at(0) ??
+          "",
+      }));
       break;
+    }
     case "rust":
       ranTests = /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
       failedTests = [];
@@ -384,12 +430,42 @@ const executionOutcome = (
       runner satisfies never;
       return panic("Unknown flake trial output");
   }
+  const passed = outcome.status === 0 && ranTests;
+  if (!passed) {
+    onFailureOutput?.(output);
+  }
   return {
     type: "executed",
-    passed: outcome.status === 0 && ranTests,
+    passed,
     status: outcome.status,
     ranTests,
     failedTests,
+    ...(runner === "rust" ? {} : { failureDetails }),
+  };
+};
+
+// Records what a failing trial reported: the first line per failing test,
+// or the exit status when it named none.
+const recordFailure = (
+  result: Measurement,
+  outcome: Extract<RunOutcome, { type: "executed" }>,
+) => {
+  if (outcome.passed) {
+    return;
+  }
+  // Names without details (a runner that reports no detail lines) still
+  // name the failure.
+  const details =
+    outcome.failureDetails ??
+    outcome.failedTests.map((name) => ({ name, detail: "" }));
+  if (details.length === 0) {
+    result.unnamedFailureStatus = outcome.status;
+    return;
+  }
+  // The first trial's line wins: later trials repeat the same failure.
+  result.failureDetails = {
+    ...Object.fromEntries(details.map(({ name, detail }) => [name, detail])),
+    ...result.failureDetails,
   };
 };
 
@@ -397,6 +473,7 @@ export const runOnce = async ({
   target,
   seed,
   timeoutMs,
+  onFailureOutput,
 }: RunOptions): Promise<RunOutcome> => {
   const deadline = performance.now() + timeoutMs;
   switch (target.runner) {
@@ -404,15 +481,16 @@ export const runOnce = async ({
     case "api":
     case "web":
       // Fresh invocations reset setup and shuffle the entire file for each trial.
-      return executionOutcome(
-        target.runner,
-        await runFlakeProcess({
+      return executionOutcome({
+        runner: target.runner,
+        outcome: await runFlakeProcess({
           command: trialCommand(target, seed),
           cwd: target.cwd,
           env: target.env,
           deadline,
         }),
-      );
+        onFailureOutput,
+      });
     case "rust": {
       const listing = createRustTestListing(target.module);
       const discovery = await runFlakeProcess({
@@ -423,7 +501,11 @@ export const runOnce = async ({
         onStdoutLine: listing.acceptLine,
       });
       if (discovery.type === "timeout" || discovery.status !== 0) {
-        return executionOutcome("rust", discovery);
+        return executionOutcome({
+          runner: "rust",
+          outcome: discovery,
+          onFailureOutput,
+        });
       }
       const batches = listing.batches();
       if (batches.length === 0) {
@@ -440,7 +522,6 @@ export const runOnce = async ({
           env: target.env,
           deadline,
         });
-        const execution = executionOutcome("rust", completed);
         if (completed.type === "completed" && completed.status === 0) {
           const ignored =
             /^test result: ok\. 0 passed; 0 failed; (?<count>[1-9]\d*) ignored;/mu.exec(
@@ -451,6 +532,11 @@ export const runOnce = async ({
             continue;
           }
         }
+        const execution = executionOutcome({
+          runner: "rust",
+          outcome: completed,
+          onFailureOutput,
+        });
         // Once listing selected names, zero execution without ignored evidence is a failure.
         if (!execution.passed) {
           return execution;
@@ -482,6 +568,7 @@ type ExecuteOptions = {
   run?: typeof runOnce;
   now?: () => number;
   budgetMs?: number;
+  reportFailureOutput?: ((output: string) => void) | undefined;
 };
 export const executeGate = async ({
   targets,
@@ -489,6 +576,9 @@ export const executeGate = async ({
   run = runOnce,
   now = () => performance.now(),
   budgetMs = BUDGET_MS,
+  reportFailureOutput = (output) => {
+    process.stderr.write(output);
+  },
 }: ExecuteOptions): Promise<Report> => {
   const start = now();
   const report: Report = {
@@ -499,9 +589,24 @@ export const executeGate = async ({
     elapsedMs: 0,
   };
   const measured: Measured[] = [];
+  const reportedFailures = new Set<string>();
+  const failureOutputLimit = 16_384;
   const remaining = () => Math.max(0, budgetMs - (now() - start));
   const attempt = async (options: RunOptions): Promise<RunOutcome> => {
-    const outcome = await Result.tryPromise(async () => run(options));
+    const outcome = await Result.tryPromise(async () =>
+      run({
+        ...options,
+        onFailureOutput: (output) => {
+          if (reportedFailures.has(options.target.file)) {
+            return;
+          }
+          reportedFailures.add(options.target.file);
+          reportFailureOutput(
+            `Flake trial failed: ${options.target.file}, seed ${options.seed}\n${output.slice(-failureOutputLimit)}\n`,
+          );
+        },
+      }),
+    );
     if (outcome.isOk()) {
       return outcome.value;
     }
@@ -533,7 +638,7 @@ export const executeGate = async ({
       continue;
     }
     measured.push({ file: target.file, durationMs });
-    report.results.push({
+    const first: Measurement = {
       file: target.file,
       runs: 1,
       failures: Number(!outcome.passed),
@@ -543,7 +648,9 @@ export const executeGate = async ({
       ),
       durationMs,
       planned: 1,
-    });
+    };
+    recordFailure(first, outcome);
+    report.results.push(first);
   }
   const plan = planRepeats(measured, remaining());
   // The plan spends the remaining budget as one serial pool, and one test
@@ -574,6 +681,9 @@ export const executeGate = async ({
       if (outcome.type === "no-tests" || !outcome.passed) {
         result.failures += 1;
         result.failedIterations.push(index + 1);
+      }
+      if (outcome.type === "executed") {
+        recordFailure(result, outcome);
       }
       for (const name of outcome.type === "executed"
         ? outcome.failedTests

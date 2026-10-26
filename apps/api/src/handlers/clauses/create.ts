@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVersions } from "@/api/db/schema";
@@ -15,31 +15,32 @@ import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
-  tDefaultVarchar,
-  tSafeId,
+  defaultVarcharSchema,
+  resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 import { normalizeClauseMetadata } from "./metadata";
 import { updateSearchVector } from "./search-vector";
 
-const createClauseBodySchema = t.Object({
+const createClauseBodySchema = v.object({
   title: withDescription(
-    tDefaultVarchar,
+    defaultVarcharSchema,
     "Clause title; required when creating",
   ),
-  categoryId: t.Optional(tSafeId("clauseCategory")),
-  language: t.Optional(t.String({ maxLength: 10 })),
+  categoryId: v.exactOptional(resourceIdSchema("clauseCategory")),
+  language: v.exactOptional(v.pipe(v.string(), v.maxLength(10))),
   body: withDescription(
     clauseBodySchema,
     "Ordered clause body paragraphs; required when creating. Each paragraph " +
       "carries text and optional formatting.",
   ),
-  description: t.Optional(t.String({ maxLength: 2000 })),
-  usageNotes: t.Optional(t.String({ maxLength: 2000 })),
-  metadata: t.Optional(t.Record(t.String(), t.Unknown())),
+  description: v.exactOptional(v.pipe(v.string(), v.maxLength(2000))),
+  usageNotes: v.exactOptional(v.pipe(v.string(), v.maxLength(2000))),
+  metadata: v.exactOptional(v.record(v.string(), v.unknown())),
 });
 
 type CreateClauseProps = {
@@ -167,7 +168,13 @@ export const createClauseHandler = async function* ({
     body.body,
   );
   if (Result.isError(searchVectorResult)) {
-    captureError(searchVectorResult.error, { clauseId });
+    captureError(
+      searchVectorResult.error,
+      handlerErrorContext(
+        "clauses.createClauseHandler.searchVectorResult_error",
+        { clauseId },
+      ),
+    );
   }
 
   if (!inserted) {

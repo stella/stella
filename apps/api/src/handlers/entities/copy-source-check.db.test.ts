@@ -19,6 +19,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -221,7 +222,8 @@ const seed = async (folder: boolean) => {
           deleteSource,
         },
         request: new Request("https://example.test/transfer"),
-        route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
+        route:
+          "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
         safeDb,
         recordAuditEvent: noAudit,
         createAuditRecorder: () => noAudit,

@@ -19,7 +19,7 @@ type RebuildStoredJudgmentOptions = {
 };
 
 type RebuiltJudgment =
-  | { type: "rebuilt"; result: IngestionResult }
+  | { type: "rebuilt"; result: IngestionResult; sourceRawS3Key: string }
   | { type: "unreadable"; detail: string }
   /** Object storage did not answer; nothing is known about the payload. */
   | { type: "read-failed"; error: StoredRawReadError };
@@ -113,6 +113,7 @@ export const rebuildStoredJudgment = async ({
   }
   return {
     type: "rebuilt",
+    sourceRawS3Key: row.sourceRawS3Key,
     result: {
       ...reparsed.result,
       sourceRawBytes: raw,

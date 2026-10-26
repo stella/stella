@@ -10,6 +10,11 @@ import { createInterface } from "node:readline/promises";
 import { text as readStreamText } from "node:stream/consumers";
 
 import {
+  parseDecimalToken,
+  parseIntegerToken,
+} from "@stll/agent-input/numeric-token";
+
+import {
   actionAdmissionRefusalLines,
   actionAdmissionRefusalOutput,
   readCliActionAdmissionRefusal,
@@ -209,10 +214,14 @@ const parseBoundedInt = (
   spec: FlagSpec,
   raw: string,
 ): Result<number | string, string> => {
-  if (!/^-?\d+$/u.test(raw.trim())) {
-    return Result.ok(raw);
+  const parsed = parseIntegerToken(raw);
+  // Localized spellings remain the server normalizer's responsibility; unsafe integers cannot be sent without losing precision.
+  if (parsed.isErr()) {
+    return parsed.error.reason === "unsafe-integer"
+      ? Result.err(`${spec.flag} expects a safe integer`)
+      : Result.ok(raw);
   }
-  const value = Number.parseInt(raw.trim(), 10);
+  const value = parsed.value;
   if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
@@ -226,10 +235,12 @@ const parseBoundedNumber = (
   spec: FlagSpec,
   raw: string,
 ): Result<number | string, string> => {
-  const value = Number(raw.trim());
-  if (!Number.isFinite(value)) {
+  const parsed = parseDecimalToken(raw);
+  // Do not coerce an empty token to zero; unresolved spellings go to the server normalizer.
+  if (parsed.isErr()) {
     return Result.ok(raw);
   }
+  const value = parsed.value;
   if (spec.range !== "clamp" && spec.min !== undefined && value < spec.min) {
     return Result.err(`${spec.flag} must be >= ${spec.min}`);
   }
@@ -821,11 +832,11 @@ export const reservedFlagUsageError = (flags: LeafFlags): string | null => {
     return `--output must be one of: json, table, jsonl (got "${output}")`;
   }
   const limit = flags[RESERVED_FLAG_KEYS.limit];
-  if (typeof limit === "string") {
-    const trimmed = limit.trim();
-    if (!/^\d+$/u.test(trimmed) || Number.parseInt(trimmed, 10) < 1) {
-      return `--limit expects a positive integer (got "${limit}")`;
-    }
+  if (
+    typeof limit === "string" &&
+    parseIntegerToken(limit, { sign: "unsigned", min: 1 }).isErr()
+  ) {
+    return `--limit expects a positive integer (got "${limit}")`;
   }
   return null;
 };
@@ -1437,7 +1448,12 @@ export const runLeafCommand = async ({
     args["cursor"] = cursorFlag;
   }
   if (typeof limitFlag === "string") {
-    args["limit"] = Number.parseInt(limitFlag.trim(), 10);
+    args["limit"] = parseIntegerToken(limitFlag, {
+      sign: "unsigned",
+      min: 1,
+    }).unwrap(
+      "Reserved pagination limit was validated before building the request",
+    );
   }
 
   if (allActive) {

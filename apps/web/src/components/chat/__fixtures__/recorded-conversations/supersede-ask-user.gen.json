@@ -22,12 +22,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Draft the NDA"
               }
             ],
@@ -383,36 +383,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -584,12 +584,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000005",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:13.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Use the buyer's form"
               }
             ],
@@ -945,36 +945,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000005",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Use the buyer's form"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:14.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000005",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Use the buyer's form"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:15.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",

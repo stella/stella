@@ -26,7 +26,11 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
 } as const;
 
 const reportSsrError = createSsrErrorReporter({
-  captureError: (error) => getAnalytics().captureError(error),
+  captureError: (error) =>
+    getAnalytics().captureError(error, {
+      fingerprintKey: "server:failure",
+      scope: { type: "handler", handlerId: "server:failure" },
+    }),
   writeDiagnostic: (line) => {
     process.stderr.write(line);
   },

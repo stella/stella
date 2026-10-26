@@ -6,13 +6,6 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -30,8 +23,8 @@ import {
 } from "@/lib/workspaces/queries/correspondence";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { selectAvailableWorkspaceViews } from "@/lib/workspaces/queries/views.logic";
-import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 import { correspondenceViewId } from "@/lib/workspaces/view-layout";
+import { CorrespondenceAssigneeField } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-assignee-field";
 import { CorrespondenceProvenance } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance";
 import { correspondenceProvenancePresentation } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-provenance.logic";
 import { UploadedSource } from "@/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source";
@@ -63,16 +56,11 @@ function CorrespondenceDetailPage() {
   );
   const { record, filers, attachments } = data;
   const provenance = correspondenceProvenancePresentation(record);
-  const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
-  const membersView = useQueryView(membersQuery);
-  const members = membersView.type === "items" ? membersView.items : [];
   const update = useUpdateCorrespondence();
   const canUpdate = usePermissions({ workspace: ["update"] });
-  const tCommon = useTranslations("common");
 
   return (
     <div className="flex h-full flex-col">
-      <QueryViewFeedback view={membersView} />
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <BackToCorrespondenceLink workspaceId={workspaceId} />
 
@@ -173,49 +161,11 @@ function CorrespondenceDetailPage() {
               )}
             </DetailField>
             <DetailField label={t("common.assignee")}>
-              {canUpdate ? (
-                <Select
-                  disabled={update.isPending}
-                  onValueChange={(value) =>
-                    update.mutate({
-                      workspaceId,
-                      correspondenceId,
-                      type: "assign",
-                      assigneeId: value === "unassigned" ? null : value,
-                    })
-                  }
-                  value={record.assigneeId ?? "unassigned"}
-                >
-                  <SelectTrigger className="min-h-11 w-full sm:max-w-64">
-                    <SelectValue>
-                      {(value) =>
-                        value === "unassigned"
-                          ? tCommon("unassigned")
-                          : (members.find((member) => member.userId === value)
-                              ?.user?.name ?? tCommon("unassigned"))
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectPopup>
-                    <SelectItem value="unassigned">
-                      {tCommon("unassigned")}
-                    </SelectItem>
-                    {members.map((member) => {
-                      if (member.user === null) {
-                        return null;
-                      }
-                      return (
-                        <SelectItem key={member.userId} value={member.userId}>
-                          {member.user.name}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectPopup>
-                </Select>
-              ) : (
-                (members.find((member) => member.userId === record.assigneeId)
-                  ?.user?.name ?? tCommon("unassigned"))
-              )}
+              <CorrespondenceAssigneeField
+                assigneeId={record.assigneeId}
+                correspondenceId={correspondenceId}
+                workspaceId={workspaceId}
+              />
             </DetailField>
           </section>
 
@@ -340,7 +290,7 @@ const BackToCorrespondenceLink = ({ workspaceId }: { workspaceId: string }) => {
       correspondenceViewId(selectAvailableWorkspaceViews(views)),
   });
   const viewIdView = useQueryView(viewIdQuery);
-  useQueryViewError(viewIdView);
+  useQueryViewError(viewIdView, "BackToCorrespondenceLink:query");
   const viewId = viewIdView.type === "items" ? viewIdView.items : null;
   const label = (
     <span className="text-muted-foreground hover:text-foreground flex min-h-11 items-center px-2 text-sm">

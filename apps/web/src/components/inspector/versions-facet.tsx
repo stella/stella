@@ -37,6 +37,7 @@ import {
   entityVersionsOptions,
   fetchOlderVersions,
 } from "@/lib/workspaces/queries/entity-versions";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type VersionsFacetProps = {
   workspaceId: string;
@@ -56,6 +57,7 @@ export const VersionsFacet = ({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   const dataQuery = useQuery(
     entityVersionsOptions({
@@ -65,7 +67,7 @@ export const VersionsFacet = ({
     }),
   );
   const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "VersionsFacet:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Accumulated list seeded from the query's newest page and extended
@@ -148,7 +150,10 @@ export const VersionsFacet = ({
       // it for telemetry and surface a toast. Keep the cursor but flag
       // the error so auto-loading pauses (the manual button retries)
       // instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "VersionsFacet:failure",
+        scope: { type: "handler", handlerId: "VersionsFacet:failure" },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;
@@ -215,25 +220,17 @@ export const VersionsFacet = ({
     // are.
     // Detect "we're on the document route" by structure, not
     // by entityId-as-segment: the path is
-    // `/workspaces/{workspaceId}/{viewId}/document` where
-    // viewId is the view selector (typically "all"), not the
-    // entity id. The previous literal `${entityId}` check
-    // never matched in normal navigation, so version switches
-    // skipped the URL sync.
+    // `/workspaces/{workspaceId}/{viewId}/document`, and the
+    // entity is identified by the search param.
     const onDocumentRoute = new RegExp(
       `^/workspaces/${workspaceId}/[^/]+/document(?:/|$|\\?)`,
       "u",
     ).test(pathname);
     if (onDocumentRoute) {
-      // Pull the current viewId out of the path (typically
-      // "all") instead of swapping it for entityId — the
-      // route lives under whichever view the user opened it
-      // from, the entity is identified by the search param.
-      const segments = pathname.split("/");
-      const currentViewId = segments[3] ?? "all";
+      // The route stays under whichever view the user opened it from.
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: currentViewId },
+        params: viewParams,
         replace: true,
         search: (prev) => ({
           ...prev,

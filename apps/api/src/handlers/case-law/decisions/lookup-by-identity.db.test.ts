@@ -50,6 +50,26 @@ const euVersions = [
   { id: createSafeId<"caseLawDecision">(), language: "en" },
   { id: createSafeId<"caseLawDecision">(), language: "fr" },
 ] as const;
+/**
+ * Versions created, and so ordered by id, alphabetically: the order a crawl
+ * of all 24 languages writes them in, which put Bulgarian first.
+ */
+const translatedVersions = (ecli: string, languages: readonly string[]) =>
+  languages.map((language) => ({
+    id: createSafeId<"caseLawDecision">(),
+    ecli,
+    language,
+  }));
+const unstatedLanguageVersions = translatedVersions("ECLI:EU:C:2020:559", [
+  "bg",
+  "cs",
+  "en",
+]);
+const statedLanguageVersions = translatedVersions("ECLI:EU:C:2005:709", [
+  "bg",
+  "de",
+  "en",
+]);
 
 /** A bare docket's locator: the case file, nothing singling a decision out. */
 const docketLocator = (value: string) =>
@@ -205,6 +225,38 @@ beforeAll(
             ecli: euEcli,
             language,
             languageGroupKey: "lookup-eu-judgment",
+          }) satisfies typeof caseLawDecisions.$inferInsert,
+      ),
+    );
+    await db.insert(caseLawDecisions).values(
+      [
+        ...unstatedLanguageVersions.map((version) => ({
+          ...version,
+          caseNumber: "C-311/18",
+          metadata: {},
+        })),
+        // The notice states the language of the case as an authority code.
+        ...statedLanguageVersions.map((version) => ({
+          ...version,
+          caseNumber: "C-144/04",
+          metadata: {
+            procedureLanguage: [{ code: "DEU", label: "German" }],
+          },
+        })),
+      ].map(
+        ({ caseNumber, ecli, id, language, metadata }) =>
+          ({
+            id,
+            sourceId: euSourceId,
+            caseNumber,
+            citationKey: citationKeyOf(caseNumber),
+            court: "Court of Justice",
+            country: "EU",
+            decisionDate: "2020-07-16",
+            ecli,
+            language,
+            languageGroupKey: ecli,
+            metadata,
           }) satisfies typeof caseLawDecisions.$inferInsert,
       ),
     );
@@ -432,6 +484,32 @@ test("a typed reference resolves only through identifiers of its own type", asyn
   expect(reporterAsDocket).toEqual([]);
 });
 
+test.each([
+  {
+    name: "in English when its own language is not stated",
+    versions: unstatedLanguageVersions,
+    expected: "en",
+  },
+  {
+    name: "in the language of the case when the source states it",
+    versions: statedLanguageVersions,
+    expected: "de",
+  },
+])("an EU decision resolves $name", async ({ versions, expected }) => {
+  const ecli = versions[0]?.ecli ?? panic("Fixture group is empty");
+  const rows = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "EU",
+    locator: { kind: "ecli", value: ecli },
+  });
+  // The fixture is ordered so the first-sorting version is not the answer.
+  expect(versions[0]?.language).not.toBe(expected);
+  expect(rows.map(({ language }) => language)).toEqual([expected]);
+  expect(rows[0]?.languageAlternates.map(({ language }) => language)).toEqual(
+    versions.map(({ language }) => language),
+  );
+});
+
 test("EU ECLI resolution returns one decision with its stored language versions", async () => {
   const admitted = admitLawRead({
     organizationId: mintAuthProviderId<"organization">(),
@@ -486,23 +564,17 @@ test.each(
     (["pages", "search"] as const).map((surface) => ({ version, surface })),
   ),
 )(
-  "stored EU $version.language stays closed on the $surface surface",
+  "stored EU $version.language opens on the $surface surface",
   async ({ surface, version }) => {
-    expect(
-      await withRedistributableSubject(
-        caseLawDb,
-        "identity",
-        { kind: "id", id: version.id },
-        async ({ id }) => id,
-      ),
-    ).toBe(version.id);
-    expect(
-      await withRedistributableSubject(
-        caseLawDb,
-        surface,
-        { kind: "id", id: version.id },
-        async ({ id }) => id,
-      ),
-    ).toBeNull();
+    for (const reading of ["identity", surface] as const) {
+      expect(
+        await withRedistributableSubject(
+          caseLawDb,
+          reading,
+          { kind: "id", id: version.id },
+          async ({ id }) => id,
+        ),
+      ).toBe(version.id);
+    }
   },
 );

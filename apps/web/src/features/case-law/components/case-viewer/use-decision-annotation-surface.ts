@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 
+import { saveCommentEdit } from "@/components/legal-reader/annotations/comment-edit";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
@@ -12,7 +13,7 @@ import { useReaderAnnotations } from "@/components/legal-reader/annotations/use-
 import type {
   CommentMarginItem,
   ComposerMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+} from "@/components/legal-reader/margin-notes";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { detached } from "@/lib/detached";
@@ -79,6 +80,7 @@ export const useDecisionAnnotationSurface = ({
     .filter((item) => item.kind === "comment" && item.body !== null)
     .map((item) => ({
       author: { image: item.authorImage, name: item.authorName },
+      createdAt: item.createdAt,
       id: item.id,
       kind: "comment",
       mine: item.mine,
@@ -86,6 +88,20 @@ export const useDecisionAnnotationSurface = ({
         detached(
           annotations.controller.remove(item.id),
           "legal-reader.annotation-remove",
+        );
+      },
+      onEdit: (edit) => {
+        detached(
+          saveCommentEdit({
+            comment: {
+              body: item.body ?? "",
+              id: item.id,
+              visibility: item.visibility,
+            },
+            edit,
+            update: annotations.controller.update,
+          }),
+          "legal-reader.annotation-comment-edit",
         );
       },
       onToggleVisibility: () => {
@@ -100,6 +116,7 @@ export const useDecisionAnnotationSurface = ({
       },
       startAnchorId: item.blockAnchorId,
       text: item.body ?? "",
+      updatedAt: item.updatedAt,
       visibility: item.visibility,
     }));
   const composerNotes = ((): ComposerMarginItem[] => {

@@ -18,11 +18,13 @@ import { Popover, PopoverPopup } from "@stll/ui/popover";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
 import { useLatest } from "@stll/ui/use-latest";
+import { cn } from "@stll/ui/utils";
 
 import { propertyAiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import { AiColumnRunButton } from "@/components/workspaces/ai-column-run-controls";
 import {
   aiColumnRunMenu,
+  aiColumnRunReveal,
   aiColumnRunScope,
 } from "@/components/workspaces/ai-column-run.logic";
 import { CreateProperty } from "@/components/workspaces/create-property";
@@ -37,7 +39,7 @@ import type { TableHeader } from "@/components/workspaces/table/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
@@ -122,11 +124,6 @@ export const PropertyPopover = ({
       rows: tableRows,
     }),
   );
-  const hasNotRunScopeRows = tableRows.some(
-    (row) =>
-      availableScopeRowIds.has(row.original.entityId) &&
-      propertyAiCellState(row.original.fields[id]?.content).type === "not_run",
-  );
   const scopedStates = tableRows
     .filter((row) => availableScopeRowIds.has(row.original.entityId))
     .map((row) => propertyAiCellState(row.original.fields[id]?.content));
@@ -186,7 +183,7 @@ export const PropertyPopover = ({
           ...groupParams,
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, { action, scoped, set }) => {
       detached(
@@ -288,7 +285,13 @@ export const PropertyPopover = ({
         });
         detached(startWorkflow(), "property-popover.start-workflow");
       } catch (error) {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "PropertyPopover.replaceDependency:failure",
+          scope: {
+            type: "handler",
+            handlerId: "PropertyPopover.replaceDependency:failure",
+          },
+        });
         notifyUserError(error, t("errors.actionFailed"));
       } finally {
         if (dependencyGenerationRef.current === generation) {
@@ -348,7 +351,14 @@ export const PropertyPopover = ({
   return (
     <>
       <Popover modal onOpenChange={setIsOpen} open={isOpen}>
-        <div className="flex min-w-0 items-center">
+        {/* The end padding keeps the Play clear of the column resize handle,
+            which straddles the header's end border. */}
+        <div
+          className={cn(
+            "flex min-w-0 items-center",
+            property.tool.type === "ai-model" && "gap-1 pe-2",
+          )}
+        >
           <span className="min-w-0 flex-1">
             <PropertyPopoverTrigger
               disabled={updateProperty.isPending}
@@ -359,7 +369,10 @@ export const PropertyPopover = ({
           {property.tool.type === "ai-model" && (
             <AiColumnRunButton
               scope={runScope}
-              hasNotRun={hasNotRunScopeRows}
+              reveal={aiColumnRunReveal({
+                states: scopedStates,
+                menuOpen: isOpen,
+              })}
               disabled={headerRunTargetIds.length === 0}
               onRun={() => {
                 detached(

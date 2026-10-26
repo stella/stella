@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   cpSync,
   mkdirSync,
@@ -11,10 +11,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 import * as v from "valibot";
 
 import {
+  type CompilerInputRecorder,
   type CompilerInputStamp,
   compilerInputStampSchema,
   createCompilerInputRecorder,
@@ -32,32 +33,27 @@ const write = (file: string, source: string) => {
   writeFileSync(destination, source);
 };
 
-// Builds a small program the way the generator does: a parsed tsconfig and a
-// default compiler host, both routed through the recorder.
-const recordProgram = (): CompilerInputStamp => {
-  const recorder = createCompilerInputRecorder();
-  const config = ts.getParsedCommandLineOfConfigFile(
-    path.join(directory, "tsconfig.json"),
-    {},
-    recorder.wrap({
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: () => {
-        panic("unreadable tsconfig");
-      },
-    }),
-  );
-  if (config === undefined) {
-    panic("tsconfig not parsed");
+// Builds a program from the directory's tsconfig the way the generator does:
+// the TypeScript 7 compiler, asking every question through the recorder.
+const buildProgram = async (recorder: CompilerInputRecorder) => {
+  const tsconfig = path.join(directory, "tsconfig.json");
+  const api = new API({ cwd: directory, fs: recorder.fileSystem() });
+  try {
+    const snapshot = await api.createSnapshot({ openProjects: [tsconfig] });
+    return (
+      (await snapshot
+        .getConfiguredProject(tsconfig)
+        ?.program.getSourceFile(path.join(directory, "src/a.ts"))) !== undefined
+    );
+  } finally {
+    await api.close();
   }
-  const host = recorder.wrap(ts.createCompilerHost(config.options));
-  const program = ts.createProgram({
-    rootNames: config.fileNames,
-    options: config.options,
-    host,
-  });
-  expect(program.getSourceFile(path.join(directory, "src/b.ts"))).toBeDefined();
-  // Stored as JSON, so the replay must accept what JSON gives back (an
-  // omitted argument comes back as null).
+};
+
+const recordProgram = async (): Promise<CompilerInputStamp> => {
+  const recorder = createCompilerInputRecorder();
+  expect(await buildProgram(recorder)).toBe(true);
+  // Stored as JSON, so the replay must accept what JSON gives back.
   const stored = JSON.stringify(recorder.stamp(CONTEXT));
   return v.parse(compilerInputStampSchema, JSON.parse(stored));
 };
@@ -86,36 +82,28 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true });
 });
 
-test("an untouched program is current, without building it again", async () => {
-  const stamp = recordProgram();
+test("an untouched program is current", async () => {
+  const stamp = await recordProgram();
   expect(Object.keys(stamp.contents)).toContain(
     path.join(directory, "src/b.ts"),
   );
-  // Building a program reads every source through ts.sys.readFile; the replay
-  // hashes bytes directly and never parses them.
-  const readFile = spyOn(ts.sys, "readFile");
-  try {
-    expect(await isCompilerInputStampCurrent(stamp, CONTEXT)).toBe(true);
-    expect(readFile).not.toHaveBeenCalled();
-  } finally {
-    readFile.mockRestore();
-  }
+  expect(await isCompilerInputStampCurrent(stamp, CONTEXT)).toBe(true);
 });
 
 test("a different context is not current", async () => {
-  expect(await isCompilerInputStampCurrent(recordProgram(), "other")).toBe(
-    false,
-  );
+  expect(
+    await isCompilerInputStampCurrent(await recordProgram(), "other"),
+  ).toBe(false);
 });
 
 test("an edited dependency is not current", async () => {
-  const stamp = recordProgram();
+  const stamp = await recordProgram();
   write("src/b.ts", "export type B = number;\n");
   expect(await isCompilerInputStampCurrent(stamp, CONTEXT)).toBe(false);
 });
 
 test("an edited tsconfig is not current", async () => {
-  const stamp = recordProgram();
+  const stamp = await recordProgram();
   write(
     "tsconfig.json",
     JSON.stringify({
@@ -129,14 +117,14 @@ test("an edited tsconfig is not current", async () => {
 test("a file that would change module resolution is not current", async () => {
   write("src/c/index.ts", "export type C = string;\n");
   write("src/a.ts", 'import type { C } from "./c";\nexport type A = C;\n');
-  const stamp = recordProgram();
+  const stamp = await recordProgram();
   // `./c` now resolves to c.ts before c/index.ts.
   write("src/c.ts", "export type C = number;\n");
   expect(await isCompilerInputStampCurrent(stamp, CONTEXT)).toBe(false);
 });
 
 test("a new ambient declaration under the included tree is not current", async () => {
-  const stamp = recordProgram();
+  const stamp = await recordProgram();
   write("src/nested/globals.d.ts", "declare const injected: string;\n");
   expect(await isCompilerInputStampCurrent(stamp, CONTEXT)).toBe(false);
 });
@@ -155,7 +143,7 @@ test("a script's source hash is the same for checkouts at other paths", () => {
   );
 });
 
-test("portable stamps preserve directory names and relative compiler globs", async () => {
+test("portable stamps keep directory entries as names", async () => {
   // The generator runs inside the checkout. Relative names must keep their
   // meaning even when cwd could resolve them into paths under the root.
   const recorded = Bun.spawnSync(
@@ -163,13 +151,11 @@ test("portable stamps preserve directory names and relative compiler globs", asy
       "bun",
       "-e",
       `
-      import ts from ${JSON.stringify(Bun.resolveSync("typescript6", import.meta.dir))};
       import { createCompilerInputRecorder } from ${JSON.stringify(path.join(import.meta.dir, "compiler-input-stamp.ts"))};
       const root = process.cwd();
       const recorder = createCompilerInputRecorder();
-      const host = recorder.wrap({ getDirectories: ts.sys.getDirectories, readDirectory: ts.sys.readDirectory });
-      host.getDirectories(root);
-      host.readDirectory(root, [".ts"], ["node_modules"], ["src/**/*"]);
+      const fileSystem = recorder.fileSystem();
+      if (typeof fileSystem.getAccessibleEntries === "function") fileSystem.getAccessibleEntries(root);
       console.log(JSON.stringify(recorder.portableStamp("context", root)));
     `,
     ],
@@ -180,12 +166,11 @@ test("portable stamps preserve directory names and relative compiler globs", asy
     compilerInputStampSchema,
     JSON.parse(recorded.stdout.toString()),
   );
-  expect(Object.values(portable.subdirectories)).toContainEqual(["src"]);
-  expect(portable.listings.at(0)?.[0].slice(1, 4)).toEqual([
-    [".ts"],
-    ["node_modules"],
-    ["src/**/*"],
-  ]);
+  expect(Object.values(portable.entries)).toContainEqual({
+    files: ["tsconfig.json"],
+    directories: ["src"],
+    symlinks: [],
+  });
   const localized = localizeStamp(portable, realpathSync(directory));
   expect(localized).toBeDefined();
   if (localized === undefined) {
@@ -194,29 +179,14 @@ test("portable stamps preserve directory names and relative compiler globs", asy
   expect(await isCompilerInputStampCurrent(localized, CONTEXT)).toBe(true);
 });
 
-test("a portable stamp rejects an unrecorded destination ancestor dependency", () => {
+test("a portable stamp rejects an unrecorded destination ancestor dependency", async () => {
   const packageName = `stamp-ancestor-${process.pid}`;
   write(
     "src/a.ts",
     `import type { Missing } from ${JSON.stringify(packageName)};\nexport type A = Missing;\n`,
   );
   const recorder = createCompilerInputRecorder();
-  const config = ts.getParsedCommandLineOfConfigFile(
-    path.join(directory, "tsconfig.json"),
-    {},
-    recorder.wrap({
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: () => panic("unreadable tsconfig"),
-    }),
-  );
-  if (config === undefined) {
-    panic("tsconfig not parsed");
-  }
-  ts.createProgram({
-    rootNames: config.fileNames,
-    options: config.options,
-    host: recorder.wrap(ts.createCompilerHost(config.options)),
-  });
+  await buildProgram(recorder);
   const portable = recorder.portableStamp(CONTEXT, directory);
   // The stamp records ancestors relative to the checkout, as deep as the
   // source checkout sits. A destination nested deeper than that has an
@@ -249,29 +219,14 @@ test("a portable stamp rejects an unrecorded destination ancestor dependency", (
   }
 });
 
-test("a portable stamp rejects a dependency in an unrecorded ancestor of a symlinked checkout path", () => {
+test("a portable stamp rejects a dependency in an unrecorded ancestor of a symlinked checkout path", async () => {
   const packageName = `stamp-link-ancestor-${process.pid}`;
   write(
     "src/a.ts",
     `import type { Missing } from ${JSON.stringify(packageName)};\nexport type A = Missing;\n`,
   );
   const recorder = createCompilerInputRecorder();
-  const config = ts.getParsedCommandLineOfConfigFile(
-    path.join(directory, "tsconfig.json"),
-    {},
-    recorder.wrap({
-      ...ts.sys,
-      onUnRecoverableConfigFileDiagnostic: () => panic("unreadable tsconfig"),
-    }),
-  );
-  if (config === undefined) {
-    panic("tsconfig not parsed");
-  }
-  ts.createProgram({
-    rootNames: config.fileNames,
-    options: config.options,
-    host: recorder.wrap(ts.createCompilerHost(config.options)),
-  });
+  await buildProgram(recorder);
   const portable = recorder.portableStamp(CONTEXT, directory);
   // The checkout's resolved path is shallow; only the path it is reached
   // through is nested deeper than the source, under a dependency directory.
@@ -309,8 +264,11 @@ test("a portable stamp rejects a dependency in an unrecorded ancestor of a symli
   }
 });
 
-test("a portable stamp for an unreadable checkout is not reused", () => {
+test("a portable stamp for an unreadable checkout is not reused", async () => {
   expect(
-    localizeStamp(recordProgram(), path.join(directory, "missing-checkout")),
+    localizeStamp(
+      await recordProgram(),
+      path.join(directory, "missing-checkout"),
+    ),
   ).toBeUndefined();
 });

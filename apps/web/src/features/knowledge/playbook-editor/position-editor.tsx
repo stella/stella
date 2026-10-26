@@ -22,8 +22,10 @@ import {
   ComboboxList,
   ComboboxPopup,
 } from "@stll/ui/combobox";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   ChevronDownIcon,
+  ChevronRightIcon,
   ChevronUpIcon,
   DuplicateIcon,
   FlagIcon,
@@ -403,14 +405,15 @@ export const PositionEditor = ({
               type="button"
               variant="ghost"
             >
-              <ChevronDownIcon
-                className={cn("transition-transform", open && "rotate-180")}
+              <DirectionalIcon
+                className={cn("transition-transform", open && "rotate-90")}
+                flip={!open}
+                icon={ChevronRightIcon}
               />
             </Button>
           </span>
         }
         className="gap-1.5"
-        index={index}
         leading={
           <Button
             aria-label={t("knowledge.playbooks.reorderPosition")}
@@ -1255,7 +1258,7 @@ const ClausePicker = ({
     enabled: clauseId !== "",
   });
   const detailView = useQueryView(detailQuery);
-  useQueryViewError(detailView);
+  useQueryViewError(detailView, "ClausePicker:query");
 
   const resolvedTitle = (() => {
     const detail = detailView.type === "items" ? detailView.items : undefined;

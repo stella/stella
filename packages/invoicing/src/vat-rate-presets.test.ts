@@ -32,10 +32,18 @@ describe("VAT rate presets", () => {
     expect(standardVatRateOn(VAT_RATE_PRESETS.CZ, "2023-12-31")).toBe(2100);
     expect(standardVatRateOn(VAT_RATE_PRESETS.CZ, "2024-01-01")).toBe(2100);
   });
+
+  test("resolves the Polish standard rate on 2026-10-24", () => {
+    expect(standardVatRateOn(VAT_RATE_PRESETS.PL, "2026-10-24")).toBe(2300);
+  });
 });
 
 describe("VAT rates for a seller's country", () => {
-  const bothPresets = [...VAT_RATE_PRESETS.SK, ...VAT_RATE_PRESETS.CZ];
+  const bothPresets = [
+    ...VAT_RATE_PRESETS.SK,
+    ...VAT_RATE_PRESETS.CZ,
+    ...VAT_RATE_PRESETS.PL,
+  ];
   const custom = {
     code: "office-standard",
     name: "Own 18 %",

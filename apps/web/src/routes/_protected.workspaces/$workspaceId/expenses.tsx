@@ -1,7 +1,7 @@
 import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -10,7 +10,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -58,7 +58,14 @@ export const Route = createFileRoute(
         context.queryClient,
         expensesOptions(params.workspaceId, { dateFrom, dateTo }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey: "workspaces.workspaceId.expenses.loader:failure",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate: "/_protected/workspaces/$workspaceId/expenses",
+            },
+          });
         },
       ),
       "expenses.prefetch",

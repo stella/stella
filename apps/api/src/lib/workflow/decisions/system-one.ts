@@ -1,5 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
+
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 /**
  * TypeSafe System One transport.
  *
@@ -16,8 +19,6 @@ import * as v from "valibot";
  * Answers are validated against the questions that produced them, so a
  * choice outside its own criteria is a transport error, never a value.
  */
-
-import { DECISION_MODEL_CATALOG } from "@stll/ai-catalog";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { createFetchWithTimeout } from "@stll/fetch";
 import type { Fetcher } from "@stll/fetch";
@@ -374,8 +375,11 @@ const abortableSleep = async (
 
 const retryDelayMs = (response: Response, attempt: number): number => {
   const header = response.headers.get("retry-after");
-  const seconds = header === null ? Number.NaN : Number(header);
-  if (Number.isFinite(seconds) && seconds >= 0) {
+  const seconds =
+    header === null
+      ? null
+      : parseDecimalToken(header, { sign: "unsigned" }).unwrapOr(null);
+  if (seconds !== null) {
     return Math.min(seconds * 1000, RETRY_MAX_DELAY_MS);
   }
   return backoffDelay(attempt, {
