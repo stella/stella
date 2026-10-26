@@ -11,8 +11,12 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 
-import type { IdentifierNode as Identifier } from "./syntax-estree-names";
-import { type Node, parseSource, walk } from "./syntax-tree";
+import {
+  type IdentifierNode as Identifier,
+  type Node,
+  parseSource,
+  walk,
+} from "./syntax-tree";
 import {
   sourceWriteExceptionIssues,
   validateSourceWriteExceptions,

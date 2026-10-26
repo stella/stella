@@ -3,16 +3,14 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { sourceFileIndex } from "./source-file-index";
-import type {
-  IdentifierNode as Identifier,
-  PropertyNode as Property,
-} from "./syntax-estree-names";
 import {
+  type IdentifierNode as Identifier,
   type JSXIdentifier,
   type JSXOpeningElement,
   type Node,
   type ParsedSource,
   parseSource,
+  type PropertyNode as Property,
   walk,
 } from "./syntax-tree";
 
