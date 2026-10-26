@@ -193,7 +193,18 @@ export const prepareStrace = ({
 };
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
 const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
-const SCAN_PRELOAD_PATH = "scripts/script-test-scan-preload.ts";
+export const SCAN_PRELOAD_PATH = "scripts/script-test-scan-preload.ts";
+
+/**
+ * Files a traced test may open without declaring them: its own import
+ * closure and the runner's instrumentation (the scan preload Bun loads into
+ * every test, with everything it imports).
+ */
+export const tracedAllowance = (
+  closure: (file: string) => ReadonlySet<string>,
+  testFile: string,
+): ReadonlySet<string> =>
+  new Set([...closure(testFile), ...closure(SCAN_PRELOAD_PATH)]);
 
 const SCRIPT_TEST_ALL_RULES = {
   manifest: /(?:^|\/)package\.json$/u,
@@ -679,7 +690,7 @@ const run = async ({
     const undeclared = trace
       ? undeclaredTracedFiles({
           trace: traceText,
-          closure: graph.closure(testFile),
+          closure: tracedAllowance((file) => graph.closure(file), testFile),
           declared: declaredInputs.get(testFile) ?? [],
           tracked,
         })
@@ -762,6 +773,7 @@ if (import.meta.main) {
     const graph = buildImportGraph(REPO_ROOT, [
       ...selection.files.filter((file) => file.endsWith(".ts")),
       RUNNER_PATH,
+      SCAN_PRELOAD_PATH,
     ]);
     const tracked = trackedFiles();
     const commands = selection.files.map((file) => ({

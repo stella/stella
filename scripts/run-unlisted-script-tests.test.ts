@@ -16,7 +16,9 @@ import {
   balanceTestFiles,
   parseScriptTestArguments,
   prepareStrace,
+  SCAN_PRELOAD_PATH,
   selectScriptTests,
+  tracedAllowance,
   uncoveredScans,
   undeclaredTracedFiles,
   unlistedTestCommands,
@@ -435,6 +437,31 @@ describe("directory scan coverage", () => {
         }),
       ).toEqual([]);
     });
+  });
+
+  test("the runner's own scan preload is never an undeclared input", () => {
+    const closures = new Map<string, ReadonlySet<string>>([
+      ["scripts/subject.test.ts", new Set(["scripts/subject.test.ts"])],
+      [
+        SCAN_PRELOAD_PATH,
+        new Set([SCAN_PRELOAD_PATH, "scripts/scan-preload-helper.ts"]),
+      ],
+    ]);
+    const trace = [
+      `1 openat(AT_FDCWD</repo>, "${path.resolve(SCAN_PRELOAD_PATH)}", O_RDONLY) = 3`,
+      `1 openat(AT_FDCWD</repo>, "${path.resolve("scripts/scan-preload-helper.ts")}", O_RDONLY) = 3`,
+    ].join("\n");
+    expect(
+      undeclaredTracedFiles({
+        trace,
+        closure: tracedAllowance(
+          (file) => closures.get(file) ?? new Set(),
+          "scripts/subject.test.ts",
+        ),
+        declared: [],
+        tracked: new Set([SCAN_PRELOAD_PATH, "scripts/scan-preload-helper.ts"]),
+      }),
+    ).toEqual([]);
   });
 
   test("a truncated trace record fails instead of escaping verification", () => {
