@@ -149,6 +149,25 @@ assert_file "a tolerated failure is a warning with escaped command text" "$dir/o
 ::warning::flaky 100%25 a%0A::error::injected failed after 2 attempts (exit 7)"
 teardown_case
 
+setup_case
+export FAKE_SUCCEED_ON=99
+export FAKE_FAILURE_STATUS=2
+status=0
+PATH="$dir/bin:$PATH" RETRY_DELAYS_SECONDS=0 RETRY_PASSTHROUGH_EXIT_CODES="2 4" \
+  bash "$SCRIPT" flaky ci > "$dir/output" 2>&1 || status=$?
+if [[ "$status" == 2 ]]; then
+  PASS=$((PASS + 1))
+  printf '  PASS  returns a listed exit code as an answer\n'
+else
+  FAIL=$((FAIL + 1))
+  FAIL_NAMES+=("returns a listed exit code as an answer")
+  printf '  FAIL  returns a listed exit code as an answer (got %s)\n' "$status"
+fi
+assert_file "does not retry a listed exit code" "$FAKE_COUNT_FILE" "1"
+assert_file "reports nothing for a listed exit code" "$dir/output" ""
+teardown_case
+
+run_case "rejects invalid passthrough exit codes" 2 env RETRY_PASSTHROUGH_EXIT_CODES=absent bash "$SCRIPT" flaky ci
 run_case "rejects invalid attempts" 2 env RETRY_ATTEMPTS=0 bash "$SCRIPT" flaky ci
 run_case "rejects invalid delays" 2 env RETRY_DELAYS_SECONDS=soon bash "$SCRIPT" flaky ci
 run_case "rejects an empty delay list" 2 env RETRY_DELAYS_SECONDS=" " bash "$SCRIPT" flaky ci

@@ -19,7 +19,12 @@
 # Inputs (environment): EVENT_NAME, PR_BASE_SHA, PR_HEAD_SHA, TARGET_REF,
 # GITHUB_OUTPUT.
 set -euo pipefail
-retry_script="$(dirname "${BASH_SOURCE[0]}")/retry.sh"
+# Resolved without dirname: callers may run this with only bash and git.
+script_dir="${BASH_SOURCE[0]%/*}"
+if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then
+  script_dir=.
+fi
+retry_script="$script_dir/retry.sh"
 base=""
 if [[ "$EVENT_NAME" == pull_request ]]; then
   base="$PR_BASE_SHA"
@@ -34,7 +39,7 @@ elif [[ "$EVENT_NAME" == merge_group ]]; then
     unshallow=(--unshallow)
   fi
   if [[ -n "$ref" ]] &&
-    bash "$retry_script" git fetch --quiet --no-tags --filter=blob:none ${unshallow[@]+"${unshallow[@]}"} origin "$ref" &&
+    "$BASH" "$retry_script" git fetch --quiet --no-tags --filter=blob:none ${unshallow[@]+"${unshallow[@]}"} origin "$ref" &&
     target="$(git rev-parse FETCH_HEAD)" &&
     merge_base="$(git merge-base "$target" HEAD)"; then
     base="$merge_base"

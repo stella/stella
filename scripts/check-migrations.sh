@@ -3,7 +3,12 @@
 # Guard against schema changes landing without migration files.
 #
 set -euo pipefail
-retry_script="$(dirname "${BASH_SOURCE[0]}")/retry.sh"
+# Resolved without dirname: callers may run this with only bash and git.
+script_dir="${BASH_SOURCE[0]%/*}"
+if [[ "$script_dir" == "${BASH_SOURCE[0]}" ]]; then
+  script_dir=.
+fi
+retry_script="$script_dir/retry.sh"
 
 BASE_REF="${BASE_REF:-}"
 
@@ -17,7 +22,7 @@ fi
 
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   echo "Base ref '$BASE_REF' is not available; fetching origin/main."
-  bash "$retry_script" git fetch origin main --depth=1
+  "$BASH" "$retry_script" git fetch origin main --depth=1
   BASE_REF="origin/main"
 fi
 

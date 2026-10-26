@@ -49,17 +49,29 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: |
-            scripts/gh-retry.sh
-            scripts/retry.sh
+          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout network retry helper
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          path: .network-retry
+          persist-credentials: false
+          sparse-checkout: scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
-          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
-          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
+
+      - name: Stage network retry helper
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-retry"
+          cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"
 
       - name: Cancel merge_group runs whose branch no longer exists
         timeout-minutes: 5
@@ -79,7 +91,7 @@ jobs:
             # ls-remote exits 2 only when the ref is absent; any other
             # failure leaves the run alone.
             set +e
-            bash "$NETWORK_RETRY_SCRIPT" git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
+            RETRY_PASSTHROUGH_EXIT_CODES=2 bash "$RUNNER_TEMP/network-retry/retry.sh" git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
             code=$?
             set -e
             if (( code != 2 )); then

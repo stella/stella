@@ -141,7 +141,7 @@ const CONTROL_PREFIX =
   /^(?:(?:if|while|until|time|!|\{|\(|\$\(|`|exec|command|env|[A-Za-z_]\w*=(?:\$\(|`|"[^"]*"|'[^']*'|[^\s$`(]*))(?:\s+|(?<=[(`])))+/u;
 // A command retries only when the retry helper is the command it runs.
 const RETRY_START =
-  /^(?:(?:bash|sh)\s+)?(?:["']?[^\s"']*(?:gh-)?retry\.sh["']?|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?)(?:\s|$)/u;
+  /^(?:(?:bash|sh|"?\$\{?BASH\}?"?)\s+)?(?:["']?[^\s"']*(?:gh-)?retry\.sh["']?|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?)(?:\s|$)/u;
 
 /** Whether a command segment runs through the retry helper. */
 const startsWithRetry = (segment: string): boolean =>
