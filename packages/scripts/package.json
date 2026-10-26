@@ -35,8 +35,7 @@
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "oxc-parser": "catalog:",
-    "oxc-transform-react": "catalog:",
-    "typescript6": "catalog:"
+    "oxc-transform-react": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
