@@ -119,7 +119,7 @@ const createDesktopCredential = async (
 ) => {
   const device = await createDesktopDeviceSigner();
   const correlationId = Bun.randomUUIDv7();
-  const verifier = randomBytes(32).toString("hex");
+  const verifier = randomBytes(32).toHex();
   const grant = await postJson("/desktop-registry/grant", browser, {
     correlationId,
     deviceJkt: device.deviceJkt,

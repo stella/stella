@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { resultTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -166,8 +166,14 @@ export const createFolderFromSelectionHandler = async function* ({
   }
   const entityId = yield* attempt;
 
-  flushSearchRepairs([entityId]).catch(captureError);
-  syncSearchActivity(workspaceId).catch(captureError);
+  detached(
+    flushSearchRepairs([entityId]),
+    "folder-from-selection.flush-search-repairs",
+  );
+  detached(
+    syncSearchActivity(workspaceId),
+    "folder-from-selection.sync-search-activity",
+  );
 
   return Result.ok({ entityId });
 };

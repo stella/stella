@@ -112,7 +112,10 @@ export const useCreateContact = () => {
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateContact:failure",
+        scope: { type: "handler", handlerId: "useCreateContact:failure" },
+      });
     },
   });
 };
@@ -192,7 +195,10 @@ export const useUpdateContact = () => {
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateContact:failure",
+        scope: { type: "handler", handlerId: "useUpdateContact:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -214,7 +220,10 @@ export const useDeleteContact = () => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteContact:failure",
+        scope: { type: "handler", handlerId: "useDeleteContact:failure" },
+      });
     },
   });
 };

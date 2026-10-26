@@ -1657,7 +1657,7 @@ export const skUsFixture = (documentUrl?: URL): EnrolledAdapterFixture => ({
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({
-      content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+      content: Buffer.from(SK_US_DOCUMENT_XHTML).toBase64(),
     });
     globalThis.fetch = asFetchMock(
       async (input: string | URL | Request, init?: RequestInit) => {

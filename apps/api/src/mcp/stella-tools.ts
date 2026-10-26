@@ -1552,10 +1552,16 @@ const readMatterOverview = async ({
   }
 
   if (overview.isErr()) {
-    return internalFailureResult(overview.error);
+    return internalFailureResult(
+      overview.error,
+      "mcp.readMatterOverview.overview_error",
+    );
   }
   if (contacts.isErr()) {
-    return internalFailureResult(contacts.error);
+    return internalFailureResult(
+      contacts.error,
+      "mcp.readMatterOverview.contacts_error",
+    );
   }
 
   const matter = {
