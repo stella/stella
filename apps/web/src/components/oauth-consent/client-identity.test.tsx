@@ -14,9 +14,9 @@ import {
   ConsentClientVerification,
 } from "@/components/oauth-consent/client-identity";
 import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
-import { ConsentSuccess } from "@/components/oauth-consent/consent-success";
 import en from "@/i18n/langs/en.json";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
+import { ConsentSuccess } from "@/routes/-consent-success";
 
 const FALLBACK_NAME = en.consent.defaultClientName;
 const VERIFIED_MARK = 'data-slot="verified-client-mark"';

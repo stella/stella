@@ -17,7 +17,6 @@ import {
   ConsentAccountRows,
   ConsentDecisionBar,
 } from "@/components/oauth-consent/consent-controls";
-import { ConsentSuccess } from "@/components/oauth-consent/consent-success";
 import { useOAuthAccountSwitch } from "@/components/oauth-consent/oauth-account";
 import { OAuthClientDetails } from "@/components/oauth-consent/oauth-client-details";
 import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
@@ -43,6 +42,7 @@ import { pageTitle } from "@/lib/page-title";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
+import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
