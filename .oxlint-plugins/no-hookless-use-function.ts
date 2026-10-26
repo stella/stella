@@ -22,7 +22,6 @@
 import { eslintCompatPlugin, type ESTree } from "@oxlint/plugins";
 
 import { isAstNode, memberPropertyName, unwrapExpression } from "./utils.ts";
-import type { AstNode } from "./utils.ts";
 
 const HOOK_NAME = /^use[A-Z]/u;
 // Bare `use` is React 19's `use(promise | context)`, which is a hook call too.
@@ -65,7 +64,11 @@ const callsHook = (node: unknown): boolean => {
   return false;
 };
 
-type FunctionNode = ESTree.ArrowFunctionExpression | ESTree.Function;
+type HookCheckOptions = {
+  name: string;
+  body: unknown;
+  node: ESTree.BindingIdentifier;
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-hookless-use-function" },
@@ -79,8 +82,8 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
-        const check = (name: string, fn: FunctionNode, node: AstNode) => {
-          if (!HOOK_NAME.test(name) || !fn.body || callsHook(fn.body)) {
+        const check = ({ name, body, node }: HookCheckOptions) => {
+          if (!HOOK_NAME.test(name) || !body || callsHook(body)) {
             return;
           }
           context.report({ node, messageId: "hookless", data: { name } });
@@ -88,7 +91,7 @@ export default eslintCompatPlugin({
         return {
           FunctionDeclaration(node) {
             if (node.id) {
-              check(node.id.name, node, node.id);
+              check({ name: node.id.name, body: node.body, node: node.id });
             }
           },
           VariableDeclarator(node) {
@@ -100,7 +103,7 @@ export default eslintCompatPlugin({
             ) {
               return;
             }
-            check(node.id.name, init as FunctionNode, node.id);
+            check({ name: node.id.name, body: init.body, node: node.id });
           },
         };
       },
