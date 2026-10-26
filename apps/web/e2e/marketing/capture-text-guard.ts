@@ -1,3 +1,6 @@
+/// <reference lib="dom" />
+// The collector runs in the page; the DOM lib types it wherever it is checked.
+
 /**
  * Text that must never reach a marketing capture: placeholder and fixture
  * markers that would show invented data as if it were the product's. The
