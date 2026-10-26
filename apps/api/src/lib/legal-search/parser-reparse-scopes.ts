@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph text and block boundaries are recomputed from the stored PDF: a line the layout wrapped inside a sentence no longer opens a numbered point or a signature, and paragraphs have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
