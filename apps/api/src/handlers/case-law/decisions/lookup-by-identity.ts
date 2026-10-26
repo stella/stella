@@ -58,6 +58,11 @@ import {
   courtPresentation,
   readCourtRegistry,
 } from "@/api/lib/case-law/court-presentation";
+import type { DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY } from "@/api/lib/case-law/decision-language";
+import {
+  authenticLanguageTag,
+  preferredLanguageVersionsFirst,
+} from "@/api/lib/case-law/decision-language";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
@@ -175,6 +180,11 @@ export type DecisionIdentityRow = {
   court: string;
   courtAbbreviation: string | null;
   decisionDate: string | null;
+  /**
+   * The publisher's kind of decision (`judgment`, `opinion`): one docket
+   * can hold several, which a list of candidates has to tell apart.
+   */
+  decisionType: string | null;
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
   identifiers: readonly { type: DecisionIdentifierType; value: string }[];
@@ -476,6 +486,13 @@ export const readDecisionIdentityHits = async (
   });
 };
 
+/**
+ * The metadata key stating a decision's own language, spelled here so the
+ * query's text is this file's; `satisfies` keeps it the owner's key.
+ */
+const AUTHENTIC_LANGUAGE_KEY =
+  "procedureLanguage" satisfies typeof DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY;
+
 export const lookupDecisionsByIdentity = async ({
   caseLawDb,
   country,
@@ -492,10 +509,14 @@ export const lookupDecisionsByIdentity = async ({
         court: publishedCaseLawDecisions.court,
         courtId: publishedCaseLawDecisions.courtId,
         decisionDate: publishedCaseLawDecisions.decisionDate,
+        decisionType: publishedCaseLawDecisions.decisionType,
         ecli: publishedCaseLawDecisions.ecli,
         id: publishedCaseLawDecisions.id,
         language: publishedCaseLawDecisions.language,
         languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
+        authenticLanguageCode: sql<
+          string | null
+        >`${publishedCaseLawDecisions.metadata} -> ${sql.raw(`'${AUTHENTIC_LANGUAGE_KEY}'`)} -> 0 ->> 'code'`,
         ...publishedSheetColumns,
         slug: publishedCaseLawDecisions.slug,
       })
@@ -549,15 +570,30 @@ export const lookupDecisionsByIdentity = async ({
       ]),
     );
     // Translations share one decision identity; distinct language groups still
-    // require the caller to choose between decisions.
-    const { representatives } = collapseByLanguageGroup(decisions, (id) => {
-      const group = groupById.get(id);
-      return group === undefined
-        ? panic("Lost an identity's language group")
-        : group;
-    });
+    // require the caller to choose between decisions. The version that stands
+    // for a group is the one a reader should get: the decision's own language,
+    // else English, never merely the translation that sorted first.
+    const { representatives } = collapseByLanguageGroup(
+      preferredLanguageVersionsFirst(
+        decisions.map(({ authenticLanguageCode, ...decision }) => ({
+          ...decision,
+          authenticLanguage: authenticLanguageTag(authenticLanguageCode),
+        })),
+      ),
+      (id) => {
+        const group = groupById.get(id);
+        return group === undefined
+          ? panic("Lost an identity's language group")
+          : group;
+      },
+    );
     return representatives.map(
-      ({ languageGroupKey, courtId, ...decision }): DecisionIdentityRow =>
+      ({
+        languageGroupKey,
+        courtId,
+        authenticLanguage: _authenticLanguage,
+        ...decision
+      }): DecisionIdentityRow =>
         Object.assign(decision, {
           courtAbbreviation: courtPresentation(registry, {
             ...decision,

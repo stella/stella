@@ -26,6 +26,10 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  servedBlockText,
+  type ServedTextBlock,
+} from "@/api/lib/case-law/served-paragraph-number";
+import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
 } from "@/api/lib/chat/tool-output-degrade";
@@ -1218,7 +1222,7 @@ export const toPlainCorpusText = ({
   blocks,
   fulltext,
 }: {
-  blocks: readonly { plainText: string }[] | null;
+  blocks: readonly ServedTextBlock[] | null;
   fulltext: string | null;
 }): string | null => {
   if (typeof fulltext === "string" && fulltext.length > 0) {
@@ -1229,7 +1233,9 @@ export const toPlainCorpusText = ({
   }
 
   return blocks
-    .flatMap((block) => (block.plainText === "" ? [] : [block.plainText]))
+    .flatMap((block) =>
+      block.plainText === "" ? [] : [servedBlockText(block)],
+    )
     .join("\n\n");
 };
 
