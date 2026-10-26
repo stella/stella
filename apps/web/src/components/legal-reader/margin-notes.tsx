@@ -776,26 +776,22 @@ const ComposerNote = ({
           >
             {t("common.cancel")}
           </Button>
-          {draft.type === "edit" && empty ? (
-            <Button
-              className="text-2xs h-6 px-2"
-              onClick={draft.onDelete}
-              size="sm"
-              type="button"
-              variant="destructive-ghost"
-            >
-              {t("common.delete")}
-            </Button>
-          ) : (
-            <Button
-              className="text-2xs h-6 px-2"
-              disabled={empty}
-              size="sm"
-              type="submit"
-            >
-              {t("common.save")}
-            </Button>
-          )}
+          {/* An edit emptied of text deletes the comment; otherwise it saves. */}
+          <Button
+            className="text-2xs h-6 px-2"
+            size="sm"
+            {...(draft.type === "edit" && empty
+              ? ({
+                  onClick: draft.onDelete,
+                  type: "button",
+                  variant: "destructive-ghost",
+                } as const)
+              : ({ disabled: empty, type: "submit" } as const))}
+          >
+            {draft.type === "edit" && empty
+              ? t("common.delete")
+              : t("common.save")}
+          </Button>
         </div>
       </div>
     </form>
@@ -807,19 +803,16 @@ const EditedMark = ({ updatedAt }: { updatedAt: string }) => {
   const t = useTranslations();
   const relativeTime = useRelativeTime();
   return (
-    <Tooltip
-      content={t("legalReader.annotations.editedAt", {
-        time: relativeTime(updatedAt),
-      })}
-      render={
-        <time
-          className="text-foreground-disabled text-[calc(0.7rem*var(--reader-text-scale))]"
-          dateTime={updatedAt}
-        />
-      }
-    >
-      {t("common.edited")}
-    </Tooltip>
+    <span className="text-foreground-disabled text-[calc(0.7rem*var(--reader-text-scale))]">
+      <Tooltip
+        content={t("legalReader.annotations.editedAt", {
+          time: relativeTime(updatedAt),
+        })}
+        render={<time dateTime={updatedAt} />}
+      >
+        {t("common.edited")}
+      </Tooltip>
+    </span>
   );
 };
 
