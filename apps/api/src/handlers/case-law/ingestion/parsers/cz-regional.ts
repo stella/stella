@@ -379,7 +379,7 @@ const OPENS_BEFORE_QUOTE_RE = /^[\s([{/]$/u;
  */
 const spanTexts = (spans: readonly TextSpan[]): string[] => {
   const chars = spans.flatMap(({ text }, span) =>
-    [...withoutSoftHyphens(text)].map((char) => ({ char, span })),
+    Array.from(withoutSoftHyphens(text), (char) => ({ char, span })),
   );
   for (let index = 0; index < chars.length; index++) {
     const quote = chars[index];
