@@ -1,0 +1,5 @@
+{
+  "kind": "ordinary",
+  "qualifier": "Requests exact-head, same-repository pull-request autofix when checks report repairable drift; no release publication, tag creation, or deployment.",
+  "reviewedDigest": "75c414ac935e776f30d7e5a3e89c7edef9ec8fb6da11532c7972314a6e76f118"
+}
