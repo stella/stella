@@ -90,6 +90,6 @@ test("scans shell tests line by line and skips comments", () => {
   );
 });
 
-test("no tracked test walks history outside the allowlist", () => {
-  expect(checkTestHistoryWalks()).toEqual([]);
+test("no tracked test walks history outside the allowlist", async () => {
+  expect(await checkTestHistoryWalks()).toEqual([]);
 });

@@ -226,8 +226,8 @@ test("uses parsed YAML commands and rejects retry flags with any value", () => {
   expect(findings).toHaveLength(2);
 });
 
-test("the tracked repository has no automated test retries", () => {
-  expect(checkTestRetries()).toEqual([]);
+test("the tracked repository has no automated test retries", async () => {
+  expect(await checkTestRetries()).toEqual([]);
 }, 15_000);
 
 test.each(["2", "0", "getRetryCount()"])(

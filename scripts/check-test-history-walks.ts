@@ -7,10 +7,11 @@
  * fixture repository the test creates is allowed with a stated reason.
  */
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript6";
+
+import { readTrackedPaths } from "./tracked-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // Every test convention a CI runner picks up, script and shell tests included.
@@ -220,14 +221,10 @@ export const findHistoryWalks = (
   return findings;
 };
 
-const trackedTests = (): Map<string, string> => {
-  const files = execFileSync("git", ["ls-files", "-z"], {
-    maxBuffer: 2 ** 30,
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-  })
-    .split("\0")
-    .filter((file) => SCRIPT_TEST_FILE.test(file) || isShellTest(file));
+const trackedTests = async (): Promise<Map<string, string>> => {
+  const files = (await readTrackedPaths(REPO_ROOT)).filter(
+    (file) => SCRIPT_TEST_FILE.test(file) || isShellTest(file),
+  );
   return new Map(
     files.map((file) => [
       file,
@@ -236,11 +233,11 @@ const trackedTests = (): Map<string, string> => {
   );
 };
 
-export const checkTestHistoryWalks = (): HistoryWalkFinding[] =>
-  findHistoryWalks(trackedTests());
+export const checkTestHistoryWalks = async (): Promise<HistoryWalkFinding[]> =>
+  findHistoryWalks(await trackedTests());
 
 if (import.meta.main) {
-  const findings = checkTestHistoryWalks();
+  const findings = await checkTestHistoryWalks();
   for (const finding of findings) {
     process.stderr.write(
       `${finding.file}:${finding.line}: ${finding.message}\n`,

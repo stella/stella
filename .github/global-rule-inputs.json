@@ -267,6 +267,8 @@
     "scripts/thin-queue.test.ts",
     "scripts/toast-error-census.test.ts",
     "scripts/toast-error-census.ts",
+    "scripts/tracked-paths.test.ts",
+    "scripts/tracked-paths.ts",
     "scripts/transfer-read-guard.ts",
     "scripts/typecheck-baseline.test.ts",
     "scripts/typecheck-baseline.ts",

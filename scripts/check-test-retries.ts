@@ -1,10 +1,11 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript6";
+
+import { readTrackedPaths } from "./tracked-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const PLAYWRIGHT_CONFIG = /(?:^|\/)playwright[^/]*\.config\.(?:[cm]?[jt]s)$/u;
@@ -775,21 +776,15 @@ export const findTestRetryViolations = (
   return findings;
 };
 
-const trackedSources = (): Map<string, string> => {
-  const files = execFileSync("git", ["ls-files", "-z"], {
-    maxBuffer: 2 ** 30,
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-  })
-    .split("\0")
-    .filter(
-      (file) =>
-        isPlaywrightConfig(file) ||
-        isSourceFile(file) ||
-        file.endsWith(".sh") ||
-        PACKAGE_FILE.test(file) ||
-        WORKFLOW_FILE.test(file),
-    );
+const trackedSources = async (): Promise<Map<string, string>> => {
+  const files = (await readTrackedPaths(REPO_ROOT)).filter(
+    (file) =>
+      isPlaywrightConfig(file) ||
+      isSourceFile(file) ||
+      file.endsWith(".sh") ||
+      PACKAGE_FILE.test(file) ||
+      WORKFLOW_FILE.test(file),
+  );
   const sources = new Map<string, string>();
   for (const file of files) {
     const source = readFileSync(path.join(REPO_ROOT, file), "utf-8");
@@ -801,11 +796,11 @@ const trackedSources = (): Map<string, string> => {
   return sources;
 };
 
-export const checkTestRetries = (): TestRetryFinding[] =>
-  findTestRetryViolations(trackedSources());
+export const checkTestRetries = async (): Promise<TestRetryFinding[]> =>
+  findTestRetryViolations(await trackedSources());
 
 if (import.meta.main) {
-  const findings = checkTestRetries();
+  const findings = await checkTestRetries();
   if (findings.length > 0) {
     for (const finding of findings) {
       process.stderr.write(`${finding.file}: ${finding.message}\n`);

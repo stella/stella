@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import {
@@ -12,8 +13,9 @@ import {
   loadGlobalRuleInputs,
   matchesGlobalRuleInput,
 } from "./global-rule-inputs";
+import { readTrackedPaths } from "./tracked-paths";
 
-const REPOSITORY_ROOT = new URL("../", import.meta.url);
+const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
 const STATIC_CHECK_JOB_ROOTS = [
   "ci-quick-checks",
   "ci-checks-policy",
@@ -22,17 +24,14 @@ const STATIC_CHECK_JOB_ROOTS = [
 ] as const;
 const STATIC_CHECK_JOB_PREFIXES = ["code-quality-"] as const;
 
-const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
-  maxBuffer: 2 ** 30,
-  cwd: REPOSITORY_ROOT,
-  encoding: "utf-8",
-})
-  .split("\0")
-  .filter(Boolean);
+const trackedFiles = await readTrackedPaths(REPOSITORY_ROOT);
 
 const getRunCommands = (readPool?: ReadCheckPool) => {
   const workflow: unknown = Bun.YAML.parse(
-    readFileSync(new URL(".github/workflows/ci.yml", REPOSITORY_ROOT), "utf-8"),
+    readFileSync(
+      nodePath.join(REPOSITORY_ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    ),
   );
   const parsed = v.parse(
     v.looseObject({
@@ -72,7 +71,9 @@ const getRunCommands = (readPool?: ReadCheckPool) => {
 const collectScriptPaths = (commands: string[]) => {
   const packageJson = v.parse(
     v.looseObject({ scripts: v.record(v.string(), v.string()) }),
-    JSON.parse(readFileSync(new URL("package.json", REPOSITORY_ROOT), "utf-8")),
+    JSON.parse(
+      readFileSync(nodePath.join(REPOSITORY_ROOT, "package.json"), "utf-8"),
+    ),
   );
   const pending = [...commands];
   const visitedPackageScripts = new Set<string>();

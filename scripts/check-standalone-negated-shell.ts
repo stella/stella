@@ -1,6 +1,5 @@
 /** Reject shell negation statements whose status `set -e` silently ignores. */
 
-import { execFileSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
@@ -10,6 +9,8 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
+
+import { readTrackedPaths } from "./tracked-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SHELL_FILE = /\.(?:sh|bash)$/u;
@@ -827,14 +828,8 @@ export const findStandaloneNegatedShellStatements = (
   return findings;
 };
 
-const trackedSources = (): Map<string, string> => {
-  const files = execFileSync("git", ["ls-files", "-z"], {
-    maxBuffer: 2 ** 30,
-    cwd: REPO_ROOT,
-    encoding: "utf-8",
-  })
-    .split("\0")
-    .filter(Boolean);
+const trackedSources = async (): Promise<Map<string, string>> => {
+  const files = await readTrackedPaths(REPO_ROOT);
   const sources = new Map<string, string>();
   for (const file of files) {
     const absoluteFile = path.join(REPO_ROOT, file);
@@ -853,11 +848,11 @@ const trackedSources = (): Map<string, string> => {
   return sources;
 };
 
-export const checkStandaloneNegatedShellStatements = () =>
-  findStandaloneNegatedShellStatements(trackedSources());
+export const checkStandaloneNegatedShellStatements = async () =>
+  findStandaloneNegatedShellStatements(await trackedSources());
 
 if (import.meta.main) {
-  const findings = checkStandaloneNegatedShellStatements();
+  const findings = await checkStandaloneNegatedShellStatements();
   if (findings.length === 0) {
     process.stdout.write(
       "Standalone negated shell statement guard passed: 0 violations.\n",
