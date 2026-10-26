@@ -270,6 +270,17 @@ const resolveBudgetMs = (
   if (depth > 8) {
     return undefined;
   }
+  // A request clamp can only shorten a positive timeout; its argument is
+  // still the upper bound the public HTTP route budget must cover.
+  const requestClamp = "requestBoundedTimeoutMs(";
+  if (expression.startsWith(requestClamp) && expression.endsWith(")")) {
+    const upperBound = resolveBudgetMs(
+      file,
+      expression.slice(requestClamp.length, -1),
+      depth + 1,
+    );
+    return upperBound !== undefined && upperBound > 0 ? upperBound : undefined;
+  }
   const statement = /^statement_timeout (\d+)(ms|s)$/u.exec(expression);
   if (statement !== null) {
     return Number(statement[1]) * (statement[2] === "s" ? 1000 : 1);
@@ -431,13 +442,13 @@ const CENSUS: readonly CensusEntry[] = [
   },
   // --- Public corpus handlers the tools share --------------------------------
   {
-    site: "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#READ_BUDGET_MS",
+    site: "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#requestBoundedTimeoutMs(READ_BUDGET_MS)",
     path: "request",
-    tools: ["read_case_law_decision"],
+    tools: ["fetch", "read_case_law_decision"],
     http: ["browse"],
-    bound: "own",
+    bound: "request",
     onExpiry: "degrades",
-    why: "Waits for a decision text the corpus does not hold yet; past it the decision answers without its text, marked pending.",
+    why: "Waits for pending decision text within the request's remaining budget; past it the decision answers without its text, marked pending.",
   },
   {
     site: "apps/api/src/handlers/case-law/decisions/document-on-demand-deps.ts#15_000",
@@ -649,6 +660,18 @@ const waitsOverToolBudget = (entries: readonly CensusEntry[]): string[] =>
   });
 
 describe("request-path timeout census", () => {
+  test.each(["0", "-1", "request.timeoutMs"])(
+    "does not treat an unbounded request clamp as a finite HTTP bound: %s",
+    (argument) => {
+      expect(
+        resolveBudgetMs(
+          "apps/api/src/handlers/case-law/decisions/document-on-demand.ts",
+          `requestBoundedTimeoutMs(${argument})`,
+        ),
+      ).toBeUndefined();
+    },
+  );
+
   test("declares every timeout under the request-path roots", () => {
     expect(scanned.filter((site) => !declared.has(site))).toEqual([]);
   });

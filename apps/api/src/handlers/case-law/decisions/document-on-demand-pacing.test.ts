@@ -6,7 +6,11 @@ import { assertProperty } from "@stll/property-testing";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { PendingDocument } from "@/api/lib/legal-search/sk-document-backfill";
+import type {
+  DecisionDocumentOutcome,
+  PendingDocument,
+} from "@/api/lib/legal-search/sk-document-backfill";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
@@ -90,6 +94,40 @@ test("a read consumes one shared source reservation", async () => {
   ).toBeNull();
   expect(fetched).toEqual([pending.id]);
   expect(reservations()).toBe(1);
+});
+
+test("a deferred read returns metadata when its request budget is spent", async () => {
+  const { deps } = pacedDeps({ tokens: 1 });
+  const fetch = Promise.withResolvers<DecisionDocumentOutcome>();
+  deps.fetchDocument = async () => await fetch.promise;
+  jest.useFakeTimers();
+  let resolved = false;
+  const read = runWithinRequestLatencyBudget(
+    { label: "fetch", budgetMs: 0 },
+    async () =>
+      await readThroughDeferredDocument({
+        decision: decision(),
+        adapterKey: "sk-courts",
+        deps,
+        recordDemand: false,
+      }),
+  ).then((result) => {
+    resolved = true;
+    return result;
+  });
+  try {
+    jest.advanceTimersByTime(1);
+    for (let turn = 0; turn < 40; turn += 1) {
+      await Promise.resolve();
+    }
+    expect(resolved).toBe(true);
+    expect(await read).toBeNull();
+  } finally {
+    fetch.resolve({ status: "claimed" });
+    jest.runAllTimers();
+    await read;
+    jest.useRealTimers();
+  }
 });
 
 for (const state of [{ tokens: 0 }, { tokens: 1, backoff: true }]) {
