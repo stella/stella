@@ -32,7 +32,11 @@ import {
 } from "./runner";
 import { createCaseLawProvisionStateBackfillTask } from "./tasks/case-law-provision-state-backfill";
 import { createLegislationExpressionIdBackfill } from "./tasks/legislation-expression-id-backfill";
-import type { SchedulerTask, SchedulerTaskRegistry } from "./types";
+import type {
+  SchedulerTask,
+  SchedulerTaskContext,
+  SchedulerTaskRegistry,
+} from "./types";
 
 // leaseMs has a hard floor of three poll intervals (3 * 60_000). The runtime
 // ceiling is independent, so a tiny ceiling times a job out long before the
@@ -494,7 +498,7 @@ describe("bounded scheduler sweeps", () => {
     const registry: SchedulerTaskRegistry = new Map([
       [
         "test.continue-now",
-        ({ scheduleContinuation }) => {
+        ({ scheduleContinuation }: SchedulerTaskContext) => {
           scheduleContinuation(PAST);
         },
       ],
