@@ -5,6 +5,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   type ActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { declareFingerprintFields } from "@stll/errors";
 
 import {
   KILL_SWITCHES,
@@ -44,6 +45,10 @@ export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
   reason: ActionAdmissionReason;
   cause?: unknown;
 }> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+
   /** Epoch milliseconds at which an exhausted budget resets. */
   readonly retryAtMs: number | undefined;
   /** The switch that turned the refused feature off. */

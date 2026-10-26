@@ -262,6 +262,8 @@ const updateSkill = createSafeRootHandler(
             id: agentSkills.id,
             scope: agentSkills.scope,
             userId: agentSkills.userId,
+            boundClientId: agentSkills.boundClientId,
+            boundWorkspaceId: agentSkills.boundWorkspaceId,
             enabled: agentSkills.enabled,
             invocation: agentSkills.invocation,
             slug: agentSkills.slug,
@@ -286,7 +288,12 @@ const updateSkill = createSafeRootHandler(
           // The row lock follows the write policy, so a skill the caller can
           // read but not manage is missing here; refuse it as the handler would.
           const visibleRows = await tx
-            .select({ scope: agentSkills.scope, userId: agentSkills.userId })
+            .select({
+              boundClientId: agentSkills.boundClientId,
+              boundWorkspaceId: agentSkills.boundWorkspaceId,
+              scope: agentSkills.scope,
+              userId: agentSkills.userId,
+            })
             .from(agentSkills)
             .where(
               and(

@@ -123,6 +123,8 @@ test("lists shared authorization status in one connector query", async () => {
     },
   };
   const context = asTestRaw<Context>({
+    request: new Request("https://api.example.test/handler"),
+    route: "/v1/mcp-connectors",
     safeDb: async (operation: (tx: unknown) => unknown) => {
       databaseOperations += 1;
       return Result.ok(await operation(chain));

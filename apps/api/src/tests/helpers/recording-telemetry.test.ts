@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 
 import {
@@ -33,9 +34,12 @@ describe("recording telemetry carries the real capture and logger paths", () => 
   test("captureError ships a fingerprinted $exception with the caller's context", () => {
     analytics = installRecordingAnalytics();
 
-    captureError(new QuotaExceededError("user 42 exceeded"), {
-      source: "usage.meter",
-    });
+    captureError(
+      new QuotaExceededError("user 42 exceeded"),
+      handlerErrorContext("helpers.capture", {
+        source: "usage.meter",
+      }),
+    );
 
     const [event] = analytics.exceptions();
     expect(event).toBeDefined();
@@ -51,11 +55,16 @@ describe("recording telemetry carries the real capture and logger paths", () => 
   test("identical errors are throttled to one event per window", () => {
     analytics = installRecordingAnalytics();
 
-    // Same construction site, so the structural fingerprint (class + frame)
-    // matches; only the message differs, and the message is redacted.
+    // The owner and class match; message changes cannot bypass suppression.
     const quotaExceeded = (message: string) => new QuotaExceededError(message);
-    captureError(quotaExceeded("first"), { source: "usage.meter" });
-    captureError(quotaExceeded("second"), { source: "usage.meter" });
+    captureError(
+      quotaExceeded("first"),
+      handlerErrorContext("helpers.capture", { source: "usage.meter" }),
+    );
+    captureError(
+      quotaExceeded("second"),
+      handlerErrorContext("helpers.capture", { source: "usage.meter" }),
+    );
 
     expect(analytics.exceptions()).toHaveLength(1);
   });

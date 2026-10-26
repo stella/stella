@@ -906,9 +906,9 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   // Jobs that became one part of a shared job: the part's step condition,
   // under the shared job's condition, keeps the historical predicate.
   const foldedParts = new Map([
-    ["parser-version-guard", "ci-quick-checks"],
-    ["ci-checks-docs", "ci-quick-checks"],
-    ["dated-waiver-expiry", "ci-quick-checks"],
+    ["parser-version-guard", "pr-heavy-gate"],
+    ["ci-checks-docs", "pr-heavy-gate"],
+    ["dated-waiver-expiry", "pr-heavy-gate"],
   ]);
   const partSelected = (job: string, value: ReturnType<typeof context>) => {
     const host = foldedParts.get(job);

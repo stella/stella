@@ -153,6 +153,7 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
+import { enforceLoadedSkillHistoryBindings } from "@/api/handlers/chat/skill-history-binding";
 import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
@@ -228,6 +229,8 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { attachVerifiedEntityMentionKinds } from "@/api/handlers/chat/verified-mention-kinds";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createVisualStore } from "@/api/handlers/visual-sandbox/store";
+import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -281,6 +284,7 @@ import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
@@ -563,7 +567,12 @@ const persistedTurnSettlement = ({
     return Result.ok({ followUps: null, settlement: { type: "not-owned" } });
   }
   if (Result.isError(persistResult)) {
-    captureError(persistResult.error, { threadId });
+    captureError(
+      persistResult.error,
+      handlerErrorContext("chat.persistedTurnSettlement.persistResult_error", {
+        threadId,
+      }),
+    );
     return Result.err({
       code: "persistence",
       error: new HandlerError({
@@ -930,7 +939,12 @@ export class ChatSendLifecycle {
               owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
             }),
       };
-      captureError(failureResult.error, { threadId: this.options.threadId });
+      captureError(
+        failureResult.error,
+        handlerErrorContext("chat.failCurrentTurn.failureResult_error", {
+          threadId: this.options.threadId,
+        }),
+      );
       return;
     }
     this.claimedTurn = { status: "unclaimed" };
@@ -1080,10 +1094,13 @@ export class ChatSendLifecycle {
           failureResult,
         );
         if (Result.isError(failureResult)) {
-          captureError(failureResult.error, {
-            source: "send-message-claimed-turn-preflight-cleanup",
-            threadId: this.options.threadId,
-          });
+          captureError(
+            failureResult.error,
+            handlerErrorContext("chat.cleanup.failureResult_error", {
+              source: "send-message-claimed-turn-preflight-cleanup",
+              threadId: this.options.threadId,
+            }),
+          );
         }
       }
       if (this.pendingSideEffects !== undefined) {
@@ -1096,10 +1113,13 @@ export class ChatSendLifecycle {
           userId: this.options.userId,
         });
         if (Result.isError(rollbackResult)) {
-          captureError(rollbackResult.error, {
-            source: "send-message-unpersisted-side-effect-rollback",
-            threadId: this.options.threadId,
-          });
+          captureError(
+            rollbackResult.error,
+            handlerErrorContext("chat.cleanup.rollbackResult_error", {
+              source: "send-message-unpersisted-side-effect-rollback",
+              threadId: this.options.threadId,
+            }),
+          );
         }
       }
       if (!this.connectorsHandedOff) {
@@ -2198,6 +2218,17 @@ const readOwnedTurnThreadNames = async ({
   return read;
 };
 
+const settleInternalPreflight = async <T, E>(
+  pending: Promise<Result<T, E>>,
+  lifecycle: ChatSendLifecycle,
+): Promise<Result<T, E>> => {
+  const result = await pending;
+  if (Result.isError(result)) {
+    await lifecycle.failCurrentTurn("internal", true);
+  }
+  return result;
+};
+
 const currentMembershipReader = (
   dependencies: SendMessageDependencies,
 ): ResolveCredentialMemberAuthorization =>
@@ -2648,6 +2679,20 @@ export const createSendMessage = (
           turnExecution,
         } = acceptedTurnResult.value;
 
+        const skillBindingScope = yield* Result.await(
+          settleInternalPreflight(
+            resolveSkillBindingScope({
+              homeWorkspaceId: workspaceId,
+              otherWorkspaceIds: [
+                ...effectiveContextMatterIds,
+                ...dataScopeAfterIncomingMessage,
+              ],
+              safeDb,
+            }),
+            lifecycle,
+          ),
+        );
+
         const runIdTaken = yield* Result.await(
           isChatTurnRunIdTaken({
             execution: turnExecution,
@@ -2719,8 +2764,20 @@ export const createSendMessage = (
           messages: latestMessagePlan.messages,
           resumedMessageId: owningAssistantMessage?.id,
         });
+        const authorizedHistory = yield* Result.await(
+          settleInternalPreflight(
+            enforceLoadedSkillHistoryBindings({
+              messages: engineHistory,
+              organizationId: session.activeOrganizationId,
+              safeDb,
+              scope: skillBindingScope,
+              userId: user.id,
+            }),
+            lifecycle,
+          ),
+        );
         const messagesForContextInput = await selectMessagesForContextInput({
-          messages: engineHistory,
+          messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
           threadId: body.threadId,
@@ -2923,6 +2980,7 @@ export const createSendMessage = (
           activeStatute: body.activeStatute,
           activeTemplate: body.activeTemplate,
           contextMatterIds: effectiveContextMatterIds,
+          skillBindingScope,
           hasReachableMatter: toolWorkspaceIds.length > 0,
           latestMentions: parsedMessage.mentions,
           latestUserMessageId: parsedMessage.message.id,
@@ -3026,6 +3084,7 @@ export const createSendMessage = (
             modelAdmission,
             externalTools: externalMcpTools?.tools ?? {},
             skillMetadata: chatContext.skillMetadata,
+            skillBindingScope: chatContext.skillBindingScope,
             activeSkillContext: chatContext.activeSkillContext,
           }),
         });
@@ -3055,6 +3114,7 @@ export const createSendMessage = (
 
         const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
           activeSkillContext: chatContext.activeSkillContext,
+          bindingScope: chatContext.skillBindingScope,
           catalog: chatContext.skillMetadata,
           messages: chatContext.hydratedMessages,
           organizationId: session.activeOrganizationId,
@@ -3521,6 +3581,7 @@ type PrepareChatContextProps = {
   activeStatute: IncomingActiveStatute | undefined;
   activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
+  skillBindingScope: SkillBindingScope;
   hasReachableMatter: boolean;
   latestMentions: readonly ChatMention[];
   latestUserMessageId: string;
@@ -3554,6 +3615,12 @@ type PrepareChatContextResult = Result<
      */
     systemUntrusted: ChatUntrustedPromptSuffix;
     skillMetadata: ModelOfferedSkills<SkillMetadata>;
+    /**
+     * Where this turn may use a bound skill: the thread's matter, and only
+     * while every pinned and embedded matter is that matter (or shares its
+     * client). The prompt, the skill tools and requested skills all use it.
+     */
+    skillBindingScope: SkillBindingScope;
     activeSkillContext: ActiveChatSkillContext | null;
     /** Court numbers the turn stamps onto the answer's passage citations. */
     decisionPassageNumbers: DecisionPassageNumbers;
@@ -3572,6 +3639,7 @@ const prepareChatContext = async ({
   activeStatute,
   activeTemplate,
   contextMatterIds,
+  skillBindingScope,
   hasReachableMatter,
   latestMentions,
   latestUserMessageId,
@@ -3620,6 +3688,7 @@ const prepareChatContext = async ({
         safeDb,
         messages: messageWindow,
         requestedSkillNames: requestedSkillNames(messageWindow),
+        skillBindingScope,
         threadId,
         toolAvailability,
         userContext,
@@ -3673,6 +3742,7 @@ const prepareChatContext = async ({
       systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
+      skillBindingScope,
       activeSkillContext: systemPrompt.activeSkillContext,
       decisionPassageNumbers: systemPrompt.decisionPassageNumbers,
       hydratedMessages: messagesWithMentionKinds,

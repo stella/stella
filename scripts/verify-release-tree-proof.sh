@@ -213,7 +213,7 @@ else
     exit 3
   fi
   candidate_tree_verifier="${RELEASE_CANDIDATE_TREE_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-candidate-tree.mjs}"
-  node "$candidate_tree_verifier" "$main" "$proof" || refuse 'release PR changes executable or unbound build input'
+  GH_RETRY_SCRIPT="$gh_retry_script" node "$candidate_tree_verifier" "$main" "$proof" "$repo" || refuse 'release PR changes executable or unbound build input'
   relation=pr-head
 fi
 if [[ "$sha" != "$proof" && -n "${GITHUB_STEP_SUMMARY:-}" ]]; then

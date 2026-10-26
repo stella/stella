@@ -92,6 +92,10 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
   const at = Temporal.Now.instant();
   const today = todayFor(settings.timeZone, at);
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "TimePolicyForm.mutation.useSettingsMutation",
+    },
     mutationFn: async (next: TimePolicy) =>
       unwrapApiResponse(
         await api["organization-settings"].post(

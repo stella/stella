@@ -84,7 +84,10 @@ export const useSuggestedFollowupPrompts = ({
     }),
   );
   const suggestedPromptsDataView = useQueryView(suggestedPromptsDataQuery);
-  useQueryViewError(suggestedPromptsDataView);
+  useQueryViewError(
+    suggestedPromptsDataView,
+    "useSuggestedFollowupPrompts:query",
+  );
   const suggestedPromptsData =
     suggestedPromptsDataView.type === "items"
       ? suggestedPromptsDataView.items

@@ -53,7 +53,7 @@ export const VerificationDetail = ({
   } = useQuery(verificationRunOptions(workspaceId, runId));
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
   const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  useQueryViewError(filesView, "VerificationDetail:query");
   const files = filesView.type === "items" ? filesView.items : undefined;
   // The document as it stands now: an earlier run may pin a file field a
   // newer version replaced, and history and re-verification follow the
