@@ -306,9 +306,17 @@ const publicCursorRouteRequests: Record<string, () => Request> = {
     new Request(
       "http://localhost/case/decisions?country=CZE&cursor=not-a-cursor",
     ),
+  "GET /case/decisions/by-slug/:slug#caseFileCursor": () =>
+    new Request(
+      "http://localhost/case/decisions/by-slug/test?country=CZE&caseFileCursor=not-a-cursor",
+    ),
   "GET /case/decisions/by-slug/:slug#citationsCursor": () =>
     new Request(
       "http://localhost/case/decisions/by-slug/test?country=CZE&citationsCursor=not-a-cursor",
+    ),
+  "GET /case/decisions/:decisionId#caseFileCursor": () =>
+    new Request(
+      `http://localhost/case/decisions/${TEST_DECISION_ID}?caseFileCursor=not-a-cursor`,
     ),
   "GET /case/decisions/:decisionId#citationsCursor": () =>
     new Request(

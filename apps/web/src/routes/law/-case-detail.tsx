@@ -41,6 +41,7 @@ import {
   fileMayHoldOthersOf,
   type PublicCaseLawDecision,
 } from "@/routes/law/-case-detail.logic";
+import { PublicDecisionCaseFile } from "@/routes/law/-components/public-decision-case-file";
 import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
 import { PublicDecisionTextNotice } from "@/routes/law/-components/public-decision-text-notice";
 
@@ -244,6 +245,7 @@ export function PublicDecisionViewer({
         />
       </ChromeHeaderActions>
       {fileMayHoldOthers && <PublicDecisionFileNote />}
+      <PublicDecisionCaseFile decision={decision} />
       {!noDocument && <InspectorFindBar find={find} />}
       <div className="flex min-h-0 flex-1 overflow-hidden" ref={contentRef}>
         {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}

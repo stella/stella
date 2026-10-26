@@ -48,6 +48,7 @@ import * as projectionModule from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
@@ -1675,6 +1676,11 @@ const CONTRACT_CORPUS = {
             },
           ],
           citationsNextCursor: null,
+          caseFile: {
+            items: [],
+            nextCursor: null,
+            limit: LIMITS.caseLawCaseFilePageSize,
+          },
           country: "CZ",
           court: "Nejvyšší soud",
           courtId: null,
@@ -2502,6 +2508,11 @@ describe("decision text in chat projection", () => {
       citationsFrom: [],
       citationsTo: [],
       citationsNextCursor: null,
+      caseFile: {
+        items: [],
+        nextCursor: null,
+        limit: LIMITS.caseLawCaseFilePageSize,
+      },
       country: "CZ",
       court: "Nejvyšší soud",
       courtId: null,
