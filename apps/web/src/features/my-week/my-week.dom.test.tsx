@@ -88,7 +88,18 @@ const suggestion = {
       id: "thread-1",
       title: "Indemnity cap",
       messageCount: 2,
-      signals: [],
+      signals: [
+        {
+          source: "chat_message",
+          resourceId: "message-1",
+          timestamp: `${MONDAY}T09:00:00.000Z`,
+        },
+        {
+          source: "chat_message",
+          resourceId: "message-2",
+          timestamp: `${MONDAY}T09:10:00.000Z`,
+        },
+      ],
     },
   ],
 } satisfies TimeEntrySuggestion;
@@ -165,8 +176,9 @@ const serveWeek = ({
       if (!inRange(group.date, start, end) || group.items.length === 0) {
         continue;
       }
+      const earlier = byDate.get(group.date);
       byDate.set(group.date, [
-        ...(byDate.get(group.date) ?? []),
+        ...(earlier === undefined ? [] : earlier),
         {
           matter: group.matter,
           activeMinutes: group.items.reduce(

@@ -129,12 +129,14 @@ export const MyWeek = ({
   const [dialog, setDialog] = useState<WeekDialog>({ type: "closed" });
 
   const pages = entriesQuery.data.pages;
-  const totals = weekTotals(pages.at(0)?.days ?? []);
+  // Every page carries the totals for the whole week; the first is enough.
+  const firstPage = pages.at(0);
+  const totals = weekTotals(firstPage === undefined ? [] : firstPage.days);
   const entries = pages
     .flatMap((page) => page.items)
     .filter((entry) => entry.dateWorked === date);
-  const suggestions =
-    suggestionRange.days.find((day) => day.date === date)?.matters ?? [];
+  const suggestionDay = suggestionRange.days.find((day) => day.date === date);
+  const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
   const matterId = dialogMatterId(dialog);
 
   const submitDialog = async (values: ManualTimeEntryValues) => {

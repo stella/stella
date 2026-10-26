@@ -253,7 +253,13 @@ describe("my suggestion range", () => {
       items: [
         {
           signalCount: 1,
-          evidence: [{ type: "chat_thread", title: "Supply agreement" }],
+          evidence: [
+            {
+              type: "chat_thread",
+              title: "Supply agreement",
+              signals: [{ source: "chat_message", resourceId: messageId }],
+            },
+          ],
         },
       ],
     });

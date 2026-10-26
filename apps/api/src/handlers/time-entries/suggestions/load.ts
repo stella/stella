@@ -621,11 +621,10 @@ export const loadTimeSuggestions = async function* ({
     endDate: date,
   });
   const scope = scopes.at(0);
-  const loaded: LoadedTimeSuggestions = {
-    date,
-    pending: scope?.pending ?? [],
-    loggedMinutes: scope?.loggedMinutes ?? 0,
-  };
+  const loaded: LoadedTimeSuggestions =
+    scope === undefined
+      ? { date, pending: [], loggedMinutes: 0 }
+      : { date, pending: scope.pending, loggedMinutes: scope.loggedMinutes };
   return loaded;
 };
 
