@@ -7762,6 +7762,198 @@
     }
   },
   {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166128,
+        "retainedPct": 100,
+        "blockCount": 263,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 233,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 165381,
+        "retainedPct": 100,
+        "blockCount": 262,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 232,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166875,
+        "retainedPct": 100,
+        "blockCount": 264,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 234,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166127,
+        "retainedPct": 100,
+        "blockCount": 263,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 233,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166128,
+        "retainedPct": 100,
+        "blockCount": 263,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 233,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-dkn-5131-4-2024.xml#removed-footnote",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 166079,
+        "retainedPct": 100,
+        "blockCount": 262,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 12,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 10,
+          "paragraph": 232,
+          "paragraph-quote": 7
+        },
+        "tinyBlocks": 1,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
     "name": "parsers/pl-uodo-dkn-5131-45-2022.xml#current",
     "result": {
       "ok": true,
@@ -8096,6 +8288,162 @@
           "paragraph-case-number": 1,
           "paragraph-holding": 3,
           "paragraph": 6
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#current",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20671,
+        "retainedPct": 100,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 41
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#dropped-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20544,
+        "retainedPct": 100,
+        "blockCount": 46,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 40
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#duplicated-paragraph",
+    "result": {
+      "ok": true,
+      "issues": [
+        {
+          "code": "DUPLICATE_BLOCKS",
+          "message": "1 consecutive duplicate blocks",
+          "severity": "warning"
+        }
+      ],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20798,
+        "retainedPct": 100,
+        "blockCount": 48,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 42
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 1,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#merged-words",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20670,
+        "retainedPct": 100,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 41
+        },
+        "tinyBlocks": 0,
+        "hugeBlocks": 0,
+        "duplicateBlocks": 0,
+        "markupResidue": [],
+        "work": {
+          "textComputations": 0,
+          "textCharacters": 0,
+          "ancestorChecks": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "parsers/pl-uodo-zszzs-440-780-2018.xml#reordered-blocks",
+    "result": {
+      "ok": true,
+      "issues": [],
+      "stats": {
+        "originalLength": 0,
+        "astLength": 20671,
+        "retainedPct": 100,
+        "blockCount": 47,
+        "missingWords": [],
+        "boundaryWhitespaceWords": [],
+        "blockTypeCounts": {
+          "heading": 2,
+          "paragraph-case-number": 1,
+          "paragraph-holding": 3,
+          "paragraph": 41
         },
         "tinyBlocks": 0,
         "hugeBlocks": 0,
