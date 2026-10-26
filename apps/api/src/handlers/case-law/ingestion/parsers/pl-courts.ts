@@ -29,9 +29,11 @@ import type {
   ParagraphRole,
   TableCell,
 } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 
 import { stripHtml } from "@/api/handlers/case-law/ingestion/parsers/strip-html";
-import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
+import { renderHtmlWhiteSpace } from "@/api/lib/legal-search/document-builders/html-whitespace";
+import { inlineStyleValue } from "@/api/lib/legal-search/document-builders/inline-style";
 import {
   buildValidationHtml,
   validateAndLog,
@@ -249,21 +251,71 @@ const textInline = (text: string, anonymized = false): Inline[] =>
     : [];
 
 /**
- * An element's inlines as a browser renders them. The source's own line
- * breaks and indentation are markup: a word processor's export wraps every
- * paragraph at a fixed width, and those wraps must not reach the text.
+ * A run with every `\n` its text keeps made a line break. The document's
+ * whitespace is rendered before the walk (`renderHtmlWhiteSpace`), so a line
+ * break left in the text is one the source preserves (`<pre>`, `white-space:
+ * pre-wrap`); every other is already a space.
  */
+const lineBreaksOf = (inlines: readonly Inline[]): Inline[] =>
+  inlines.flatMap((inline): Inline[] => {
+    if (inline.type === "text") {
+      if (!inline.text.includes("\n")) {
+        return [inline];
+      }
+      return inline.text
+        .split("\n")
+        .flatMap((line, index): Inline[] => [
+          ...(index === 0 ? [] : [{ type: "line-break" as const }]),
+          ...(line === "" ? [] : [{ ...inline, text: line }]),
+        ]);
+    }
+    return hasInlineChildren(inline)
+      ? [{ ...inline, children: lineBreaksOf(inline.children) }]
+      : [inline];
+  });
+
+/**
+ * A run without the line breaks at either edge, inside formatting too: the
+ * line a block's edge ends prints nothing of its own.
+ */
+const trimLineBreaks = (inlines: readonly Inline[]): Inline[] => {
+  const trimEdge = (run: readonly Inline[], fromEnd: boolean): Inline[] => {
+    const items = fromEnd ? [...run].toReversed() : [...run];
+    while (items.length > 0) {
+      const edge = items[0];
+      if (edge?.type === "line-break") {
+        items.shift();
+        continue;
+      }
+      if (edge !== undefined && hasInlineChildren(edge)) {
+        const children = trimEdge(edge.children, fromEnd);
+        if (children.length === 0) {
+          items.shift();
+          continue;
+        }
+        items[0] = { ...edge, children };
+      }
+      break;
+    }
+    return fromEnd ? items.toReversed() : items;
+  };
+  return trimEdge(trimEdge(inlines, false), true);
+};
+
+/** An element's inlines, over a document whose whitespace is rendered. */
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
   state: ParserState,
 ): Inline[] =>
-  collapseHtmlWhitespace(
-    walkInlinesShared($, el, {
-      sanitizeHref: sanitizeUrl,
-      anonymized: false,
-      superscripts: state.superscripts,
-    }),
+  trimLineBreaks(
+    lineBreaksOf(
+      walkInlinesShared($, el, {
+        sanitizeHref: sanitizeUrl,
+        anonymized: false,
+        superscripts: state.superscripts,
+      }),
+    ),
   );
 
 const alphabeticOrdinal = (ordinal: number): string => {
@@ -305,19 +357,40 @@ const romanOrdinal = (ordinal: number): string => {
   return text;
 };
 
-/** `<ol type>` values and how each counts. */
-const ORDERED_LIST_STYLE = {
-  "1": String,
-  a: alphabeticOrdinal,
-  A: (ordinal: number): string =>
-    alphabeticOrdinal(ordinal).toLocaleUpperCase("pl-PL"),
-  i: (ordinal: number): string => romanOrdinal(ordinal).toLowerCase(),
-  I: romanOrdinal,
-} as const;
-
 const ORDERED_LIST_STYLE_KEYS = ["1", "a", "A", "i", "I"] as const;
 
 type OrderedListType = (typeof ORDERED_LIST_STYLE_KEYS)[number];
+
+/**
+ * How each `<ol type>` prints a counter, and the counters it can print: CSS
+ * counts alphabetically from 1 and in Roman numerals from 1 to 3999, and
+ * prints a counter outside its style's range in decimal.
+ */
+const ORDERED_LIST_STYLE = {
+  "1": { range: [-Infinity, Infinity], print: String },
+  a: { range: [1, Infinity], print: alphabeticOrdinal },
+  A: {
+    range: [1, Infinity],
+    print: (ordinal: number): string =>
+      alphabeticOrdinal(ordinal).toLocaleUpperCase("pl-PL"),
+  },
+  i: {
+    range: [1, 3999],
+    print: (ordinal: number): string => romanOrdinal(ordinal).toLowerCase(),
+  },
+  I: { range: [1, 3999], print: romanOrdinal },
+} as const satisfies Record<
+  OrderedListType,
+  { range: readonly [number, number]; print: (ordinal: number) => string }
+>;
+
+const counterText = (type: OrderedListType, ordinal: number): string => {
+  const {
+    range: [min, max],
+    print,
+  } = ORDERED_LIST_STYLE[type];
+  return ordinal >= min && ordinal <= max ? print(ordinal) : String(ordinal);
+};
 
 /**
  * CSS `list-style-type` keywords: the `type` each counts in, or null for a
@@ -337,38 +410,48 @@ const CSS_LIST_STYLE_TYPES: Readonly<Record<string, OrderedListType | null>> = {
   "upper-roman": "I",
 };
 
-const CSS_LIST_STYLE =
-  /(?:^|;)\s*list-style(?:-type)?\s*:\s*(?<value>[^;]+)/giu;
+/** `list-style` shorthand parts that name no counter style. */
+const LIST_STYLE_OTHER_PART = /^(?:inside|outside|url\(.*\))$/u;
 
 /**
  * The counting an element's inline style states: a type, null where it
  * prints no number, undefined where the style states none this reader knows.
- * The last declaration wins, as in CSS.
+ * The `list-style` shorthand without a counter style resets it to `disc`,
+ * which prints no number.
  */
-const cssListStyleOf = (
-  element: Element,
-): OrderedListType | null | undefined => {
-  let stated: OrderedListType | null | undefined;
-  for (const match of (element.attribs["style"] ?? "").matchAll(
-    CSS_LIST_STYLE,
-  )) {
-    for (const token of (match.groups?.["value"] ?? "")
-      .toLowerCase()
-      .split(/\s+/u)) {
-      if (Object.hasOwn(CSS_LIST_STYLE_TYPES, token)) {
-        stated = CSS_LIST_STYLE_TYPES[token];
-        break;
-      }
+const cssListStyleOf = (element: Element): OrderedListType | null | undefined =>
+  inlineStyleValue<OrderedListType | null>(element, (property, value) => {
+    if (property === "list-style-type") {
+      return Object.hasOwn(CSS_LIST_STYLE_TYPES, value)
+        ? { value: CSS_LIST_STYLE_TYPES[value] ?? null }
+        : undefined;
     }
-  }
-  return stated;
-};
+    if (property !== "list-style") {
+      return undefined;
+    }
+    const parts = value.split(/\s+/u);
+    const counter = parts.find((part) =>
+      Object.hasOwn(CSS_LIST_STYLE_TYPES, part),
+    );
+    if (counter !== undefined) {
+      return { value: CSS_LIST_STYLE_TYPES[counter] ?? null };
+    }
+    return parts.every((part) => LIST_STYLE_OTHER_PART.test(part))
+      ? { value: null }
+      : undefined;
+  })?.value;
 
+/**
+ * An integer attribute as HTML states it, or undefined. A value past the
+ * safe integer range is not one a list counts from: a browser stores it in a
+ * 32-bit field, and arithmetic on it here would stop being exact.
+ */
 const integerAttribute = (value: string | undefined): number | undefined => {
   if (value === undefined || !/^\s*-?\d+\s*$/u.test(value)) {
     return undefined;
   }
-  return Number.parseInt(value, 10);
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
 };
 
 /**
@@ -410,13 +493,7 @@ const orderedListMarker = (item: Element): string | undefined => {
   const itemStyle = cssListStyleOf(item);
   const stated = itemStyle === undefined ? cssListStyleOf(list) : itemStyle;
   const type = stated === undefined ? attributeType : stated;
-  if (type === null) {
-    return undefined;
-  }
-  const style = ORDERED_LIST_STYLE[type];
-  // Alphabetic and Roman counting has no zero or negatives; a browser prints
-  // those in decimal.
-  return `${ordinal > 0 ? style(ordinal) : String(ordinal)}.`;
+  return type === null ? undefined : `${counterText(type, ordinal)}.`;
 };
 
 const inferParagraphRole = (
@@ -503,21 +580,22 @@ const handleHeadingText = (
   return false;
 };
 
+/** Push a paragraph for an element's inlines; whether it held any text. */
 const parseParagraphElement = (
   $: cheerio.CheerioAPI,
   state: ParserState,
   node: cheerio.Cheerio<AnyNode>,
   marker?: string,
-): void => {
+): boolean => {
   const inlines = walkInlines($, node, state);
   const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
 
   if (!plainText) {
-    return;
+    return false;
   }
 
   if (handleHeadingText(state, plainText, inlines)) {
-    return;
+    return true;
   }
 
   // The role is read from the item's own words; the number its list prints
@@ -534,7 +612,7 @@ const parseParagraphElement = (
 
   if (marker === undefined) {
     pushParagraph(state, plainText, inlines, role);
-    return;
+    return true;
   }
   const marked: Inline[] = [];
   appendTextInline(marked, `${marker} `);
@@ -546,6 +624,7 @@ const parseParagraphElement = (
     }
   }
   pushParagraph(state, `${marker} ${plainText}`, marked, role);
+  return true;
 };
 
 const parseTableElement = (
@@ -587,74 +666,161 @@ const parseTableElement = (
   pushTable(state, rows, plainText);
 };
 
-const parseChildren = (
+/** Children of a list item that a browser sets as blocks of their own. */
+const LIST_ITEM_BLOCK_TAGS: ReadonlySet<string> = new Set([
+  "blockquote",
+  "div",
+  "dl",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ol",
+  "p",
+  "pre",
+  "table",
+  "ul",
+]);
+
+const isListItemBlock = (node: AnyNode): node is Element =>
+  isTag(node) && LIST_ITEM_BLOCK_TAGS.has(node.tagName.toLowerCase());
+
+/**
+ * A list item: its number opens its first text. Text around a nested list or
+ * another block is a paragraph of its own, and the nested blocks are read in
+ * source order, so a nested list's items count on their own counter.
+ */
+const parseListItem = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  item: Element,
+): void => {
+  let marker = orderedListMarker(item);
+  const children = item.children;
+  if (!children.some(isListItemBlock)) {
+    parseParagraphElement($, state, $(item), marker);
+    return;
+  }
+  // The item's inline children from `start` up to `end`, read as one
+  // paragraph through a copy of the item that holds only them.
+  let start = 0;
+  const readInline = (end: number): void => {
+    if (end > start) {
+      const segment = $(item).clone();
+      segment
+        .contents()
+        .filter((index) => index < start || index >= end)
+        .remove();
+      if (parseParagraphElement($, state, segment, marker)) {
+        marker = undefined;
+      }
+    }
+  };
+  for (const [index, child] of children.entries()) {
+    if (!isListItemBlock(child)) {
+      continue;
+    }
+    readInline(index);
+    start = index + 1;
+    if (marker !== undefined && child.tagName.toLowerCase() === "p") {
+      if (parseParagraphElement($, state, $(child), marker)) {
+        marker = undefined;
+      }
+      continue;
+    }
+    if (marker !== undefined) {
+      // The number stands on its own line ahead of the block it opens.
+      pushParagraph(
+        state,
+        marker,
+        textInline(marker),
+        inferParagraphRole(state, ""),
+      );
+      marker = undefined;
+    }
+    parseNode($, state, child);
+  }
+  readInline(children.length);
+};
+
+const parseNode = (
+  $: cheerio.CheerioAPI,
+  state: ParserState,
+  node: AnyNode,
+): void => {
+  if (isText(node)) {
+    const inlines = lineBreaksOf(textInline(node.data));
+    const text = normalizeWhitespace(inlinesToPlainText(inlines));
+    if (!text) {
+      return;
+    }
+
+    pushParagraph(state, text, inlines, inferParagraphRole(state, text));
+    return;
+  }
+
+  if (!isTag(node)) {
+    return;
+  }
+
+  const $node = $(node);
+  const tag = node.tagName.toLowerCase();
+
+  // isTag() also matches <script>/<style>; never emit their raw text.
+  if (isExcludedHtmlTag(tag)) {
+    return;
+  }
+
+  if (tag === "p" || tag === "pre") {
+    parseParagraphElement($, state, $node);
+    return;
+  }
+
+  if (tag === "li") {
+    parseListItem($, state, node);
+    return;
+  }
+
+  if (/^h[1-6]$/u.test(tag)) {
+    const inlines = walkInlines($, $node, state);
+    const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
+    if (!plainText) {
+      return;
+    }
+
+    if (handleHeadingText(state, plainText, inlines)) {
+      return;
+    }
+
+    pushHeading(
+      state,
+      tag === "h1" || tag === "h2" ? 2 : 3,
+      plainText,
+      "section-heading",
+      inlines,
+    );
+    return;
+  }
+
+  if (tag === "table") {
+    parseTableElement($, state, $node);
+    return;
+  }
+
+  parseChildren($, state, $node);
+};
+
+function parseChildren(
   $: cheerio.CheerioAPI,
   state: ParserState,
   root: cheerio.Cheerio<AnyNode>,
-): void => {
+): void {
   root.contents().each((_, node) => {
-    if (isText(node)) {
-      const inlines = collapseHtmlWhitespace(textInline(node.data));
-      const text = normalizeWhitespace(inlinesToPlainText(inlines));
-      if (!text) {
-        return;
-      }
-
-      pushParagraph(state, text, inlines, inferParagraphRole(state, text));
-      return;
-    }
-
-    if (!isTag(node)) {
-      return;
-    }
-
-    const $node = $(node);
-    const tag = node.tagName.toLowerCase();
-
-    // isTag() also matches <script>/<style>; never emit their raw text.
-    if (isExcludedHtmlTag(tag)) {
-      return;
-    }
-
-    if (tag === "p") {
-      parseParagraphElement($, state, $node);
-      return;
-    }
-
-    if (tag === "li") {
-      parseParagraphElement($, state, $node, orderedListMarker(node));
-      return;
-    }
-
-    if (/^h[1-6]$/u.test(tag)) {
-      const inlines = walkInlines($, $node, state);
-      const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
-      if (!plainText) {
-        return;
-      }
-
-      if (handleHeadingText(state, plainText, inlines)) {
-        return;
-      }
-
-      pushHeading(
-        state,
-        tag === "h1" || tag === "h2" ? 2 : 3,
-        plainText,
-        "section-heading",
-        inlines,
-      );
-      return;
-    }
-
-    if (tag === "table") {
-      parseTableElement($, state, $node);
-      return;
-    }
-
-    parseChildren($, state, $node);
+    parseNode($, state, node);
   });
-};
+}
 
 const plainTextParagraphsToInlines = (text: string): Inline[] => {
   const lines = text.split("\n");
@@ -738,6 +904,10 @@ export const parsePlDecisionContent = (
   if (hasHtmlTags(input.content)) {
     const $ = loadHtml(input.content);
     const root = $("body").length > 0 ? $("body") : $.root();
+    const parsed = $.root().get(0);
+    if (parsed !== undefined) {
+      renderHtmlWhiteSpace(parsed);
+    }
     parseChildren($, state, root);
     validateAndLog(
       { parser: "pl-courts", caseNumber: input.caseNumber },

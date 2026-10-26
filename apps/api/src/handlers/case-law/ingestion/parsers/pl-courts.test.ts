@@ -337,6 +337,58 @@ describe("markup whitespace", () => {
       "Przewodniczący: SSO A. B.",
     ]);
   });
+
+  const plainTextsOf = (html: string): string[] =>
+    parsePlDecisionContent(
+      baseInput(html, { decisionType: undefined }),
+    ).documentAst.blocks.map((block) => block.plainText);
+
+  test.each([
+    ["<pre>A\tB\nC\tD</pre>", ["A\tB\nC\tD"]],
+    ['<p style="white-space:pre-wrap">A  B\n  C</p>', ["A  B\n  C"]],
+    ['<p style="white-space: pre">A\t\tB</p>', ["A\t\tB"]],
+    ['<p style="white-space:break-spaces">A   B</p>', ["A   B"]],
+    ['<p style="white-space:pre-line">A   B\n   C</p>', ["A B\nC"]],
+    // Inherited from a container, and undone by a descendant.
+    ['<div style="white-space:pre-wrap"><p>A  B</p></div>', ["A  B"]],
+    [
+      '<div style="white-space:pre-wrap"><p style="white-space:normal">A  B</p></div>',
+      ["A B"],
+    ],
+    // The cascade's priority: the important declaration wins.
+    [
+      '<p style="white-space:pre !important; white-space:normal">A  B</p>',
+      ["A  B"],
+    ],
+  ])("%s keeps the whitespace its style preserves", (html, expected) => {
+    expect(plainTextsOf(html)).toEqual(expected);
+  });
+
+  test("a kept line break is a line break inline, not text", () => {
+    const { documentAst } = parsePlDecisionContent(
+      baseInput("<pre>A\nB</pre>", { decisionType: undefined }),
+    );
+    expect(documentAst.blocks.at(0)).toMatchObject({
+      inlines: [
+        { type: "text", text: "A" },
+        { type: "line-break" },
+        { type: "text", text: "B" },
+      ],
+    });
+  });
+
+  test("paragraphs inside one cell stay apart, a line each", () => {
+    // Captured KIO markup: each paragraph ends in a space and the next
+    // follows with nothing between them.
+    const { documentAst } = parsePlDecisionContent(
+      baseInput(
+        "<table><tr><td><p><span>Sp. z o.o. </span></p><p><span>ul. Zabytkowa 2 </span></p></td></tr></table>",
+        { decisionType: undefined },
+      ),
+    );
+    const table = documentAst.blocks.find((block) => block.type === "table");
+    expect(table?.rows[0]?.[0]?.plainText).toBe("Sp. z o.o.\nul. Zabytkowa 2");
+  });
 });
 
 describe("ordered list items print the number a browser gives them", () => {
@@ -371,6 +423,42 @@ describe("ordered list items print the number a browser gives them", () => {
     [
       '<ol style="list-style-type: none"><li style="list-style-type: lower-alpha">a</li></ol>',
       ["a. a"],
+    ],
+    // The cascade's priority: the important declaration wins.
+    [
+      '<ol><li style="list-style-type:none !important;list-style-type:decimal">A</li></ol>',
+      ["A"],
+    ],
+    ['<ol style="list-style: inside"><li>a</li></ol>', ["a"]],
+    // Counters outside a style's range print in decimal, and a counter past
+    // the safe integer range is not one the list counts from.
+    [
+      '<ol type="I" start="3999"><li>a</li><li>b</li></ol>',
+      ["MMMCMXCIX. a", "4000. b"],
+    ],
+    ['<ol type="i" start="4000"><li>a</li></ol>', ["4000. a"]],
+    [
+      '<ol type="a" start="-1"><li>a</li><li>b</li><li>c</li></ol>',
+      ["-1. a", "0. b", "a. c"],
+    ],
+    ['<ol type="a" start="703"><li>a</li></ol>', ["aaa. a"]],
+    ['<ol type="I" start="100000000000000000000"><li>a</li></ol>', ["I. a"]],
+    [
+      '<ol><li value="100000000000000000000">a</li><li>b</li></ol>',
+      ["1. a", "2. b"],
+    ],
+    // A nested list is its own list, numbered on its own counter, in place.
+    [
+      '<ol><li>Parent<ol type="a"><li>Child</li></ol></li><li>Next</li></ol>',
+      ["1. Parent", "a. Child", "2. Next"],
+    ],
+    [
+      '<ol reversed><li>P<ol><li value="5">C1</li><li>C2</li></ol> tail</li><li>Q</li></ol>',
+      ["2. P", "5. C1", "6. C2", "tail", "1. Q"],
+    ],
+    [
+      '<ol start="3"><li><p>One</p><p>More</p></li><li><ul><li>Deep</li></ul></li></ol>',
+      ["3. One", "More", "4.", "Deep"],
     ],
     ["<ul><li>a</li><li>b</li></ul>", ["a", "b"]],
   ])("%s", (html, expected) => {
