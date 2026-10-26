@@ -666,6 +666,29 @@ describe("the portal's typesetting, read as a browser lays it out", () => {
     propertyTestTimeout(30_000),
   );
 
+  test.each([
+    [" \n\t\n\r\f", ""],
+    [" \t\f", " \t\f"],
+    // HTML normalizes a carriage return to a line feed before cleanup.
+    [" \t\r\f", ""],
+    ["\n\u00a0\n", "\n\u00a0"],
+    ["\n\u000b\n", "\n\u000b"],
+    [`${" ".repeat(20_000)}\n${"\t".repeat(20_000)}`, ""],
+  ])(
+    "raised marks remove only line-bearing export whitespace (case %#)",
+    (gap, kept) => {
+      const page = parsePlTkPage(`<div id="sprawaForm:tabView:dok_1">
+      <div id="tekst_1"><p>word${gap}<span class="wyrok_indeks_gorny">1</span></p></div>
+    </div>`);
+      const ruling = readPlTkRuling(page, "1");
+      expect(
+        cheerio
+          .load(ruling?.textHtml ?? "")("p")
+          .text(),
+      ).toBe(`word${kept}1`);
+    },
+  );
+
   test("a raised number stays on the word it belongs to", async () => {
     const judgment = (await everyRuling("pl-tk-case-sk-14-11.html.gz")).find(
       (ruling) => ruling.documentId === "9897",

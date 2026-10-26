@@ -613,8 +613,27 @@ const NOTE_REFERENCE = /^#tresc-przypisu-[\w-]+$/u;
 const RAISED_CLASS = "wyrok_indeks_gorny";
 
 /** Whitespace holding a line break: the export's indentation, never a word. */
-const INDENTATION = /^[ \t\n\r\f]*\n[ \t\n\r\f]*$/u;
-const TRAILING_INDENTATION = /[ \t\n\r\f]*\n[ \t\n\r\f]*$/u;
+const isExportWhitespace = (code: number | undefined): boolean =>
+  code === 0x20 ||
+  code === 0x09 ||
+  code === 0x0a ||
+  code === 0x0d ||
+  code === 0x0c;
+
+/** Start of the trailing export-whitespace run, when it contains a line feed. */
+const trailingIndentationStart = (text: string): number | undefined => {
+  let start = text.length;
+  let hasLineFeed = false;
+  while (start > 0) {
+    const code = text.codePointAt(start - 1);
+    if (!isExportWhitespace(code)) {
+      break;
+    }
+    hasLineFeed ||= code === 0x0a;
+    start -= 1;
+  }
+  return hasLineFeed ? start : undefined;
+};
 
 /** Elements a raised mark can sit in without leaving its line. */
 const INLINE_WRAPPERS = new Set([
@@ -631,7 +650,7 @@ const INLINE_WRAPPERS = new Set([
 const CLOSING_PUNCTUATION = /^[)\]}.,;:!?…”’»]/u;
 
 const isIndentation = (node: AnyNode | null): boolean =>
-  node !== null && isText(node) && INDENTATION.test(node.data);
+  node !== null && isText(node) && trailingIndentationStart(node.data) === 0;
 
 /** `node`, or the inline wrappers it is the only content of on `side`. */
 const outermostRun = (node: AnyNode, side: "prev" | "next"): AnyNode => {
@@ -698,7 +717,10 @@ const tightenRaisedMark = ($: Root, mark: Element): void => {
       continue;
     }
     if (before !== null && isText(before)) {
-      before.data = before.data.replace(TRAILING_INDENTATION, "");
+      const indentationStart = trailingIndentationStart(before.data);
+      if (indentationStart !== undefined) {
+        before.data = before.data.slice(0, indentationStart);
+      }
     }
     break;
   }
