@@ -6432,6 +6432,7 @@
       "promoteCta": "Előléptetés ügyfélüggyé",
       "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
       "promotedSuccess": "Ügy előléptetve",
+      "recentClients": "Legutóbbi ügyfelek",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
       "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",

@@ -6432,6 +6432,7 @@
       "promoteCta": "Promote to client",
       "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
       "promotedSuccess": "Matter promoted",
+      "recentClients": "Recent clients",
       "removeClient": "Remove client",
       "removeParty": "Remove party",
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?",
