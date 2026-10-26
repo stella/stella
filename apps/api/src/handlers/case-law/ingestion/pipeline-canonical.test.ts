@@ -49,6 +49,10 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 
+beforeEach(() => {
+  putPacksMock.mockReset();
+});
+
 /**
  * `canonical` storage mode moves the payload out of Postgres, so what a
  * type cannot check is the ordering: the row and durable upload intent must

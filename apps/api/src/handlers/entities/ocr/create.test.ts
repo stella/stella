@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect, QueryBuilder } from "drizzle-orm/pg-core";
 
@@ -19,6 +19,11 @@ import type { PersistManualOcrRunOptions } from "@/api/lib/document-processing-r
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+beforeEach(() => {
+  recordAuditEvent.mockReset();
+  rootTransactionMock.mockReset();
+});
 
 const rootTransactionMock = mock();
 const recordAuditEvent = mock(async () => undefined);

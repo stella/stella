@@ -1,10 +1,22 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });

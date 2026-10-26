@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -26,6 +26,10 @@ import {
   createRemoveWorkspaceMember,
   removeWorkspaceMemberHandler,
 } from "./remove";
+
+beforeEach(() => {
+  revokeWorkspaceSseAccessMock.mockReset();
+});
 
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
 const removeWorkspaceMember = createRemoveWorkspaceMember({

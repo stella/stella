@@ -12,6 +12,7 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -48,6 +49,10 @@ import {
   getRlsFixture,
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 setDefaultTimeout(120_000);
 

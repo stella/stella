@@ -5,33 +5,90 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 const plugin = "bun-test-hygiene";
 const rule = "require-module-mock-reset";
 
-test("requires a file-level restore for module mocks", async () => {
+test("reports the first test without a named reset", async () => {
   expect(
     await lintSingleRule(
       rule,
       [
-        'import { beforeEach, describe, mock, spyOn } from "bun:test";',
-        "const first = mock(() => 1);",
-        'mock.module("dependency", () => ({}));',
-        'spyOn(console, "log");',
-        'describe("suite", () => { beforeEach(() => mock.restore()); });',
+        'import { beforeEach, mock, test } from "bun:test";',
+        "const dependency = mock(() => 1);",
+        "beforeEach(() => mock.restore());",
+        'test("uncovered", () => {});',
+        'test("also uncovered", () => {});',
       ].join("\n"),
       { plugin },
     ),
-  ).toEqual([2, 3, 4]);
+  ).toEqual([4]);
 });
 
-test("accepts restore and default reinstallation in one file-level hook", async () => {
+test("accepts a named reset and default reinstallation", async () => {
   expect(
     await lintSingleRule(
       rule,
       [
-        'import { afterEach as cleanup, mock as mockFn } from "bun:test";',
+        'import { afterEach as cleanup, mock as mockFn, test } from "bun:test";',
         "const dependency = mockFn(() => 1);",
         "cleanup(() => {",
-        "  mockFn.restore();",
         "  dependency.mockReset();",
         "  dependency.mockImplementation(() => 1);",
+        "});",
+        'test("covered", () => {});',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});
+
+test("accepts clear plus default reinstallation in the same hook", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { beforeEach, mock, test } from "bun:test";',
+        "const dependency = mock(() => 1);",
+        "beforeEach(() => {",
+        "  dependency.mockClear();",
+        "  dependency.mockImplementation(() => 1);",
+        "});",
+        'test("covered", () => {});',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});
+
+test("reports a sibling describe not covered by another describe reset", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { beforeEach, describe, mock, test } from "bun:test";',
+        "const dependency = mock();",
+        'describe("covered", () => {',
+        "  beforeEach(() => dependency.mockReset());",
+        '  test("first", () => {});',
+        "});",
+        'describe("sibling", () => {',
+        '  test("reported", () => {});',
+        "});",
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([8]);
+});
+
+test("inherits a parent describe reset in a nested describe", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { beforeEach, describe, mock, test } from "bun:test";',
+        "const dependency = mock();",
+        'describe("parent", () => {',
+        "  beforeEach(() => dependency.mockReset());",
+        '  describe("nested", () => {',
+        '    test("covered", () => {});',
+        "  });",
         "});",
       ].join("\n"),
       { plugin },
@@ -39,18 +96,19 @@ test("accepts restore and default reinstallation in one file-level hook", async 
   ).toEqual([]);
 });
 
-test("does not treat clearAllMocks as an implementation reset", async () => {
+test("requires mock.restore for module-scope spies", async () => {
   expect(
     await lintSingleRule(
       rule,
       [
-        'import { beforeEach, mock } from "bun:test";',
-        "const dependency = mock(() => 1);",
+        'import { beforeEach, mock, spyOn, test } from "bun:test";',
+        'spyOn(console, "log");',
         "beforeEach(() => mock.clearAllMocks());",
+        'test("uncovered", () => {});',
       ].join("\n"),
       { plugin },
     ),
-  ).toEqual([2]);
+  ).toEqual([4]);
 });
 
 test("ignores mocks created inside tests and helper callbacks", async () => {

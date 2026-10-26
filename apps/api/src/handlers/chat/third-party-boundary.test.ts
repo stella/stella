@@ -48,6 +48,10 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
 
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockReset();
+});
+
 const anonymizeTextFieldsMock = mock(
   async ({
     fields,

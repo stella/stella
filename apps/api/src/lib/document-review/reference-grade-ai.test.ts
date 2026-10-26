@@ -28,6 +28,10 @@ import type {
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
+beforeEach(() => {
+  generateObjectMock.mockReset();
+});
+
 type CapturedGenerateOptions = {
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   messages: readonly ModelMessage[];

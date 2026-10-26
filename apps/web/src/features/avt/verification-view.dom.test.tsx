@@ -4,13 +4,25 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
 import { plugin } from "bun";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { OriginalDocxHostProps } from "./original-docx-host";
 import type { ClaimState, VerificationRun } from "./types";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 

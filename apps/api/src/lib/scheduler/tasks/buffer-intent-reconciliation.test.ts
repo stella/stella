@@ -1,9 +1,13 @@
 import { Result } from "better-result";
-import { expect, mock, test } from "bun:test";
+import { beforeEach, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+beforeEach(() => {
+  reconcileStaleBufferIntentsGloballyMock.mockReset();
+});
 
 const reconcileStaleBufferIntentsGloballyMock = mock(async () => 0);
 const { createReconcileBufferIntentsTask } =

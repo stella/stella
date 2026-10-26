@@ -65,6 +65,11 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockReset();
+});
+
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,

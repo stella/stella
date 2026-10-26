@@ -17,6 +17,10 @@ import { createHttpApp } from "@/api/http/app";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
+beforeEach(() => {
+  submitMock.mockReset();
+});
+
 const SUBMIT_RESPONSE: FeedbackSubmitResponse = {
   receipt: "FB-7K2M-9QXZ",
   redactions: 0,

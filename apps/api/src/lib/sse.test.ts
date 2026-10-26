@@ -1,4 +1,4 @@
-import { describe, expect, mock, spyOn, test } from "bun:test";
+import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import {
   RESOURCE_TYPE,
@@ -15,6 +15,11 @@ import {
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
+
+beforeEach(() => {
+  createRedisClientMock.mockReset();
+  mock.restore();
+});
 
 type MessageHandler = (message: string) => void;
 

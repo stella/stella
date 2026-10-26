@@ -22,6 +22,10 @@ import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
+beforeEach(() => {
+  suggestTemplateFieldsMock.mockReset();
+});
+
 const PROVIDER_ERROR = new Error(
   "upstream provider rejected request: invalid api key sk-live-abc123",
 );

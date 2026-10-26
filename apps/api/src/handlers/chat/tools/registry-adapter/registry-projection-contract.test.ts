@@ -68,6 +68,31 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 
+beforeEach(() => {
+  describeStoredTemplateMock.mockReset();
+  executeRegistryLookupMock.mockReset();
+  getLawTextBlockMock.mockReset();
+  listStatuteVersionsHandlerMock.mockReset();
+  readCaseLawCoverageHandlerMock.mockReset();
+  readGatedDecisionCitationDigestMock.mockReset();
+  readGatedDecisionCitationsMock.mockReset();
+  readGatedDecisionWithDocumentMock.mockReset();
+  readLegislationProvisionVersionsMock.mockReset();
+  readOverviewHandlerMock.mockReset();
+  readProvisionHistoryHandlerMock.mockReset();
+  readPublicLegislationHandlerMock.mockReset();
+  readVersionBlocksMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+  readWorkspaceMembersHandlerMock.mockReset();
+  resolveStatuteExpressionMock.mockReset();
+  resolveStatuteWorkVersionMock.mockReset();
+  searchConsolidatedLegislationMock.mockReset();
+  searchDecisionsHandlerMock.mockReset();
+  searchLegislationHandlerMock.mockReset();
+  searchProviderSearchMock.mockReset();
+});
+
 /**
  * Contract corpus over every chat-projectable read tool: run the real MCP
  * handler through `runRegistryReadTool` against fixtures whose every id-bearing

@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -43,6 +45,10 @@ import type {
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 const routeServer = serveRoutesForTest([
   ...apiKeysRoute,

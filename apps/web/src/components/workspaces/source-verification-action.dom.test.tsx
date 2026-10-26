@@ -1,6 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { parseTimeZoneId } from "@stll/time";
 
@@ -8,6 +16,10 @@ import arabicMessages from "@/i18n/langs/ar.json";
 import englishMessages from "@/i18n/langs/en.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const sourceId = "019a0000-0000-7000-8000-000000000004";

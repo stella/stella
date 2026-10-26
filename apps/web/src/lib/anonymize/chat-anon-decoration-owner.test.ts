@@ -4,6 +4,10 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { createChatAnonDecorationOwner } from "./chat-anon-decoration-owner";
 
+beforeEach(() => {
+  setPairs.mockReset();
+});
+
 const setPairs = mock(
   (_view: object, _pairs: readonly ChatAnonPair[]) => undefined,
 );

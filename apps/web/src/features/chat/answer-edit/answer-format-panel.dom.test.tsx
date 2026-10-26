@@ -1,5 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
@@ -8,6 +16,10 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 import type { AnswerFormatPanelProps } from "./answer-format-panel";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });

@@ -56,6 +56,15 @@ import type {
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
 
+beforeEach(() => {
+  compactMessagesForContextMock.mockReset();
+  loadExternalMcpToolsForUserMock.mockReset();
+  loadWebSearchProvidersForOrgMock.mockReset();
+  rollbackUnpersistedChatSideEffectsMock.mockReset();
+  uploadMessageFilesWithRollbackMock.mockReset();
+  upsertChatThreadSearchDocumentMock.mockReset();
+});
+
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
   webSearchProviderLoadHook?.();

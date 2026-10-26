@@ -18,7 +18,7 @@
  */
 
 import { panic } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
@@ -27,6 +27,13 @@ import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+beforeEach(() => {
+  clearMock.mockReset();
+  releaseClaimMock.mockReset();
+  setRequestIdMock.mockReset();
+  tryClaimMock.mockReset();
+});
 
 const claimedRequestIds: string[] = [];
 const releasedClaims: { requestId: string; workspaceId: string }[] = [];

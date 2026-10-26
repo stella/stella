@@ -51,13 +51,11 @@
 //   opens; the lint config exempts that module.
 //
 // require-module-mock-reset
-//   A file that creates `mock(...)`, `mock.module(...)`, or `spyOn(...)` at
-//   module scope must call `mock.restore()` in a file-level `beforeEach` or
-//   `afterEach`. Bun's `mock.clearAllMocks()` only clears call history: it
-//   leaves implementations installed by `mockImplementation` and
-//   `mockReturnValue` in place. The hook must therefore restore globally and
-//   re-install any file defaults there. A describe-local hook is insufficient
-//   because it cannot protect sibling or subsequently added suites.
+//   Every test using a module-scope standalone `mock(...)` binding must be
+//   enclosed by a `beforeEach` or `afterEach` that resets that binding by name.
+//   A parent describe's hook covers nested suites, but not sibling suites.
+//   Module-scope `spyOn(...)` calls are covered by `mock.restore()` in the same
+//   set of enclosing scopes.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import { panic } from "better-result";
@@ -492,19 +490,7 @@ const isModuleMockCreation = (
   );
 };
 
-const isFileLevelMockRestore = (
-  context: ScopeContext,
-  node: AstNode,
-): boolean => {
-  const callee = unwrapExpression(node.callee);
-  if (
-    !isAstNode(callee) ||
-    callee.type !== "MemberExpression" ||
-    memberPropertyName(callee) !== "restore" ||
-    bunTestExport(context, callee.object) !== "mock"
-  ) {
-    return false;
-  }
+const hookScope = (context: ScopeContext, node: AstNode): unknown => {
   let current: unknown = node;
   while (isAstNode(current)) {
     if (FUNCTION_TYPES.has(current.type)) {
@@ -517,13 +503,58 @@ const isFileLevelMockRestore = (
         !hookCall.arguments.includes(callback) ||
         !FILE_HOOK_EXPORTS.has(bunTestExport(context, hookCall.callee) ?? "")
       ) {
-        return false;
+        return null;
       }
-      return isProgram(enclosingBlock(hookCall).node);
+      return enclosingBlock(hookCall).node;
     }
     current = current.parent;
   }
-  return false;
+  return null;
+};
+
+const calledMember = (
+  node: AstNode,
+): { object: AstNode; property: string } | null => {
+  const callee = unwrapExpression(node.callee);
+  if (!isAstNode(callee) || callee.type !== "MemberExpression") {
+    return null;
+  }
+  const object = unwrapExpression(callee.object);
+  const property = memberPropertyName(callee);
+  return object === null || property === null ? null : { object, property };
+};
+
+const identifierName = (node: unknown): string | null =>
+  isAstNode(node) && node.type === "Identifier" && typeof node.name === "string"
+    ? node.name
+    : null;
+
+const enclosingTestScopes = (
+  context: ScopeContext,
+  node: AstNode,
+): unknown[] => {
+  const scopes: unknown[] = [];
+  let current: unknown = node;
+  while (isAstNode(current)) {
+    if (current.type === "Program") {
+      scopes.push(current);
+      break;
+    }
+    if (FUNCTION_TYPES.has(current.type)) {
+      const call = current.parent;
+      if (
+        isAstNode(call) &&
+        call.type === "CallExpression" &&
+        Array.isArray(call.arguments) &&
+        call.arguments.includes(current) &&
+        testRegistration(context, call)?.kind === TEST_KIND.describe
+      ) {
+        scopes.push(current);
+      }
+    }
+    current = current.parent;
+  }
+  return scopes;
 };
 
 // Exports that open a database connection pool when constructed, by module.
@@ -640,38 +671,133 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           missingReset:
-            "Module-level Bun mocks require `mock.restore()` in a file-level beforeEach or afterEach, followed by re-installing file defaults. `mock.clearAllMocks()` preserves mock implementations, and describe-local cleanup does not cover sibling suites.",
+            'Module-level mock "{{binding}}" is not reset for test "{{test}}". Add a beforeEach or afterEach in the file or an enclosing describe that resets it by name; `mock.restore()` covers spies only.',
         },
       },
       createOnce(context) {
-        const moduleMocks: AstNode[] = [];
-        let hasFileLevelRestore = false;
+        const moduleMocks = new Map<string, AstNode>();
+        const moduleSpies: AstNode[] = [];
+        const tests: { node: AstNode; title: string }[] = [];
+        const hookResets = new Map<unknown, Set<string>>();
+        const hookImplementations = new Map<unknown, Set<string>>();
+        const hookRestores = new Set<unknown>();
         return {
           before() {
-            moduleMocks.length = 0;
-            hasFileLevelRestore = false;
+            moduleMocks.clear();
+            moduleSpies.length = 0;
+            tests.length = 0;
+            hookResets.clear();
+            hookImplementations.clear();
+            hookRestores.clear();
             return mentionsBunTest(context.sourceCode.text);
           },
           CallExpression(node) {
             if (!isAstNode(node)) {
               return;
             }
+            const registration = testRegistration(context, node);
+            if (registration?.kind === TEST_KIND.test) {
+              tests.push({
+                node,
+                title:
+                  staticTitle(
+                    Array.isArray(node.arguments) ? node.arguments.at(0) : null,
+                  ) ?? "<dynamic title>",
+              });
+            }
+
             if (
               isProgram(enclosingBlock(node).node) &&
               isModuleMockCreation(context, node)
             ) {
-              moduleMocks.push(node);
+              const exportName = bunTestExport(
+                context,
+                unwrapExpression(node.callee),
+              );
+              if (exportName === "spyOn") {
+                moduleSpies.push(node);
+              } else {
+                const declarator = node.parent;
+                const name =
+                  isAstNode(declarator) &&
+                  declarator.type === "VariableDeclarator"
+                    ? identifierName(declarator.id)
+                    : null;
+                if (name !== null) {
+                  moduleMocks.set(name, node);
+                }
+              }
             }
-            if (isFileLevelMockRestore(context, node)) {
-              hasFileLevelRestore = true;
+
+            const scope = hookScope(context, node);
+            if (scope === null) {
+              return;
+            }
+            const member = calledMember(node);
+            if (member === null) {
+              return;
+            }
+            if (
+              member.property === "restore" &&
+              bunTestExport(context, member.object) === "mock"
+            ) {
+              hookRestores.add(scope);
+              return;
+            }
+            const name = identifierName(member.object);
+            if (name === null) {
+              return;
+            }
+            if (member.property === "mockReset") {
+              const resets = hookResets.get(scope) ?? new Set<string>();
+              resets.add(name);
+              hookResets.set(scope, resets);
+            } else if (member.property === "mockImplementation") {
+              const implementations =
+                hookImplementations.get(scope) ?? new Set<string>();
+              implementations.add(name);
+              hookImplementations.set(scope, implementations);
+            } else if (member.property === "mockClear") {
+              const resets = hookResets.get(scope) ?? new Set<string>();
+              resets.add(`${name}:clear`);
+              hookResets.set(scope, resets);
             }
           },
           "Program:exit"() {
-            if (hasFileLevelRestore) {
-              return;
+            for (const binding of moduleMocks.keys()) {
+              const uncovered = tests.find(
+                ({ node }) =>
+                  !enclosingTestScopes(context, node).some((scope) => {
+                    const resets = hookResets.get(scope);
+                    return (
+                      resets?.has(binding) === true ||
+                      (resets?.has(`${binding}:clear`) === true &&
+                        hookImplementations.get(scope)?.has(binding) === true)
+                    );
+                  }),
+              );
+              if (uncovered !== undefined) {
+                context.report({
+                  node: uncovered.node,
+                  messageId: "missingReset",
+                  data: { binding, test: uncovered.title },
+                });
+              }
             }
-            for (const node of moduleMocks) {
-              context.report({ node, messageId: "missingReset" });
+            for (const _spy of moduleSpies) {
+              const uncovered = tests.find(
+                ({ node }) =>
+                  !enclosingTestScopes(context, node).some((scope) =>
+                    hookRestores.has(scope),
+                  ),
+              );
+              if (uncovered !== undefined) {
+                context.report({
+                  node: uncovered.node,
+                  messageId: "missingReset",
+                  data: { binding: "spyOn", test: uncovered.title },
+                });
+              }
             }
           },
         };

@@ -17,6 +17,10 @@ import type {
 
 import { generateBBoxData } from "./ai-generate-b-boxes";
 
+beforeEach(() => {
+  generateObjectMock.mockReset();
+});
+
 const generateObjectMock = mock(async () => ({ boxes: [] as unknown[] }));
 // SAFETY: This suite only dispatches the bbox schema and configures outputs
 // matching that schema; Bun's mock type cannot express the generic schema tie.

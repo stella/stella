@@ -44,6 +44,10 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
+beforeEach(() => {
+  sweepMock.mockReset();
+});
+
 const sweepMock = mock(async () =>
   Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }),
 );

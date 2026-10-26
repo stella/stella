@@ -1,8 +1,12 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { queryView } from "@/lib/query-view.logic";
 
 import { leadSectionContent } from "./lead-section.logic";
+
+beforeEach(() => {
+  retry.mockReset();
+});
 
 const readError = new Error("Matter read failed");
 const retry = mock(async () => {

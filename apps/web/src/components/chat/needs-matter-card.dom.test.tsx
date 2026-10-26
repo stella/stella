@@ -1,10 +1,22 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const fetch = spyOn(globalThis, "fetch").mockImplementation(

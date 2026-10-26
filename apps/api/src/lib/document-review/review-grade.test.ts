@@ -22,6 +22,11 @@ import {
 } from "@/api/lib/workflow/verdict-engine";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
+beforeEach(() => {
+  gradeReferencePositionsMock.mockReset();
+  gradeTierMatchesMock.mockReset();
+});
+
 let modelCallCount = 0;
 let abortAfterFirstCall: AbortController | null = null;
 let returnVerdicts = true;

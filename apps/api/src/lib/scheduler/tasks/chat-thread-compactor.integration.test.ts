@@ -11,6 +11,7 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -49,6 +50,10 @@ import {
   createChatThreadCompactor,
   OWNER_ACCESS_LOST_REASON,
 } from "./chat-thread-compactor";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 setDefaultTimeout(120_000);
 

@@ -11,6 +11,7 @@ import {
   beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -97,6 +98,10 @@ const transcriptSpy = spyOn(compactionTranscript, "loadCompactionTranscript");
 const warnSpy = spyOn(logger, "warn");
 const dedupSpy = spyOn(memoryDedup, "createMemoryDedupIdentity");
 const state = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  mock.restore();
+});
 const originalGrants = env.API_FEATURE_ACCESS_GRANTS;
 const originalUser =
   (

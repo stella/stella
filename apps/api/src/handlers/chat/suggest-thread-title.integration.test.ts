@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -19,6 +27,10 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+beforeEach(() => {
+  generateTextMock.mockReset();
+});
 
 const generateTextMock = mock(async () => '"Title: Drafting an NDA"');
 // SAFETY: The test fake ignores request details and returns a fixture title.

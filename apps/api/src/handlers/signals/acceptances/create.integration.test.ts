@@ -1,6 +1,7 @@
 import {
   afterAll,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -31,6 +32,10 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+beforeEach(() => {
+  flushEntitySearchRepairsMock.mockReset();
+});
 
 const flushEntitySearchRepairsMock = mock(async () => ({
   failed: 0,

@@ -4,6 +4,14 @@ import type { ServerAnalytics } from "@/api/lib/analytics/server-analytics";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createOrganizationLifecycleHooks } from "@/api/lib/organization-lifecycle-hooks";
 
+beforeEach(() => {
+  identifyOrganizationGroup.mockReset();
+  recordAccessState.mockReset();
+  recordProfessionalUse.mockReset();
+  seedDefaultDocumentTypes.mockReset();
+  seedMemberDefaults.mockReset();
+});
+
 const identifyOrganizationGroup =
   mock<ServerAnalytics["identifyOrganizationGroup"]>();
 const calls: string[] = [];

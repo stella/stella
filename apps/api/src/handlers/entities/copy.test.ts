@@ -29,6 +29,16 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
 
+beforeEach(() => {
+  enqueueDocumentProcessingRunMock.mockReset();
+  enqueueEntitySearchRepairsMock.mockReset();
+  enqueueImageThumbnailOrMarkFailedMock.mockReset();
+  enqueuePdfDerivativeOrMarkFailedMock.mockReset();
+  flushEntitySearchRepairsMock.mockReset();
+  requestNativeExtractionRunsMock.mockReset();
+  syncWorkspaceSearchActivityMock.mockReset();
+});
+
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
 const fileBytes = new TextEncoder().encode("file content");

@@ -1,5 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import { sleep } from "@stll/concurrency/sleep";
@@ -8,6 +16,10 @@ import { stellaToast } from "@stll/ui/toast";
 import messages from "@/i18n/langs/en.json";
 import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+beforeEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondLatest: (request: Request) => Promise<Response> | Response = () => {
