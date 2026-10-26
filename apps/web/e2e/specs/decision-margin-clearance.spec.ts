@@ -4,7 +4,7 @@ import type { OrganizationAIAvailability } from "@stll/api-contract/organization
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { READER_ASIDE_RESIZE_SLOT } from "../../src/features/case-law/components/case-viewer/decision-workspace.logic";
+import { READER_ASIDE_RESIZE_SLOT } from "../../src/features/case-law/components/case-viewer/reader-aside-slots";
 import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
