@@ -8,7 +8,6 @@ import {
   sql,
   TransactionRollbackError,
 } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import {
   IDEMPOTENCY_IN_PROGRESS_CODE,
@@ -25,6 +24,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { isHttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -245,7 +245,7 @@ type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
 
 // A replay writes the serialized transport response of the original T. Keep
 // the handler's inferred payload contract; Response is an implementation detail
-// of replaying that same JSON through Elysia, not another payload schema.
+// of replaying that same JSON through HTTP, not another payload schema.
 export function runWithRequestReceipt<T>(
   options: ReplayRequestOptions<T>,
 ): Promise<Result<T, HandlerError>>;
@@ -335,12 +335,8 @@ export async function runWithRequestReceipt<T>({
               const result = await run(transactionalDb);
               let body: unknown = result;
               let status = responseStatus();
-              while (body instanceof ElysiaCustomStatusResponse) {
-                const code: unknown = body.code;
-                if (typeof code !== "number") {
-                  panic("Elysia response status must be numeric");
-                }
-                status = code;
+              while (isHttpStatusResponse(body)) {
+                status = body.code;
                 body = body.response;
               }
               if (status < 200 || status >= 300) {

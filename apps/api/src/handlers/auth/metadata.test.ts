@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -11,6 +11,9 @@ import {
   authCapabilitiesRoute,
   authMetadataRoute,
 } from "@/api/handlers/auth/routes";
+import { PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS } from "@/api/handlers/public-cors";
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
@@ -18,12 +21,24 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+
+// The cache stage decides `Cache-Control` from each route's declared policy.
+const server = serveForTest(
+  createHttpApp({
+    routes: [...authMetadataRoute, ...authCapabilitiesRoute],
+    middleware: [responseCachePolicy, errorBoundary],
+  }),
+);
+afterAll(async () => {
+  await server.stop();
+});
 
 describe("OAuth authorization server metadata", () => {
   const assertMetadataResponse = async (path: string) => {
-    const response = await authMetadataRoute.handle(
-      new Request(`http://localhost${path}`),
-    );
+    const response = await server.fetch(new Request(`http://localhost${path}`));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe(
@@ -118,7 +133,7 @@ describe("OAuth authorization server metadata", () => {
   });
 
   test("answers CORS preflight requests", async () => {
-    const response = await authMetadataRoute.handle(
+    const response = await server.fetch(
       new Request(
         `http://localhost${ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH}`,
         { method: "OPTIONS" },
@@ -130,12 +145,51 @@ describe("OAuth authorization server metadata", () => {
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
     );
+    expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+      "MCP-Protocol-Version",
+    );
+    expect(response.headers.get("Access-Control-Max-Age")).toBe(
+      String(PUBLIC_CORS_PREFLIGHT_MAX_AGE_SECONDS),
+    );
+  });
+
+  test("answers a third-party preflight ahead of the credentialed CORS layer", async () => {
+    // Served behind the API's own pipeline: its CORS stage answers preflights
+    // for the app's origins with credentials, which a third-party MCP client
+    // must never receive for these documents.
+    await using piped = serveRoutesForTest(authMetadataRoute);
+    for (const path of [
+      ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+      OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
+      OPENID_CONFIGURATION_DISCOVERY_PATH,
+    ]) {
+      const response = await piped.fetch(
+        new Request(`http://localhost${path}`, {
+          method: "OPTIONS",
+          headers: {
+            origin: "https://client.example.test",
+            "access-control-request-method": "GET",
+            "access-control-request-headers": "mcp-protocol-version",
+          },
+        }),
+      );
+
+      expect(response.status).toBe(204);
+      expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+      expect(response.headers.get("Access-Control-Allow-Headers")).toBe(
+        "MCP-Protocol-Version",
+      );
+      expect(
+        response.headers.get("Access-Control-Allow-Credentials"),
+      ).toBeNull();
+      expect(response.headers.get("Vary")).toBeNull();
+    }
   });
 });
 
 describe("auth capabilities", () => {
   test("reports social providers as unavailable when provider credentials are not configured", async () => {
-    const response = await authCapabilitiesRoute.handle(
+    const response = await server.fetch(
       new Request("http://localhost/auth/capabilities"),
     );
 

@@ -3,8 +3,8 @@ import * as v from "valibot";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   READER_PAGE_MAX_CHARS,
-  READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
 } from "@stll/api-contract/limits";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";

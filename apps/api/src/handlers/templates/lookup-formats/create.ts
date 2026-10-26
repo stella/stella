@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { templateLookupFormats } from "@/api/db/schema";
 import {
@@ -24,14 +24,15 @@ const config = {
     reason: "template_authoring_ui",
     consumesServices: false,
   },
-  body: t.Object(
-    {
-      registry: t.UnionEnum(LOOKUP_REGISTRIES),
-      name: t.String({ minLength: 1, maxLength: FORMAT_LIMITS.name }),
-      format: t.String({ minLength: 1, maxLength: FORMAT_LIMITS.format }),
-    },
-    { additionalProperties: false },
-  ),
+  body: v.strictObject({
+    registry: v.picklist(LOOKUP_REGISTRIES),
+    name: v.pipe(v.string(), v.minLength(1), v.maxLength(FORMAT_LIMITS.name)),
+    format: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(FORMAT_LIMITS.format),
+    ),
+  }),
 } satisfies HandlerConfig;
 
 const createLookupFormat = createSafeRootHandler(

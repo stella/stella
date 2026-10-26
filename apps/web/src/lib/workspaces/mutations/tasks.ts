@@ -7,7 +7,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
@@ -27,7 +27,7 @@ export const useCreateTask = () => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({ name: t("tasks.untitled") }, request);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (data, workspaceId) => {
       stellaToast.add({
@@ -50,7 +50,10 @@ export const useCreateTask = () => {
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateTask:failure",
+        scope: { type: "handler", handlerId: "useCreateTask:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -101,13 +104,16 @@ export const useAddTaskAssignee = (workspaceId: string) => {
           taskId: toSafeId<"entity">(taskId),
           userId: toSafeId<"user">(userId),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { taskId }) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useAddTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useAddTaskAssignee:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -127,13 +133,16 @@ export const useRemoveTaskAssignee = (workspaceId: string) => {
           taskId: toSafeId<"entity">(taskId),
           userId: toSafeId<"user">(userId),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { taskId }) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRemoveTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useRemoveTaskAssignee:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -169,13 +178,16 @@ export const useMoveTaskAssignee = (workspaceId: string) => {
           fromUserId: fromUserId === null ? null : toSafeId<"user">(fromUserId),
           toUserId: toUserId === null ? null : toSafeId<"user">(toUserId),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { taskId }) => {
       await invalidateTaskQueries({ queryClient, workspaceId, taskId });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useMoveTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useMoveTaskAssignee:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

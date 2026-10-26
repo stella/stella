@@ -15,11 +15,11 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 
 import {
+  selectDueCountingAdapters,
   SOURCE_TOTAL_POLL_OUTCOME,
   SOURCE_TOTAL_STALE_AFTER_MS,
-  selectDueCountingAdapters,
-  tallySourceTotalPollOutcomes,
   type SourceTotalPollOutcome,
+  tallySourceTotalPollOutcomes,
 } from "./source-total-outcomes";
 
 const adapter = (

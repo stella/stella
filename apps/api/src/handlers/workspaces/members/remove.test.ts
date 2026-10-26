@@ -6,12 +6,13 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import {
   auditLogs,
   correspondence,
-  desktopEditSessions,
   desktopEditHandoffs,
+  desktopEditSessions,
   timeEntries,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -63,6 +64,7 @@ const createContext = ({
     managedAIResidency: "eu" as const,
     params: { userId: "user_lead" },
     request: recorderBindings.request,
+    route: "/v1/workspaces/:workspaceId/members/:userId" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },

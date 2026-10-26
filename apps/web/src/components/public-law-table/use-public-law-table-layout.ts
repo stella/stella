@@ -2,10 +2,13 @@ import { useState } from "react";
 
 import { Result } from "better-result";
 
+import type { HandlerExceptionScope } from "@stll/errors";
+
 import { layoutForSurface } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
+import type { PersistedDeviceUiStateKey } from "@/lib/analytics/web-hang/persisted-ui-state";
 import { ClientOperationError } from "@/lib/errors/client";
 
 /**
@@ -13,8 +16,9 @@ import { ClientOperationError } from "@/lib/errors/client";
  * module constant per table, so the hook reads one identity across renders.
  */
 export type PublicLawTableLayoutStore<TLayout extends PublicLawTableLayout> = {
+  exceptionScope: HandlerExceptionScope;
   /** The browser storage key; renaming it forgets every stored arrangement. */
-  storageKey: string;
+  storageKey: PersistedDeviceUiStateKey;
   /** Every stored arrangement, normalised once, from the raw stored value. */
   read: (raw: string | null) => Record<string, TLayout>;
   defaultLayout: TLayout;
@@ -53,7 +57,10 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
         }),
     });
     if (Result.isError(read)) {
-      analytics.captureError(read.error);
+      analytics.captureError(read.error, {
+        fingerprintKey: "usePublicLawTableLayout:failure",
+        scope: store.exceptionScope,
+      });
     }
     setLayouts(Result.isError(read) ? {} : read.value);
   }
@@ -89,7 +96,10 @@ export const usePublicLawTableLayout = <TLayout extends PublicLawTableLayout>(
           }),
       });
       if (Result.isError(written)) {
-        analytics.captureError(written.error);
+        analytics.captureError(written.error, {
+          fingerprintKey: "usePublicLawTableLayout.setLayout:failure",
+          scope: store.exceptionScope,
+        });
       }
     },
   };

@@ -7,10 +7,8 @@ import { Result } from "better-result";
 import type { CustomRenderer, CustomRendererProps } from "streamdown";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
-  CopyIcon,
   DownloadIcon,
   Maximize2Icon,
   MinusIcon,
@@ -25,6 +23,7 @@ import {
   renderDiagram,
 } from "@/components/ai-elements/mermaid-diagram";
 import type { DiagramRender } from "@/components/ai-elements/mermaid-diagram";
+import { CopyActionButton } from "@/components/copy-action-button";
 import { detached } from "@/lib/detached";
 
 /**
@@ -33,8 +32,7 @@ import { detached } from "@/lib/detached";
  * a half-drawn or engine-provided error diagram.
  */
 export type DiagramBlockState =
-  | { kind: "source" }
-  | { kind: "settled"; render: DiagramRender };
+  { kind: "source" } | { kind: "settled"; render: DiagramRender };
 
 const CONTAINER_CLASS = "my-4 rounded-xl border p-4";
 
@@ -107,16 +105,13 @@ export const DiagramBlockView = ({
         >
           <PlusIcon className="size-3" />
         </Button>
-        <Button
-          aria-label={t("common.copy")}
-          onClick={() =>
-            detached(copyToClipboard(svg), "mermaid-diagram.copy-svg")
-          }
+        <CopyActionButton
+          iconClassName="size-3"
+          iconOnly
           size="icon-xs"
+          text={svg}
           variant="ghost"
-        >
-          <CopyIcon className="size-3" />
-        </Button>
+        />
         <Button
           aria-label={t("common.download")}
           onClick={() => downloadSvg(svg)}

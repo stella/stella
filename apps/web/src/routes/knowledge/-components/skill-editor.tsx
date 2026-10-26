@@ -55,9 +55,9 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
+import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
@@ -66,6 +66,7 @@ import { catalogueKeys } from "@/lib/knowledge/queries/catalogue";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
 
+import { SkillAvailabilitySummary } from "./skill-availability-field";
 import {
   rebaseSkillMetadataDraft,
   skillMetadataDraft,
@@ -102,8 +103,7 @@ type SkillResource = {
 };
 
 type SelectedFile =
-  | { type: "body" }
-  | { type: "resource"; resourceId: string; path: string };
+  { type: "body" } | { type: "resource"; resourceId: string; path: string };
 
 type SkillEditorProps = {
   skillId: string;
@@ -349,7 +349,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .patch({ ...payload });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       onChanged();
@@ -377,7 +377,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.post({ ...payload }, request);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       onChanged();
@@ -398,7 +398,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         .resources.upload.post({
           ...payload,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data) => {
       onChanged();
@@ -418,7 +418,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         .skills({ skillId: safeSkillId })
         .resources.delete({ path: payload.path });
       return {
-        ...unwrapEden(response),
+        ...unwrapApiResponse(response),
         resourceId: payload.resourceId,
         path: payload.path,
       };
@@ -452,7 +452,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       const response = await api
         .skills({ skillId: safeSkillId })
         .resources.rename.post({ ...payload });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, variables) => {
       onChanged();
@@ -779,12 +779,23 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               saving={patchMetadata.isPending}
               value={invocation}
             />
+            {detail.data && (
+              <SkillAvailabilitySummary
+                boundClientId={detail.data.boundClientId}
+                boundWorkspaceId={detail.data.boundWorkspaceId}
+                scope={detail.data.scope}
+              />
+            )}
           </div>
         </div>
       </div>
       {/* Files — the skill's bundle, the main surface. Click a file to edit it
           in the inspector. */}
       <FileDropZone
+        exceptionScope={{
+          type: "handler",
+          handlerId: "knowledge.skill-files.drop",
+        }}
         className="p-3"
         coverage="content"
         enabled={canEditContent}

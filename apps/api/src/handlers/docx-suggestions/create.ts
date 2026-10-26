@@ -5,7 +5,7 @@ import { chatThreads, docxSuggestions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   DOCX_PENDING_CAPACITY,
   docxSuggestionsPendingLimitError,
@@ -40,7 +40,7 @@ const createDocxSuggestions = createSafeHandler(
     permissions: { entity: ["update"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "document_processing" },
-    params: workspaceParams({ entityId: tSafeId("entity") }),
+    params: workspaceParams({ entityId: resourceIdSchema("entity") }),
     body: tCreateDocxSuggestionsBody,
   },
   async function* ({ workspaceId, params, body, safeDb }) {

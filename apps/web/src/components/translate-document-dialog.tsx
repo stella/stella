@@ -15,10 +15,10 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -33,22 +33,22 @@ import { DocumentLanguagePicker } from "@/components/document-language-picker";
 import { DOCUMENT_TRANSLATION_TARGET_CODES } from "@/components/document-language-picker.logic";
 import {
   documentTranslationPreparationOptions,
-  invalidateDocumentTranslationOutputQueries,
-  documentTranslationRunOptions,
-  isDocumentTranslationRunActive,
   type DocumentTranslationRun,
+  documentTranslationRunOptions,
+  invalidateDocumentTranslationOutputQueries,
+  isDocumentTranslationRunActive,
 } from "@/components/document-translation-queries";
 import {
   activeTranslationChoice,
-  canTranslateDocument,
   canStartDocumentTranslation,
+  canTranslateDocument,
   commentPolicyStateForSource,
   DEFAULT_TRANSLATION_CHOICE,
   defaultDocumentTranslationTarget,
-  documentTranslationRunFailureKey,
-  openDocumentTranslationOutput,
   type DocumentTranslationCommentPolicy,
   type DocumentTranslationCommentPolicyState,
+  documentTranslationRunFailureKey,
+  openDocumentTranslationOutput,
   type TranslationChoice,
 } from "@/components/translate-document-dialog.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -60,7 +60,7 @@ import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
@@ -249,7 +249,10 @@ export const TranslateDocumentDialog = (
       return;
     }
 
-    analytics.captureError(result.error);
+    analytics.captureError(result.error, {
+      fingerprintKey: "TranslateDocumentDialog:failure",
+      scope: { type: "handler", handlerId: "TranslateDocumentDialog:failure" },
+    });
     notifyUserError(result.error, t("translate.error.title"), {
       description: userErrorFromThrown(result.error, t("errors.actionFailed")),
     });
@@ -262,7 +265,13 @@ export const TranslateDocumentDialog = (
       availabilityErrorRef.current !== availabilityError
     ) {
       availabilityErrorRef.current = availabilityError;
-      analytics.captureError(availabilityError);
+      analytics.captureError(availabilityError, {
+        fingerprintKey: "TranslateDocumentDialog:availabilityError",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:availabilityError",
+        },
+      });
       notifyUserError(availabilityError, t("translate.error.title"), {
         description: userErrorFromThrown(
           availabilityError,
@@ -275,7 +284,13 @@ export const TranslateDocumentDialog = (
       preparationErrorRef.current !== preparationQuery.error
     ) {
       preparationErrorRef.current = preparationQuery.error;
-      analytics.captureError(preparationQuery.error);
+      analytics.captureError(preparationQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-2",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-2",
+        },
+      });
     }
     const run = runQuery.data?.run;
     if (
@@ -284,7 +299,13 @@ export const TranslateDocumentDialog = (
       pollingErrorRunRef.current !== runId
     ) {
       pollingErrorRunRef.current = runId;
-      analytics.captureError(runQuery.error);
+      analytics.captureError(runQuery.error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-3",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-3",
+        },
+      });
       notifyUserError(runQuery.error, t("translate.error.title"), {
         description: userErrorFromThrown(
           runQuery.error,
@@ -361,7 +382,7 @@ export const TranslateDocumentDialog = (
       const data = await (async () => {
         switch (choice) {
           case "translated:deepl":
-            return unwrapEden(
+            return unwrapApiResponse(
               await idempotentSubmit.run({
                 operation: `translations.${workspaceId}.create`,
                 body: {
@@ -369,7 +390,7 @@ export const TranslateDocumentDialog = (
                   output: "translated" as const,
                   engine: "deepl" as const,
                 },
-                send: async (body) => client.post(body),
+                send: (body, request) => client.post(body, request),
               }),
             );
           case "translated:ai":
@@ -377,7 +398,7 @@ export const TranslateDocumentDialog = (
             const entityVersionId =
               preparationQuery.data?.entityVersionId ??
               panic("AI translation started without a prepared version");
-            return unwrapEden(
+            return unwrapApiResponse(
               await idempotentSubmit.run({
                 operation: `translations.${workspaceId}.create`,
                 body: {
@@ -389,7 +410,7 @@ export const TranslateDocumentDialog = (
                   engine: "ai" as const,
                   entityVersionId,
                 },
-                send: async (body) => client.post(body),
+                send: (body, request) => client.post(body, request),
               }),
             );
           }
@@ -422,7 +443,13 @@ export const TranslateDocumentDialog = (
       setDialogOpen(true);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "TranslateDocumentDialog:failure-4",
+        scope: {
+          type: "handler",
+          handlerId: "TranslateDocumentDialog:failure-4",
+        },
+      });
       notifyUserError(error, t("translate.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

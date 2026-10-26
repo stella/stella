@@ -65,11 +65,7 @@ type LintSingleRuleOptions = {
   /** Test-only scheduler control for awaits before a shared request is ready. */
   delayBeforeSharedAwaitForTest?: (
     point:
-      | "mkdtemp"
-      | "realpath"
-      | "config-write"
-      | "source-write"
-      | "shared-ready",
+      "mkdtemp" | "realpath" | "config-write" | "source-write" | "shared-ready",
   ) => Promise<void>;
   /** Test-only notification after the request cohort is atomically taken. */
   onSharedBatchTakenForTest?: () => void;
@@ -78,6 +74,37 @@ type LintSingleRuleOptions = {
 type OxlintRun = { stdout: string; stderr: string; exitCode: number };
 
 type LintRunner = (args: readonly string[], cwd: string) => Promise<OxlintRun>;
+
+type LintRunTrace = {
+  readonly id: number;
+  readonly code: string;
+  readonly queuedAt: number;
+};
+
+let nextLintRunId = 0;
+let activeLintRun: LintRunTrace | undefined;
+
+type LintRunEvent =
+  | { stage: "queued" | "acquired" | "released" }
+  | { stage: "isolated-run" | "batch"; cases: number }
+  | { stage: "spawned" | "stdout-eof" | "stderr-eof"; pid: number }
+  | { stage: "exited"; pid: number; exitCode: number };
+
+const traceLintRun = (run: LintRunTrace | undefined, event: LintRunEvent) => {
+  const { CI: ci } = process.env;
+  if (ci !== "true" || run === undefined) {
+    return;
+  }
+  process.stderr.write(
+    `[lint-single-rule] ${JSON.stringify({
+      worker: process.pid,
+      run: run.id,
+      rule: run.code,
+      elapsedMs: performance.now() - run.queuedAt,
+      ...event,
+    })}\n`,
+  );
+};
 
 const spawnOxlint = async (
   args: readonly string[],
@@ -92,10 +119,25 @@ const spawnOxlint = async (
     ],
     { cwd, stderr: "pipe", stdout: "pipe" },
   );
+  const run = activeLintRun;
+  traceLintRun(run, { stage: "spawned", pid: spawned.pid });
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(spawned.stdout).text(),
-    new Response(spawned.stderr).text(),
-    spawned.exited,
+    new Response(spawned.stdout).text().then((output) => {
+      traceLintRun(run, { stage: "stdout-eof", pid: spawned.pid });
+      return output;
+    }),
+    new Response(spawned.stderr).text().then((output) => {
+      traceLintRun(run, { stage: "stderr-eof", pid: spawned.pid });
+      return output;
+    }),
+    spawned.exited.then((status) => {
+      traceLintRun(run, {
+        stage: "exited",
+        pid: spawned.pid,
+        exitCode: status,
+      });
+      return status;
+    }),
   ]);
   return { stdout, stderr, exitCode };
 };
@@ -122,8 +164,22 @@ const lintRunner = (code: string): LintRunner =>
 // tests queue here, and cases that share a configuration join one run.
 let oxlintSlot: Promise<unknown> = Promise.resolve();
 
-const withOxlintSlot = async <T>(run: () => Promise<T>): Promise<T> => {
-  const next = oxlintSlot.then(run);
+const withOxlintSlot = async <T>(
+  run: () => Promise<T>,
+  code: string,
+): Promise<T> => {
+  const trace = { id: nextLintRunId++, code, queuedAt: performance.now() };
+  traceLintRun(trace, { stage: "queued" });
+  const next = oxlintSlot.then(async () => {
+    activeLintRun = trace;
+    traceLintRun(trace, { stage: "acquired" });
+    try {
+      return await run();
+    } finally {
+      traceLintRun(trace, { stage: "released" });
+      activeLintRun = undefined;
+    }
+  });
   oxlintSlot = next.catch(() => undefined);
   return next;
 };
@@ -135,7 +191,7 @@ const withLintSlot = async <T>(
   run: () => Promise<T>,
 ): Promise<T> => {
   if (!lintRunnersForTest.has(code)) {
-    return await withOxlintSlot(run);
+    return await withOxlintSlot(run, code);
   }
   const next = (testRunnerSlots.get(code) ?? Promise.resolve()).then(run);
   testRunnerSlots.set(
@@ -162,6 +218,9 @@ const lintAlone = async (
   { configPath, sourceFile, fix, directory, sourcePath }: LintCase,
   code: string,
 ): Promise<AloneRun> => {
+  if (activeLintRun?.code === code && !lintRunnersForTest.has(code)) {
+    traceLintRun(activeLintRun, { stage: "isolated-run", cases: 1 });
+  }
   const run = await lintRunner(code)(
     [
       "-c",
@@ -372,6 +431,9 @@ const lintShared = (
       const requests = pendingByConfig.get(configKey) ?? [];
       claimedRequests = requests;
       pendingByConfig.delete(configKey);
+      if (activeLintRun?.code === code && !lintRunnersForTest.has(code)) {
+        traceLintRun(activeLintRun, { stage: "batch", cases: requests.length });
+      }
       requests.at(0)?.onBatchTakenForTest?.();
       const preparations = await Promise.all(
         requests.map(async ({ preparation }) => await preparation),
@@ -479,11 +541,7 @@ export const runSingleRule = async (
     ruleOptionsForRoot === undefined ? makeConfig(ruleOptions) : undefined;
   const delay = async (
     point:
-      | "mkdtemp"
-      | "realpath"
-      | "config-write"
-      | "source-write"
-      | "shared-ready",
+      "mkdtemp" | "realpath" | "config-write" | "source-write" | "shared-ready",
   ) => {
     if (!alone) {
       await delayBeforeSharedAwaitForTest?.(point);
@@ -652,20 +710,22 @@ export const lintRuleAcrossFiles = async (
     for (const name of names) {
       await Bun.write(path.join(directory, name), files[name] ?? "");
     }
-    const { stdout, exitCode } = await withOxlintSlot(async () =>
-      spawnOxlint(
-        [
-          "-c",
-          configPath,
-          "-f",
-          "json",
-          // One worker walks every file, so state a rule keeps between files
-          // is visible instead of split across threads.
-          "--threads=1",
-          ...names,
-        ],
-        directory,
-      ),
+    const { stdout, exitCode } = await withOxlintSlot(
+      async () =>
+        spawnOxlint(
+          [
+            "-c",
+            configPath,
+            "-f",
+            "json",
+            // One worker walks every file, so state a rule keeps between files
+            // is visible instead of split across threads.
+            "--threads=1",
+            ...names,
+          ],
+          directory,
+        ),
+      `${plugin}(${ruleName})`,
     );
     return { stdout, exitCode };
   });
@@ -700,6 +760,9 @@ export const lintRuleAcrossFiles = async (
       return panic(`oxlint reported an unexpected diagnostic:\n${stdout}`);
     }
     lines.push(line);
+  }
+  for (const lines of Object.values(linesByFile)) {
+    recordCoverage(`${plugin}/${ruleName}`, lines);
   }
   return linesByFile;
 };

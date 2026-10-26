@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -21,8 +22,7 @@ export type CorpusSliceRow = {
 };
 
 export type CorpusSliceYear =
-  | { type: "year"; year: number }
-  | { type: "undated" };
+  { type: "year"; year: number } | { type: "undated" };
 
 const corpusSliceYearSchema = v.variant("type", [
   v.strictObject({
@@ -34,7 +34,7 @@ const corpusSliceYearSchema = v.variant("type", [
 
 const corpusSliceManifestSchema = v.strictObject({
   version: v.literal(1),
-  asOf: v.pipe(v.string(), v.isoTimestamp()),
+  asOf: apiDateTimeSchema,
   recentYears: v.pipe(v.number(), v.integer(), v.minValue(1)),
   memberCount: v.pipe(v.number(), v.integer(), v.minValue(0)),
   memberIdsSha256: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),

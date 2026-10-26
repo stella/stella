@@ -41,7 +41,7 @@ import {
   resolveChatContextMatterIds,
   toChatThreadId,
 } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { formatContextualTimestamp } from "@/lib/relative-time";
@@ -118,7 +118,7 @@ export const ChatMessageActionsMenu = ({
               : {},
           },
         );
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onMutate: (destination) => {
       if (destination === "inspector") {
@@ -143,7 +143,10 @@ export const ChatMessageActionsMenu = ({
     },
     onError: (error) => {
       sidePanelChat.fail();
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "ChatMessageActionsMenu:failure",
+        scope: { type: "handler", handlerId: "ChatMessageActionsMenu:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

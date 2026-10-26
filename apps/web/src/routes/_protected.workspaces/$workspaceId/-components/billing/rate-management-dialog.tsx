@@ -36,7 +36,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { apiFieldIssueMessage, unwrapEden } from "@/lib/errors/api";
+import { apiFieldIssueMessage, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
@@ -44,8 +44,8 @@ import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
 import {
-  schemaFormOptions,
   requiredTrimmedStringSchema,
+  schemaFormOptions,
   toFormErrors,
 } from "@/lib/schema";
 import { useQueryView } from "@/lib/use-query-view";
@@ -134,10 +134,13 @@ const RateTablesView = ({
           request,
         );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure",
+        scope: { type: "handler", handlerId: "RateTablesView:failure" },
+      });
     },
   });
   const deleteTable = useMutation({
@@ -154,10 +157,13 @@ const RateTablesView = ({
           id: toSafeId<"rateTable">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure-2",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-2" },
+      });
     },
   });
   type UpdateRateTableVars = {
@@ -178,10 +184,13 @@ const RateTablesView = ({
           id: toSafeId<"rateTable">(body.id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure-3",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-3" },
+      });
     },
   });
 
@@ -493,10 +502,13 @@ const RateEntriesView = ({
           request,
         );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateEntriesView:failure",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure" },
+      });
     },
   });
   const deleteEntry = useMutation({
@@ -517,10 +529,13 @@ const RateEntriesView = ({
           id: toSafeId<"rateEntry">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateEntriesView:failure-2",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure-2" },
+      });
     },
   });
 

@@ -6,7 +6,7 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -35,7 +35,7 @@ export const useCreateBBoxes = ({
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
   const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
-  useQueryViewError(aiAvailabilityView);
+  useQueryViewError(aiAvailabilityView, "useCreateBBoxes:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&
     aiAvailabilityView.refetchError === undefined
@@ -54,7 +54,7 @@ export const useCreateBBoxes = ({
       id: justification.id,
     },
     mutationKey: [CREATE_BBOXES_MUTATION_KEY],
-    mutationFn: async () => {
+    mutationFn: async (_variables, request) => {
       if (justification.boundingBoxes || inflight.has(justification.id)) {
         return undefined;
       }
@@ -63,11 +63,14 @@ export const useCreateBBoxes = ({
 
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["bounding-boxes"].post({
-          justificationId: toSafeId<"justification">(justification.id),
-        });
+        ["bounding-boxes"].post(
+          {
+            justificationId: toSafeId<"justification">(justification.id),
+          },
+          request,
+        );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       detached(
@@ -81,7 +84,10 @@ export const useCreateBBoxes = ({
       inflight.delete(justification.id);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateBBoxes:failure",
+        scope: { type: "handler", handlerId: "useCreateBBoxes:failure" },
+      });
     },
   });
 

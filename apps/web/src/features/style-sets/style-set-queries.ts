@@ -4,7 +4,7 @@ import { panic } from "better-result";
 import type { StyleSetEditorSettings } from "@/features/style-sets/style-set-editor-types";
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 const STYLE_SETS_PAGE_SIZE = 100;
@@ -21,8 +21,7 @@ type StyleSetPreviewBody = Parameters<
 export type StyleSetPreviewContent = StyleSetPreviewBody["content"];
 
 export type StyleSetPreviewSource =
-  | { type: "stella" }
-  | { type: "saved"; styleSetId: string };
+  { type: "stella" } | { type: "saved"; styleSetId: string };
 
 type StyleSetPreviewOptions = {
   organizationId: string;
@@ -110,7 +109,7 @@ export const styleSetsOptions = (organizationId: string) =>
         query: { limit: STYLE_SETS_PAGE_SIZE },
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -125,7 +124,7 @@ export const styleSetEditorOptions = ({
       const response = await api["style-sets"]({
         styleSetId: toSafeId<"styleSet">(styleSetId),
       }).editor.get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
@@ -137,7 +136,7 @@ export const stellaStyleEditorOptions = (organizationId: string) =>
       const response = await api["style-sets"].editor.stella.get({
         fetch: { signal },
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });

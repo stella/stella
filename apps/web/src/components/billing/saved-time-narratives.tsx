@@ -19,8 +19,8 @@ import {
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPopup,
   DialogTitle,
@@ -35,7 +35,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -78,7 +78,7 @@ export const SavedTimeNarratives = ({
   const savedQuery = useInfiniteQuery({
     queryKey,
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["saved-time-narratives"].get({
           query: {
             limit: PAGE_SIZE,
@@ -93,13 +93,19 @@ export const SavedTimeNarratives = ({
   });
 
   const reportError = (error: Error) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "SavedTimeNarratives.reportError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "SavedTimeNarratives.reportError:failure",
+      },
+    });
     notifyUserError(error, t("common.somethingWentWrong"));
   };
   const submitIntent = useIdempotentSubmit();
   const create = useMutation({
     mutationFn: async (savedName: string) =>
-      unwrapEden(
+      unwrapApiResponse(
         await submitIntent.run({
           operation: "saved-time-narratives.create",
           body: {
@@ -118,7 +124,7 @@ export const SavedTimeNarratives = ({
   });
   const remove = useMutation({
     mutationFn: async (id: SavedNarrative["id"]) =>
-      unwrapEden(await api["saved-time-narratives"]({ id }).delete()),
+      unwrapApiResponse(await api["saved-time-narratives"]({ id }).delete()),
     onSuccess: async () => {
       setDeleting(null);
       await queryClient.invalidateQueries({ queryKey });

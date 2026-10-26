@@ -11,15 +11,12 @@ import {
   openOnlineIndexObserver,
   openOnlineRepairConnection,
 } from "../db/online-index-observer";
-import {
-  acquireOnlineMigrationLock,
-  releaseOnlineMigrationLock,
-} from "../db/online-migrations";
 import { envDbLoadGate } from "../env-db-load-gate";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
+import { withChatContentV3MigrationLock } from "./backfill-chat-content-v3-lock";
 
 const run = async (): Promise<void> => {
   const args = process.argv.slice(2);
@@ -39,17 +36,6 @@ const run = async (): Promise<void> => {
     panic("Chat content backfill requires a database connection");
   }
   const connection = await openOnlineRepairConnection(url);
-  // The gate terminates this session when it cannot cancel its own work; the
-  // lock went with the session, and an unlock there would mask why.
-  let sessionStatus: "active" | "terminated" = "active";
-  const sessionIsActive = () => sessionStatus === "active";
-  const { terminate } = connection;
-  if (terminate) {
-    connection.terminate = async () => {
-      sessionStatus = "terminated";
-      await terminate();
-    };
-  }
   try {
     if (!args.includes("--apply")) {
       await connection.execute("BEGIN READ ONLY");
@@ -63,8 +49,7 @@ const run = async (): Promise<void> => {
       }
     } else {
       // Serialize with deploy's online repair, including checkpoint reset.
-      await acquireOnlineMigrationLock(connection);
-      try {
+      await withChatContentV3MigrationLock(connection, async () => {
         if (args.includes("--retry-failed")) {
           await resetChatContentV3Checkpoints(connection);
         }
@@ -95,11 +80,7 @@ const run = async (): Promise<void> => {
           );
           process.exitCode = 75;
         }
-      } finally {
-        if (sessionIsActive()) {
-          await releaseOnlineMigrationLock(connection);
-        }
-      }
+      });
     }
   } finally {
     await connection.release();

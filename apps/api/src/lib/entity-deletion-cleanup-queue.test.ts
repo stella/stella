@@ -1,7 +1,7 @@
-import { Result, type Result as BetterResult } from "better-result";
+import { type Result as BetterResult, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { ENTITY_DELETION_EFFECT_KIND } from "@/api/lib/entity-deletion-effect-store";
 import type { EntityDeletionEffectClaim } from "@/api/lib/entity-deletion-effect-store";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";

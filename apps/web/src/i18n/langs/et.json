@@ -9,13 +9,12 @@
       "noOtherSessions": "Teisi aktiivseid seansse pole",
       "revokeOtherSessions": "Logi teistest seadmetest välja",
       "revokeOtherSessionsConfirm": "See lõpetab kõik seansid peale praeguse.",
+      "signedInFrom": "Sisse logitud rakenduse {clientName} kaudu",
       "unknownDevice": "Tundmatu seade"
     }
   },
   "admin": {
     "ai": "AI",
-    "backToApp": "Tagasi rakendusse",
-    "billingAndUsage": "Arveldus ja kasutus",
     "billingProfiles": "Arveldusprofiilid",
     "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
     "deleteOrganization": "Kustuta organisatsioon",
@@ -27,12 +26,9 @@
     "leaveOrganization": "Lahku organisatsioonist",
     "leaveRefusedOnlyOwner": "Olete ainus omanik. Enne lahkumist määrake omanikuks mõni teine liige.",
     "modelsAndProviders": "Mudelid ja pakkujad",
-    "noPlan": "Aktiivne pakett puudub",
     "organizationDeleted": "Organisatsioon on kustutatud.",
     "organizationId": "Organisatsiooni ID",
     "organizationLeft": "Olete organisatsioonist lahkunud.",
-    "overviewDescription": "Hallake oma organisatsiooni, inimesi ja tööriistu.",
-    "people": "Inimesed",
     "planAndUsage": "Pakett ja kasutus",
     "title": "Organisatsiooni haldus",
     "toolsDescription": "Lubage või keelake sisseehitatud tööriistad kõigile selles organisatsioonis."
@@ -54,11 +50,11 @@
   },
   "agentSetup": {
     "addressLabel": "Assistent küsib seda aadressi",
-    "copiedToast": "Juhised kopeeritud. Kleebi need vestlusesse oma assistendiga.",
     "copy": "Kopeeri talle juhised",
     "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
     "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",
     "openGuide": "Ava juhend: {assistant}",
+    "pasteHint": "Kleebi need vestlusesse oma assistendiga.",
     "selfSetupHint": "Kasutad Claude Code’i või Codexit?",
     "title": "Kasuta stellat oma AI-assistendis"
   },
@@ -66,8 +62,12 @@
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
     "keyRequired": {
+      "accountRestricted": "Tehisintellekti pakkuja seaded pole selle konto jaoks saadaval.",
+      "configUnreadable": "Tehisintellekti pakkuja seadistust ei saa lugeda. Paluge organisatsiooni administraatoril see uuesti ühendada.",
       "cta": "Ava AI seaded",
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
+      "permissionRequired": "Tehisintellekti pakkuja saab ühendada ainult organisatsiooni administraator.",
+      "seatRequired": "Paluge organisatsiooni administraatoril teile koht määrata.",
       "title": "Ühenda AI teenusepakkuja"
     },
     "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?",
@@ -142,6 +142,8 @@
       "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
       "title": "Sisselogimine ebaõnnestus"
     },
+    "handoffAccount": "Kas jätkata kasutajana <account>{email}</account> organisatsioonis <organization>{organizationName}</organization>?",
+    "handoffTitle": "Jätka stellasse",
     "headline": "Selgus igas asjas.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",
@@ -157,11 +159,11 @@
     "organizationNamePlaceholder": "Minu organisatsioon",
     "password": "Parool",
     "professionalUse": {
-      "description": "Teie konto loomisel seda kinnitust teile ei näidatud. Jätkamiseks nõustuge sellega.",
       "title": "Kinnitage kutsealane kasutus"
     },
     "professionalUseStatement": "Konto loomisega kinnitate, et kasutate stellat kutsealastel eesmärkidel, ning võtate teadmiseks, et stella on tööriist õigusvaldkonna spetsialistidele ega asenda õigusnõustamist.",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
+    "reauthenticationRequired": "Selle toimingu jätkamiseks logige uuesti sisse.",
     "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
@@ -386,6 +388,7 @@
         "reading": "Lugemisvaade"
       },
       "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
+      "pdfTextFailed": "PDF-i teksti ei õnnestunud lugeda, seetõttu pole väited lehekülgedel märgitud.",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {
@@ -642,6 +645,7 @@
         "eso9": "ESO9 impordileht (XLSX)",
         "exporting": "Eksporti valmistatakse ette…",
         "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "ksefFa3": "KSeF e-arve FA(3) (XML)",
         "spreadsheets": "Tabelid",
         "xlsx": "Arved (XLSX)",
         "xlsxLines": "Arveread (XLSX)"
@@ -755,6 +759,7 @@
     "sellerProfiles": {
       "add": "Lisa müüja profiil",
       "archiveConfirm": "Kas arhiveerida see müüja profiil? Seda ei saa enam uute arvete jaoks kasutada.",
+      "barRegistration": "Advokatuuri registreering",
       "bic": "BIC / SWIFT-kood",
       "default": "Vaikimisi müüja",
       "defaultCurrency": "Vaikevaluuta",
@@ -766,11 +771,10 @@
       "invalidCurrency": "Sisestage kolmetäheline valuutakood.",
       "invalidIban": "Sisestage kehtiv IBAN.",
       "legalName": "Ametlik nimi",
+      "registerEntry": "Registrikanne",
       "registrationId": "Registrikood",
       "setDefault": "Määra vaikimisi",
       "title": "Müüja profiilid",
-      "vatId": "Käibemaksukohustuslase number",
-      "vatPayer": "Käibemaksukohustuslane",
       "vatPayerHelp": "Selle müüja arved sisaldavad käibemaksu. Lülitage välja registreeritud isiku puhul, kellel on käibemaksukohustuslase number, kuid kes ei ole maksukohustuslane.",
       "vatPayerRequiresVatId": "Sisestage käibemaksukohustuslase number, et väljastada arveid käibemaksukohustuslasena."
     },
@@ -805,6 +809,8 @@
     "total": "Kokku",
     "vatRates": {
       "add": "Lisa käibemaksumäär",
+      "addCzechia": "Lisa Tšehhi määrad",
+      "addSlovakia": "Lisa Slovakkia määrad",
       "archiveConfirm": "Kas arhiveerida see käibemaksumäär? Seda ei saa enam uute dokumentide jaoks kasutada.",
       "code": "Määra kood",
       "current": "Praegune määr",
@@ -819,6 +825,7 @@
       "overlap": "Sama määra koodi kehtivusajad ei tohi kattuda.",
       "past": "Varasem määr",
       "periodHelp": "Alguskuupäev on kaasatud; lõppkuupäev ei ole kaasatud. Jätke lõppkuupäev tühjaks, kui periood on avatud.",
+      "presetResult": "Lisatud: {added}; vahele jäetud: {skipped}.",
       "rate": "Käibemaksuprotsent",
       "title": "Käibemaksumäärad",
       "validFrom": "Kehtib alates",
@@ -931,13 +938,10 @@
     },
     "coverage": {
       "completeness": "Täielikkus",
-      "countedOn": "Loendatud {date} seisuga",
       "courtsHeading": "Kohtute kaupa",
       "courtsUnavailable": "Kohtute kaupa jaotus pole praegu saadaval.",
       "decisionYears": "Lahendite aastad",
       "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
-      "exceedsReportedTotal": "Sisaldab rohkem, kui avaldaja viimati {date} seisuga teatas",
-      "gapStatusUnknown": "Lünkade olek teadmata",
       "generatedAt": "Andmed seisuga {date}",
       "globeLabel": "Riigid, mille kohtupraktikat korpus sisaldab, gloobusel",
       "healthCurrent": "Ajakohane",
@@ -958,7 +962,8 @@
       "searchable": "Otsitavad",
       "title": "Kohtupraktika kaetus",
       "totalFrom": "Koguarv seisuga {date}",
-      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval.",
+      "unreadListingPeriods": "Nimekirja lugemata perioodid"
     },
     "decisionNotFound": "Otsust ei leitud",
     "decisionTypes": {
@@ -1027,7 +1032,10 @@
       "pageOfCount": "Lehekülg {page}/{pageCount}",
       "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
       "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
+      "pageWithEstimatedMatchCounts": "Lehekülg {page} · ligikaudu {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
+      "pageWithMatchCounts": "Lehekülg {page} · {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithPartialMatchCount": "Lehekülg {page} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
       "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
       "perPage": "Lehekülje kohta",
       "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
@@ -1478,7 +1486,7 @@
       "label": "Simuleeritud AI"
     },
     "modelSelector": {
-      "allModels": "Kõik mudelid ({count, number})",
+      "allModels": "Kõik mudelid",
       "autoDescription": "Valib mudeli ja arutlustaseme automaatselt.",
       "autoLabel": "Automaatne",
       "belowFrontier": "Allpool parimaid kompromisse",
@@ -1596,6 +1604,7 @@
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorConnectionFailed": "Vestlusega ühenduse loomine ebaõnnestus. Kontrollige ühendust ja proovige uuesti.",
+    "sendErrorContinuationRejected": "Vestlust ei saanud jätkata. Uuesti alustamiseks saatke uus sõnum.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
@@ -2120,6 +2129,7 @@
       "ZH-HANT": "Hiina (traditsiooniline)"
     },
     "lastUpdated": "Viimati uuendatud",
+    "layoutResetAfterProblem": "Pärast tõrget taastati vaikimisi paigutus.",
     "legalDatabase": "Õigusandmebaas",
     "loadMore": "Laadi rohkem",
     "loading": "Laadimine",
@@ -2218,6 +2228,7 @@
     "suggested": "Soovitus",
     "summarizeChanges": "Võta muudatused kokku",
     "target": "Sihtmärk",
+    "taxId": "Maksukohustuslase number",
     "timeBilling": "Aeg ja arveldus",
     "today": "Täna",
     "translate": "Tõlgi",
@@ -2241,6 +2252,8 @@
     "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
     "value": "Väärtus",
+    "vatId": "Käibemaksukohustuslase number",
+    "vatPayer": "Käibemaksukohustuslane",
     "verified": "Kinnitatud",
     "verify": "Kinnita",
     "version": "Versioon",
@@ -2282,6 +2295,7 @@
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeLawRead": "Lugeda avalikke õigusakte ja kohtupraktikat",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid ja ülesandeid",
+    "scopeMemoryWrite": "Assistendi mälestuste loomine ja muutmine",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
@@ -2309,6 +2323,7 @@
     "summaryLineRead": "<group>Lugemine:</group> {items}",
     "summaryLineUse": "<group>Kasutamine:</group> {items}",
     "summaryMattersWrite": "toimikud ja ülesanded",
+    "summaryMemoryWrite": "assistendi mälestused",
     "summaryProfile": "profiil",
     "summaryRead": "dokumendid, toimikud ja kontaktid",
     "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
@@ -2429,7 +2444,9 @@
       "prefix": "Eesliide",
       "registrationNumber": "Registrikood",
       "suffix": "Järelliide",
-      "taxId": "KMKR number",
+      "vatPayer": "Käibemaksukohustuslase staatus",
+      "vatPayerNo": "Ei ole käibemaksukohustuslane",
+      "vatPayerUnknown": "Teadmata",
       "year": "Aasta"
     },
     "filterOrganizations": "Organisatsioonid",
@@ -2469,7 +2486,6 @@
         "primary_phone": "Peamine telefoninumber",
         "state": "Maakond või piirkond",
         "suffix": "Järelliide",
-        "tax_id": "KMKR number",
         "type": "Kontakti tüüp"
       },
       "fileInvalid": "Vali üks CSV-, TSV- või TXT-fail.",
@@ -2674,6 +2690,7 @@
       "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
       "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
       "contact": "Võtke meiega ühendust",
+      "featureDisabled": "See funktsioon on ajutiselt välja lülitatud.",
       "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
       "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
     },
@@ -3531,6 +3548,12 @@
       "unsupportedVisualContent": "See fail sisaldab pilte või vektorgraafikat, mida ei saa tundliku teksti suhtes kontrollida. Eksport pole saadaval.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
+    "conversionRefusal": {
+      "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
+      "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
+      "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada.",
+      "unsupportedReference": "See dokument viitab välisele ressursile asukohas {element} {attribute}, mistõttu ei saa seda teisendada."
+    },
     "external": {
       "confirmDescription": "Oled avamas välist veebisaiti.",
       "confirmTitle": "Ava väline link?",
@@ -3809,6 +3832,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Üks klient",
+      "availabilityClientBadgeHelp": "Saadaval ainult ühe kliendi toimikutes.",
+      "availabilityClientHelp": "Kasutatav ainult selle kliendi toimikutes. Seda ei saa hiljem muuta.",
+      "availabilityFixedHelp": "Määrati oskuse loomisel. Seda ei saa muuta.",
+      "availabilityLabel": "Saadaval",
+      "availabilityMatter": "Üks toimik",
+      "availabilityMatterBadgeHelp": "Saadaval ainult ühes toimikus.",
+      "availabilityMatterHelp": "Kasutatav ainult selles toimikus. Seda ei saa hiljem muuta.",
+      "availabilityOrganization": "Kogu organisatsioon",
+      "availabilityTeamNeedsMatter": "Oskuse jagamiseks meeskonnaga valige toimik, mille jaoks see on mõeldud. Seda ei saa hiljem muuta.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Looge lepingute ülevaatamise playbook seisukoht seisukoha haaval, tuginedes oma varem allkirjastatud lepingutele, lühikesele intervjuule ja turul tavapärastele standarditele.",
@@ -4201,7 +4234,9 @@
     "prompt": "Mida otsite?",
     "recent": "Hiljutised",
     "recentCasesFilter": "Kohtulahendid",
+    "recentLoadFailed": "Hiljutisi tegevusi ei saanud laadida.",
     "recentSearchFilter": "Otsingud",
+    "recentUpdateFailed": "Hiljutisi tegevusi ei saanud uuendada.",
     "recentlyInForce": "Hiljuti jõustunud",
     "searchLabel": "Otsi õigusandmebaasist",
     "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
@@ -4228,6 +4263,22 @@
       "guestStorageUnavailable": "Esiletõstmisi ja märkusi ei õnnestunud sellel vahekaardil salvestada.",
       "highlight": "Tõsta esile",
       "highlightedPassage": "Esiletõstetud lõik",
+      "history": {
+        "colorRestored": "Värv taastatud",
+        "commentRemoved": "Kommentaar eemaldatud",
+        "commentRestored": "Kommentaar taastatud",
+        "highlightRemoved": "Esiletõst eemaldatud",
+        "highlightRestored": "Esiletõst taastatud",
+        "markChanged": "Seda esiletõstu või kommentaari on vahepeal mujal muudetud, seega jäeti see muutmata.",
+        "markGone": "Seda esiletõstu või kommentaari enam ei ole.",
+        "nothingToRedo": "Pole midagi uuesti teha",
+        "nothingToUndo": "Pole midagi tagasi võtta",
+        "redoShortcut": "Tee esiletõstu või kommentaari muudatus uuesti",
+        "styleRestored": "Stiil taastatud",
+        "textRestored": "Kommentaari tekst taastatud",
+        "undoShortcut": "Võta esiletõstu või kommentaari muudatus tagasi",
+        "visibilityRestored": "Jagamine taastatud"
+      },
       "removeHighlight": "Eemalda esiletõst",
       "sharedBadge": "Jagatud",
       "styleHighlight": "Esiletõst",
@@ -4721,7 +4772,7 @@
     "modelError": "Mudel ei suutnud seda vastust lõpetada.",
     "networkError": "Ühendus katkes. Proovi uuesti.",
     "regenerate": "Loo vastus uuesti",
-    "selectionError": "Vali tekst ühe lõigu piires (kuni 2000 märki).",
+    "selectionError": "Valige tekst otsusest endast.",
     "send": "Saada täpsustav küsimus",
     "share": "Jaga meeskonnaga",
     "timeoutError": "Vastuse loomise aeg sai otsa. Proovi uuesti.",
@@ -4739,6 +4790,7 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawEmptyState": "Alustage tippimist, et otsida kohtulahendeid.",
     "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
@@ -4773,6 +4825,8 @@
     "recentDocuments": "Hiljutised dokumendid",
     "recentSearches": "Hiljutised otsingud",
     "recentlyOpenedFiles": "Hiljuti avatud failid",
+    "registryCandidateNameMismatch": "Ametlik nimi „{officialName}“ ei ühti",
+    "registryCandidateNoOfficialRecord": "Ametlikus registris pole selle numbri kohta kannet",
     "registryChoose": "Vali äriregister",
     "registryCredentialAskAdmin": "Paluge organisatsiooni administraatoril seadistada juurdepääs sellele registrile.",
     "registryCredentialSaved": "Registri juurdepääs salvestatud",
@@ -4783,6 +4837,7 @@
       "enrichmentUnavailable": "Äriregistri andmed pole ajutiselt saadaval"
     },
     "registryKrsHint": "KRS otsib registrinumbri, mitte ettevõtte nime järgi. Sisestage 10-kohaline KRS-number koos algusnullidega (nt 0000006865).",
+    "registryNameSearchNotFound": "Ükski kontrollitud ettevõte ei vastanud sellele nimele. Järgmised kandidaadid lükati tagasi:",
     "registryVatHint": "VIES kontrollib käibemaksukohustuslasena registreerimise numbreid, mitte ettevõtete nimesid. Sisestage number koos riigikoodiga (nt CZ27082440); vorming sõltub riigist.",
     "renameSearchTitle": "Nimeta salvestatud otsing ümber",
     "requestCountry": "Taotle uue riigi lisamist",
@@ -4796,6 +4851,7 @@
     "savedSearchesEmpty": "Salvesta otsing, et seda hiljem uuesti kasutada.",
     "scopeFilter": "Otsingu ulatus",
     "scopePlaceholderAll": "Otsi kõigist <scope>allikatest</scope>…",
+    "scopePlaceholderCaseLaw": "Otsi <scope>kohtupraktikast</scope>…",
     "scopePlaceholderMatters": "Otsi kõigist <scope>toimikutest</scope>…",
     "scopePlaceholderRegistries": "Otsi <scope>registritest</scope>…",
     "scopeRegistries": "Registrid",
@@ -4945,7 +5001,7 @@
       "description": "Kasuta stellat oma AI-assistendist ja vaata, millel on juurdepääs sinu kontole.",
       "developerDescription": "Serveriaadressid ja käsureatööriist tehniliseks seadistamiseks.",
       "developerTitle": "Arendaja juurdepääs",
-      "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua.",
+      "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua. Ka selle ühenduse kaudu loodud brauseriseansid logitakse välja.",
       "disconnectConfirmTitle": "Katkestada ühendus rakendusega {clientName}?",
       "disconnectSuccess": "Ühendus rakendusega {clientName} katkestatud",
       "integrationsDescription": "Välised teenused, mida AI saab sinu eest kasutada, näiteks dokumendihoidla.",
@@ -5306,7 +5362,7 @@
     "importDescription": "Stiilid eraldatakse uude sisuta DOCX-faili.",
     "importTitle": "Impordi stiilikomplekt",
     "loadFailed": "Stiilikomplekte ei saanud laadida",
-    "newDocument": "Uus dokument",
+    "newDocument": "Uus DOCX-dokument",
     "pickerDescription": "Valige uue faili vormindussüsteem.",
     "renameTitle": "Nimeta stiilikomplekt ümber",
     "replace": "Asenda lähtefail",
@@ -5590,7 +5646,7 @@
     "moveToMatter": "Salvesta toimikusse",
     "moveToMatterAnyway": "Salvesta ikkagi",
     "myDefaultLookupFormat": "Minu vaikevorming",
-    "newFromTemplate": "Uus dokument mallist",
+    "newFromTemplate": "Uus DOCX-dokument mallist",
     "newFromTemplateFillHint": "Täitke väljad; dokument luuakse sellesse toimikusse.",
     "newTemplate": "Uus mall",
     "noTemplates": "Malle pole veel",
@@ -5961,6 +6017,7 @@
         "action": "Muuda töölauarakenduses",
         "authRequiredDescription": "Värskenda stella ja logi enne töölaual redigeerimise kasutamist uuesti sisse.",
         "authRequiredTitle": "Seanss on aegunud",
+        "editInApplication": "Muuda rakenduses <bdi>{application}</bdi>",
         "editLocallyPrompt": "Muutke faili kohalikult ja sünkroonige muudatused stellaga.",
         "forceRelease": "Sunni vabastamine",
         "notOpenedDescription": "stella desktop ei kinnitanud, et <bdi>{application}</bdi> avanes. Käivita stella desktop ja proovi uuesti.",
@@ -5984,13 +6041,15 @@
         "alreadyInstalled": "Juba paigaldatud? Ühenda",
         "connect": "Ühenda stella desktop",
         "connected": "stella desktop on ühendatud",
+        "download": "Laadi alla stella desktop",
         "editNone": "Laadi alla stella desktop, et seda faili muuta",
         "editOutdated": "Uuenda stella desktop, et muuta",
         "editReason": "Arvutis muutmine avab faili stella desktopi kaudu sinu arvuti rakenduses.",
         "signCurrent": "Allkirjasta stella desktopiga",
         "signNone": "Laadi alla stella desktop, et see PDF allkirjastada",
         "signOutdated": "Uuenda stella desktop, et allkirjastada",
-        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis."
+        "signReason": "Allkirjastamine kasutab sinu arvutis olevat sertifikaati, seega toimub see stella desktopis.",
+        "update": "Uuenda stella desktop"
       },
       "downloadAs": "Laadi alla kujul…",
       "downloadAsZip": "Laadi alla .zip-fail",
@@ -5998,12 +6057,15 @@
       "downloadFailed": "Allalaadimine ebaõnnestus",
       "downloadPdf": "Laadi alla PDF-ina",
       "downloadSearchablePdf": "Otsitav PDF",
+      "emptyFile": "Fail on tühi.",
       "includeReferenceNumber": "Lisa viitenumber",
       "itemLimitReached": "See toimik on jõudnud üksuste piirini.",
       "maxEntitiesReached": "Kirjete piirarv on täis",
       "ocrAlreadyProcessed": "Tekstituvastus on juba lõpetatud",
+      "ocrBatchHelp": "Järjekorras olevad dokumendid töödeldakse järgmises OCR-i paketis.",
       "ocrQueueFailed": "Tekstituvastust ei õnnestunud järjekorda lisada",
-      "ocrQueued": "Tekstituvastus lisati järgmisse OCR-i paketti",
+      "ocrQueued": "Tekstituvastus lisati järjekorda",
+      "ocrQueuedForBatch": "Tekstituvastus lisati järgmisse OCR-i paketti",
       "pdfSigning": {
         "alreadySigningTitle": "Allkirjastamine on stella desktopis juba pooleli",
         "cancelledBaseVersionDescription": "Dokument muutus allkirjastamise ajal. Ava uusim versioon ja allkirjasta uuesti.",
@@ -6060,6 +6122,7 @@
         "waitingDescription": "Vali rakenduses stella desktop allkirjastamissertifikaat, et see PDF allkirjastada.",
         "waitingTitle": "Ootame rakendust stella desktop"
       },
+      "queueForOcr": "Lisa OCR-i järjekorda",
       "rateLimited": "Kiiruspiirang; jätkatakse {seconds, number} s pärast",
       "referencedUpload": {
         "choiceLabel": "Mida teha failiga {fileName}",
@@ -6071,7 +6134,6 @@
       "removeMetadata": "Eemalda dokumendi metaandmed",
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",
       "retryFailed": "Proovi uuesti {count, plural, one {# faili} other {# faili}}",
-      "runOcr": "Lisa OCR järjekorda",
       "scrubFailed": "Selle faili metaandmeid ei õnnestunud eemaldada, seega ei laaditud midagi alla",
       "uploadedPartially": "{failed, plural, one {# faili} other {# faili}} üleslaadimine ebaõnnestus {total, number}-st",
       "uploadedSuccessfully": "Failid edukalt üles laaditud",
@@ -6359,6 +6421,7 @@
       "addParty": "Lisa osapool",
       "changeClient": "Muuda klienti",
       "client": "Klient",
+      "movedToClient": "Toimik <bdi>{matterName}</bdi> teisaldati kliendile <bdi>{clientName}</bdi>",
       "noClient": "Klienti pole määratud",
       "noClientOptional": "Klient puudub (valikuline)",
       "noParties": "Sellele toimikule pole osapooli lisatud.",
@@ -6377,7 +6440,9 @@
       "personalLabel": "Isiklik",
       "promoteCta": "Eduta kliendile",
       "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
+      "promoteToClientConfirm": "Toimik <bdi>{matterName}</bdi> määratakse kliendile <bdi>{clientName}</bdi> ja jagatakse meeskonnaga. Seda ei saa enam isiklikuks muuta.",
       "promotedSuccess": "Toimik edutatud",
+      "recentClients": "Hiljutised kliendid",
       "removeClient": "Eemalda klient",
       "removeParty": "Eemalda osapool",
       "removePartyConfirm": "Kas olete kindel, et soovite selle osapoole toimikust eemaldada?",
@@ -6589,6 +6654,12 @@
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {
       "parties": "Osapooled"
+    },
+    "switcher": {
+      "searchPlaceholder": "Leia toimik…",
+      "trigger": "Vaheta toimikut",
+      "viewAll": "Kuva kõik toimikud",
+      "viewAllForClient": "Kuva kõik kliendi {clientName} toimikud"
     },
     "table": {
       "clearFlags": "Eemalda märgised",

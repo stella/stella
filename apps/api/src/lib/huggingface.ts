@@ -3,8 +3,7 @@ import { Result } from "better-result";
 import { parseSafeOutboundUrl } from "@/api/lib/safe-outbound-fetch";
 
 type HuggingFaceBaseURLResult =
-  | { ok: true; baseURL: string }
-  | { ok: false; error: string };
+  { ok: true; baseURL: string } | { ok: false; error: string };
 
 export const normalizeHuggingFaceBaseURL = (
   rawEndpoint: string,

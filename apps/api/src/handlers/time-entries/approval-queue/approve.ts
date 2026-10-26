@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { approveTimeEntryBatch } from "@/api/lib/billing/time-entry-approval";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const approveTimeEntries = createSafeRootHandler(
@@ -20,12 +20,13 @@ const approveTimeEntries = createSafeRootHandler(
       consumesServices: false,
     },
     access: "write",
-    body: t.Object({
-      ids: t.Array(tSafeId("timeEntry"), {
-        minItems: 1,
-        maxItems: LIMITS.timeEntriesApprovalBatchMax,
-        uniqueItems: true,
-      }),
+    body: v.object({
+      ids: v.pipe(
+        v.array(resourceIdSchema("timeEntry")),
+        v.minLength(1),
+        v.maxLength(LIMITS.timeEntriesApprovalBatchMax),
+        uniqueItems(),
+      ),
     }),
   },
   async function* ({

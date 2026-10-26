@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/bun-sql";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { createDatabase } from "@/api/db/sql-client";
 import { instrumentRootPoolTransactions } from "@/api/lib/db/root-pool-reservation";
 import { readRootPoolSnapshot } from "@/api/lib/db/root-pool-snapshot";
 import { createRootPoolWindow } from "@/api/lib/observability/root-pool-window";
@@ -84,7 +84,7 @@ describe.skipIf(!enabled)("root pool observation with PostgreSQL", () => {
         openClient({ max: 1 }).sql,
         window,
       );
-      const db = drizzle({ client });
+      const db = createDatabase({ client });
       const context = new AsyncLocalStorage<string>();
       await db.execute(
         sql`CREATE TEMP TABLE root_pool_observation (value integer)`,

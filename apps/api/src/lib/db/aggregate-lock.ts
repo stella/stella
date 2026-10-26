@@ -1,13 +1,17 @@
 import { panic, Result, TaggedError } from "better-result";
 import {
   and,
+  asc,
   eq,
-  inArray,
-  or,
-  getColumnTable,
   getColumns,
+  getColumnTable,
   getTableName,
+  inArray,
   is,
+  isNotNull,
+  isNull,
+  lte,
+  or,
   SQL,
   sql,
 } from "drizzle-orm";
@@ -20,6 +24,7 @@ import type {
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type {
@@ -28,6 +33,7 @@ import type {
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawReplayBatches,
   entities,
   entityVersions,
   fields,
@@ -58,6 +64,10 @@ export const AGGREGATE_LOCKS = {
   schedulerClaim: { rank: 20, kind: "row" },
   definitionCap: { rank: 30, kind: "advisory" },
   definition: { rank: 40, kind: "row" },
+  // Global fence for linking republished rulings and discovering their aliases.
+  // Take it before any case-law decision row lock: link pages use exclusive
+  // mode, while erasures use shared mode so independent erasures can proceed.
+  caseLawRepublication: { rank: 45, kind: "advisory" },
   // Public-corpus work fence is taken before its legacy projection/expression locks.
   legislationAmendmentWork: { rank: 50, kind: "advisory" },
   scoutCensus: { rank: 60, kind: "row" },
@@ -70,6 +80,7 @@ export const AGGREGATE_LOCKS = {
   // then the receipt it produced.
   chatThread: { rank: 120, kind: "row" },
   readerAnswer: { rank: 120, kind: "row" },
+  readerAnnotation: { rank: 120, kind: "advisory" },
   readerAnswerMessage: { rank: 130, kind: "row" },
   chatTurn: { rank: 130, kind: "row" },
   chatSecret: { rank: 140, kind: "row" },
@@ -147,6 +158,7 @@ export const AGGREGATE_CHAINS = {
   ],
   scoutRun: ["orgFeatureAdmission", "scoutCensus"],
   legislationAmendments: ["legislationAmendmentWork"],
+  caseLawRepublication: ["caseLawRepublication"],
   chatSecret: ["chatThread", "chatTurn", "chatSecret"],
   chatToolGrants: ["chatThread", "chatToolGrants"],
   memberPrefix: [
@@ -184,6 +196,7 @@ export const AGGREGATE_CHAINS = {
   searchHistory: ["desktopMembership", "searchHistory"],
   chatRevision: ["chatThread", "chatMessage"],
   readerAnswer: ["readerAnswer", "readerAnswerMessage"],
+  readerAnnotation: ["readerAnnotation"],
   signingSession: ["workspace", "signingSession"],
 } as const satisfies Record<string, readonly AggregateName[]>;
 
@@ -257,6 +270,7 @@ type AggregateIdentities = {
     id: SafeId<"flowDefinition">;
     organizationId: SafeId<"organization">;
   };
+  caseLawRepublication: "global";
   scoutCensus: {
     type: "run";
     id: SafeId<"scoutRun">;
@@ -284,6 +298,11 @@ type AggregateIdentities = {
   };
   readerAnswer: {
     id: SafeId<"legalReaderAnswer">;
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+  };
+  readerAnnotation: {
+    id: SafeId<"legalReaderAnnotation">;
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   };
@@ -650,7 +669,11 @@ export class ExecutorSavepointError extends TaggedError(
   message: string;
   cause: unknown;
   phase: "setup" | "callback" | "cleanup";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["phase"]);
+  }
+}
 
 /**
  * A savepoint for execute-only callbacks. The callback must not acquire typed
@@ -1312,6 +1335,17 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
           options.id.userId,
         ],
       };
+    case "readerAnnotation":
+      return {
+        first: sql`${0x0f_10_cc_af}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.userId, options.id.id])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+          options.id.id,
+        ],
+      };
     case "orgFeatureAdmission":
       return {
         first: sql`${0x0f_10_cc_aa}::integer`,
@@ -1327,6 +1361,12 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`${0x0f_10_cc_ab}::integer`,
         second: sql`hashtext(${options.id.definitionId})`,
         order: [options.aggregate, options.id.definitionId],
+      };
+    case "caseLawRepublication":
+      return {
+        first: sql`${0x0f_10_cc_ae}::integer`,
+        second: sql`0::integer`,
+        order: [options.aggregate, options.id],
       };
     default:
       options satisfies never;
@@ -2240,6 +2280,127 @@ type DecisionCitationStatsLocksOptions = {
  * holds its own row while it waits for stripes.
  */
 const lockedDecisionRowSchema = v.object({ id: v.string() });
+
+/** Coordinate republication linking with alias discovery during erasure. */
+export const lockCaseLawRepublication = async ({
+  tx,
+  mode,
+}: {
+  tx: ExecuteTransaction;
+  mode: AdvisoryLockMode;
+}): Promise<void> => {
+  await withAggregateLock({
+    aggregate: "caseLawRepublication",
+    id: "global",
+    mode,
+    tx,
+  });
+};
+
+/** Lock decision rows in stable order before reading mutation preconditions. */
+export const lockCaseLawDecisionRows = async ({
+  tx,
+  decisionIds,
+}: {
+  tx: ExecuteTransaction;
+  decisionIds: readonly SafeId<"caseLawDecision">[];
+}): Promise<void> => {
+  if (decisionIds.length === 0) {
+    return;
+  }
+  await tx.execute(sql`
+    SELECT id FROM case_law_decisions
+    WHERE id IN (${sql.join(
+      decisionIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )})
+    ORDER BY id
+    FOR UPDATE
+  `);
+};
+
+/** Acquire one replay reservation after its checkpoint and before its decision. */
+export const lockCaseLawReplayBatch = async ({
+  tx,
+  id,
+  predicate,
+}: {
+  tx: Transaction;
+  id: string;
+  predicate: SQL | undefined;
+}) =>
+  (
+    await tx
+      .select()
+      .from(caseLawReplayBatches)
+      .where(and(eq(caseLawReplayBatches.id, id), predicate))
+      .for("update")
+      .limit(1)
+  ).at(0);
+
+type ReplayPendingBatchLockOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+  cursor: string | null;
+};
+
+/** Select one due batch while retaining the checkpoint's deterministic order. */
+export const lockCaseLawReplayPendingBatch = async ({
+  tx,
+  sourceId,
+  now,
+  cursor,
+}: ReplayPendingBatchLockOptions) =>
+  (
+    await tx
+      .select()
+      .from(caseLawReplayBatches)
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, sourceId),
+          inArray(caseLawReplayBatches.status, ["reserved", "retry-exhausted"]),
+          or(
+            isNull(caseLawReplayBatches.retryAt),
+            lte(caseLawReplayBatches.retryAt, sql`${now}::timestamptz`),
+          ),
+        ),
+      )
+      .orderBy(
+        ...(cursor === null
+          ? []
+          : [
+              sql`CASE WHEN ${caseLawReplayBatches.firstDecisionId} > ${cursor}::uuid THEN 0 ELSE 1 END`,
+            ]),
+        asc(caseLawReplayBatches.firstDecisionId),
+        asc(caseLawReplayBatches.id),
+      )
+      .for("update")
+      .limit(1)
+  ).at(0);
+
+type ReplayCompactionQueryOptions = { cutoff: Date; limit: number };
+export const buildCaseLawReplayCompactionQuery = (
+  tx: Transaction,
+  { cutoff, limit }: ReplayCompactionQueryOptions,
+) =>
+  tx
+    .select({
+      id: caseLawReplayBatches.id,
+    })
+    .from(caseLawReplayBatches)
+    .where(
+      and(
+        isNotNull(caseLawReplayBatches.supersededAt),
+        lte(caseLawReplayBatches.supersededAt, sql`${cutoff}::timestamptz`),
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayBatches.supersededAt),
+      asc(caseLawReplayBatches.id),
+    )
+    .limit(limit)
+    .for("update");
 
 /**
  * The citing decisions a reviewed-label run admits: the unredacted ones among

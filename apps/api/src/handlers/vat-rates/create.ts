@@ -34,7 +34,7 @@ export default createSafeRootHandler(
           endDate: body.validTo ?? null,
         });
         if (Result.isError(overlap)) {
-          return overlap;
+          return Result.err(overlap.error);
         }
         const rows = await tx
           .insert(vatRates)

@@ -243,7 +243,7 @@ describe("machine key tenant filter", () => {
     const guardAt = source.indexOf("!existing.enabled");
     // The invocation, matched with its leading newline+indent, so the
     // top-of-file import of the same name does not count as "before".
-    const mintCallAt = source.indexOf("\n      mintMachineApiKey({");
+    const mintCallAt = source.indexOf("\n      issueMachineApiKey({");
     expect(guardAt).toBeGreaterThan(-1);
     expect(mintCallAt).toBeGreaterThan(-1);
     expect(guardAt).toBeLessThan(mintCallAt);

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -19,12 +19,12 @@ export const useAddWorkspaceMember = () => {
   const queryClient = useQueryClient();
 
   return useIdempotentMutation({
-    mutationFn: async ({ workspaceId, userId }: AddMemberVars) => {
-      const response = await api.workspaces({ workspaceId }).members.put({
-        userId: toSafeId<"user">(userId),
-      });
+    mutationFn: async ({ workspaceId, userId }: AddMemberVars, request) => {
+      const response = await api
+        .workspaces({ workspaceId })
+        .members.put({ userId: toSafeId<"user">(userId) }, request);
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (_data, vars) => {
       detached(
@@ -39,7 +39,10 @@ export const useAddWorkspaceMember = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useAddWorkspaceMember:failure",
+        scope: { type: "handler", handlerId: "useAddWorkspaceMember:failure" },
+      });
     },
   });
 };

@@ -2,7 +2,6 @@ import { Result, TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
-import { detached } from "@/api/lib/analytics/capture";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -22,7 +21,7 @@ import {
   withCommandTimeout,
 } from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
-import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import { type CoordinationKey, coordinationKey } from "@/api/lib/redis-keys";
 
 const REQUEST_KEY_SEPARATOR = "\u001f";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
@@ -83,23 +82,16 @@ type RedisRateLimitFailurePolicy =
 type RedisRateLimitClient = {
   close?: () => void;
   /**
-   * Opens the socket ahead of the first command. The client runs with the
-   * offline queue disabled, so a command issued before the socket is up
-   * rejects at once instead of waiting; connecting at construction keeps the
-   * first requests after a process start on Redis rather than on the
-   * per-process fallback.
+   * Opens the socket before the first command. The context awaits this promise
+   * once because the client runs with the offline queue disabled; after it
+   * settles successfully, later commands are sent without awaiting it again.
    */
   connect?: () => Promise<void>;
   send: (command: string, args: string[]) => Promise<unknown>;
 };
 
 type RedisRateLimitOperation =
-  | "connect"
-  | "decrement"
-  | "increment"
-  | "read"
-  | "reset"
-  | "complete";
+  "connect" | "decrement" | "increment" | "read" | "reset" | "complete";
 
 type RedisRateLimitContextOptions = {
   commandTimeoutMs?: number;
@@ -120,6 +112,14 @@ type CreateRedisRateLimitOptions = {
 };
 
 type RedisRateLimitBinding = Pick<RateLimitOptions, "context" | "generator">;
+
+type RedisConnection = {
+  client: RedisRateLimitClient;
+  ready: Promise<RedisConnectOutcome> | null;
+};
+
+type RedisConnectOutcome =
+  { status: "connected" } | { error: unknown; status: "failed" };
 
 type RateLimitCounter = {
   count: number;
@@ -163,7 +163,7 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
   ) => void;
   private readonly scheduleTimeout: ScheduleTimeout;
   private durationMs = 60_000;
-  private redis: RedisRateLimitClient | null = null;
+  private redisConnection: RedisConnection | null = null;
   private readonly refundProvenanceByRequest = new Map<
     string,
     RefundProvenance
@@ -211,7 +211,6 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
       REFUND_PROVENANCE_CLEANUP_INTERVAL_MS,
     );
     this.refundProvenanceCleanupTimer.unref();
-    this.openRedis();
   }
 
   init(options: RateLimitContextConfig): void {
@@ -440,9 +439,9 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     // Disown before closing: closing rejects a still-pending connect, and the
     // client may settle that promise within the close call itself, so the
     // handler must already see this client as replaced.
-    const redis = this.redis;
-    this.redis = null;
-    redis?.close?.();
+    const connection = this.redisConnection;
+    this.redisConnection = null;
+    connection?.client.close?.();
   }
 
   private evictExpiredRefundProvenance(): void {
@@ -462,51 +461,57 @@ export class RedisRateLimitContext implements ReadableRateLimitContext {
     }
   }
 
-  /**
-   * Builds the client and starts connecting it without waiting: construction
-   * and the request path never block on the socket. Commands issued before
-   * the socket is up reject and take the failure policy, exactly as during an
-   * outage. The client reconnects on its own while the peer refuses, so the
-   * promise settles only once a connection exists, the client's own retries
-   * run out, or the client is closed; a rejection is reported through
-   * `onRedisError` rather than the cold-start retry ladder, whose per-attempt
-   * rejection this client never produces.
-   */
-  private openRedis(): RedisRateLimitClient {
-    const redis = this.createRedis();
-    this.redis = redis;
-    if (redis.connect === undefined) {
-      return redis;
+  private async getRedis() {
+    let connection = this.redisConnection;
+    if (connection === null) {
+      const client = this.createRedis();
+      const createdConnection: RedisConnection = { client, ready: null };
+      connection = createdConnection;
+      this.redisConnection = createdConnection;
+      if (client.connect !== undefined) {
+        createdConnection.ready = withCommandTimeout({
+          command: Promise.resolve().then(async () => await client.connect?.()),
+          commandTimeoutMs: this.commandTimeoutMs,
+          label: "api-rate-limit-redis-connect",
+          scheduleTimeout: this.scheduleTimeout,
+        }).then(
+          () => ({ status: "connected" }),
+          (error: unknown) => ({ error, status: "failed" }),
+        );
+      }
     }
-    detached(
-      redis.connect().catch((error: unknown) => {
-        // A client replaced or closed while still connecting is not this
-        // context's connection any more; its outcome is nobody's news.
-        if (this.redis === redis) {
-          this.onRedisError(error, "connect");
-        }
-      }),
-      "rate-limit.redis-connect",
-    );
-    return redis;
+    if (connection.ready !== null) {
+      const outcome = await connection.ready;
+      if (this.redisConnection === connection) {
+        connection.ready = null;
+      }
+      if (outcome.status === "failed") {
+        return Result.err(outcome.error);
+      }
+    }
+    return Result.ok(connection.client);
   }
 
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
-    const redis = this.redis ?? this.openRedis();
-    const result = await Result.tryPromise({
-      try: async () =>
-        await withCommandTimeout({
-          command: redis.send(command, args),
-          commandTimeoutMs: this.commandTimeoutMs,
-          label: "api-rate-limit-redis-command",
-          scheduleTimeout: this.scheduleTimeout,
-        }),
-      catch: (error: unknown) => error,
-    });
+    const redisResult = await this.getRedis();
+    const redis = Result.isOk(redisResult) ? redisResult.value : null;
+    const result =
+      redis === null
+        ? redisResult
+        : await Result.tryPromise({
+            try: async () =>
+              await withCommandTimeout({
+                command: redis.send(command, args),
+                commandTimeoutMs: this.commandTimeoutMs,
+                label: "api-rate-limit-redis-command",
+                scheduleTimeout: this.scheduleTimeout,
+              }),
+            catch: (error: unknown) => error,
+          });
     if (Result.isError(result)) {
-      if (TimeoutError.is(result.error)) {
-        if (this.redis === redis) {
-          this.redis = null;
+      if (redis !== null && TimeoutError.is(result.error)) {
+        if (this.redisConnection?.client === redis) {
+          this.redisConnection = null;
         }
         redis.close?.();
       }

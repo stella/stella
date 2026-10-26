@@ -25,8 +25,8 @@ export const classifyOAuthDestination = (
       ? "loopback"
       : "hosted";
   }
-  return info.redirectHosts.length > 0 &&
-    info.redirectHosts.every(isLoopbackHost)
+  return info.redirectTargets.length > 0 &&
+    info.redirectTargets.every(isLoopbackHost)
     ? "loopback"
     : "hosted";
 };

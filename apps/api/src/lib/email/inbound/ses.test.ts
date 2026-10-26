@@ -310,14 +310,23 @@ test("an unknown virus verdict fails closed at the provider boundary", async () 
       })
     ).isErr(),
   ).toBe(true);
+});
+
+test.each([
+  ["PASS", "pass"],
+  ["FAIL", "fail"],
+  ["GRAY", "inconclusive"],
+  ["PROCESSING_FAILED", "unavailable"],
+] as const)("virus verdict %s maps to %s", async (status, scan) => {
   const delivery = await read({
     ...event,
-    receipt: { ...event.receipt, virusVerdict: { status: "GRAY" } },
+    receipt: { ...event.receipt, virusVerdict: { status } },
   });
   expect(delivery.isOk() && delivery.value.status).toBe("received");
-  if (delivery.isOk() && delivery.value.status === "received") {
-    expect(delivery.value.scan).toBe("unavailable");
+  if (delivery.isErr() || delivery.value.status !== "received") {
+    return;
   }
+  expect(delivery.value.scan).toBe(scan);
 });
 
 test.each(["declared", "streamed"] as const)(

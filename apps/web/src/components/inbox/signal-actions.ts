@@ -11,7 +11,7 @@ import {
 } from "@/lib/chat-draft-store";
 import { createChatThreadId, getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import type { InboxSignal } from "@/lib/inbox/queries";
@@ -34,7 +34,7 @@ const snoozeSignal = async (
   request: IdempotentRequest,
 ) =>
   Result.tryPromise(async () => {
-    unwrapEden(
+    unwrapApiResponse(
       await signalClient(signalId).snoozes.post(
         { until: until.toISOString() },
         request,
@@ -47,7 +47,7 @@ const dismissSignal = async (
   request: IdempotentRequest,
 ) =>
   Result.tryPromise(async () => {
-    unwrapEden(
+    unwrapApiResponse(
       await signalClient(signalId).dismissals.post({ reason }, request),
     );
   });
@@ -60,7 +60,7 @@ const assignSignal = async (
   request: IdempotentRequest,
 ) =>
   Result.tryPromise(async () => {
-    unwrapEden(
+    unwrapApiResponse(
       await signalClient(signalId).assignments.post(
         {
           assigneeUserId:
@@ -83,7 +83,7 @@ const acceptSignal = async (
   request: IdempotentRequest,
 ) =>
   Result.tryPromise(async () => {
-    const accepted = unwrapEden(
+    const accepted = unwrapApiResponse(
       await signalClient(signalId).acceptances.post(
         {
           suggestionKind,

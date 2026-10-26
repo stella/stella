@@ -1,14 +1,75 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  UNKNOWN,
   contextFromNested,
   contextWithPlanOutputs,
   definitelyFalse,
   evaluate,
+  expressionValueSources,
+  UNKNOWN,
 } from "./github-expression";
 
 const none = { values: {} };
+
+test.each([
+  ["needs.plan.outputs.image", ["needs.plan.outputs.image"]],
+  [
+    "matrix.shard == 1 && needs.plan.outputs.required == 'true' && needs.plan.outputs.image || ''",
+    ["needs.plan.outputs.image", ""],
+  ],
+  [
+    "needs.plan.outputs.unresolved || needs.plan.outputs.image",
+    ["needs.plan.outputs.unresolved", "needs.plan.outputs.image"],
+  ],
+  [
+    "needs.plan.outputs.image || needs.plan.outputs.unresolved",
+    ["needs.plan.outputs.image", "needs.plan.outputs.unresolved"],
+  ],
+  [
+    "(needs.plan.outputs.required == 'true') || needs.plan.outputs.image",
+    [true, "needs.plan.outputs.image"],
+  ],
+  ["false && needs.plan.outputs.unresolved || ''", [""]],
+  ["format('{0}', needs.plan.outputs.image)", ["computed"]],
+] as const)(
+  "value provenance retains every possible source of %s",
+  (source, expected) => {
+    const values = expressionValueSources(source).map((value) => {
+      switch (value.type) {
+        case "reference":
+          return value.path;
+        case "literal":
+          return value.value;
+        case "computed":
+          return "computed";
+        default: {
+          const exhaustive: never = value;
+          return exhaustive;
+        }
+      }
+    });
+    expect([...new Set(values)]).toEqual([...expected]);
+  },
+);
+
+test("gated images use GitHub operand-returning semantics for every shard and flag", () => {
+  const source =
+    "matrix.shard == 1 && needs.plan.outputs.required == 'true' && needs.plan.outputs.image || ''";
+  for (const shard of [1, 2, 3]) {
+    for (const required of ["true", "false", ""]) {
+      const image = "docker.io/library/postgres:18";
+      expect(
+        evaluate(source, {
+          values: {
+            "matrix.shard": shard,
+            "needs.plan.outputs.required": required,
+            "needs.plan.outputs.image": image,
+          },
+        }),
+      ).toBe(shard === 1 && required === "true" ? image : "");
+    }
+  }
+});
 
 describe("GitHub expression evaluation", () => {
   test("nested contexts preserve projections, status functions and unknown paths", () => {

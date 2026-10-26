@@ -19,7 +19,7 @@ import type {
 } from "@/features/avt/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { useObservedMutationState } from "@/lib/idempotency/use-observed-mutation-state";
@@ -97,7 +97,13 @@ export const useClaimReviewActions = (scope: RunScope) => {
           : withClaimReviews(current, context.previous),
       );
     }
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "useClaimReviewActions.rollback:failure",
+      scope: {
+        type: "handler",
+        handlerId: "useClaimReviewActions.rollback:failure",
+      },
+    });
     notifyUserError(error, t("avt.save.failedTitle"));
   };
 
@@ -111,7 +117,7 @@ export const useClaimReviewActions = (scope: RunScope) => {
       { targetIds: [claimId], event }: RecordVariables,
       request,
     ) =>
-      unwrapEden(
+      unwrapApiResponse(
         await lists()["claim-reviews"].post({ runId, claimId, event }, request),
       ),
     onMutate: async ({ targetIds, event }) =>
@@ -132,7 +138,7 @@ export const useClaimReviewActions = (scope: RunScope) => {
     mutationKey,
     scope: { id: mutationKey.join(":") },
     mutationFn: async ({ targetIds: claimIds }: BulkVariables, request) =>
-      unwrapEden(
+      unwrapApiResponse(
         await lists()["claim-reviews"].bulk.post({ runId, claimIds }, request),
       ),
     onMutate: async ({ targetIds }) =>

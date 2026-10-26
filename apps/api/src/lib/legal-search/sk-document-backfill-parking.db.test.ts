@@ -18,8 +18,8 @@ import { eq, inArray } from "drizzle-orm";
 
 import {
   DOCUMENT_FETCH_EVENT,
-  type DocumentStageObserver,
   type DocumentStageObservation,
+  type DocumentStageObserver,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { ScopedDb } from "@/api/db/safe-db";

@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { loadSampleCaseAndOpen } from "@/features/avt/sample-case.logic";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
@@ -35,14 +35,15 @@ export const useLoadSampleCase = ({
     mutationFn: async () =>
       await loadSampleCaseAndOpen({
         load: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await submit.run({
               operation: `sample.${workspaceId}.create`,
               body: {
                 // Used only when the matter has no file property yet.
                 filePropertyName: t("common.documents"),
               },
-              send: async (body) => listsApi["sample-case"].post(body),
+              send: async (body, request) =>
+                listsApi["sample-case"].post(body, request),
             }),
           ),
         openList: async (listId) =>

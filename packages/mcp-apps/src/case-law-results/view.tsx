@@ -12,8 +12,8 @@ import {
 import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  parseDecisionParagraphFragment,
   formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
 } from "@stll/api-contract/decision-paragraph-range";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { Temporal, todayFor } from "@stll/time";
@@ -66,12 +66,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
-import {
-  Tooltip,
-  TooltipPopup,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@stll/ui/tooltip";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import { createReaderController } from "../decision-reader/controller";
@@ -130,7 +125,7 @@ const ResultTableRow = ({
   const sourceUrl = row.source_url;
   const openWeb = () => {
     if (url !== null) {
-      bridge.detached(bridge.openLink(url), "open case-law decision");
+      bridge.detached(bridge.openLink(url), "caseLawResults.openDecision");
     }
   };
   return (
@@ -347,7 +342,7 @@ const ResultTableRow = ({
                     onClick={() => {
                       bridge.detached(
                         bridge.openLink(sourceUrl),
-                        "open original case-law source",
+                        "caseLawResults.openOriginalSource",
                       );
                     }}
                   />
@@ -486,7 +481,7 @@ const SearchControls = ({
               queries: query === originalQuery ? input["queries"] : [query],
             },
           }),
-          "filter case-law results",
+          "caseLawResults.filter",
         );
       }}
     >
@@ -732,7 +727,7 @@ const SearchResults = ({
                             name: "search_case_law",
                             arguments: { ...input, cursor: page.nextCursor },
                           }),
-                          "page case-law results",
+                          "caseLawResults.page",
                         )
                       }
                     />
@@ -791,7 +786,7 @@ const ResultContent = ({
           <Button
             variant="outline"
             onClick={() =>
-              bridge.detached(bridge.retry(), "retry case-law read")
+              bridge.detached(bridge.retry(), "caseLawResults.retry")
             }
           >
             {t("retry")}
@@ -892,7 +887,10 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
   const onOpen: OpenReader = (row, trigger) => {
     if (row.type === "resolve" || !bridge.supportsTools()) {
       if (row.url !== null) {
-        bridge.detached(bridge.openLink(row.url), "open case-law decision");
+        bridge.detached(
+          bridge.openLink(row.url),
+          "caseLawResults.openDecision",
+        );
       }
       return;
     }
@@ -916,7 +914,7 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
             : { paragraphs: formatDecisionParagraphRange(paragraphs) }),
         },
       }),
-      "open decision reader",
+      "caseLawResults.openReader",
     );
   };
   const onBack = () => {
@@ -924,7 +922,7 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
     setScreen("results");
     embeddedReaderBridge.detached(
       embeddedReaderBridge.requestInline(),
-      "restore results display mode",
+      "caseLawResults.restoreDisplayMode",
     );
   };
   const { context } = useSyncExternalStore(
@@ -935,7 +933,7 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
   return (
     <IntlProvider locale={formattingLocale} messages={messages}>
       <DirectionProvider direction={direction}>
-        <TooltipProvider>
+        <>
           <main
             hidden={screen !== "results"}
             ref={(element) => {
@@ -967,7 +965,7 @@ export const CaseLawApp = ({ bridge }: { bridge: CaseLawBridge }) => {
           {screen === "reader" && (
             <ReaderView host={embeddedReader} onBack={onBack} />
           )}
-        </TooltipProvider>
+        </>
       </DirectionProvider>
     </IntlProvider>
   );

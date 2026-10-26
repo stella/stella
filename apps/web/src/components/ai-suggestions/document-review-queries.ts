@@ -5,7 +5,7 @@ import type { ReviewFlag } from "@stll/api-contract";
 
 import { documentReviewRunPollInterval } from "@/components/ai-suggestions/document-review-run.logic";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -91,7 +91,7 @@ const fetchDocumentReviewParties = async (
   },
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].parties.post(
@@ -161,7 +161,7 @@ export const documentReviewSourcesOptions = ({
             ...(pageParam ? { cursor: pageParam } : {}),
           },
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -185,7 +185,7 @@ export const fetchDocumentReviewRuns = async (
   { workspaceId, entityId, fileFieldId }: DocumentReviewRunTarget,
   { includeLatest = false, signal }: FetchDocumentReviewRunsOptions = {},
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].runs.get({
@@ -268,7 +268,7 @@ const fetchDocumentReviewRun = async (
   { workspaceId, runId }: DocumentReviewRunRef,
   signal?: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].runs({
@@ -340,9 +340,8 @@ type DecideReviewFindingArgs = {
  * Record one reviewer answer against one finding: the disposition, the flags,
  * or both.
  *
- * `decision` is always sent, current value included, because Elysia coerces an
- * absent optional `UnionEnum` to the first member of its vocabulary — which
- * here would silently reopen the finding. The endpoint treats a restated
+ * `decision` is always sent, current value included: the route's schema
+ * requires it. The endpoint treats a restated
  * decision as the no-op it is and leaves the decider and the moment alone.
  */
 export const decideReviewFinding = async ({
@@ -351,7 +350,7 @@ export const decideReviewFinding = async ({
   decision,
   flags,
 }: DecideReviewFindingArgs) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       ["document-reviews"].findings({ findingId })
@@ -401,7 +400,7 @@ export const saveRunAsPlaybook = async (
   { workspaceId, runId, name }: SaveRunAsPlaybookArgs,
   request: IdempotentRequest,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api.playbooks["from-run"].post(
       {
         workspaceId: toSafeId<"workspace">(workspaceId),

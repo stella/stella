@@ -2,7 +2,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
@@ -40,8 +40,6 @@ type WorkflowKey = { workspaceId: string };
 type WorkflowTargetCountOptionsInput =
   QueryOptionsInput<WorkflowTargetCountKey>;
 
-const WORKFLOW_STATUS_POLL_INTERVAL_MS = 2000;
-
 export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
   queryOptions({
     queryKey: workspaceKeys.workflow(key.workspaceId),
@@ -50,7 +48,7 @@ export const workflowOptions = ({ key }: { key: WorkflowKey }) =>
         .workspaces({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
         .workflow.get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
 
@@ -92,7 +90,7 @@ export const workflowTargetCountOptions = ({
           { fetch: { signal } },
         );
 
-      return unwrapEden(response).count;
+      return unwrapApiResponse(response).count;
     },
   });
 
@@ -115,8 +113,6 @@ export const useIsWorkflowRunning = (inputWorkspaceId?: string) => {
 export const useWorkflowStatus = (workspaceId: string) =>
   useQuery({
     ...workflowOptions({ key: { workspaceId } }),
-    refetchInterval: (query) =>
-      query.state.data?.running ? WORKFLOW_STATUS_POLL_INTERVAL_MS : false,
   });
 
 type JustificationsOptionsInput = QueryOptionsInput<JustificationsKey>;
@@ -138,6 +134,6 @@ export const justificationsOptions = ({
           { fetch: { signal } },
         );
 
-      return unwrapEden(response).map(toWorkspaceJustification);
+      return unwrapApiResponse(response).map(toWorkspaceJustification);
     },
   });

@@ -11,9 +11,9 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   AlertTriangleIcon,
   ArrowLeftIcon,
   BookmarkPlusIcon,
@@ -29,17 +30,16 @@ import {
   ChevronRightIcon,
   LandmarkIcon,
   PencilIcon,
-  PlusIcon,
   PlayIcon,
-  RepeatIcon,
+  PlusIcon,
   RefreshCwIcon,
+  RepeatIcon,
+  SigmaIcon,
   SlashIcon,
   SplitIcon,
-  SigmaIcon,
   TextQuoteIcon,
   Trash2Icon,
   UserIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
@@ -65,9 +65,9 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
+  invalidateTemplateClauseSources,
   knowledgeKeys,
   templateClausesOptions,
-  invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -88,8 +88,8 @@ import {
   fieldHasLoopBounds,
   findEnclosingForGroup,
   findEnclosingIfGroup,
-  sanitizeFieldPath,
   type OutlineGroup,
+  sanitizeFieldPath,
 } from "@/routes/knowledge/-components/template-studio-model";
 import {
   dedupeOutlineFields,
@@ -98,9 +98,9 @@ import {
   outlineFieldPaths,
 } from "@/routes/knowledge/-components/template-studio-outline";
 import {
-  useTemplateStudioStore,
   type OutlineNode,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 import { FieldConfigEditor } from "@/routes/knowledge/-components/template-wizard";
 
@@ -1074,8 +1074,7 @@ const fieldRepeatState = (
  *  marker (otherwise removing the `if` would expose the block's other
  *  content unconditionally). */
 type FieldConditionState =
-  | { kind: "none" }
-  | { kind: "conditional"; expr: string; canRemove: boolean };
+  { kind: "none" } | { kind: "conditional"; expr: string; canRemove: boolean };
 
 const fieldConditionState = (
   field: StudioField,

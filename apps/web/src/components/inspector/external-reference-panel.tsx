@@ -1,10 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -18,16 +16,16 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { CopyIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
+import { ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { CompanyRegistryPreview } from "@/components/company-registry-preview";
+import { CopyActionButton } from "@/components/copy-action-button";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import {
   InspectorFindBar,
@@ -36,13 +34,11 @@ import {
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { useProxiedIconSrc } from "@/components/proxied-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { PDFPage } from "@/lib/pdf/pdf-page";
@@ -66,7 +62,8 @@ export const ExternalSourceLogo = ({
   className?: string | undefined;
   iconHref?: string | undefined;
 }) => {
-  if (iconHref) {
+  const proxiedIconSrc = useProxiedIconSrc(iconHref);
+  if (proxiedIconSrc) {
     return (
       <span
         className={cn(
@@ -78,7 +75,7 @@ export const ExternalSourceLogo = ({
           alt=""
           className="size-3 rounded-xs object-contain"
           height={12}
-          src={iconHref}
+          src={proxiedIconSrc}
           width={12}
         />
       </span>
@@ -230,6 +227,7 @@ const ExternalPdfPreview = ({
       key={fileId}
     >
       <PDFViewport
+        pageSource="portfolio"
         buffer={buffer}
         className="document-preview-surface h-full"
         contentClassName="relative space-y-2 px-2 pt-2"
@@ -308,7 +306,7 @@ const GenericExternalReferencePanel = ({
     enabled: shouldFetchPreview,
   });
   const fetchedPreviewView = useQueryView(fetchedPreviewQuery);
-  useQueryViewError(fetchedPreviewView);
+  useQueryViewError(fetchedPreviewView, "GenericExternalReferencePanel:query");
   const { isLoading: previewLoading } = fetchedPreviewQuery;
   const fetchedPreview =
     fetchedPreviewView.type === "items" ? fetchedPreviewView.items : undefined;
@@ -377,7 +375,10 @@ const GenericExternalReferencePanel = ({
     enabled: connectorSlug !== undefined,
   });
   const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView);
+  useQueryViewError(
+    mcpConnectorsDataView,
+    "GenericExternalReferencePanel:query-2",
+  );
   const mcpConnectorsData =
     mcpConnectorsDataView.type === "items"
       ? mcpConnectorsDataView.items
@@ -414,19 +415,6 @@ const GenericExternalReferencePanel = ({
     openIsolatedWindow(confirmHref);
     setConfirmHref(undefined);
   }, [confirmHref, setConfirmHref]);
-  const copyConfirmHref = useCallback(async () => {
-    if (confirmHref === undefined) {
-      return;
-    }
-
-    const copied = await copyToClipboard(confirmHref);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      notifyUserError(copied.error, t("common.error"));
-      return;
-    }
-    stellaToast.success(t("common.copied"));
-  }, [confirmHref, t]);
 
   return (
     <div
@@ -600,18 +588,12 @@ const GenericExternalReferencePanel = ({
             className="grid grid-cols-2 gap-2 sm:grid-cols-2"
             variant="bare"
           >
-            <Button
-              onClick={() => {
-                detached(
-                  copyConfirmHref(),
-                  "external-reference-panel.copy-confirm-href",
-                );
-              }}
+            <CopyActionButton
+              iconClassName="size-4"
+              label={t("common.copyLink")}
+              text={confirmHref ?? ""}
               variant="outline"
-            >
-              <CopyIcon className="size-4" />
-              {t("common.copyLink")}
-            </Button>
+            />
             <Button onClick={openConfirmedExternal}>
               <ExternalLinkIcon className="size-4" />
               {t("inspector.external.openLink")}

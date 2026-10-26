@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -12,13 +12,14 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-const termSchema = t.Object({
-  canonical: t.String({ minLength: 1, maxLength: 512 }),
-  label: t.String({ minLength: 1, maxLength: 64 }),
-  variants: t.Optional(
-    t.Array(t.String({ minLength: 1, maxLength: 512 }), {
-      maxItems: LIMITS.anonymizationBlacklistVariantsPerEntry,
-    }),
+const termSchema = v.object({
+  canonical: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+  label: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  variants: v.optional(
+    v.pipe(
+      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+      v.maxLength(LIMITS.anonymizationBlacklistVariantsPerEntry),
+    ),
   ),
 });
 
@@ -40,8 +41,8 @@ const config = {
     reason: "anonymization_admin",
     consumesServices: false,
   },
-  body: t.Object({
-    entries: t.Array(termSchema, { minItems: 1, maxItems: 100 }),
+  body: v.object({
+    entries: v.pipe(v.array(termSchema), v.minLength(1), v.maxLength(100)),
   }),
 } satisfies WorkspaceHandlerConfig;
 

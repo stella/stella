@@ -1,6 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test, mock } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import {
   PROVIDER_SETUP_ERROR_CATALOGUE,

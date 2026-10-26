@@ -15,8 +15,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
-  contactRateInput,
   buildTextContactPayload,
+  contactRateInput,
   EDITABLE_FIELD_POLICY,
   getEditableFieldInputAttributes,
   isNumericEditableField,

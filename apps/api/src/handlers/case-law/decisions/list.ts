@@ -1,17 +1,19 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, not, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { numberFromString } from "@stll/api-contract/http-input";
 import { isUuid } from "@stll/uuid-codec";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -23,8 +25,8 @@ import {
 } from "@/api/lib/case-law/court-presentation";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
+  decisionPageOffsetSchema,
   decisionPageRequestRefusal,
-  tDecisionPageOffset,
 } from "@/api/lib/case-law/decision-page-offset";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
@@ -36,9 +38,9 @@ import {
   redistributableCaseLawSourceFor,
 } from "@/api/lib/case-law/redistribution";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
@@ -54,22 +56,22 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
-export const listDecisionsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
-  // A page addressed by number; exclusive with `cursor` and bounded like the
-  // search's (`LIMITS.caseLawResultDepthMax`).
-  offset: t.Optional(tDecisionPageOffset()),
-  court: t.Optional(t.String({ maxLength: 512 })),
+export const listDecisionsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
+  offset: v.exactOptional(numberFromString(decisionPageOffsetSchema())),
+  court: v.optional(v.pipe(v.string(), v.maxLength(512))),
   country: tPublicLawCountry,
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(tSafeId("caseLawSource")),
-  language: t.Optional(t.String({ maxLength: 8 })),
+  dateFrom: v.optional(apiDateSchema),
+  dateTo: v.optional(apiDateSchema),
+  decisionType: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  sourceId: v.optional(resourceIdSchema("caseLawSource")),
+  language: v.optional(v.pipe(v.string(), v.maxLength(8))),
 });
 
-type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
+type ListDecisionsQuery = v.InferOutput<typeof listDecisionsQuerySchema>;
 
 /**
  * The browse walk is newest decision first. Undated decisions sort last, as
@@ -149,11 +151,19 @@ const decisionFilterConditions = (
     conditions.push(eq(decision.court, query.court));
   }
   conditions.push(eq(decision.country, query.country));
+  // Date bounds compare the walk's own sort key, so both browse indexes take
+  // them as a range of the walk; on the bare column they filter a walk that
+  // starts at the newest decision. The key gives undated rows `-infinity`: a
+  // lower bound excludes them, an upper bound alone must exclude them itself.
+  const sortKey = decisionDateSortKeySql(decision.decisionDate);
   if (query.dateFrom) {
-    conditions.push(sql`${decision.decisionDate} >= ${query.dateFrom}`);
+    conditions.push(sql`${sortKey} >= ${query.dateFrom}::date`);
   }
   if (query.dateTo) {
-    conditions.push(sql`${decision.decisionDate} <= ${query.dateTo}`);
+    conditions.push(sql`${sortKey} <= ${query.dateTo}::date`);
+    if (!query.dateFrom) {
+      conditions.push(sql`${sortKey} > '-infinity'::date`);
+    }
   }
   if (query.decisionType) {
     conditions.push(
@@ -197,8 +207,15 @@ export const listDecisionsPageQuery = ({
     conditions.push(decisionDateKeysetAfter(cursor));
   }
 
-  // Keep the representative lookup correlated and bounded: flattening it
-  // into an anti-join makes the browse walk sort the whole country's corpus.
+  // The representative check stays a correlated, per-row test on the index
+  // walk. Flattened into an anti-join, or kept as a lateral join filtered on
+  // null, the planner estimates that almost no row survives it, expects to
+  // read the whole country to fill a page, and sorts the corpus instead of
+  // walking the date index. As a subplan it is estimated as half the rows,
+  // which is the walk's real shape: most decisions have no earlier version.
+  // `OFFSET 0` is a deliberate optimization fence, not a no-op to clean up:
+  // PostgreSQL never pulls an EXISTS with an offset up into a join, so it is
+  // what keeps the check a subplan. `list-plan.db.test.ts` fails without it.
   const earlierSibling = tx
     .select({ id: sibling.id })
     .from(sibling)
@@ -215,8 +232,8 @@ export const listDecisionsPageQuery = ({
         ...decisionFilterConditions(query, sibling),
       ),
     )
-    .limit(1)
-    .as("earlier_sibling");
+    .limit(1);
+  const hasEarlierSibling = sql`exists (${earlierSibling} offset 0)`;
 
   return tx
     .select(publicDecisionRowColumns())
@@ -225,13 +242,12 @@ export const listDecisionsPageQuery = ({
       caseLawSources,
       eq(caseLawSources.id, publishedCaseLawDecisions.sourceId),
     )
-    .leftJoinLateral(earlierSibling, sql`true`)
     .where(
       and(
         ...conditions,
         // Only an older version eligible for this request hides a row.
         // A null group key matches no sibling, so ungrouped rows remain.
-        isNull(earlierSibling.id),
+        not(hasEarlierSibling),
       ),
     )
     .orderBy(

@@ -4,6 +4,7 @@ import ts from "typescript6";
 import {
   declaredAppFrameScope,
   readDockedChatHosts,
+  renderedImports,
 } from "../helpers/docked-chat-hosts";
 
 test.each(["member", "knowledge", "none"])(
@@ -78,16 +79,31 @@ test("docked chat census includes reader and inspector hosts but excludes non-pa
 
 test("docked chat census follows the frame a route's parent layout selects", () => {
   const { hosts } = readDockedChatHosts();
-  // The admin console mounts its own frame without the docked inspector.
-  expect(
-    hosts.some(
-      ({ template, surfaces }) =>
-        (template === "/admin" || template.startsWith("/admin/")) &&
-        surfaces.includes("inspector"),
-    ),
-  ).toBe(false);
-  expect(
-    hosts.find((host) => host.template === "/settings/account/profile")
-      ?.surfaces,
-  ).toContain("inspector");
+  // Account settings and organization admin share the app frame, and with it
+  // the docked inspector.
+  for (const template of [
+    "/settings/account/profile",
+    "/admin/general",
+    "/admin/members",
+  ]) {
+    expect(
+      hosts.find((host) => host.template === template)?.surfaces,
+    ).toContain("inspector");
+  }
+});
+
+test("a preview-only PDF viewer is not followed into its docked chat reader", () => {
+  const imports = (mode: string) =>
+    renderedImports(
+      ts.createSourceFile(
+        "preview.tsx",
+        `import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+export const Preview = () => <PeekPdfViewer interactionMode="${mode}" />;`,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX,
+      ),
+    );
+  expect(imports("preview-only")).toEqual([]);
+  expect(imports("with-ai")).toEqual(["@/components/pdf/peek/peek-pdf-viewer"]);
 });

@@ -60,8 +60,7 @@ type InFlight = {
 };
 
 type Step =
-  | { kind: "submit" }
-  | { kind: "settle"; pick: number; succeeds: boolean };
+  { kind: "submit" } | { kind: "settle"; pick: number; succeeds: boolean };
 
 const step: fc.Arbitrary<Step> = fc.oneof(
   fc.constant({ kind: "submit" as const }),
@@ -109,6 +108,10 @@ const mountSettingsMutation = () => {
   const { result, unmount } = testing.renderHook(
     () =>
       useSettingsMutation({
+        exceptionScope: {
+          type: "handler",
+          handlerId: "mountSettingsMutation.useSettingsMutation",
+        },
         mutationFn: async (value: number) => {
           const settle = Promise.withResolvers<number>();
           sent.push(value);

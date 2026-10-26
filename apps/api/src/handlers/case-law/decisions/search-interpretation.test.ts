@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 
@@ -12,7 +12,7 @@ import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decision
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema>;
 
 /** The question that returned nothing: nine words, five of them grammar. */
 const QUESTION = "jak velký musí být dluh na nájemném pro výpověď z nájmu";
@@ -247,6 +247,20 @@ describe("searchAnswer", () => {
 
   test("a strict page with hits carries no warning at all", () => {
     expect(answerFor(request({ strict: true }), 3).warnings).toEqual([]);
+  });
+
+  test("a page containing relaxed corpus matches reports the fallback", () => {
+    const body = request();
+    const interpretation = interpret(body);
+    expect(
+      searchAnswer({
+        body,
+        interpretation,
+        hitCount: 2,
+        partialHitCount: 2,
+        countsResultSet: true,
+      }).warnings.map(({ code }) => code),
+    ).toContain("partial_matches_appended");
   });
 });
 

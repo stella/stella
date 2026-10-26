@@ -9,8 +9,8 @@ import { ENTITY_KINDS } from "./entity-kinds";
  * body and the web that sends it. A second list of these names is how the
  * order a result page was read under stops matching the one it re-reads under.
  *
- * `relevance` is first because Elysia coerces an absent optional `UnionEnum`
- * to its first member, so slot 0 has to be the default a handler applies.
+ * `relevance` is first because `DEFAULT_SEARCH_SORT` reads slot 0, the
+ * default a handler applies when a search names no order.
  */
 export const SEARCH_SORTS = ["relevance", "newest"] as const;
 
@@ -36,9 +36,9 @@ export const GLOBAL_SEARCH_RESULT_LIMIT = 1000;
  * engine answering. Here rather than in the API because the search body and
  * the web that sends it both declare it.
  *
- * `short` is first because Elysia coerces an absent optional `UnionEnum` to
- * its first member, so slot 0 has to be the default a handler applies — and
- * it is the size every result has always been shown at.
+ * `short` is first because `DEFAULT_SEARCH_EXCERPT` reads slot 0, the
+ * default a handler applies — and it is the size every result has always
+ * been shown at.
  */
 export const SEARCH_EXCERPTS = ["short", "medium", "long"] as const;
 
@@ -70,8 +70,7 @@ export const SEARCH_TOTAL_TYPE = {
 } as const;
 
 type CountedSearchTotalType =
-  | typeof SEARCH_TOTAL_TYPE.EXACT
-  | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
+  typeof SEARCH_TOTAL_TYPE.EXACT | typeof SEARCH_TOTAL_TYPE.ESTIMATE;
 
 export type SearchTotal =
   | {
@@ -141,8 +140,6 @@ export const GLOBAL_SEARCH_RESULT_TYPES = [
   "contact",
   "case-law",
   ...ENTITY_KINDS,
-  // Appended last on purpose: Elysia coerces an absent optional UnionEnum to
-  // the first element, so new types must never take slot 0.
   "chat",
 ] as const;
 

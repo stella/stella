@@ -1,14 +1,18 @@
 import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   AGENT_SKILL_COMMAND_PATTERN,
   AGENT_SKILL_SCOPES,
-  RESERVED_AGENT_SKILL_COMMANDS,
   agentSkills,
+  RESERVED_AGENT_SKILL_COMMANDS,
 } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
+import {
+  authorizeSkillBinding,
+  skillBindingBodyFields,
+} from "@/api/handlers/skills/skill-binding";
 import { tSkillInvocation } from "@/api/handlers/skills/skill-invocation-schema";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -17,21 +21,26 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import { authorizeSkillInstallScope } from "@/api/lib/skills/install";
 import { includes } from "@/api/lib/type-guards";
 
 import { uniqueSlug } from "./slug";
 
-const createSkillBodySchema = t.Object({
-  scope: t.UnionEnum(AGENT_SKILL_SCOPES),
-  name: t.String({ minLength: 1, maxLength: 64 }),
-  description: t.String({
-    minLength: 1,
-    maxLength: LIMITS.agentSkillDescriptionMaxChars,
-  }),
-  body: t.String({ minLength: 1, maxLength: LIMITS.agentSkillBodyMaxChars }),
-  command: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-  invocation: t.Optional(tSkillInvocation()),
+const createSkillBodySchema = v.object({
+  scope: v.picklist(AGENT_SKILL_SCOPES),
+  name: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  description: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.agentSkillDescriptionMaxChars),
+  ),
+  body: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.agentSkillBodyMaxChars),
+  ),
+  command: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(50))),
+  invocation: v.optional(tSkillInvocation()),
+  ...skillBindingBodyFields,
 });
 
 const config = {
@@ -42,7 +51,11 @@ const config = {
     "an optional slash command, and an optional invocation (`auto`, the " +
     "default: the assistant may use it on its own; `manual`: only when the " +
     "user invokes it). Team scope requires admin or owner, " +
-    "private scope is your own. A command must be lowercase letters, digits, " +
+    "private scope is your own. Pass `boundWorkspaceId` to bind the skill " +
+    "to one matter (any member who reaches the matter may, for team scope " +
+    "too) or `boundClientId` to bind it to one client (admins and owners " +
+    "only); a bound skill is visible and usable only there, and the binding " +
+    "cannot change later. A command must be lowercase letters, digits, " +
     "hyphens, or underscores, must not be one of the reserved commands, and " +
     "must be free in the organization, as must the skill name. Refused once " +
     "the per-user or per-organization skill limit is reached. Use " +
@@ -68,13 +81,18 @@ const createSkill = createSafeRootHandler(
     session,
     user,
   }) {
-    const authorization = authorizeSkillInstallScope({
-      memberRole,
-      scope: body.scope,
-    });
-    if (Result.isError(authorization)) {
-      return Result.err(authorization.error);
-    }
+    const binding = {
+      boundClientId: body.boundClientId ?? null,
+      boundWorkspaceId: body.boundWorkspaceId ?? null,
+    };
+    yield* Result.await(
+      authorizeSkillBinding({
+        binding,
+        memberRole,
+        safeDb,
+        scope: body.scope,
+      }),
+    );
 
     if (body.command !== undefined) {
       if (!AGENT_SKILL_COMMAND_PATTERN.test(body.command)) {
@@ -171,6 +189,7 @@ const createSkill = createSafeRootHandler(
           body: body.body,
           enabled: true,
           invocation: body.invocation ?? "auto",
+          ...binding,
           command: body.command ?? null,
         })
         .returning({ id: agentSkills.id });
@@ -191,6 +210,12 @@ const createSkill = createSafeRootHandler(
                 ...(body.command !== undefined && { command: body.command }),
                 ...(body.invocation !== undefined && {
                   invocation: body.invocation,
+                }),
+                ...(binding.boundWorkspaceId !== null && {
+                  boundWorkspaceId: binding.boundWorkspaceId,
+                }),
+                ...(binding.boundClientId !== null && {
+                  boundClientId: binding.boundClientId,
                 }),
               },
             },

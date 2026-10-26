@@ -33,10 +33,9 @@ import {
   AGENDA_SENSITIVITIES,
   ENTITY_DELETION_CLEANUP_STATUSES,
   ENTITY_KINDS,
-  LIST_ITEM_TYPES,
-  TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
+  LIST_ITEM_TYPES,
   organization,
   organizationCheck,
   p,
@@ -46,6 +45,7 @@ import {
   safeWorkspaceId,
   sql,
   stella,
+  TASK_ASSIGNEE_ROLES,
   timestamptz,
   user,
   workspaceCheck,
@@ -1286,7 +1286,7 @@ export const pendingUploads = p.pgTable(
     /** Set inside the claim transaction. Used to detect stuck `scanning` rows. */
     claimedAt: timestamptz("claimed_at"),
     claimedByRequestId: p.varchar("claimed_by_request_id", { length: 64 }),
-    /** `createdAt + 5min`. A finalize after this rejects without touching S3. */
+    /** Finalize deadline (`uploadTimeline`); later requests only replay terminal results. */
     expiresAt: timestamptz("expires_at").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     finalizedAt: timestamptz("finalized_at"),
@@ -1341,7 +1341,7 @@ export const BUFFER_OBJECT_CLEANUP_INTENT_STATUS = {
  * writer confirms it can no longer publish or the bounded late-write
  * quarantine completes. Matter writers reserve a finalized
  * `{org}/{workspace}/{file}` key; organization-scoped chat writers reserve
- * their `{user}/{file}` key with a null workspace. No bucket lifecycle rule
+ * their `{org}/{file}` key with a null workspace. No bucket lifecycle rule
  * expires either class and no prefix sweep can rediscover one.
  *
  * Adding an ancestor reference is therefore only safe once that ancestor's
@@ -1383,7 +1383,10 @@ export const bufferObjectCleanupIntents = p.pgTable(
   (table) => {
     const ownerScopeAccess = sql`((
       ${table.chatThreadId} IS NOT NULL
-      AND pg_catalog.split_part(${table.objectKey}, '/', 1) = (SELECT pg_catalog.current_setting('app.user_id', true))
+      AND pg_catalog.split_part(${table.objectKey}, '/', 1) IN (
+        ${table.organizationId},
+        (SELECT pg_catalog.current_setting('app.user_id', true))
+      )
       AND EXISTS (
         SELECT 1 FROM chat_threads ct
         WHERE ct.id = ${table.chatThreadId}
@@ -1494,6 +1497,14 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Workflow run that currently owns this non-terminal cell. */
+    ownerRunId: p.text("owner_run_id"),
+    /** Batch within the workflow run that currently owns this cell. */
+    ownerBatchId: p.text("owner_batch_id"),
+    /** Time after which the cell owner may be reconciled. */
+    deadlineAt: timestamptz("deadline_at"),
+    /** Bounded automatic-retry attempt for an owned cell. */
+    attempt: p.smallint("attempt"),
   },
   (table) => [
     ...entityFeatureGateChecks(table),

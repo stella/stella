@@ -19,11 +19,28 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,
+  lockCaseLawRepublication,
   lockRequestReceiptPrincipalRows,
   withAggregateLock,
   withAutomatedFlowRunCapLock,
   withSkipLockedBatch,
 } from "./aggregate-lock";
+
+test("case-law republication coordination preserves shared and exclusive modes", async () => {
+  const dialect = new PgDialect();
+  const statements: string[] = [];
+  const transaction = () => ({
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement).sql);
+      return aggregateExecutionRows(statement);
+    },
+  });
+  await lockCaseLawRepublication({ tx: transaction(), mode: "shared" });
+  await lockCaseLawRepublication({ tx: transaction(), mode: "exclusive" });
+  expect(statements.at(0)).toContain("pg_advisory_xact_lock_shared");
+  expect(statements.at(1)).toContain("pg_advisory_xact_lock(");
+  expect(statements.at(1)).not.toContain("pg_advisory_xact_lock_shared");
+});
 
 test("the flow cap owner opens one transaction and awaits its fence before running the decision", async () => {
   const events: string[] = [];

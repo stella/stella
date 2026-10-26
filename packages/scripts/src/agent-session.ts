@@ -57,12 +57,12 @@ import {
 import { buildStackScriptStep } from "./dev-runner";
 import {
   DEV_STATE_DIR,
+  type DevRuntime,
   devStatePath,
   isPidAlive,
   readDevRuntime,
   SEAL_FILE,
   stackShutdownReason,
-  type DevRuntime,
 } from "./dev-runtime";
 
 const RUNNER_SCRIPT = "packages/scripts/src/dev-runner.ts";

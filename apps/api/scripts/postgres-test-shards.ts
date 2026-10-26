@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { partitionTestFiles, parseApiTestShard } from "./test-file-shards";
+import { parseApiTestShard, partitionTestFiles } from "./test-file-shards";
 
 // Three shards: each hosted runner is a slot in a shared job pool, and the
 // suites outgrew two 480 s shards. Three keep every shard inside the budget,

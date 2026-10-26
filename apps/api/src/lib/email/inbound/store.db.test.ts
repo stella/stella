@@ -21,9 +21,10 @@ import type {
 } from "@/api/lib/email/inbound/ingest";
 import { InboundPersistenceError } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailStore } from "@/api/lib/email/inbound/store";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
-  openGatedTestDatabase,
   type GatedTestDb,
+  openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -214,6 +215,14 @@ if (!databaseUrl || !runPostgresTests) {
           createdAt: new Date(),
         },
       ]);
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgA,
+        now: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId: orgB,
+        now: new Date(),
+      });
       await db.insert(member).values([
         {
           id: mintAuthProviderIdValue(),

@@ -242,8 +242,7 @@ export const AICellSourceCard = ({
 type CellFlagProvenanceRowProps = {
   flagId: string;
   provenance:
-    | NonNullable<WorkspaceCellMetadata["flagProvenance"]>[string]
-    | undefined;
+    NonNullable<WorkspaceCellMetadata["flagProvenance"]>[string] | undefined;
 };
 
 const CellFlagProvenanceRow = ({

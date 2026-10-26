@@ -4,7 +4,7 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
@@ -36,7 +36,7 @@ export const useCreateViewTemplate = () => {
       const response = await api["view-templates"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       }).put(body, request);
-      return { data: unwrapEden(response), workspaceId };
+      return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
       detached(
@@ -47,7 +47,10 @@ export const useCreateViewTemplate = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateViewTemplate:failure",
+        scope: { type: "handler", handlerId: "useCreateViewTemplate:failure" },
+      });
     },
   });
 };
@@ -76,7 +79,7 @@ export const useDeleteViewTemplate = () => {
       })({
         templateId: toSafeId<"workspaceViewTemplate">(templateId),
       }).delete();
-      return { data: unwrapEden(response), workspaceId };
+      return { data: unwrapApiResponse(response), workspaceId };
     },
     onSuccess: () => {
       detached(
@@ -87,7 +90,10 @@ export const useDeleteViewTemplate = () => {
       );
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteViewTemplate:failure",
+        scope: { type: "handler", handlerId: "useDeleteViewTemplate:failure" },
+      });
     },
   });
 };

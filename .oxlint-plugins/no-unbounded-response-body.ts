@@ -39,8 +39,8 @@
 // `<output>.Body`. Native Bun S3 handles are confined by
 // `no-native-s3-object-read`.
 //
-// Not reported: `Request` bodies and Elysia `t.File()` uploads (bounded by the
-// route schema's `maxSize`), `Bun.file(...)` reads, `new Response(stream)`
+// Not reported: `Request` bodies and `fileSchema()` uploads (bounded by the
+// route schema's `v.maxSize`), `Bun.file(...)` reads, `new Response(stream)`
 // wrappers around local subprocess output, and any receiver whose provenance
 // is not visible in the file. The modules that implement the bounded readers
 // are excluded in `oxlint.config.ts`.

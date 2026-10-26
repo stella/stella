@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
@@ -22,17 +21,17 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
-const bodySchema = t.Object({
-  listId: tSafeId("legalList"),
-  runId: tSafeId("legalListGenerationRun"),
-  candidateId: tSafeId("legalListGenerationCandidate"),
-  sectionId: t.Optional(tSafeId("legalListSection")),
+const bodySchema = v.object({
+  listId: resourceIdSchema("legalList"),
+  runId: resourceIdSchema("legalListGenerationRun"),
+  candidateId: resourceIdSchema("legalListGenerationCandidate"),
+  sectionId: v.optional(resourceIdSchema("legalListSection")),
 });
 const config = {
   contract: "patch",
@@ -57,7 +56,7 @@ const config = {
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-type AcceptanceBody = Static<typeof bodySchema>;
+type AcceptanceBody = v.InferOutput<typeof bodySchema>;
 
 /** Candidate source ids are unique uuids, so byte order is a total order. */
 const byCandidateSourceId = (

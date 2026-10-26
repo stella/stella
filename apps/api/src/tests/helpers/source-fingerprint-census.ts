@@ -12,6 +12,8 @@
  * suite using this restores the original in an `afterEach`.
  */
 
+import { sha256Hex } from "@stll/sha256/node";
+
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
@@ -30,6 +32,7 @@ import {
   czRegionalFixture,
   czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
@@ -45,7 +48,6 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 /** One way of building a decision of a source, named for the baseline key. */
@@ -176,7 +178,27 @@ export type FingerprintCensusRow = {
   /** `<registration>::<driver>`; no line numbers, so it survives edits. */
   readonly key: string;
   readonly finding: FingerprintFinding;
+  /** Adapter fingerprint persisted and compared by ingestion. */
+  readonly fingerprint: string;
+  /** Stable identity of the stored fields, independent of the fingerprint implementation. */
+  readonly storedInputIdentity: string;
 };
+
+const storedInputIdentity = ({
+  sourceRaw,
+  sourceRawObjects,
+}: {
+  readonly sourceRaw: string;
+  readonly sourceRawObjects?: IngestionResult["sourceRawObjects"];
+}): string =>
+  sha256Hex(
+    JSON.stringify([
+      sourceRaw,
+      ...Object.values(sourceRawObjects ?? {}).map(({ bytes }) =>
+        sha256Hex(bytes),
+      ),
+    ]),
+  );
 
 /** Every driver of every registration, with what its decision's hash covers. */
 export const sourceFingerprintCensus = async (): Promise<
@@ -189,9 +211,18 @@ export const sourceFingerprintCensus = async (): Promise<
     for (const { name, fixture } of drivers) {
       // Sequential: fixtures replace the shared fetch while they build.
       const decision = await fixture().buildDecision();
+      const envelope = emittedEnvelope(decision);
       rows.push({
         key: `${registration}::${name}`,
         finding: fingerprintFinding(decision),
+        fingerprint: decision.rawHash,
+        storedInputIdentity:
+          envelope === undefined
+            ? sha256Hex(decision.rawHash)
+            : storedInputIdentity({
+                sourceRaw: envelope,
+                sourceRawObjects: decision.sourceRawObjects,
+              }),
       });
     }
   }

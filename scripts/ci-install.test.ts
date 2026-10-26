@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
-  mkdirSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";

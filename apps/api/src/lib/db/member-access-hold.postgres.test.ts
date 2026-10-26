@@ -5,7 +5,13 @@ import { eq, sql } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
-import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  contacts,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -14,8 +20,8 @@ import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import {
-  withGatedTestClients,
   type GatedTestDb,
+  withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -44,6 +50,10 @@ const seedMember = async (db: GatedTestDb) => {
     { id: userId, name: "Member", email: `member-${suffix}@example.test` },
     { id: ownerId, name: "Owner", email: `owner-${suffix}@example.test` },
   ]);
+  await db.insert(organizationAccessStates).values({
+    organizationId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+  });
   await db.insert(member).values([
     {
       id: memberId,

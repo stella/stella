@@ -1,6 +1,8 @@
-import { describe, expect, jest, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 
-import { UploadQueue } from "@/lib/upload-queue";
+import { APIError } from "@/lib/errors/api";
+import { EmptyUploadFileError } from "@/lib/files/upload-file-validation";
+import { uploadFailureDisposition, UploadQueue } from "@/lib/upload-queue";
 
 /**
  * Tests for the concurrent upload state machine. The state map these
@@ -16,8 +18,8 @@ import { UploadQueue } from "@/lib/upload-queue";
  *   done ──enqueue──▶ running                 (fresh batch)
  *
  * Per-file outcome inside a batch is completed | failed | retrying(transient).
- * Retryable = HTTP >= 500 or status 0 (network); 429 = rate-limit; other
- * 4xx or exhausted retries = permanent failure.
+ * Structured server, timeout and network failures are retryable; 429 parks
+ * the queue. Client rejections and local validation failures are permanent.
  */
 
 // A single microtask flush cannot cover the module's multi-await retry
@@ -32,16 +34,15 @@ const makeFile = (name: string) =>
   new File(["x"], name, { type: "text/plain" });
 const makeFiles = (...names: string[]) => names.map(makeFile);
 
-const httpError = (status: number): Error & { status: number } =>
-  Object.assign(new Error(`HTTP ${status}`), { status });
+const httpError = (status: number) =>
+  new APIError({ status, message: `HTTP ${String(status)}` });
 
 const rateLimitError = (retryAfterS?: number) => {
   const headers = new Headers();
   if (retryAfterS !== undefined) {
     headers.set("Retry-After", String(retryAfterS));
   }
-  return Object.assign(new Error("HTTP 429"), {
-    status: 429,
+  return Object.assign(new APIError({ status: 429, message: "HTTP 429" }), {
     response: new Response(null, { status: 429, headers }),
   });
 };
@@ -150,6 +151,23 @@ class ScriptedUploader {
   }
 }
 
+afterEach(() => jest.useRealTimers());
+
+const exhaustUploadRetries = async (
+  uploader: ScriptedUploader,
+  name: string,
+) => {
+  jest.useFakeTimers();
+  for (const delay of [1000, 2000, 4000]) {
+    uploader.rejectFile(name, httpError(408));
+    await flush();
+    jest.advanceTimersByTime(delay);
+    await flush();
+  }
+  uploader.rejectFile(name, httpError(408));
+  await flush();
+};
+
 type DoneEvent = {
   completed: string[];
   failed: { file: File; error: Error }[];
@@ -177,6 +195,31 @@ const harness = (uploader: ScriptedUploader, concurrency: number) => {
   });
   return { queue, doneEvents, states, progress, rateLimited };
 };
+
+test("a local empty-file rejection fails once without automatic or manual retry", async () => {
+  jest.useFakeTimers();
+  const uploader = new ScriptedUploader();
+  const { queue, doneEvents } = harness(uploader, 1);
+  try {
+    queue.enqueue(makeFiles("empty.pdf"));
+    uploader.rejectFile(
+      "empty.pdf",
+      new EmptyUploadFileError({ message: "The file is empty." }),
+    );
+    await flush();
+
+    expect(queue.getState()).toBe("done");
+    expect(doneEvents).toHaveLength(1);
+    expect(queue.getFailedFiles().at(0)?.disposition).toBe("permanent");
+    queue.retryFailed();
+    jest.advanceTimersByTime(10_000);
+    await flush();
+    expect(uploader.callCount("empty.pdf")).toBe(1);
+  } finally {
+    queue.cancel();
+    jest.useRealTimers();
+  }
+});
 
 describe("terminal state is reached exactly once", () => {
   test("a clean batch classifies every file as completed and fires done once", async () => {
@@ -274,38 +317,51 @@ describe("no double upload", () => {
     expect(uploader.sawConcurrentDoubleUpload).toBe(false);
   });
 
-  test("a retried file runs its next attempt only after the previous settles", async () => {
-    jest.useFakeTimers();
-    try {
-      const uploader = new ScriptedUploader();
-      const { queue, doneEvents } = harness(uploader, 2);
+  test.each([
+    { kind: "server", failure: httpError(500) },
+    { kind: "network", failure: new TypeError("network unavailable") },
+    {
+      kind: "storage server",
+      failure: Object.assign(new Error("S3 unavailable"), {
+        response: new Response(null, { status: 503 }),
+      }),
+    },
+    { kind: "timeout", failure: new DOMException("timed out", "TimeoutError") },
+  ])(
+    "a $kind failure retries only after its previous attempt settles",
+    async ({ failure }) => {
+      jest.useFakeTimers();
+      try {
+        const uploader = new ScriptedUploader();
+        const { queue, doneEvents } = harness(uploader, 2);
 
-      queue.enqueue(makeFiles("flaky"));
-      await flush();
-      expect(uploader.callCount("flaky")).toBe(1);
+        queue.enqueue(makeFiles("flaky"));
+        await flush();
+        expect(uploader.callCount("flaky")).toBe(1);
 
-      uploader.rejectFile("flaky", httpError(500)); // retryable
-      await flush();
-      // Still in backoff: no second attempt yet, nothing in flight.
-      expect(uploader.callCount("flaky")).toBe(1);
-      expect(uploader.active).toBe(0);
+        uploader.rejectFile("flaky", failure);
+        await flush();
+        // Still in backoff: no second attempt yet, nothing in flight.
+        expect(uploader.callCount("flaky")).toBe(1);
+        expect(uploader.active).toBe(0);
 
-      jest.advanceTimersByTime(1000); // RETRY_BACKOFF_MS[0]
-      await flush();
-      expect(uploader.callCount("flaky")).toBe(2);
-      expect(uploader.active).toBe(1);
+        jest.advanceTimersByTime(1000); // RETRY_BACKOFF_MS[0]
+        await flush();
+        expect(uploader.callCount("flaky")).toBe(2);
+        expect(uploader.active).toBe(1);
 
-      uploader.resolveFile("flaky");
-      await flush();
+        uploader.resolveFile("flaky");
+        await flush();
 
-      expect(queue.getState()).toBe("done");
-      expect(doneEvents).toHaveLength(1);
-      expect(doneEvents[0]!.completed).toHaveLength(1);
-      expect(uploader.sawConcurrentDoubleUpload).toBe(false);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
+        expect(queue.getState()).toBe("done");
+        expect(doneEvents).toHaveLength(1);
+        expect(doneEvents.at(0)?.completed).toHaveLength(1);
+        expect(uploader.sawConcurrentDoubleUpload).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
 
   test("retries are exhausted after MAX_RETRIES then the file fails", async () => {
     jest.useFakeTimers();
@@ -471,34 +527,55 @@ describe("rate limiting (429)", () => {
 });
 
 describe("retryFailed", () => {
-  test("re-runs only the failed files as a fresh batch", async () => {
+  test("re-runs only retryable failures as a fresh batch", async () => {
     const uploader = new ScriptedUploader();
     const { queue, doneEvents } = harness(uploader, 5);
 
-    queue.enqueue(makeFiles("keep", "drop"));
+    queue.enqueue(makeFiles("keep", "permanent", "retryable"));
     await flush();
     uploader.resolveFile("keep");
-    uploader.rejectFile("drop", httpError(400));
+    uploader.rejectFile("permanent", httpError(400));
+    await exhaustUploadRetries(uploader, "retryable");
     await flush();
     expect(doneEvents).toHaveLength(1);
-    expect(queue.getFailedFiles().map((f) => f.file.name)).toEqual(["drop"]);
+    expect(
+      queue
+        .getFailedFiles()
+        .map(({ file, disposition }) => [file.name, disposition]),
+    ).toEqual([
+      ["permanent", "permanent"],
+      ["retryable", "retryable"],
+    ]);
 
     queue.retryFailed();
     await flush();
-    // Only the previously failed file is re-uploaded; the completed one is not.
+    // Neither the completed nor permanently rejected file is re-uploaded.
     expect(uploader.callCount("keep")).toBe(1);
-    expect(uploader.callCount("drop")).toBe(2);
+    expect(uploader.callCount("permanent")).toBe(1);
+    expect(uploader.callCount("retryable")).toBe(5);
     // retryFailed starts a fresh batch scoped to the retried files: total and
     // completed are reset, so the new done reflects only this retry batch.
     expect(queue.getProgress().total).toBe(1);
 
-    uploader.resolveFile("drop");
+    uploader.resolveFile("retryable");
     await flush();
 
     expect(queue.getState()).toBe("done");
     expect(doneEvents).toHaveLength(2);
     expect(doneEvents[1]!.completed).toHaveLength(1);
     expect(doneEvents[1]!.failed).toHaveLength(0);
+  });
+
+  test("classifies structured HTTP, network, and timeout failures", () => {
+    expect(uploadFailureDisposition(httpError(400))).toBe("permanent");
+    expect(uploadFailureDisposition(httpError(429))).toBe("retryable");
+    expect(uploadFailureDisposition(httpError(503))).toBe("retryable");
+    expect(uploadFailureDisposition(new TypeError("network unavailable"))).toBe(
+      "retryable",
+    );
+    expect(
+      uploadFailureDisposition(new DOMException("timed out", "TimeoutError")),
+    ).toBe("retryable");
   });
 
   test("is ignored while a batch is still running", async () => {
@@ -696,8 +773,8 @@ describe("a stale retry does not leak across runs", () => {
       await flush();
       expect(uploader.active).toBe(2);
 
-      // Permanent failure: lands in `failed`, eligible for retryFailed().
-      uploader.rejectFile("badfile", httpError(400));
+      // Exhausted transient failure remains eligible for manual retry.
+      await exhaustUploadRetries(uploader, "badfile");
       await flush();
 
       // Retryable failure: frees its inflight slot and starts sleeping
@@ -797,8 +874,8 @@ describe("a stale retry does not leak across runs", () => {
       await flush();
       expect(uploader.active).toBe(2);
 
-      // Permanent failure: lands in `failed`, eligible for retryFailed().
-      uploader.rejectFile("badfile", httpError(400));
+      // Exhausted transient failure remains eligible for manual retry.
+      await exhaustUploadRetries(uploader, "badfile");
       await flush();
 
       // Retryable failure: frees its inflight slot and starts sleeping
@@ -876,8 +953,8 @@ describe("a stale in-flight settlement does not leak across runs", () => {
     await flush();
     expect(uploader.active).toBe(2);
 
-    // Permanent failure: lands in `failed`, eligible for retryFailed().
-    uploader.rejectFile("badfile", httpError(400));
+    // Exhausted transient failure remains eligible for manual retry.
+    await exhaustUploadRetries(uploader, "badfile");
     await flush();
 
     queue.cancel();
@@ -932,7 +1009,7 @@ describe("a stale in-flight settlement does not leak across runs", () => {
     await flush();
     expect(uploader.active).toBe(2);
 
-    uploader.rejectFile("badfile", httpError(400));
+    await exhaustUploadRetries(uploader, "badfile");
     await flush();
 
     queue.cancel();

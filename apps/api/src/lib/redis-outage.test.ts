@@ -16,7 +16,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 
@@ -34,7 +34,7 @@ describe("link icons during a Valkey outage", () => {
     let outboundRequests = 0;
     const result = await settle(
       cache.readOrLease({
-        hostname: "example.com",
+        hostname: toRegistrableIconSite("example.com").unwrap(),
         userId: toSafeId<"user">("outage-user"),
         ip: "192.0.2.1",
       }),
@@ -58,6 +58,8 @@ const { createRedisClient } = await import("@/api/lib/redis-client");
 const { chargeMcpReadBytes, closeMcpReadFenceRedis } =
   await import("@/api/lib/rate-limit/mcp-read-fence");
 const { toSafeId } = await import("@/api/lib/branded-types");
+const { toRegistrableIconSite } =
+  await import("@/api/handlers/chat/link-icons/origin");
 const { Result } = await import("better-result");
 const { RedisRateLimitContext } =
   await import("@/api/lib/rate-limit/redis-context");

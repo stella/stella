@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { aiMemories } from "@/api/db/schema";
 import { canManageMemory } from "@/api/handlers/memories/authorization";
@@ -8,31 +8,42 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { sanitizePersonMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  description:
+    "Change one assistant memory: accept a suggested memory (status " +
+    "active), retire it (status archived), pin or unpin it, or edit its " +
+    "content. Archiving is how a memory is removed; an archived memory must " +
+    "be set active again before its content can change. Firm-wide memory " +
+    "needs firm-memory permission, matter memory needs permission to update " +
+    "that active matter.",
   permissions: { chat: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
-  params: t.Object({ memoryId: tSafeId("aiMemory") }),
-  body: t.Object({
+  mcp: {
+    type: "capability",
+    confirmation: "required",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
+  realtime: noResourceSetUpdates(
+    "Memory mutation callers invalidate the caller-scoped memory queries after a successful write.",
+  ),
+  params: v.object({ memoryId: resourceIdSchema("aiMemory") }),
+  body: v.object({
     // Accept a suggestion (-> active) or dismiss/retire it (-> archived).
     // "suggested" and "stale" are machine-only transitions.
-    // Plain `t.Union` (not `t.UnionEnum`): an absent optional UnionEnum
-    // coerces to its first member ("active"), which would silently
-    // re-activate a memory on any PATCH that omits `status`. With
-    // `t.Union` an absent field stays `undefined`, and the handler's
-    // `status !== undefined` guards leave the persisted status unchanged.
-    status: t.Optional(t.Union([t.Literal("active"), t.Literal("archived")])),
-    pinned: t.Optional(t.Boolean()),
-    content: t.Optional(t.String({ minLength: 1, maxLength: 4000 })),
+    status: v.optional(v.picklist(["active", "archived"])),
+    pinned: v.optional(v.boolean()),
+    content: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(4000))),
   }),
 } satisfies HandlerConfig;
 

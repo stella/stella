@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -241,7 +242,9 @@ const createContext = ({
     organizationId,
     workspaceId: sourceWorkspaceId,
     userId,
-    request: new Request("https://example.test/v1/entities/copy-to-workspace"),
+    request: new Request(
+      `https://example.test/v1/entities/${sourceWorkspaceId}/copy-to-workspace`,
+    ),
     server: null,
   };
   const createBoundAuditRecorder: CopyToWorkspaceContext["createAuditRecorder"] =
@@ -267,7 +270,7 @@ const createContext = ({
       sourceFieldId,
     },
     request: sourceRecorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
+    route: "/v1/entities/:workspaceId/copy-to-workspace" satisfies ApiRoutePath,
     getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
       workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
     safeDb,
@@ -479,8 +482,8 @@ describe("copy-to-workspace", () => {
     // The bytes never travel through the API task.
     expect(requestKeys("GET")).toEqual([]);
 
-    // The extraction run that reads the copied PDF indexes it, so the copy
-    // carries no mark of its own; marking it too would index it twice.
+    // The copy is marked for immediate name indexing while extraction adds
+    // content independently to the same source-fenced projection.
     if (!copiedEntity) {
       throw new Error("Expected the copy to be inserted");
     }
@@ -488,7 +491,9 @@ describe("copy-to-workspace", () => {
     expect(enqueueDocumentProcessingRunMock.mock.calls).toEqual([
       [toSafeId<"documentProcessingRun">("run_0")],
     ]);
-    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([]);
+    expect(enqueueEntitySearchRepairsMock.mock.calls.at(0)?.at(1)).toEqual([
+      copiedEntity.id,
+    ]);
   });
 
   test("maps document type classifier fields by role before name fallback", async () => {

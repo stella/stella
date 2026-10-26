@@ -53,12 +53,16 @@ describe.serial("test failures remain observable", () => {
       "request().catch((error) => { throw error; });",
       'request().catch((error) => { expect(error.message).toBe("cancelled"); });',
     ];
-    for (const [index, source] of cases.entries()) {
-      const diagnostics = await lintSingleRule(RULE, source, {
-        plugin: PLUGIN,
-      });
-      expect(diagnostics.length, source).toBe(index < 8 ? 1 : 0);
-    }
+    const results = await Promise.all(
+      cases.map(async (source, index) => ({
+        label: source,
+        result: (await lintSingleRule(RULE, source, { plugin: PLUGIN })).length,
+        expected: index < 8 ? 1 : 0,
+      })),
+    );
+    expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+      results.map(({ label, expected }) => ({ label, result: expected })),
+    );
   });
 
   test("covers every application, package and script test/support shape", () => {

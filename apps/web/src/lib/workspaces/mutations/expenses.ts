@@ -4,7 +4,7 @@ import type { ExpenseCategory } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
@@ -41,10 +41,13 @@ export const useCreateExpense = () => {
           request,
         );
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateExpense:failure",
+        scope: { type: "handler", handlerId: "useCreateExpense:failure" },
+      });
     },
   });
 };
@@ -81,10 +84,13 @@ export const useUpdateExpense = () => {
           }),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useUpdateExpense:failure",
+        scope: { type: "handler", handlerId: "useUpdateExpense:failure" },
+      });
     },
   });
 };
@@ -105,10 +111,13 @@ export const useDeleteExpense = () => {
           id: toSafeId<"expense">(id),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useDeleteExpense:failure",
+        scope: { type: "handler", handlerId: "useDeleteExpense:failure" },
+      });
     },
   });
 };

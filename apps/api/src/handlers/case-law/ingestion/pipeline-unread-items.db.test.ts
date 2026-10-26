@@ -26,8 +26,8 @@ import { UNAVAILABLE_ITEMS_CONFIG_KEY } from "@/api/handlers/case-law/ingestion/
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   isReadRefusal,
@@ -38,7 +38,7 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { startFakeS3, type FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 

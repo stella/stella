@@ -27,7 +27,7 @@ describe("account creation origin", () => {
     ["/callback/microsoft", "social_registration"],
     ["/callback/:id", "social_registration"],
     ["/sign-up/email", "bootstrap_registration"],
-    ["/sign-in/social", "identity_token_sign_in"],
+    ["/sign-in/social", "social_registration"],
     [AGENT_IDENTITY_CREATE_USER_PATH, "agent_provisioning"],
     [REVIEW_ACCOUNT_CREATE_USER_PATH, "operator_command"],
   ] as const)("an account created through %s has origin %s", (path, origin) => {
@@ -98,7 +98,6 @@ describe("acceptance at creation", () => {
   }
 
   test.each([
-    ["/sign-in/social"],
     [AGENT_IDENTITY_CREATE_USER_PATH],
     [REVIEW_ACCOUNT_CREATE_USER_PATH],
   ])(
@@ -118,6 +117,21 @@ describe("acceptance at creation", () => {
       ).toEqual({ type: "required", reason: "statement_not_shown" });
     },
   );
+
+  test("a social creation reported at its initiating path reads the OAuth state", async () => {
+    expect(
+      await readCreationAcceptance(
+        { path: "/sign-in/social", body: {} },
+        async () => ({
+          [PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD]:
+            PROFESSIONAL_USE_STATEMENT_VERSION,
+        }),
+      ),
+    ).toEqual({
+      type: "accepted",
+      statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+    });
+  });
 
   const BASE_URL = "http://localhost:3001";
 

@@ -22,29 +22,29 @@ import {
   deletionCleanupRetryColumns,
 } from "./cleanup-ledgers";
 import {
-  ENTITY_KINDS,
-  SEARCH_PROJECTION_KINDS,
-  TEMPLATE_DELETION_CLEANUP_STATUSES,
   bytea,
+  ENTITY_KINDS,
   jsonb,
+  organization,
   organizationCheck,
   orgPolicies,
   orgReadOnlyPolicies,
-  organization,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
+  SEARCH_PROJECTION_KINDS,
   stella,
   storedFileScanState,
   storedFileScanStateCheck,
+  TEMPLATE_DELETION_CLEANUP_STATUSES,
+  timestamptz,
   tsvector,
   user,
   userOrganizationPolicies,
   wsOrganizationPolicies,
   wsOrganizationReadOnlyPolicies,
-  timestamptz,
 } from "./common";
 import type {
   AnyPgColumn,
@@ -54,7 +54,7 @@ import type {
   TemplateManifest,
 } from "./common";
 import { contacts, workspaces } from "./contacts";
-import { TEMPLATE_KINDS, entities, entityVersions, fields } from "./entities";
+import { entities, entityVersions, fields, TEMPLATE_KINDS } from "./entities";
 
 export const LOOKUP_FORMAT_PREFERENCE = {
   SAVED: "saved",
@@ -295,6 +295,10 @@ export const templates = p.pgTable(
     p.unique("templates_id_org_unq").on(table.id, table.organizationId),
     storedFileScanStateCheck("templates_scan_state_check", table.scanState),
     p.check(
+      "templates_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
+    ),
+    p.check(
       "templates_origin_type_values_check",
       sql`${table.originType} IN (${sql.join(TEMPLATE_ORIGIN_TYPE_SQL_VALUES, sql`, `)})`,
     ),
@@ -479,6 +483,10 @@ export const templateVersions = p.pgTable(
     storedFileScanStateCheck(
       "template_versions_scan_state_check",
       table.scanState,
+    ),
+    p.check(
+      "template_versions_s3_key_organization_check",
+      sql`starts_with(${table.s3Key}, ${table.organizationId} || '/')`,
     ),
     ...orgPolicies(),
   ],

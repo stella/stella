@@ -64,7 +64,7 @@ describe("canonicalDecisionDate", () => {
       const floor = decisionDateMinYear(jurisdiction);
       expect([jurisdiction, floor]).toEqual([
         jurisdiction,
-        jurisdiction === "USA" ? 1600 : 1800,
+        jurisdiction === "USA" || jurisdiction === "GBR" ? 1600 : 1800,
       ]);
       expect(
         canonicalDecisionDate(`${String(floor)}-01-01`, jurisdiction),

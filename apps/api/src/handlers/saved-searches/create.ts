@@ -119,7 +119,7 @@ const createSavedSearch = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(createSavedSearch.handler, {
+declareAggregateMutation(createSavedSearch, {
   type: "aggregate",
   aggregates: ["personalCatalog"],
 });

@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -181,6 +182,7 @@ const createRepository = (directory: string) => {
     GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z",
     GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z",
     PROOF_TEST_RESPONSES: responses,
+    PROOF_TEST_TARGET: "",
     GH_RETRY_SCRIPT: path.join(directory, "gh-retry.sh"),
   };
   const git = (...args: string[]) => {
@@ -192,11 +194,13 @@ const createRepository = (directory: string) => {
     return result.stdout.toString().trim();
   };
   git("init", "--quiet", "--initial-branch=main", "--template=");
+  mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
   writeFileSync(path.join(directory, "VERSION"), "1.2.2\n");
-  git("add", "VERSION");
+  writeFileSync(path.join(directory, "bun.lock"), "{}\n");
+  git("add", "VERSION", "bun.lock");
   const commit = (contents: string, message: string) => {
-    writeFileSync(path.join(directory, "release.txt"), contents);
-    git("add", "release.txt", "VERSION");
+    writeFileSync(path.join(directory, "docs/changelog/v1.2.3.md"), contents);
+    git("add", "docs/changelog/v1.2.3.md", "VERSION");
     git("commit", "--quiet", "--message", message);
     return git("rev-parse", "HEAD");
   };
@@ -209,6 +213,7 @@ const createRepository = (directory: string) => {
   git("checkout", "--quiet", "main");
   writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
   const target = commit("b", "squash release");
+  environment.PROOF_TEST_TARGET = target;
   git("update-ref", "refs/remotes/origin/main", target);
   const publishCommit = (sha: string) => {
     writeFileSync(
@@ -226,6 +231,7 @@ const createRepository = (directory: string) => {
     html_url: `https://github.com/${repository}/pull/1`,
     number: 1,
     title: "chore: release v1.2.3",
+    draft: false,
     state: "closed",
     merged_at: "2026-01-01T00:00:00Z",
     merge_commit_sha: target,
@@ -324,6 +330,40 @@ case "$endpoint" in
     else
       jq -c 'add // []' "$PROOF_TEST_RESPONSES/$sha-pulls"
     fi
+    ;;
+  query=*ReleaseCommitHistory*)
+    jq -nc \
+      --arg sha "$PROOF_TEST_TARGET" \
+      --slurpfile pulls "$PROOF_TEST_RESPONSES/$PROOF_TEST_TARGET-pulls" \
+      --slurpfile timeline "$PROOF_TEST_RESPONSES/timeline-1" \
+      --slurpfile runs "$PROOF_TEST_RESPONSES/$PROOF_TEST_TARGET-merge-group-runs" '
+      {
+        data: {
+          repository: {
+            c0: {
+              oid: $sha,
+              associatedPullRequests: {
+                pageInfo: {hasNextPage: false},
+                nodes: ($pulls[0][0] | map({
+                  number,
+                  title,
+                  url: .html_url,
+                  mergedAt: .merged_at,
+                  mergeCommit: {oid: .merge_commit_sha},
+                  timelineItems: $timeline[0].data.repository.pullRequest.timelineItems
+                }))
+              },
+              checkSuites: {
+                pageInfo: {hasNextPage: false, endCursor: null},
+                nodes: ($runs[0].workflow_runs | map({
+                  conclusion: (if .conclusion == "success" then "SUCCESS" else (.conclusion | ascii_upcase) end),
+                  workflowRun: {event, file: {path: ".github/workflows/ci.yml"}}
+                }))
+              }
+            }
+          }
+        }
+      }'
     ;;
   number=*)
     cat "$PROOF_TEST_RESPONSES/timeline-\${endpoint#number=}"
@@ -554,6 +594,27 @@ esac
 };
 
 describe("release proof trust boundary", () => {
+  // The proof resolves its release PR tree verifier beside itself, so a step
+  // that relocates the proof without it refuses every release PR head.
+  test("every step that relocates the proof relocates its tree verifier beside it", () => {
+    const workflows = path.join(import.meta.dir, "../.github/workflows");
+    const relocatedProof = /"\$RUNNER_TEMP\/verify-release-tree-proof\.sh"$/mu;
+    const relocatedVerifier =
+      /"\$RUNNER_TEMP\/verify-release-candidate-tree\.mjs"$/mu;
+    const missing = readdirSync(workflows)
+      .filter((file) => file.endsWith(".yml"))
+      .flatMap((file) =>
+        readFileSync(path.join(workflows, file), "utf-8")
+          .split("\n      - name: ")
+          .filter(
+            (step) =>
+              relocatedProof.test(step) && !relocatedVerifier.test(step),
+          )
+          .map((step) => `${file}: ${step.slice(0, step.indexOf("\n"))}`),
+      );
+    expect(missing).toEqual([]);
+  });
+
   test("accepts identical trees when the same repository verifies the squash parent and PR head", async () =>
     withRepository(({ git, proof, target, verify }) => {
       expect(proof).not.toBe(target);
@@ -767,7 +828,9 @@ describe("release proof trust boundary", () => {
         expect(verify(proof, proof, true).exitCode).toBe(0);
         expect(verify(proof, proof).exitCode).not.toBe(0);
         git("update-ref", "refs/remotes/origin/main", target);
-        expect(verify(proof, proof, true).exitCode).not.toBe(0);
+        const stale = verify(proof, proof, true);
+        expect(stale.exitCode).toBe(3);
+        expect(stale.stderr.toString()).toContain("RELEASE_TREE_PROOF_STALE");
       },
     ));
 });
@@ -828,6 +891,33 @@ describe("release health with reused proof", () => {
         expect(discoveredResult.stderr.toString()).toContain("missing");
       }),
   );
+
+  test("refuses a draft release PR as a candidate proof", async () =>
+    withRepository(
+      ({
+        base,
+        git,
+        mergedPullRequest,
+        proof,
+        publishPullRequests,
+        verify,
+      }) => {
+        publishPullRequests(proof, [
+          { ...mergedPullRequest, state: "open", merged_at: null },
+        ]);
+        git("update-ref", "refs/remotes/origin/main", base);
+        const ready = verify(proof, proof, true);
+        expect(ready.exitCode, ready.stderr.toString()).toBe(0);
+        publishPullRequests(proof, [
+          { ...mergedPullRequest, state: "open", merged_at: null, draft: true },
+        ]);
+        const draft = verify(proof, proof, true);
+        expect(draft.exitCode).not.toBe(0);
+        expect(draft.stderr.toString()).toContain(
+          "open release PR relation is unverified",
+        );
+      },
+    ));
 });
 
 describe("merge-group receipt in place of the heavy statuses", () => {

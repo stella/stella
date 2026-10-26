@@ -12,15 +12,15 @@ import {
   compareYearBuckets,
 } from "@/api/lib/case-law/decision-search-facets";
 import type {
-  CorpusIndexAggregations,
   CorpusIndexAggregateInput,
+  CorpusIndexAggregations,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import { DECISION_TIMESTAMP_FIELD } from "@/api/lib/legal-search/corpus-index-config";
 import {
+  type CorpusCourtYear,
   courtYearAggregation,
   parseCourtYearAggregation,
-  type CorpusCourtYear,
 } from "@/api/lib/legal-search/corpus-index-court-year";
 import { corpusExcludedSourcesClause } from "@/api/lib/legal-search/corpus-query";
 import { LIMITS } from "@/api/lib/limits";

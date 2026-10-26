@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -15,13 +15,13 @@ import {
   entityDeletionCleanupRequests,
   entityVersions,
   fields,
+  fileComparisonUploads,
   folioCollabRooms,
   pendingUploads,
   properties,
-  fileComparisonUploads,
   styleSets,
-  templateVersions,
   templates,
+  templateVersions,
   userFiles,
   workspaces,
 } from "@/api/db/schema";
@@ -34,12 +34,15 @@ import {
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntents,
 } from "@/api/lib/buffer-intent-reconciliation";
-import type { FileKey } from "@/api/lib/file-key";
+import {
+  createUserFileKey,
+  createUserFileThumbnailKey,
+  type FileKey,
+} from "@/api/lib/file-key";
 import {
   completeOrganizationDeletion,
   OrganizationStorageTeardownBoundError,
 } from "@/api/lib/organization-storage-teardown";
-import { testFileKey } from "@/api/tests/helpers/file-key";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -217,7 +220,11 @@ const seedChatAttachment = async ({
 }) => {
   const threadId = toSafeId<"chatThread">(uuid());
   const userFileId = toSafeId<"userFile">(uuid());
-  const s3Key = testFileKey(`${userId}/${userFileId}.pdf`);
+  const s3Key = createUserFileKey({
+    fileId: userFileId,
+    mimeType: PDF_MIME,
+    organizationId,
+  });
   await testDb.insert(chatThreads).values({
     id: threadId,
     organizationId,
@@ -541,7 +548,13 @@ beforeAll(async () => {
 
   fixture = {
     chatAttachmentKey: attachment.s3Key,
-    chatThumbnailKey: `${userId}/${chatThumbnailFileId}.webp`,
+    chatThumbnailKey:
+      createUserFileThumbnailKey({
+        sourceKey: attachment.s3Key,
+        thumbnailFileId: chatThumbnailFileId,
+        organizationId,
+        uploaderUserId: userId,
+      }) ?? panic("The chat attachment key must have an accepted owner"),
     checkpointKey: `${organizationId}/${firstWorkspaceId}/${checkpointFileId}.docx`,
     collabDocxKey: `${organizationId}/${secondWorkspaceId}/${collabDocxFileId}.docx`,
     collabSnapshotKey: `${organizationId}/${secondWorkspaceId}/${collabSnapshotFileId}.bin`,
@@ -634,7 +647,11 @@ const pageKeysMatchScope = ({
       ? key.startsWith(`${fixture.organizationId}/templates/`) ||
         key.startsWith(`${fixture.organizationId}/style-sets/`) ||
         key.startsWith(`${fixture.organizationId}/tmp/comparisons/`) ||
-        key.startsWith(`${fixture.userId}/`)
+        [
+          fixture.chatAttachmentKey,
+          fixture.chatThumbnailKey,
+          fixture.globalChatAttachmentKey,
+        ].includes(key)
       : key.startsWith(`${fixture.organizationId}/${workspaceId}/`) ||
         key.startsWith("tmp/"),
   );

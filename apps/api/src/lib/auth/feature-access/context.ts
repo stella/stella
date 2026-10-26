@@ -10,8 +10,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type {
-  FeatureAccessSnapshot,
   FeatureAccessDecision,
+  FeatureAccessSnapshot,
 } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";

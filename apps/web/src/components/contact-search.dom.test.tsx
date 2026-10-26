@@ -1,8 +1,11 @@
+import type { ComponentProps } from "react";
+
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import type { contactsOptions } from "@/lib/contacts/queries";
 import { toSafeId } from "@/lib/safe-id";
+import type { Workspace } from "@/lib/workspaces/types";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
@@ -29,11 +32,35 @@ const match = {
   createdAt: "2026-10-01T12:00:00.000Z",
   clientMatterCount: 0,
 } satisfies ContactListResponse["items"][number];
+const workspaceReads: URL[] = [];
+const northwind = {
+  id: toSafeId<"contact">("00000000-0000-4000-8000-000000000002"),
+  displayName: "Northwind Logistics s.r.o.",
+  type: "organization",
+  responsibleAttorneyName: null,
+} satisfies NonNullable<Workspace["client"]>;
+const eva = {
+  id: match.id,
+  displayName: match.displayName,
+  type: match.type,
+  responsibleAttorneyName: null,
+} satisfies NonNullable<Workspace["client"]>;
+// Only the fields the picker reads; personal matters (no client) are newest.
+const clientMatters = [
+  { client: null, lastActivityAt: "2026-10-26T08:00:00.000Z" },
+  { client: northwind, lastActivityAt: "2026-10-12T08:00:00.000Z" },
+  { client: eva, lastActivityAt: "2026-10-20T08:00:00.000Z" },
+  { client: eva, lastActivityAt: "2026-09-02T08:00:00.000Z" },
+] satisfies Pick<Workspace, "client" | "lastActivityAt">[];
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(new Request(input, init).url);
     if (url.pathname.endsWith("/mcp/connectors")) {
       return Response.json({ nativeTools: [], connectors: [] });
+    }
+    if (url.pathname.endsWith("/workspaces")) {
+      workspaceReads.push(url);
+      return Response.json({ workspaces: clientMatters });
     }
     if (
       !url.pathname.endsWith("/contacts") &&
@@ -61,7 +88,8 @@ const { default: messages } = await import("@/i18n/langs/en.json");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { ContactPicker } = await import("@/components/contact-picker");
+const { CONTACT_PICKER_SUGGESTIONS, ContactPicker } =
+  await import("@/components/contact-picker");
 const { Route } = await import("@/routes/_protected.contacts/index");
 const ContactsPage = () => {
   const Component = Route.options.component;
@@ -96,6 +124,7 @@ afterEach(() => {
   }
   clients.length = 0;
   reads.length = 0;
+  workspaceReads.length = 0;
   failing = true;
   empty = false;
   heldRead = undefined;
@@ -107,7 +136,17 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const mount = async (picker = false, locale: "en" | "ar" = "en") => {
+/** `false` mounts the contacts page; props mount a bare picker. */
+type MountTarget =
+  | false
+  | Partial<
+      Pick<ComponentProps<typeof ContactPicker>, "onSelect" | "suggestions">
+    >;
+
+const mount = async (
+  picker: MountTarget = false,
+  locale: "en" | "ar" = "en",
+) => {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: 1, retryDelay: 0, staleTime: Infinity },
@@ -129,6 +168,7 @@ const mount = async (picker = false, locale: "en" | "ar" = "en") => {
           <ContactPicker
             onCreate={() => undefined}
             onSelect={() => undefined}
+            {...picker}
           />
         )
       : ContactsPage,
@@ -251,7 +291,7 @@ test("contacts failed refresh retains authoritative rows with recovery", async (
 });
 
 test("picker failed search hides creation and recovers matches while retaining failed refresh data", async () => {
-  const client = await mount(true);
+  const client = await mount({});
   const input = testing.screen.getByRole("combobox");
   if (!(input instanceof HTMLInputElement)) {
     throw new TypeError("Expected contact search input");
@@ -301,7 +341,7 @@ test("contacts initial failed read offers retry rather than first use", async ()
 test("picker pending read hides creation and only successful absence is empty", async () => {
   const pending = Promise.withResolvers<Response>();
   heldRead = pending;
-  await mount(true);
+  await mount({});
   const input = testing.screen.getByRole("combobox");
   if (!(input instanceof HTMLInputElement)) {
     throw new TypeError("Expected contact search input");
@@ -369,7 +409,7 @@ test("successful empty contact reads retain recovery after a failed refresh", as
 test("picker successful empty search hides creation after failed refresh", async () => {
   failing = false;
   empty = true;
-  const client = await mount(true);
+  const client = await mount({});
   const input = testing.screen.getByRole("combobox");
   if (!(input instanceof HTMLInputElement)) {
     throw new TypeError("Expected contact search input");
@@ -389,4 +429,57 @@ test("picker successful empty search hides creation after failed refresh", async
   });
   await expectReadError();
   expect(testing.screen.queryAllByRole("option")).toHaveLength(0);
+  // Without opting in, the picker never reads the matter list.
+  expect(workspaceReads).toHaveLength(0);
+});
+
+test("client picker lists recent clients before typing and searches once typed", async () => {
+  failing = false;
+  const selected: string[] = [];
+  await mount({
+    onSelect: (contact) => {
+      selected.push(contact.id);
+    },
+    suggestions: CONTACT_PICKER_SUGGESTIONS.recentClients,
+  });
+  const input = testing.screen.getByRole("combobox");
+  if (!(input instanceof HTMLInputElement)) {
+    throw new TypeError("Expected contact search input");
+  }
+  testing.act(() => input.focus());
+  testing.fireEvent.keyDown(input, { key: "ArrowDown" });
+  await testing.waitFor(() =>
+    expect(testing.screen.getAllByRole("option")).toHaveLength(2),
+  );
+  expect(
+    testing.screen.getByText(messages.workspaces.parties.recentClients),
+  ).toBeTruthy();
+  const [first, second] = testing.screen.getAllByRole("option");
+  if (first === undefined || second === undefined) {
+    throw new TypeError("Expected two suggested clients");
+  }
+  expect(testing.within(first).getByText(eva.displayName)).toBeTruthy();
+  expect(testing.within(first).getByText("2 matters")).toBeTruthy();
+  expect(testing.within(second).getByText(northwind.displayName)).toBeTruthy();
+  expect(testing.within(second).getByText("1 matter")).toBeTruthy();
+  expect(workspaceReads).toHaveLength(1);
+  expect(reads).toHaveLength(0);
+
+  testing.fireEvent.click(second);
+  await testing.waitFor(() => expect(selected).toEqual([northwind.id]));
+
+  await typeSearch(input);
+  await testing.waitFor(() =>
+    expect(testing.screen.getByText(match.displayName)).toBeTruthy(),
+  );
+  expect(
+    testing.screen.queryByText(messages.workspaces.parties.recentClients),
+  ).toBeNull();
+  expect(
+    reads.some(
+      (url) =>
+        url.pathname.endsWith("/contacts/search") &&
+        url.searchParams.get("q") === "Eva",
+    ),
+  ).toBe(true);
 });

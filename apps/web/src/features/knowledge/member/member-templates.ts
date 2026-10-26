@@ -39,7 +39,7 @@ const useTemplates = (
     templateCategoriesOptions(organizationId),
   );
   const categoriesDataView = useQueryView(categoriesDataQuery);
-  useQueryViewError(categoriesDataView);
+  useQueryViewError(categoriesDataView, "useTemplates:query");
   const categoriesData =
     categoriesDataView.type === "items" ? categoriesDataView.items : undefined;
 

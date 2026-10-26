@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
 import {
@@ -58,7 +59,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
@@ -177,7 +178,7 @@ type AnonymizationFacetProps = {
    * tab. Inactive document tabs stay mounted (just hidden), so
    * without this gate every parked Anonymization facet would
    * keep the global active counter bumped and the worker
-   * heartbeat firing even after the user switched away.
+   * detection running even after the user switched away.
    * Sidepeek leaves this defaulted (always visible).
    */
   isVisible?: boolean;
@@ -207,7 +208,7 @@ export const AnonymizationFacet = ({
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const termsQueryView = useQueryView(termsQuery);
-  useQueryViewError(termsQueryView);
+  useQueryViewError(termsQueryView, "AnonymizationFacet:query");
   const createMutation = useIdempotentMutation({
     mutationFn: async (
       vars: {
@@ -244,7 +245,7 @@ export const AnonymizationFacet = ({
       // a try/catch that captures and toasts, so a handler here would report
       // the same failure twice. `deleteMutation` below is fire-and-forget and
       // keeps its handler for that reason.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
   const deleteMutation = useMutation({
@@ -261,7 +262,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure" },
+      });
     },
   });
 
@@ -393,7 +397,13 @@ export const AnonymizationFacet = ({
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet.addTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.addTerm:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     }
   };
@@ -409,7 +419,7 @@ export const AnonymizationFacet = ({
     enabled: activeFieldId !== null,
   });
   const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  useQueryViewError(allowlistQueryView, "AnonymizationFacet:query-2");
   const allowlistEntries = allowlistQuery.data?.entries;
   const matchesReady =
     pipelineStatus === "ready" &&
@@ -439,10 +449,13 @@ export const AnonymizationFacet = ({
           },
           request,
         );
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-2",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-2" },
+      });
     },
   });
   const deleteAllowlistMutation = useMutation({
@@ -458,7 +471,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-3",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-3" },
+      });
     },
   });
   // Restrict the visible workspace vocabulary to entries whose
@@ -491,6 +507,12 @@ export const AnonymizationFacet = ({
     if (!activeFieldId || !canDownloadAnonymized) {
       return;
     }
+    // Fail closed: when the open document changed since its last detection,
+    // this starts detection for the current version and the facet leaves its
+    // ready state; the user downloads once that run lands.
+    if (!confirmAnonymizationDetectionCurrent(activeFieldId)) {
+      return;
+    }
     setDownloadStatus("running");
     const download = await Result.tryPromise(async () => {
       const { downloadAnonymizedFile } =
@@ -504,7 +526,13 @@ export const AnonymizationFacet = ({
     }).then((result) => (result.isErr() ? result : result.value));
     setDownloadStatus("idle");
     if (download.isErr()) {
-      analytics.captureError(download.error);
+      analytics.captureError(download.error, {
+        fingerprintKey: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        },
+      });
       notifyUserError(
         download.error,
         UnsupportedAnonymizedExportError.is(download.error)

@@ -42,7 +42,15 @@ jobs:
           PROOF_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          bash scripts/verify-release-tree-proof.sh --allow-pr-head "$GITHUB_REPOSITORY" "$PROOF_SHA" "$PROOF_SHA" >/dev/null
+          verified=0
+          bash scripts/verify-release-tree-proof.sh --allow-pr-head "$GITHUB_REPOSITORY" "$PROOF_SHA" "$PROOF_SHA" >/dev/null || verified=$?
+          if [[ "$verified" -eq 3 ]]; then
+            # Main moved past the release PR head; the merged version commit
+            # is proved after merge, so this head gets no early proof run.
+            echo "Skipped: main moved past release PR head $PROOF_SHA; the version commit is proved after merge." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          [[ "$verified" -eq 0 ]] || exit "$verified"
           for workflow in deploy-staging main-heavy; do
             case "$workflow" in
               deploy-staging) title="Staging release proof $PROOF_SHA" ;;

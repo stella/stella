@@ -1,19 +1,72 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
 
 import { isValidLinkIconImage } from "@/api/handlers/chat/link-icons/image";
-import { createLinkIconOrigin } from "@/api/handlers/chat/link-icons/origin";
+import {
+  createLinkIconOrigin,
+  toRegistrableIconSite,
+} from "@/api/handlers/chat/link-icons/origin";
+import type { LinkIconTarget } from "@/api/handlers/chat/link-icons/origin";
 import type { CacheableLinkIconOutcome } from "@/api/handlers/chat/link-icons/outcome";
 import { readLinkIcon } from "@/api/handlers/chat/link-icons/read";
 import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
+import { createHttpApp } from "@/api/http/app";
+import { responseCachePolicy } from "@/api/http/cache";
+import { routes } from "@/api/http/route";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { SafeOutboundFetchError } from "@/api/lib/safe-outbound-fetch";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const ICON_BYTES = Uint8Array.fromBase64(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=",
 );
+
+test("registrable sites share one fetch and invalid hosts never reach origin", async () => {
+  const outcomes = new Map<string, CacheableLinkIconOutcome>();
+  let requests = 0;
+  const cache = {
+    readOrLease: async ({ hostname }: { hostname: LinkIconTarget }) =>
+      outcomes.get(hostname.value) ??
+      ({ type: "lease", token: "lease" } as const),
+    store: async ({
+      hostname,
+      outcome,
+    }: {
+      hostname: LinkIconTarget;
+      outcome: CacheableLinkIconOutcome;
+    }) => {
+      outcomes.set(hostname.value, outcome);
+      return true;
+    },
+  };
+  const read = async (hostname: string) => {
+    const site = toRegistrableIconSite(hostname);
+    if (Result.isError(site)) {
+      return { type: "no-icon" } as const;
+    }
+    return await readLinkIcon({
+      hostname: site.value,
+      userId: toSafeId<"user">("site-user"),
+      ip: "192.0.2.2",
+      cache,
+      readOrigin: async () => {
+        requests += 1;
+        return { type: "no-icon" };
+      },
+    });
+  };
+
+  expect(await read("x.y.attacker.example")).toEqual({ type: "no-icon" });
+  expect(await read("attacker.example")).toEqual({ type: "no-icon" });
+  expect(requests).toBe(1);
+  for (const hostname of ["co.uk", "127.0.0.1", "localhost", "[::1]"]) {
+    expect(await read(hostname)).toEqual({ type: "no-icon" });
+  }
+  expect(requests).toBe(1);
+});
 
 for (const failure of ["timeout", "deadline", 503] as const) {
   test(`a ${failure} followed by a valid icon recovers without a negative cache entry`, async () => {
@@ -61,31 +114,41 @@ for (const failure of ["timeout", "deadline", 503] as const) {
       },
     } satisfies Parameters<typeof readLinkIcon>[0]["cache"];
     const permit = grantThirdPartyOutboundPermit();
-    const app = new Elysia().get("/icon", async ({ set }) =>
-      linkIconBody(
-        await readLinkIcon({
-          hostname: "example.com",
-          userId: toSafeId<"user">("retry-user"),
-          ip: "192.0.2.1",
-          cache,
-          readOrigin: async (hostname) => await origin(hostname, permit),
+    await using server = serveForTest(
+      createHttpApp({
+        routes: routes({
+          "/icon": {
+            GET: defineEndpoint.public({}, async ({ set }) =>
+              linkIconBody(
+                await readLinkIcon({
+                  hostname: toRegistrableIconSite("example.com").unwrap(),
+                  userId: toSafeId<"user">("retry-user"),
+                  ip: "192.0.2.1",
+                  cache,
+                  readOrigin: async (hostname) =>
+                    await origin(hostname, permit),
+                }),
+                set,
+              ),
+            ),
+          },
         }),
-        set,
-      ),
+        middleware: [responseCachePolicy, errorBoundary],
+      }),
     );
     const request = () => new Request("http://localhost/icon");
-    const first = await app.handle(request());
+    const first = await server.fetch(request());
     expect(await first.json()).toEqual({ type: "temporary" });
     expect(first.headers.get("cache-control")).toContain("no-store");
     expect(stored).toBeUndefined();
     expect(requests).toBe(1);
     // Pass the short lease while staying well inside the one-hour negative TTL.
     now = 11_000;
-    const recovered = await app.handle(request());
+    const recovered = await server.fetch(request());
     expect(recovered.headers.get("content-type")).toBe("image/png");
     expect(new Uint8Array(await recovered.arrayBuffer())).toEqual(ICON_BYTES);
     expect(requests).toBe(2);
-    const cached = await app.handle(request());
+    const cached = await server.fetch(request());
     expect(cached.headers.get("cache-control")).toContain("max-age=3600");
     expect(requests).toBe(2);
   });

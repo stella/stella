@@ -14,9 +14,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import { classifyCorpusHit } from "@/api/lib/legal-search/corpus-hit-disposition";
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type {
   CorpusIndexHit,
@@ -41,8 +41,8 @@ import {
   type CorpusIndexRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
-  type CorpusSearchOrder,
   corpusEngineSortBy,
+  type CorpusSearchOrder,
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import type { RankedHit, ScoredCandidate } from "@/api/lib/legal-search/rerank";

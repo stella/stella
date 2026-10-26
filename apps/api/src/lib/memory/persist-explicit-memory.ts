@@ -13,8 +13,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   ChatToolError,
-  HandlerError,
   ConcurrentModificationError,
+  HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { createMemoryDedupIdentity } from "@/api/lib/memory/memory-dedup";
 import type { MemoryDedupScope } from "@/api/lib/memory/memory-dedup";

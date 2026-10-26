@@ -7,9 +7,9 @@ import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
   buildScreeningIndex,
+  DEFAULT_CUTOFF,
   SANCTIONS_SOURCES,
   screen,
-  DEFAULT_CUTOFF,
 } from "@stll/sanctions";
 import type {
   SanctionsEntry,

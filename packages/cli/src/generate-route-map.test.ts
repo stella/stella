@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   classifyProp,
-  type PropSchema,
   generateRouteMap,
+  type PropSchema,
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
@@ -79,6 +79,16 @@ const leafEntries = (
   walk(node, []);
   return entries;
 };
+
+test("capability list exposes free-text search", () => {
+  const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
+  const list = findLeaf(tree, ["capability", "list"]);
+
+  expect(flagFor(list ?? errorSpec(), "--query")).toMatchObject({
+    kind: "string",
+    required: false,
+  });
+});
 
 const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
   spec.flags.find((f) => f.flag === flag);
@@ -332,6 +342,22 @@ describe("generateRouteMap: flag mapping (S3)", () => {
         prop: "kind",
         kind: "enum",
         enum: ["search", "decision", "statute"],
+        repeatable: false,
+      },
+    });
+  });
+
+  test("string literal unions without a stated type produce enum flags", () => {
+    const schema = {
+      anyOf: [{ const: "draft" }, { const: "approved" }],
+    } as const satisfies PropSchema;
+    expect(classifyProp("status", schema)).toEqual({
+      kind: "flag",
+      spec: {
+        flag: "--status",
+        prop: "status",
+        kind: "enum",
+        enum: ["draft", "approved"],
         repeatable: false,
       },
     });

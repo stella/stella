@@ -1,21 +1,21 @@
 import { panic, Result } from "better-result";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
+import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
-export const createMatterLinkBodySchema = t.Object({
-  decisionId: tSafeId("caseLawDecision"),
-  note: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+export const createMatterLinkBodySchema = v.object({
+  decisionId: resourceIdSchema("caseLawDecision"),
+  note: v.exactOptional(v.nullable(v.pipe(v.string(), v.maxLength(2000)))),
 });
 
-type CreateMatterLinkBody = Static<typeof createMatterLinkBodySchema>;
+type CreateMatterLinkBody = v.InferOutput<typeof createMatterLinkBodySchema>;
 
 type CreateMatterLinkProps = {
   scopedDb: ScopedDb;

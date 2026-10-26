@@ -4,10 +4,10 @@ import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
 import {
+  type AdmissionRedisClient,
   createAdmissionRedis,
   resolveAdmissionRedisClient,
   sendAdmissionRedisCommand,
-  type AdmissionRedisClient,
 } from "@/api/lib/admission-redis";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";

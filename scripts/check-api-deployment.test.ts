@@ -1,5 +1,11 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { afterAll, describe, expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -141,6 +147,8 @@ describe("API deployment health receipt", () => {
     const success = {
       WEB_SMOKE: "success",
       API_SMOKE: "success",
+      DEPLOYED_JOURNEYS: "success",
+      MOCK_JOURNEYS: "success",
       MCP_SMOKE: "success",
       CORPUS_PREFLIGHT: "success",
       CORPUS_SEARCH_WAIVED: "false",
@@ -149,7 +157,13 @@ describe("API deployment health receipt", () => {
     };
     const cases = [
       { outcomes: success, state: "success" },
-      ...["WEB_SMOKE", "API_SMOKE", "MCP_SMOKE"].flatMap((smoke) =>
+      ...[
+        "WEB_SMOKE",
+        "API_SMOKE",
+        "MCP_SMOKE",
+        "DEPLOYED_JOURNEYS",
+        "MOCK_JOURNEYS",
+      ].flatMap((smoke) =>
         ["failure", "skipped", ""].map((outcome) => ({
           outcomes: { ...success, [smoke]: outcome },
           state: "failure",
@@ -419,6 +433,7 @@ describe("API deployment health receipt", () => {
       "test:e2e:staging",
       "apps/api/src/scripts/post-deploy-smoke.ts",
       "apps/api/src/scripts/post-deploy-response-policy.ts",
+      "scripts/staging-wake.sh",
     ];
     const workflowsDir = new URL("../.github/workflows/", import.meta.url);
     const consumers: { run: string; env: Record<string, unknown> }[] = [];
@@ -445,7 +460,10 @@ describe("API deployment health receipt", () => {
     }
     // One source for the staging access value, so rotating it is one change.
     for (const { run, env } of consumers) {
-      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      // A readiness probe names its URL in the run or passes it to a script.
+      const probe =
+        run.includes("$STAGING_HEALTH_URL") || "STAGING_HEALTH_URL" in env;
+      const prefix = probe ? "" : "E2E_";
       expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
       expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
         `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
@@ -527,10 +545,13 @@ describe("API deployment health receipt", () => {
     expect(healthJob).toContain(
       "Start staging, then dispatch this workflow again.",
     );
-    expect(apiBuild).toContain("needs: [resolve, staging-health]");
-    expect(apiBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
-    expect(webBuild).toContain("needs: [resolve, staging-health]");
-    expect(webBuild).toContain("needs.staging-health.outputs.deploy == 'true'");
+    // A release candidate that found staging off deploys once staging-wake
+    // started it; the builds run after either job says deploy.
+    for (const build of [apiBuild, webBuild]) {
+      expect(build).toContain("needs: [resolve, staging-health, staging-wake]");
+      expect(build).toContain("needs.staging-health.outputs.deploy == 'true'");
+      expect(build).toContain("needs.staging-wake.outputs.deploy == 'true'");
+    }
     expect(apiBuild).toContain("cancel-in-progress: true");
     expect(webBuild).toContain("cancel-in-progress: true");
     expect(promoteJob).toContain("cancel-in-progress: false");
@@ -973,4 +994,374 @@ describe("API deployment health receipt", () => {
 
     expect(result).toEqual({ status: "stable", consecutiveMatches: 3 });
   });
+});
+
+describe("desktop release workflows", () => {
+  const script = path.resolve(import.meta.dir, "desktop-release-ref.sh");
+  const work = mkdtempSync(path.join(tmpdir(), "desktop-release-ref-"));
+  afterAll(() => rmSync(work, { recursive: true, force: true }));
+
+  // Stands in for scripts/gh-retry.sh: answers every API call with the
+  // fixture and records the arguments it was called with.
+  const stub = path.join(work, "gh-retry.sh");
+  writeFileSync(
+    stub,
+    `printf '%s\\n' "$*" >> "$CALLS"\nprintf '%s' "$ARTIFACTS"\n`,
+  );
+
+  type ResolveOptions = {
+    releaseInput?: string;
+    upstreamRunId?: string;
+    artifacts?: readonly string[];
+  };
+  const resolve = ({
+    releaseInput = "",
+    upstreamRunId = "",
+    artifacts = [],
+  }: ResolveOptions) => {
+    const calls = path.join(work, `calls-${crypto.randomUUID()}`);
+    writeFileSync(calls, "");
+    const result = Bun.spawnSync(
+      ["bash", script, releaseInput, upstreamRunId],
+      {
+        env: {
+          ...process.env,
+          ARTIFACTS: JSON.stringify({
+            total_count: artifacts.length,
+            artifacts: artifacts.map((name) => ({ name })),
+          }),
+          CALLS: calls,
+          GH_RETRY_SCRIPT: stub,
+          GITHUB_REPOSITORY: "stella/stella",
+        },
+      },
+    );
+    return {
+      exit: result.exitCode,
+      stdout: result.stdout.toString(),
+      stderr: result.stderr.toString(),
+      calls: readFileSync(calls, "utf-8"),
+    };
+  };
+
+  // What Release Artifacts uploads next to its manifest.
+  const releaseRunArtifacts = (tag: string) => [
+    "release-notes",
+    `release-manifest-${tag}`,
+    "web-build-report",
+  ];
+
+  describe("desktop release ref", () => {
+    test("a manual dispatch publishes the tag it names, without reading any run", () => {
+      const result = resolve({ releaseInput: "v1.2.3", upstreamRunId: "" });
+      expect(result).toMatchObject({ exit: 0, stdout: "v1.2.3\n", calls: "" });
+    });
+
+    // A tag-push run and a dispatched run look the same here on purpose: the
+    // dispatched run reports main as its branch, so only its manifest names
+    // the tag.
+    for (const [trigger, tag] of [
+      ["tag push", "v1.2.3"],
+      ["dispatched from main", "v1.2.4-rc.1"],
+    ] as const) {
+      test(`a Release Artifacts run started by ${trigger} publishes its manifest's tag`, () => {
+        const result = resolve({
+          upstreamRunId: "39945408543",
+          artifacts: releaseRunArtifacts(tag),
+        });
+        expect(result.exit).toBe(0);
+        expect(result.stdout).toBe(`${tag}\n`);
+        expect(result.calls).toBe(
+          "api repos/stella/stella/actions/runs/39945408543/artifacts?per_page=100\n",
+        );
+      });
+    }
+
+    test("refuses a run without exactly one release manifest", () => {
+      for (const [artifacts, manifests] of [
+        [["release-notes"], 0],
+        [["release-manifest-v1.2.3", "release-manifest-v1.2.4"], 2],
+      ] as const) {
+        const result = resolve({ upstreamRunId: "7", artifacts });
+        expect(result.exit, artifacts.join(",")).toBe(1);
+        expect(result.stdout).toBe("");
+        expect(result.stderr).toContain(
+          `has ${String(manifests)} release-manifest artifacts`,
+        );
+      }
+    });
+
+    test("refuses to run without an input or an upstream run id", () => {
+      for (const upstreamRunId of ["", "main", "7 8"]) {
+        const result = resolve({ upstreamRunId });
+        expect(result.exit, upstreamRunId).toBe(1);
+        expect(result.calls).toBe("");
+      }
+    });
+  });
+
+  describe("release workflows name runs by tag", () => {
+    const workflow = (file: string): Record<string, unknown> => {
+      const parsed: unknown = Bun.YAML.parse(
+        readFileSync(
+          new URL(`../.github/workflows/${file}`, import.meta.url),
+          "utf-8",
+        ),
+      );
+      expect(isRecord(parsed), file).toBe(true);
+      return isRecord(parsed) ? parsed : {};
+    };
+    const releaseDesktop = workflow("release-desktop.yml");
+    const release = workflow("release.yml");
+
+    test("Release Desktop App never reads the upstream run's branch", () => {
+      expect(JSON.stringify(releaseDesktop)).not.toContain(
+        "workflow_run.head_branch",
+      );
+      const jobs = isRecord(releaseDesktop["jobs"])
+        ? releaseDesktop["jobs"]
+        : {};
+      const resolveJob = isRecord(jobs["resolve"]) ? jobs["resolve"] : {};
+      const steps = Array.isArray(resolveJob["steps"])
+        ? resolveJob["steps"]
+        : [];
+      const resolveStep = steps.find(
+        (step: unknown) => isRecord(step) && step["id"] === "ref",
+      );
+      expect(isRecord(resolveStep) ? resolveStep["run"] : "").toContain(
+        'REF=$(bash scripts/desktop-release-ref.sh "$RELEASE_INPUT" "$UPSTREAM_RUN_ID")',
+      );
+    });
+
+    // retry.sh makes three attempts with 15 s and 45 s pauses; an uncached
+    // Windows install has taken up to 9 min, macOS about 30 s.
+    test("the install deadline leaves room for every retry on each runner OS", () => {
+      const jobs = isRecord(releaseDesktop["jobs"])
+        ? releaseDesktop["jobs"]
+        : {};
+      const build = isRecord(jobs["build"]) ? jobs["build"] : {};
+      const steps = Array.isArray(build["steps"]) ? build["steps"] : [];
+      const install = steps.find(
+        (step: unknown) =>
+          isRecord(step) && step["name"] === "Install dependencies",
+      );
+      expect(isRecord(install) ? install["timeout-minutes"] : undefined).toBe(
+        githubExpression("matrix.install_timeout_minutes"),
+      );
+      // The slowest measured uncached install per runner OS, in minutes.
+      const worstInstallMinutes: Record<string, number> = {
+        windows: 9,
+        macos: 0.5,
+      };
+      const strategy = isRecord(build["strategy"]) ? build["strategy"] : {};
+      const matrix = isRecord(strategy["matrix"]) ? strategy["matrix"] : {};
+      const legs = Array.isArray(matrix["include"]) ? matrix["include"] : [];
+      expect(
+        legs.map((leg) => (isRecord(leg) ? leg["os"] : undefined)),
+      ).toEqual(Object.keys(worstInstallMinutes));
+      for (const leg of legs) {
+        const os = isRecord(leg) ? String(leg["os"]) : "";
+        const deadline = isRecord(leg) ? leg["install_timeout_minutes"] : 0;
+        expect(
+          3 * (worstInstallMinutes[os] ?? Infinity) + (15 + 45) / 60,
+          os,
+        ).toBeLessThanOrEqual(Number(deadline));
+      }
+    });
+
+    // scripts/check-desktop-release-policy.sh matches runs by these names.
+    test("run names carry the tag on every trigger", () => {
+      expect(release["run-name"]).toBe(
+        `Release Artifacts ${githubExpression("github.event_name == 'workflow_dispatch' && inputs.release_ref || github.ref_name")}`,
+      );
+      expect(releaseDesktop["run-name"]).toBe(
+        `Desktop ${githubExpression("inputs.release_ref && format('Release Artifacts {0}', inputs.release_ref) || github.event.workflow_run.display_title")}`,
+      );
+      const policy = readFileSync(
+        path.resolve(import.meta.dir, "check-desktop-release-policy.sh"),
+        "utf-8",
+      );
+      expect(policy).toContain(`run_title="Release Artifacts \${newest_tag}"`);
+      expect(policy).toContain(
+        `run_title="Desktop Release Artifacts \${newest_tag}"`,
+      );
+    });
+  });
+});
+
+test("target-owned journeys require their harness before setup and execution", () => {
+  const requiredFiles = [
+    ".github/actions/user-journeys/action.yml",
+    "apps/web/e2e/playwright.journeys.config.ts",
+  ];
+  let guardedJobs = 0;
+  for (const file of ["user-journeys.yml", "deploy-staging.yml"]) {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    expect(isRecord(jobs)).toBe(true);
+    if (!isRecord(jobs)) {
+      continue;
+    }
+    for (const job of Object.values(jobs)) {
+      const rawSteps = isRecord(job) ? job["steps"] : undefined;
+      const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+      const journey = steps.findIndex(
+        (step) => step["uses"] === "./.github/actions/user-journeys",
+      );
+      if (journey === -1) {
+        continue;
+      }
+      guardedJobs += 1;
+      const guard = steps.findIndex(
+        (step) => step["name"] === "Require target journey harness",
+      );
+      const checkout = steps
+        .slice(0, journey)
+        .findLastIndex(
+          (step) =>
+            typeof step["uses"] === "string" &&
+            step["uses"].startsWith("actions/checkout@"),
+        );
+      const setup = steps.findIndex((step) => step["name"] === "Setup Bun");
+      expect(guard).toBeGreaterThan(checkout);
+      expect(checkout).toBeGreaterThanOrEqual(0);
+      expect(guard).toBeLessThan(setup);
+      expect(setup).toBeLessThan(journey);
+      const script = steps.at(guard)?.["run"];
+      expect(typeof script).toBe("string");
+      if (typeof script !== "string") {
+        continue;
+      }
+      for (const absent of [undefined, ...requiredFiles]) {
+        const directory = mkdtempSync(path.join(tmpdir(), "journey-harness-"));
+        try {
+          for (const required of requiredFiles) {
+            if (required !== absent) {
+              const target = path.join(directory, required);
+              mkdirSync(path.dirname(target), { recursive: true });
+              writeFileSync(target, "fixture");
+            }
+          }
+          const result = Bun.spawnSync(["bash", "-c", script], {
+            cwd: directory,
+          });
+          expect(result.exitCode).toBe(absent === undefined ? 0 : 1);
+          if (absent !== undefined) {
+            expect(new TextDecoder().decode(result.stdout)).toContain(absent);
+          }
+        } finally {
+          rmSync(directory, { recursive: true, force: true });
+        }
+      }
+    }
+  }
+  expect(guardedJobs).toBe(4);
+});
+
+test("journey reports upload from the directory the journey run writes", () => {
+  const action = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/actions/user-journeys/action.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const outputs = isRecord(action) ? action["outputs"] : undefined;
+  const reportPaths = isRecord(outputs) ? outputs["report-paths"] : undefined;
+  expect(isRecord(reportPaths) ? reportPaths["value"] : undefined).toBe(
+    githubExpression("steps.source.outputs.report-paths"),
+  );
+  const runs = isRecord(action) ? action["runs"] : undefined;
+  const rawSteps = isRecord(runs) ? runs["steps"] : undefined;
+  const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+  const run = steps.find((step) => step["name"] === "Run pinned journeys");
+  const runEnv = run?.["env"];
+  expect(isRecord(runEnv) ? runEnv["E2E_OUTPUT_DIR"] : undefined).toBe(
+    githubExpression("steps.source.outputs.output-dir"),
+  );
+  const config = readFileSync(
+    new URL("../apps/web/e2e/playwright.journeys.config.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(config).toContain('process.env["E2E_OUTPUT_DIR"]');
+  expect(config).toContain("outputDir: OUTPUT_DIR,");
+  expect(config).toContain(`outputFolder: \`\${OUTPUT_DIR}-report\``);
+
+  // The paths exist before the source check can fail, so a failed run's
+  // upload step always has something to name.
+  const source = steps.find((step) => step["id"] === "source")?.["run"];
+  expect(typeof source).toBe("string");
+  const directory = mkdtempSync(path.join(tmpdir(), "journey-output-"));
+  try {
+    const outputFile = path.join(directory, "github-output");
+    writeFileSync(outputFile, "");
+    const result = Bun.spawnSync(["bash", "-c", String(source)], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        EXPECTED_COMMIT: "not-a-commit",
+        GITHUB_OUTPUT: outputFile,
+        GITHUB_WORKSPACE: directory,
+        HEALTH_URL: "",
+        PROJECT: "local-stack",
+      },
+    });
+    expect(result.exitCode).toBe(1);
+    const written = readFileSync(outputFile, "utf-8");
+    const outputDir = path.join(
+      directory,
+      "apps/web/e2e/test-results/user-journeys-local-stack",
+    );
+    expect(written).toContain(`output-dir=${outputDir}\n`);
+    expect(written).toContain(
+      `report-paths<<REPORT_PATHS\n${outputDir}/\n${outputDir}-report/\nREPORT_PATHS\n`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+
+  let uploads = 0;
+  for (const file of ["user-journeys.yml", "deploy-staging.yml"]) {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    for (const job of Object.values(isRecord(jobs) ? jobs : {})) {
+      const jobSteps = isRecord(job) ? job["steps"] : undefined;
+      const all = (Array.isArray(jobSteps) ? jobSteps : []).filter(isRecord);
+      const journeyIds = all
+        .filter((step) => step["uses"] === "./.github/actions/user-journeys")
+        .map((step) => String(step["id"]));
+      if (journeyIds.length === 0) {
+        continue;
+      }
+      const upload = all.find(
+        (step) =>
+          typeof step["uses"] === "string" &&
+          step["uses"].startsWith("actions/upload-artifact@") &&
+          journeyIds.some((id) =>
+            String(step["if"]).includes(`steps.${id}.outcome`),
+          ),
+      );
+      const uploadWith = upload?.["with"];
+      const uploadPath = isRecord(uploadWith) ? String(uploadWith["path"]) : "";
+      for (const id of journeyIds) {
+        expect(uploadPath, `${file}: ${id} report upload`).toContain(
+          githubExpression(`steps.${id}.outputs.report-paths`),
+        );
+      }
+      expect(uploadPath, `${file}: hand-written report path`).not.toContain(
+        "test-results",
+      );
+      uploads += 1;
+    }
+  }
+  expect(uploads).toBe(4);
 });

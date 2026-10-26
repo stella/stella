@@ -4,9 +4,9 @@ import * as v from "valibot";
 import { SubprocessError } from "@/api/lib/errors/tagged-errors";
 import { OFFICE_EVIDENCE_LIMITS } from "@/api/lib/files/office-evidence-domain";
 import {
-  officeEvidenceWorkerResultSchema,
   type OfficeEvidenceFormat,
   type OfficeEvidenceWorkerResult,
+  officeEvidenceWorkerResultSchema,
 } from "@/api/lib/files/office-evidence-types";
 import {
   resolveRuntimeWorkerPath,
@@ -23,11 +23,13 @@ const WORKER_PATH = resolveRuntimeWorkerPath({
 export const extractOfficeEvidence = async (
   buffer: ArrayBuffer,
   format: OfficeEvidenceFormat,
+  signal?: AbortSignal,
 ): Promise<Result<OfficeEvidenceWorkerResult, SubprocessError>> => {
   const workerResult = await spawnBinaryWorker({
     args: [format],
     maxOutputBytes: OFFICE_EVIDENCE_LIMITS.workerOutputMaxBytes,
     stdin: new Blob([buffer]),
+    ...(signal === undefined ? {} : { signal }),
     timeoutMs: OFFICE_EVIDENCE_LIMITS.workerTimeoutMs,
     workerPath: WORKER_PATH,
   });

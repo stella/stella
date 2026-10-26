@@ -116,6 +116,10 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
       "no-direct-status-set(no-direct-status-set)",
       "no-direct-status-set/no-direct-status-set",
     ],
+    [
+      "require-polite-publisher-fetch(require-polite-publisher-fetch)",
+      "require-polite-publisher-fetch/require-polite-publisher-fetch",
+    ],
     ["eslint(complexity)", "eslint/complexity"],
     ["eslint(max-lines-per-function)", "eslint/max-lines-per-function"],
     ["eslint(max-params)", "eslint/max-params"],
@@ -130,6 +134,7 @@ test("a diagnostic code maps to its tracked rule for both plugin kinds", () => {
     "no-unbounded-response-body",
     "no-computed-key-record-assignment",
     "no-direct-status-set",
+    "require-polite-publisher-fetch",
     "eslint",
     "react",
   ]);

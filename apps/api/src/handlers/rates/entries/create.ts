@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { apiDateSchema } from "@stll/api-contract/api-date";
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -14,9 +14,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tMinorUnitAmount,
-  tSafeId,
-  tUserId,
+  minorUnitAmountSchema,
+  resourceIdSchema,
+  userIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -25,30 +25,17 @@ import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
-type LiteralSchemas<Values extends readonly string[]> = {
-  [Index in keyof Values]: ReturnType<typeof t.Literal<Values[Index]>>;
-};
-
-// A tuple preserves TypeBox's static union; the canonical role tuple binds its
-// membership and order so adding a role cannot silently omit its input schema.
-const roleSchemas = [
-  t.Literal("owner"),
-  t.Literal("admin"),
-  t.Literal("member"),
-  t.Literal("intern"),
-  t.Literal("external"),
-] satisfies LiteralSchemas<typeof ORGANIZATION_ROLE_NAMES>;
-
-const createRateEntryBodySchema = t.Object({
-  userId: t.Optional(t.Nullable(tUserId)),
-  role: t.Optional(t.Nullable(t.Union(roleSchemas))),
-  hourlyRate: tMinorUnitAmount(0),
-  effectiveFrom: t.String({ format: "date" }),
-  effectiveTo: t.Optional(t.Nullable(t.String({ format: "date" }))),
+const createRateEntryBodySchema = v.object({
+  userId: v.optional(v.nullable(userIdSchema)),
+  // The canonical role tuple, so adding a role cannot silently omit it here.
+  role: v.optional(v.nullable(v.picklist(ORGANIZATION_ROLE_NAMES))),
+  hourlyRate: minorUnitAmountSchema(0),
+  effectiveFrom: apiDateSchema,
+  effectiveTo: v.optional(v.nullable(apiDateSchema)),
 });
 
 const rateEntryParamsSchema = workspaceParams({
-  rateTableId: tSafeId("rateTable"),
+  rateTableId: resourceIdSchema("rateTable"),
 });
 
 export type CreateRateEntryHandlerProps = {
@@ -56,7 +43,7 @@ export type CreateRateEntryHandlerProps = {
   workspaceId: SafeId<"workspace">;
   session: { activeOrganizationId: SafeId<"organization"> };
   params: { rateTableId: SafeId<"rateTable"> };
-  body: Static<typeof createRateEntryBodySchema>;
+  body: v.InferOutput<typeof createRateEntryBodySchema>;
   recordAuditEvent: AuditRecorder;
 };
 

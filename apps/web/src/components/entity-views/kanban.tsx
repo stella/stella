@@ -10,11 +10,11 @@ import { UserText } from "@stll/ui/bidi-text";
 import {
   buildKanbanBoardMatrix,
   KANBAN_BOARD_AUTO_SCROLL_SOURCES,
-  registerKanbanBoardAutoScroll,
-  KanbanColumnHeader,
   type KanbanBoardCell,
+  KanbanColumnHeader,
   KanbanSubgroupBoard,
   KanbanVirtualCell,
+  registerKanbanBoardAutoScroll,
   resolveKanbanGrouping,
 } from "@stll/ui/kanban";
 import { cn } from "@stll/ui/utils";
@@ -29,14 +29,14 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayout } from "@/lib/types";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 import { invalidateTaskQueries } from "@/lib/workspaces/mutations/tasks";
 
-import { ENTITY_VIEW_GROUP, entryId, entryGroupValue } from "./model";
+import { ENTITY_VIEW_GROUP, entryGroupValue, entryId } from "./model";
 import { NewEntityViewTask } from "./new-task";
 import type { EntityViewRow, EntityViewScope } from "./types";
 import { useEntityViewGroupingSchema } from "./use-grouping-schema";
@@ -164,7 +164,7 @@ export const EntityViewKanban = ({
         workspaceId: toSafeId<"workspace">(entry.workspaceId),
       });
       if (entry.entity.status !== status) {
-        unwrapEden(
+        unwrapApiResponse(
           await taskApi.patch({ taskId: toSafeId<"entity">(entityId), status }),
         );
       }
@@ -173,7 +173,7 @@ export const EntityViewKanban = ({
         sourceLane !== undefined &&
         sourceLane !== targetLane
       ) {
-        unwrapEden(
+        unwrapApiResponse(
           await taskApi.assignees.move.post({
             taskId: toSafeId<"entity">(entityId),
             fromUserId:
@@ -184,7 +184,10 @@ export const EntityViewKanban = ({
       }
     });
     if (result.isErr()) {
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, {
+        fingerprintKey: "EntityViewKanban.move:failure",
+        scope: { type: "handler", handlerId: "EntityViewKanban.move:failure" },
+      });
       notifyUserError(result.error, t("common.unexpectedError"));
     }
     await invalidateTaskQueries({

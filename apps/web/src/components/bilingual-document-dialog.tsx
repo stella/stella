@@ -15,10 +15,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -35,7 +35,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
@@ -83,7 +83,7 @@ export const BilingualDocumentDialog = ({
       }).bilingual;
       const response = await submit.run({
         operation: `bilingual-create:${workspaceId}`,
-        send: async (body) => client.post(body),
+        send: (body, request) => client.post(body, request),
         body: {
           entityId: toSafeId<"entity">(entityId),
           fieldId: toSafeId<"field">(fieldId),
@@ -92,7 +92,7 @@ export const BilingualDocumentDialog = ({
           borders: "none",
         } satisfies Parameters<typeof client.post>[0],
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (data) => {
       stellaToast.add({
@@ -124,7 +124,13 @@ export const BilingualDocumentDialog = ({
       setOpen(false);
     },
     onError: (error: unknown) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "BilingualDocumentDialog:failure",
+        scope: {
+          type: "handler",
+          handlerId: "BilingualDocumentDialog:failure",
+        },
+      });
       notifyUserError(error, t("bilingual.error.title"), {
         description: userErrorFromThrown(error, t("errors.actionFailed")),
       });

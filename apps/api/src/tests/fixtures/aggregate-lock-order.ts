@@ -73,6 +73,10 @@ export const aggregateFences = () => {
       id: { id: definitionId, organizationId },
       mode: "update",
     },
+    caseLawRepublication: {
+      aggregate: "caseLawRepublication",
+      id: "global",
+    },
     legislationAmendmentWork: {
       aggregate: "legislationAmendmentWork",
       id: {
@@ -123,6 +127,14 @@ export const aggregateFences = () => {
       aggregate: "readerAnswer",
       id: { id: answerId, organizationId, userId },
       mode: "update",
+    },
+    readerAnnotation: {
+      aggregate: "readerAnnotation",
+      id: {
+        id: createSafeId<"legalReaderAnnotation">(),
+        organizationId,
+        userId,
+      },
     },
     readerAnswerMessage: {
       aggregate: "readerAnswerMessage",

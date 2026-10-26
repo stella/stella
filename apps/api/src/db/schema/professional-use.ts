@@ -9,6 +9,23 @@ import {
   user,
 } from "./common";
 
+export const PROFESSIONAL_USE_ACCEPTANCE_SOURCE = {
+  interactive: "interactive",
+  registration: "registration",
+  recordedBeforeProvenance: "recorded_before_provenance",
+  ownerBackfill20261022: "owner_backfill_2026_10_22",
+  /** Recorded by the operator command that provisions the review account. */
+  operatorProvisioning: "operator_provisioning",
+} as const;
+
+export const PROFESSIONAL_USE_ACCEPTANCE_SOURCES = [
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE.interactive,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE.registration,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE.ownerBackfill20261022,
+  PROFESSIONAL_USE_ACCEPTANCE_SOURCE.operatorProvisioning,
+] as const;
+
 const ownsUserAcceptances = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.user_professional_use_acceptances'::regclass)`;
 
 /**
@@ -27,8 +44,24 @@ export const userProfessionalUseAcceptances = p.pgTable(
     statementVersion: p.text("statement_version").notNull(),
     termsVersion: p.text("terms_version").notNull(),
     acceptedAt: timestamptz("accepted_at").notNull().defaultNow(),
+    /**
+     * How this acceptance was given or, for legacy rows, why that is unknown.
+     * The default only covers rows written before provenance existed and by
+     * the previous release during a rollout; every current writer names its
+     * source explicitly (enforced by the writer census test).
+     */
+    source: p
+      .text("source", { enum: PROFESSIONAL_USE_ACCEPTANCE_SOURCES })
+      .notNull()
+      .default(PROFESSIONAL_USE_ACCEPTANCE_SOURCE.recordedBeforeProvenance),
   },
   () => [
+    p.check(
+      "user_professional_use_acceptances_source_values",
+      sql.raw(
+        `source IN (${PROFESSIONAL_USE_ACCEPTANCE_SOURCES.map((source) => `'${source}'`).join(", ")})`,
+      ),
+    ),
     p.pgPolicy("user_professional_use_acceptances_owner_access", {
       for: "all",
       to: "public",

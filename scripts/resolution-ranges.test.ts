@@ -4,18 +4,18 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
-  runFixResolutionRanges,
   type RefreshLockfile,
+  runFixResolutionRanges,
 } from "./fix-resolution-ranges";
 import {
   analyzeResolutionRanges,
   applyOverridePins,
   collectDeclaredRanges,
+  type DeclaredRanges,
   inspectManifestChange,
   lockRangeSources,
   planResolutionRepairs,
   rangeFloor,
-  type DeclaredRanges,
   type ResolutionViolation,
 } from "./resolution-ranges";
 

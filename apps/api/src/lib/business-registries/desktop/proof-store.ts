@@ -6,8 +6,8 @@ import { Temporal } from "@stll/time";
 import { rootDb } from "@/api/db/root";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
 import {
-  VerifiedDesktopDeviceProof,
   deviceProofRefusal,
+  VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import {
   withAggregateTransaction,

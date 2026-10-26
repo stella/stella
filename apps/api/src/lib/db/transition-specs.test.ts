@@ -10,9 +10,9 @@ import {
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { permitsTransition } from "@/api/lib/db/transitions";
 import {
-  WORK_OBLIGATION_TRANSITIONS,
-  WORK_OBLIGATION_SOURCE_SETTLEMENT,
   reopenedWorkObligationStatus,
+  WORK_OBLIGATION_SOURCE_SETTLEMENT,
+  WORK_OBLIGATION_TRANSITIONS,
 } from "@/api/lib/work-obligations/transitions";
 
 test("obligation membership and lifecycle transitions share the declared graph", () => {

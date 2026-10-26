@@ -1,11 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import { Elysia } from "elysia";
-import type { ElysiaCustomStatusResponse } from "elysia";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteDefinition } from "@/api/http/route";
+import type { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import {
   ACCOUNT_ACCESS,
@@ -22,10 +24,11 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import {
-  currentActionCostIdentity,
   type ActionCostObservation,
+  currentActionCostIdentity,
 } from "@/api/lib/usage/action-costs/context";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -82,7 +85,7 @@ type ReplayWrappedResponseHandler = MustBeNever<
   Parameters<
     typeof createSafeRootHandler<
       typeof replayConfig,
-      ElysiaCustomStatusResponse<201, Response>
+      HttpStatusResponse<201, Response>
     >
   >[1]
 >;
@@ -136,7 +139,7 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 
 describe("finite HTTP action admission", () => {
   test.each([undefined, { type: "replay" } as const])(
-    "unkeyed calls run with or without HTTP transport and replay declaration %p",
+    "unkeyed calls execute independently with replay declaration %p",
     async (idempotency) => {
       let calls = 0;
       const endpoint = createSafeRootHandler(
@@ -152,12 +155,12 @@ describe("finite HTTP action admission", () => {
           return Result.ok({ call: calls });
         },
       );
-      const { request: _request, ...directContext } = context();
+      const requestContext = context();
 
-      expect(await endpoint.handler(asTestRaw(directContext))).toEqual({
+      expect(await endpoint.handler(asTestRaw(requestContext))).toEqual({
         call: 1,
       });
-      expect(await endpoint.handler(asTestRaw(directContext))).toEqual({
+      expect(await endpoint.handler(asTestRaw(requestContext))).toEqual({
         call: 2,
       });
       expect(await endpoint.handler(asTestRaw(context()))).toEqual({ call: 3 });
@@ -224,15 +227,27 @@ describe("finite HTTP action admission", () => {
             },
             { admit: async () => Result.err(refusal) },
           );
-          const app = new Elysia().post("/action", async ({ set }) => {
-            set.headers["access-control-allow-origin"] = "https://example.test";
-            set.headers["x-content-type-options"] = "nosniff";
-            set.headers["x-request-id"] = "request_example";
-            return await endpoint.handler(asTestRaw({ ...context(), set }));
-          });
-          const response = await app.handle(
-            new Request("http://localhost/action", { method: "POST" }),
+          const action: RouteDefinition = {
+            access: "public",
+            config: {},
+            run: async ({ ctx }) => {
+              const { set } = ctx;
+              set.headers["access-control-allow-origin"] =
+                "https://example.test";
+              set.headers["x-content-type-options"] = "nosniff";
+              set.headers["x-request-id"] = "request_example";
+              return await endpoint.handler(asTestRaw({ ...context(), set }));
+            },
+          };
+          await using server = serveForTest(
+            createHttpApp({
+              middleware: [],
+              routes: routes({ "/action": { POST: action } }),
+            }),
           );
+          const response = await server.fetch("http://localhost/action", {
+            method: "POST",
+          });
           expect(response.status).toBe(metadata.status);
           expect(response.headers.get("access-control-allow-origin")).toBe(
             "https://example.test",

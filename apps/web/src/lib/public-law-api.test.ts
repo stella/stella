@@ -1,27 +1,30 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
+  type PublicCountryCapabilities,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
-  PUBLIC_COUNTRY_CAPABILITIES,
-  type PublicCountryCapabilities,
 } from "@stll/api-contract/public-country-capability";
 
-import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
+import { APIError, shouldRetryAPIRequest } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawMiss,
   isSearchUnavailableError,
   PublicLawUnavailableError,
-  unwrapPublicLawEden,
+  unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
-import { createAppQueryClient } from "@/lib/react-query";
+import {
+  createAppQueryClient,
+  CriticalQueryTimeoutError,
+} from "@/lib/react-query";
 
 const thrownBy = (status: number, value: unknown): unknown => {
   try {
-    unwrapPublicLawEden(
+    unwrapPublicLawResponse(
       { data: null, error: { status, value } },
       "searchPublicCaseLawDecisions",
     );
@@ -31,17 +34,17 @@ const thrownBy = (status: number, value: unknown): unknown => {
   return null;
 };
 
-describe("unwrapPublicLawEden", () => {
+describe("unwrapPublicLawResponse", () => {
   test("returns the data of a successful response", () => {
     const data = { country: [], court: [], year: [] };
     expect(
-      unwrapPublicLawEden({ data, error: null }, "listPublicCaseLawFacets"),
+      unwrapPublicLawResponse({ data, error: null }, "listPublicCaseLawFacets"),
     ).toBe(data);
   });
 
   test("names a disabled surface instead of a generic API failure", () => {
     expect(() =>
-      unwrapPublicLawEden(
+      unwrapPublicLawResponse(
         {
           data: null,
           error: {
@@ -56,7 +59,7 @@ describe("unwrapPublicLawEden", () => {
 
   test("a success answer carrying the gate marker is still a disabled surface", () => {
     expect(() =>
-      unwrapPublicLawEden(
+      unwrapPublicLawResponse(
         { data: { error: "Not Found" } as const, error: null },
         "listPublicCaseLawFacets",
       ),
@@ -65,7 +68,7 @@ describe("unwrapPublicLawEden", () => {
 
   test("keeps a missing resource on an enabled surface an API error", () => {
     expect(() =>
-      unwrapPublicLawEden(
+      unwrapPublicLawResponse(
         { data: null, error: { status: 404, value: { message: "Not found" } } },
         "readPublicCaseLawDecision",
       ),
@@ -74,7 +77,7 @@ describe("unwrapPublicLawEden", () => {
 
   test("keeps every other failure an API error", () => {
     expect(() =>
-      unwrapPublicLawEden(
+      unwrapPublicLawResponse(
         { data: null, error: { status: 503, value: null } },
         "listPublicCaseLawFacets",
       ),
@@ -86,7 +89,7 @@ describe("isSearchUnavailableError", () => {
   test("country admission is localized and never treated as a retryable engine outage or a miss", () => {
     const refusal = {
       status: PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
-      value: publicCountryUnavailable("HUN", {
+      value: publicCountryUnavailable("USA", {
         domain: "caseLaw",
         surface: "search",
       }),
@@ -251,6 +254,18 @@ describe("isSearchUnavailableError", () => {
     expect(
       isSearchUnavailableError(thrownBy(404, { error: "Not Found" })),
     ).toBe(false);
+  });
+
+  test("a read the page stopped waiting for is a search outage", () => {
+    expect(
+      isSearchUnavailableError(
+        new CriticalQueryTimeoutError({
+          message: "Critical query timed out after 10000ms",
+          queryKey: ["case-law-decisions", "page"],
+          timeoutMs: 10_000,
+        }),
+      ),
+    ).toBe(true);
   });
 
   test("anything that is not an API failure is not a search outage", () => {

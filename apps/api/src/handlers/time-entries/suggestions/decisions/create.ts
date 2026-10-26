@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -22,6 +21,11 @@ import { readTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
+  timeEntryBillableSchema,
+  timeEntryNarrativeSchema,
+  utbmsCodeSchema,
+} from "@/api/lib/billing/time-entry-body";
+import {
   insertPreparedTimeEntry,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
@@ -36,49 +40,38 @@ const SUGGESTION_UNAVAILABLE_HINT =
   "regrouped it. Call time-entries.suggestions.list for the day again and " +
   "use a fingerprint from that response.";
 
-const acceptDecisionSchema = t.Object({
-  type: t.Literal("accept"),
-  durationMinutes: t.Integer({
-    minimum: 1,
-    description:
+const acceptDecisionSchema = v.object({
+  type: v.literal("accept"),
+  durationMinutes: v.pipe(
+    v.pipe(v.number(), v.integer(), v.minValue(1)),
+    v.description(
       "Minutes to record; the suggestion's engaged minutes unless edited",
-  }),
-  narrative: t.String({
-    minLength: 0,
-    maxLength: 10_000,
-    description: "Description of the work",
-  }),
-  narrativeLanguage: t.Optional(narrativeLanguageSchema),
-  billable: t.Optional(
-    t.Boolean({ description: "Whether the entry is billable to the client" }),
-  ),
-  taskCode: t.Optional(
-    t.Nullable(
-      t.String({ maxLength: 20, description: "UTBMS/LEDES task code" }),
     ),
   ),
-  activityCode: t.Optional(
-    t.Nullable(
-      t.String({ maxLength: 20, description: "UTBMS/LEDES activity code" }),
-    ),
-  ),
+  narrative: timeEntryNarrativeSchema,
+  narrativeLanguage: v.optional(narrativeLanguageSchema),
+  billable: v.optional(timeEntryBillableSchema),
+  taskCode: v.optional(utbmsCodeSchema("UTBMS/LEDES task code")),
+  activityCode: v.optional(utbmsCodeSchema("UTBMS/LEDES activity code")),
 });
 
-const dismissDecisionSchema = t.Object({
-  type: t.Literal("dismiss"),
-});
+const dismissDecisionSchema = v.object({ type: v.literal("dismiss") });
 
-const createTimeSuggestionDecisionBodySchema = t.Object({
+const createTimeSuggestionDecisionBodySchema = v.object({
   fingerprint: timeSuggestionFingerprintSchema,
   date: timeSuggestionDateSchema,
   timezoneId: timeSuggestionTimezoneSchema,
-  decision: t.Union([acceptDecisionSchema, dismissDecisionSchema], {
-    description:
+  decision: v.pipe(
+    v.union([acceptDecisionSchema, dismissDecisionSchema]),
+    v.description(
       "`accept` records a time entry from the suggestion; `dismiss` hides it for good",
-  }),
+    ),
+  ),
 });
 
-type DecisionBody = Static<typeof createTimeSuggestionDecisionBodySchema>;
+type DecisionBody = v.InferOutput<
+  typeof createTimeSuggestionDecisionBodySchema
+>;
 
 type DecisionContext = {
   featureAccessSnapshot: FeatureAccessSnapshot | undefined;
@@ -101,7 +94,7 @@ const acceptSuggestion = async function* ({
   recordAuditEvent,
   body,
 }: DecisionContext & {
-  body: DecisionBody & { decision: Static<typeof acceptDecisionSchema> };
+  body: DecisionBody & { decision: v.InferOutput<typeof acceptDecisionSchema> };
 }) {
   const loaded = yield* loadTimeSuggestions({
     safeDb,

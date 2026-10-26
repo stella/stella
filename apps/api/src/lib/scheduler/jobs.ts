@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, eq, gt, notInArray, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -50,6 +50,7 @@ import { BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK } from "@/api/lib/scheduler/tasks
 import { CHECK_DATA_INVARIANTS_TASK } from "@/api/lib/scheduler/tasks/data-invariants";
 import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import { RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK } from "@/api/lib/scheduler/tasks/document-deadline-scout-recovery";
+import { DISPATCH_NATIVE_EXTRACTION_TASK } from "@/api/lib/scheduler/tasks/document-processing-native-extraction";
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { RECONCILE_DOCUMENT_REVIEW_RUNS_TASK } from "@/api/lib/scheduler/tasks/document-review-run-reconcile";
 import { SWEEP_FILE_COMPARISON_UPLOADS_TASK } from "@/api/lib/scheduler/tasks/file-comparison-sweep";
@@ -72,6 +73,7 @@ import { RESET_REVIEW_ORGANIZATION_TASK } from "@/api/lib/scheduler/tasks/review
 import { DRAIN_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring";
 import { BACKFILL_SANCTIONS_MONITORING_TASK } from "@/api/lib/scheduler/tasks/sanctions-monitoring-backfill";
 import { REFRESH_SANCTIONS_SOURCES_TASK } from "@/api/lib/scheduler/tasks/sanctions-refresh";
+import { AUDIT_SCHEDULER_PAUSES_TASK } from "@/api/lib/scheduler/tasks/scheduler-pause-audit";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
 import { REPAIR_SEARCH_PROJECTIONS_TASK } from "@/api/lib/scheduler/tasks/search-projection-repair";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
@@ -107,6 +109,44 @@ export const initialNextRunAt = (
   now: Date,
 ): Date =>
   firstRun === "on-registration" ? now : computeNextRunAt(schedule, now);
+
+/**
+ * Ends every pause beyond the 72-hour maximum at the maximum and clears a
+ * `-infinity` deadline, which never paused anything. Rows written before the
+ * bound can hold either, and the finite-deadline check refuses every later
+ * update of such a row, the boot upsert included, so this runs first at each
+ * boot. A bounded pause keeps no recorded start, so the pause audit reports it
+ * on its next run. Returns the ids it bounded.
+ */
+export const boundSchedulerPauses = async (
+  db: SchedulerDb,
+): Promise<string[]> => {
+  const negative = sql`'-infinity'::timestamptz`;
+  // audit: skip — scheduler system state; each bounded job is logged below.
+  const changed = await db
+    .update(schedulerJobs)
+    .set({
+      pausedUntil: sql`CASE WHEN ${schedulerJobs.pausedUntil} = ${negative}
+        THEN NULL ELSE now() + interval '72 hours' END`,
+    })
+    .where(
+      or(
+        gt(schedulerJobs.pausedUntil, sql`now() + interval '72 hours'`),
+        eq(schedulerJobs.pausedUntil, negative),
+      ),
+    )
+    .returning({
+      id: schedulerJobs.id,
+      pausedUntil: schedulerJobs.pausedUntil,
+    });
+  const bounded = changed
+    .filter(({ pausedUntil }) => pausedUntil !== null)
+    .map(({ id }) => id);
+  for (const id of bounded) {
+    logger.warn("scheduler.job.pause_bounded", { jobId: id });
+  }
+  return bounded;
+};
 
 export const ensureSchedulerJob = async (
   definition: SchedulerJobDefinition,
@@ -244,6 +284,13 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: SWEEP_REQUEST_RECEIPTS_TASK,
   },
   {
+    description: "Report scheduler pauses older than 24 hours",
+    id: "scheduler.pauseAudit.hourly",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
+    task: AUDIT_SCHEDULER_PAUSES_TASK,
+  },
+  {
     description: "Release queued PDFs to the searchable-text worker",
     id: "documentProcessing.dispatchOcr.configuredInterval",
     mode: "recurring",
@@ -252,6 +299,13 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: envBase.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES * 60_000,
     },
     task: DISPATCH_DOCUMENT_OCR_TASK,
+  },
+  {
+    description: "Release queued native extraction runs to their worker",
+    id: "documentProcessing.dispatchNativeExtraction.twoMinute",
+    mode: "recurring",
+    schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
+    task: DISPATCH_NATIVE_EXTRACTION_TASK,
   },
   {
     description: "Dispatch document deadline scouts nothing has picked up",
@@ -308,10 +362,14 @@ export const DECLARED_SCHEDULER_JOBS = [
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
   },
   {
+    // Hourly: nothing alarms on these gauges at a finer resolution, and a
+    // source falls behind by sync cycles, not minutes. The id is the row's
+    // key and outlives its old cadence: a new id would register a second
+    // job beside the existing row, which only retires by task name.
     description: "Report case-law projection backlog and source freshness",
     id: "caseLaw.reportFreshness.fiveMinute",
     mode: "recurring",
-    schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
+    schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
   },
   {
@@ -702,6 +760,7 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
       reason: "HOSTED_USAGE_WEBHOOK_RETENTION_DAYS is unset",
     });
   }
+  await boundSchedulerPauses(rootDb);
   for (const { mode, ...definition } of DECLARED_SCHEDULER_JOBS) {
     // Sequential on purpose: each upsert is a read followed by a write, so
     // issuing all of them at once puts more concurrent statements in flight

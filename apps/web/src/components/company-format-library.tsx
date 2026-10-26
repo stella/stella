@@ -26,7 +26,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -73,7 +73,7 @@ export const useCompanyFormatLibrary = ({
     queryKey,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"].get({
           query: {
             registry,
@@ -130,12 +130,15 @@ export const useCompanyFormatLibrary = ({
     }
   };
   const onError = (error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "useCompanyFormatLibrary:failure",
+      scope: { type: "handler", handlerId: "useCompanyFormatLibrary:failure" },
+    });
     notifyUserError(error, t("templates.saveFailed"));
   };
   const create = useMutation({
     mutationFn: async (draft: { name: string; format: string }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await submit.run({
           operation: "lookup-format-create",
           body: { registry, ...draft },
@@ -153,7 +156,7 @@ export const useCompanyFormatLibrary = ({
   });
   const setDefault = useMutation({
     mutationFn: async (formatId: NonNullable<typeof selected>["id"] | null) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"].default.post({
           registry,
           formatId,
@@ -168,7 +171,7 @@ export const useCompanyFormatLibrary = ({
   // No permission gate: a personal default changes nothing a colleague sees.
   const setMyDefault = useMutation({
     mutationFn: async (formatId: NonNullable<typeof selected>["id"] | null) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.templates["lookup-formats"]["my-default"].post({
           registry,
           formatId,
