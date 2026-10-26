@@ -221,6 +221,16 @@ describe("printed lines of a typescript", () => {
       expect(first).toContain("o státní příslušnosti česko-slovenské a");
     });
 
+    test("of a compound stays when only a longer word shares its letters", () => {
+      const [first] = reflowPrintedText([
+        ...typescriptAround(brokenAt("česko-", "slovenský")),
+        "",
+        "Československo zaniklo.",
+      ]);
+      expect(first).toContain("o státní příslušnosti česko-slovenský a");
+      expect(first).not.toContain("československý");
+    });
+
     test("of a compound the text spells elsewhere stays", () => {
       const [first] = reflowPrintedText([
         ...typescriptAround(brokenAt("vědecko-", "pedagogické")),

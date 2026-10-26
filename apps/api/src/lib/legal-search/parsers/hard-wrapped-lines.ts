@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { normalizeUnicode } from "@stll/text-normalize";
+
 /**
  * Printed lines of a typewriter-era text, read back as paragraphs.
  *
@@ -273,50 +275,38 @@ const SUSPENDED_HYPHEN_NEXT = new Set([
   "až",
   "ani",
 ]);
-/** Letters of the second half that must match a word the text spells whole. */
-const ATTESTED_PREFIX_LETTERS = 3;
-
 /**
  * The words a text spells, to tell a word the margin split ("dis-" /
- * "kriminaci", spelled "diskriminace" elsewhere) from a compound whose
- * hyphen is the author's ("česko-" / "slovenský"). Without the text's own
- * evidence a hyphen is kept: a compound read as one word changes the word,
- * a split word read with its hyphen does not.
+ * "kriminaci", with "diskriminaci" spelled whole elsewhere) from a compound
+ * whose hyphen is the author's ("česko-" / "slovenský"). Only the whole
+ * word counts as evidence: "Československo" elsewhere does not make
+ * "česko-" / "slovenský" one word. Without that evidence a hyphen is kept:
+ * a compound read as one word changes the word, a split word read with its
+ * hyphen does not.
  */
 type Vocabulary = {
-  /** Every word, lowercased and sorted, for prefix lookups. */
-  readonly words: readonly string[];
-  /** Hyphenated compounds the text spells within a line, lowercased. */
+  /** Every whole word, lowercased and NFC-normalised. */
+  readonly words: ReadonlySet<string>;
+  /** Hyphenated compounds the text spells within a line, likewise. */
   readonly compounds: ReadonlySet<string>;
 };
+
+const wordKey = (word: string): string =>
+  normalizeUnicode(word, "NFC").toLowerCase();
 
 const vocabularyOf = (texts: readonly string[]): Vocabulary => {
   const words = new Set<string>();
   const compounds = new Set<string>();
   for (const text of texts) {
-    for (const [word] of text.matchAll(/\p{L}+/gu)) {
-      words.add(word.toLowerCase());
+    const normalized = normalizeUnicode(text, "NFC");
+    for (const [word] of normalized.matchAll(/\p{L}+/gu)) {
+      words.add(wordKey(word));
     }
-    for (const [compound] of text.matchAll(/\p{L}+-\p{L}+/gu)) {
-      compounds.add(compound.toLowerCase());
-    }
-  }
-  return { words: [...words].toSorted(), compounds };
-};
-
-/** Whether the text spells a word starting with `prefix`. */
-const spellsWordStarting = ({ words }: Vocabulary, prefix: string): boolean => {
-  let low = 0;
-  let high = words.length;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((words[middle] ?? "") < prefix) {
-      low = middle + 1;
-    } else {
-      high = middle;
+    for (const [compound] of normalized.matchAll(/\p{L}+-\p{L}+/gu)) {
+      compounds.add(wordKey(compound));
     }
   }
-  return words[low]?.startsWith(prefix) ?? false;
+  return { words, compounds };
 };
 
 /** How the halves of a hyphenated word read: welded, or as a compound. */
@@ -325,16 +315,14 @@ const hyphenatedJoin = (
   stem: string,
   next: string,
 ): LineJoin => {
-  const rest = /^\p{L}+/u.exec(next)?.[0] ?? "";
+  const rest = /^\p{L}+/u.exec(normalizeUnicode(next, "NFC"))?.[0] ?? "";
   if (SUSPENDED_HYPHEN_NEXT.has(rest)) {
     return LINE_JOINS.SPACE;
   }
-  const compound = `${stem}-${rest}`.toLowerCase();
-  if (vocabulary.compounds.has(compound)) {
+  if (vocabulary.compounds.has(wordKey(`${stem}-${rest}`))) {
     return LINE_JOINS.COMPOUND;
   }
-  const welded = `${stem}${rest.slice(0, ATTESTED_PREFIX_LETTERS)}`;
-  return spellsWordStarting(vocabulary, welded.toLowerCase())
+  return vocabulary.words.has(wordKey(`${stem}${rest}`))
     ? LINE_JOINS.WORD
     : LINE_JOINS.COMPOUND;
 };
