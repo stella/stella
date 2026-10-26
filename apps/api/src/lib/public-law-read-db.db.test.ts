@@ -8,6 +8,7 @@ import {
   withSharedTransactionTimeoutRestoration,
 } from "@/api/db/shared-pool-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { runWithinRequestLatencyBudget } from "@/api/lib/load/request-latency-budget";
 import {
   configureReadTransaction,
   EXTERNAL_PUBLIC_LAW_READ_GUARDS,
@@ -60,6 +61,26 @@ test("the public read is read-only and bounded", async () => {
     lockTimeout: "1s",
     idleTimeout: "30s",
   });
+});
+
+test("a request deadline retains the read's own statement cap", async () => {
+  const settings = await runWithinRequestLatencyBudget(
+    { label: "read_statute", budgetMs: 2000 },
+    async () =>
+      await db.transaction(async (tx) => {
+        await configureReadTransaction(
+          tx,
+          "read-committed",
+          EXTERNAL_PUBLIC_LAW_READ_GUARDS,
+        );
+        return {
+          statement: await readSetting(tx, "statement_timeout"),
+          transaction: await readSetting(tx, "transaction_timeout"),
+        };
+      }),
+  );
+  expect(settings.statement).toBe("30s");
+  expect(settings.transaction).not.toBe("0");
 });
 
 test("nested query budgets restore the prior tighter budget", async () => {

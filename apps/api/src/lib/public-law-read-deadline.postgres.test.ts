@@ -76,9 +76,9 @@ if (!databaseUrl || !runPostgres) {
       ).toBe(1);
     });
 
-    test("a statement timeout the request clamped is the budget's", async () => {
-      // A 500 ms budget shortens the read's 30 s statement cap, so the cancel
-      // is the budget's, wherever in the last millisecond it lands.
+    test("the transaction deadline is the budget's while the statement cap stays independent", async () => {
+      // The request's 500 ms transaction deadline ends this read before
+      // its independent 30 s statement cap can expire.
       const outcome = await runWithinRequestLatencyBudget(
         { label: "read_statute", budgetMs: 500 },
         async () =>
@@ -120,6 +120,38 @@ if (!databaseUrl || !runPostgres) {
           ),
       );
       const error = Result.isError(outcome) ? outcome.error : undefined;
+      expect(error).not.toBeInstanceOf(TimeoutError);
+      expect(getPgErrorCode(error)).toBe(PG_ERROR.QUERY_CANCELED);
+      expect(readFailureBrand(error)?.reason).not.toBe("timeout_budgeted");
+    });
+
+    test("an explicit cancellation inside the request budget keeps its original error", async () => {
+      let cancellation: unknown;
+      const outcome = await runWithinRequestLatencyBudget(
+        { label: "read_statute", budgetMs: BUDGET_MS },
+        async () =>
+          await Result.tryPromise({
+            try: async () =>
+              await publicLawReadDb(async (tx) => {
+                const cancelled = await Result.tryPromise({
+                  try: async () =>
+                    await tx.execute(
+                      sql`SELECT pg_cancel_backend(pg_backend_pid())`,
+                    ),
+                  catch: (cause) => cause,
+                });
+                if (Result.isError(cancelled)) {
+                  cancellation = cancelled.error;
+                  throw cancelled.error;
+                }
+                return "not cancelled";
+              }),
+            catch: (cause) => cause,
+          }),
+      );
+      expect(Result.isError(outcome)).toBe(true);
+      const error = Result.isError(outcome) ? outcome.error : undefined;
+      expect(error).toBe(cancellation);
       expect(error).not.toBeInstanceOf(TimeoutError);
       expect(getPgErrorCode(error)).toBe(PG_ERROR.QUERY_CANCELED);
       expect(readFailureBrand(error)?.reason).not.toBe("timeout_budgeted");

@@ -12,7 +12,7 @@ import type { McpToolName } from "@/api/mcp/static-tool-names";
  *   which a log metric filter counts;
  * - a `tools/call` runs inside a request latency scope of this budget
  *   (`lib/load/request-latency-budget.ts`), so the corpus client and the public-law
- *   statement timeout give up inside it rather than outwaiting the caller.
+ *   transaction deadline give up inside it rather than outwaiting the caller.
  *
  * Keys are the names the phases record reports (`classifyMcpMetricToolName`):
  * a static tool name, or the `external_mcp`, `skill` and `unknown` buckets

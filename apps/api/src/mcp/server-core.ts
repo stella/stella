@@ -1015,7 +1015,7 @@ export const createMcpHttpRequestHandler = ({
       signal?.throwIfAborted();
       // Everything the tool waits on gives up inside the tool's budget, counted
       // from the request's start as the metric and the canary count it: the
-      // corpus client and public-law statements clamp to what is left of it.
+      // corpus client and public-law transaction deadline use what is left of it.
       const result = await measureMcpPhase(
         "dispatch",
         async () =>

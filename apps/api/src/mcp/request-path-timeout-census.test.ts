@@ -17,7 +17,8 @@ import type { McpToolLatencyBudgetKey } from "@/api/mcp/tool-latency-budgets";
  * or on a public corpus route the tools share, is declared here with the
  * tools and route classes that reach it, and must be shorter than each of
  * their budgets, unless the site clamps to the request's remaining budget
- * (`requestBoundedTimeoutMs`) or does not hold the request at all.
+ * (`requestBoundedTimeoutMs`, including the enclosing transaction deadline)
+ * or does not hold the request at all.
  *
  * The scan is the lint half: a new `timeoutMs`, `deadlineMs`,
  * `AbortSignal.timeout(...)` or statement timeout under these roots fails
@@ -55,8 +56,8 @@ type CensusEntry = {
       http?: readonly PublicCorpusRouteClass[];
       /**
        * `own`: the site's own budget must be shorter than every listed
-       * tool's. `request`: the site clamps to the remaining request budget
-       * with `requestBoundedTimeoutMs`, so it cannot outwait the tool.
+       * tool's. `request`: a timeout or enclosing transaction is bounded by
+       * `requestBoundedTimeoutMs`, so it cannot outwait the tool.
        */
       bound: "own" | "request";
       /** What the caller gets when it expires. */
@@ -598,15 +599,15 @@ const CENSUS: readonly CensusEntry[] = [
     http: ["browse", "search", "aggregate", "sitemap"],
     bound: "request",
     onExpiry: "fails-fast",
-    why: "The public-law statement guard; a transaction inside a tool call sets the shorter of it and what is left of the tool's budget, and ends at the deadline as a whole.",
+    why: "The read's statement cap remains independent; the enclosing transaction ends at the request's deadline as a whole.",
   },
   {
-    site: "apps/api/src/lib/public-law-read-db.ts#requestStatementTimeoutMs",
+    site: "apps/api/src/lib/public-law-read-db.ts#statementCapMs",
     path: "request",
     tools: PUBLIC_LAW_READ_TOOLS,
     bound: "request",
     onExpiry: "fails-fast",
-    why: "Where the statement guard is clamped to the route class and the request's remaining budget.",
+    why: "The route-owned statement cap, inside a transaction bounded by the request's remaining budget.",
   },
   {
     site: "apps/api/src/lib/public-law-read-db.ts#requestDeadlineMs",

@@ -16,7 +16,7 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * (`mcp/tool-latency-budgets.ts`). Inside it:
  *
  * - shared clients clamp their own timeouts with `requestBoundedTimeoutMs`
- *   (the corpus index client, the public-law statement timeout), so the
+ *   (the corpus index client, the public-law transaction deadline), so the
  *   request fails fast at its budget instead of waiting theirs out;
  * - an optional step runs through `runBoundedRequestStep` with a named
  *   sub-budget, and answers a typed degraded outcome the caller reports
