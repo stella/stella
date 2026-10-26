@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useState } from "react";
 import type { ComponentProps } from "react";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
@@ -44,6 +44,7 @@ import {
 } from "@stll/ui/select";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { retainOutlinePageNumbers } from "@/lib/folio-outline-items.logic";
 
 const LocalizedColorPicker = (props: Omit<ColorPickerProps, "moreLabel">) => {
   const t = useTranslations();
@@ -71,12 +72,21 @@ const FolioInput = ({ type, ...props }: FolioInputProps) => {
 };
 
 // Folio reserves docked chrome on its outline host for both default and injected rails.
-const FolioOutlineRail = (
-  props: ComponentProps<FolioUIComponents["OutlineRail"]>,
-) => {
+const FolioOutlineRail = ({
+  items,
+  ...props
+}: ComponentProps<FolioUIComponents["OutlineRail"]>) => {
   const t = useTranslations();
+  const [retained, setRetained] = useState({ source: items, shown: items });
+  if (retained.source !== items) {
+    setRetained({
+      source: items,
+      shown: retainOutlinePageNumbers(retained.shown, items),
+    });
+  }
   return createElement(OutlineRail, {
     ...props,
+    items: retained.shown,
     bottomInset: 0,
     formatMetaLabel: (page) => t("common.page", { page }),
   });
