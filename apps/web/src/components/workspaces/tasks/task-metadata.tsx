@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -14,6 +16,11 @@ import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
+import {
+  MEMBER_CHOICE,
+  MemberCombobox,
+  workspaceMemberOptions,
+} from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
@@ -351,15 +358,16 @@ export const AssigneePicker = ({
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
   const membersView = useQueryView(membersQuery);
   useQueryViewError(membersView, "AssigneePicker:query");
-  const members = membersView.type === "items" ? membersView.items : undefined;
+  const members = membersView.type === "items" ? membersView.items : [];
+  const [addOpen, setAddOpen] = useState(false);
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));
 
   const addAssignee = useAddTaskAssignee(workspaceId);
   const removeAssignee = useRemoveTaskAssignee(workspaceId);
 
-  const unassignedMembers = members?.filter(
-    (m) => m.user && !assignedIds.has(m.user.id),
+  const unassignedMembers = workspaceMemberOptions(members).filter(
+    (member) => !assignedIds.has(member.userId),
   );
 
   return (
@@ -395,8 +403,8 @@ export const AssigneePicker = ({
           </Button>
         </div>
       ))}
-      {unassignedMembers && unassignedMembers.length > 0 && (
-        <Popover>
+      {unassignedMembers.length > 0 && (
+        <Popover onOpenChange={setAddOpen} open={addOpen}>
           <PopoverTrigger
             render={
               <button
@@ -408,42 +416,32 @@ export const AssigneePicker = ({
             <PlusIcon className="size-3.5" />
             <span>{t("addAssignee")}</span>
           </PopoverTrigger>
-          <PopoverPopup padding="xs" side="bottom">
-            <div className="flex w-48 flex-col">
-              {unassignedMembers.map((m) => {
-                const user = m.user;
-                if (!user) {
-                  return null;
-                }
-                return (
-                  <button
-                    className="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
-                    key={user.id}
-                    onClick={() =>
-                      addAssignee.mutate({ taskId, userId: user.id })
-                    }
-                    type="button"
-                  >
-                    <UserIdentity
-                      as="span"
-                      avatarClassName="size-5 text-3xs"
-                      image={user.image}
-                      name={user.name.trim() || tCommon("unknownUser")}
-                      nameClassName="text-sm font-normal"
-                    />
-                  </button>
-                );
-              })}
+          <PopoverPopup padding="sm" side="bottom">
+            <div className="w-72">
+              <MemberCombobox
+                autoFocus
+                choice={{ type: MEMBER_CHOICE.member }}
+                label={t("addAssignee")}
+                members={unassignedMembers}
+                onValueChange={(userId) => {
+                  if (userId === null) {
+                    return;
+                  }
+                  addAssignee.mutate({ taskId, userId });
+                  setAddOpen(false);
+                }}
+                placeholder={tCommon("searchMembers")}
+                value={null}
+              />
             </div>
           </PopoverPopup>
         </Popover>
       )}
-      {assignees.length === 0 &&
-        (!unassignedMembers || unassignedMembers.length === 0) && (
-          <span className="text-muted-foreground px-1.5 text-sm">
-            {t("noAssignees")}
-          </span>
-        )}
+      {assignees.length === 0 && unassignedMembers.length === 0 && (
+        <span className="text-muted-foreground px-1.5 text-sm">
+          {t("noAssignees")}
+        </span>
+      )}
     </div>
   );
 };

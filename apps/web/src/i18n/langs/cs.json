@@ -2205,6 +2205,7 @@
     "scrollToTop": "Posunout nahoru",
     "search": "Hledat...",
     "searchIn": "Hledat v",
+    "searchMembers": "Hledat členy…",
     "selectAMatter": "Vyberte spis",
     "selectARole": "Vyberte roli",
     "selectAll": "Vybrat vše",
@@ -6210,8 +6211,7 @@
         "lead": "Vedoucí",
         "leadActive": "Vedoucí",
         "leadInactive": "Nastavit vedoucího",
-        "noLead": "Bez vedoucího",
-        "searchMembers": "Hledat členy…"
+        "noLead": "Bez vedoucího"
       },
       "to": "Do"
     },
@@ -6291,10 +6291,10 @@
       "addMember": "Přidat do spisu",
       "addMemberDescription": "Vyberte existujícího člena týmu, kterého chcete přidat k tomuto spisu",
       "alreadyMember": "Uživatel je již členem",
+      "alreadyOnMatter": "Již je v tomto spisu",
       "cannotRemoveLast": "Nelze odebrat posledního člena",
       "noMembersFound": "Nebyli nalezeni žádní členové",
-      "removeMemberConfirm": "Odebrat tohoto člena ze spisu?",
-      "selectMember": "Vybrat člena"
+      "removeMemberConfirm": "Odebrat tohoto člena ze spisu?"
     },
     "newDocument": "Nový dokument",
     "newFolder": "Nová složka",

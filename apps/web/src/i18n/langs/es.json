@@ -2205,6 +2205,7 @@
     "scrollToTop": "Ir arriba",
     "search": "Buscar...",
     "searchIn": "Buscar en",
+    "searchMembers": "Buscar miembros…",
     "selectAMatter": "Selecciona un asunto",
     "selectARole": "Seleccione un rol",
     "selectAll": "Seleccionar todo",
@@ -6210,8 +6211,7 @@
         "lead": "Responsable",
         "leadActive": "Responsable",
         "leadInactive": "Definir responsable",
-        "noLead": "Sin responsable",
-        "searchMembers": "Buscar miembros…"
+        "noLead": "Sin responsable"
       },
       "to": "Hasta"
     },
@@ -6291,10 +6291,10 @@
       "addMember": "Añadir miembro",
       "addMemberDescription": "Añadir un miembro del equipo a este asunto",
       "alreadyMember": "El usuario ya es miembro",
+      "alreadyOnMatter": "Ya está en este asunto",
       "cannotRemoveLast": "No se puede eliminar al último miembro",
       "noMembersFound": "No se encontraron miembros",
-      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?",
-      "selectMember": "Seleccionar miembro"
+      "removeMemberConfirm": "¿Eliminar a este miembro del asunto?"
     },
     "newDocument": "Nuevo documento",
     "newFolder": "Nueva carpeta",

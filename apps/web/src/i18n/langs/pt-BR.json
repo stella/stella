@@ -2205,6 +2205,7 @@
     "scrollToTop": "Rolar para o topo",
     "search": "Pesquisar...",
     "searchIn": "Pesquisar em",
+    "searchMembers": "Pesquisar membros…",
     "selectAMatter": "Selecione um caso",
     "selectARole": "Selecione uma função",
     "selectAll": "Selecionar tudo",
@@ -6210,8 +6211,7 @@
         "lead": "Responsável",
         "leadActive": "Responsável",
         "leadInactive": "Definir responsável",
-        "noLead": "Sem responsável",
-        "searchMembers": "Pesquisar membros…"
+        "noLead": "Sem responsável"
       },
       "to": "Até"
     },
@@ -6291,10 +6291,10 @@
       "addMember": "Adicionar ao caso",
       "addMemberDescription": "Escolha um membro existente da equipe para adicionar a este caso",
       "alreadyMember": "O usuário já é membro",
+      "alreadyOnMatter": "Já está neste caso",
       "cannotRemoveLast": "Não é possível remover o último membro",
       "noMembersFound": "Nenhum membro encontrado",
-      "removeMemberConfirm": "Remover este membro do caso?",
-      "selectMember": "Selecione um membro"
+      "removeMemberConfirm": "Remover este membro do caso?"
     },
     "newDocument": "Novo documento",
     "newFolder": "Nova pasta",

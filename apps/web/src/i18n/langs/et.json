@@ -2205,6 +2205,7 @@
     "scrollToTop": "Keri üles",
     "search": "Otsi...",
     "searchIn": "Otsi",
+    "searchMembers": "Otsi liikmeid…",
     "selectAMatter": "Vali toimik",
     "selectARole": "Valige roll",
     "selectAll": "Vali kõik",
@@ -6210,8 +6211,7 @@
         "lead": "Vastutav",
         "leadActive": "Vastutav",
         "leadInactive": "Määra vastutaja",
-        "noLead": "Vastutajat pole",
-        "searchMembers": "Otsi liikmeid…"
+        "noLead": "Vastutajat pole"
       },
       "to": "Kuni"
     },
@@ -6291,10 +6291,10 @@
       "addMember": "Lisa liige",
       "addMemberDescription": "Lisa tiimiliige sellesse toimikusse",
       "alreadyMember": "Kasutaja on juba liige",
+      "alreadyOnMatter": "Juba selles toimikus",
       "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
       "noMembersFound": "Liikmeid ei leitud",
-      "removeMemberConfirm": "Kas eemaldada see liige toimikust?",
-      "selectMember": "Vali liige"
+      "removeMemberConfirm": "Kas eemaldada see liige toimikust?"
     },
     "newDocument": "Uus dokument",
     "newFolder": "Uus kaust",

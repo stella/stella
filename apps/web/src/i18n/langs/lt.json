@@ -2205,6 +2205,7 @@
     "scrollToTop": "Slinkti į viršų",
     "search": "Ieškoti...",
     "searchIn": "Ieškoti",
+    "searchMembers": "Ieškoti narių…",
     "selectAMatter": "Pasirinkite bylą",
     "selectARole": "Pasirinkite rolę",
     "selectAll": "Pasirinkti visus",
@@ -6210,8 +6211,7 @@
         "lead": "Atsakingas",
         "leadActive": "Atsakingas",
         "leadInactive": "Nustatyti atsakingą",
-        "noLead": "Nėra atsakingo",
-        "searchMembers": "Ieškoti narių…"
+        "noLead": "Nėra atsakingo"
       },
       "to": "Iki"
     },
@@ -6291,10 +6291,10 @@
       "addMember": "Pridėti narį",
       "addMemberDescription": "Pridėti komandos narį prie šios bylos",
       "alreadyMember": "Naudotojas jau yra narys",
+      "alreadyOnMatter": "Jau yra šioje byloje",
       "cannotRemoveLast": "Negalima pašalinti paskutinio nario",
       "noMembersFound": "Narių nerasta",
-      "removeMemberConfirm": "Pašalinti šį narį iš bylos?",
-      "selectMember": "Pasirinkti narį"
+      "removeMemberConfirm": "Pašalinti šį narį iš bylos?"
     },
     "newDocument": "Naujas dokumentas",
     "newFolder": "Naujas aplankas",

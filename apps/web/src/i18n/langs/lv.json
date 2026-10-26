@@ -2205,6 +2205,7 @@
     "scrollToTop": "Ritināt uz augšu",
     "search": "Meklēt...",
     "searchIn": "Meklēt",
+    "searchMembers": "Meklēt dalībniekus…",
     "selectAMatter": "Izvēlieties lietu",
     "selectARole": "Izvēlieties lomu",
     "selectAll": "Atlasīt visus",
@@ -6210,8 +6211,7 @@
         "lead": "Atbildīgais",
         "leadActive": "Atbildīgais",
         "leadInactive": "Iestatīt vadītāju",
-        "noLead": "Nav atbildīgā",
-        "searchMembers": "Meklēt dalībniekus…"
+        "noLead": "Nav atbildīgā"
       },
       "to": "Līdz"
     },
@@ -6291,10 +6291,10 @@
       "addMember": "Pievienot dalībnieku",
       "addMemberDescription": "Pievienot komandas dalībnieku šai lietai",
       "alreadyMember": "Lietotājs jau ir dalībnieks",
+      "alreadyOnMatter": "Jau ir šajā lietā",
       "cannotRemoveLast": "Nevar noņemt pēdējo dalībnieku",
       "noMembersFound": "Dalībnieki nav atrasti",
-      "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?",
-      "selectMember": "Izvēlēties dalībnieku"
+      "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?"
     },
     "newDocument": "Jauns dokuments",
     "newFolder": "Jauna mape",

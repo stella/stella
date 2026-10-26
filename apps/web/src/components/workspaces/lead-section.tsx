@@ -4,17 +4,14 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { cn } from "@stll/ui/utils";
 
+import {
+  MEMBER_CHOICE,
+  MemberCombobox,
+  workspaceMemberOptions,
+} from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { UserIdentity } from "@/components/user-avatar";
 import { leadSectionContent } from "@/components/workspaces/lead-section.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -70,12 +67,7 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
       return panic("Unhandled matter lead read state");
   }
   const leadUserId = content.workspace.leadUserId;
-  const memberItems = content.members.map((m) => ({
-    email: m.user?.email ?? null,
-    image: m.user?.image ?? null,
-    name: m.user?.name ?? m.userId,
-    value: m.userId,
-  }));
+  const memberOptions = workspaceMemberOptions(content.members);
 
   const handleSelect = (value: string | null) => {
     if (value === leadUserId) {
@@ -108,58 +100,17 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
         <QueryViewFeedback view={workspaceView} />
         <QueryViewFeedback view={membersView} />
         <div className="flex min-w-0 items-center gap-1">
-          <Select
-            disabled={!canUpdate || updateWorkspace.isPending}
-            onValueChange={(value) => {
-              if (typeof value !== "string") {
-                return;
-              }
-              handleSelect(value);
-            }}
-            value={leadUserId ?? ""}
-          >
-            <SelectTrigger className="min-w-0 flex-1 rounded-md shadow-none">
-              <SelectValue>
-                {(current) => {
-                  const found = memberItems.find((m) => m.value === current);
-                  if (!found) {
-                    return (
-                      <span className="text-muted-foreground">
-                        {t("workspaces.leadEmpty")}
-                      </span>
-                    );
-                  }
-                  return (
-                    <UserIdentity
-                      avatarClassName="size-5 shrink-0 text-[0.5625rem]"
-                      className="min-w-0"
-                      image={found.image}
-                      name={found.name}
-                      nameClassName="text-sm"
-                    />
-                  );
-                }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup>
-              {memberItems.length === 0 && (
-                <div className="text-muted-foreground px-2 py-1.5 text-sm">
-                  {t("workspaces.leadPicker.noMatchingMembers")}
-                </div>
-              )}
-              {memberItems.map((item) => (
-                <SelectItem key={item.value} value={item.value}>
-                  <UserIdentity
-                    avatarClassName="size-6 shrink-0 text-3xs"
-                    className="min-w-0"
-                    image={item.image}
-                    name={item.name}
-                    secondaryText={item.email ?? null}
-                  />
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+          <div className="min-w-0 flex-1">
+            <MemberCombobox
+              choice={{ type: MEMBER_CHOICE.member }}
+              disabled={!canUpdate || updateWorkspace.isPending}
+              label={t("workspaces.lead")}
+              members={memberOptions}
+              onValueChange={handleSelect}
+              placeholder={t("workspaces.leadEmpty")}
+              value={leadUserId}
+            />
+          </div>
           {canUpdate && leadUserId && (
             <Button
               aria-label={t("common.remove")}
