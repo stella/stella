@@ -14,6 +14,7 @@ import {
   polishAdministrativeDocketOf,
   polishConstitutionalDocketKey,
   polishKioDocketKey,
+  SLOVAK_DOCKET_WORKPLACE_PREFIX_SOURCE,
 } from "@stll/api-contract/decision-docket-grammar";
 import {
   canonicalUsReporterCitation,
@@ -964,7 +965,10 @@ const CITATION_PATTERNS: RegExp[] = [
   // branch letter+digits, hyphen, then the ordinary joined chamber+
   // registry/case/year shape. The period after "zn" is optional, matching
   // the general sp. zn. pattern above.
-  /sp\.\s*zn\.?:?\s*(?<caseNumber>[A-Z]\d{1,2}-\d{1,3}\p{L}{1,5}\/\d{1,6}\/\d{2,4})(?!\d)/gu,
+  new RegExp(
+    String.raw`sp\.\s*zn\.?:?\s*(?<caseNumber>${SLOVAK_DOCKET_WORKPLACE_PREFIX_SOURCE}\d{1,3}\p{L}{1,5}/\d{1,6}/\d{2,4})(?!\d)`,
+    "gu",
+  ),
 
   // Czech senate file number: "sen. zn. 29 NSČR 55/2013" (grand panel,
   // insolvency). Same shape as sp. zn. under a different prefix.

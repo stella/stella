@@ -1968,8 +1968,10 @@ const quarantinedEcjDecision = ({
 }: QuarantinedEcjOptions): IngestionResult => {
   const ecli = binding.ecli.value;
   const decisionDate = binding.date.value;
-  const decisionType =
-    CDM_TYPE_MAP[binding.type.value] ?? UNKNOWN_DECISION_TYPE;
+  const typeCode = binding.type.value;
+  const decisionType = Object.hasOwn(CDM_TYPE_MAP, typeCode)
+    ? (CDM_TYPE_MAP[typeCode] ?? UNKNOWN_DECISION_TYPE)
+    : UNKNOWN_DECISION_TYPE;
   const manifestationId = toCellarManifestationId(binding.manifestation.value);
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: JSON.stringify(binding),

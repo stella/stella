@@ -47,8 +47,9 @@ export type DecisionRowWriteStatus =
   (typeof DECISION_ROW_WRITE_STATUS)[keyof typeof DECISION_ROW_WRITE_STATUS];
 
 /** One canonical identity plus a small, explicit set of publisher aliases. */
-// NALUS can name three exact publisher IDs and eight visible/legacy repair digests.
-export const MAX_SOURCE_IDENTITY_CANDIDATES = 11;
+// Slovak Courts can name one exact ID and twelve degraded-listing repair digests;
+// NALUS names at most three exact IDs and eight repair digests.
+export const MAX_SOURCE_IDENTITY_CANDIDATES = 13;
 
 /**
  * Legacy null-id rows one docket may hold. A docket publishes a handful of

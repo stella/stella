@@ -1398,6 +1398,21 @@ describe("a variant listed under a CELEX no store can hold", () => {
     expect(noticeRequests).toEqual([]);
   });
 
+  test.each(["toString", "constructor", "__proto__", "UNKNOWN_PUBLISHER_TYPE"])(
+    "a listed unknown type %s cannot inherit a decision type",
+    async (typeCode) => {
+      const binding = {
+        ...malformedEn,
+        type: { ...malformedEn.type, value: typeCode },
+      };
+      installSparqlMock({ bindings: [binding] });
+      const [decision] = await crawl();
+      expect(decision?.decisionType === "unknown").toBe(true);
+      expect(decision?.sourceDocumentId).toBe(quarantineId);
+      expect(decision?.metadata["identityQuarantined"]).toBe(true);
+    },
+  );
+
   test("the slice walk lists it under the same identity and builds the crawl's row", async () => {
     installSparqlMock({ bindings: [malformedEn] });
 

@@ -32,7 +32,10 @@ import {
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { observeDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
+import { MAX_SOURCE_IDENTITY_CANDIDATES } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { createSafeId } from "@/api/lib/branded-types";
 import { storeDecisionTextFields } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -573,6 +576,7 @@ describe("sk-courts buildDecision", () => {
     if (built.type !== "built") {
       panic("Expected the recovered court decision to build");
     }
+    const degradedIds = new Set<string>();
     for (const spisovaZnacka of [GALANTA_ITEM.spisovaZnacka, null]) {
       for (const identifikacneCislo of [
         GALANTA_ITEM.identifikacneCislo,
@@ -595,6 +599,7 @@ describe("sk-courts buildDecision", () => {
             if (degraded?.type !== "document") {
               panic("Expected a quarantined degraded listing");
             }
+            degradedIds.add(degraded.sourceDocumentId);
             expect(built.decision.sourceDocumentIdRepairAliases).toContain(
               degraded.sourceDocumentId,
             );
@@ -602,6 +607,31 @@ describe("sk-courts buildDecision", () => {
         }
       }
     }
+    const observed = observeDecision({
+      input: built.decision,
+      sourceId: createSafeId<"caseLawSource">(),
+    });
+    expect(observed.repairSourceIdentityCandidates).toEqual(
+      [...degradedIds].toSorted(),
+    );
+    expect(observed.sourceIdentityCandidates).toHaveLength(
+      degradedIds.size + 1,
+    );
+    expect(observed.sourceIdentityCandidates.length).toBeLessThanOrEqual(
+      MAX_SOURCE_IDENTITY_CANDIDATES,
+    );
+    expect(() =>
+      observeDecision({
+        input: {
+          ...built.decision,
+          sourceDocumentIdRepairAliases: [
+            ...degradedIds,
+            "unexpected-additional-publisher-identity",
+          ],
+        },
+        sourceId: createSafeId<"caseLawSource">(),
+      }),
+    ).toThrow("Too many publisher identities for one decision");
   });
 
   test("a quarantined payload is built listing-only, with nothing asked of the publisher", async () => {

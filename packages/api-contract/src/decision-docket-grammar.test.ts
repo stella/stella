@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import type { Arbitrary } from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   canonicalDecisionDocket,
@@ -460,6 +460,61 @@ describe("British neutral citations", () => {
       });
     }
   });
+});
+
+describe("Slovak courthouse workplace dockets", () => {
+  test("svk.workplace-prefix-preserves-identity", () => {
+    assertProperty(
+      "svk.workplace-prefix-preserves-identity",
+      fc.property(
+        fc.constantFrom("B", "K", "M", "Z"),
+        fc.integer({ min: 0, max: 99 }),
+        fc.integer({ min: 1, max: 999 }),
+        fc.constantFrom("C", "Cb", "P", "T", "Obo"),
+        fc.integer({ min: 1, max: 999_999 }),
+        fc.integer({ min: 1900, max: 2099 }),
+        (letter, workplace, senate, registry, ordinal, year) => {
+          const base = `${senate}${registry}/${ordinal}/${year}`;
+          const docket = `${letter}${workplace}-${base}`;
+          const parsed = DECISION_DOCKET_GRAMMARS.SVK.parse(docket);
+          const spaced = DECISION_DOCKET_GRAMMARS.SVK.parse(
+            `${letter}${workplace}‑${senate} ${registry} / ${ordinal}/${year}`,
+          );
+          expect(parsed).toEqual({
+            jurisdiction: "SVK",
+            formatted: docket,
+            canonical: docket.toLowerCase(),
+          });
+          expect(spaced).toEqual(parsed);
+          expect(parsed?.canonical).not.toBe(
+            DECISION_DOCKET_GRAMMARS.SVK.parse(base)?.canonical,
+          );
+        },
+      ),
+      { numRuns: 200, seed: 68_470_001 },
+    );
+  });
+
+  test.each(["B1-7C/221/1991", "B4-14Cb/13/2021", "K2-17P/72/2022"])(
+    "a publisher workplace prefix remains part of %s",
+    (docket) => {
+      const parsed = DECISION_DOCKET_GRAMMARS.SVK.parse(docket);
+      expect(parsed).toEqual({
+        jurisdiction: "SVK",
+        formatted: docket,
+        canonical: docket.toLowerCase(),
+      });
+      expect(storedDecisionDocketOf(docket, "SVK")).toEqual({
+        type: "canonical",
+        caseNumber: docket,
+      });
+      const unprefixed = DECISION_DOCKET_GRAMMARS.SVK.parse(
+        docket.slice(docket.indexOf("-") + 1),
+      );
+      expect(unprefixed).not.toBeNull();
+      expect(parsed?.canonical).not.toBe(unprefixed?.canonical);
+    },
+  );
 });
 
 describe("Slovak Constitutional Court dockets", () => {

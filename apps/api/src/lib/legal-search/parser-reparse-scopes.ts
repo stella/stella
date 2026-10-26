@@ -290,11 +290,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
+        "Preserve main’s document corrections and rebuild quarantined listing types from owned CDM mappings, treating inherited object names as unknown.",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {

@@ -1,3 +1,4 @@
+// parser-output-unchanged: [pl-uokik] Slovak workplace prefixes extend only the SVK grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: [pl-uokik] BP extends only GBR and the division-list export leaves the POL grammar used by this adapter unchanged.
 // parser-output-unchanged: [pl-uokik] GBR adds a separate grammar; this adapter explicitly reads the unchanged POL grammar.
 // parser-output-unchanged: Unicode owner migration retains native normalization forms, mark classes and operation order; no folding is added.
@@ -499,8 +500,13 @@ const formatCzechDocket = (folded: string): string => {
   const numeral = senate.toLowerCase() === "pl" ? "Pl" : senate.toUpperCase();
   return `${numeral}. ÚS ${docket}`;
 };
-const SVK_DOCKET_RE =
-  /^(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?\/ ?| )(?<ordinal>\d{1,6})\/(?<year>\d{4})$/iu;
+/** The courthouse workplace remains part of a transferred Slovak docket. */
+export const SLOVAK_DOCKET_WORKPLACE_PREFIX_SOURCE = String.raw`[A-Z]\d{1,2}-`;
+
+const SVK_DOCKET_RE = new RegExp(
+  String.raw`^(?<workplace>${SLOVAK_DOCKET_WORKPLACE_PREFIX_SOURCE})?(?<senate>\d{1,3}) ?(?<registry>\p{L}{1,7})(?: ?/ ?| )(?<ordinal>\d{1,6})/(?<year>\d{4})$`,
+  "iu",
+);
 /**
  * A Slovak Constitutional Court docket: a Roman senate numeral or `PL.` for
  * the plenum, `ÚS`, the number and the year as the court wrote it (two digits
@@ -661,7 +667,7 @@ const parseSlovakDocket: DecisionDocketGrammarFor<"SVK">["parse"] = (raw) => {
     // a part after it keys by its spelling, so a spaced family would miss it.
     formatted: folded.replace(
       SVK_DOCKET_RE,
-      "$<senate>$<registry>/$<ordinal>/$<year>",
+      "$<workplace>$<senate>$<registry>/$<ordinal>/$<year>",
     ),
     canonical: canonicalSlovakDocketKey(folded),
   };
@@ -778,7 +784,9 @@ const canonicalSlovakDocketKey = (formatted: string): string => {
   ) {
     return panic("Accepted Slovak docket is missing a canonical component");
   }
-  return canonicalDocketKey(`${senate}${registry}/${ordinal}/${year}`);
+  return canonicalDocketKey(
+    `${groups?.["workplace"] ?? ""}${senate}${registry}/${ordinal}/${year}`,
+  );
 };
 
 const canonicalHungarianDocketKey = (formatted: string): string => {

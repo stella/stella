@@ -1,3 +1,4 @@
+// parser-output-unchanged: [sk-courts] Extracts quarantined replay identity matching into its own helper without changing accepted rows, aliases, labels or stored output.
 // parser-output-unchanged: [sk-courts] only adds sourceDocumentIdRepairAliases to guid-keyed rows; no stored row had a quarantine row to adopt.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
@@ -2444,6 +2445,29 @@ const skCourtsStoredDocketMatch = ({
     : "different";
 };
 
+const reparseQuarantinedSkCourtsRaw = (
+  stored: StoredRawReparseInput,
+  listed: Extract<SkCourtsRecordIdentity, { type: "quarantined" }>,
+): StoredRawReparseOutcome => {
+  // Only a row stored under that quarantine identity, or under the earlier
+  // id its rebuilt row names as a repair alias (which the pipeline adopts),
+  // is rebuilt from it. A row an earlier version stored under any other key
+  // keeps it: replay never moves a stored row onto an identity it cannot
+  // prove is the same record's.
+  const rebuilt = quarantinedSkCourtsDecision(listed);
+  return stored.sourceDocumentId === listed.quarantine.sourceDocumentId ||
+    (stored.sourceDocumentId !== null &&
+      rebuilt.sourceDocumentIdRepairAliases?.includes(
+        stored.sourceDocumentId,
+      ) === true)
+    ? reparsedSkCourtsDecision(stored, rebuilt)
+    : {
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+        detail: `the stored listing row for ${stored.caseNumber} is quarantined under ${listed.quarantine.sourceDocumentId}`,
+      };
+};
+
 /**
  * Rebuild a decision from the responses already stored for it.
  *
@@ -2477,23 +2501,7 @@ const reparseStoredRaw = (
   // A quarantined row is rebuilt from its listing alone, whatever the
   // listing's shape: that is all it was ever built from.
   if (listed.type === "quarantined") {
-    // Only a row stored under that quarantine identity, or under the earlier
-    // id its rebuilt row names as a repair alias (which the pipeline adopts),
-    // is rebuilt from it. A row an earlier version stored under any other key
-    // keeps it: replay never moves a stored row onto an identity it cannot
-    // prove is the same record's.
-    const rebuilt = quarantinedSkCourtsDecision(listed);
-    return stored.sourceDocumentId === listed.quarantine.sourceDocumentId ||
-      (stored.sourceDocumentId !== null &&
-        rebuilt.sourceDocumentIdRepairAliases?.includes(
-          stored.sourceDocumentId,
-        ) === true)
-      ? reparsedSkCourtsDecision(stored, rebuilt)
-      : {
-          type: "rejected",
-          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
-          detail: `the stored listing row for ${stored.caseNumber} is quarantined under ${listed.quarantine.sourceDocumentId}`,
-        };
+    return reparseQuarantinedSkCourtsRaw(stored, listed);
   }
   const item = storedPart(parts?.["listing"], isSkApiItem);
   if (item === null) {
