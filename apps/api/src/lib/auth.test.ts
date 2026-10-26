@@ -48,8 +48,10 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -118,6 +120,12 @@ testState.beforeAll(async () => {
       createdAt: new Date(),
     },
   ]);
+  for (const organizationId of [orgFull, orgEmpty]) {
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId,
+      now: new Date(),
+    });
+  }
 
   await testDb.insert(member).values([
     {
@@ -459,8 +467,7 @@ describe("resolveUserRealtimeAuthorization", () => {
   });
 });
 
-// oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
-const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
+const fakeCtx = (path: string) => asTestRaw<HookEndpointContext>({ path });
 
 describe("withStellaTwoFactorSignInGate", () => {
   test("keeps the after-hook (and its original handler) instead of dropping it", () => {

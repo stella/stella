@@ -242,9 +242,7 @@ describe("prepare_file_comparison_from_links", () => {
         headers: {
           "content-type": DOCX_MIME_TYPE,
           "content-length": "1",
-          "x-amz-checksum-sha256": Buffer.from(BASE_SHA, "hex").toString(
-            "base64",
-          ),
+          "x-amz-checksum-sha256": Buffer.from(BASE_SHA, "hex").toBase64(),
           "x-amz-sdk-checksum-algorithm": "SHA256",
         },
         size: BASE_BYTES.byteLength,
@@ -254,9 +252,7 @@ describe("prepare_file_comparison_from_links", () => {
         headers: {
           "content-type": DOCX_MIME_TYPE,
           "content-length": "1",
-          "x-amz-checksum-sha256": Buffer.from(TARGET_SHA, "hex").toString(
-            "base64",
-          ),
+          "x-amz-checksum-sha256": Buffer.from(TARGET_SHA, "hex").toBase64(),
           "x-amz-sdk-checksum-algorithm": "SHA256",
         },
         size: TARGET_BYTES.byteLength,

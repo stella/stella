@@ -400,6 +400,7 @@ describe("search_index_unavailable", () => {
       new UnhandledException({
         cause: searchIndexUnavailableError(new Error("refused")),
       }),
+      "mcp.response.failure",
     );
 
     expect(payloadOf(serialized(response))).toEqual(EXPECTED_ENVELOPE);
@@ -413,7 +414,9 @@ describe("search_index_unavailable", () => {
         message: "Search is temporarily unavailable",
       }),
     ]) {
-      const payload = payloadOf(serialized(internalFailureResult(error)));
+      const payload = payloadOf(
+        serialized(internalFailureResult(error, "mcp.payload.error")),
+      );
       expect(payload).toEqual({
         error: {
           code: "internal_error",

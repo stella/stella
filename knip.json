@@ -11,7 +11,10 @@
       "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
-        "typescript",
+        "tsrs",
+        // Git hooks load packages/scripts/src/syntax-tree.ts, which imports it;
+        // hook-dependencies.test.ts requires the root to declare it.
+        "oxc-parser",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",

@@ -16,13 +16,16 @@ import { detached } from "@/lib/detached";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
+import { routeSearchSchema } from "@/route-search-params";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 
 const KNOWLEDGE_MCP_PATH = "/knowledge/tools";
 const FALLBACK_NAVIGATE_DELAY_MS = 150;
 
-const searchSchema = v.object({
-  status: v.picklist(["connected", "error"]),
+const searchSchema = routeSearchSchema({
+  // A callback that does not say it connected reports a failure, never a
+  // connection.
+  status: v.optional(v.picklist(["connected", "error"]), "error"),
   slug: v.optional(v.string()),
   reason: v.optional(v.string()),
 });

@@ -64,8 +64,17 @@ const { useLegalDocumentChatThreads } =
 const { ChatEditorProvider } =
   await import("@/components/chat-editor-provider");
 const { LegalReaderAIChat } = await import("./legal-reader-ai-chat");
+const { askAboutReaderPassage } =
+  await import("./annotations/reader-annotation-target");
+const { useInspectorTabsStore } =
+  await import("@/components/inspector/inspector-tabs-store");
+const { DECISION_IDENTIFIER_TYPES } =
+  await import("@stll/legal-ast/decision-identifier");
 
 const READER_CONTENT = "Reader content";
+// The overlay host is a lazy chunk; its first load under a busy runner
+// outlasts the default per-test timeout.
+const LAZY_OVERLAY_TEST_TIMEOUT_MS = 30_000;
 
 afterEach(() => {
   cleanup();
@@ -80,6 +89,51 @@ afterAll(async () => {
   globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });
+
+type ActiveLegal = Parameters<typeof LegalReaderAIChat>[0]["activeLegal"];
+
+/** The law route as the app mounts a reader: no AI key gate above it. */
+const mountReader = async (activeLegal: ActiveLegal) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const router = createRouter({
+    routeTree: createRootRoute({
+      component: () => (
+        <ChatEditorProvider>
+          <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
+            <p>{READER_CONTENT}</p>
+          </LegalReaderAIChat>
+        </ChatEditorProvider>
+      ),
+    }),
+    history: createMemoryHistory({ initialEntries: ["/law/cz/statutes"] }),
+  });
+  await router.load();
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: "org-1",
+          email: "member@example.test",
+          id: "user-1",
+          image: null,
+          name: "Member",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <FormattingProvider locale="en" timeZone="UTC">
+            <RouterProvider router={router} />
+          </FormattingProvider>
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
+  );
+  return queryClient;
+};
 
 // The statute and decision readers, in the main view and in their inspector
 // views, all reach the chat through this component. Every route that mounts
@@ -101,46 +155,7 @@ test.each([
   "a signed-in $type reader renders its chat without a route-level AI gate",
   async (activeLegal) => {
     availabilityReads = 0;
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    // The law route as the app mounts it: a router and the chat editor
-    // above the reader, and no AI key gate.
-    const router = createRouter({
-      routeTree: createRootRoute({
-        component: () => (
-          <ChatEditorProvider>
-            <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
-              <p>{READER_CONTENT}</p>
-            </LegalReaderAIChat>
-          </ChatEditorProvider>
-        ),
-      }),
-      history: createMemoryHistory({ initialEntries: ["/law/cz/statutes"] }),
-    });
-    await router.load();
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AuthenticatedUserProvider
-          user={{
-            activeOrganizationId: "org-1",
-            email: "member@example.test",
-            id: "user-1",
-            image: null,
-            name: "Member",
-            preferredName: null,
-            timezoneId: "UTC",
-            wordEditShortcut: null,
-          }}
-        >
-          <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <RouterProvider router={router} />
-            </FormattingProvider>
-          </IntlProvider>
-        </AuthenticatedUserProvider>
-      </QueryClientProvider>,
-    );
+    const queryClient = await mountReader(activeLegal);
     // Nothing above the reader provides the gate, so the only availability
     // read is the one the overlay host makes for itself. Without it the
     // overlay panics and its boundary shows the error fallback instead.
@@ -181,7 +196,68 @@ test.each([
     expect(editor.getHTML()).toContain("www.stll.app");
     queryClient.clear();
   },
-  // The overlay host is a lazy chunk; its first load under a busy runner
-  // outlasts the default per-test timeout.
-  30_000,
+  LAZY_OVERLAY_TEST_TIMEOUT_MS,
+);
+
+// The reader's AI action sends a passage to the decision's one conversation
+// and opens it in the docked chat. That tab is then the conversation's only
+// composer: the reader floats none over the text rather than showing the same
+// draft a second time, and its own returns, draft included, once the tab
+// leaves the screen.
+// timeout: the overlay host is a lazy chunk whose first load outlasts the default budget
+test(
+  "asking about a passage leaves the docked chat as the only composer",
+  async () => {
+    const inspector = useInspectorTabsStore.getState();
+    const decisionId = "decision-1";
+    const caseNumber = "7 Azs 172/2025";
+    const queryClient = await mountReader({
+      type: "decision",
+      decisionId,
+      caseNumber,
+    });
+    await screen.findByRole("textbox", undefined, { timeout: 15_000 });
+    try {
+      await act(async () => {
+        askAboutReaderPassage({
+          prompt: "Explain the passage",
+          quote: "Reader passage",
+          target: {
+            type: "decision",
+            caseNumber,
+            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+            country: "CZE",
+            court: "Nejvyšší správní soud",
+            decisionDate: null,
+            decisionType: null,
+            ecli: null,
+            id: decisionId,
+            name: null,
+          },
+        });
+      });
+      await waitFor(() => {
+        expect(screen.queryAllByRole("textbox")).toEqual([]);
+      });
+      expect(screen.getByText(READER_CONTENT)).toBeDefined();
+      // Closing the docked chat hands the conversation back to the reader.
+      await act(async () => {
+        useInspectorTabsStore.setState({ minimized: true });
+      });
+      const composer = await screen.findByRole("textbox", undefined, {
+        timeout: 15_000,
+      });
+      if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
+        panic("Expected the reader overlay's mounted TipTap composer");
+      }
+      const editor = composer.editor;
+      await waitFor(() => {
+        expect(JSON.stringify(editor.getJSON())).toContain("Reader passage");
+      });
+    } finally {
+      useInspectorTabsStore.setState(inspector, true);
+      queryClient.clear();
+    }
+  },
+  LAZY_OVERLAY_TEST_TIMEOUT_MS,
 );

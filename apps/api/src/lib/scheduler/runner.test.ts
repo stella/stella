@@ -16,6 +16,9 @@ import {
 } from "@/api/db/backfill-runtime";
 import type { SchedulerSchedule } from "@/api/db/schema";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
+import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
+import { getExceptionScope } from "@/api/lib/observability/exception-scope";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -1166,4 +1169,34 @@ describe("lease heartbeat", () => {
     heartbeat.stop();
     expect(lostCount).toBe(0);
   });
+});
+
+test("scheduled job ownership scopes the same nested failure by persisted definition", async () => {
+  await seedJob({ id: "scope.first", task: "test.scoped" });
+  await seedJob({ id: "scope.second", task: "test.scoped" });
+  const fingerprints = new Map<string, string>();
+  const registry = registryOf("test.scoped", async ({ job }) => {
+    await Promise.resolve();
+    const scope = getExceptionScope();
+    expect(scope).toEqual({ type: "job", jobId: job.id, task: job.task });
+    if (scope !== undefined) {
+      fingerprints.set(
+        job.id,
+        exceptionFingerprint(readEvidence(new Error("private")), {
+          fingerprintKey: "shared.recordNestedFailure",
+          scope,
+        }),
+      );
+    }
+  });
+  const result = await runSchedulerOnce({
+    db,
+    leaseMs: LEASE_MS,
+    registry,
+    runnerId: "scope.runner",
+  });
+  expect(result.succeeded).toBe(2);
+  expect(fingerprints.size).toBe(2);
+  expect(new Set(fingerprints.values()).size).toBe(2);
+  expect(getExceptionScope()).toBeUndefined();
 });

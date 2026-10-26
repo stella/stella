@@ -13,7 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { workspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -25,6 +25,7 @@ import {
   userIdSchema,
 } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -327,7 +328,11 @@ export const updateWorkspaceHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs([workspaceId]).catch(captureError);
+  flushWorkspaceSearchRepairs([workspaceId]).catch(
+    createErrorCapture(
+      handlerErrorContext("updateWorkspaceHandler.flushWorkspaceSearchRepairs"),
+    ),
+  );
 
   return Result.ok({});
 };

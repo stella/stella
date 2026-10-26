@@ -2,6 +2,7 @@ import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { handlerErrorContext } from "@stll/errors/exception-context";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
@@ -203,10 +204,13 @@ const backfillRow = async (
     // points nowhere, and only the recording makes the work durable.
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(error, {
-      decisionId: row.id,
-      step: "caseLawCorpusStorageBackfill",
-    });
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillRow", {
+        decisionId: row.id,
+        step: "caseLawCorpusStorageBackfill",
+      }),
+    );
     return "failed";
   }
 };
@@ -280,10 +284,13 @@ const backfillLegislationRow = async (
 
     return recorded.length > 0 ? "written" : "skipped";
   } catch (error) {
-    captureError(error, {
-      documentId: row.id,
-      step: "legislationCorpusStorageBackfill",
-    });
+    captureError(
+      error,
+      handlerErrorContext("runners.backfillLegislationRow", {
+        documentId: row.id,
+        step: "legislationCorpusStorageBackfill",
+      }),
+    );
     return "failed";
   }
 };

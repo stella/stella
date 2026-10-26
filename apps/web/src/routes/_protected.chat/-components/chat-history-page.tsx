@@ -174,7 +174,7 @@ export const ChatHistoryPage = ({
     placeholderData: keepPreviousData,
   });
   const threadsView = useQueryView(threadsQuery);
-  useQueryViewError(threadsView);
+  useQueryViewError(threadsView, "ChatHistoryPage:query");
   const matterUnavailable =
     threadsView.type === "error" &&
     isMatterUnavailable({ error: threadsView.error, matter: search.matter });
@@ -187,7 +187,7 @@ export const ChatHistoryPage = ({
     }),
   );
   const mattersView = useQueryView(mattersQuery);
-  useQueryViewError(mattersView);
+  useQueryViewError(mattersView, "ChatHistoryPage:query-2");
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per
   // selection rather than a fresh copy on every render.

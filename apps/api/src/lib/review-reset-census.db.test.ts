@@ -82,7 +82,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       ).toEqual([...OWNER_ERASURE_TABLES].toSorted());
       const columns = await client<{ table: string; name: string }[]>`
         SELECT table_name AS table, column_name AS name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+        WHERE table_schema = 'public' AND table_name = ANY(${`{${[...REVIEW_RESET_CLEARED_TABLES, "workspaces"].join(",")}}`})`;
       const forced = await client<
         { name: string }[]
       >`SELECT relname AS name FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relforcerowsecurity`;
@@ -93,14 +93,21 @@ describe.skipIf(!enabled)("review reset policy census", () => {
         GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${owner}; GRANT USAGE ON SCHEMA ${schema} TO stella;
         SET search_path TO ${schema}, public`);
       try {
-        await client.unsafe(`CREATE TABLE workspaces (id uuid, organization_id text);
+        await client.unsafe(`CREATE TABLE workspaces (LIKE public.workspaces);
           CREATE TABLE member (organization_id text, user_id text, role text);
           GRANT SELECT ON workspaces, member TO stella;
           CREATE TABLE user_files (id uuid, thread_id uuid);
           ALTER TABLE workspaces OWNER TO ${owner}; ALTER TABLE member OWNER TO ${owner}; ALTER TABLE user_files OWNER TO ${owner}`);
+        for (const { name } of columns.filter(
+          ({ table }) => table === "workspaces",
+        )) {
+          await client.unsafe(
+            `ALTER TABLE workspaces ALTER COLUMN ${identifier(name)} DROP NOT NULL`,
+          );
+        }
         await client`INSERT INTO member VALUES (${organizationId}, ${reviewerId}, 'owner')`;
         for (const workspaceId of workspaceIds) {
-          await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
+          await client`INSERT INTO workspaces (id, organization_id) VALUES (${workspaceId}, ${organizationId})`;
         }
         for (const name of REVIEW_RESET_CLEARED_TABLES) {
           const table = identifier(name);

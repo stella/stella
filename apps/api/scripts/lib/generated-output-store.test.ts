@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { API } from "typescript/unstable/async";
+import { API } from "tsrs/unstable/async";
 
 import {
   type CompilerInputStamp,
@@ -43,10 +43,10 @@ const portableStamp = async (root: string): Promise<CompilerInputStamp> => {
   const tsconfig = path.join(root, "tsconfig.json");
   const api = new API({ cwd: root, fs: recorder.fileSystem() });
   try {
-    const snapshot = await api.updateSnapshot({ openProjects: [tsconfig] });
+    const snapshot = await api.createSnapshot({ openProjects: [tsconfig] });
     expect(
       await snapshot
-        .getProject(tsconfig)
+        .getConfiguredProject(tsconfig)
         ?.program.getSourceFile(path.join(root, "src/a.ts")),
     ).toBeDefined();
   } finally {
