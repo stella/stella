@@ -469,22 +469,26 @@ const selfTestDiff = (firstKey: string, secondKey: string) => {
   };
 };
 
-const selfTestMethodOwnership = () => {
-  const methodCode =
-    'const view = { render() { "use no memo"; useMemo(() => 1, []); return null; } };';
-  const methodSource = sourceFileFor("method.tsx", methodCode);
-  const methodOptOuts = new Map<string, BailoutRecord>();
-  addExplicitOptOuts(methodSource, "method.tsx", methodCode, methodOptOuts);
-  const methodNode = enclosingFunction(
-    methodSource,
-    methodCode.indexOf("useMemo"),
-  );
-  return (
-    methodNode !== undefined &&
-    functionName(methodSource, methodNode) === "render" &&
-    methodOptOuts.get("method.tsx::render")?.memos === 1
-  );
-};
+// Object literal and class methods both own their function's range, name and
+// opt-out directive.
+const selfTestMethodOwnership = () =>
+  [
+    'const view = { render() { "use no memo"; useMemo(() => 1, []); return null; } };',
+    'class View { render() { "use no memo"; useMemo(() => 1, []); return null; } }',
+  ].every((methodCode) => {
+    const methodSource = sourceFileFor("method.tsx", methodCode);
+    const methodOptOuts = new Map<string, BailoutRecord>();
+    addExplicitOptOuts(methodSource, "method.tsx", methodCode, methodOptOuts);
+    const methodNode = enclosingFunction(
+      methodSource,
+      methodCode.indexOf("useMemo"),
+    );
+    return (
+      methodNode !== undefined &&
+      functionName(methodSource, methodNode) === "render" &&
+      methodOptOuts.get("method.tsx::render")?.memos === 1
+    );
+  });
 
 const runSelfTest = (): number => {
   const code = [
