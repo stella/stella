@@ -20,6 +20,7 @@
     "oauth:partner-client": "bun run src/scripts/partner-oauth-client.ts",
     "oauth:partner-client-secret": "bun run src/scripts/partner-oauth-client-secret.ts",
     "oauth:service-client": "bun run src/scripts/service-oauth-client.ts",
+    "scheduler:job-pause": "bun run src/scripts/scheduler-job-pause.ts",
     "test:e2e:browser": "playwright test --config e2e/playwright.config.ts",
     "test:postgres": "bun scripts/run-postgres-tests.ts",
     "test:valkey": "bun scripts/run-valkey-tests.ts",
