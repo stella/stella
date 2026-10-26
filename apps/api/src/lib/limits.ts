@@ -351,6 +351,8 @@ export const LIMITS = {
   timeSuggestionTailMinutes: 5,
   /** Per-source cap on activity rows read for one day of suggestions. */
   timeSuggestionSignalsPerSourceMax: 1000,
+  /** Longest span of work dates one personal time read covers: a week. */
+  timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,

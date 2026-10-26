@@ -348,6 +348,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/time-entries/:workspaceId/summary": "crud",
   "GET /v1/time-entries/approval-queue": "crud",
   "GET /v1/time-entries/me": "crud",
+  "GET /v1/time-entries/me/suggestions": "crud",
   "GET /v1/time-timers": "crud",
   "GET /v1/time-timers/admin": "crud",
   "GET /v1/usage/access": "crud",

@@ -30,6 +30,7 @@ import {
   scalingCoverageViolations,
   withNewWriteRoutes,
 } from "./surface";
+import { suggestionRangeScalingScenario } from "./time-suggestion-range";
 import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
@@ -39,6 +40,7 @@ const measuredApiScenarios = [
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   ...claimCommentScalingScenarios,
+  suggestionRangeScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

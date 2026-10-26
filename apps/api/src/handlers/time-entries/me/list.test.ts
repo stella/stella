@@ -429,6 +429,30 @@ describe("personal time entries", () => {
       response: { code: "invalid_cursor" },
     });
   });
+
+  test("lists a range of work dates with per-day totals and caps it at a week", async () => {
+    const page = await listFor({ date: BEFORE_DAY, endDate: AFTER_DAY });
+    if (!isPage(page)) {
+      throw new Error(`unexpected list response: ${JSON.stringify(page)}`);
+    }
+    expect(page.items.map(({ id }) => id).toSorted()).toEqual(
+      [...visibleIds, hiddenIds[4], afterDayId].toSorted(),
+    );
+    expect(page.days).toEqual([
+      { dateWorked: BEFORE_DAY, loggedMinutes: 30, billableMinutes: 30 },
+      { dateWorked: DAY, loggedMinutes: 60, billableMinutes: 60 },
+      { dateWorked: AFTER_DAY, loggedMinutes: 30, billableMinutes: 30 },
+    ]);
+
+    const weekEnd = "2024-07-06";
+    expect(await listFor({ date: DAY, endDate: weekEnd })).toSatisfy(isPage);
+    for (const endDate of ["2024-07-07", BEFORE_DAY]) {
+      expect(await listFor({ date: DAY, endDate })).toMatchObject({
+        code: 400,
+        response: { code: "invalid_date_worked" },
+      });
+    }
+  });
 });
 
 test("my day includes the owner's internal work without exposing other members or tenants", async () => {
