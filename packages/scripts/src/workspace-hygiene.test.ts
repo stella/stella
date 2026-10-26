@@ -762,7 +762,7 @@ const createWorkspaceRoot = ({
     path.join(rootDir, "apps/landing/package.json"),
     JSON.stringify({
       devDependencies: {
-        "@astrojs/check": "^0.9.9",
+        "@astrojs/check": "^0.9.11",
         typescript: "catalog:ts6",
       },
       name: "@stll/landing",

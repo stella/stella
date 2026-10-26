@@ -948,7 +948,7 @@ export const createPostHogAnalytics = ({
       if (import.meta.env.DEV && !localDebugEnabled) {
         return null;
       }
-      if (!event || !isWebAnalyticsEvent(event.event)) {
+      if (!isWebAnalyticsEvent(event.event)) {
         return null;
       }
       switch (event.event) {
