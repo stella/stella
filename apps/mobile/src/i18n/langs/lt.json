@@ -8,7 +8,31 @@
   "chat": {
     "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
     "emptyTitle": "Pokalbių dar nėra",
-    "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos."
+    "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos.",
+    "loadFailed": "Nepavyko įkelti jūsų pokalbių.",
+    "retry": "Bandyti dar kartą",
+    "untitled": "Pokalbis be pavadinimo",
+    "loadMoreFailed": "Įkelti daugiau",
+    "loadOlderFailed": "Įkelti ankstesnes žinutes",
+    "toolUsed": "Naudota: {tool}",
+    "threadTitle": "Pokalbis",
+    "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
+    "threadEmptyDescription": "Šiame pokalbyje dar nėra žinučių.",
+    "sections": {
+      "today": "Šiandien",
+      "yesterday": "Vakar",
+      "week": "Paskutinės 7 dienos",
+      "earlier": "Anksčiau"
+    },
+    "newChat": "Naujas pokalbis",
+    "composerPlaceholder": "Klauskite stellos",
+    "send": "Siųsti",
+    "stop": "Sustabdyti",
+    "sendFailed": "Žinutės išsiųsti nepavyko. Bandykite dar kartą.",
+    "answerWorking": "Dirbu…",
+    "answerStopped": "Sustabdyta.",
+    "answerNeedsInput": "Šiam atsakymui reikia jūsų įvesties. Tęskite jį stella žiniatinklio programoje.",
+    "answerFailed": "Atsakymo užbaigti nepavyko."
   },
   "tasks": {
     "description": "Matykite, kam reikia dėmesio, neatidarydami visos darbo erdvės.",

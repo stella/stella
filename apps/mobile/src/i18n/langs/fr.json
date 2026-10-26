@@ -8,7 +8,31 @@
   "chat": {
     "description": "Gardez votre travail en cours à portée de main et reprenez-le depuis n’importe quel appareil.",
     "emptyTitle": "Aucune conversation",
-    "emptyDescription": "Les nouvelles conversations et les fils récents apparaîtront ici."
+    "emptyDescription": "Les nouvelles conversations et les fils récents apparaîtront ici.",
+    "loadFailed": "Vos conversations n’ont pas pu être chargées.",
+    "retry": "Réessayer",
+    "untitled": "Conversation sans titre",
+    "loadMoreFailed": "Charger plus",
+    "loadOlderFailed": "Charger les messages précédents",
+    "toolUsed": "Utilisé : {tool}",
+    "threadTitle": "Conversation",
+    "threadLoadFailed": "Cette conversation n’a pas pu être chargée.",
+    "threadEmptyDescription": "Cette conversation ne contient encore aucun message.",
+    "sections": {
+      "today": "Aujourd’hui",
+      "yesterday": "Hier",
+      "week": "7 derniers jours",
+      "earlier": "Plus ancien"
+    },
+    "newChat": "Nouvelle conversation",
+    "composerPlaceholder": "Demander à stella",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "sendFailed": "Votre message n’a pas pu être envoyé. Réessayez.",
+    "answerWorking": "En cours…",
+    "answerStopped": "Arrêté.",
+    "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
+    "answerFailed": "La réponse n’a pas pu être terminée."
   },
   "tasks": {
     "description": "Voyez ce qui demande votre attention sans ouvrir tout l’espace de travail.",
