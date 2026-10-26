@@ -84,6 +84,13 @@ type ReconcileDecisionsOptions = {
   replacements: ReadonlyMap<string, string>;
 };
 
+const decisionKind = (file: string): unknown => {
+  const decision: unknown = JSON.parse(readFileSync(file, "utf-8"));
+  return typeof decision === "object" && decision !== null && "kind" in decision
+    ? decision.kind
+    : undefined;
+};
+
 const reconcileDecisions = ({
   root,
   previous,
@@ -94,6 +101,7 @@ const reconcileDecisions = ({
     root,
     ".github/ci-job-classification-decisions",
   );
+  const conflicted = new Set<string>();
   for (const name of new Bun.Glob("*.json").scanSync({
     cwd: decisionDirectory,
   })) {
@@ -123,10 +131,20 @@ const reconcileDecisions = ({
     }
     const renamedKey = `${replacement}${key.slice(separator)}`;
     const newFile = path.resolve(root, decisionPathForKey(renamedKey));
+    if (conflicted.has(renamedKey)) {
+      rmSync(path.resolve(root, oldFile));
+      continue;
+    }
     if (existsSync(newFile)) {
-      throw new AdmissionError({
-        message: `Decision already exists: ${renamedKey}`,
-      });
+      // Two old revisions converged on one new revision. Decisions that
+      // agree on the kind keep the one already in place; decisions that
+      // disagree are both dropped, so the job is reviewed afresh.
+      if (decisionKind(newFile) !== decisionKind(path.resolve(root, oldFile))) {
+        rmSync(newFile);
+        conflicted.add(renamedKey);
+      }
+      rmSync(path.resolve(root, oldFile));
+      continue;
     }
     renameSync(path.resolve(root, oldFile), newFile);
   }
@@ -298,27 +316,124 @@ export const writeSnapshots = ({
         ),
       ),
     };
-    for (const [oldSupplier, snapshot] of Object.entries(previous)) {
-      if (
-        oldSupplier !== supplier &&
-        retained[oldSupplier] === undefined &&
-        snapshot.origin.owner === origin.owner &&
-        snapshot.origin.repo === origin.repo
-      ) {
-        replacements.set(oldSupplier, supplier);
-      }
+  }
+  const refreshBase = base ?? gitBase(root);
+  const moves = pinMoves(root, refreshBase);
+  for (const [oldSupplier, snapshot] of Object.entries(previous)) {
+    if (retained[oldSupplier] !== undefined) {
+      continue;
+    }
+    const { owner, repo } = snapshot.origin;
+    const added = Object.entries(retained).filter(
+      ([supplier, candidate]) =>
+        previous[supplier] === undefined &&
+        candidate.origin.owner === owner &&
+        candidate.origin.repo === repo,
+    );
+    const moved = moves.get(sourceIdentity(snapshot.origin));
+    // Without a caller site that pairs up, only an unambiguous successor
+    // inherits the old supplier's decisions.
+    const fallback = added.length === 1 ? added[0] : undefined;
+    const target =
+      moved === undefined
+        ? fallback
+        : added.find(([, candidate]) => moved.has(candidate.origin.sha));
+    if (target !== undefined) {
+      replacements.set(oldSupplier, target[0]);
     }
   }
 
   reconcileDecisions({ root, previous, retained, replacements });
   writeFileSync(snapshotFile, `${JSON.stringify(retained, null, 2)}\n`);
 
-  const refreshBase = base ?? gitBase(root);
   const refreshed = refreshJobClassificationDigests(root, refreshBase);
   if (refreshed.isErr()) {
     throw refreshed.error;
   }
   return { refreshed: refreshed.value.refreshed };
+};
+
+const gitOutput = (root: string, args: readonly string[]) => {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    throw new AdmissionError({ message: `git ${args.join(" ")} failed` });
+  }
+  return new TextDecoder().decode(result.stdout);
+};
+
+const isMetadataFile = (file: string) =>
+  file.startsWith(".github/") &&
+  (file.endsWith(".yml") || file.endsWith(".yaml"));
+
+/**
+ * Each remote `uses:` pin, keyed by its file, its reference without the
+ * revision, and its occurrence among equal references in that file, so the
+ * same site can be found on both sides of a change.
+ */
+const pinSites = (files: ReadonlyMap<string, string>) => {
+  const sites = new Map<string, { repository: string; sha: string }>();
+  for (const [file, text] of files) {
+    const occurrences = new Map<string, number>();
+    for (const line of text.split("\n")) {
+      const at = line.indexOf("uses:");
+      if (at === -1) {
+        continue;
+      }
+      const value = line
+        .slice(at + "uses:".length)
+        .trim()
+        .replace(/^["']/u, "")
+        .split(/[\s"'#]/u)[0];
+      if (!value || value.startsWith("./") || value.startsWith("docker://")) {
+        continue;
+      }
+      const parsed = Result.try(() => parseRemoteReference(value));
+      if (parsed.isErr()) {
+        continue;
+      }
+      const { owner, repo, path: documentPath, sha } = parsed.value;
+      const reference = `${owner}/${repo}/${documentPath}`;
+      const occurrence = occurrences.get(reference) ?? 0;
+      occurrences.set(reference, occurrence + 1);
+      sites.set(`${file}\0${reference}\0${occurrence}`, {
+        repository: `${owner}/${repo}`,
+        sha,
+      });
+    }
+  }
+  return sites;
+};
+
+/** Old `owner/repo@sha` pins mapped to the revisions their sites now pin. */
+const pinMoves = (root: string, base: string) => {
+  const baseFiles = new Map(
+    gitOutput(root, ["ls-tree", "-r", "--name-only", base, "--", ".github"])
+      .split("\n")
+      .filter(isMetadataFile)
+      .map((file) => [file, gitOutput(root, ["show", `${base}:${file}`])]),
+  );
+  const headFiles = new Map(
+    [
+      ...new Bun.Glob(".github/**/*.{yml,yaml}").scanSync({
+        cwd: root,
+        dot: true,
+      }),
+    ].map((file) => [file, readFileSync(path.resolve(root, file), "utf-8")]),
+  );
+  const head = pinSites(headFiles);
+  const moves = new Map<string, Set<string>>();
+  for (const [site, before] of pinSites(baseFiles)) {
+    const after = head.get(site);
+    if (after === undefined || after.sha === before.sha) {
+      continue;
+    }
+    const key = `${before.repository}@${before.sha}`;
+    moves.set(key, (moves.get(key) ?? new Set()).add(after.sha));
+  }
+  return moves;
 };
 
 const gitBase = (root: string) => {

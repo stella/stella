@@ -214,3 +214,115 @@ test("a privilege-relevant content change remains review-required", () => {
     expect(result.error.message).toContain("Missing or changed job review");
   }
 });
+
+const createConvergingFixture = (
+  kinds: readonly [string, string],
+  split = false,
+) => {
+  const directory = mkdtempSync(
+    path.join(tmpdir(), "classification-snapshots-"),
+  );
+  const source = path.join(directory, "source");
+  const root = path.join(directory, "candidate");
+  mkdirSync(source);
+  mkdirSync(root);
+  for (const repository of [source, root]) {
+    git(repository, "init", "-q");
+    git(repository, "config", "user.email", "tests@example.com");
+    git(repository, "config", "user.name", "Tests");
+  }
+  write(source, ".github/workflows/shared.yml", reusable());
+  const firstSha = commit(source, "first");
+  const secondSha = commit(source, "second");
+  const newSha = commit(source, "new");
+  const otherSha = split ? commit(source, "other") : newSha;
+  write(root, ".github/workflows/first.yml", caller(firstSha));
+  write(root, ".github/workflows/second.yml", caller(secondSha));
+  const snapshot = (sha: string) => ({
+    origin: { type: "git", owner: "acme", repo: "shared", sha },
+    documents: { ".github/workflows/shared.yml": reusable() },
+  });
+  write(
+    root,
+    ".github/ci-job-classification-sources.json",
+    `${JSON.stringify(
+      { supplier6: snapshot(firstSha), supplier7: snapshot(secondSha) },
+      null,
+      2,
+    )}\n`,
+  );
+  mkdirSync(path.join(root, ".github/ci-job-classification-decisions"));
+  let jobs: ReadonlyMap<string, DerivedJob> | undefined;
+  generateClassification({
+    ...readClassificationInputs(root),
+    observeJobs: (value) => {
+      jobs = value;
+    },
+  });
+  if (!jobs) {
+    throw new Error("fixture jobs missing");
+  }
+  for (const [key, job] of jobs) {
+    const kind = key.startsWith("supplier7:") ? kinds[1] : kinds[0];
+    writeDecision(root, key, {
+      kind,
+      qualifier: `reviewed ${key}`,
+      reviewedDigest: job.digest,
+    });
+  }
+  const base = commit(root, "base");
+  write(root, ".github/workflows/first.yml", caller(newSha));
+  write(root, ".github/workflows/second.yml", caller(otherSha));
+  writeSnapshots({
+    root,
+    sources: { ...sources(source, newSha), ...sources(source, otherSha) },
+    base,
+  });
+  const remoteDecisions = readdirSync(
+    path.join(root, ".github/ci-job-classification-decisions"),
+  )
+    .map((name) =>
+      decisionKeyFromPath(`.github/ci-job-classification-decisions/${name}`),
+    )
+    .filter((key) => key.startsWith("supplier"));
+  const kindOf = (sha: string) => {
+    const supplier =
+      Object.entries(readClassificationInputs(root).snapshots).find(
+        ([, entry]) => entry.origin.sha === sha,
+      )?.[0] ?? "missing";
+    const key = `${supplier}:.github/workflows/shared.yml/shared`;
+    return remoteDecisions.includes(key)
+      ? JSON.parse(
+          readFileSync(path.join(root, decisionPathForKey(key)), "utf-8"),
+        ).kind
+      : undefined;
+  };
+  return { root, base, remoteDecisions, kindOf, newSha, otherSha };
+};
+
+test("two old revisions bumped to two new ones keep their own decisions", () => {
+  const fixture = createConvergingFixture(["ordinary", "priority"], true);
+  expect(fixture.remoteDecisions).toHaveLength(2);
+  expect(fixture.kindOf(fixture.newSha)).toBe("ordinary");
+  expect(fixture.kindOf(fixture.otherSha)).toBe("priority");
+});
+
+test("two old revisions converging on one keep a decision they agree on", () => {
+  const fixture = createConvergingFixture(["ordinary", "ordinary"]);
+  expect(Object.keys(readClassificationInputs(fixture.root).snapshots)).toEqual(
+    ["supplier8"],
+  );
+  expect(fixture.remoteDecisions).toEqual([
+    "supplier8:.github/workflows/shared.yml/shared",
+  ]);
+});
+
+test("two old revisions converging on one with different kinds need a review", () => {
+  const fixture = createConvergingFixture(["ordinary", "priority"]);
+  expect(fixture.remoteDecisions).toEqual([]);
+  const result = checkJobClassification(fixture.root, fixture.base);
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("Missing or changed job review");
+  }
+});

@@ -835,3 +835,39 @@ test("type-aware autofix fixtures require a successful dependency install", asyn
     "apps/api/scripts/refresh-test-durations.test.ts",
   );
 });
+
+test("pinned source discovery reads quoted and unquoted reusable workflow pins", () => {
+  const workflow: unknown = Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8"));
+  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+  const job = isRecord(jobs) ? jobs["discover-classification-sources"] : null;
+  const step = workflowStepByName(
+    isRecord(job) ? job["steps"] : [],
+    "Find newly pinned public sources",
+  );
+  const run = typeof step["run"] === "string" ? step["run"] : "";
+  const filter = run
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith("| sed -nE "))
+    ?.slice(2)
+    .replace(/ \\$/u, "");
+  expect(filter).toBeDefined();
+  const sha = "a".repeat(40);
+  const diff = [
+    `+    uses: stella/.github/.github/workflows/one.yml@${sha}`,
+    `+    uses: "stella/.github/.github/workflows/two.yml@${"b".repeat(40)}"`,
+    `+      - uses: 'stella/.github/actions/three@${"c".repeat(40)}' # v1`,
+    `+    uses: other/repo/.github/workflows/four.yml@${sha}`,
+    `     uses: stella/.github/.github/workflows/five.yml@${"d".repeat(40)}`,
+  ].join("\n");
+  const result = Bun.spawnSync(["bash", "-c", filter ?? "false"], {
+    stdin: new TextEncoder().encode(`${diff}\n`),
+    stdout: "pipe",
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString().trim().split("\n")).toEqual([
+    `stella/.github@${sha}`,
+    `stella/.github@${"b".repeat(40)}`,
+    `stella/.github@${"c".repeat(40)}`,
+  ]);
+});

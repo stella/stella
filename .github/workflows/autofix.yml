@@ -470,7 +470,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --unified=0 "$BASE_SHA" HEAD -- .github/workflows .github/actions \
-            | sed -nE 's#^\+.*uses:[[:space:]]*(stella/\.github)/[^@[:space:]]+@([0-9a-f]{40}).*$#\1@\2#p' \
+            | sed -nE 's#^\+.*uses:[[:space:]]*["'"'"']?(stella/\.github)/[^@[:space:]"'"'"']+@([0-9a-f]{40}).*$#\1@\2#p' \
             | sort -u > "$RUNNER_TEMP/classification-sources"
           matrix=$(jq -Rsc '
             split("\n") | map(select(length > 0)) | to_entries
