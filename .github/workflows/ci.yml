@@ -2829,12 +2829,12 @@ jobs:
   # the same scope the serial run computed (scripts/test-scope.ts) down to the
   # packages it owns; scripts/test-shards.ts owns the mapping.
   ci-tests:
-    needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
@@ -3207,13 +3207,13 @@ jobs:
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
   ci-browser:
-    needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
@@ -3725,12 +3725,12 @@ jobs:
           script: *pr_code_quality_cancel
 
   query-perf:
-    needs: [ci-plan, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && inputs.pr_depth_only != true
       && needs.ci-plan.outputs.run_required != 'false'
       && (inputs.heavy_only == true
@@ -3744,12 +3744,12 @@ jobs:
       heavy_only: ${{ inputs.heavy_only == true }}
 
   postgres-service-suites:
-    needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
@@ -3951,12 +3951,12 @@ jobs:
       - *merge_group_cancel
 
   service-suites:
-    needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
@@ -4641,12 +4641,12 @@ jobs:
   # run would blow that job's timeout; here they run in parallel instead.
   # Regenerate the cumulative budget: `bun scripts/typecheck-baseline.ts --write-baseline`.
   web-build:
-    needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
@@ -5008,13 +5008,13 @@ jobs:
 
   route-smoke:
     needs:
-      [ci-plan, web-build, heavy-web-build, code-quality-api, ci-quick-checks]
+      [ci-plan, web-build, heavy-web-build, code-quality-api, pr-heavy-gate]
     # Affected browser suites certify the queued tree at every queue depth.
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && inputs.pr_depth_only != true
 
       && (
@@ -5130,13 +5130,13 @@ jobs:
 
   e2e-production-shard:
     needs:
-      [ci-plan, web-build, heavy-web-build, code-quality-api, ci-quick-checks]
+      [ci-plan, web-build, heavy-web-build, code-quality-api, pr-heavy-gate]
     # Test the selected browser specs on the queued tree.
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
@@ -5453,12 +5453,12 @@ jobs:
       - *merge_group_cancel
 
   e2e-vite-canary:
-    needs: [ci-plan, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && inputs.pr_depth_only != true
 
       && (
@@ -5673,12 +5673,12 @@ jobs:
   # Every depth: a landing change is checked in its own pull request and
   # merge group, not only by the scheduled full run.
   e2e-landing:
-    needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]
+    needs: [ci-plan, pr-heavy-gate, code-quality-api]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
@@ -5902,13 +5902,13 @@ jobs:
         e2e-production-shard,
         e2e-vite-canary,
         code-quality-api,
-        ci-quick-checks,
+        pr-heavy-gate,
       ]
     if: >-
       !cancelled()
       && (github.event_name != 'pull_request'
           || (needs.code-quality-api.result != 'failure'
-              && needs.ci-quick-checks.result != 'failure'))
+              && needs.pr-heavy-gate.result == 'success'))
       && inputs.pr_depth_only != true
 
       && (

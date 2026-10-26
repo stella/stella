@@ -513,10 +513,20 @@ test("release-periodic jobs also run on non-release schedules and stay off pull 
   expect(check()).toContain("fixture.yml/removed: stale periodic job");
 });
 
-const CHEAP_PULL_REQUEST_GATES = [
-  "code-quality-api",
-  "ci-quick-checks",
-] as const;
+const CHEAP_PULL_REQUEST_GATES = ["code-quality-api", "pr-heavy-gate"] as const;
+const CHEAP_GATE_REQUIREMENTS = {
+  "code-quality-api": {
+    comparison: "!= 'failure'",
+    message: "tolerate a skipped",
+  },
+  "pr-heavy-gate": {
+    comparison: "== 'success'",
+    message: "require a successful",
+  },
+} as const satisfies Record<
+  (typeof CHEAP_PULL_REQUEST_GATES)[number],
+  { comparison: string; message: string }
+>;
 const EXPENSIVE_PULL_REQUEST_JOBS = [
   "ci-tests",
   "ci-browser",
@@ -544,9 +554,13 @@ const cheapGateProblems = (workflow: unknown) => {
       ...(needs?.includes(gate) === true
         ? []
         : [`${name}: needs must include ${gate}`]),
-      ...(condition.includes(`needs.${gate}.result != 'failure'`)
+      ...(condition.includes(
+        `needs.${gate}.result ${CHEAP_GATE_REQUIREMENTS[gate].comparison}`,
+      )
         ? []
-        : [`${name}: condition must tolerate a skipped ${gate}`]),
+        : [
+            `${name}: condition must ${CHEAP_GATE_REQUIREMENTS[gate].message} ${gate}`,
+          ]),
     ]);
   });
 };
@@ -581,9 +595,11 @@ test("ci-result keeps failed cheap gates strict when gated jobs skip", () => {
     expect(needs).toContain(gate);
   }
   const outcome = result.steps?.find(
-    (step) => step.name === "Evaluate CI outcome",
+    (step) => step["name"] === "Evaluate CI outcome",
   );
-  const fastRequired = JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? "null");
+  const fastRequired = JSON.parse(
+    v.parse(v.string(), outcome?.env?.["FAST_REQUIRED"]),
+  );
   expect(fastRequired).toEqual(
     expect.arrayContaining(["code-quality-api", "pr-heavy-gate"]),
   );

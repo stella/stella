@@ -697,6 +697,7 @@ const heavyGateContext = (event: string) => ({
     "needs.ci-plan.outputs.heavy_proof": "true",
     "needs.ci-plan.outputs.armed_delta": "false",
     "needs.generated-sources.result": "success",
+    "needs.code-quality-api.result": "success",
     "needs.pr-heavy-gate.result":
       event === EVENT.pullRequest ? "success" : "skipped",
   },
@@ -7171,6 +7172,7 @@ test("Postgres plans are visible on PRs while execution requires explicit opt-in
             values: {
               ...jobValues,
               "needs.ci-plan.result": "success",
+              "needs.code-quality-api.result": "success",
               "needs.pr-heavy-gate.result":
                 event === EVENT.pullRequest ? "success" : "skipped",
             },
@@ -8693,9 +8695,11 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
     "e2e-landing",
     "e2e-production-shard",
     "e2e-report",
+    "e2e-vite-canary",
     "marketing-screenshots",
     "marketing-screenshots-cancel",
     "postgres-service-suites",
+    "query-perf",
     "route-smoke",
     "service-suites",
     "web-build",
@@ -8704,12 +8708,7 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
     expect(
       v.parse(v.object({ needs: v.array(v.string()) }), ciJobs[job]).needs,
       job,
-    ).toEqual([
-      "ci-plan",
-      "pr-heavy-gate",
-      "code-quality-api",
-      "ci-quick-checks",
-    ]);
+    ).toEqual(["ci-plan", "pr-heavy-gate", "code-quality-api"]);
   }
   expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual(
     expect.arrayContaining(["ci-tests", "ci-browser", "web-build"]),
@@ -8844,6 +8843,7 @@ test("every scope that plans a pull request heavy suite also plans its gate", ()
           "steps.depth.outputs.suite_depth": SUITE_DEPTH.fast,
           "steps.pilot.outputs.coverage_profile": "normal-v1",
           "needs.ci-plan.result": "success",
+          "needs.code-quality-api.result": "success",
           "needs.pr-heavy-gate.result": "success",
         },
         status: { cancelled: false },

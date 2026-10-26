@@ -1519,7 +1519,7 @@ describe("detect-e2e-changes", () => {
 
     const webBuild = workflowJob("web-build");
     expect(webBuild).toContain(
-      "needs: [ci-plan, pr-heavy-gate, code-quality-api, ci-quick-checks]",
+      "needs: [ci-plan, pr-heavy-gate, code-quality-api]",
     );
     expect(webBuild).toContain("Upload production E2E web build");
     expect(webBuild).toContain("uses: ./.github/actions/build-e2e-web");
@@ -1531,7 +1531,7 @@ describe("detect-e2e-changes", () => {
       "web-build",
       "heavy-web-build",
       "code-quality-api",
-      "ci-quick-checks",
+      "pr-heavy-gate",
     ]);
     const predicate = requiredExpression(productionJob?.if);
     for (const event of [
@@ -1576,7 +1576,10 @@ describe("detect-e2e-changes", () => {
                         "web-build": { result: webResult },
                         "heavy-web-build": { result: heavyResult },
                         "code-quality-api": { result: "success" },
-                        "ci-quick-checks": { result: "skipped" },
+                        "pr-heavy-gate": {
+                          result:
+                            event === "pull_request" ? "success" : "skipped",
+                        },
                       },
                       always: () => true,
                       cancelled: () => cancelled,
