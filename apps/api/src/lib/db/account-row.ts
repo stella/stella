@@ -11,10 +11,7 @@ import {
   ACCOUNT_EMAIL_UNDELIVERABLE_REASONS,
   type AccountEmailUndeliverableReason,
 } from "@/api/lib/email/deliverability-contract";
-import {
-  emailColumnMatches,
-  type NormalizedEmail,
-} from "@/api/lib/email/normalized-email";
+import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 // Account-level access to the auth `user` row.
@@ -227,7 +224,7 @@ export const markAccountEmailUndeliverable = async ({
     })
     .where(
       and(
-        emailColumnMatches(user.email, email),
+        eq(user.email, email),
         or(
           isNull(user.emailUndeliverableAddress),
           ne(user.emailUndeliverableAddress, email),
@@ -256,10 +253,7 @@ export const readAccountEmailUndeliverable = async (
     .select({ id: user.id, reason: user.emailUndeliverableReason })
     .from(user)
     .where(
-      and(
-        emailColumnMatches(user.email, email),
-        eq(user.emailUndeliverableAddress, email),
-      ),
+      and(eq(user.email, email), eq(user.emailUndeliverableAddress, email)),
     )
     .limit(1);
   const row = rows.at(0);
