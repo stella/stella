@@ -542,7 +542,7 @@ const probeEntry = async ({
     const baseFiles = Object.fromEntries(
       changes.map(({ source, before }) => [source, before]),
     );
-    validateRemovalModules(files);
+    await validateRemovalModules(files);
     for (const { source, after } of changes) {
       writeFileSync(path.join(checkout, source), after);
     }
