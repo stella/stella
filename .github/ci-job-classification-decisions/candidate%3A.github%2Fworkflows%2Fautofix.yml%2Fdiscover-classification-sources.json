@@ -1,5 +1,0 @@
-{
-  "kind": "ordinary",
-  "qualifier": "Discovers newly pinned public reusable-workflow sources for pull-request autofix; no release publication, tag creation, or deployment.",
-  "reviewedDigest": "9464313c6549053e5efb3c31f677974bc3009f002f143ea01e5f1efe95646aa2"
-}

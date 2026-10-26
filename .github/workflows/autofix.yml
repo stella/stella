@@ -17,11 +17,17 @@ on:
         description: Owning generator ID
         required: true
         type: string
-  # Workflow files are never fixed (the App cannot push them), but every one
-  # feeds the job classification digests, so no path is filtered out. A test
-  # derives this from the generators and the Tauri alignment.
+  # Workflow files are never fixed (the App cannot push them), so a workflow
+  # edit runs autofix only where a generator or the Tauri alignment reads that
+  # workflow. A test derives this list from the generators.
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - "**"
+      - "!.github/workflows/**"
+      - .github/workflows/autofix.yml
+      - .github/workflows/ci.yml
+      - .github/workflows/release.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
@@ -436,205 +442,11 @@ jobs:
             bun --no-install --no-env-file scripts/autofix-plan.ts plan < "$RUNNER_TEMP/changed-paths" >> "$GITHUB_OUTPUT"
           fi
 
-  discover-classification-sources:
-    name: Discover reusable workflow sources
-    needs: regenerate-scope
-    if: >-
-      !cancelled()
-      && ((needs.regenerate-scope.result == 'success'
-           && needs.regenerate-scope.outputs.ready == 'true'
-           && needs.regenerate-scope.outputs.needed != 'false')
-          || (github.actor != 'autofix-ci[bot]'
-              && github.event.pull_request.user.login == 'dependabot[bot]'
-              && github.event.pull_request.head.repo.full_name == github.repository
-              && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')))
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    outputs:
-      matrix: ${{ steps.sources.outputs.matrix }}
-    steps:
-      - name: Checkout pull request head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Find newly pinned public sources
-        id: sources
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git diff --unified=0 "$BASE_SHA" HEAD -- .github/workflows .github/actions \
-            | sed -nE 's#^\+.*uses:[[:space:]]*["'"'"']?(stella/\.github)/[^@[:space:]"'"'"']+@([0-9a-f]{40}).*$#\1@\2#p' \
-            | sort -u > "$RUNNER_TEMP/classification-sources"
-          matrix=$(jq -Rsc '
-            split("\n") | map(select(length > 0)) | to_entries
-            | if length == 0 then [{key: 0, value: "@"}] else . end
-            | {include: map({index: .key, repository: (.value | split("@")[0]), sha: (.value | split("@")[1]), active: (.value != "@")})}
-          ' "$RUNNER_TEMP/classification-sources")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-
-  checkout-classification-sources:
-    name: Checkout reusable workflow source
-    needs: discover-classification-sources
-    if: >-
-      !cancelled()
-      && needs.discover-classification-sources.result == 'success'
-    strategy:
-      matrix: ${{ fromJSON(needs.discover-classification-sources.outputs.matrix) }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout pinned public source
-        if: matrix.active
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 2
-        with:
-          repository: ${{ matrix.repository }}
-          ref: ${{ matrix.sha }}
-          path: source
-          persist-credentials: false
-
-      - name: Record source identity
-        env:
-          REPOSITORY: ${{ matrix.repository }}
-          SHA: ${{ matrix.sha }}
-        run: |
-          touch artifact-marker
-          if [[ "${{ matrix.active }}" == true ]]; then
-            printf '%s@%s\n' "$REPOSITORY" "$SHA" > source-spec
-            # The generator reads the pinned revision through Git, so the
-            # checkout travels with its .git directory in one archive.
-            tar -cf source.tar -C source .
-          fi
-
-      - name: Upload pinned source
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        timeout-minutes: 2
-        with:
-          name: classification-source-${{ matrix.index }}
-          path: |
-            source.tar
-            source-spec
-            artifact-marker
-
-  dependabot-actions-snapshot-autofix:
-    name: Autofix Dependabot workflow snapshots
-    needs: checkout-classification-sources
-    if: >-
-      !cancelled()
-      && needs.checkout-classification-sources.result == 'success'
-      && github.actor != 'autofix-ci[bot]'
-      && github.event.pull_request.user.login == 'dependabot[bot]'
-      && github.event.pull_request.head.repo.full_name == github.repository
-      && startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    steps:
-      - name: Checkout Dependabot head
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Verify trusted snapshot sources
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        # This job runs the head's code, so the head may change nothing but
-        # the workflow and action pins an actions update bumps, and the
-        # snapshot outputs an earlier run of this job pushed. Compared from
-        # the merge base, so later base-branch changes do not count.
-        run: |
-          set -euo pipefail
-          unexpected="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" -- . \
-            ':(exclude).github/workflows/**' ':(exclude).github/actions/**' \
-            ':(exclude).github/ci-job-classification-sources.json' \
-            ':(exclude).github/ci-job-classification-decisions/**')"
-          if [[ -n "$unexpected" ]]; then
-            echo "::error::A workflow snapshot autofix runs only on pin updates; this head also changes:"
-            printf '%s\n' "$unexpected"
-            exit 1
-          fi
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-          bun-version-file: "package.json"
-
-      - name: Install dependencies
-        timeout-minutes: 5
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: Download pinned classification sources
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        timeout-minutes: 2
-        with:
-          pattern: classification-source-*
-          path: ${{ runner.temp }}/classification-sources
-
-      - name: Regenerate workflow snapshots
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          source_args=()
-          while IFS= read -r spec_file; do
-            source_directory="$(dirname "$spec_file")/source"
-            mkdir -p "$source_directory"
-            tar -xf "$(dirname "$spec_file")/source.tar" -C "$source_directory"
-            source_args+=(--source "$(cat "$spec_file")=$source_directory")
-          done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
-          bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "${source_args[@]}"
-          bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"
-
-      - name: Restrict generated changes
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then
-            echo "::error::Autofix moved HEAD away from $HEAD_SHA."
-            exit 1
-          fi
-          unexpected_tracked="$(git diff --name-only "$HEAD_SHA" -- . \
-            ':(exclude).github/ci-job-classification-sources.json' \
-            ':(exclude).github/ci-job-classification-decisions/**')"
-          unexpected_untracked="$(git ls-files --others --exclude-standard -- . \
-            ':(exclude).github/ci-job-classification-sources.json' \
-            ':(exclude).github/ci-job-classification-decisions/**')"
-          if [[ -n "${unexpected_tracked}${unexpected_untracked}" ]]; then
-            echo "::error::Autofix changed files outside classification snapshot outputs."
-            git status --short
-            exit 1
-          fi
-          git diff --check -- .github/ci-job-classification-sources.json \
-            .github/ci-job-classification-decisions
-
-      - name: Push workflow snapshot autofixes
-        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
-        with:
-          commit-message: "chore: regenerate workflow snapshots"
-
   regenerate-derived-files:
     name: Autofix changed files
-    needs: [regenerate-scope, checkout-classification-sources]
+    needs: regenerate-scope
     if: >-
-      !cancelled()
-      && needs.regenerate-scope.result == 'success'
+      needs.regenerate-scope.result == 'success'
       && needs.regenerate-scope.outputs.ready == 'true'
       && needs.regenerate-scope.outputs.needed != 'false'
     runs-on: ubuntu-24.04
@@ -709,13 +521,6 @@ jobs:
         env:
           # .npmrc references NPM_TOKEN; pull request installs get none.
           NPM_TOKEN: ""
-
-      - name: Download pinned classification sources
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        timeout-minutes: 2
-        with:
-          pattern: classification-source-*
-          path: ${{ runner.temp }}/classification-sources
 
       - name: Prepare environment
         env:
@@ -839,18 +644,7 @@ jobs:
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [[ ",$GENERATOR_IDS," == *,ci-job-classification-digests,* ]]; then
-            source_args=()
-            while IFS= read -r spec_file; do
-              source_directory="$(dirname "$spec_file")/source"
-              mkdir -p "$source_directory"
-              tar -xf "$(dirname "$spec_file")/source.tar" -C "$source_directory"
-              source_args+=(--source "$(cat "$spec_file")=$source_directory")
-            done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
-            bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "${source_args[@]}"
-          fi
           if [[ -n "$GENERATOR_IDS" ]]; then
             bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
           fi

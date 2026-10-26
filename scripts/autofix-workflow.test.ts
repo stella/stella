@@ -78,7 +78,9 @@ test("the PR trigger drops exactly the workflow files autofix never reads", () =
   );
 });
 
-test("every workflow edit selects the classification digest refresh", () => {
+// Its outputs live under .github/, which the autofix action may not modify,
+// so no edit selects the classification digest refresh as an autofix.
+test("no edit selects the classification digest refresh as an autofix", () => {
   for (const file of [
     ".github/workflows/deploy-staging.yml",
     ".github/actions/ci-install/action.yml",
@@ -88,30 +90,8 @@ test("every workflow edit selects the classification digest refresh", () => {
     expect(
       generatorsForFiles([file]).map(({ id }) => id),
       file,
-    ).toContain("ci-job-classification-digests");
+    ).not.toContain("ci-job-classification-digests");
   }
-  expect(
-    generatorsForFiles(["apps/web/src/main.tsx"]).map(({ id }) => id),
-  ).not.toContain("ci-job-classification-digests");
-});
-
-test("classification snapshots use read-only, bounded pinned source checkouts", async () => {
-  const workflow = await Bun.file(WORKFLOW_URL).text();
-  const sourceJob = workflow.slice(
-    workflow.indexOf("  checkout-classification-sources:"),
-    workflow.indexOf("  regenerate-derived-files:"),
-  );
-  expect(sourceJob).toContain("permissions:\n      contents: read");
-  expect(sourceJob).toContain(
-    "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-  );
-  expect(sourceJob).toContain("timeout-minutes: 2");
-  expect(sourceJob).toMatch(/repository: \$\{\{ matrix\.repository \}\}/u);
-  expect(sourceJob).toMatch(/ref: \$\{\{ matrix\.sha \}\}/u);
-  expect(sourceJob).toContain("persist-credentials: false");
-  expect(workflow).toMatch(
-    /bun scripts\/ci-job-classification\/snapshots\.ts --write --base "\$BASE_SHA" "\$\{source_args\[@\]\}"/u,
-  );
 });
 
 const namedCiStep = (workflow: unknown, name: string) => {
@@ -141,61 +121,6 @@ const namedCiStep = (workflow: unknown, name: string) => {
 };
 
 describe("Dependabot Bun autofix boundary", () => {
-  test("routes action pins to snapshot-only autofix without changing Bun updates", async () => {
-    const workflow = await Bun.file(WORKFLOW_URL).text();
-    const bunStart = workflow.indexOf("  dependabot-bun-autofix:");
-    const scopeStart = workflow.indexOf("  regenerate-scope:");
-    const discoverStart = workflow.indexOf(
-      "  discover-classification-sources:",
-    );
-    const checkoutStart = workflow.indexOf(
-      "  checkout-classification-sources:",
-    );
-    const actionsStart = workflow.indexOf(
-      "  dependabot-actions-snapshot-autofix:",
-    );
-    const derivedStart = workflow.indexOf("  regenerate-derived-files:");
-    const bunJob = workflow.slice(bunStart, scopeStart);
-    const discoveryJobs = workflow.slice(discoverStart, actionsStart);
-    const actionsJob = workflow.slice(actionsStart, derivedStart);
-
-    expect(bunStart).toBeGreaterThanOrEqual(0);
-    expect(actionsStart).toBeGreaterThan(checkoutStart);
-    expect(bunJob).toContain(
-      "startsWith(github.event.pull_request.head.ref, 'dependabot/bun/')",
-    );
-    expect(bunJob).not.toContain("dependabot/github_actions/");
-    expect(bunJob).toContain("bun --no-env-file dedupe --lockfile-only");
-    expect(discoveryJobs).toContain("!cancelled()");
-    expect(discoveryJobs).toContain("dependabot/github_actions/");
-    expect(actionsJob).toContain("!cancelled()");
-    expect(actionsJob).toContain("dependabot/github_actions/");
-    expect(actionsJob).toContain(
-      `bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "\${source_args[@]}"`,
-    );
-    // The job runs the head's code, so the head may change only pins.
-    expect(actionsJob).toContain(
-      `':(exclude).github/workflows/**' ':(exclude).github/actions/**'`,
-    );
-    // Its own earlier outputs are allowed; the comparison starts at the
-    // merge base.
-    expect(actionsJob).toContain(
-      "':(exclude).github/ci-job-classification-decisions/**'",
-    );
-    expect(actionsJob).toContain(
-      'git diff --name-only "$BASE_SHA...$HEAD_SHA"',
-    );
-    expect(actionsJob).toContain(
-      'bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"',
-    );
-    expect(actionsJob).toContain(".github/ci-job-classification-sources.json");
-    expect(actionsJob).toContain(".github/ci-job-classification-decisions/**");
-    expect(actionsJob).toContain("- name: Push workflow snapshot autofixes");
-    expect(actionsJob).not.toContain("Dedupe lockfile");
-    expect(actionsJob).not.toContain("Fix changed files");
-    expect(actionsJob).not.toContain("autofix-plan.ts run");
-  });
-
   test("keeps the runner read-only and hands off only verified autofixes", async () => {
     const workflow = await Bun.file(WORKFLOW_URL).text();
     const restrictionStep = workflow.indexOf(
@@ -391,9 +316,7 @@ describe("changed-file autofix boundary", () => {
     const pushStep = job.indexOf("- name: Push autofixes");
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
     expect(pushStep).toBeGreaterThan(restrictionStep);
-    expect(job.indexOf("autofix-ci/action@", pushStep)).toBeGreaterThan(
-      pushStep,
-    );
+    expect(job.indexOf("autofix-ci/action@")).toBeGreaterThan(pushStep);
   });
 
   test("finds a named CI guard inside a nested parallel group", () => {
@@ -846,56 +769,4 @@ test("type-aware autofix fixtures require a successful dependency install", asyn
   expect(invariants).not.toContain(
     "apps/api/scripts/refresh-test-durations.test.ts",
   );
-});
-
-test("pinned source discovery reads quoted and unquoted reusable workflow pins", () => {
-  const workflow: unknown = Bun.YAML.parse(readFileSync(WORKFLOW_URL, "utf-8"));
-  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
-  const job = isRecord(jobs) ? jobs["discover-classification-sources"] : null;
-  const step = workflowStepByName(
-    isRecord(job) ? job["steps"] : [],
-    "Find newly pinned public sources",
-  );
-  const run = typeof step["run"] === "string" ? step["run"] : "";
-  const filter = run
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.startsWith("| sed -nE "))
-    ?.slice(2)
-    .replace(/ \\$/u, "");
-  expect(filter).toBeDefined();
-  const sha = "a".repeat(40);
-  const diff = [
-    `+    uses: stella/.github/.github/workflows/one.yml@${sha}`,
-    `+    uses: "stella/.github/.github/workflows/two.yml@${"b".repeat(40)}"`,
-    `+      - uses: 'stella/.github/actions/three@${"c".repeat(40)}' # v1`,
-    `+    uses: other/repo/.github/workflows/four.yml@${sha}`,
-    `     uses: stella/.github/.github/workflows/five.yml@${"d".repeat(40)}`,
-  ].join("\n");
-  const result = Bun.spawnSync(["bash", "-c", filter ?? "false"], {
-    stdin: new TextEncoder().encode(`${diff}\n`),
-    stdout: "pipe",
-  });
-  expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString().trim().split("\n")).toEqual([
-    `stella/.github@${sha}`,
-    `stella/.github@${"b".repeat(40)}`,
-    `stella/.github@${"c".repeat(40)}`,
-  ]);
-});
-
-test("pinned sources travel as an archive that keeps their Git directory", () => {
-  const workflow = readFileSync(WORKFLOW_URL, "utf-8");
-  // The generator reads each pinned revision through Git; artifact uploads
-  // do not carry a checkout's .git directory.
-  expect(workflow).toContain("tar -cf source.tar -C source .");
-  expect(workflow).not.toContain("include-hidden-files: true");
-  const unpacks = workflow.match(
-    /tar -xf "\$\(dirname "\$spec_file"\)\/source\.tar" -C "\$source_directory"/gu,
-  );
-  const generatorRuns = workflow.match(
-    /bun scripts\/ci-job-classification\/snapshots\.ts --write/gu,
-  );
-  expect(unpacks?.length).toBe(2);
-  expect(unpacks?.length).toBe(generatorRuns?.length);
 });

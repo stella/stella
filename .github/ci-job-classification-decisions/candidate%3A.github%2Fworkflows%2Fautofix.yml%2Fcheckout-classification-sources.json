@@ -1,5 +1,0 @@
-{
-  "kind": "ordinary",
-  "qualifier": "Checks out pinned public reusable-workflow sources and uploads them for pull-request autofix; no publication or deployment.",
-  "reviewedDigest": "0119a70c0ae5ff4a88f345d7bf34d37755a398465f438c8e6f84651f03f961a9"
-}

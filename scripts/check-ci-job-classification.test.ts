@@ -18,7 +18,7 @@ import {
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
 
-test("the autofix generator reads and writes every classification input it owns", () => {
+test("the classification generator reads and writes every input it owns", () => {
   const generator = GENERATORS.find(
     ({ id }) => id === "ci-job-classification-digests",
   );
@@ -27,7 +27,8 @@ test("the autofix generator reads and writes every classification input it owns"
     `${CLASSIFICATION_DECISIONS_PATH}/**`,
     ".github/ci-job-classification-sources.json",
   ]);
-  expect(generator?.autofix).toBe(true);
+  // The autofix action may not modify .github/, where every output lives.
+  expect(generator?.autofix).toBe(false);
   expect(generator?.write).toEqual([
     "bun",
     "scripts/check-ci-job-classification.ts",
