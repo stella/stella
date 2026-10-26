@@ -1486,7 +1486,7 @@
       "label": "Simulierte KI"
     },
     "modelSelector": {
-      "allModels": "Alle Modelle ({count, number})",
+      "allModels": "Alle Modelle",
       "autoDescription": "Wählt Modell und Denkaufwand automatisch aus.",
       "autoLabel": "Automatisch",
       "belowFrontier": "Unter den besten Kompromissen",
@@ -6645,6 +6645,12 @@
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {
       "parties": "Parteien"
+    },
+    "switcher": {
+      "searchPlaceholder": "Akte suchen…",
+      "trigger": "Akte wechseln",
+      "viewAll": "Alle Akten anzeigen",
+      "viewAllForClient": "Alle Akten des Klienten {clientName} anzeigen"
     },
     "table": {
       "clearFlags": "Markierungen löschen",

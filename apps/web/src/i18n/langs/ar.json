@@ -1486,7 +1486,7 @@
       "label": "ذكاء اصطناعي مُحاكى"
     },
     "modelSelector": {
-      "allModels": "كل النماذج ({count, number})",
+      "allModels": "كل النماذج",
       "autoDescription": "يختار النموذج ومستوى الاستدلال تلقائيًا.",
       "autoLabel": "تلقائي",
       "belowFrontier": "دون أفضل الموازنات",
@@ -6645,6 +6645,12 @@
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {
       "parties": "الأطراف"
+    },
+    "switcher": {
+      "searchPlaceholder": "ابحث عن ملف قانوني…",
+      "trigger": "تبديل الملف القانوني",
+      "viewAll": "عرض جميع الملفات القانونية",
+      "viewAllForClient": "عرض جميع الملفات القانونية للعميل {clientName}"
     },
     "table": {
       "clearFlags": "مسح العلامات",

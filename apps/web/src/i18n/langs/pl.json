@@ -1486,7 +1486,7 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
-      "allModels": "Wszystkie modele ({count, number})",
+      "allModels": "Wszystkie modele",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
       "belowFrontier": "Poniżej najlepszych kompromisów",
@@ -6645,6 +6645,12 @@
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {
       "parties": "Strony"
+    },
+    "switcher": {
+      "searchPlaceholder": "Znajdź sprawę…",
+      "trigger": "Przełącz sprawę",
+      "viewAll": "Pokaż wszystkie sprawy",
+      "viewAllForClient": "Pokaż wszystkie sprawy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Wyczyść oznaczenia",

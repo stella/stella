@@ -1486,7 +1486,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos os modelos ({count, number})",
+      "allModels": "Todos os modelos",
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
       "belowFrontier": "Abaixo dos melhores equilíbrios",
@@ -6645,6 +6645,12 @@
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
       "parties": "Partes"
+    },
+    "switcher": {
+      "searchPlaceholder": "Encontrar um caso…",
+      "trigger": "Trocar de caso",
+      "viewAll": "Ver todos os casos",
+      "viewAllForClient": "Ver todos os casos do cliente {clientName}"
     },
     "table": {
       "clearFlags": "Limpar sinalizadores",

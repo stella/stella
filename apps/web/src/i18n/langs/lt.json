@@ -1486,7 +1486,7 @@
       "label": "Imituojamas DI"
     },
     "modelSelector": {
-      "allModels": "Visi modeliai ({count, number})",
+      "allModels": "Visi modeliai",
       "autoDescription": "Automatiškai parenka modelį ir samprotavimo lygį.",
       "autoLabel": "Automatinis",
       "belowFrontier": "Žemiau geriausių kompromisų",
@@ -6645,6 +6645,12 @@
     "referenceTaken": "Šis nuorodos numeris jau naudojamas",
     "sections": {
       "parties": "Šalys"
+    },
+    "switcher": {
+      "searchPlaceholder": "Rasti bylą…",
+      "trigger": "Pakeisti bylą",
+      "viewAll": "Rodyti visas bylas",
+      "viewAllForClient": "Rodyti visas kliento {clientName} bylas"
     },
     "table": {
       "clearFlags": "Išvalyti žymas",

@@ -1486,7 +1486,7 @@
       "label": "Szimulált AI"
     },
     "modelSelector": {
-      "allModels": "Összes modell ({count, number})",
+      "allModels": "Összes modell",
       "autoDescription": "Automatikusan választja ki a modellt és a gondolkodási szintet.",
       "autoLabel": "Automatikus",
       "belowFrontier": "A legjobb kompromisszumok alatt",
@@ -6645,6 +6645,12 @@
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {
       "parties": "Felek"
+    },
+    "switcher": {
+      "searchPlaceholder": "Ügy keresése…",
+      "trigger": "Ügy váltása",
+      "viewAll": "Összes ügy megjelenítése",
+      "viewAllForClient": "{clientName} ügyfél összes ügyének megjelenítése"
     },
     "table": {
       "clearFlags": "Jelölések törlése",

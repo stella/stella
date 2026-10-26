@@ -27,6 +27,7 @@ import {
   releaseMcpRefreshLease,
 } from "@/api/lib/mcp-upstream/connections";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { TABLE_POLICY_SETTINGS_BASELINE } from "@/api/tests/security/table-policy-settings-baseline";
@@ -92,6 +93,10 @@ beforeAll(async () => {
     name: "Connector organization",
     slug: `connector-${organizationId}`,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(testDb, {
+    organizationId,
+    now: new Date(),
   });
   await testDb.insert(member).values([
     {
@@ -911,6 +916,10 @@ describe("MCP connector authorization reviews", () => {
       name: "Other connector organization",
       slug: `connector-${otherOrganizationId}`,
       createdAt: new Date(),
+    });
+    await recordNewOrganizationAccessState(testDb, {
+      organizationId: otherOrganizationId,
+      now: new Date(),
     });
     await testDb.insert(mcpConnectors).values({
       id: catalogueConnectorId,
