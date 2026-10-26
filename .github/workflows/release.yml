@@ -129,13 +129,14 @@ jobs:
           persist-credentials: false
 
       - name: Verify release source
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.release.outputs.ref }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
             echo "::error::Release tag $RELEASE_REF is not reachable from protected main"
             exit 1

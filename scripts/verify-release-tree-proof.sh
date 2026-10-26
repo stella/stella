@@ -4,6 +4,7 @@
 # No merge/rebase chains are inferred: an ambiguous relation is refused.
 set -euo pipefail
 export GIT_NO_REPLACE_OBJECTS=1
+retry_script="$(dirname "${BASH_SOURCE[0]}")/retry.sh"
 # Merge-group receipt: the merge queue fast-forwards main to the merge-group
 # commit, so that group's ci-result check run sits on the commit that lands.
 # A successful one from a merge_group run of ci.yml can stand in for main/heavy
@@ -156,7 +157,7 @@ for commit in "${commits[@]}"; do
   metadata=$(bash "$gh_retry_script" api "repos/$repo/commits/$commit")
   jq -e --arg sha "$commit" '.sha == $sha' <<< "$metadata" >/dev/null || refuse 'commit is unavailable in repository'
   if ! git cat-file -e "$commit^{commit}"; then
-    git fetch --no-tags "https://github.com/$repo.git" "$commit"
+    bash "$retry_script" git fetch --no-tags "https://github.com/$repo.git" "$commit"
   fi
   tree=$(git rev-parse --verify "$commit^{tree}")
   jq -e --arg tree "$tree" '.commit.tree.sha == $tree' <<< "$metadata" >/dev/null || refuse 'repository tree does not match local commit'

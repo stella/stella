@@ -56,6 +56,7 @@ jobs:
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
       - name: Check release candidate
+        timeout-minutes: 5
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -73,12 +74,13 @@ jobs:
           git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/check-release-candidate.sh > "$RUNNER_TEMP/check-release-candidate.sh"
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
-          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin "$REQUESTED_SHA"
           cd "$directory"
           bash "$RUNNER_TEMP/check-release-candidate.sh" "$REQUESTED_SHA"
 
@@ -112,6 +114,7 @@ jobs:
           no-cache: true
 
       - name: Reuse completed release proof
+        timeout-minutes: 5
         id: reuse
         working-directory: .release-proof
         env:
@@ -132,6 +135,7 @@ jobs:
       # main/pr-depth only when the receipt covers the release history. This
       # push already runs heavy; pr-depth is dispatched below when it does not.
       - name: Check the version commit's merge-group receipt
+        timeout-minutes: 5
         id: receipt
         if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
         working-directory: .release-proof
@@ -247,6 +251,7 @@ jobs:
           fi
 
       - name: Fetch main history
+        timeout-minutes: 5
         if: steps.selection.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -258,8 +263,9 @@ jobs:
           git -C "$RUNNER_TEMP/main-heavy-validation" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git -C "$RUNNER_TEMP/main-heavy-validation" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$RUNNER_TEMP/main-heavy-validation" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
 

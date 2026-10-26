@@ -58,6 +58,7 @@ jobs:
           no-cache: true
 
       - name: Reuse completed release proof
+        timeout-minutes: 5
         id: reuse
         working-directory: .release-proof
         env:
@@ -113,6 +114,7 @@ jobs:
           fi
 
       - name: Fetch main history
+        timeout-minutes: 5
         if: steps.selection.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,8 +127,9 @@ jobs:
           git -C "$directory" remote add origin "$SERVER_URL/$REPOSITORY.git"
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
-          git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
           git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
 

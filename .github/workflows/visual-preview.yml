@@ -43,9 +43,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Resolve comparison base
+        timeout-minutes: 5
         id: target-base
         uses: ./.github/actions/merge-target-base
       - name: Select preview changes
+        timeout-minutes: 5
         id: scope
         env:
           BASE_SHA: ${{ steps.target-base.outputs.base_sha }}
@@ -56,7 +58,7 @@ jobs:
             echo 'required=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin "$BASE_SHA"
           changed_files=$(git diff --name-only "$BASE_SHA" HEAD)
           if grep -E '^(apps/visual-preview/|scripts/browser/|apps/api/src/handlers/visual-sandbox/|packages/api-contract/src/visual-sandbox.ts$|packages/api-contract/src/visual-preview|packages/api-contract/src/generated-visual.ts$|packages/api-contract/src/visual-bridge-policy.ts$|bun.lock$|.github/workflows/visual-preview.yml$)' <<< "$changed_files"; then
             echo 'required=true' >> "$GITHUB_OUTPUT"

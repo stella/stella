@@ -58,6 +58,7 @@ jobs:
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
       - name: Cancel merge_group runs whose branch no longer exists
+        timeout-minutes: 5
         env:
           DRY_RUN: ${{ inputs.dry-run == true }}
           GH_TOKEN: ${{ github.token }}
@@ -74,7 +75,7 @@ jobs:
             # ls-remote exits 2 only when the ref is absent; any other
             # failure leaves the run alone.
             set +e
-            git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git ls-remote --exit-code "https://github.com/$REPO" "refs/heads/$branch" > /dev/null
             code=$?
             set -e
             if (( code != 2 )); then

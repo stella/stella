@@ -4,6 +4,7 @@
 # SHA on main's first-parent history, or an explicitly authorized release PR
 # head verified against main. Anything else is refused.
 set -euo pipefail
+retry_script="$(dirname "${BASH_SOURCE[0]}")/retry.sh"
 
 sha=""
 release_pr_head="${RELEASE_PR_HEAD:-false}"
@@ -18,7 +19,7 @@ fetch_options=(--no-tags)
 if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
   fetch_options+=(--unshallow)
 fi
-git fetch "${fetch_options[@]}" origin +refs/heads/main:refs/remotes/origin/main
+bash "$retry_script" git fetch "${fetch_options[@]}" origin +refs/heads/main:refs/remotes/origin/main
 
 main=$(git rev-parse --verify --quiet 'origin/main^{commit}') \
   || { echo "::error::STAGING_SHA_REFUSED: origin/main is not available in this checkout" >&2; exit 1; }

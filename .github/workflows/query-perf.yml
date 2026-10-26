@@ -73,10 +73,12 @@ jobs:
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Resolve comparison base
+        timeout-minutes: 5
         id: target-base
         uses: ./.github/actions/merge-target-base
 
       - name: Resolve query performance baseline
+        timeout-minutes: 5
         if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
         id: base
         env:
@@ -90,7 +92,7 @@ jobs:
             base_sha="$(git rev-parse "$tested_sha^")"
           else
             test -n "$BASE_SHA"
-            git fetch --no-tags origin "$BASE_SHA"
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "$BASE_SHA"
             tested_sha="$GITHUB_SHA"
             base_sha="$(git merge-base "$BASE_SHA" "$tested_sha")"
           fi

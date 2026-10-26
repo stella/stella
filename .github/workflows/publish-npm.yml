@@ -261,6 +261,7 @@ jobs:
           ref: ${{ steps.source.outputs.ref }}
 
       - name: Verify manual package recovery source
+        timeout-minutes: 5
         if: >-
           github.event_name == 'workflow_dispatch'
           && inputs.publish
@@ -270,7 +271,7 @@ jobs:
           MANUAL_SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin main:refs/remotes/origin/main
 
           source_sha="$(git rev-parse HEAD)"
           if [[ "$source_sha" != "$MANUAL_SOURCE_SHA" ]]; then
@@ -362,6 +363,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Validate CLI release source
+        timeout-minutes: 5
         id: release-source
         if: >-
           contains(fromJSON(steps.pack.outputs.packages), 'cli')
@@ -381,11 +383,11 @@ jobs:
             exit 1
           fi
 
-          if git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
+          if bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
             echo "::error::A branch named ${release_ref} exists alongside the release tag; refusing ambiguous publication." >&2
             exit 1
           fi
-          git fetch --no-tags origin \
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin \
             "refs/tags/${release_ref}:refs/tags/${release_ref}" \
             main:refs/remotes/origin/main
 

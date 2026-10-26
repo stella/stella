@@ -213,6 +213,32 @@ ${stepEnv}        run: cargo build --locked
 });
 
 describe("shell detection", () => {
+  test("git network subcommands are fetches with or without global options", () => {
+    for (const subcommand of ["clone", "fetch", "ls-remote", "pull"]) {
+      expect(
+        scanShell(`git ${subcommand} origin`, "git").map((fetch) => fetch.kind),
+      ).toEqual([`git ${subcommand}`]);
+      expect(
+        scanShell(
+          `git -c protocol.version=2 -C repo --no-pager --git-dir=.git --work-tree=. ${subcommand} origin`,
+          "git",
+        ).map((fetch) => fetch.kind),
+      ).toEqual([`git ${subcommand}`]);
+    }
+  });
+
+  test("git fetch through retry.sh counts as retried", () => {
+    expect(
+      scanShell("bash scripts/retry.sh git fetch origin main", "git").map(
+        (fetch) => [fetch.kind, fetch.wrapped],
+      ),
+    ).toEqual([["git fetch", true]]);
+  });
+
+  test("git commands without network access are not fetches", () => {
+    expect(scanShell("git status\ngit log -1", "git")).toEqual([]);
+  });
+
   test("loopback readiness probes are not fetches", () => {
     expect(
       scanShell(

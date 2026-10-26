@@ -2,10 +2,11 @@
 set -euo pipefail
 : "${REPOSITORY:?REPOSITORY is required}"
 gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/../../../scripts/gh-retry.sh}"
+retry_script="$(dirname "${BASH_SOURCE[0]}")/../../../scripts/retry.sh"
 purpose=${NETWORK_BASELINE_PURPOSE:-comparison}
 case "$purpose" in comparison|recording) ;; *) exit 1 ;; esac
 [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
-git fetch --no-tags origin "$BASE_SHA"
+bash "$retry_script" git fetch --no-tags origin "$BASE_SHA"
 # Default to the common ancestor for head checkouts and merge queues.
 base=$(git merge-base HEAD "$BASE_SHA")
 # GitHub's PR merge ref includes newer main commits than the event's recorded

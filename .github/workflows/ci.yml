@@ -3925,9 +3925,9 @@ jobs:
           POSTGRES_JUNIT_FILE: ${{ runner.temp }}/postgres-tests.xml
         run: |
           if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
-            git fetch --filter=blob:none --no-tags --unshallow origin main
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --filter=blob:none --no-tags --unshallow origin main
           else
-            git fetch --filter=blob:none --no-tags origin main
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --filter=blob:none --no-tags origin main
           fi
           bun scripts/ci-postgres-selector-miss.ts
 
@@ -4056,6 +4056,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Select statute recall base from the target branch
+        timeout-minutes: 5
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         env:
           TARGET_BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
@@ -4063,10 +4064,10 @@ jobs:
         run: |
           base="${TARGET_BASE_SHA:-$PUSH_BEFORE_SHA}"
           if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            git fetch --no-tags --depth=1 origin main
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin main
             base="$(git rev-parse FETCH_HEAD)"
           else
-            git fetch --no-tags --depth=1 origin "$base"
+            bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags --depth=1 origin "$base"
           fi
           git cat-file -e "$base^{commit}"
           echo "STATUTE_RECALL_BASE_REF=$base" >> "$GITHUB_ENV"
@@ -4147,6 +4148,7 @@ jobs:
         run: bun test scripts/check-migration-safety.test.ts scripts/check-migration-index-builds.test.ts apps/api/scripts/migration-roles.test.ts
 
       - name: Check migration coverage
+        timeout-minutes: 5
         env:
           BASE_REF: ${{ needs.ci-plan.outputs.target_base_sha || 'HEAD^' }}
         run: bash scripts/check-migrations.sh
@@ -5047,6 +5049,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare merge-base network budget
+        timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
