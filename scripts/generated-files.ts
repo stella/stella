@@ -91,6 +91,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/workspace-ui/**/*.{ts,tsx,js,jsx}",
       "packages/workspace-ui/package.json",
       "oxlint.config.ts",
+      "oxlint.tailwind.config.ts",
       "scripts/generate-tailwind-classes.ts",
       "patches/oxlint-tailwindcss@1.16.0.patch",
       "package.json",

@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index 6d9820c..193fe51 100644
+index 6d9820c..8fd6062 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -2277,10 +2277,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -60,7 +60,52 @@ index 6d9820c..193fe51 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -4099,7 +4119,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -3794,6 +3814,20 @@ function packageVersionFrom(fromDir, name) {
+ 	}
+ }
+ /**
++* The stylesheet a bare `@import` loads when it lives in the workspace, not in
++* an installed package, or `null`. An installed package is pinned by the
++* version folded into the key; a workspace package (`@scope/ui/theme.css`)
++* changes without a new version, so its text has to go into the key.
++*/
++function workspaceStylesheetFrom(fromDir, spec) {
++	try {
++		const resolved = (0, node_fs.realpathSync)((0, node_module.createRequire)((0, node_path.join)(fromDir, "noop.js")).resolve(spec));
++		return resolved.endsWith(".css") && !/[\\/]node_modules[\\/]/.test(resolved) ? resolved : null;
++	} catch {
++		return null;
++	}
++}
++/**
+ * Everything a design system is built from besides the Tailwind engine, as one
+ * string for the cache key — so the cache invalidates when any of it changes,
+ * not only the entry file:
+@@ -3806,7 +3840,9 @@ function packageVersionFrom(fromDir, name) {
+ *   - the installed version of every PACKAGE the CSS imports or loads as a
+ *     plugin (`tw-animate-css`, `@tailwindcss/typography`): the engine version
+ *     folded into the hash says nothing about them, so upgrading one used to
+-*     keep serving the old class list (H19).
++*     keep serving the old class list (H19);
++*   - the text of a WORKSPACE stylesheet a bare `@import` loads, and its own
++*     imports: no version changes when it is edited.
+ *
+ * Best-effort: an unreadable file contributes nothing and an unresolvable
+ * package contributes `name@?` — neither can be what the build loads either.
+@@ -3841,6 +3877,12 @@ function hashableContent(entryPath, entryContent) {
+ 		for (const spec of collect(IMPORT_RE)) {
+ 			if (!isPathSpecifier(spec)) {
+ 				addPackage(spec);
++				const stylesheet = workspaceStylesheetFrom(baseDir, spec);
++				const stylesheetContent = stylesheet === null ? null : readOnce(stylesheet);
++				if (stylesheetContent !== null) {
++					parts.push(stylesheetContent);
++					visit(stylesheet, stylesheetContent, depth - 1);
++				}
+ 				continue;
+ 			}
+ 			const importPath = (0, node_path.resolve)(baseDir, spec);
+@@ -4099,7 +4141,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -69,7 +114,7 @@ index 6d9820c..193fe51 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4107,6 +4127,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4107,6 +4149,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -77,7 +122,7 @@ index 6d9820c..193fe51 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4612,6 +4633,7 @@ var DesignSystemWorker = class {
+@@ -4612,6 +4655,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -85,7 +130,7 @@ index 6d9820c..193fe51 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5549,6 +5571,73 @@ function answersFor(cache) {
+@@ -5549,6 +5593,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -159,7 +204,7 @@ index 6d9820c..193fe51 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5569,12 +5658,15 @@ function answersFor(cache) {
+@@ -5569,12 +5680,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -194,7 +239,7 @@ index a330176..52e9de6 100644
 +export { cacheArtifactPaths, plugin as default };
 \ No newline at end of file
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 61c6242..d83f163 100644
+index 61c6242..766a1af 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -2280,10 +2280,10 @@ var DesignSystemCache = class DesignSystemCache {
@@ -255,7 +300,52 @@ index 61c6242..d83f163 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -4102,7 +4122,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -3797,6 +3817,20 @@ function packageVersionFrom(fromDir, name) {
+ 	}
+ }
+ /**
++* The stylesheet a bare `@import` loads when it lives in the workspace, not in
++* an installed package, or `null`. An installed package is pinned by the
++* version folded into the key; a workspace package (`@scope/ui/theme.css`)
++* changes without a new version, so its text has to go into the key.
++*/
++function workspaceStylesheetFrom(fromDir, spec) {
++	try {
++		const resolved = realpathSync(createRequire(join(fromDir, "noop.js")).resolve(spec));
++		return resolved.endsWith(".css") && !/[\\/]node_modules[\\/]/.test(resolved) ? resolved : null;
++	} catch {
++		return null;
++	}
++}
++/**
+ * Everything a design system is built from besides the Tailwind engine, as one
+ * string for the cache key — so the cache invalidates when any of it changes,
+ * not only the entry file:
+@@ -3809,7 +3843,9 @@ function packageVersionFrom(fromDir, name) {
+ *   - the installed version of every PACKAGE the CSS imports or loads as a
+ *     plugin (`tw-animate-css`, `@tailwindcss/typography`): the engine version
+ *     folded into the hash says nothing about them, so upgrading one used to
+-*     keep serving the old class list (H19).
++*     keep serving the old class list (H19);
++*   - the text of a WORKSPACE stylesheet a bare `@import` loads, and its own
++*     imports: no version changes when it is edited.
+ *
+ * Best-effort: an unreadable file contributes nothing and an unresolvable
+ * package contributes `name@?` — neither can be what the build loads either.
+@@ -3844,6 +3880,12 @@ function hashableContent(entryPath, entryContent) {
+ 		for (const spec of collect(IMPORT_RE)) {
+ 			if (!isPathSpecifier(spec)) {
+ 				addPackage(spec);
++				const stylesheet = workspaceStylesheetFrom(baseDir, spec);
++				const stylesheetContent = stylesheet === null ? null : readOnce(stylesheet);
++				if (stylesheetContent !== null) {
++					parts.push(stylesheetContent);
++					visit(stylesheet, stylesheetContent, depth - 1);
++				}
+ 				continue;
+ 			}
+ 			const importPath = resolve(baseDir, spec);
+@@ -4102,7 +4144,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -264,7 +354,7 @@ index 61c6242..d83f163 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4110,6 +4130,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4110,6 +4152,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -272,7 +362,7 @@ index 61c6242..d83f163 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4615,6 +4636,7 @@ var DesignSystemWorker = class {
+@@ -4615,6 +4658,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -280,7 +370,7 @@ index 61c6242..d83f163 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5552,6 +5574,73 @@ function answersFor(cache) {
+@@ -5552,6 +5596,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -354,7 +444,7 @@ index 61c6242..d83f163 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5572,12 +5661,15 @@ function answersFor(cache) {
+@@ -5572,12 +5683,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -370,7 +460,7 @@ index 61c6242..d83f163 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
-@@ -10787,4 +10879,4 @@ const plugin = definePlugin({
+@@ -10787,4 +10901,4 @@ const plugin = definePlugin({
  	}
  });
  //#endregion

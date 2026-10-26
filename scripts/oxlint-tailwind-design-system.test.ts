@@ -2,18 +2,22 @@ import { expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   cp,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
   rm,
+  symlink,
   unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
 import oxlintConfig from "../oxlint.config.ts";
+import tailwindConfig from "../oxlint.tailwind.config.ts";
 import {
   checkCache,
   mergeCache,
@@ -466,4 +470,74 @@ test("read-only branches reject worker fallback", async () => {
   expect(patch).toContain(
     "if (CACHE_READ_ONLY) throw readOnlyCacheError(`missing declaration answer",
   );
+});
+
+test("a workspace stylesheet imported by package name is part of the snapshot key", async () => {
+  // A workspace package changes without a new version, so the key reads the
+  // stylesheet itself and what it imports; otherwise an edited shared theme
+  // keeps the old snapshot name and the cache check passes on stale data.
+  const workspace = await mkdtemp(
+    path.join(tmpdir(), "stella-tailwind-workspace-key-"),
+  );
+  try {
+    const ui = path.join(workspace, "packages/ui");
+    await Bun.write(
+      path.join(ui, "package.json"),
+      JSON.stringify({
+        name: "@fixture/ui",
+        exports: { "./theme.css": "./theme.css" },
+      }),
+    );
+    await Bun.write(
+      path.join(ui, "theme.css"),
+      '@import "./extra.css";\n@theme { --color-shared: red; }\n',
+    );
+    await Bun.write(path.join(ui, "extra.css"), "@utility one { top: 0; }\n");
+    await mkdir(path.join(workspace, "node_modules/@fixture"), {
+      recursive: true,
+    });
+    await symlink(ui, path.join(workspace, "node_modules/@fixture/ui"));
+    const entry = path.join(workspace, "app/app.css");
+    await Bun.write(entry, '@import "@fixture/ui/theme.css";\n');
+    const key = () => path.basename(cacheArtifactPaths(entry).json);
+    const original = key();
+    await Bun.write(
+      path.join(ui, "theme.css"),
+      '@import "./extra.css";\n@theme { --color-shared: blue; }\n',
+    );
+    const themeEdited = key();
+    await Bun.write(path.join(ui, "extra.css"), "@utility one { top: 1px; }\n");
+    const importEdited = key();
+    expect(new Set([original, themeEdited, importEdited]).size).toBe(3);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("the generation config sees every Tailwind rule the repository lint enables", () => {
+  // oxlint.tailwind.config.ts copies the Tailwind rules of oxlint.config.ts
+  // and its overrides; a preset naming one would escape it.
+  expect(JSON.stringify(oxlintConfig.extends)).not.toContain('"tailwindcss/');
+  const scopes = (config: typeof oxlintConfig) =>
+    [
+      ...Object.entries(config.rules ?? {}).map(([rule, value]) => [
+        "*",
+        rule,
+        JSON.stringify(value),
+      ]),
+      ...(config.overrides ?? []).flatMap(({ files, excludeFiles, rules }) =>
+        Object.entries(rules ?? {}).map(([rule, value]) => [
+          JSON.stringify([files, excludeFiles ?? []]),
+          rule,
+          JSON.stringify(value),
+        ]),
+      ),
+    ].filter(([, rule]) => rule?.startsWith("tailwindcss/"));
+  expect(scopes(tailwindConfig).length).toBeGreaterThan(0);
+  expect(scopes(tailwindConfig)).toEqual(scopes(oxlintConfig));
+  expect(tailwindConfig.jsPlugins).toEqual(["oxlint-tailwindcss"]);
+  expect(tailwindConfig.ignorePatterns).toEqual(oxlintConfig.ignorePatterns);
+  expect(tailwindConfig.settings).toEqual({
+    tailwindcss: oxlintConfig.settings?.["tailwindcss"],
+  });
 });
