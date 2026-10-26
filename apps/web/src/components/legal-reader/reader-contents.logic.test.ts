@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -274,7 +275,9 @@ describe("reader contents", () => {
             // Only a model titled this trail, so it says so.
             expect(trail).toEqual({
               type: "analysis",
-              segments: outline.sections.paths.get(row.anchorId),
+              segments:
+                outline.sections.paths.get(row.anchorId) ??
+                panic(`Analysis row ${row.anchorId} has no section path`),
               disclosure: "caseLaw",
             });
           } else {
