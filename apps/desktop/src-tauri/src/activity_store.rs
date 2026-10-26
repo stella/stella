@@ -1863,7 +1863,7 @@ mod tests {
     store_a.delete_day(day).unwrap();
     assert!(store_a.load_drafted(day).unwrap().is_empty());
     fs::remove_dir_all(root_a).unwrap();
-    fs::remove_dir_all(root_b).unwrap();
+    assert!(!root_b.exists());
   }
 
   #[test]
