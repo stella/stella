@@ -3,6 +3,7 @@
     "scripts/api-dockerfile-entrypoints.test.ts": [
       "apps/api/Dockerfile",
       "apps/legal-atlas-runner/package.json",
+      "deploy/**",
       "docs/self-hosting.md"
     ],
     "scripts/api-test-impact.test.ts": ["**"],
