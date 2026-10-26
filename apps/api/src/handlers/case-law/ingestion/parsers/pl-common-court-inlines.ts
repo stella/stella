@@ -55,7 +55,37 @@ const ENDS_MID_PHRASE = /[\p{L}\p{Nd},)”]$/u;
 const SENTENCE_CONTINUATION = /^[\p{Ll}\p{Nd}§(„]/u;
 
 /** A point's own number or letter: "1.", "2)", "(3)", "1.1.", "a)". */
-const ENUMERATION_ITEM = /^\(?(?:\d{1,3}(?:\.\d{1,3})*|\p{Ll})[.)](?:\s|$)/u;
+const isEnumerationItem = (text: string): boolean => {
+  if (/^\(?\p{Ll}[.)](?:\s|$)/u.test(text)) {
+    return true;
+  }
+  let index = text.startsWith("(") ? 1 : 0;
+  while (index < text.length) {
+    let digits = 0;
+    while (index < text.length && /[0-9]/u.test(text.charAt(index))) {
+      digits += 1;
+      index += 1;
+      if (digits > 3) {
+        return false;
+      }
+    }
+    if (digits === 0) {
+      return false;
+    }
+    const delimiter = text.charAt(index);
+    if (delimiter !== "." && delimiter !== ")") {
+      return false;
+    }
+    index += 1;
+    if (index === text.length || /\s/u.test(text.charAt(index))) {
+      return true;
+    }
+    if (delimiter !== ".") {
+      return false;
+    }
+  }
+  return false;
+};
 
 /** An operative point opens with its verb: "oddala apelację". */
 const OPERATIVE_POINT =
@@ -91,7 +121,7 @@ const isLineWrap = (before: string, after: string): boolean => {
     ENDS_MID_PHRASE.test(previous) &&
     !BENCH_TITLE.test(previous) &&
     SENTENCE_CONTINUATION.test(next) &&
-    !ENUMERATION_ITEM.test(next) &&
+    !isEnumerationItem(next) &&
     !OPERATIVE_POINT.test(next) &&
     !POSTAL_CODE.test(next) &&
     !BENCH_ROLE.test(next)

@@ -57,6 +57,15 @@ describe("a line the court ended stays ended", () => {
     ]);
   });
 
+  test.each(["1.", "(2)", "1.2.3.", "123.45)", "a)", "ą."])(
+    "a numbered point %s keeps its preceding line break",
+    (marker) => {
+      expect(
+        paragraphs(`<p>${WRAPPED}<br/>${marker} treść punktu</p>`),
+      ).toEqual([`${WRAPPED}\n${marker} treść punktu`]);
+    },
+  );
+
   test.each([
     ["an address", "<p>Jan Kowalski<br/>ul. Długa 1<br/>00-001 Warszawa</p>"],
     [

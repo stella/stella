@@ -289,7 +289,10 @@ export const renderHtmlWhiteSpace = (root: AnyNode): void => {
         endLine(false);
       }
       if (whiteSpace === WHITE_SPACE.PRESERVE_BREAKS) {
-        text = text.replaceAll(/[ \t\f]+/gu, " ").replaceAll(/ *\n */gu, "\n");
+        text = text
+          .replaceAll(/[ \t\f]+/gu, " ")
+          .replaceAll(" \n", "\n")
+          .replaceAll("\n ", "\n");
       }
     }
     if (whiteSpace !== WHITE_SPACE.PRESERVE && afterSpace) {

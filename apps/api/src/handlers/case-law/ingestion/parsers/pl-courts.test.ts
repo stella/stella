@@ -492,25 +492,16 @@ describe("ordered list items print the number a browser gives them", () => {
   test("reading an item's runs around its blocks costs work linear in the item", () => {
     // Every inline walk lists an element's children once; the total listed
     // is the work. Copying the item per run made it quadratic.
-    let contentsOwner: object = Object.getPrototypeOf(
-      cheerio.load("<p></p>").root(),
-    );
-    while (!Object.hasOwn(contentsOwner, "contents")) {
-      contentsOwner = Object.getPrototypeOf(contentsOwner);
-    }
     const listed = (runs: number): number => {
-      const spy = spyOn(
-        contentsOwner as { contents: () => { length: number } },
-        "contents",
-      );
+      const content = `<ol><li>${"text<p>paragraph</p>".repeat(runs)}</li></ol>`;
+      const $ = cheerio.load(content);
+      const spy = spyOn($.fn, "contents");
       try {
         const { documentAst } = parsePlDecisionContent(
-          baseInput(
-            `<ol><li>${"text<p>paragraph</p>".repeat(runs)}</li></ol>`,
-            {
-              decisionType: undefined,
-            },
-          ),
+          baseInput(content, {
+            decisionType: undefined,
+            loadHtml: () => $,
+          }),
         );
         expect(documentAst.blocks).toHaveLength(runs * 2);
         let total = 0;

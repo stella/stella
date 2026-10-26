@@ -18,7 +18,7 @@
  * HTML tags.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import {
   type AnyNode,
@@ -29,6 +29,7 @@ import {
   isText,
 } from "domhandler";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -522,11 +523,11 @@ const cssListStyleOf = (element: Element): OrderedListType | null | undefined =>
  * 32-bit field, and arithmetic on it here would stop being exact.
  */
 const integerAttribute = (value: string | undefined): number | undefined => {
-  if (value === undefined || !/^\s*-?\d+\s*$/u.test(value)) {
+  if (value === undefined) {
     return undefined;
   }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
+  const parsed = parseIntegerToken(value.trim());
+  return Result.isOk(parsed) ? parsed.value : undefined;
 };
 
 /**
