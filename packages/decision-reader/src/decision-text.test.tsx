@@ -328,6 +328,21 @@ test("a supplied copy adapter preserves existing permalink markup", () => {
   }
 });
 
+/** A card's quoted runs: whether each is marked cited, and its paragraphs. */
+const quotedRuns = (markup: string) =>
+  Array.from(
+    markup.matchAll(
+      /<div(?: class="[^"]*")?( data-cited="")? data-slot="provision-card-quote">(.*?)<\/div>/gu,
+    ),
+    ([, cited, body = ""]) => ({
+      cited: cited !== undefined,
+      texts: Array.from(
+        body.matchAll(/<p[^>]*>(.*?)<\/p>/gu),
+        ([, paragraph]) => paragraph,
+      ),
+    }),
+  );
+
 test("a provision card identifies unavailable parts until its full wording recovers them", () => {
   const provision = (part: string) =>
     ({
@@ -461,12 +476,10 @@ test("a provision card identifies unavailable parts until its full wording recov
     expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
     expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
     expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
-    expect(unresolved).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
-    );
-    expect(unresolved).toMatch(
-      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
-    );
+    expect(quotedRuns(unresolved)).toEqual([
+      { cited: true, texts: [fullAvailableBlock.text] },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
     const recovered = render({
       availableWording: wording,
       missingWording,
@@ -489,18 +502,17 @@ test("a provision card identifies unavailable parts until its full wording recov
       'data-slot="provision-card-unavailable-part"',
     );
     expect(recovered).not.toContain("Text of § 5 odst. 2 is not available");
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Doplněné znění druhého odstavce\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Písmeno citovaného druhého odstavce\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
-    );
+    expect(quotedRuns(recovered)).toEqual([
+      {
+        cited: true,
+        texts: [
+          fullAvailableBlock.text,
+          fullMissingBlock.text,
+          fullMissingChildBlock.text,
+        ],
+      },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
   }
   const allUnavailable = render({
     availableWording: null,
