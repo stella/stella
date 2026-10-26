@@ -68,8 +68,12 @@ describe("locatePassages", () => {
     // The served text prints a court's number before its paragraph; the
     // reader's text does not hold it, so it names the paragraph instead.
     const numbered: Block = {
-      ...paragraph("p-2", "The applicant lodged an appeal."),
+      anchorId: "p-2",
+      id: "id-p-2",
+      inlines: [{ text: "The applicant lodged an appeal.", type: "text" }],
       number: 48,
+      plainText: "The applicant lodged an appeal.",
+      type: "paragraph",
     };
     const blocks = [
       paragraph("p-1", "As in 48 The applicant lodged an appeal, so here."),
