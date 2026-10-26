@@ -253,6 +253,8 @@ import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { PlaybookQuerySection } from "./playbook-query-section";
 
@@ -324,7 +326,8 @@ export const PlaybookFacet = ({
   const author = getWordEditAuthorName(user);
   const navigate = useNavigate();
 
-  const viewId = useMatterViewId();
+  const currentView = useCurrentWorkspaceView();
+  const { viewId } = resolveWorkspaceViewParams(workspaceId, currentView);
   const { placement, paneSwap } = useDocumentPaneRouting({
     entityId,
     fileFieldId,
@@ -561,11 +564,7 @@ export const PlaybookFacet = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: {
-          workspaceId: reference.workspaceId,
-          // A reference from another matter has no view of this one to open in.
-          viewId: reference.workspaceId === workspaceId ? viewId : ALL_VIEW_ID,
-        },
+        params: resolveWorkspaceViewParams(reference.workspaceId, currentView),
         search: (prev) => ({
           ...prev,
           block: blockId,
@@ -967,9 +966,6 @@ const findingReferencePassages = (finding: ReviewFinding) =>
 const resultReferencePassages = (items: readonly ReviewResultItem[]) =>
   items.flatMap((item) => findingReferencePassages(item.finding));
 
-/** The matter view a document from another matter opens in: all of it. */
-const ALL_VIEW_ID = "all";
-
 /**
  * Which facet the document's inspector tab shows in each arrangement: the
  * document itself exactly when the main pane is not showing it. Total over the
@@ -995,16 +991,6 @@ const referenceNamesByField = (
  *  has picked none. */
 const referenceNameLookup = (setup: ReviewSetup | null): ReferenceNameLookup =>
   referenceNamesByField(setup === null ? [] : setup.references);
-
-/** The matter view a document opens in. The facet renders in shared chrome,
- *  so it may be mounted on a route that has none. */
-const useMatterViewId = (): string => {
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
-  return viewMatch?.params.viewId ?? ALL_VIEW_ID;
-};
 
 type DocumentPaneRoutingArgs = {
   entityId: string;

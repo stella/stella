@@ -1931,6 +1931,8 @@ const config = defineConfig({
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-raw-browser-storage.ts",
+    "./.oxlint-plugins/no-raw-history-state.ts",
+    "./.oxlint-plugins/no-literal-view-id.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -3333,6 +3335,28 @@ const config = defineConfig({
       ],
       rules: {
         "no-raw-browser-storage/no-raw-browser-storage": "error",
+      },
+    },
+    {
+      // In-app back navigation reads the router's history, never the
+      // browser's state or length; the router setup is the one owner.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-history-state.fixture.ts",
+      ],
+      rules: {
+        "no-raw-history-state/no-raw-history-state": "error",
+      },
+    },
+    {
+      // The default `$viewId` slug lives in its owner; navigations keep the
+      // view on screen or name the owner's constant.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-literal-view-id.fixture.tsx",
+      ],
+      rules: {
+        "no-literal-view-id/no-literal-view-id": "error",
       },
     },
     {

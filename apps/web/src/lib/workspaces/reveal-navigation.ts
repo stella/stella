@@ -5,9 +5,9 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 type Navigate = ReturnType<typeof useNavigate>;
-const DEFAULT_WORKSPACE_VIEW_ID = "all";
 
 export const getCurrentWorkspaceViewId = (
   pathname: string,

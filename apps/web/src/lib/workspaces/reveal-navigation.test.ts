@@ -5,6 +5,7 @@ import {
   getCurrentWorkspaceViewId,
   getWorkspaceRevealTarget,
 } from "@/lib/workspaces/reveal-navigation";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 const view = (
   id: string,
@@ -100,7 +101,7 @@ describe("reveal navigation", () => {
       }),
     ).toEqual({
       to: "/workspaces/$workspaceId/$viewId",
-      params: { viewId: "all", workspaceId: "ws_1" },
+      params: { viewId: DEFAULT_WORKSPACE_VIEW_ID, workspaceId: "ws_1" },
       search: { folder: "folder_1" },
     });
   });
