@@ -278,6 +278,7 @@ const readReaderAnswerContext = async ({
           (cause) =>
             new HandlerError({
               status: 503,
+              code: "internal_error",
               message: "Decision reader is unavailable",
               cause,
             }),
