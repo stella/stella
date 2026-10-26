@@ -2,6 +2,7 @@ import { panic, Result, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
+import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
@@ -19,15 +20,27 @@ import {
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
+  getPublicReadStatementTimeoutMs,
+  runWithPublicReadStatementTimeout,
+} from "@/api/lib/legal-search/public-read-timeout-context";
+import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
   searchIndexUnavailableError,
 } from "@/api/lib/legal-search/search-index-unavailable";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
+import {
+  flushFailureObservations,
+  resetFailureObservationsForTesting,
+} from "@/api/lib/observability/failure-shadow";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
+import {
+  LAW_MCP_TOOL_DISPOSITION,
+  MCP_PUBLIC_CORPUS_CLASS,
+} from "@/api/mcp/static-tool-definitions";
 import type { McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import {
@@ -38,6 +51,10 @@ import {
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -128,7 +145,7 @@ const createContext = (): AuthorizedMcpRequestContext => {
     accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
     accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, "active"]]),
     accessibleWorkspaces: [],
-    grantedScopes: [],
+    grantedScopes: ["stella:read", "stella:search", "stella:knowledge_write"],
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_1"),
     recordAuditEvent: asTestRaw(async () => await Promise.resolve(undefined)),
@@ -425,5 +442,140 @@ describe("search_index_unavailable", () => {
         },
       });
     }
+  });
+});
+
+describe("public corpus statement budgets", () => {
+  test("every corpus disposition runs at dispatch under its class budget", async () => {
+    const corpusTools = Object.entries(LAW_MCP_TOOL_DISPOSITION)
+      .filter(([, disposition]) => disposition === "corpus")
+      .map(([name]) => name)
+      .toSorted();
+    const classes = new Map(Object.entries(MCP_PUBLIC_CORPUS_CLASS));
+    expect(corpusTools.filter((name) => !classes.has(name))).toEqual([]);
+    expect(classes.has("search_boe_legislation")).toBe(false);
+    const exercised: string[] = [];
+    for (const toolName of classes.keys()) {
+      await handleMcpToolCall({
+        toolName,
+        args: { __budget_probe: true },
+        context: createContext(),
+        dependencies: {
+          dispatchGatewayToolCall: async () => {
+            exercised.push(toolName);
+            const corpusClass = classes.get(toolName);
+            if (corpusClass === undefined) {
+              throw new Error("Missing corpus class");
+            }
+            expect(getPublicReadStatementTimeoutMs()).toBe(
+              PUBLIC_READ_STATEMENT_TIMEOUT_MS[corpusClass],
+            );
+            await Promise.resolve();
+            expect(getPublicReadStatementTimeoutMs()).toBe(
+              PUBLIC_READ_STATEMENT_TIMEOUT_MS[corpusClass],
+            );
+            return null;
+          },
+        },
+      });
+      expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
+    }
+    expect(exercised.toSorted()).toEqual([...classes.keys()].toSorted());
+  });
+
+  test("upstream-only dispatch does not acquire a public-read budget", async () => {
+    let reached = false;
+    await handleMcpToolCall({
+      toolName: "search_boe_legislation",
+      args: { __budget_probe: true },
+      context: createContext(),
+      dependencies: {
+        dispatchGatewayToolCall: async () => {
+          reached = true;
+          expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
+          return null;
+        },
+      },
+    });
+    expect(reached).toBe(true);
+  });
+
+  test("a cancelled corpus search is retryable and transient without a defect", async () => {
+    const analytics = installRecordingAnalytics();
+    const logs = installRecordingLogger();
+    resetFailureObservationsForTesting();
+    try {
+      const context = createContext();
+      const result = await handleMcpToolCall({
+        toolName: "search_case_law",
+        args: { country: "CZE", queries: ["smlouva"] },
+        context: {
+          ...context,
+          testDependencies: {
+            ...context.testDependencies,
+            searchDecisionsHandler: async () => {
+              expect(getPublicReadStatementTimeoutMs()).toBe(
+                PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
+              );
+              throw Object.assign(new Error("private SQL diagnostics"), {
+                code: "57014",
+              });
+            },
+          },
+        },
+      });
+      expect(result.isError).toBe(true);
+      expect(payloadOf(result)).toEqual({
+        error: {
+          code: "public_read_timeout",
+          message: "Public read timed out. Please try again.",
+          hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+          retryable: true,
+        },
+      });
+      expect(analytics.exceptions()).toEqual([]);
+      flushFailureObservations();
+      expect(
+        logs.records.filter(({ message }) => message === "failure.observed"),
+      ).toMatchObject([
+        {
+          attributes: {
+            "failure.grade": "transient",
+            "failure.reason": "public_read_timeout",
+          },
+        },
+      ]);
+      expect(
+        logs.records.some(
+          ({ attributes }) => attributes?.["failure.grade"] === "defect",
+        ),
+      ).toBe(false);
+      expect(JSON.stringify(logs.records)).not.toContain(
+        "private SQL diagnostics",
+      );
+    } finally {
+      resetFailureObservationsForTesting();
+      logs.restore();
+      analytics.restore();
+    }
+  });
+
+  test("failed Results map cancels only inside the public-read budget", () => {
+    const cancelled = new UnhandledException({
+      cause: Object.assign(new Error("private SQL diagnostics"), {
+        errno: "57014",
+      }),
+    });
+    const within = runWithPublicReadStatementTimeout(
+      PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse,
+      () => internalFailureResult(cancelled, "mcp.response.failure"),
+    );
+    expect(payloadOf(serialized(within))).toMatchObject({
+      error: { code: "public_read_timeout", retryable: true },
+    });
+    const outside = internalFailureResult(cancelled, "mcp.response.failure");
+    expect(payloadOf(serialized(outside))).toMatchObject({
+      error: { code: "internal_error" },
+    });
   });
 });

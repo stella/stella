@@ -3649,15 +3649,15 @@
   },
   {
     "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "43dcac559efabea48919abdb2853456c6bcb5a803e4bafd6cdadd8caaa86dc7e",
+    "fingerprint": "175f666c3662b5398246fd148f90d65f4fbdf3fba83e500d9d9672e450dfbcaf",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/public-law-read-db.ts: Existing root transaction runner on external.database; opens the owning database transaction for this module."
+    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/public-law-read-db.ts",
-    "fingerprint": "8cd7517024c8b2fa6124cb97c69c43970c9dcb254b872ddcb786278600319dcb",
+    "fingerprint": "f5b5976998e8b3259d75c0037e2a325e0bef6c406dae071974c2ec4547205404",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/public-law-read-db.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "Observe statements inside the existing read-only transaction; transaction ownership and count are unchanged."
   },
   {
     "file": "apps/api/src/lib/review-organization/reset.ts",

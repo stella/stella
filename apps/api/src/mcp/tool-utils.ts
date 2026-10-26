@@ -31,6 +31,7 @@ import {
 } from "@/api/lib/chat/tool-output-degrade";
 import { maskUuids } from "@/api/lib/chat/uuid-mask";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import {
   isSearchIndexUnavailable,
   SEARCH_INDEX_UNAVAILABLE_CODE,
@@ -855,6 +856,20 @@ export const internalFailureResult = (
   if (isSearchIndexUnavailable(error)) {
     return searchIndexUnavailableResult(error);
   }
+  const timeout = publicReadTimeoutError(error);
+  if (timeout !== null) {
+    captureError(
+      timeout,
+      handlerErrorContext(fingerprintKey, { source: "mcp" }),
+    );
+    return structuredErrorResult({
+      code: "public_read_timeout",
+      message: timeout.message,
+      hint: "Retry with a narrower query or a smaller selection of public-law documents.",
+      retryable: true,
+    });
+  }
+
   if (HandlerError.is(error)) {
     if (error.code === "upstream_unavailable") {
       captureError(

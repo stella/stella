@@ -18,6 +18,7 @@ export const FAILURE_GRADES = [
 export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
+  public_read_timeout: "transient",
   upstream_unavailable: "transient",
   work_capacity_unavailable: "transient",
   work_deadline_exceeded: "transient",
