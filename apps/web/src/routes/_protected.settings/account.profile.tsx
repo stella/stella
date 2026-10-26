@@ -245,9 +245,9 @@ function ProfilePageBody() {
   const [step, setStep] = useState<"loading" | "tasks" | "confirm" | "otp">(
     "loading",
   );
-  const [reassignments, setReassignments] = useState<Record<string, string>>(
-    {},
-  );
+  const [reassignments, setReassignments] = useState<
+    Record<string, string | null>
+  >({});
 
   const {
     data: pendingTasksData,

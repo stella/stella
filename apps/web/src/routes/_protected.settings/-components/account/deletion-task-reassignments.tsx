@@ -25,8 +25,8 @@ export type DeletionTaskGroup = {
   members: PendingMember[];
 };
 
-/** Task entity id to the member taking it over; "" leaves it unassigned. */
-type Reassignments = Record<string, string>;
+/** Task entity id to the member taking it over; null leaves it unassigned. */
+type Reassignments = Record<string, string | null>;
 
 // The deletion read names each candidate only; it carries no email or avatar.
 const reassignmentOptions = (
@@ -56,7 +56,7 @@ export const DeletionTaskReassignments = ({
   const sharedReassignment = (tasks: readonly PendingTask[]): string | null => {
     const chosen = new Set(tasks.map((task) => reassignments[task.entityId]));
     const only = chosen.size === 1 ? [...chosen].at(0) : undefined;
-    return only || null;
+    return only ?? null;
   };
 
   return (
@@ -122,13 +122,13 @@ export const DeletionTaskReassignments = ({
                         onValueChange={(userId) => {
                           onReassignmentsChange((prev) => ({
                             ...prev,
-                            [task.entityId]: userId ?? "",
+                            [task.entityId]: userId,
                           }));
                         }}
                         placeholder={t(
                           "settings.account.deleteAccountTaskReassignPlaceholder",
                         )}
-                        value={reassignments[task.entityId] || null}
+                        value={reassignments[task.entityId] ?? null}
                       />
                     ) : (
                       <p className="text-muted-foreground text-xs italic">
