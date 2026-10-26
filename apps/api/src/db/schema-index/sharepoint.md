@@ -36,5 +36,6 @@ sharepoint_oauth_state.organization_id  safeOrganizationId  fk,not null       sh
 sharepoint_oauth_state.user_id          text                fk,not null       sharepoint.ts:85
 sharepoint_oauth_state.code_verifier    text                not null          sharepoint.ts:89
 sharepoint_oauth_state.redirect_uri     text                not null          sharepoint.ts:90
-sharepoint_oauth_state.created_at       timestamptz         default,not null  sharepoint.ts:91
+sharepoint_oauth_state.requested_scope  text                null              sharepoint.ts:92  Exact server-authorized scopes for this consent attempt.
+sharepoint_oauth_state.created_at       timestamptz         default,not null  sharepoint.ts:93
 ```
