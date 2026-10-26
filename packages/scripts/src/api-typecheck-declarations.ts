@@ -2,6 +2,8 @@
 import { panic } from "better-result";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { parseSync, Visitor } from "oxc-parser";
+import type { CallExpression, NewExpression } from "oxc-parser";
 import ts from "typescript6";
 import * as v from "valibot";
 
@@ -164,8 +166,27 @@ export const missingDeclarationCacheInputs = (
   return uncoveredApiTypecheckFiles({ files, inputs, project });
 };
 
+// Calls that build a route group, the API server, or an MCP server, keyed by
+// the module that exports them (relative to apps/api/src for API modules).
+const RUNTIME_CONSTRUCTORS: Readonly<Record<string, readonly string[]>> = {
+  "http/route": ["routes", "mount"],
+  "http/app": ["createHttpApp"],
+  "@modelcontextprotocol/server": ["Server"],
+};
+
+const constructorModule = (specifier: string, relative: string) => {
+  if (specifier.startsWith("@/api/")) {
+    return specifier.slice("@/api/".length);
+  }
+  if (specifier.startsWith(".")) {
+    return path.posix.join(path.posix.dirname(relative), specifier);
+  }
+  return specifier;
+};
+
 // Route and server contracts belong to the source checker, never to the
-// declaration surface consumed by secondary compiler programs.
+// declaration surface consumed by secondary compiler programs. A module is a
+// boundary by its name, or by building routes or a server whatever its name.
 const isApiRuntimeBoundary = (source: ts.SourceFile) => {
   const relative = source.fileName
     .replaceAll(path.sep, "/")
@@ -180,44 +201,51 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
   ) {
     return true;
   }
+  const parsed = parseSync(source.fileName, source.text);
+  // Local names bound to a constructor, and namespaces that carry one.
   const constructors = new Set<string>();
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
-      !["elysia", "@modelcontextprotocol/server"].includes(
-        statement.moduleSpecifier.text,
-      )
-    ) {
+  const namespaces = new Map<string, readonly string[]>();
+  for (const { moduleRequest, entries } of parsed.module.staticImports) {
+    const names =
+      RUNTIME_CONSTRUCTORS[constructorModule(moduleRequest.value, relative)];
+    if (!names) {
       continue;
     }
-    const clause = statement.importClause;
-    if (clause?.name && statement.moduleSpecifier.text === "elysia") {
-      constructors.add(clause.name.text);
-    }
-    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-      for (const binding of clause.namedBindings.elements) {
-        const imported = binding.propertyName?.text ?? binding.name.text;
-        if (imported === "Elysia" || imported === "Server") {
-          constructors.add(binding.name.text);
-        }
+    for (const { importName, localName, isType } of entries) {
+      if (isType) {
+        continue;
+      }
+      if (importName.kind === "NamespaceObject") {
+        namespaces.set(localName.value, names);
+      } else if (importName.name !== null && names.includes(importName.name)) {
+        constructors.add(localName.value);
       }
     }
   }
-  let route = false;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      constructors.has(node.expression.text)
+  if (constructors.size === 0 && namespaces.size === 0) {
+    return false;
+  }
+  let boundary = false;
+  const construction = (node: CallExpression | NewExpression) => {
+    const callee = node.callee;
+    if (callee.type === "Identifier") {
+      boundary ||= constructors.has(callee.name);
+    } else if (
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.object.type === "Identifier" &&
+      callee.property.type === "Identifier"
     ) {
-      route = true;
-      return;
+      boundary ||=
+        namespaces.get(callee.object.name)?.includes(callee.property.name) ??
+        false;
     }
-    ts.forEachChild(node, visit);
   };
-  visit(source);
-  return route;
+  new Visitor({
+    CallExpression: construction,
+    NewExpression: construction,
+  }).visit(parsed.program);
+  return boundary;
 };
 
 // Emit the explicit public roots and their declaration dependencies. Runtime
