@@ -88,22 +88,22 @@ const FETCH_PATTERNS: readonly { kind: string; pattern: RegExp }[] = [
   {
     kind: "git clone",
     pattern:
-      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:"[^"]*"|'[^']*'|[^\s"']\S*)|--no-pager|--(?:git-dir|work-tree)=\S+)\s+)*clone(?=\s|$)/u,
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*clone(?=\s|$)/u,
   },
   {
     kind: "git fetch",
     pattern:
-      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:"[^"]*"|'[^']*'|[^\s"']\S*)|--no-pager|--(?:git-dir|work-tree)=\S+)\s+)*fetch(?=\s|$)/u,
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*fetch(?=\s|$)/u,
   },
   {
     kind: "git ls-remote",
     pattern:
-      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:"[^"]*"|'[^']*'|[^\s"']\S*)|--no-pager|--(?:git-dir|work-tree)=\S+)\s+)*ls-remote(?=\s|$)/u,
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*ls-remote(?=\s|$)/u,
   },
   {
     kind: "git pull",
     pattern:
-      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:"[^"]*"|'[^']*'|[^\s"']\S*)|--no-pager|--(?:git-dir|work-tree)=\S+)\s+)*pull(?=\s|$)/u,
+      /\bgit\s+(?:(?:(?:-c|-C)\s+(?:[^\s"']|"[^"]*"|'[^']*')+|--no-pager|--(?:git-dir|work-tree)=(?:[^\s"']|"[^"]*"|'[^']*')+)\s+)*pull(?=\s|$)/u,
   },
 ];
 

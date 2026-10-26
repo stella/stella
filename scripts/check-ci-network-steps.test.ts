@@ -248,6 +248,18 @@ describe("shell detection", () => {
     ).toEqual([["git fetch", true]]);
   });
 
+  test("option values quoted inside a word still reveal the subcommand", () => {
+    for (const command of [
+      'git -c http.extraheader="Authorization: basic $auth" fetch origin main',
+      'git --git-dir="repo with spaces/.git" fetch origin main',
+    ]) {
+      expect(
+        scanShell(command, "git").map((fetch) => fetch.kind),
+        command,
+      ).toEqual(["git fetch"]);
+    }
+  });
+
   test("git commands without network access are not fetches", () => {
     expect(scanShell("git status\ngit log -1", "git")).toEqual([]);
   });
