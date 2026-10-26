@@ -42,7 +42,8 @@ fn main() {
   use objc2::rc::{Retained, autoreleasepool};
   use objc2::runtime::{AnyObject, ClassBuilder};
   use objc2_app_kit::{
-    NSApplicationActivationPolicy, NSBackingStoreType, NSRunningApplication, NSWorkspace,
+    NSApplicationActivationPolicy, NSBackingStoreType, NSRunningApplication,
+    NSWorkspace,
   };
   use objc2_foundation::{NSPoint, NSRect, NSSize};
   use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
@@ -58,6 +59,9 @@ fn main() {
     let previous_app = NSWorkspace::sharedWorkspace()
       .frontmostApplication()
       .filter(|app| app.processIdentifier() != own_process_id);
+    // This harness pumps events itself instead of calling run(), which
+    // normally completes AppKit's launch before starting its event loop.
+    application.finishLaunching();
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(100.0, 100.0));
     for _ in 0..3 {
       // SAFETY: initialized on the main thread and retained until after close;
