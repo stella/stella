@@ -957,45 +957,50 @@ const expectPastePreview = async (
   await expect(content.locator("strong")).toHaveText(FORMATTED_CLIP.plainText);
 };
 
+// Base UI ignores a WebKit mouse move that reports no movement (a pointer
+// resting while the list scrolls under it), and Playwright's WebKit reports
+// movementX/Y 0 for every synthetic move, `hover()` and stepped moves alike.
+// A real pointer arriving over an item moves, so the hover adds that move.
+const hoverMenuItem = async (item: Locator) => {
+  await item.hover();
+  await item.dispatchEvent("mousemove", {
+    bubbles: true,
+    movementX: 1,
+    movementY: 1,
+  });
+};
+
 test("hovering a plain-text paste option previews the clip without formatting", async ({
-  browserName,
   page,
 }) => {
-  // Base UI ignores a WebKit pointer move that reports no movement, and
-  // Playwright's WebKit moves report none, so a hover never highlights there.
-  // The arrow-key test below covers the same preview in WebKit.
-  test.skip(
-    browserName === "webkit",
-    "Playwright WebKit pointer moves carry no movement",
-  );
   const cards = await openClipboard(page, "en");
   await expectPastePreview(page, "original");
 
   await cards.first().click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Paste text as" }));
   const plainText = page.getByRole("menuitem", { name: "Plain text" });
   const original = page.getByRole("menuitem", {
     name: "Original formatting",
   });
-  await plainText.hover();
+  await hoverMenuItem(plainText);
   await expectPastePreview(page, "plainText");
-  await original.hover();
+  await hoverMenuItem(original);
   await expectPastePreview(page, "original");
-  await plainText.hover();
+  await hoverMenuItem(plainText);
   await expectPastePreview(page, "plainText");
-  await page.getByRole("menuitem", { name: "Edit clip" }).hover();
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Edit clip" }));
   await expect(plainText).toBeHidden();
   await expectPastePreview(page, "original");
 
-  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
-  await plainText.hover();
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Paste text as" }));
+  await hoverMenuItem(plainText);
   await expectPastePreview(page, "plainText");
   // The first Escape closes only the submenu.
   await page.keyboard.press("Escape");
   await expect(plainText).toBeHidden();
   await expectPastePreview(page, "original");
-  await page.getByRole("menuitem", { name: "Paste text as" }).hover();
-  await plainText.hover();
+  await hoverMenuItem(page.getByRole("menuitem", { name: "Paste text as" }));
+  await hoverMenuItem(plainText);
   await expectPastePreview(page, "plainText");
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
