@@ -1,12 +1,10 @@
-// Independent equivalence oracle captured from f3efe8009a. Name variants
-// (bracketed parts, joined names) come from the shared normaliser, as in the
-// compact index.
+// Independent equivalence oracle captured from f3efe8009a.
 import { panic } from "better-result";
 
 import { distance } from "@stll/fuzzy-search";
 
 import type { AliasQuality, EntityType, SanctionsEntry } from "../entry";
-import { nameReadings, readingKey } from "../normalise";
+import { nameReading } from "../normalise";
 import type { NameReading, NameToken } from "../normalise";
 
 // One budget covers vocabulary lookups, postings and scoring across readings.
@@ -44,7 +42,7 @@ const INITIAL_SIMILARITY = 0.8;
 // A listed middle name, patronymic or particle the query omits costs a quarter
 // of its weight; any other listed token the query omits costs all of it.
 const MIDDLE_NAME_DISCOUNT = 0.25;
-export const WEAK_ALIAS_FACTOR = 0.9;
+const WEAK_ALIAS_FACTOR = 0.9;
 const PATRONYMIC = /(?:ov|ev)(?:ic|ici|iti|na)$/u;
 // Name particles, in folded form, that a query often drops.
 const PARTICLES = new Set([
@@ -155,8 +153,6 @@ export type NameIndex = {
   raw: Vocabulary;
   /** Inverse document frequency per folded id; join-only strings get the maximum. */
   weights: readonly number[];
-  /** Per folded id, whether a listed name (not only a derived variant) has it. */
-  listedWords: readonly boolean[];
   maxWeight: number;
 };
 
@@ -254,8 +250,8 @@ export function* nameIndexSteps(
   let canShareVocabularies = true;
   for (const { names, entityType } of entries) {
     canShareVocabularies = names.every(({ name }) =>
-      nameReadings(name, entityType).every(({ reading }) =>
-        reading.tokens.every(({ raw, folded }) => raw === folded),
+      nameReading(name, entityType).tokens.every(
+        ({ raw, folded }) => raw === folded,
       ),
     );
     if (!canShareVocabularies) {
@@ -271,25 +267,9 @@ export function* nameIndexSteps(
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, IndexedAlias>();
     const entryTokens = new Set<number>();
-    // Only each listed name's own reading counts towards token frequencies.
-    const variants = entry.names.flatMap(({ name, quality }) =>
-      nameReadings(name, entry.entityType).map(
-        ({ reading, qualifier }, position) => ({
-          name,
-          reading,
-          quality: qualifier ? ("weak" as const) : quality,
-          listed: position === 0,
-        }),
-      ),
-    );
-    for (const { name, reading, quality, listed } of variants) {
-      const { tokens, adjacent } = reading;
-      if (listed) {
-        for (const token of tokens) {
-          entryTokens.add(intern(folded, token.folded));
-        }
-      }
-      const key = readingKey(reading);
+    for (const { name, quality } of entry.names) {
+      const { tokens, adjacent } = nameReading(name, entry.entityType);
+      const key = `${tokens.map((token) => token.raw).join(" ")}|${adjacent.join(";")}`;
       const existing = byKey.get(key);
       if (tokens.length === 0 || existing?.quality === "strong") {
         continue;
@@ -348,6 +328,9 @@ export function* nameIndexSteps(
           aliases.length,
         );
       }
+      for (const id of alias.folded) {
+        entryTokens.add(id);
+      }
       aliases.push(alias);
     }
     for (const id of entryTokens) {
@@ -367,7 +350,6 @@ export function* nameIndexSteps(
         ? maxWeight
         : Math.log(entries.length / count) + 1;
     }),
-    listedWords: folded.strings.map((_, id) => entryCounts.has(id)),
     maxWeight,
   };
 }
@@ -644,7 +626,7 @@ const prepareQuery = ({
     let weight = index.maxWeight;
     let best = -1;
     for (const [id, similarity] of single?.folded ?? []) {
-      if (similarity > best && index.listedWords[id] === true) {
+      if (similarity > best && (index.folded.postings[id]?.length ?? 0) > 0) {
         best = similarity;
         weight = index.weights[id] ?? weight;
       }
@@ -1226,7 +1208,10 @@ export const bruteForceNameMatches = (
     let weight = index.maxWeight;
     let best = -1;
     for (const [id, similarity] of singles.get(position)?.folded ?? []) {
-      if (similarity > best && index.listedWords.at(id) === true) {
+      if (
+        similarity > best &&
+        (index.folded.postings.at(id)?.length ?? 0) > 0
+      ) {
         best = similarity;
         weight = index.weights.at(id) ?? panic("Missing oracle weight");
       }

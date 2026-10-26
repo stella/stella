@@ -16,7 +16,7 @@ import {
   StringMap,
 } from "./compact-storage";
 import type { AliasQuality, EntityType, SanctionsEntry } from "./entry";
-import { nameReadings, readingKey } from "./normalise";
+import { nameReading, nameReadings, readingKey } from "./normalise";
 import type { NameReading, NameToken } from "./normalise";
 
 export type ScreeningWorkBudget = { remaining: number; exhausted: boolean };
@@ -40,8 +40,7 @@ const INITIAL_SIMILARITY = 0.8;
 // A listed middle name, patronymic or particle the query omits costs a quarter
 // of its weight; any other listed token the query omits costs all of it.
 const MIDDLE_NAME_DISCOUNT = 0.25;
-/** A weak alias, or a bracketed part read on its own, scores this share. */
-export const WEAK_ALIAS_FACTOR = 0.9;
+const WEAK_ALIAS_FACTOR = 0.9;
 const PATRONYMIC = /(?:ov|ev)(?:ic|ici|iti|na)$/u;
 // Name particles, in folded form, that a query often drops.
 const PARTICLES = new Set([
@@ -353,18 +352,122 @@ function* entityIndexSteps({
   return entities ?? panic("Entity index construction did not return an index");
 }
 
-export function* nameIndexSteps(
-  entries: Iterable<SanctionsEntry> & {
-    readonly length: number;
-    entries: () => Iterable<[number, SanctionsEntry]>;
+type IndexedEntries = Iterable<SanctionsEntry> & {
+  readonly length: number;
+  entries: () => Iterable<[number, SanctionsEntry]>;
+};
+type AliasSource = {
+  entryIndex: number;
+  entry: SanctionsEntry;
+  name: string;
+  quality: AliasQuality;
+  reading: NameReading;
+  folded: BuildingVocabulary;
+  raw: BuildingVocabulary;
+};
+const indexedAlias = ({
+  entryIndex,
+  entry,
+  name,
+  quality,
+  reading: { tokens, adjacent },
+  folded,
+  raw,
+}: AliasSource): IndexedAlias => ({
+  entry: entryIndex,
+  name,
+  quality,
+  entityType: entry.entityType,
+  tokens,
+  folded: tokens.map((token) => intern(folded, token.folded)),
+  raw: tokens.map((token) => intern(raw, token.raw)),
+  joins: adjacent.map((positions) => ({
+    positions,
+    folded: intern(
+      folded,
+      positions.map((position) => tokens[position]?.folded ?? "").join(""),
+    ),
+    raw: intern(
+      raw,
+      positions.map((position) => tokens[position]?.raw ?? "").join(""),
+    ),
+  })),
+  patternKey: `${entry.entityType}|${readingKey({ tokens, adjacent })}`,
+});
+
+/**
+ * Further readings of each listed name (without brackets, dotted acronyms
+ * joined), indexed only after every listed name and never counted, so token
+ * frequencies and vocabulary order are those of the listed names.
+ */
+function* furtherAliasSteps(
+  entries: IndexedEntries,
+  {
+    aliases,
+    folded,
+    raw,
+  }: {
+    aliases: AliasColumn;
+    folded: BuildingVocabulary;
+    raw: BuildingVocabulary;
   },
+): Generator<undefined, void, void> {
+  for (const [entryIndex, entry] of entries.entries()) {
+    const further = entry.names.flatMap(({ name, quality }) =>
+      nameReadings(name, entry.entityType)
+        .slice(1)
+        .map((reading) => ({ name, quality, reading })),
+    );
+    const listed = new Set(
+      further.length === 0
+        ? []
+        : entry.names.map(({ name }) =>
+            readingKey(nameReading(name, entry.entityType)),
+          ),
+    );
+    const byKey = new Map<string, { quality: AliasQuality; id: number }>();
+    for (const { name, quality, reading } of further) {
+      const key = readingKey(reading);
+      const existing = byKey.get(key);
+      if (listed.has(key) || existing?.quality === "strong") {
+        continue;
+      }
+      if (existing !== undefined) {
+        if (
+          quality === "strong" ||
+          (quality === "unknown" && existing.quality === "weak")
+        ) {
+          existing.quality = quality;
+          aliases.setQuality(existing.id, quality);
+        }
+        continue;
+      }
+      byKey.set(key, { quality, id: aliases.length });
+      aliases.push(
+        indexedAlias({
+          entryIndex,
+          entry,
+          name,
+          quality,
+          reading,
+          folded,
+          raw,
+        }),
+      );
+    }
+    yield;
+  }
+}
+
+export function* nameIndexSteps(
+  entries: IndexedEntries,
 ): IndexBuildSteps<NameIndex> {
   let share = true;
   for (const entry of entries) {
     if (
       entry.names.some(({ name }) =>
-        nameReadings(name, entry.entityType).some(({ reading }) =>
-          reading.tokens.some(({ raw, folded }) => raw !== folded),
+        nameReadings(name, entry.entityType).some(({ tokens }) =>
+          tokens.some(({ raw, folded }) => raw !== folded),
         ),
       )
     ) {
@@ -385,30 +488,11 @@ export function* nameIndexSteps(
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
     const entryTokens = new Set<number>();
-    // Every variant of a listed name indexes under the listed name itself, so
-    // a match on the name without its brackets shows what was listed. Only
-    // the listed name's own reading, which comes first, counts towards token
-    // frequencies: a derived variant never changes another entry's weights.
-    const variants = entry.names.flatMap(({ name, quality }) =>
-      nameReadings(name, entry.entityType).map(
-        ({ reading, qualifier }, position) => ({
-          name,
-          reading,
-          quality: qualifier ? ("weak" as const) : quality,
-          listed: position === 0,
-        }),
-      ),
-    );
-    for (const { name, reading, quality, listed } of variants) {
-      const { tokens, adjacent } = reading;
-      if (listed) {
-        for (const token of tokens) {
-          entryTokens.add(intern(folded, token.folded));
-        }
-      }
+    for (const { name, quality } of entry.names) {
+      const reading = nameReading(name, entry.entityType);
       const key = readingKey(reading);
       const existing = byKey.get(key);
-      if (tokens.length === 0 || existing?.alias.quality === "strong") {
+      if (reading.tokens.length === 0 || existing?.alias.quality === "strong") {
         continue;
       }
       if (existing !== undefined) {
@@ -421,30 +505,19 @@ export function* nameIndexSteps(
         }
         continue;
       }
-      const alias: IndexedAlias = {
-        entry: entryIndex,
+      const alias = indexedAlias({
+        entryIndex,
+        entry,
         name,
         quality,
-        entityType: entry.entityType,
-        tokens,
-        folded: tokens.map((token) => intern(folded, token.folded)),
-        raw: tokens.map((token) => intern(raw, token.raw)),
-        joins: adjacent.map((positions) => ({
-          positions,
-          folded: intern(
-            folded,
-            positions
-              .map((position) => tokens[position]?.folded ?? "")
-              .join(""),
-          ),
-          raw: intern(
-            raw,
-            positions.map((position) => tokens[position]?.raw ?? "").join(""),
-          ),
-        })),
-        patternKey: `${entry.entityType}|${key}`,
-      };
+        reading,
+        folded,
+        raw,
+      });
       byKey.set(key, { alias, id: aliases.length });
+      for (const id of alias.folded) {
+        entryTokens.add(id);
+      }
       aliases.push(alias);
     }
     for (const id of entryTokens) {
@@ -452,6 +525,7 @@ export function* nameIndexSteps(
     }
     yield;
   }
+  yield* furtherAliasSteps(entries, { aliases, folded, raw });
   const maxWeight = Math.log(Math.max(entries.length, 1)) + 1;
   const weights = new NumberColumn("float");
   const wordIds = new NumberColumn("byte");
