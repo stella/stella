@@ -507,6 +507,24 @@
     "addEntry": "Lisa kanne",
     "amount": "Summa",
     "amountMustBePositive": "Summa peab olema suurem kui null",
+    "approval": {
+      "approveSelected": "Kinnita {count, plural, one {# valitud kanne} other {# valitud kannet}}",
+      "empty": "Selles toimikus ei oota midagi kinnitamist.",
+      "failed": "Muudatust ei salvestatud. Proovige uuesti.",
+      "myTime": "Minu aeg",
+      "refusals": {
+        "invalidEntry": "Lisage kirjeldus ja kontrollige töö kuupäeva, seejärel kinnitage kanne.",
+        "notApprover": "Seda kannet saab kinnitada ainult määratud kinnitaja või administraator.",
+        "notFound": "Seda kannet enam ei ole. Värskendage loendit.",
+        "runningTimer": "Peatage töötav taimer enne kande kinnitamist.",
+        "unpriced": "Sellel kandel pole määra. Seadistage selle toimiku määr ja kinnitage seejärel kanne.",
+        "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
+      },
+      "returnComment": "Tagastamise põhjus",
+      "selectEntry": "Vali kanne",
+      "timeEntries": "Ajakanded",
+      "title": "Kinnitamine"
+    },
     "approve": "Kinnita",
     "approveSelected": "Kinnita valitud",
     "batchActions": "Partiiaktsioonid",
@@ -594,6 +612,7 @@
       "openInvoice": "Ava arve",
       "otherCurrency": "{count, plural, one {# rida on} other {# rida on}} kirjendatud muus valuutas kui {currency} ja jääb eraldi arve jaoks.",
       "outsideScope": "Ei kuulu käibemaksu kohaldamisalasse, 0 %",
+      "pendingApprovals": "{count, plural, one {# kirje ootab} other {# kirjet ootab}} kinnitamist. Vaata kinnitamisi.",
       "rate": "Tunnihind",
       "readyDescription": "Väljastamisel saab arve teie numbriseeria järgmise numbri ja lukustatakse. Mustandit saab edasi muuta.",
       "readyTitle": "Valmis väljastamiseks",
@@ -2056,7 +2075,6 @@
       "orLetUsKnowAt": "või andke meile teada aadressil",
       "viewDocumentation": "Vaata dokumentatsiooni"
     },
-    "enterKey": "↵",
     "error": "Viga",
     "expenses": "Kulud",
     "export": {
@@ -2205,10 +2223,12 @@
     "scrollToTop": "Keri üles",
     "search": "Otsi...",
     "searchIn": "Otsi",
+    "searchMembers": "Otsi liikmeid…",
     "selectAMatter": "Vali toimik",
     "selectARole": "Valige roll",
     "selectAll": "Vali kõik",
     "selectDate": "Vali kuupäev…",
+    "selected": "Valitud",
     "sessions": "Seansid",
     "settings": "Seaded",
     "showAll": "Näita kõiki",
@@ -6210,8 +6230,7 @@
         "lead": "Vastutav",
         "leadActive": "Vastutav",
         "leadInactive": "Määra vastutaja",
-        "noLead": "Vastutajat pole",
-        "searchMembers": "Otsi liikmeid…"
+        "noLead": "Vastutajat pole"
       },
       "to": "Kuni"
     },
@@ -6273,6 +6292,7 @@
       "deleteAll": "Kustuta kõik",
       "deleteAllConfirm": "Kustutada kõik {count} elementi veerus „{column}\"?",
       "hideColumn": "Peida veerg",
+      "moveFailed": "{failed, plural, one {{total} üksusest # ei õnnestunud teisaldada.} other {{total} üksusest # ei õnnestunud teisaldada.}}",
       "readOnlyGrouping": "See rühmitus on ainult lugemiseks",
       "selectPropertyHint": "Valige tööriistaribal omadus, mille järgi rühmitada",
       "uploadDocument": "Laadi üles dokument",
@@ -6291,10 +6311,10 @@
       "addMember": "Lisa liige",
       "addMemberDescription": "Lisa tiimiliige sellesse toimikusse",
       "alreadyMember": "Kasutaja on juba liige",
+      "alreadyOnMatter": "Juba selles toimikus",
       "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
       "noMembersFound": "Liikmeid ei leitud",
-      "removeMemberConfirm": "Kas eemaldada see liige toimikust?",
-      "selectMember": "Vali liige"
+      "removeMemberConfirm": "Kas eemaldada see liige toimikust?"
     },
     "newDocument": "Uus dokument",
     "newFolder": "Uus kaust",
@@ -6332,7 +6352,6 @@
           "approvedBy": "Kinnitaja",
           "channel": "Kanal",
           "dateTime": "Kuupäev ja kellaaeg",
-          "eventId": "Sündmuse ID",
           "notAvailable": "Pole saadaval",
           "openTarget": "Ava üksus",
           "runId": "Käivituse ID",
@@ -6515,6 +6534,11 @@
       },
       "passwordLabel": "Sisestage PDF-i parool",
       "previousPage": "Eelmine leht",
+      "selection": {
+        "explainPassagePrompt": "Selgita seda {citation} lõiku:\n\n„{quote}“",
+        "pageLocator": "lk {page}",
+        "pageRangeLocator": "lk {start}–{end}"
+      },
       "showOriginal": "Kuva originaalleheküljed",
       "unlock": "Ava lukk"
     },
