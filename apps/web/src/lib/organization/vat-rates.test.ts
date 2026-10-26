@@ -54,7 +54,15 @@ test("VAT create carries both capability and submission intent headers", async (
     { preconnect: () => undefined },
   );
   await sendVatRateCommand(
-    { type: "create", values: { name: "Standard", rate: 21 } },
+    {
+      type: "create",
+      values: {
+        code: "standard",
+        name: "Standard",
+        rateBps: 2100,
+        validFrom: "2026-01-01",
+      },
+    },
     { headers: { "Idempotency-Key": "create-intent" } },
   );
   expect(requests).toHaveLength(1);
