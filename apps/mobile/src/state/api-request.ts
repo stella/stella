@@ -6,7 +6,7 @@ import { fetchWithTimeout } from "@/connection/http";
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 
-export class ApiRequestError extends TaggedError("ApiRequestError")<{
+class ApiRequestError extends TaggedError("ApiRequestError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
