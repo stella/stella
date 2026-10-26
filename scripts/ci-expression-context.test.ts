@@ -64,3 +64,12 @@ test("the census names a context path removed from the model", () => {
     "ci-plan: steps.completed-depth.outputs.marker",
   );
 });
+
+test("the pull request author path is represented for repairable-drift checks", () => {
+  const context = contextFromNested(
+    ciExpressionContext({ event: "pull_request" }),
+  );
+  expect(evaluate("github.event.pull_request.user.login", context)).toBe(
+    "contributor",
+  );
+});

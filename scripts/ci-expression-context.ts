@@ -48,6 +48,7 @@ export type ModelledRunContext = {
       pull_request: {
         draft: boolean;
         labels: { name: string }[];
+        user: { login: string };
         head: { repo: { full_name: string } };
       };
     };
