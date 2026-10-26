@@ -1470,7 +1470,9 @@ describe("a variant listed under a CELEX no store can hold", () => {
     });
 
     if (replayed?.type !== "parsed") {
-      throw new TypeError(`Expected parsed, got ${replayed?.type}`);
+      throw new TypeError(
+        `Expected parsed, got ${replayed?.type ?? "missing"}`,
+      );
     }
     expect(replayed.result.sourceDocumentId).toBe(quarantineId);
     expect(replayed.result.rawHash).toBe(stored.rawHash);

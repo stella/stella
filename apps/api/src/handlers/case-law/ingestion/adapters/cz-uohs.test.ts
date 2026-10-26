@@ -19,6 +19,7 @@ import {
   parseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+import { throughLedgerJson } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   extractPlPdfSeparatedContent,
   PL_PDF_PARAGRAPH_START,
@@ -702,8 +703,10 @@ describe("ÚOHS decisions listed without a storable IRI", () => {
     const requested = serve([keyed, empty, overLong, unnamed]);
     const page = (await czUohsAdapter.fetchPage(null, {}, undefined)).unwrap();
     expect(requested).not.toContain(PDF_URL);
-    expect<unknown>(
-      page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+    expect(
+      throughLedgerJson(
+        page.decisions.map(({ sourceDocumentId }) => sourceDocumentId),
+      ),
     ).toEqual([emptyId, keyed.iri, overLongId]);
     for (const [record, reason] of [
       [empty, "missing-record-iri"],
@@ -732,7 +735,7 @@ describe("ÚOHS decisions listed without a storable IRI", () => {
     const { empty } = await listed();
     const [item] = (await listSlice([empty])).items;
     expect(item).toBeDefined();
-    if (item === undefined || item.identity.type !== "document") {
+    if (item?.identity.type !== "document") {
       return;
     }
     const outcome = await czUohsAdapter.reconciliation.buildDecision(
@@ -756,8 +759,8 @@ describe("ÚOHS decisions listed without a storable IRI", () => {
     const decision = await buildCzUohsDecision(
       parseCzUohsListing({ rozhodnutí: [recovered] })[0]!,
     );
-    expect<string | undefined>(decision.sourceDocumentId).toBe(RECOVERED_IRI);
-    expect<unknown>(decision.sourceDocumentIdRepairAliases).toEqual([
+    expect(decision.sourceDocumentId).toBe(RECOVERED_IRI);
+    expect(throughLedgerJson(decision.sourceDocumentIdRepairAliases)).toEqual([
       quarantineId,
     ]);
     const quarantined = await buildCzUohsDecision(
