@@ -6,9 +6,11 @@ import type { QueryClient as Client } from "@tanstack/react-query";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
 import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 import { cents } from "@stll/money";
 
+import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
@@ -47,24 +49,60 @@ const entry = (id: string, overrides: Partial<TimeEntry> = {}): TimeEntry =>
     ...overrides,
   }) satisfies TimeEntry;
 
-type Refusal = "unpriced" | "time_period_locked" | "invalid_entry";
+/** One row of the expense list, as the web client reads it from the API. */
+type Expense = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof expensesOptions>["queryFn"]>>
+>[number];
+
+const expense = (id: string, overrides: Partial<Expense> = {}): Expense =>
+  ({
+    id: toSafeId<"expense">(id),
+    userId: "timekeeper-1",
+    matterId: null,
+    matterReference: null,
+    dateIncurred: "2026-10-08",
+    amount: cents(4500),
+    currency: "CZK",
+    category: "filing_fee",
+    description: `Expense ${id}`,
+    invoiceDescription: null,
+    billable: true,
+    markup: 0,
+    status: "draft",
+    userName: "Timekeeper One",
+    createdAt: "2026-10-08T10:00:00Z",
+    updatedAt: null,
+    ...overrides,
+  }) satisfies Expense;
+
 type Server = {
   entries: Map<string, TimeEntry>;
-  refusals: Map<string, Refusal>;
+  expenses: Map<string, Expense>;
+  /** Time entries the API refuses to approve or return, with the reason. */
+  refusals: Map<string, TimeApprovalRefusal>;
+  /** Expenses the API refuses to change, as it does once one is billed. */
+  expenseRefusals: Set<string>;
   approveCalls: string[][];
+  returnCalls: unknown[];
+  expenseCalls: unknown[];
   prefillReads: number;
   listReads: number;
 };
 const server: Server = {
   entries: new Map(),
+  expenses: new Map(),
   refusals: new Map(),
+  expenseRefusals: new Set(),
   approveCalls: [],
+  returnCalls: [],
+  expenseCalls: [],
   prefillReads: 0,
   listReads: 0,
 };
 
-// The API's own shapes: a list page, a per-entry approval outcome, and the
-// invoice prefill of a matter whose time is all still in draft.
+// The API's own shapes: a list page, a per-entry approval outcome, a returned
+// entry, an updated expense, its error bodies, and the invoice prefill of a
+// matter whose time is all still in draft.
 const emptyPrefill = {
   currency: "CZK",
   language: "cs",
@@ -112,6 +150,52 @@ globalThis.fetch = Object.assign(
       });
       return Response.json({ results });
     }
+    if (
+      request.method === "POST" &&
+      url.pathname.endsWith("/approval-queue/return")
+    ) {
+      const body: unknown = await request.json();
+      server.returnCalls.push(body);
+      const { id } = v.parse(v.object({ id: v.string() }), body);
+      const reason = server.refusals.get(id);
+      if (reason) {
+        return Response.json(
+          {
+            code: reason,
+            message: "Time entry cannot be returned",
+            hint: "Check the assigned approver, entry status, running timer, and locked period.",
+          },
+          { status: 409 },
+        );
+      }
+      const current = server.entries.get(id);
+      if (current) {
+        server.entries.set(id, { ...current, status: "draft" });
+      }
+      return Response.json({ id, status: "draft" });
+    }
+    if (
+      request.method === "PATCH" &&
+      url.pathname.endsWith(`/expenses/${WORKSPACE}`)
+    ) {
+      const body: unknown = await request.json();
+      server.expenseCalls.push(body);
+      const { id, status } = v.parse(
+        v.object({ id: v.string(), status: v.picklist(["draft", "approved"]) }),
+        body,
+      );
+      if (server.expenseRefusals.has(id)) {
+        return Response.json(
+          { message: "Cannot edit a billed or written-off expense" },
+          { status: 400 },
+        );
+      }
+      const current = server.expenses.get(id);
+      if (current) {
+        server.expenses.set(id, { ...current, status });
+      }
+      return Response.json({ id });
+    }
     if (request.method === "GET" && url.pathname.endsWith("/prefill")) {
       server.prefillReads += 1;
       return Response.json(emptyPrefill);
@@ -134,7 +218,14 @@ globalThis.fetch = Object.assign(
       request.method === "GET" &&
       url.pathname.endsWith(`/expenses/${WORKSPACE}`)
     ) {
-      return Response.json({ items: [], limit: 100, nextCursor: null });
+      const status = url.searchParams.get("status");
+      return Response.json({
+        items: [...server.expenses.values()].filter(
+          (item) => item.status === status,
+        ),
+        limit: 100,
+        nextCursor: null,
+      });
     }
     throw new Error(`Unexpected request: ${request.method} ${request.url}`);
   },
@@ -156,10 +247,14 @@ const { expensesOptions } = await import("@/lib/workspaces/queries/expenses");
 const { MatterApprovalView } = await import("./matter-approval-view");
 const { InvoiceComposer } = await import("./invoice-composer");
 
-const resetServer = (entries: TimeEntry[]) => {
+const resetServer = (entries: TimeEntry[], expenses: Expense[] = []) => {
   server.entries = new Map(entries.map((item) => [item.id, item]));
+  server.expenses = new Map(expenses.map((item) => [item.id, item]));
   server.refusals = new Map();
+  server.expenseRefusals = new Set();
   server.approveCalls = [];
+  server.returnCalls = [];
+  server.expenseCalls = [];
   server.prefillReads = 0;
   server.listReads = 0;
 };
@@ -387,6 +482,171 @@ describe("matter approval view", () => {
     expect(rowOf("Narrative entry-unpriced").contains(alert)).toBe(true);
     expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
     expect(server.approveCalls).toEqual([["entry-unpriced", "entry-priced"]]);
+  });
+});
+
+const typeReturnComment = async (row: HTMLElement, comment: string) => {
+  await testing.act(async () => {
+    testing.fireEvent.change(
+      testing.within(row).getByRole("textbox", {
+        name: messages.billing.approval.returnComment,
+      }),
+      { target: { value: comment } },
+    );
+  });
+};
+
+const clickIn = async (row: HTMLElement, name: string) => {
+  await testing.act(async () => {
+    testing.fireEvent.click(testing.within(row).getByRole("button", { name }));
+  });
+};
+
+describe("returning approved time to draft", () => {
+  test("sends the trimmed comment, moves the entry back to draft and reads the invoice prefill again", async () => {
+    resetServer([entry("entry-a", { status: "approved" })]);
+    await mount("owner", approvalPage);
+    await testing.screen.findByText("Timekeeper One: Narrative entry-a");
+    await testing.waitFor(() => expect(server.prefillReads).toBe(1));
+    const row = rowOf("Timekeeper One: Narrative entry-a");
+    const revert = testing.within(row).getByRole("button", {
+      name: messages.billing.revertToDraft,
+    });
+    // A blank comment cannot be sent: the API requires a reason.
+    expect(revert).toHaveProperty("disabled", true);
+    await typeReturnComment(row, "   ");
+    expect(revert).toHaveProperty("disabled", true);
+
+    const comment = "Add the client meeting to the narrative";
+    await typeReturnComment(row, `  ${comment}\n`);
+    await clickIn(row, messages.billing.revertToDraft);
+
+    await testing.waitFor(() =>
+      expect(server.returnCalls).toEqual([{ id: "entry-a", comment }]),
+    );
+    // Back among the drafts, where it can be approved again.
+    await testing.waitFor(() =>
+      expect(
+        testing
+          .within(rowOf("Narrative entry-a"))
+          .getByRole("button", { name: messages.billing.approve }),
+      ).toBeTruthy(),
+    );
+    await testing.waitFor(() => expect(server.prefillReads).toBe(2));
+    expect(testing.screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("a refused return shows the reason on that entry only", async () => {
+    resetServer([
+      entry("entry-locked", { status: "approved" }),
+      entry("entry-open", { status: "approved" }),
+    ]);
+    await mount("owner", approvalPage);
+    await testing.screen.findByText("Timekeeper One: Narrative entry-locked");
+    await testing.waitFor(() => expect(server.prefillReads).toBe(1));
+    server.refusals.set("entry-locked", "time_period_locked");
+    const locked = rowOf("Timekeeper One: Narrative entry-locked");
+
+    await typeReturnComment(locked, "Wrong matter");
+    await clickIn(locked, messages.billing.revertToDraft);
+
+    const alert = await testing.screen.findByRole("alert");
+    expect(alert.textContent).toBe(messages.billing.globalTimer.periodLocked);
+    expect(
+      rowOf("Timekeeper One: Narrative entry-locked").contains(alert),
+    ).toBe(true);
+    expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
+    expect(server.returnCalls).toEqual([
+      { id: "entry-locked", comment: "Wrong matter" },
+    ]);
+    // Still approved, and nothing billable changed.
+    expect(
+      testing
+        .within(rowOf("Timekeeper One: Narrative entry-locked"))
+        .getByRole("button", { name: messages.billing.revertToDraft }),
+    ).toBeTruthy();
+    expect(testing.screen.queryByText("Narrative entry-locked")).toBeNull();
+    expect(server.prefillReads).toBe(1);
+  });
+});
+
+describe("expense approval", () => {
+  for (const { from, to, action, next } of [
+    {
+      from: "draft",
+      to: "approved",
+      action: messages.billing.approve,
+      next: messages.billing.revertToDraft,
+    },
+    {
+      from: "approved",
+      to: "draft",
+      action: messages.billing.revertToDraft,
+      next: messages.billing.approve,
+    },
+  ] as const) {
+    test(`moving an expense from ${from} to ${to} sends that status and reads the invoice prefill again`, async () => {
+      resetServer(
+        [],
+        [
+          expense("expense-a", { status: from }),
+          expense("expense-b", { status: from }),
+        ],
+      );
+      await mount("owner", approvalPage);
+      await testing.screen.findByText("Timekeeper One: Expense expense-a");
+      await testing.waitFor(() => expect(server.prefillReads).toBe(1));
+
+      await clickIn(rowOf("Timekeeper One: Expense expense-a"), action);
+
+      await testing.waitFor(() =>
+        expect(server.expenseCalls).toEqual([{ id: "expense-a", status: to }]),
+      );
+      await testing.waitFor(() =>
+        expect(
+          testing
+            .within(rowOf("Timekeeper One: Expense expense-a"))
+            .getByRole("button", { name: next }),
+        ).toBeTruthy(),
+      );
+      await testing.waitFor(() => expect(server.prefillReads).toBe(2));
+      // The other expense is untouched.
+      expect(
+        testing
+          .within(rowOf("Timekeeper One: Expense expense-b"))
+          .getByRole("button", { name: action }),
+      ).toBeTruthy();
+      expect(testing.screen.queryByRole("alert")).toBeNull();
+    });
+  }
+
+  test("a refused expense shows the failure on that expense only", async () => {
+    resetServer([], [expense("expense-billed"), expense("expense-open")]);
+    await mount("owner", approvalPage);
+    await testing.screen.findByText("Timekeeper One: Expense expense-billed");
+    await testing.waitFor(() => expect(server.prefillReads).toBe(1));
+    server.expenseRefusals.add("expense-billed");
+
+    await clickIn(
+      rowOf("Timekeeper One: Expense expense-billed"),
+      messages.billing.approve,
+    );
+
+    const alert = await testing.screen.findByRole("alert");
+    expect(alert.textContent).toBe(messages.billing.approval.failed);
+    expect(
+      rowOf("Timekeeper One: Expense expense-billed").contains(alert),
+    ).toBe(true);
+    expect(testing.screen.getAllByRole("alert")).toHaveLength(1);
+    expect(server.expenseCalls).toEqual([
+      { id: "expense-billed", status: "approved" },
+    ]);
+    expect(
+      testing
+        .within(rowOf("Timekeeper One: Expense expense-billed"))
+        .getByRole("button", { name: messages.billing.approve }),
+    ).toBeTruthy();
+    expect(server.prefillReads).toBe(1);
   });
 });
 
