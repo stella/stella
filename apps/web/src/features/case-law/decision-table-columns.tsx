@@ -272,7 +272,7 @@ export const useDecisionTableSchema = ({
  * one through it, or the answer alone, where no order can be chosen (an
  * identifier lookup).
  */
-export type DecisionTableOrdering = "header" | "answer";
+type DecisionTableOrdering = "header" | "answer";
 
 type UseDecisionTableColumnsOptions = UseDecisionTableSchemaOptions & {
   ordering: DecisionTableOrdering;
