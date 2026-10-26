@@ -5,9 +5,13 @@ import type { Verdict } from "@stll/db-load-gate/health";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import { reconcileDecisionIdentifiersStep } from "@/api/handlers/case-law/ingestion/decision-identifier-backfill";
+import {
+  type CaseLawRootHandle,
+  caseLawRootHandleUnderCorpusSchemaLane,
+} from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { SCHEDULER_BACKFILL_CONFIG } from "@/api/lib/scheduler/backfill-config";
-import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
+import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK =
   "caseLaw.reconcileDecisionIdentifiers" as const;
@@ -15,7 +19,9 @@ export const RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK =
 export const DECISION_IDENTIFIER_RECONCILIATION_PAGES_PER_RUN = 4;
 const DECISION_IDENTIFIER_RECONCILIATION_TIME_BUDGET_MS = 45_000;
 
-const readDecisionTableVerdict = async (db: SchedulerDb): Promise<Verdict> =>
+const readDecisionTableVerdict = async (
+  db: CaseLawRootHandle,
+): Promise<Verdict> =>
   await createDatabaseLoadVerdictReader({
     db: {
       transaction: async (work) => await withAggregateTransaction(db, work),
@@ -25,7 +31,7 @@ const readDecisionTableVerdict = async (db: SchedulerDb): Promise<Verdict> =>
   })();
 
 type ReconcileTaskOptions = {
-  readVerdict?: (db: SchedulerDb) => Promise<Verdict>;
+  readVerdict?: (db: CaseLawRootHandle) => Promise<Verdict>;
   step?: typeof reconcileDecisionIdentifiersStep;
 };
 
@@ -40,6 +46,10 @@ export const createReconcileCaseLawDecisionIdentifiersTask =
     step = reconcileDecisionIdentifiersStep,
   }: ReconcileTaskOptions = {}): SchedulerTask =>
   async ({ db, logger, signal }) => {
+    const laneDb = caseLawRootHandleUnderCorpusSchemaLane(db, {
+      signal,
+      laneWaitMs: DECISION_IDENTIFIER_RECONCILIATION_TIME_BUDGET_MS,
+    });
     const startedAt = performance.now();
     for (
       let page = 0;
@@ -50,7 +60,7 @@ export const createReconcileCaseLawDecisionIdentifiersTask =
     ) {
       signal.throwIfAborted();
       // db-await-in-loop: each bounded page needs a fresh admission verdict
-      const verdict = await readVerdict(db);
+      const verdict = await readVerdict(laneDb);
       if (
         decideStart(verdict, "backfill_batch", SCHEDULER_BACKFILL_CONFIG)
           .decision === "wait"
@@ -61,7 +71,7 @@ export const createReconcileCaseLawDecisionIdentifiersTask =
         return;
       }
       // db-await-in-loop: one ordered checkpoint page per admitted verdict
-      const result = await step(db);
+      const result = await step(laneDb);
       switch (result.status) {
         case "advanced":
           if (result.repairs !== undefined) {

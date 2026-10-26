@@ -143,11 +143,19 @@ const openLaneConnection = async (): Promise<MaintenanceLaneSql> => {
  * lane. `execute` outside a transaction runs inside one, so there is no path
  * around the lane.
  */
-const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
+type CaseLawSchemaLaneHandleOptions = {
+  signal?: AbortSignal;
+  laneWaitMs?: number;
+};
+
+export const caseLawRootHandleUnderCorpusSchemaLane = (
+  rootDb: typeof rootDatabase,
+  options: CaseLawSchemaLaneHandleOptions = {},
+): CaseLawRootHandle => {
   const transaction = async <T>(
     fn: (tx: Transaction) => Promise<T>,
   ): Promise<T> =>
-    await runUnderCorpusSchemaLane({ database: rootDb, work: fn });
+    await runUnderCorpusSchemaLane({ database: rootDb, work: fn, ...options });
   return {
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
@@ -163,7 +171,7 @@ const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
   await assertDatabaseLoginPosture(rootDb);
   const { createIngestionDb } = await import("@/api/db/scoped");
   return {
-    rootDb: laneRootHandle(rootDb),
+    rootDb: caseLawRootHandleUnderCorpusSchemaLane(rootDb),
     ingestionDb: createIngestionDb(rlsDb),
   };
 };

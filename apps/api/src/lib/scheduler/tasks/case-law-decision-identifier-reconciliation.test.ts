@@ -2,6 +2,7 @@ import { expect, mock, test } from "bun:test";
 
 import type { Verdict, VerdictKind } from "@stll/db-load-gate/health";
 
+import { CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL } from "@/api/db/corpus-schema-lane";
 import {
   createReconcileCaseLawDecisionIdentifiersTask,
   DECISION_IDENTIFIER_RECONCILIATION_PAGES_PER_RUN,
@@ -93,4 +94,48 @@ test("the retry limit emits a visible pause and stops the page run", async () =>
     "case_law.decision_identifier_reconciliation.paused",
     { attempt: 3, retryAfter },
   );
+});
+
+test("verdict and page work each acquire the corpus schema lane", async () => {
+  const observed: string[] = [];
+  let active = false;
+  const tx = {
+    execute: async (statement: unknown) => {
+      if (statement === CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL) {
+        observed.push("lane");
+        return [{ granted: true }];
+      }
+      observed.push(String(statement));
+      return [];
+    },
+  };
+  const db = {
+    transaction: async <T>(work: (handle: typeof tx) => Promise<T>) => {
+      expect(active).toBe(false);
+      active = true;
+      try {
+        return await work(tx);
+      } finally {
+        active = false;
+      }
+    },
+  };
+  await createReconcileCaseLawDecisionIdentifiersTask({
+    readVerdict: async (laneDb) => {
+      await laneDb.execute("verdict");
+      return verdictOf("normal");
+    },
+    step: async (laneDb) =>
+      await laneDb.transaction(async (handle) => {
+        await handle.execute("page");
+        return { status: "completed" as const };
+      }),
+  })(
+    asTestRaw<SchedulerTaskContext>({
+      db,
+      logger: {},
+      signal: new AbortController().signal,
+    }),
+  );
+  expect(observed).toEqual(["lane", "verdict", "lane", "page"]);
 });
