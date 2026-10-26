@@ -18,6 +18,8 @@ import type {
 } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
+import { ownEntry } from "@stll/api-contract/own-key";
+
 import { runFinishedOutcomeOf } from "@/api/lib/chat/tanstack-chat-runtime";
 
 /**
@@ -152,7 +154,8 @@ export const tanStackStreamEventLifecycle = (
   if (chunk.type === EventType.RUN_FINISHED) {
     return runFinishedOutcomeOf(chunk);
   }
-  return TANSTACK_STREAM_EVENT_LIFECYCLE[chunk.type];
+  // A type the installed SDK does not name neither starts nor ends a run.
+  return ownEntry(TANSTACK_STREAM_EVENT_LIFECYCLE, chunk.type) ?? "content";
 };
 
 /** Compile-time seam with TanStack's browser chat state union. */

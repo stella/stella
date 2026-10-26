@@ -1429,7 +1429,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
         .filter((name) => {
           const featureId = toolFeatureId(name);
           return (
-            !(name in tools) &&
+            !Object.hasOwn(tools, name) &&
             featureId !== undefined &&
             Object.hasOwn(featureRegistry, featureId) &&
             featureRegistry[featureId]?.enrolment === "general-availability"
@@ -1440,7 +1440,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
             [name, "unavailable for this caller or deployment"] as const,
         ),
       ...Object.keys(registered)
-        .filter((name) => !(name in projected))
+        .filter((name) => !Object.hasOwn(projected, name))
         .map((name) => [name, "subagents cannot call it"] as const),
       ...sourceScopeDroppedTools(sourceScope).map(
         (name) => [name, sourceScopeUnavailableReason(sourceScopes)] as const,

@@ -1240,6 +1240,7 @@
       "toastTitle": "Visualização completa ainda não disponível"
     },
     "activity": {
+      "newerVersion": "Este conteúdo é exibido em uma versão mais recente.",
       "review": "Atualização da revisão"
     },
     "aiPrompt": "Campo de mensagem de IA",

@@ -1,3 +1,5 @@
+import { isOwnKey } from "@stll/api-contract/own-key";
+
 import type {
   ChatMessage,
   ChatUIPart,
@@ -111,7 +113,7 @@ const CHAT_TOOL_ACTIVITY_CATEGORIES = {
 const isCategorizedBuiltInChatToolName = (
   toolName: string,
 ): toolName is keyof typeof CHAT_TOOL_ACTIVITY_CATEGORIES =>
-  toolName in CHAT_TOOL_ACTIVITY_CATEGORIES;
+  isOwnKey(CHAT_TOOL_ACTIVITY_CATEGORIES, toolName);
 
 const EXTERNAL_ARTIFACT_OPERATION_PATTERN =
   /(?:^|[_-])(?:compose|draft|fill|render|shape|transform)(?:$|[_-])/u;

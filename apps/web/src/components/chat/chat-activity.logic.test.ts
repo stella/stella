@@ -216,3 +216,15 @@ describe("thread activity", () => {
     ).toBeNull();
   });
 });
+
+describe("tool names a model or a newer server sends", () => {
+  test("an inherited object name is categorized as the unknown tool it is", () => {
+    const unknown = getChatToolActivityCategory("no_such_tool");
+    for (const name of [
+      ...Object.getOwnPropertyNames(Object.prototype),
+      "__proto__",
+    ]) {
+      expect(getChatToolActivityCategory(name)).toBe(unknown);
+    }
+  });
+});

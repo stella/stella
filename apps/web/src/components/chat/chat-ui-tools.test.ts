@@ -1573,3 +1573,30 @@ describe("getCurrentApprovalPendingMessageId", () => {
     ).toBeNull();
   });
 });
+
+describe("tool names a model or a newer server sends", () => {
+  // A tool name is read off the wire; one that matches a name every object
+  // inherits must read as the unknown tool it is.
+  const INHERITED_NAMES = [
+    ...Object.getOwnPropertyNames(Object.prototype),
+    "__proto__",
+  ];
+
+  test("an inherited object name is no known tool", () => {
+    const unknown = getChatToolTitleKey("no_such_tool");
+    for (const name of INHERITED_NAMES) {
+      expect(getChatToolTitleKey(name)).toBe(unknown);
+      expect(isPublicOfficialChatToolName(name)).toBe(false);
+      expect(isRegistryWriteSummaryToolName(name)).toBe(false);
+      expect(
+        isRunningToolPart({
+          arguments: "{}",
+          id: "call-inherited",
+          name,
+          state: "input-streaming",
+          type: "tool-call",
+        }),
+      ).toBe(true);
+    }
+  });
+});

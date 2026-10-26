@@ -1240,6 +1240,7 @@
       "toastTitle": "Full view not yet available"
     },
     "activity": {
+      "newerVersion": "This content is shown in a newer version.",
       "review": "Review update"
     },
     "aiPrompt": "AI message composer",

@@ -1240,6 +1240,7 @@
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
     "activity": {
+      "newerVersion": "Dieser Inhalt wird in einer neueren Version angezeigt.",
       "review": "Aktualisierung zur Prüfung"
     },
     "aiPrompt": "KI-Nachrichtenfeld",

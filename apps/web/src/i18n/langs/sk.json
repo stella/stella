@@ -1240,6 +1240,7 @@
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah sa zobrazí v novšej verzii.",
       "review": "Informácie o revízii"
     },
     "aiPrompt": "Pole správy pre AI",

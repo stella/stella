@@ -11,6 +11,7 @@ import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,
   chatMessageFromPersisted,
+  continueStoredChatPart,
   createChatAttachmentPart,
   getAwaitingUserInteractions,
   getChatAttachmentFilename,
@@ -197,12 +198,15 @@ const remapChatAttachmentPart = (
   }
   const filename = getChatAttachmentFilename(part);
   const placeholder = getChatAttachmentPlaceholder(part);
-  return createChatAttachmentPart({
-    mimeType: getChatAttachmentMimeType(part),
-    url: toUserFileUrl(copiedFileId),
-    ...(filename === undefined ? {} : { filename }),
-    ...(placeholder === undefined ? {} : { placeholder }),
-  });
+  return continueStoredChatPart(
+    part,
+    createChatAttachmentPart({
+      mimeType: getChatAttachmentMimeType(part),
+      url: toUserFileUrl(copiedFileId),
+      ...(filename === undefined ? {} : { filename }),
+      ...(placeholder === undefined ? {} : { placeholder }),
+    }),
+  );
 };
 
 /**
@@ -920,14 +924,17 @@ export const createForkThread = ({
                 // compaction all read (createdAt, id), so a re-stamped copy
                 // would reorder the fork against its own history.
                 createdAt: row.createdAt,
-                content: toPersistedChatMessageContentV3({
-                  data: message.parts.map((part) =>
-                    remapChatAttachmentPart(part, copiedFileIds),
-                  ),
-                  ...(message.metadata === undefined
-                    ? {}
-                    : { metadata: message.metadata }),
-                }),
+                content: toPersistedChatMessageContentV3(
+                  {
+                    data: message.parts.map((part) =>
+                      remapChatAttachmentPart(part, copiedFileIds),
+                    ),
+                    ...(message.metadata === undefined
+                      ? {}
+                      : { metadata: message.metadata }),
+                  },
+                  row.id,
+                ),
                 id: createSafeId<"chatMessage">(),
                 memoryExtractionEligible: row.memoryExtractionEligible,
                 role: row.role,

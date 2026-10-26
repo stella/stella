@@ -37,7 +37,10 @@ import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
 import {
   VISUAL_PREVIEW_TOOL_NAME,
   type VisualPreviewOutput,
@@ -5903,6 +5906,60 @@ describe("chat stream refs", () => {
     expect(assistant).toHaveProperty("parts");
     expect(JSON.stringify(assistant)).not.toContain(ref);
     expect(JSON.stringify(assistant)).toContain(resolved);
+  });
+
+  test("the outgoing stream removes an unknown stored part's raw payload", async () => {
+    const messageId = createSafeId<"chatMessage">();
+    const marker = {
+      type: "activity" as const,
+      activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+      content: { part: { type: "citation", secret: "future-private-value" } },
+    };
+    const sourceSnapshot = buildWireSnapshot([
+      { id: messageId, role: "assistant", parts: [] },
+    ]);
+    const chunks = await collectChunks(
+      transformClientVisibleStream({
+        source: streamChunks([sourceSnapshot]),
+        storedHistory: {
+          loadServed: async () =>
+            Result.ok(
+              new Map([
+                [
+                  messageId,
+                  {
+                    createdAt: "2026-01-01T00:00:00Z",
+                    edited: false,
+                    id: messageId,
+                    parts: [marker],
+                    revision: 0,
+                    role: "assistant" as const,
+                  },
+                ],
+              ]),
+            ),
+          rewrittenOnAcceptance: [],
+        },
+      }),
+    );
+    expect(JSON.stringify(chunks)).not.toContain("future-private-value");
+    const firstChunk = chunks.at(0);
+    expect(firstChunk?.type).toBe(EventType.MESSAGES_SNAPSHOT);
+    if (firstChunk?.type !== EventType.MESSAGES_SNAPSHOT) {
+      return;
+    }
+    expect(firstChunk.messages).toMatchObject([
+      {
+        id: messageId,
+        parts: [
+          {
+            type: "activity",
+            activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+            content: {},
+          },
+        ],
+      },
+    ]);
   });
 
   test("reports a failed served-history read as a terminal stream error", async () => {

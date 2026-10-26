@@ -1240,6 +1240,7 @@
       "toastTitle": "A teljes nézet még nem érhető el"
     },
     "activity": {
+      "newerVersion": "Ez a tartalom egy újabb verzióban jelenik meg.",
       "review": "Frissítés az áttekintésről"
     },
     "aiPrompt": "AI-üzenetmező",

@@ -56,6 +56,39 @@ export const isChatPastedTextPart = (
 export const ASK_USER_TOOL_NAME = "ask-user";
 export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
 
+/**
+ * The activity a stored message part of a type this release does not know
+ * reads as. A newer release may store part types an older one has never seen;
+ * the older one carries the stored part whole (`content.part`) so that saving
+ * the message writes it back unchanged, never shows it to the model, and the
+ * page shows a neutral row in its place.
+ */
+export const UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE = "stella.unsupported-part";
+
+/** A stored part carried whole because this release cannot read it. */
+export type UnsupportedChatPart = {
+  type: "activity";
+  activityType: typeof UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE;
+  content: { part: unknown };
+};
+
+/** Whether `part` is a stored part this release carries without reading. */
+export const isUnsupportedChatPart = (
+  part: unknown,
+): part is UnsupportedChatPart => {
+  if (typeof part !== "object" || part === null) {
+    return false;
+  }
+  const content: unknown = Reflect.get(part, "content");
+  return (
+    Reflect.get(part, "type") === "activity" &&
+    Reflect.get(part, "activityType") === UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE &&
+    typeof content === "object" &&
+    content !== null &&
+    Object.hasOwn(content, "part")
+  );
+};
+
 /** Executor recorded from the tool definition, independent of input readiness. */
 export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
 

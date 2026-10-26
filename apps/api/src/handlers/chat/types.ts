@@ -121,8 +121,13 @@ export type ChatTanStackPart =
         providerMetadata?: PersistedToolProviderMetadata;
       })
   | (ThinkingPart & {
-      /** Server-issued replay identity; historical parts may have none. */
-      provenance?: ReasoningProvenance;
+      /**
+       * Server-issued replay identity; historical parts may have none. One
+       * naming a provider or format this release does not list (a newer
+       * release's, or one since retired) is kept as stored but unverified:
+       * replay accepts only a provenance it can verify.
+       */
+      provenance?: ReasoningProvenance | PersistedJsonObject;
       /** Provider artefacts a writer stored with the reasoning, kept as stored. */
       providerMetadata?: PersistedJsonObject;
     });

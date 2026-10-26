@@ -15,7 +15,10 @@ import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import { AI_FAILURE_CODES } from "@stll/api-contract";
-import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  isChatPastedTextPart,
+  UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+} from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -1628,6 +1631,10 @@ const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
       break;
     case "review":
       labelKey = "chat.activity.review";
+      break;
+    // A part a newer release stored: named, never read or rendered here.
+    case UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE:
+      labelKey = "chat.activity.newerVersion";
       break;
     default:
       return (

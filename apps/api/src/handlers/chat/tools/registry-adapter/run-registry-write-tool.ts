@@ -230,7 +230,7 @@ export const runRegistryWriteTool = async (
 
   if ("unavailableInputParams" in entry) {
     for (const param of entry.unavailableInputParams) {
-      if (param in args) {
+      if (Object.hasOwn(args, param)) {
         return Result.err(
           new ChatToolError({
             kind: "invalid-input",

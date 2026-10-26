@@ -89,6 +89,7 @@ import {
   createChatTurnTimingDurability,
   withChatTurnTiming,
 } from "@/api/handlers/chat/chat-turn-timing-stream";
+import { clientVisibleStreamChunk } from "@/api/handlers/chat/client-visible-chat-part";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   knownDecisionPassageStamper,
@@ -3842,22 +3843,32 @@ export const transformClientVisibleStream = ({
   source,
   storedHistory,
 }: TransformClientVisibleStreamProps): AsyncIterable<StreamChunk> =>
-  presentStoredHistory({
-    history: storedHistory,
-    source: keepDeniedApprovalsOnScreen({
-      deniedApprovals,
-      source: transformOutgoingStream({
-        boundary: { type: "raw" },
-        initialRestorationPlaceholders: new Set(),
-        resolveAssistantTextRefs,
-        resolveAssistantToolInputRefs,
-        resolveAssistantToolOutputRefs,
-        resolveAssistantValueRefs,
-        restorationPairs: [],
-        source,
+  projectClientVisibleStream(
+    presentStoredHistory({
+      history: storedHistory,
+      source: keepDeniedApprovalsOnScreen({
+        deniedApprovals,
+        source: transformOutgoingStream({
+          boundary: { type: "raw" },
+          initialRestorationPlaceholders: new Set(),
+          resolveAssistantTextRefs,
+          resolveAssistantToolInputRefs,
+          resolveAssistantToolOutputRefs,
+          resolveAssistantValueRefs,
+          restorationPairs: [],
+          source,
+        }),
       }),
     }),
-  });
+  );
+
+const projectClientVisibleStream = async function* (
+  source: AsyncIterable<StreamChunk>,
+): AsyncIterable<StreamChunk> {
+  for await (const chunk of source) {
+    yield clientVisibleStreamChunk(chunk);
+  }
+};
 
 type OutgoingChunkTransformerOptions = {
   boundary: ChatThirdPartyBoundary;

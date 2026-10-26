@@ -1240,6 +1240,7 @@
       "toastTitle": "Vue plein écran pas encore disponible"
     },
     "activity": {
+      "newerVersion": "Ce contenu s’affiche dans une version plus récente.",
       "review": "Mise à jour de la révision"
     },
     "aiPrompt": "Champ de message IA",

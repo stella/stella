@@ -1240,6 +1240,7 @@
       "toastTitle": "Täisvaade ei ole veel saadaval"
     },
     "activity": {
+      "newerVersion": "Seda sisu kuvatakse uuemas versioonis.",
       "review": "Ülevaatuse värskendus"
     },
     "aiPrompt": "AI sõnumiväli",
