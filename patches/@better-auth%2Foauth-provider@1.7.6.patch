@@ -1,7 +1,91 @@
+Continue steps (selected, created, postLogin) treat a session created after
+the signed request was issued as answering its prompt=login, the rule
+consent() already applies (withSatisfiedLoginPrompt). Upstream 1.7.6
+re-enters authorize with the login prompt intact, so after a fresh sign-in the
+organization step's continue sends the browser back to sign-in in a loop.
+Keep this hunk until upstream continue steps honour a satisfied login prompt.
+Runtime regression: apps/api/src/lib/oauth-organization-picker.db.test.ts.
+
 diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
+index 52dbf4ee9e5fd9ef25f9eaf5deea8ff2cc584c63..6c2058cb67540d5d3c42e2513ed6ffe96c597a5f 100644
 --- a/dist/authorize-CLuqtSXQ.mjs
 +++ b/dist/authorize-CLuqtSXQ.mjs
-@@ -3504,45 +3504,10 @@
+@@ -143,23 +143,34 @@
+ 		error: "invalid_request"
+ 	});
+ }
++// A session created after the signed request was issued has answered its login
++// prompt, as consent and the sign-in hook already treat it; without this, a
++// continue step after a fresh sign-in would send the browser back to sign-in.
++async function withSatisfiedLoginPrompt(ctx, oauthRequest, query) {
++	if (!parsePrompt(query.get("prompt") ?? "").has("login")) return query;
++	const session = await getSessionFromCtx(ctx);
++	if (!isSessionFreshForSignedQuery(session?.session.createdAt, oauthRequest?.signedQueryIssuedAt)) return query;
++	return removeMaxAgeFromQuery(removePromptFromQuery(query, "login"));
++}
+ async function selected(ctx, authorize) {
+-	const _query = (await oAuthState.get())?.query;
++	const oauthRequest = await oAuthState.get();
++	const _query = oauthRequest?.query;
+ 	if (!_query) throw new APIError("BAD_REQUEST", {
+ 		error_description: "missing oauth query",
+ 		error: "invalid_request"
+ 	});
+ 	ctx.headers?.set("accept", "application/json");
+-	ctx.query = searchParamsToQuery(removePromptFromQuery(new URLSearchParams(_query), "select_account"));
++	ctx.query = searchParamsToQuery(removePromptFromQuery(await withSatisfiedLoginPrompt(ctx, oauthRequest, new URLSearchParams(_query)), "select_account"));
+ 	return await authorize(ctx);
+ }
+ async function created(ctx, authorize) {
+-	const _query = (await oAuthState.get())?.query;
++	const oauthRequest = await oAuthState.get();
++	const _query = oauthRequest?.query;
+ 	if (!_query) throw new APIError("BAD_REQUEST", {
+ 		error_description: "missing oauth query",
+ 		error: "invalid_request"
+ 	});
+-	const query = new URLSearchParams(_query);
++	const query = await withSatisfiedLoginPrompt(ctx, oauthRequest, new URLSearchParams(_query));
+ 	ctx.headers?.set("accept", "application/json");
+ 	ctx.query = searchParamsToQuery(removePromptFromQuery(query, "create"));
+ 	return await authorize(ctx);
+@@ -171,7 +182,7 @@
+ 		error_description: "missing oauth query",
+ 		error: "invalid_request"
+ 	});
+-	const query = new URLSearchParams(_query);
++	const query = await withSatisfiedLoginPrompt(ctx, state, new URLSearchParams(_query));
+ 	ctx.headers?.set("accept", "application/json");
+ 	ctx.query = searchParamsToQuery(query);
+ 	const session = await getSessionFromCtx(ctx);
+@@ -1682,7 +1693,7 @@ async function resolveClientRegistrationResources(ctx, opts, requestedResources)
+ 	}
+ 	return resources;
+ }
+-function validateClientRedirectUri(redirectUri, applicationType) {
++function validateClientRedirectUri(redirectUri, applicationType, nativeRedirectUriExceptions = []) {
+ 	let url;
+ 	try {
+ 		url = new URL(redirectUri);
+@@ -1708,7 +1719,7 @@ function validateClientRedirectUri(redirectUri, applicationType) {
+ 		if (!isAllowedNativeHttpLoopback) invalidRedirectUri(`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`);
+ 		return;
+ 	}
+-	if (FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) || !isReverseDomainPrivateUseRedirectUri(url)) invalidRedirectUri(`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`);
++	if (FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) || !isReverseDomainPrivateUseRedirectUri(url) && !nativeRedirectUriExceptions.includes(redirectUri)) invalidRedirectUri(`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`);
+ }
+ function assertValidRegistrationJwks(jwks) {
+ 	const result = validatePublicClientJwks(jwks);
+@@ -1775,7 +1786,7 @@ async function checkOAuthClient(client, opts, settings) {
+ 		error: "invalid_redirect_uri",
+ 		error_description: "Redirect URIs are required for authorization_code and implicit grant types"
+ 	});
+-	for (const uri of clientWithDefaults.redirect_uris ?? []) validateClientRedirectUri(uri, applicationType ?? (isClientMetadataDocument ? "native" : "web"));
++	for (const uri of clientWithDefaults.redirect_uris ?? []) validateClientRedirectUri(uri, applicationType ?? (isClientMetadataDocument ? "native" : "web"), opts.nativeRedirectUriExceptions);
+ 	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+ 	if (isClientMetadataDocument) {
+ 		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) throw new APIError("BAD_REQUEST", {
+@@ -3504,45 +3515,10 @@ async function revokeRefreshToken(ctx, opts, token, clientId) {
  			value: await getStoredToken(opts.storeTokens, token, "refresh_token")
  		}]
  	});
@@ -51,7 +135,7 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
  }
  /**
  * We don't know the access token format so we try to validate it
-@@ -3606,7 +3571,7 @@
+@@ -3606,7 +3582,7 @@ async function revokeEndpoint(ctx, opts) {
  	} catch (error) {
  		if (error instanceof APIError$1) {
  			if (error.body?.error === "unsupported_token_type") throw error;
@@ -60,7 +144,7 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
  			throw error;
  		} else if (error instanceof Error) {
  			logger.error("Introspection error:", error.message, error.stack);
-@@ -5375,8 +5340,8 @@
+@@ -5375,8 +5351,8 @@ function getIssuer(ctx, opts) {
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
@@ -71,7 +155,7 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
  }
  /**
  * Based on the loopback port matching approach in node-oidc-provider.
-@@ -5438,12 +5403,27 @@
+@@ -5438,14 +5414,29 @@ function findRegisteredRedirectUri(registered, requested) {
  	const hasFragment = requested.includes("#");
  	const hasUserinfo = requestedUrl.username.length > 0 || requestedUrl.password.length > 0;
  	if (hasFragment || hasUserinfo) return;
@@ -81,12 +165,11 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
  		if (url === requested) return true;
 -		if (!requestedWithoutPort) return false;
 -		return stripLoopbackRedirectPort(url) === requestedWithoutPort;
--	});
 +		if (!requestedLoopback) return false;
 +		return canonicalNativeLoopbackRedirect(url) === requestedLoopback;
-+	});
-+}
-+/**
+ 	});
+ }
+ /**
 +* RFC 8252 sections 7.3 and 8.3: a native client's loopback redirect may use
 +* any port, and the loopback IP literals `127.0.0.1` and `[::1]` are one
 +* interface the client binds on whichever IP version is available. `localhost`
@@ -100,10 +183,12 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
 +	const match = /^http:\/\/(?:127\.0\.0\.1|\[::1\])(?=[/?#]|$)/u.exec(withoutPort);
 +	if (!match) return withoutPort;
 +	return `http://loopback-ip${withoutPort.slice(match[0].length)}`;
- }
- /**
++}
++/**
  * Loads the client, verifies it's enabled, and returns the requested
-@@ -5477,7 +5457,7 @@
+ * redirect_uri when it matches a registered entry. Returns null whenever the
+ * RP cannot be safely reached, so callers can fall back to the server error
+@@ -5477,7 +5468,7 @@ function authorizeRedirectOnError(opts) {
  		const raw = ctx.query ?? {};
  		const trusted = await resolveTrustedRedirectUri(ctx, opts, typeof raw.client_id === "string" ? raw.client_id : void 0, typeof raw.redirect_uri === "string" ? raw.redirect_uri : void 0);
  		if (trusted) return handleRedirect(ctx, formatErrorURL(trusted, error, error_description, typeof raw.state === "string" ? raw.state : void 0, getIssuer(ctx, opts), deriveResponseMode(raw)));
@@ -112,7 +197,7 @@ diff --git a/dist/authorize-CLuqtSXQ.mjs b/dist/authorize-CLuqtSXQ.mjs
  	};
  }
  async function authorizeEndpoint(ctx, opts, settings) {
-@@ -5546,13 +5526,13 @@
+@@ -5546,13 +5537,13 @@ async function authorizeEndpoint(ctx, opts, settings) {
  	});
  	const promptSet = ctx.query?.prompt ? parsePrompt(ctx.query?.prompt) : void 0;
  	const promptNone = promptSet?.has("none") ?? false;
@@ -458,7 +543,7 @@ index c41408fff2544b24d5e2666209f45b0833fe0853..d711713829a853723affdb330588a1d8
  		error: "invalid_request"
  	});
 diff --git a/dist/oauth-1Ud-hvZY.d.mts b/dist/oauth-1Ud-hvZY.d.mts
-index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145c274f579 100644
+index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..4e6ad4d1f8a66197caeec8c9fc8b47646b89fcb1 100644
 --- a/dist/oauth-1Ud-hvZY.d.mts
 +++ b/dist/oauth-1Ud-hvZY.d.mts
 @@ -1118,6 +1118,8 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
@@ -479,3 +564,18 @@ index 130fd5d8f3ddd36d1b776338367af5b8cb7f0e79..e44e3a50806c1d72a885841319a68145
    /**
     * Opt-in cache membership for resources by `identifier`. Mirrors the
     * {@link OAuthOptions.cachedTrustedClients} pattern.
+@@ -1284,6 +1286,14 @@ interface OAuthOptions<Scopes extends readonly Scope[] = InternallySupportedScop
+    * @default false
+    */
+   allowUnauthenticatedClientRegistration?: boolean;
++  /**
++   * Exact native private-use redirect URIs accepted although their scheme is
++   * not a reverse-domain name or they carry a naming authority (RFC 8252
++   * §7.1). Every other native redirect rule still applies.
++   *
++   * @default []
++   */
++  nativeRedirectUriExceptions?: readonly string[];
+   /**
+    * Allow dynamic client registration (RFC 7591) at `POST /oauth2/register`.
+    *

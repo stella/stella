@@ -861,8 +861,8 @@ describe.skipIf(!enabled)(
           const fixture = await db.transaction(
             async (tx) => await seedFixture(tx, openClient().db),
           );
-          const currentKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
-          const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toString("hex")}`;
+          const currentKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
+          const successorKey = `${DESKTOP_REGISTRY_KEY_PREFIX}${randomBytes(64).toHex()}`;
           const device = await createDesktopDeviceSigner();
           try {
             await db

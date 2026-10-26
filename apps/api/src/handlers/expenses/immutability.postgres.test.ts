@@ -14,6 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -127,7 +128,8 @@ if (!databaseUrl || !runPostgresTests) {
               session: { activeOrganizationId: organizationId },
               memberRole: sessionMemberRole("owner"),
               request: new Request("https://example.test/billing"),
-              route: "/test/billing",
+              route:
+                "/v1/invoices/:workspaceId/:invoiceId/entries" satisfies ApiRoutePath,
               recordAuditEvent: async () => {},
             };
             attaching = addEntries.handler(

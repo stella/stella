@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/membership-role-invariants";
 import { cents } from "@/api/lib/money";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
   type GatedTestDb,
   withGatedTestClients,
@@ -65,6 +66,10 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     name: "Membership",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(member).values(
     owners.map(({ userId, memberId }) => ({

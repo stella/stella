@@ -135,7 +135,7 @@ const prepareTemplate = createSafeRootHandler(
     // Return the prepared docx as base64 in JSON rather than a binary
     // Response. The client decodes this back to bytes.
     return Result.ok({
-      docxBase64: Buffer.from(prepared.file.bytes).toString("base64"),
+      docxBase64: Buffer.from(prepared.file.bytes).toBase64(),
       fieldCount: prepared.fields.length,
       unappliedCount: prepared.unapplied.length,
     });

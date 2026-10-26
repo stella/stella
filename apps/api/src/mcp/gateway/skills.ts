@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import type { SafeDbError } from "@/api/db/safe-db";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   narrowModelOfferedSkills,
   offerSkillsToModel,
@@ -30,6 +31,7 @@ import {
   collisionSafeToolName,
   namespaceSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { McpGatewayLoadError } from "@/api/mcp/errors";
@@ -73,6 +75,8 @@ const loadSkillTools = async ({
   // `tools/list` fails loudly rather than silently dropping skill tools.
   const skills = throwOnLoadFault(
     await listAvailableChatSkillMetadata({
+      // An MCP session has no conversation matter: unbound skills only.
+      bindingScope: NO_SKILL_BINDING_SCOPE,
       organizationId: context.organizationId,
       safeDb: context.safeDb,
       userId: context.userId,
@@ -218,6 +222,7 @@ export const readSkillTool = async ({
   skill: ResolvedSkillTool;
 }): Promise<SkillToolRead | null> => {
   const scope = {
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     skillName: skill.name,
@@ -288,7 +293,12 @@ const isResolvedSkill = ({
 
 const throwOnLoadFault = <T>(result: Result<T, SafeDbError>): T => {
   if (Result.isError(result)) {
-    captureError(result.error, { source: "mcp-gateway-skills" });
+    captureError(
+      result.error,
+      handlerErrorContext("gateway.throwOnLoadFault.result_error", {
+        source: "mcp-gateway-skills",
+      }),
+    );
     // A load fault means the skills may still exist: dispatch answers a
     // retryable error rather than `unknown_tool`.
     throw new McpGatewayLoadError({

@@ -37,6 +37,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
 import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import type { ChatPart } from "@/api/handlers/chat/types";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { resolveMemberAuthorization } from "@/api/lib/auth";
@@ -252,6 +253,7 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  compactMessages = compactMessagesForContext,
   beforeTurnSettles,
   boundaryAnonymizer,
   failingApprovalNames = [],
@@ -268,7 +270,10 @@ export const createApprovalHarness = ({
   textAdapterFactory,
   user,
   withDirectRefTool = false,
+  workspaceId: homeWorkspaceId,
 }: {
+  /** Observe or control the real send's pre-model compaction boundary. */
+  compactMessages?: typeof compactMessagesForContext | undefined;
   /**
    * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
    * test can make it fail. The real pipeline by default.
@@ -325,6 +330,8 @@ export const createApprovalHarness = ({
   promptCachingEnabled?: boolean | undefined;
   /** Registers `DIRECT_REF_TOOL_NAME` too. */
   withDirectRefTool?: boolean | undefined;
+  /** Home matter supplied by the route's authorized workspace boundary. */
+  workspaceId?: SafeId<"workspace"> | undefined;
   /** Uses a local adapter through the same resolution seam as scripted replies. */
   textAdapterFactory?: NonNullable<
     Parameters<typeof installScriptedProvider>[0]
@@ -461,7 +468,7 @@ export const createApprovalHarness = ({
         sources.web ?? { urlFetcher: null, webSearchProvider: null },
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
-    compactMessagesForContext,
+    compactMessagesForContext: compactMessages,
     streamResponse: async (props) => {
       // The run owns every terminal path, including checkpoint restoration and
       // failures that produce no onFinish event. Its notification only wakes
@@ -528,7 +535,7 @@ export const createApprovalHarness = ({
   ): SendMessageCtx => {
     const request = createTornDownRequest({
       signal,
-      url: "http://localhost/v1/chat/send",
+      url: "http://localhost/v1/chat",
     });
     if (sources.contextMatterIds !== undefined) {
       // The matters the page's context names, as its composer sends them
@@ -559,7 +566,10 @@ export const createApprovalHarness = ({
         ]),
       getActiveWorkspaceIds: async () =>
         await Promise.resolve([ids.wsA1, ids.wsA2]),
-      getWorkspaceAccess: async () => await Promise.resolve(null),
+      getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+        workspaceId === homeWorkspaceId
+          ? { id: workspaceId, status: "active" }
+          : null,
       memberRole: sessionMemberRole("owner"),
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -568,7 +578,7 @@ export const createApprovalHarness = ({
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
       request: request.request,
-      route: "/v1/chat/send",
+      route: "/v1/chat" satisfies ApiRoutePath,
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },
@@ -665,6 +675,7 @@ export const createApprovalHarness = ({
         : { parentRunId: resume.interruptedRunId, resume: resume.items };
     const forwardedProps = {
       activeFile,
+      workspaceId: homeWorkspaceId,
       contextMatterIds: [],
       message,
       runId,
@@ -675,6 +686,7 @@ export const createApprovalHarness = ({
     return contextFromBody(
       asTestRaw<SendBody>({
         activeFile,
+        workspaceId: homeWorkspaceId,
         threadId,
         runId: forwardedProps.runId,
         state: {},
@@ -774,7 +786,8 @@ export const createApprovalHarness = ({
           `http://localhost/v1/chat/threads/${threadId}/turns/${turnId}/cancel`,
           { method: "POST" },
         ),
-        route: "/v1/chat/threads/:threadId/turns/:turnId/cancel",
+        route:
+          "/v1/chat/threads/:threadId/turns/:turnId/cancel" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         set,
@@ -1412,7 +1425,8 @@ export const createApprovalHarness = ({
           },
           query: Object.fromEntries(url.searchParams),
           request: new Request(url.toString(), init),
-          route: `/v1/chat/threads/:threadId/turns/:turnId/${delivery}`,
+          route:
+            `/v1/chat/threads/:threadId/turns/:turnId/${delivery}` satisfies ApiRoutePath,
           safeDb,
           scopedDb,
           session: { activeOrganizationId: ids.orgA },

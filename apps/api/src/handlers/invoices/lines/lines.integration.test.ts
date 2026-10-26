@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -34,9 +35,11 @@ import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
 import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";
 import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -965,7 +968,44 @@ const manual = (
   vatTreatment: "domestic_vat",
 });
 
-const contextFor = <TContext>(
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createInvoiceLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === updateInvoiceLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === deleteInvoiceLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === readInvoiceById.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  if (handler === deleteTimeEntryById.handler) {
+    return "/v1/time-entries/:workspaceId";
+  }
+  if (handler === batchUpdateTimeEntries.handler) {
+    return "/v1/time-entries/:workspaceId/batch";
+  }
+  if (handler === updateExpense.handler) {
+    return "/v1/expenses/:workspaceId";
+  }
+  if (handler === deleteExpense.handler) {
+    return "/v1/expenses/:workspaceId";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
+const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (handlerContext: TContext) => unknown,
   {
     body,
@@ -997,7 +1037,7 @@ const contextFor = <TContext>(
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-    route: "/test/invoices/lines",
+    route: invoiceRouteForHandler(_handler),
     safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },
