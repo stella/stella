@@ -123,6 +123,12 @@ retry.sh: attempt 3/4 failed (exit 7); retrying in 45s: flaky ci
 teardown_case
 
 setup_case
+export FAKE_SUCCEED_ON=2
+PATH="$dir/bin:$PATH" RETRY_DELAYS_SECONDS=0 bash "$SCRIPT" flaky ci > "$dir/output" 2> /dev/null
+assert_file "keeps its reports off the command's stdout" "$dir/output" ""
+teardown_case
+
+setup_case
 export FAKE_SUCCEED_ON=99
 export FAKE_FAILURE_STATUS=23
 PATH="$dir/bin:$PATH" RETRY_DELAYS_SECONDS=0 bash "$SCRIPT" flaky ci > "$dir/output" 2>&1 \

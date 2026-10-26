@@ -64,11 +64,12 @@ for delay in "${delays[@]}"; do
 done
 
 # Each retry prints one plain line; the outcome is reported once, as a single
-# annotation, so a log never carries one banner per attempt.
+# annotation, so a log never carries one banner per attempt. All of it goes to
+# stderr: callers capture the command's stdout, which carries only its own.
 for ((attempt = 1; attempt <= attempts; attempt += 1)); do
   if "$@"; then
     if ((attempt > 1)); then
-      echo "::warning::$command_text succeeded on attempt $attempt/$attempts"
+      echo "::warning::$command_text succeeded on attempt $attempt/$attempts" >&2
     fi
     exit 0
   else
@@ -83,7 +84,7 @@ for ((attempt = 1; attempt <= attempts; attempt += 1)); do
 
   if ((attempt == attempts)); then
     if ((attempts > 1)); then
-      echo "::$failure_level::$command_text failed after $attempts attempts (exit $status)"
+      echo "::$failure_level::$command_text failed after $attempts attempts (exit $status)" >&2
     fi
     exit "$status"
   fi
@@ -92,6 +93,6 @@ for ((attempt = 1; attempt <= attempts; attempt += 1)); do
   index=$((attempt < ${#delays[@]} ? attempt : ${#delays[@]}))
   delay="${delays[index - 1]}"
 
-  echo "retry.sh: attempt $attempt/$attempts failed (exit $status); retrying in ${delay}s: $command_text"
+  echo "retry.sh: attempt $attempt/$attempts failed (exit $status); retrying in ${delay}s: $command_text" >&2
   sleep "$delay"
 done
