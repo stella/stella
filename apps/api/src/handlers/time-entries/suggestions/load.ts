@@ -498,8 +498,9 @@ const groupByMatterAndDay = ({
 /**
  * Clusters one matter's day and drops what is already settled: time recorded
  * over a cluster's window, and any cluster whose fingerprint was decided. A
- * decided fingerprint is never offered again, even when signals it did not
- * cover now start that cluster.
+ * fingerprint is a decision's idempotency key: once decided, a suggestion with
+ * that fingerprint can never be resolved again, so it is never pending, even
+ * when its decision's evidence names no signals to exclude.
  */
 const suggestScope = (
   { workspaceId, date, signals, recorded }: ScopeInputs,

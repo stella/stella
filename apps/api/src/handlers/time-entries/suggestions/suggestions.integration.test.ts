@@ -559,9 +559,19 @@ describe("time entry suggestions integration", () => {
     expect(row).toBeUndefined();
   });
 
-  test("a decision whose stored evidence names no signals covers none", async () => {
-    const withoutSignals = "a".repeat(64);
-    const withoutEvidence = "b".repeat(64);
+  test("a decision without signal identities still settles its own suggestion", async () => {
+    const listed = await listFor(ids.userA1);
+    if (!isListResponse(listed)) {
+      throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
+    }
+    const [withoutSignals, withoutEvidence] = listed.items.map(
+      (item) => item.fingerprint,
+    );
+    if (withoutSignals === undefined || withoutEvidence === undefined) {
+      throw new Error("expected two pending suggestions to decide");
+    }
+    // Decisions written before they recorded their signal identities: one
+    // with evidence that names no signals, one with no evidence at all.
     await testDb.insert(timeEntrySuggestions).values([
       {
         organizationId: ids.orgA,
@@ -570,7 +580,6 @@ describe("time entry suggestions integration", () => {
         dateWorked: DAY,
         fingerprint: withoutSignals,
         status: "dismissed",
-        // Evidence written before decisions recorded their signal identities.
         evidence: asTestRaw<
           (typeof timeEntrySuggestions.$inferInsert)["evidence"]
         >([
@@ -593,8 +602,15 @@ describe("time entry suggestions integration", () => {
       },
     ]);
     try {
-      const listed = await listFor(ids.userA1);
-      expect(isListResponse(listed)).toBe(true);
+      const relisted = await listFor(ids.userA1);
+      if (!isListResponse(relisted)) {
+        throw new Error(
+          `unexpected list response: ${JSON.stringify(relisted)}`,
+        );
+      }
+      const pending = relisted.items.map((item) => item.fingerprint);
+      expect(pending).not.toContain(withoutSignals);
+      expect(pending).not.toContain(withoutEvidence);
     } finally {
       await testDb
         .delete(timeEntrySuggestions)
