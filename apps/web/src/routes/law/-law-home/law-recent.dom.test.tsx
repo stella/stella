@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import type { LawHistoryCountry } from "@/features/law-search-history/law-search-history-query";
 import arabicMessages from "@/i18n/langs/ar.json";
 import messages from "@/i18n/langs/en.json";
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
@@ -32,7 +33,7 @@ const queryImportBatchSchema = v.object({
 });
 
 const usage = {
-  country: "CZE",
+  country: "CZE" as const,
   firstUsedAt: "2026-01-01T12:00:00Z",
   lastUsedAt: "2026-01-02T12:00:00Z",
   useCount: 1,
@@ -492,7 +493,7 @@ const mountServerHistory = async (
       { preconnect: () => undefined },
     ),
   );
-  const page = (country: string) => (
+  const page = (country: LawHistoryCountry) => (
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
@@ -516,7 +517,7 @@ const mountServerHistory = async (
     requests,
     client,
     /** The country picker moving to another jurisdiction. */
-    setCountry: async (country: string) => {
+    setCountry: async (country: LawHistoryCountry) => {
       await act(async () => {
         rendered?.rerender(page(country));
       });
