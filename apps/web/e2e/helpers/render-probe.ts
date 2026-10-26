@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
 import type { BrowserContext, Page, Request, Response } from "@playwright/test";
+import { TaggedError } from "better-result";
 import { execFile } from "node:child_process";
 
 import { sleep } from "@stll/concurrency/sleep";
@@ -33,6 +34,13 @@ type PageNetworkState = {
 const networks = new WeakMap<Page, PageNetworkState>();
 const trackedContexts = new WeakSet<BrowserContext>();
 const requestNetworks = new WeakMap<Request, PageNetworkState>();
+
+class RenderProbeBundleError extends TaggedError("RenderProbeBundleError")<{
+  message: string;
+  cause: unknown;
+  stderr: string;
+  exitCode: number | string | undefined;
+}> {}
 
 const pageNetwork = (page: Page) => {
   const existing = networks.get(page);
@@ -95,9 +103,16 @@ const buildProbe = async (): Promise<string> =>
           .pathname,
       ],
       { maxBuffer: 4 * 1024 * 1024, encoding: "utf-8" },
-      (error, stdout) => {
+      (error, stdout, stderr) => {
         if (error !== null) {
-          reject(error);
+          reject(
+            new RenderProbeBundleError({
+              message: "Could not bundle the render probe",
+              cause: error,
+              stderr,
+              exitCode: error.code,
+            }),
+          );
           return;
         }
         resolve(stdout);
