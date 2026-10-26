@@ -13,6 +13,7 @@
     "doctor": "bun scripts/expo-doctor.ts .",
     "fingerprint": "bun scripts/fingerprint.ts",
     "native-client": "bun scripts/native-client.ts",
+    "sim": "bun scripts/sim.ts",
     "ios": "expo start --ios",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check apps/mobile",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/mobile",
