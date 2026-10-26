@@ -24,10 +24,12 @@
  *   Judge name + title
  */
 
+import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { isComment, isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
@@ -150,6 +152,7 @@ type PChunk = {
   bold: boolean;
   letterSpacing: boolean;
   fontSize: number;
+  paragraphLayout: "first-line" | "continuation" | "unknown";
   footnote: { anchorId: string; label: string } | null;
 } & (
   | { kind: "paragraph" | "table-row"; listItemIndex: null; decimalList: false }
@@ -417,6 +420,29 @@ const toRoman = (n: number): string => {
   return result;
 };
 
+const paragraphLayoutOf = (style: string): PChunk["paragraphLayout"] => {
+  const indentDeclaration = style
+    .split(";")
+    .find((declaration) => declaration.trimStart().startsWith("text-indent:"));
+  const indentValue = indentDeclaration
+    ?.slice(indentDeclaration.indexOf(":") + 1)
+    .trim();
+  const indent = parseDecimalToken(
+    indentValue?.endsWith("pt") ? indentValue.slice(0, -2) : indentValue,
+  );
+  const startsIndented = Result.isOk(indent) && indent.value > 0;
+  const unindented =
+    indentDeclaration === undefined ||
+    (Result.isOk(indent) && indent.value === 0);
+  if (startsIndented) {
+    return "first-line";
+  }
+  if (unindented && style.includes("text-align:justify")) {
+    return "continuation";
+  }
+  return "unknown";
+};
+
 /**
  * One leaf paragraph or <div> as a chunk, its heading cues read from the
  * inline style: centring, font size, a mostly-bold run and letter spacing.
@@ -445,6 +471,7 @@ const styledBlockChunk = (
       style.includes("letter-spacing") ||
       $el.find("span[style*='letter-spacing']").length > 0,
     fontSize: parseFontSize(style),
+    paragraphLayout: paragraphLayoutOf(style),
     kind: "paragraph",
     listItemIndex: null,
     decimalList: false,
@@ -522,6 +549,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
+          paragraphLayout: "unknown",
           kind: "paragraph",
           listItemIndex: null,
           decimalList: false,
@@ -589,6 +617,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
+          paragraphLayout: "unknown",
           kind: "table-row",
           listItemIndex: null,
           decimalList: false,
@@ -628,6 +657,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           bold: false,
           letterSpacing: false,
           fontSize: 12,
+          paragraphLayout: "unknown",
           kind: "list-item",
           listItemIndex: ordered ? listStart : null,
           decimalList,
@@ -877,34 +907,45 @@ const withListMarker = (
   };
 };
 
-/**
- * Append a chunk to the reasoning paragraph a page break cut, when the chunk
- * is the rest of its sentence. Reports whether it did.
- */
-const finishesCutParagraph = (
-  cut: ParagraphBlock | null,
-  chunk: PChunk,
-  { inlines, plainText }: ChunkContent,
-): boolean => {
+type CutParagraph = {
+  paragraph: ParagraphBlock;
+  layout: PChunk["paragraphLayout"];
+};
+
+type FinishCutParagraphOptions = {
+  cut: CutParagraph | null;
+  chunk: PChunk;
+  content: ChunkContent;
+  afterPageFurniture: boolean;
+};
+
+/** Only page furniture or the publisher's continuation layout joins chunks. */
+const finishesCutParagraph = ({
+  cut,
+  chunk,
+  content: { inlines, plainText },
+  afterPageFurniture,
+}: FinishCutParagraphOptions): boolean => {
+  if (cut === null || chunk.footnote !== null || chunk.kind !== "paragraph") {
+    return false;
+  }
+  const atPageBoundary =
+    (cut.layout === "first-line" && chunk.paragraphLayout === "continuation") ||
+    afterPageFurniture ||
+    chunk.plainText.startsWith("[OBRÁZEK]") ||
+    PAGE_FURNITURE_RE.exec(chunk.plainText)?.groups?.["headerDocket"] !==
+      undefined;
   if (
-    cut === null ||
-    chunk.footnote !== null ||
-    chunk.kind !== "paragraph" ||
-    !continuesAcrossPageBreak(cut.plainText, plainText)
+    !atPageBoundary ||
+    !continuesAcrossPageBreak(cut.paragraph.plainText, plainText)
   ) {
     return false;
   }
-  cut.inlines.push({ type: "text", text: " " }, ...inlines);
-  cut.plainText = `${cut.plainText} ${plainText}`;
+  cut.paragraph.inlines.push({ type: "text", text: " " }, ...inlines);
+  cut.paragraph.plainText = `${cut.paragraph.plainText} ${plainText}`;
   return true;
 };
 
-/**
- * Strip a character-counted prefix from inlines.
- * Unlike a naive approach, this correctly handles bold,
- * italic, and other wrapper nodes by recursively counting
- * their text content.
- */
 const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
@@ -923,20 +964,28 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
    * The reasoning paragraph just emitted, which the next chunk may finish:
    * a page break cuts a paragraph in two, sometimes behind a running header.
    */
-  let cutParagraph: ParagraphBlock | null = null;
+  let cutParagraph: CutParagraph | null = null;
+  let afterPageFurniture = false;
 
   for (const chunk of chunks) {
     const { centered, bold, letterSpacing: _letterSpacing } = chunk;
 
     const content = stripPageFurniture(chunk);
     if (content === null) {
+      afterPageFurniture = true;
       continue;
     }
     const { plainText, inlines } = content;
-    const continuing: ParagraphBlock | null = cutParagraph;
+    const continuing: CutParagraph | null = cutParagraph;
     cutParagraph = null;
-
-    if (finishesCutParagraph(continuing, chunk, content)) {
+    const continued = finishesCutParagraph({
+      cut: continuing,
+      chunk,
+      content,
+      afterPageFurniture,
+    });
+    afterPageFurniture = false;
+    if (continued) {
       cutParagraph = continuing;
       continue;
     }
@@ -1289,7 +1338,7 @@ const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
     };
     blocks.push(paragraph);
     if (reasoning && chunk.kind === "paragraph") {
-      cutParagraph = paragraph;
+      cutParagraph = { paragraph, layout: chunk.paragraphLayout };
     }
   }
 

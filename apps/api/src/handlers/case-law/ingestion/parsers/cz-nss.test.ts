@@ -430,6 +430,52 @@ describe("parseNssDecisionHtml", () => {
     });
   });
 
+  test.each([
+    ["separate", ""],
+    ["joined", "<p>pokračování 2 1 As 23/2012-45</p>"],
+    ["joined", "<p>[OBRÁZEK]</p>"],
+  ])(
+    "unfinished paragraphs stay %s according to page furniture %s",
+    (reading, furniture) => {
+      const before =
+        "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+      const after = "náklady řízení přitom musí být doloženy.";
+      const { documentAst } = parseNssDecisionHtml(
+        baseInput(
+          `<body>${bold("Odůvodnění:")}<p>${before}</p>${furniture}<p>${after}</p></body>`,
+        ),
+      );
+      const paragraphs = documentAst.blocks.filter(
+        (block) => block.type === "paragraph",
+      );
+      expect(paragraphs.map((block) => block.plainText)).toEqual(
+        reading === "joined" ? [`${before} ${after}`] : [before, after],
+      );
+    },
+  );
+
+  test.each([
+    ["joined", ""],
+    ["joined", "text-indent:0pt;"],
+    ["separate", "text-indent:35.4pt;"],
+    ["separate", "text-indent:-10pt;"],
+  ])("indented paragraph and %s continuation with %s", (reading, indent) => {
+    const before =
+      "Stěžovatel namítá, že výpočet náhrady musí zahrnovat veškeré vynaložené náklady";
+    const after = "náklady řízení přitom musí být doloženy.";
+    const { documentAst } = parseNssDecisionHtml(
+      baseInput(
+        `<body>${bold("Odůvodnění:")}<p style="text-indent:35.4pt;text-align:justify">${before}</p><p style="${indent}text-align:justify">${after}</p></body>`,
+      ),
+    );
+    const paragraphs = documentAst.blocks.filter(
+      (block) => block.type === "paragraph",
+    );
+    expect(paragraphs.map((block) => block.plainText)).toEqual(
+      reading === "joined" ? [`${before} ${after}`] : [before, after],
+    );
+  });
+
   describe("unordered list content", () => {
     test.each(["list", "table"])(
       "%s boundaries keep adjacent unfinished reasoning paragraphs apart",
