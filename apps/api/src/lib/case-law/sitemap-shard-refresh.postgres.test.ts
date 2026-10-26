@@ -156,6 +156,9 @@ if (!databaseUrl || !runPostgresTests) {
           .where(inArray(caseLawDecisions.id, ids));
       });
       expect(await loggedMonths()).toEqual(["1901/01"]);
+      await refreshUntilDone();
+      expect(await listedMonths()).toEqual(["1901/01:3"]);
+      expect(await loggedMonths()).toEqual([]);
 
       await db.transaction(async (tx) => {
         await tx
