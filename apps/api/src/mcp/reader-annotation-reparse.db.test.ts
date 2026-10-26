@@ -1,14 +1,20 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { legalReaderAnnotations } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
+import { createAnnotationBodySchema } from "@/api/lib/legal-search/reader-annotations/schema";
 import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -185,6 +191,49 @@ const listAfterReparse = async (caller: Caller, blocks: readonly Block[]) =>
     }),
   );
 
+/**
+ * A highlight saved through the reader route's own body schema with spans
+ * that carry no context: what a reader page loaded before the context was
+ * kept sends.
+ */
+const createWithoutContext = async (
+  { organizationId, userId }: Caller,
+  span: {
+    blockAnchorId: string;
+    startOffset: number;
+    endOffset: number;
+    quote: string;
+  },
+) => {
+  const body = v.parse(createAnnotationBodySchema, {
+    targetType: "decision",
+    targetId: DECISION_ID,
+    kind: "highlight",
+    color: "yellow",
+    style: "highlight",
+    spans: [span],
+  });
+  const created = await Result.gen(() =>
+    createReaderAnnotationHandler({
+      body,
+      organizationId,
+      recordAuditEvent: async () => await Promise.resolve(),
+      safeDb: asTestRaw<SafeDb>(
+        createMembershipSafeDb(testDb, {
+          organizationId,
+          serverValidatedWorkspaceIds: [],
+          userId,
+        }),
+      ),
+      userId,
+    }),
+  );
+  if (Result.isError(created)) {
+    throw created.error;
+  }
+  return created.value;
+};
+
 describe("reader marks across a re-parse of their decision", () => {
   test("each mark names where its words are now, or is orphaned", async () => {
     const caller = await createCaller();
@@ -252,6 +301,60 @@ describe("reader marks across a re-parse of their decision", () => {
         reason: "quote_ambiguous",
         quote: "przepisy ustawy.",
       },
+    ]);
+  });
+
+  test("a mark saved without context is stored with none and placed like an older mark", async () => {
+    const caller = await createCaller();
+    const created = await createWithoutContext(caller, {
+      blockAnchorId: "p-reasons-3",
+      startOffset: 15,
+      endOffset: 23,
+      quote: "oddalona",
+    });
+    // A repeated quote, sent without context too: only its stored position
+    // tells its occurrences apart.
+    await createWithoutContext(caller, {
+      blockAnchorId: "p-reasons-5",
+      startOffset: 13,
+      endOffset: 26,
+      quote: "art. 5 ustawy",
+    });
+
+    const [stored] = await testDb
+      .select({
+        quotePrefix: legalReaderAnnotations.quotePrefix,
+        quoteSuffix: legalReaderAnnotations.quoteSuffix,
+      })
+      .from(legalReaderAnnotations)
+      .where(eq(legalReaderAnnotations.id, created.id));
+    expect(stored).toEqual({ quotePrefix: "", quoteSuffix: "" });
+
+    // In the text it was made on, each stays where it was put, the repeated
+    // quote included.
+    expect(
+      (await listAfterReparse(caller, FIRST_PARSE)).annotations.map(
+        (listed) => listed.passages,
+      ),
+    ).toEqual([
+      [{ placement: "placed", anchor: "p-reasons-3", quote: "oddalona" }],
+      [{ placement: "placed", anchor: "p-reasons-5", quote: "art. 5 ustawy" }],
+    ]);
+    // Re-parsed: words that occur once follow; a repeat whose stored
+    // position is gone has nothing to tell its occurrences apart.
+    expect(
+      (await listAfterReparse(caller, SECOND_PARSE)).annotations.map(
+        (listed) => listed.passages,
+      ),
+    ).toEqual([
+      [{ placement: "placed", anchor: "p-reasons-2", quote: "oddalona" }],
+      [
+        {
+          placement: "orphaned",
+          reason: "quote_ambiguous",
+          quote: "art. 5 ustawy",
+        },
+      ],
     ]);
   });
 });

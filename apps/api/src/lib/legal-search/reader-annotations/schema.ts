@@ -174,8 +174,11 @@ const spanSchema = v.object({
     v.minLength(1),
     v.maxLength(READER_ANNOTATION_QUOTE_MAX_LENGTH),
   ),
-  quotePrefix: quoteContextSchema,
-  quoteSuffix: quoteContextSchema,
+  // Optional so a reader page loaded before the context was kept can still
+  // save: a span without it is stored with none, and placed by its stored
+  // position and words like a mark made before the context existed.
+  quotePrefix: v.optional(quoteContextSchema, ""),
+  quoteSuffix: v.optional(quoteContextSchema, ""),
 });
 
 const spansSchema = v.pipe(
