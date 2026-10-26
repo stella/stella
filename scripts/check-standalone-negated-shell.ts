@@ -1,5 +1,6 @@
 /** Reject shell negation statements whose status `set -e` silently ignores. */
 
+import { execFileSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
@@ -9,8 +10,6 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-
-import { trackedRepoFiles } from "./oxlint-config-scopes";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const SHELL_FILE = /\.(?:sh|bash)$/u;
@@ -829,7 +828,13 @@ export const findStandaloneNegatedShellStatements = (
 };
 
 const trackedSources = (): Map<string, string> => {
-  const files = trackedRepoFiles();
+  const files = execFileSync("git", ["ls-files", "-z"], {
+    maxBuffer: 2 ** 30,
+    cwd: REPO_ROOT,
+    encoding: "utf-8",
+  })
+    .split("\0")
+    .filter(Boolean);
   const sources = new Map<string, string>();
   for (const file of files) {
     const absoluteFile = path.join(REPO_ROOT, file);
