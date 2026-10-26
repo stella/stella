@@ -200,6 +200,22 @@ const queryCallsite = (): string => {
 const isSessionConfigurationQuery = (query: string): boolean =>
   /^\s*select\s+set_config\s*\(/iu.test(query);
 
+const sqlControlType = (
+  query: string,
+): "savepoint" | "transaction" | undefined => {
+  if (
+    /^\s*(?:savepoint|release)\b|^\s*rollback\s+(?:(?:work|transaction)\s+)?to\b/iu.test(
+      query,
+    )
+  ) {
+    return "savepoint";
+  }
+  if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
+    return "transaction";
+  }
+  return undefined;
+};
+
 /**
  * Drizzle-compatible logger that increments the active store's count per query.
  * When no store is active it does nothing, preserving behavior for background
@@ -211,7 +227,7 @@ const recordSqlQuery = (query: string, phase: "work" | "cleanup"): void => {
   if (!counter) {
     return;
   }
-  if (/^\s*(begin|commit|rollback)\b/iu.test(query)) {
+  if (sqlControlType(query) !== undefined) {
     return;
   }
   // Reuse the repeated-query owner's normalization and callsite identity.
@@ -305,18 +321,13 @@ const instrumentNativeQuery = (
       value: (...args: unknown[]) => {
         if (state.phase === "created") {
           if (Reflect.get(query, "cancelled", query) !== true) {
-            if (
-              /^\s*(begin|commit|rollback|savepoint|release)\b/iu.test(
-                statement,
-              )
-            ) {
-              const controlPhase = /^\s*(commit|rollback|release)\b/iu.test(
-                statement,
-              )
+            const controlType = sqlControlType(statement);
+            if (controlType === "transaction") {
+              const controlPhase = /^\s*(commit|rollback)\b/iu.test(statement)
                 ? "cleanup"
                 : phase;
               recordTransactionRoundTrip(controlPhase);
-            } else {
+            } else if (controlType === undefined) {
               recordSqlQuery(statement, phase);
             }
           }
@@ -405,13 +416,16 @@ export const instrumentDedicatedSqlCounts = <TClient extends object>(
               return result;
             });
           };
-          return await runCountedTransaction(async () => {
+          const operation = async () => {
             const result: unknown = await Reflect.apply(value, target, [
               ...args.slice(0, -1),
               wrapped,
             ]);
             return result;
-          });
+          };
+          return property === "savepoint"
+            ? await operation()
+            : await runCountedTransaction(operation);
         };
       }
       return (...args: unknown[]) => {

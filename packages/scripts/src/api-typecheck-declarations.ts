@@ -181,6 +181,9 @@ export const missingDeclarationCacheInputs = (
 // Route and server contracts belong to the source checker, never to the
 // declaration surface consumed by secondary compiler programs.
 const isApiRuntimeBoundary = (filename: string, text: string) => {
+  if (JSON_MODULE.test(filename)) {
+    return false;
+  }
   const relative = filename
     .replaceAll(path.sep, "/")
     .split("/apps/api/src/")[1];

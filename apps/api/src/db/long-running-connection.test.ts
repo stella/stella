@@ -362,7 +362,7 @@ test("the dedicated owner counts reserved setup, raw work, nested transactions a
       await dedicated.end();
     }
     expect(counter.count).toBe(8);
-    expect(counter.transactions).toBe(4);
+    expect(counter.transactions).toBe(2);
     expect(statements).toEqual([
       "SELECT pg_backend_pid() AS pid",
       "SET LOCAL lock_timeout = '10ms'",
@@ -373,6 +373,27 @@ test("the dedicated owner counts reserved setup, raw work, nested transactions a
       "SELECT nested",
       "SELECT pg_cancel_backend($1)",
     ]);
+  });
+});
+
+test("dedicated savepoint controls do not add statements or transaction round trips", async () => {
+  const statements: string[] = [];
+  const client = instrumentDedicatedSqlCounts(recordingSqlClient(statements));
+  await runWithQueryCounter(async (counter) => {
+    for (const statement of [
+      "BEGIN",
+      'SAVEPOINT "nested"',
+      'ROLLBACK TO SAVEPOINT "nested"',
+      'ROLLBACK TRANSACTION TO "nested"',
+      'RELEASE SAVEPOINT "nested"',
+      'RELEASE "nested"',
+      "SELECT 1",
+      "COMMIT",
+    ]) {
+      await client.unsafe(statement);
+    }
+    expect(counter.count).toBe(1);
+    expect(counter.transactions).toBe(2);
   });
 });
 

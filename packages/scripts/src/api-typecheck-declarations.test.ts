@@ -722,6 +722,54 @@ test("stable wrappers prepare and restore exact roots and owners without committ
   }
 });
 
+test("declarations retain API JSON ledger imports without parsing data as TypeScript", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "api-json-declarations-"));
+  try {
+    const sourceRoot = path.join(root, "apps/api/src/lib/db");
+    mkdirSync(sourceRoot, { recursive: true });
+    const ledger = path.join(sourceRoot, "statement-ceiling.json");
+    writeFileSync(ledger, '{\n  "request": {},\n  "mcp": {}\n}\n');
+    const surface = path.join(sourceRoot, "statement-ceiling.ts");
+    writeFileSync(
+      surface,
+      'import ledger from "./statement-ceiling.json";\nexport type StatementCeilingLedger = typeof ledger;\n',
+    );
+    const project = path.join(root, "tsconfig.json");
+    writeFileSync(
+      project,
+      JSON.stringify({
+        compilerOptions: {
+          noCheck: true,
+          declaration: true,
+          emitDeclarationOnly: true,
+          resolveJsonModule: true,
+          esModuleInterop: true,
+          module: "esnext",
+          moduleResolution: "bundler",
+          rootDir: root,
+          outDir: path.join(root, "declarations"),
+          types: [],
+        },
+        files: [surface],
+      }),
+    );
+    const result = await emitApiTypecheckDeclarations(project);
+    expect(result.diagnostics).toEqual([]);
+    expect(result.files).toContain(ledger);
+    expect(
+      readFileSync(
+        path.join(
+          root,
+          "declarations/apps/api/src/lib/db/statement-ceiling.d.ts",
+        ),
+        "utf-8",
+      ),
+    ).toContain('import ledger from "./statement-ceiling.json"');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("reads a JSON module in the program as referencing nothing", () => {
   expect(
     typescriptModuleReferences(

@@ -108,6 +108,25 @@ describe("db query counter logger", () => {
     expect(result.repeats[0]).toContain("select * from matters where id = ?");
   });
 
+  test("pooled savepoint controls contribute neither statements nor transaction round trips", async () => {
+    await runWithQueryCounter(async (counter) => {
+      await runCountedTransaction(async () => {
+        for (const statement of [
+          'SAVEPOINT "nested"',
+          'ROLLBACK TO SAVEPOINT "nested"',
+          'ROLLBACK WORK TO "nested"',
+          'RELEASE SAVEPOINT "nested"',
+          'RELEASE "nested"',
+        ]) {
+          queryCountLogger.logQuery(statement, []);
+        }
+        queryCountLogger.logQuery("SELECT 1", []);
+      });
+      expect(counter.count).toBe(1);
+      expect(counter.transactions).toBe(2);
+    });
+  });
+
   test("unmeasured counters retain no diagnostic fingerprints", () => {
     runWithQueryCounter((counter) => {
       for (const id of [1, 2]) {

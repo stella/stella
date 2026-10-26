@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import * as v from "valibot";
 
 import { DEFAULT_STATEMENT_CEILING } from "./statement-ceiling";
@@ -24,6 +27,48 @@ const ledgerSchema = v.object({
 });
 const ledgerPath = "apps/api/src/lib/db/statement-ceiling.json";
 
+type LedgerFilesOptions = { revision: string; cwd?: string };
+
+const ledgerFiles = ({ revision, cwd = process.cwd() }: LedgerFilesOptions) =>
+  Bun.spawnSync(
+    [
+      "git",
+      "ls-tree",
+      "--full-tree",
+      "--name-only",
+      revision,
+      "--",
+      ledgerPath,
+    ],
+    { cwd },
+  );
+
+test("finds the statement ceiling ledger from the API package directory", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "statement-ceiling-ledger-"));
+  try {
+    const apiDirectory = path.join(root, "apps/api");
+    mkdirSync(path.dirname(path.join(root, ledgerPath)), { recursive: true });
+    writeFileSync(path.join(root, ledgerPath), JSON.stringify(ledger));
+    for (const command of [
+      ["git", "init", "--quiet"],
+      ["git", "add", "--", ledgerPath],
+    ]) {
+      const result = Bun.spawnSync(command, { cwd: root });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+    }
+    const tree = Bun.spawnSync(["git", "write-tree"], { cwd: root });
+    expect(tree.exitCode, tree.stderr.toString()).toBe(0);
+    const files = ledgerFiles({
+      revision: tree.stdout.toString().trim(),
+      cwd: apiDirectory,
+    });
+    expect(files.exitCode, files.stderr.toString()).toBe(0);
+    expect(files.stdout.toString().trim()).toBe(ledgerPath);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("statement ceiling allowances only shrink after their initial census", () => {
   const current = v.parse(ledgerSchema, ledger);
   const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"]);
@@ -33,14 +78,7 @@ test("statement ceiling allowances only shrink after their initial census", () =
     );
   }
   const revision = base.stdout.toString().trim();
-  const files = Bun.spawnSync([
-    "git",
-    "ls-tree",
-    "--name-only",
-    revision,
-    "--",
-    ledgerPath,
-  ]);
+  const files = ledgerFiles({ revision });
   if (files.exitCode !== 0) {
     panic("Cannot enumerate the statement ceiling ledger base");
   }
