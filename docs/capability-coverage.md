@@ -370,6 +370,8 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.ai-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings ai-availability-get` |
 | `organization-settings.anonymization-blacklist.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings anonymization-blacklist-get` |
 | `organization-settings.anonymization-blacklist.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings anonymization-blacklist-update` |
+| `organization-settings.billing-drafts.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings billing-drafts-get` |
+| `organization-settings.billing-drafts.update` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings billing-drafts-update` |
 | `organization-settings.correspondence.allowed-senders.create` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-create` |
 | `organization-settings.correspondence.allowed-senders.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-delete` |
 | `organization-settings.correspondence.allowed-senders.list` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-allowed-senders-list` |
@@ -714,7 +716,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 41 |
+| auth_plumbing | 39 |
 | billing_ui | 1 |
 | chat_thread_ui | 17 |
 | compound_consent | 1 |

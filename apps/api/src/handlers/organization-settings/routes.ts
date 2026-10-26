@@ -36,10 +36,10 @@ import { routes } from "@/api/http/route";
 
 import {
   listBillingKnowledgeFiles,
-  readBillingDraftConfiguration,
   readBillingKnowledgeFile,
-  updateBillingDraftConfiguration,
 } from "./billing-drafts";
+import readBillingDraftConfiguration from "./billing-drafts/get";
+import updateBillingDraftConfiguration from "./billing-drafts/update";
 
 export const organizationSettingsRoute = routes(
   {

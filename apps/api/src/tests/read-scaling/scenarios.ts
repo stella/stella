@@ -6,9 +6,9 @@ import readEntities from "@/api/handlers/entities/list";
 import readVersions from "@/api/handlers/entities/versions/list";
 import {
   listBillingKnowledgeFiles,
-  readBillingDraftConfiguration,
   readBillingKnowledgeFile,
 } from "@/api/handlers/organization-settings/billing-drafts";
+import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";

@@ -120,6 +120,7 @@ const contact = (id: typeof A, notes: string | null) =>
     vatId: null,
     vatPayer: null,
     invoiceLanguage: null,
+    timeBillingFormat: "categories",
     bankAccounts: null,
     billingAddress: null,
     defaultHourlyRate: null,

@@ -281,6 +281,7 @@ const installFixtureNetwork = () => {
     clientId: null,
     leadUserId: null,
     billingReference: null,
+    billingNarrativeLanguage: null,
     color: null,
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",

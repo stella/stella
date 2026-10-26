@@ -13,6 +13,7 @@ import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
 } from "@stll/api-contract/desktop-billing-drafts";
+import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -87,10 +88,13 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
       const parsed = v.safeParse(desktopBillingDraftResponseSchema, value);
       if (!parsed.success) {
         return Result.err(
-          new HandlerError({
-            status: 502,
-            message: "Billing draft response is invalid",
-          }),
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              message: "Billing draft response is invalid",
+            }),
+            "response_invalid",
+          ),
         );
       }
       const referencedIds = parsed.output.checkedGuidelines.map(
@@ -124,10 +128,13 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
       }
       if (referencedIds.some((alias) => !originals.has(alias))) {
         return Result.err(
-          new HandlerError({
-            status: 502,
-            message: "Billing draft contains an unknown reference",
-          }),
+          classifyFailure(
+            new HandlerError({
+              status: 502,
+              message: "Billing draft contains an unknown reference",
+            }),
+            "response_invalid",
+          ),
         );
       }
       return Result.ok({
@@ -455,12 +462,17 @@ export const createDesktopBillingDraftEndpoint = ({
                       return Result.ok(restored);
                     });
                   if (validation.isErr()) {
-                    analytics.captureError(validation.error);
+                    analytics.captureError(
+                      classifyFailure(validation.error, "response_invalid"),
+                    );
                     return Result.err(
-                      new HandlerError({
-                        status: 502,
-                        message: "Billing draft proposals failed validation",
-                      }),
+                      classifyFailure(
+                        new HandlerError({
+                          status: 502,
+                          message: "Billing draft proposals failed validation",
+                        }),
+                        "response_invalid",
+                      ),
                     );
                   }
                   return Result.ok(

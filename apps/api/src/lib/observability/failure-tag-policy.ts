@@ -40,6 +40,7 @@ export const TAGGED_FAILURE_REASON = {
   BetterAuthSignInReplayError: "tagged_failure",
   BilingualAIContractError: "tagged_failure",
   BilingualFormattingError: "tagged_failure",
+  BillingDraftValidationError: "tagged_failure",
   BufferIntentOwnershipError: "tagged_failure",
   BufferIntentWorkspaceUnavailableError: "tagged_failure",
   CanaryRateLimitError: "tagged_failure",

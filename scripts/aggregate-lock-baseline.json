@@ -151,12 +151,6 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "4520f47f0843baf6b7d849352ada98c187c2f93ae190d5a83a04d18efbdb332b",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "158925b6e7c5d16f46e7b8f51cb000a59ff2697fb83099c05e4bc30d01362ced",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -205,9 +199,9 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "5abe04df0c869b1faa6517be46cf5595331cb2a0c86b64533c49b0987494b2cb",
+    "fingerprint": "4520f47f0843baf6b7d849352ada98c187c2f93ae190d5a83a04d18efbdb332b",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "Existing seed transaction; seeding contacts' VAT numbers as VAT ids changes the inserted values, not the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
@@ -256,6 +250,12 @@
     "fingerprint": "593b4db3a90b36f159cb3e27d067177608ce23b4252016759115eff9121308be",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "5abe04df0c869b1faa6517be46cf5595331cb2a0c86b64533c49b0987494b2cb",
+    "count": 1,
+    "reason": "Existing seed transaction; seeding contacts' VAT numbers as VAT ids changes the inserted values, not the transaction boundary."
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
@@ -4233,7 +4233,7 @@
     "file": "apps/api/src/scripts/better-auth-migration-audit-command.ts",
     "fingerprint": "fc0f0097cd1ab3f2ca6229c95a53ce6b468bb40137d87ce8a48882666d9c9f4a",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/better-auth-migration-audit-command.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "Move the migration audit command out of its entry so the backfill imports it without importing an entrypoint; the transaction and count are unchanged."
   },
   {
     "file": "apps/api/src/scripts/case-law-source-total.ts",
@@ -4395,13 +4395,13 @@
     "file": "apps/api/src/scripts/replay-tick-command.ts",
     "fingerprint": "5d2ff5e173412a2f6563f61cbe7648607a2b8113a3077eee52c0fcea09278c0f",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick-command.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
+    "reason": "Move the replay tick command out of its entry so other scripts import it without importing an entrypoint; the transaction and count are unchanged."
   },
   {
     "file": "apps/api/src/scripts/replay-tick-command.ts",
     "fingerprint": "8b393d7fb941d1c9d9dcfb1376ea5bf724dffb7e5f54671fdb7adedc4cf45f08",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/scripts/replay-tick-command.ts: Existing root transaction runner on handles.rootDb; opens the owning database transaction for this module."
+    "reason": "Move the replay tick command out of its entry so other scripts import it without importing an entrypoint; the transaction and count are unchanged."
   },
   {
     "file": "apps/api/src/scripts/seed-polarity-rules.ts",

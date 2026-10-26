@@ -12,9 +12,9 @@ import {
 } from "@/api/db/schema";
 import {
   listBillingKnowledgeFiles,
-  readBillingDraftConfiguration,
   readBillingKnowledgeFile,
 } from "@/api/handlers/organization-settings/billing-drafts";
+import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
