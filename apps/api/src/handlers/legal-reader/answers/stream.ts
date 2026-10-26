@@ -368,7 +368,7 @@ export const streamReaderAnswer = ({
                               signal: runSignal,
                               answerId: prepared.answer.id,
                               decisionId: prepared.decision.decisionId,
-                              paragraphId: prepared.anchor.paragraphId,
+                              paragraphId: prepared.anchor[0].paragraphId,
                               system: prompt.system,
                               messages: [
                                 { role: "user", content: prompt.context },

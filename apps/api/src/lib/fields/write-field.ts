@@ -11,7 +11,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { cellMetadata, entities, fields } from "@/api/db/schema";
 import { currencyCodeSchema } from "@/api/db/schema-validators";
 import type { CellMetadata } from "@/api/db/schema-validators";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditAction, AuditRecorder } from "@/api/lib/audit-log";
@@ -19,6 +19,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
 import { userIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -448,7 +449,11 @@ export const writeFieldValue = async function* ({
   }
 
   if (flushSearchRepairs) {
-    flushEntitySearchRepairs([entityId]).catch(captureError);
+    flushEntitySearchRepairs([entityId]).catch(
+      createErrorCapture(
+        handlerErrorContext("writeFieldValue.flushEntitySearchRepairs"),
+      ),
+    );
   }
   return Result.ok({});
 };

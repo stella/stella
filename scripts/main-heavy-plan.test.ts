@@ -659,7 +659,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["docker_checks_pr_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
-        for (const [job, body] of Object.entries(original.jobs)) {
+        // The current workflow is also compared as its own baseline: that is
+        // what this test sees once a pull request lands, so an expectation
+        // that only holds while a change is unmerged fails before the merge.
+        for (const [job, body] of [
+          ...Object.entries(original.jobs),
+          ...Object.entries(workflow.jobs),
+        ]) {
           const current = workflow.jobs[job]?.if;
           if (current?.includes("inputs.heavy_only") !== true) {
             continue;
@@ -704,12 +710,14 @@ test("heavy event policies exclude pull requests and preserve existing full cert
             expected = required === "true";
           }
           // Pull request quick checks run in the heavy-suite gate, so the gate
-          // runs where the baseline quick checks ran and they skip there.
+          // runs on every ready pull request and nowhere else. State this
+          // without the baseline: once the gate change is on main, the
+          // baseline quick checks no longer run on pull requests.
           if (job === "pr-heavy-gate") {
             expected =
               event === "pull_request" &&
               selected(
-                original.jobs["ci-quick-checks"]?.if ?? "true",
+                "github.event.pull_request.draft != true && github.event.action != 'enqueued'",
                 context(event, false, plan),
               );
           }

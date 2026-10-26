@@ -1348,6 +1348,7 @@
       "inputs": [
         "$TURBO_ROOT$/packages/agent-input/**",
         "$TURBO_ROOT$/packages/api-contract/**",
+        "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/text-normalize/**",

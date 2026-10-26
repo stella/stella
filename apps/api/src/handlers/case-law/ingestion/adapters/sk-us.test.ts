@@ -418,7 +418,7 @@ const mockFetch = ({
           () =>
             new Response(
               JSON.stringify({
-                content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
+                content: Buffer.from(DOCUMENT_XHTML).toBase64(),
               }),
               { headers: JSON_HEADERS },
             ),

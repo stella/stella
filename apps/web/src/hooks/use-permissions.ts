@@ -14,7 +14,7 @@ import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
  */
 export const usePermissions = (permissions: PermissionInput): boolean => {
   const roleView = useQueryView(useQuery(roleOptions));
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "usePermissions:query");
 
   if (roleView.type !== "items" || roleView.refetchError !== undefined) {
     return false;

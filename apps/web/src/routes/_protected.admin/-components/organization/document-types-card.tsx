@@ -73,6 +73,10 @@ export const DocumentTypesCard = () => {
   const once = useSingleFlight();
 
   const createMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypesCard.createMutation.useSettingsMutation",
+    },
     mutationFn: async (label: string) =>
       unwrapApiResponse(await api["document-types"].post({ label })),
     invalidate: documentTypesInvalidationKey,
@@ -84,6 +88,10 @@ export const DocumentTypesCard = () => {
   });
 
   const reorderMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypesCard.reorderMutation.useSettingsMutation",
+    },
     mutationFn: async (orderedIds: SafeId<"documentType">[]) =>
       unwrapApiResponse(
         await api["document-types"].reorder.post({ orderedIds }),
@@ -242,6 +250,10 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   }, [rowRef, gripRef, type.id, type.label, handleReorder]);
 
   const renameMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypeRow.renameMutation.useSettingsMutation",
+    },
     mutationFn: async (label: string) =>
       unwrapApiResponse(
         await api["document-types"]({ documentTypeId: type.id }).patch({
@@ -257,6 +269,10 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   });
 
   const deleteMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypeRow.deleteMutation.useSettingsMutation",
+    },
     mutationFn: async () =>
       unwrapApiResponse(
         await api["document-types"]({ documentTypeId: type.id }).delete(),

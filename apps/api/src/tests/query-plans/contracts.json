@@ -521,5 +521,15 @@
         "index": "corpus_index_projection_states_erase_pending_idx"
       }
     ]
+  },
+  "case-law.freshness-pending-states": {
+    "scans": [
+      {
+        "position": "root/0/0/0/0",
+        "relation": "corpus_index_projection_states",
+        "nodeType": "Index Scan",
+        "index": "corpus_index_projection_states_pending_idx"
+      }
+    ]
   }
 }

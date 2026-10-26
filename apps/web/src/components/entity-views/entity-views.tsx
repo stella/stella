@@ -89,7 +89,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
   const latestSave = useRef(0);
   useExternalSyncEffect(() => {
     if (saved.error) {
-      analytics.captureError(saved.error);
+      analytics.captureError(saved.error, {
+        fingerprintKey: "EntityViews:failure",
+        scope: { type: "handler", handlerId: "EntityViews:failure" },
+      });
     }
   }, [analytics, saved.error]);
   const defaults = useMemo(
@@ -126,7 +129,10 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
       ? draft
       : (views.find((view) => view.id === selectedId) ?? views.at(0));
   const reportError = (error: unknown) => {
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "EntityViews.reportError:failure",
+      scope: { type: "handler", handlerId: "EntityViews.reportError:failure" },
+    });
     notifyUserError(error, t("common.unexpectedError"));
   };
   const save = useMutation({
@@ -527,7 +533,10 @@ const EntityViewContent = ({
   };
   useExternalSyncEffect(() => {
     if (records.error) {
-      analytics.captureError(records.error);
+      analytics.captureError(records.error, {
+        fingerprintKey: "EntityViewContent:failure",
+        scope: { type: "handler", handlerId: "EntityViewContent:failure" },
+      });
     }
   }, [analytics, records.error]);
   const loading = records.isPending;

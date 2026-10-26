@@ -147,12 +147,8 @@ describe("business registry credential organization isolation", () => {
       }
       expect(JSON.stringify(result)).not.toContain(ciphertextA.toString());
       expect(JSON.stringify(result)).not.toContain(ciphertextB.toString());
-      expect(JSON.stringify(result)).not.toContain(
-        ciphertextA.toString("base64"),
-      );
-      expect(JSON.stringify(result)).not.toContain(
-        ciphertextB.toString("base64"),
-      );
+      expect(JSON.stringify(result)).not.toContain(ciphertextA.toBase64());
+      expect(JSON.stringify(result)).not.toContain(ciphertextB.toBase64());
     }
   });
 
