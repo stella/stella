@@ -24,6 +24,7 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { ProvisionReferenceChip } from "@/features/case-law/components/case-viewer/provision-reference-chip";
@@ -366,44 +367,49 @@ const WorkReferences = ({
             {t("statutes.publisherWindowInconsistent")}
           </p>
         )}
-        <div className="flex flex-wrap gap-1.5">
-          {group.provisions.map((provision) => {
-            const href =
-              group.jurisdiction === "EU"
-                ? euProvisionSourceUrl(group.workIdentifier, provision)
-                : null;
-            return (
-              <ProvisionReferenceChip
-                target={
-                  href !== null
-                    ? { type: "external", href }
-                    : {
-                        type: "hosted",
-                        document:
-                          group.jurisdiction === "EU"
-                            ? null
-                            : documentFor(provision),
-                      }
-                }
-                key={provision.key}
-                label={formatProvisionLabel(
-                  group.jurisdiction,
-                  provision,
-                  renderPart,
-                )}
-                anchorSeparator={provisionAnchorSeparatorFor(
-                  group.jurisdiction,
-                )}
-                jurisdiction={group.jurisdiction}
-                provision={provision}
-                statuteTitle={title}
-                versionMarker={
-                  exceptions.has(provision.key) ? "exception" : "group"
-                }
-              />
-            );
-          })}
-        </div>
+        {/* The chips are reader peeks; their side-panel action opens the
+            provision through the reader's adapters, which the inspector
+            views around this list do not otherwise provide. */}
+        <WebReaderProvider>
+          <div className="flex flex-wrap gap-1.5">
+            {group.provisions.map((provision) => {
+              const href =
+                group.jurisdiction === "EU"
+                  ? euProvisionSourceUrl(group.workIdentifier, provision)
+                  : null;
+              return (
+                <ProvisionReferenceChip
+                  target={
+                    href !== null
+                      ? { type: "external", href }
+                      : {
+                          type: "hosted",
+                          document:
+                            group.jurisdiction === "EU"
+                              ? null
+                              : documentFor(provision),
+                        }
+                  }
+                  key={provision.key}
+                  label={formatProvisionLabel(
+                    group.jurisdiction,
+                    provision,
+                    renderPart,
+                  )}
+                  anchorSeparator={provisionAnchorSeparatorFor(
+                    group.jurisdiction,
+                  )}
+                  jurisdiction={group.jurisdiction}
+                  provision={provision}
+                  statuteTitle={title}
+                  versionMarker={
+                    exceptions.has(provision.key) ? "exception" : "group"
+                  }
+                />
+              );
+            })}
+          </div>
+        </WebReaderProvider>
       </AccordionPanel>
     </AccordionItem>
   );
