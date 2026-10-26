@@ -8,7 +8,10 @@ import {
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import { sanitizeErrorAttributesForOutput } from "@stll/errors";
+import {
+  declareFingerprintFields,
+  sanitizeErrorAttributesForOutput,
+} from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { receiveAndDeleteSesInboundMail } from "@/api/lib/email/inbound/ses";
@@ -51,7 +54,11 @@ class InboundQueueMessageError extends TaggedError("InboundQueueMessageError")<{
     | "invalid-envelope"
     | "untrusted-topic"
     | "unsupported-notification";
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type InboundQueueNotification =
   { type: "received"; event: unknown } | { type: "setup" };

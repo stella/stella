@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import {
   type DecisionAnalysis,
   parsePersistedDecisionAnalysis,
@@ -353,7 +354,7 @@ test("an inline holding reference highlights its full range and scrolls to its s
                 role: "member",
                 ai: true,
                 deepl: false,
-                ocr: false,
+                ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
                 desktop: "none",
                 settings: undefined,
               })}

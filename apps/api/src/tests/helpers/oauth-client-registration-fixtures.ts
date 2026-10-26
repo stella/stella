@@ -74,6 +74,18 @@ const HOSTED_CLIENT_BODY = {
   token_endpoint_auth_method: "client_secret_post",
 } as const;
 
+const CURSOR_DESKTOP_BODY = {
+  client_name: "Cursor",
+  grant_types: ["authorization_code", "refresh_token"],
+  redirect_uris: [
+    "cursor://anysphere.cursor-mcp/oauth/callback",
+    "https://www.cursor.com/agents/mcp/oauth/callback",
+    "http://localhost:8787/callback",
+  ],
+  response_types: ["code"],
+  token_endpoint_auth_method: "none",
+} as const;
+
 export const OAUTH_REQUIRED_CALLBACK_FIXTURES = Object.fromEntries(
   (
     [
@@ -224,6 +236,39 @@ export const OAUTH_CLIENT_REGISTRATION_FIXTURES = {
       response_types: ["code"],
     },
   },
+  cursorDesktop: {
+    /**
+     * Cursor 3.14 registers one public client for three callbacks: a
+     * private-use scheme with a naming authority, a hosted https callback
+     * and a fixed loopback port, with no `application_type`. It registers as
+     * native, and its private-use callback is an entry in
+     * NATIVE_REDIRECT_URI_EXCEPTIONS.
+     */
+    client: "Cursor desktop MCP client",
+    origin: "documented",
+    body: CURSOR_DESKTOP_BODY,
+  },
+  cursorAgentLegacyScope: {
+    // A scope this server does not offer (`mcp:tools`) is dropped, and the
+    // default capability set applies.
+    client: "cursor-agent requesting mcp:tools",
+    origin: "synthetic",
+    body: { ...CURSOR_DESKTOP_BODY, scope: "mcp:tools" },
+  },
+  identityScopeClient: {
+    // Identity scopes this server does not offer (`name`, `picture`) are
+    // dropped, never granted.
+    client: "client requesting unoffered identity scopes",
+    origin: "synthetic",
+    body: {
+      client_name: "Example assistant",
+      grant_types: ["authorization_code", "refresh_token"],
+      redirect_uris: ["https://assistant.example.com/oauth/callback"],
+      response_types: ["code"],
+      scope: "openid profile email name picture offline_access",
+      token_endpoint_auth_method: "none",
+    },
+  },
   mcpInspector: {
     client: "MCP Inspector",
     origin: "synthetic",
@@ -282,6 +327,58 @@ export const OAUTH_CLIENT_REGISTRATION_REJECTION_FIXTURES = {
       redirect_uris: [],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
+    },
+    error: "invalid_redirect_uri",
+  },
+  confidentialPrivateUseRedirect: {
+    // Only a public client is inferred native; a confidential client keeps
+    // the web default, which refuses the private-use callback.
+    client: "confidential client with Cursor's callbacks",
+    body: {
+      ...CURSOR_DESKTOP_BODY,
+      token_endpoint_auth_method: "client_secret_post",
+    },
+    error: "invalid_redirect_uri",
+  },
+  statedWebPrivateUseRedirect: {
+    // A stated application_type is never overridden.
+    client: "public client stating web with Cursor's callbacks",
+    body: { ...CURSOR_DESKTOP_BODY, application_type: "web" },
+    error: "invalid_redirect_uri",
+  },
+  unlistedAuthorityScheme: {
+    // Native, but neither reverse-domain nor an exact exception entry.
+    client: "public client with an unlisted private-use authority",
+    body: {
+      ...CURSOR_DESKTOP_BODY,
+      redirect_uris: ["myapp://callback.example/oauth"],
+    },
+    error: "invalid_redirect_uri",
+  },
+  unlistedBareScheme: {
+    client: "public client with an unlisted bare private-use scheme",
+    body: { ...CURSOR_DESKTOP_BODY, redirect_uris: ["myapp:/oauth/callback"] },
+    error: "invalid_redirect_uri",
+  },
+  exceptionSchemeOtherPath: {
+    // Exceptions are exact URIs, not schemes.
+    client: "public client reusing the Cursor scheme on another path",
+    body: {
+      ...CURSOR_DESKTOP_BODY,
+      redirect_uris: ["cursor://anysphere.cursor-mcp/other"],
+    },
+    error: "invalid_redirect_uri",
+  },
+  nativeHttpOnNonLoopback: {
+    // Inferred native clients still get every native rule: http is allowed
+    // only on the exact loopback hosts.
+    client: "public client mixing Cursor's scheme with plain http",
+    body: {
+      ...CURSOR_DESKTOP_BODY,
+      redirect_uris: [
+        "cursor://anysphere.cursor-mcp/oauth/callback",
+        "http://assistant.example.com/callback",
+      ],
     },
     error: "invalid_redirect_uri",
   },

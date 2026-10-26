@@ -14,6 +14,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoices from "@/api/handlers/invoices/export";
 import { createInvoicesExport } from "@/api/handlers/invoices/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -172,7 +173,7 @@ const context = (
       method: "POST",
       headers: { "Accept-Language": "cs" },
     }),
-    route: "/test/invoices/export",
+    route: "/v1/invoices/:workspaceId/export" satisfies ApiRoutePath,
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
     scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
     session: { activeOrganizationId: organizationId },
@@ -200,6 +201,57 @@ const writtenText = (data: unknown): string => {
 };
 
 describe("invoice export", () => {
+  test.each([
+    "xlsx",
+    "xlsx_lines",
+    "pohoda",
+    "money_s3",
+    "flexibee",
+    "isdoc",
+    "ubl",
+    "ksef_fa3",
+    "eso9",
+    "ledes_1998b",
+  ] as const)(
+    "refuses %s when home-currency VAT would be omitted",
+    async (format) => {
+      await fixture.testDb
+        .update(invoices)
+        .set({
+          vatExchangeRate: "25",
+          vatExchangeRateSource: "CNB",
+          vatExchangeRateDate: "2026-09-29",
+          vatExchangeRateTaxPoint: "2026-09-30",
+        })
+        .where(eq(invoices.id, issuedId));
+      try {
+        const events: AuditEvent[] = [];
+        const { handler, writes } = capturingExport();
+        const response = await handler.handler(
+          context("own", { format, invoiceIds: [issuedId] }, events),
+        );
+        expect(response).toMatchObject({
+          code: 409,
+          response: {
+            hint: "This export cannot yet carry the home-currency VAT; use the PDF.",
+          },
+        });
+        expect(writes).toHaveLength(0);
+        expect(events).toHaveLength(0);
+      } finally {
+        await fixture.testDb
+          .update(invoices)
+          .set({
+            vatExchangeRate: null,
+            vatExchangeRateSource: null,
+            vatExchangeRateDate: null,
+            vatExchangeRateTaxPoint: null,
+          })
+          .where(eq(invoices.id, issuedId));
+      }
+    },
+  );
+
   test("exports the matter's issued invoices and skips drafts", async () => {
     const events: AuditEvent[] = [];
     const { handler, writes } = capturingExport();
@@ -239,6 +291,25 @@ describe("invoice export", () => {
       resourceType: "invoice",
       resourceId: issuedId,
     });
+  });
+
+  test("exports stored identifiers trimmed", async () => {
+    await fixture.testDb
+      .update(sellerProfiles)
+      .set({ registrationId: " 12345678 " })
+      .where(eq(sellerProfiles.id, sellerId));
+    try {
+      const { handler, writes } = capturingExport();
+      await handler.handler(
+        context("own", { format: "pohoda", invoiceIds: [issuedId] }, []),
+      );
+      expect(writtenText(writes.at(0)?.data)).toContain('ico="12345678"');
+    } finally {
+      await fixture.testDb
+        .update(sellerProfiles)
+        .set({ registrationId: "12345678" })
+        .where(eq(sellerProfiles.id, sellerId));
+    }
   });
 
   test("refuses a draft in the selection", async () => {

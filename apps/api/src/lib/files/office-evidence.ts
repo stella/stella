@@ -34,6 +34,7 @@ import {
   type WorkAdmission,
   WorkRefusal,
 } from "@/api/lib/load/work-admission";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { OBJECT_READ_TIMEOUT_MS, readS3ArrayBuffer } from "@/api/lib/s3";
@@ -169,7 +170,12 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(decryptResult)) {
-    captureError(decryptResult.error, { operation: "office-evidence-decrypt" });
+    captureError(
+      decryptResult.error,
+      handlerErrorContext("files.decodeEvidenceRow.decryptResult_error", {
+        operation: "office-evidence-decrypt",
+      }),
+    );
     return null;
   }
   const jsonResult = Result.try({
@@ -177,7 +183,12 @@ const decodeEvidenceRow = async (
     catch: (cause) => cause,
   });
   if (Result.isError(jsonResult)) {
-    captureError(jsonResult.error, { operation: "office-evidence-json" });
+    captureError(
+      jsonResult.error,
+      handlerErrorContext("files.decodeEvidenceRow.jsonResult_error", {
+        operation: "office-evidence-json",
+      }),
+    );
     return null;
   }
   const parsed = v.safeParse(officeEvidencePayloadSchema, jsonResult.value);
@@ -190,7 +201,9 @@ const decodeEvidenceRow = async (
       new TelemetryError({
         message: "Persisted Office evidence failed validation",
       }),
-      { operation: "office-evidence-validate" },
+      handlerErrorContext("files.decodeEvidenceRow", {
+        operation: "office-evidence-validate",
+      }),
     );
     return null;
   }
@@ -384,7 +397,11 @@ const abandonOfficeEvidenceClaim = async ({
 type CaptureAndAbandonOfficeEvidenceOptions =
   AbandonOfficeEvidenceClaimOptions & {
     error: unknown;
-    operation: string;
+    operation:
+      | "office-evidence-file-read"
+      | "office-evidence-extract"
+      | "office-evidence-encrypt"
+      | "office-evidence-persist";
   };
 
 const captureAndAbandonOfficeEvidence = async ({
@@ -392,10 +409,15 @@ const captureAndAbandonOfficeEvidence = async ({
   operation,
   ...claim
 }: CaptureAndAbandonOfficeEvidenceOptions): Promise<null> => {
-  captureError(error, { operation });
+  captureError(error, handlerErrorContext(`files.${operation}`, { operation }));
   const abandoned = await abandonOfficeEvidenceClaim(claim);
   if (Result.isError(abandoned)) {
-    captureError(abandoned.error, { operation: "office-evidence-abandon" });
+    captureError(
+      abandoned.error,
+      handlerErrorContext(`files.${operation}.abandon`, {
+        operation: "office-evidence-abandon",
+      }),
+    );
   }
   return null;
 };
@@ -562,7 +584,12 @@ export const loadOfficeEvidence = async ({
     workspaceId,
   });
   if (Result.isError(claimResult)) {
-    captureError(claimResult.error, { operation: "office-evidence-claim" });
+    captureError(
+      claimResult.error,
+      handlerErrorContext("files.loadOfficeEvidence.claimResult_error", {
+        operation: "office-evidence-claim",
+      }),
+    );
     return null;
   }
   const claim = claimResult.value;
@@ -610,7 +637,12 @@ const abandonRefusedOfficeEvidence = async (
 ): Promise<null> => {
   const abandoned = await abandonOfficeEvidenceClaim(scope);
   if (Result.isError(abandoned)) {
-    captureError(abandoned.error, { operation: "office-evidence-abandon" });
+    captureError(
+      abandoned.error,
+      handlerErrorContext("files.loadOfficeEvidence.abandoned_error", {
+        operation: "office-evidence-abandon",
+      }),
+    );
   }
   return null;
 };

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import {
   correspondenceAllowedSenderMatters,
@@ -9,7 +11,7 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createCursorPage,
@@ -86,9 +88,13 @@ true satisfies UnexpectedAllowedSenderMatterRowColumn extends never
 const PAGE_SIZE_DEFAULT = 50;
 const PAGE_SIZE_MAX = 200;
 const MAX_MATTERS_PER_SENDER = 200;
-const querySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGE_SIZE_MAX })),
-  cursor: t.Optional(tPaginationCursor()),
+const querySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PAGE_SIZE_MAX)),
+    ),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
 });
 
 const config = {

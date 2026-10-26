@@ -64,6 +64,7 @@ import {
   isIdentifier,
   isIdentifierReference,
   isStringLiteral,
+  isUnshadowedGlobalIdentifier as hasGlobalBinding,
   memberPropertyName,
   resolveImport,
   resolveVariable,
@@ -374,16 +375,8 @@ export default eslintCompatPlugin({
           return aliases;
         };
 
-        const isGlobalReference = (identifier: unknown): boolean => {
-          if (!isIdentifierReference(identifier)) {
-            return false;
-          }
-          if (context.sourceCode.isGlobalReference(identifier)) {
-            return true;
-          }
-          const variable = resolveVariable(context, identifier);
-          return variable === null || variable.defs.length === 0;
-        };
+        const isGlobalReference = (identifier: unknown) =>
+          hasGlobalBinding(context, identifier);
 
         const isGlobalObjectExpression = (
           node: unknown,

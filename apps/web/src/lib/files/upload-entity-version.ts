@@ -4,7 +4,7 @@ import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import {
   hashActiveUploadFile,
   withActiveUpload,
@@ -45,7 +45,7 @@ const abortUpload = async (
         uploadId,
       })
       .abort.post({});
-    unwrapEden(response);
+    unwrapApiResponse(response);
   } catch {
     // Preserve the original upload failure. Cleanup is intentionally best effort.
   }
@@ -94,7 +94,7 @@ export const uploadEntityVersion = async ({
       },
       signal ? { fetch: { signal } } : undefined,
     );
-    const { uploadId, url, headers } = unwrapEden(presign);
+    const { uploadId, url, headers } = unwrapApiResponse(presign);
 
     await completeEntityVersionUpload({
       abort: async () => await abortUpload(workspaceId, uploadId),

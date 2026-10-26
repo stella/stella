@@ -1022,6 +1022,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed stella API client; sends each route call to the configured API origin through the caller's fetcher or the global fetch.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/boe/src/client.ts",
     class: "package-owned-client",
     reason:
@@ -1210,6 +1217,11 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
   {
     path: "apps/api/src/handlers/external-preview/preview.ts",
     reason: "Issues request authority for the external preview routes.",
+  },
+  {
+    path: "apps/api/src/handlers/invoices/transition.ts",
+    reason:
+      "Issues request authority for the official VAT exchange rate an invoice finalize needs.",
   },
   {
     path: "apps/api/src/handlers/legislation/boe/law-structure/get.ts",

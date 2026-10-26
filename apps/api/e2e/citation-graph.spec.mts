@@ -268,6 +268,7 @@ const mountGraph = async ({
                 result: toolResult({
                   status: "unavailable",
                   metadata: {
+                    extractionWarnings: [],
                     decisionId,
                     url: `https://stella.example/law/cze/cases/${decisionId}`,
                     caseNumber: "Fixture case",

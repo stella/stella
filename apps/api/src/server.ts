@@ -1,199 +1,40 @@
-import "./register-schema-formats";
-import cors from "@elysia/cors";
 import { panic } from "better-result";
-import { Elysia } from "elysia";
 
-import {
-  REQUEST_ID_HEADER,
-  STELLA_API_VERSION_PREFIX,
-} from "@stll/api-contract";
-import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
-import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
+import { HTTP_REQUEST_BODY_MAX_BYTES } from "@stll/api-contract/limits";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
+import { apiPipeline } from "@/api/api-pipeline";
+import { apiRoutes } from "@/api/api-routes";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
-import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
-import {
-  agentAuthConfirmRoute,
-  agentAuthRoute,
-} from "@/api/handlers/agent-auth/routes";
-import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
-import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
-import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
-import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
-import {
-  authCapabilitiesRoute,
-  authMetadataPreflightRoute,
-  authMetadataRoute,
-} from "@/api/handlers/auth/routes";
-import { authUiRoute } from "@/api/handlers/auth/ui-routes";
-import { bilingualTranslationsRoute } from "@/api/handlers/bilingual-translations/routes";
-import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
-import { caseLawRoute } from "@/api/handlers/case-law/routes";
-import { catalogueRoute } from "@/api/handlers/catalogue/routes";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
-import { chatRoute } from "@/api/handlers/chat/routes";
-import {
-  clauseCategoriesRoute,
-  clausesRoute,
-} from "@/api/handlers/clauses/routes";
-import { contactsRoute } from "@/api/handlers/contacts/routes";
-import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
-import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
-import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
-import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
-import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
-import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
-import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
-import { documentTypesRoute } from "@/api/handlers/document-types/routes";
-import { documentsRoute } from "@/api/handlers/documents/routes";
-import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
-import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
-import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
-import { entitiesRoute } from "@/api/handlers/entities/routes";
-import { entityViewsRoute } from "@/api/handlers/entity-views/routes";
-import { expensesRoute } from "@/api/handlers/expenses/routes";
-import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
-import {
-  feedbackPublicRoute,
-  feedbackRoute,
-} from "@/api/handlers/feedback/routes";
-import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/routes";
-import { flowsRoute } from "@/api/handlers/flows/routes";
-import { flowRunsRoute } from "@/api/handlers/flows/run-route";
-import { isFolioCollabRateLimitedPath } from "@/api/handlers/folio-collab/rate-limit";
-import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
-import { healthRoute } from "@/api/handlers/health/routes";
-import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/routes";
-import { invoicesRoute } from "@/api/handlers/invoices/routes";
-import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
-import { legalResolveRoute } from "@/api/handlers/legal-resolve/routes";
-import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
-import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { legislationRoute } from "@/api/handlers/legislation/routes";
-import { listsRoute } from "@/api/handlers/lists/routes";
-import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
-import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
-import { mcpRoute } from "@/api/handlers/mcp/routes";
-import { handleMcpPreflightRequest } from "@/api/handlers/mcp/routes-core";
-import { createMcpTransportRateLimitOptions } from "@/api/handlers/mcp/transport-rate-limit";
-import { meRoute } from "@/api/handlers/me/routes";
-import { memoriesRoute } from "@/api/handlers/memories/routes";
-import { notificationsRoute } from "@/api/handlers/notifications/routes";
-import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
-import { operatorRoute } from "@/api/handlers/operator/routes";
-import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
-import { playbooksRoute } from "@/api/handlers/playbooks/routes";
-import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
-import { propertiesRoute } from "@/api/handlers/properties/routes";
-import { publicKnowledgeRoute } from "@/api/handlers/public-knowledge/routes";
-import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
-import { reportsRoute } from "@/api/handlers/reports/routes";
-import { publicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
-import { savedSearchesRoute } from "@/api/handlers/saved-searches/routes";
-import { savedTimeNarrativesRoute } from "@/api/handlers/saved-time-narratives/routes";
-import { searchHistoryRoute } from "@/api/handlers/search-history/routes";
-import { searchRoute } from "@/api/handlers/search/routes";
-import { sellerProfilesRoute } from "@/api/handlers/seller-profiles/routes";
-import { sharepointRoute } from "@/api/handlers/sharepoint/routes";
-import { signalsRoute } from "@/api/handlers/signals/routes";
-import { skillsRoute } from "@/api/handlers/skills/routes";
-import { isSkillSourceRateLimitedRequest } from "@/api/handlers/skills/source-rate-limit";
-import { smokeRoute } from "@/api/handlers/smoke/routes";
-import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
-import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
-import { syntheticRoute } from "@/api/handlers/synthetic/routes";
-import { tasksRoute } from "@/api/handlers/tasks/routes";
-import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
-import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import { clearLookupPreviewCache } from "@/api/handlers/templates/lookup-preview-cache";
-import {
-  templateCategoriesRoute,
-  templatesRoute,
-} from "@/api/handlers/templates/routes";
-import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
-import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
-import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
-import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
-import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
-import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
-import { uploadsRoute } from "@/api/handlers/uploads/routes";
-import { usageRoute } from "@/api/handlers/usage/routes";
-import { userFilesRoute } from "@/api/handlers/user-files/routes";
-import { vatRateRoute } from "@/api/handlers/vat-rates/routes";
-import { verifyAuthRoute } from "@/api/handlers/verify/routes";
-import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
-import { viewsRoute } from "@/api/handlers/views/routes";
-import { handleVisualSandboxRequest } from "@/api/handlers/visual-sandbox/routes";
-import { wellKnownRoute } from "@/api/handlers/well-known/routes";
-import { myWorkRoute } from "@/api/handlers/work-obligations/my-work-route";
-import { workObligationsRoute } from "@/api/handlers/work-obligations/routes";
-import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
-import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { createHttpApp } from "@/api/http/app";
 import { detached } from "@/api/lib/analytics/capture";
-import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
-import { createAuthResponseCookiesPlugin } from "@/api/lib/auth/auth-response-cookies";
-import { applyDiscoveryMetadataCachePolicy } from "@/api/lib/auth/discovery-metadata-cache";
-import {
-  isAllowedBrowserOrigin,
-  shouldRejectBrowserMutation,
-} from "@/api/lib/browser-origin-guard";
-import {
-  capabilityRequestGuard,
-  type MountedRoute,
-} from "@/api/lib/capability-request";
-import { loadCapabilityEndpoints } from "@/api/lib/capability-request-endpoints";
+import { realtimeAuthorizers } from "@/api/lib/auth";
 import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
-import {
-  clientAddressConfigurationWarning,
-  resolveClientAddress,
-  resolveSignupRateLimitClientIp,
-  sealEdgeHeaders,
-  stampClientAddressHeader,
-} from "@/api/lib/client-ip";
+import { clientAddressConfigurationWarning } from "@/api/lib/client-ip";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
-import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
-import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
   openFreshLoginClient,
   startDatabaseLoginProbe,
 } from "@/api/lib/health/database-login-probe";
 import { markScheduledJobsReady } from "@/api/lib/health/readiness";
-import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
-import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
-import {
-  clientTooOldError,
-  LOCAL_CLIENT_IDENTITY_HEADER,
-} from "@/api/lib/mcp-connectors/local-client-support";
 import { createMemoryPressureHandler } from "@/api/lib/memory-pressure";
-import { multipartFormParser } from "@/api/lib/multipart-form-parser";
 import { startEventLoopDelayMonitor } from "@/api/lib/observability/event-loop-delay";
 import { logger } from "@/api/lib/observability/logger";
-import {
-  enrichRequestContext,
-  getRequestId,
-  initRequestContext,
-} from "@/api/lib/observability/request-context";
-import {
-  answerRequestError,
-  completeRequest,
-  withFinalResponseCompletion,
-} from "@/api/lib/observability/request-lifecycle";
 import {
   emitEventLoopDelayMetric,
   emitProcessMemoryLog,
 } from "@/api/lib/observability/request-metrics";
-import { runWithHttpRequestScope } from "@/api/lib/observability/request-scope";
 import {
   closeActionAdmissionRedis,
   startActionAdmissionRedis,
@@ -202,13 +43,7 @@ import {
   closeMcpReadFenceRedis,
   startMcpReadFenceRedis,
 } from "@/api/lib/rate-limit/mcp-read-fence";
-import { createPublicCorpusRateLimitComposition } from "@/api/lib/rate-limit/public-corpus-rate-limit-composition";
-import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
-import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
-import {
-  createTenantActionClassifier,
-  runTenantHttpAction,
-} from "@/api/lib/rate-limit/tenant-action-boundary";
+import { closeRateLimitContexts } from "@/api/lib/rate-limit/rate-limit";
 import {
   refreshCorpusS3,
   refreshS3,
@@ -219,18 +54,10 @@ import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
-import { securityCanaryInterceptor } from "@/api/lib/security-canary";
-import {
-  API_SECURITY_HEADERS,
-  CORS_EXPOSED_HEADERS,
-  finalizeResponseCachePolicy,
-  setSecurityHeaders,
-} from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
-import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
 import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
-import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+import { isLocalDevOpen } from "@/api/runtime-mode";
 import { startConfiguredScheduler } from "@/api/server-scheduled-jobs";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -238,12 +65,6 @@ import {
 } from "@/api/server-shutdown";
 
 const DEFAULT_API_PORT = 3001;
-// Keep-alive idle timeout in seconds; see the `api.listen` call.
-const HTTP_IDLE_TIMEOUT_S = 75;
-const SESSION_ID_HEADER = "x-posthog-session-id";
-const TANSTACK_RUN_ID_HEADER = "X-Run-Id";
-const SESSION_ID_MAX_LENGTH = 64;
-const SESSION_ID_PATTERN = /^[\w-]+$/u;
 const S3_REFRESH_CHECK_INTERVAL_MS = 60_000;
 const WORKER_SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -318,466 +139,11 @@ const startEventLoopDelayReporting = () => {
   });
 };
 
-const allowedBrowserOrigins = (): (string | RegExp)[] => {
-  const origins: (string | RegExp)[] = frontendOrigins({
-    frontendUrl: env.FRONTEND_URL,
-    runtimeMode: runtimeMode(),
-  });
-  if (isLocalDevOpen()) {
-    origins.push(/^chrome-extension:\/\//u);
-    origins.push(...DEV_INSPECTOR_ORIGINS);
-  }
-  if (env.EXTENSION_ORIGIN) {
-    origins.push(env.EXTENSION_ORIGIN);
-  }
-  return origins;
-};
-
-const ALLOWED_BROWSER_ORIGINS = allowedBrowserOrigins();
-
-// Local development routes exist only in an open runtime. The module is
-// imported on demand because it loads seeding and search maintenance; the
-// browser contract names the routes in eden-contract.ts.
-const localDevPublicRoutes = new Elysia();
-const localDevVersionedRoutes = new Elysia();
-if (isLocalDevOpen()) {
-  const { devPublicRoute, devRoute } =
-    await import("@/api/handlers/dev/routes");
-  localDevPublicRoutes.use(devPublicRoute);
-  localDevVersionedRoutes.use(devRoute);
-}
-
-const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
-
-const publicCorpusRateLimits = createPublicCorpusRateLimitComposition({
-  skipShared: (request) => {
-    // The dev-only e2e walk measures navigation, not abuse budgets.
-    if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
-      return true;
-    }
-    // Other dedicated budgets also exclude their traffic from the shared bucket.
-    const { pathname } = new URL(request.url);
-    return (
-      isUploadRateLimitedPath(pathname) ||
-      isFolioCollabRateLimitedPath(pathname) ||
-      isSkillSourceRateLimitedRequest(request) ||
-      isStyleSetUploadRateLimitedRequest(request)
-    );
-  },
+/** The API: one route table behind one pipeline, served by `Bun.serve`. */
+export const apiApp = createHttpApp({
+  routes: apiRoutes,
+  middleware: apiPipeline,
 });
-
-const api = new Elysia()
-  .use(createAuthResponseCookiesPlugin())
-  .mapResponse(({ responseValue, set }) =>
-    finalizeResponseCachePolicy({ response: responseValue, set }),
-  )
-  // Body parsing is decided before any route runs, so the multipart parser has
-  // to sit ahead of every route registration.
-  .use(multipartFormParser)
-  .onRequest(({ set }) => {
-    setSecurityHeaders(set);
-  })
-  .onRequest(({ request, set }) => {
-    applyDiscoveryMetadataCachePolicy({ request, set });
-  })
-  .onRequest(({ request, set }) => {
-    const error = clientTooOldError(request);
-    if (error) {
-      set.status = 426;
-      return error;
-    }
-    return undefined;
-  })
-  .onRequest(async (context) => {
-    const { request, set } = context;
-
-    const rawSessionId = request.headers.get(SESSION_ID_HEADER);
-    const sessionId =
-      rawSessionId &&
-      rawSessionId.length <= SESSION_ID_MAX_LENGTH &&
-      SESSION_ID_PATTERN.test(rawSessionId)
-        ? rawSessionId
-        : undefined;
-
-    initRequestContext(request, sessionId);
-    const clientAddress = resolveClientAddress(request, context.server ?? null);
-    // Better Auth reads the address from this header.
-    stampClientAddressHeader(request, clientAddress);
-    enrichRequestContext(request, {
-      clientIp: clientAddress?.address ?? null,
-      clientAddressSource: clientAddress?.source ?? null,
-      signupRateLimitIp: resolveSignupRateLimitClientIp(
-        request,
-        context.server ?? null,
-      ),
-    });
-    sealEdgeHeaders(request, clientAddress);
-
-    // Stamp the receipt on every response from the central header point, next
-    // to the security headers, so REST callers always get an `x-request-id`
-    // they can quote back (the MCP envelope + invoke payloads carry the same id
-    // through the ambient store). Set in `onRequest` so it survives error
-    // responses too, exactly like `setSecurityHeaders`.
-    const requestId = getRequestId(request);
-    if (requestId !== undefined) {
-      set.headers[REQUEST_ID_HEADER] = requestId;
-    }
-
-    if (
-      shouldRejectBrowserMutation({
-        allowedOrigins: ALLOWED_BROWSER_ORIGINS,
-        method: request.method,
-        origin: request.headers.get("origin"),
-        secFetchSite: request.headers.get("sec-fetch-site"),
-      })
-    ) {
-      set.status = 403;
-      return httpError("Untrusted browser origin");
-    }
-
-    const interceptedResponse = await securityCanaryInterceptor(context);
-    if (interceptedResponse) {
-      return interceptedResponse;
-    }
-
-    // Ahead of the CORS layer below, which otherwise answers every preflight
-    // with the API-wide method list and trusted origins only, leaving the MCP
-    // route's own preflight unreachable.
-    const publicPreflightResponse = handleMcpPreflightRequest(request, set);
-    if (publicPreflightResponse) {
-      return publicPreflightResponse;
-    }
-
-    return (
-      handleMcpAppSandboxRequest(request, set) ??
-      handleVisualSandboxRequest(request, set)
-    );
-  })
-  // Keep discovery interception in its owning handler module while mounting it
-  // before the credentialed global CORS layer.
-  .use(authMetadataPreflightRoute)
-  .use(
-    cors({
-      origin: ALLOWED_BROWSER_ORIGINS,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      credentials: true,
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "MCP-Protocol-Version",
-        LOCAL_CLIENT_IDENTITY_HEADER,
-        FORMATTING_LOCALE_HEADER,
-        SESSION_ID_HEADER,
-        AUTH_SESSION_STARTUP_HEADER,
-        TANSTACK_RUN_ID_HEADER,
-        CAPABILITY_REQUEST_HEADER,
-      ],
-      exposeHeaders: CORS_EXPOSED_HEADERS,
-      maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
-    }),
-  )
-  .onError((context) => answerRequestError(context))
-  .onAfterHandle(async (context) => await completeRequest(context))
-  // Global, and ahead of every route, so each route below inherits the hook.
-  // The explicit return type keeps `api` out of its own inferred type.
-  .use(
-    capabilityRequestGuard({
-      mountedRoutes: (): readonly MountedRoute[] => api.routes,
-      loadEndpoints: loadCapabilityEndpoints,
-    }),
-  )
-  .use(authUiRoute)
-  .use(authMetadataRoute)
-  .use(
-    new Elysia()
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.agentAuth.duration,
-          max: API_RATE_LIMITS.agentAuth.max,
-          budget: { name: "api.agent_auth.address", keyKind: "address" },
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "agent-auth",
-          }),
-        }),
-      )
-      .use(agentAuthRoute),
-  )
-  .use(
-    // The session-authed confirm endpoint is mounted at the root (its path is
-    // fixed, not `/v1`-prefixed), so it would otherwise escape the shared `api`
-    // limiter. Give this mutating endpoint its own abuse budget.
-    new Elysia()
-      .use(
-        rateLimit({
-          duration: API_RATE_LIMITS.api.duration,
-          max: API_RATE_LIMITS.api.max,
-          budget: {
-            name: "api.agent_auth_confirm.address",
-            keyKind: "address",
-          },
-          ...createRedisRateLimit({
-            failurePolicy: "fail_open_local",
-            scope: "agent-auth-confirm",
-          }),
-          skip: () => env.E2E_DISABLE_AUTH_RATE_LIMIT,
-        }),
-      )
-      .use(agentAuthConfirmRoute),
-  )
-  .use(healthRoute)
-  .use(operatorRoute)
-  .use(wellKnownRoute)
-  .use(hostedUsageWebhookRoute)
-  .use(
-    // The MCP transport paths sit at the root, outside the shared `/v1`
-    // budget, and one agent loop can otherwise issue unbounded JSON-RPC calls.
-    // Accepted credentials have independent buckets. Authentication failures
-    // consume the route-owned address budget; discovery and preflight are unmetered.
-    new Elysia()
-      .use(rateLimit(createMcpTransportRateLimitOptions()))
-      .use(mcpRoute),
-  )
-  .use(aiAutocompleteRoute)
-  .use(feedbackPublicRoute)
-  .use(memoriesRoute)
-  .use(notificationsRoute)
-  .use(
-    new Elysia()
-      .use(timeApprovalQueueRoute)
-      .use(internalTimeEntriesRoute)
-      .use(myTimeEntriesRoute)
-      .use(memberTimeTargetsRoute)
-      .use(timeTimersRoute),
-  )
-  .use(localDevPublicRoutes)
-  .use(smokeRoute)
-  .use(syntheticRoute)
-  .mount(getAuth().handler)
-  .group(STELLA_API_VERSION_PREFIX, (app) =>
-    app
-
-      .use(publicCorpusRateLimits)
-      .use(authCapabilitiesRoute)
-      .use(workspaceEventsRoute)
-      .use(workspacesRoute)
-      .use(playbooksRoute)
-      .use(playbookRunsRoute)
-      .use(documentReviewsRoute)
-      .use(documentReviewPassagesRoute)
-      .use(documentTranslationsRoute)
-      .use(documentsRoute)
-      .use(bilingualTranslationsRoute)
-      .use(reportsRoute)
-      .use(flowsRoute)
-      .use(signalsRoute)
-      .use(flowRunsRoute)
-      .use(documentTypesRoute)
-      .use(propertiesRoute)
-      .use(filesRoute)
-      .use(
-        new Elysia()
-          .use(
-            rateLimit({
-              duration: API_RATE_LIMITS.folioCollab.duration,
-              max: API_RATE_LIMITS.folioCollab.max,
-              budget: { name: "api.folio_collab.address", keyKind: "address" },
-              ...createRedisRateLimit({
-                failurePolicy: "fail_open_local",
-                scope: "folio-collab",
-              }),
-              // Same e2e escape hatch as the shared `api` bucket above: the
-              // route walk opens the document editor repeatedly and would
-              // drain this 30/min budget across back-to-back runs.
-              skip: () => env.E2E_DISABLE_AUTH_RATE_LIMIT,
-            }),
-          )
-          .use(folioCollabRoute),
-      )
-      .use(desktopEditSessionsRoute)
-      .use(uploadsRoute)
-      .use(entitiesRoute)
-      .use(docxSuggestionsRoute)
-      .use(fieldsRoute)
-      // Each domain slice composes in one link: every `.use` here deepens the
-      // app's type, and the chain sits at TypeScript's instantiation limit.
-      .use(
-        new Elysia()
-          .use(templatesRoute)
-          .use(styleSetsRoute)
-          .use(templateCategoriesRoute)
-          .use(templatePacksRoute)
-          .use(templateRecipesRoute),
-      )
-      .use(
-        new Elysia()
-          .use(timeEntriesRoute)
-          .use(billingCodesRoute)
-          .use(ratesRoute)
-          .use(expensesRoute)
-          .use(invoicesRoute),
-      )
-      // Issuer settings share one link: every `.use` here deepens the
-      // app's type, and the chain sits at TypeScript's instantiation limit.
-      .use(
-        new Elysia()
-          .use(sellerProfilesRoute)
-          .use(numberSeriesRoute)
-          .use(vatRateRoute),
-      )
-      .use(externalPreviewRoute)
-      .use(mcpConnectorsRoute)
-      .use(sharepointRoute)
-      .use(catalogueRoute)
-      .use(organizationSettingsRoute)
-      .use(apiKeysRoute)
-      .use(desktopRegistryRoute)
-      .use(aiConfigPublicRoute)
-      .use(clauseCategoriesRoute)
-      .use(clausesRoute)
-      .use(contactsRoute)
-      .use(legislationRoute)
-      .use(legislationCorpusRoute)
-      .use(new Elysia().use(publicLegislationRoute).use(publicSanctionsRoute))
-      .use(publicKnowledgeRoute)
-      // Compose the search slice in one link to bound the server's inferred
-      // Elysia chain depth while preserving each route's full contract.
-      .use(
-        new Elysia()
-          .use(searchRoute)
-          .use(savedSearchesRoute)
-          .use(searchHistoryRoute),
-      )
-      .use(savedTimeNarrativesRoute)
-      .use(auditLogsRoute)
-      .use(
-        new Elysia()
-          .use(caseLawRoute)
-          .use(legalReaderRoute)
-          .use(legalResolveRoute),
-      )
-      .use(chatRoute)
-      .use(userFilesRoute)
-      .use(skillsRoute)
-      .use(usageRoute)
-      .use(
-        new Elysia()
-          .use(viewTemplatesRoute)
-          .use(viewsRoute)
-          .use(entityViewsRoute),
-      )
-      .use(
-        new Elysia()
-          .use(listsRoute)
-          .use(tasksRoute)
-          .use(workObligationsRoute)
-          .use(myWorkRoute),
-      )
-      .use(accountExportsRoute)
-      .use(meRoute)
-      .use(localDevVersionedRoutes)
-      .use(verifyAuthRoute),
-  )
-  // Mounted after the versioned group on purpose: a route added before it
-  // deepens the type the group callback infers, which is already at
-  // TypeScript's instantiation limit for the browser's Eden client. The
-  // signing route carries the version prefix itself.
-  .use(feedbackRoute)
-  .use(
-    new Elysia()
-      .use(pdfSigningSessionsRoute)
-      .use(desktopPresenceRoute)
-      .use(desktopFeatureAccessRoute)
-      .use(desktopTimeEntriesRoute),
-  );
-
-export default api;
-
-// Scope the per-request async stores — the ambient request id and the dev/CI
-// DB query counter — around the whole composed handler.
-//
-// No lifecycle hook can do this: a hook runs *inside* the request, so both
-// stores used to open themselves from `onRequest` with
-// `AsyncLocalStorage.enterWith`. `enterWith` mutates the ambient async context
-// frame with no restore point, and the runtime leaves that frame current for
-// callbacks it dispatches afterwards, so a background loop (a BullMQ worker, a
-// reconciler tick, the SSE keep-alive) resuming there adopted the in-flight
-// request's stores and kept them from then on — billing its own queries to that
-// request's `x-db-queries` count and stamping that request's receipt id on
-// unrelated work. `run` restores the previous frame, so the scope covers the
-// request's own callback tree and nothing else.
-//
-// `wrap` is the only place that sees a whole request as one function: Elysia
-// applies it to both the general handler and the per-route handlers it hands to
-// Bun's native router, which `api.fetch` alone would miss. It is a private
-// Elysia API, so pin its two observable effects rather than trusting it: the
-// `x-request-id` header and the `x-db-queries` count both disappear if a future
-// release stops applying higher-order functions, and the route-smoke network
-// baseline fails on a budgeted endpoint whose response drops the count header.
-// Byte refusals happen before lifecycle hooks; keep their headers observable
-// through the same browser-origin and security policies as ordinary answers.
-const decorateActionSizeRefusal = (
-  response: Response,
-  request: Request,
-): Response => {
-  initRequestContext(request);
-  const headers = new Headers(response.headers);
-  for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
-    headers.set(name, value);
-  }
-  const requestId = getRequestId(request);
-  if (requestId !== undefined) {
-    headers.set(REQUEST_ID_HEADER, requestId);
-  }
-  const origin = request.headers.get("origin");
-  if (
-    origin !== null &&
-    isAllowedBrowserOrigin(origin, ALLOWED_BROWSER_ORIGINS)
-  ) {
-    headers.set("access-control-allow-origin", origin);
-    headers.set("access-control-allow-credentials", "true");
-    headers.set(
-      "access-control-expose-headers",
-      CORS_EXPOSED_HEADERS.join(", "),
-    );
-    headers.append("vary", "Origin");
-  }
-  return new Response(response.body, { status: response.status, headers });
-};
-
-const scopeRequestAsyncStores = (): void => {
-  const isTenantAction = createTenantActionClassifier({
-    routes: api.routes,
-    staticRoutes: api.router.static,
-    strictPath: api.config.strictPath,
-    aot: api.config.aot,
-  });
-  api.wrap((handleRequest) => async (request: Request) => {
-    const scopedRequest = async () => {
-      if (!isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION")) {
-        return handleRequest(request);
-      }
-      return withFinalResponseCompletion(request, async () =>
-        runTenantHttpAction(request, {
-          handleRequest: async (bounded) => {
-            // The private HOC types erase the response type; validate the
-            // framework boundary before applying serialized JSON limits.
-            const response: unknown = await Promise.resolve(
-              handleRequest(bounded),
-            );
-            if (!(response instanceof Response)) {
-              return panic("The HTTP framework returned an invalid response");
-            }
-            return response;
-          },
-          isTenantAction,
-          decorateRefusal: decorateActionSizeRefusal,
-        }),
-      );
-    };
-    return runWithHttpRequestScope(scopedRequest);
-  });
-};
 
 const startS3RefreshLoop = () => {
   const timer = setInterval(() => {
@@ -803,10 +169,8 @@ const startS3RefreshLoop = () => {
 // Booting (migration check, S3 warmup, BullMQ workers, bound port) runs
 // only when this module is the process entry point: `bun src/server.ts` in
 // dev and the `bun build --compile` binary in prod. Importing the module
-// instead — as the exact-mirror CI guard in
-// `apps/api/scripts/exact-mirror-guard.ts` does to build every route's
-// schema mirror — must yield the fully constructed `api` without any of
-// these side effects (no DB, no Redis, no listen).
+// instead must yield the fully constructed `apiApp` without any of these side
+// effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
   const clientAddressWarning = clientAddressConfigurationWarning({
     edgeHeader: env.STELLA_CLIENT_ADDRESS_HEADER,
@@ -838,7 +202,7 @@ const startServer = async (): Promise<void> => {
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
   // matches the previous import-time behavior and completes well before
-  // `api.listen()` starts accepting requests.
+  // `Bun.serve` starts accepting requests.
   startSse(realtimeAuthorizers);
 
   // Schema-drift fail-fast. If the runtime expects migrations
@@ -872,18 +236,10 @@ const startServer = async (): Promise<void> => {
         openClient: () => openFreshLoginClient(envBase.DATABASE_URL),
       });
 
-  scopeRequestAsyncStores();
-
-  api.listen({
+  const server = Bun.serve({
     port: getApiPort(),
-    // Longer than the load balancer's 60 s idle timeout (Bun defaults to
-    // 10 s). The balancer may reuse an idle backend connection any time
-    // before its own timeout expires, so the server must never close
-    // first: a request written onto a connection the server is closing is
-    // lost in flight and the client hangs with no response and no
-    // server-side log line. The SSE keep-alive heartbeat (20 s) stays
-    // well inside this window.
-    idleTimeout: HTTP_IDLE_TIMEOUT_S,
+    ...apiApp.serveOptions,
+    maxRequestBodySize: HTTP_REQUEST_BODY_MAX_BYTES,
   });
 
   // From here the loop serves requests; boot work before this point delays
@@ -930,7 +286,7 @@ const startServer = async (): Promise<void> => {
       },
       relinquishChatTurnRuns,
       stopHttp: async () => {
-        await api.stop();
+        await server.stop();
       },
       // Stop claiming new jobs before draining, so a tick in flight finishes
       // and releases its lease rather than leaving it to expire.
@@ -944,6 +300,7 @@ const startServer = async (): Promise<void> => {
     ]);
     closeActionAdmissionRedis();
     closeMcpReadFenceRedis();
+    await closeRateLimitContexts();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });

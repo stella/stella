@@ -95,6 +95,8 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
+import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -583,6 +585,11 @@ export type GetChatToolsProps = {
   externalConnectors?: readonly ScopedExternalConnector[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: ModelOfferedSkills<SkillMetadata> | undefined;
+  /**
+   * Where the turn may use a bound skill. Absent (validation and tool-name
+   * sets, which never run a skill read) means unbound skills only.
+   */
+  skillBindingScope?: SkillBindingScope | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   /** Records reads that run without an approval, such as `load-skill`. */
@@ -846,6 +853,16 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
+// An organization can switch off each native public-source tool by slug.
+const nativeSourceTools = (
+  disabledNativeToolSlugs: readonly string[] | undefined,
+) => ({
+  boeTools: disabledNativeToolSlugs?.includes("boe") ? {} : createBoeTools(),
+  infosoudTools: disabledNativeToolSlugs?.includes("infosoud")
+    ? {}
+    : createInfosoudTools(),
+});
+
 const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -893,6 +910,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     externalConnectors = [],
     registryDispatch,
     skillMetadata,
+    skillBindingScope = NO_SKILL_BINDING_SCOPE,
     activeSkillContext,
     recordAuditEvent,
     recordReadAuditEvent,
@@ -982,6 +1000,7 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
   const skillTools = createSkillTools({
     activeSkillContext,
+    bindingScope: skillBindingScope,
     organizationId,
     purpose,
     recordAuditEvent,
@@ -1019,12 +1038,10 @@ const buildChatTools = (props: GetChatToolsProps): ChatToolMap => {
     thirdPartyBoundary.type === "raw"
       ? createCounterpartyCheckTools({ scopedDb, organizationId })
       : {};
-  const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
-  const boeTools = boeDisabled ? {} : createBoeTools();
+  const { boeTools, infosoudTools } = nativeSourceTools(
+    disabledNativeToolSlugs,
+  );
   const browserControlTools = browserClient ? createBrowserControlTool() : {};
-  const infosoudDisabled =
-    disabledNativeToolSlugs?.includes("infosoud") ?? false;
-  const infosoudTools = infosoudDisabled ? {} : createInfosoudTools();
   const { webSearchProvider, urlFetcher } = webSearchProviders;
   // The `webSearchProvider !== null` re-check narrows the type for
   // createWebSearchTools; it is implied by `webResearchAvailable`.

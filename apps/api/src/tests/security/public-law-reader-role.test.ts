@@ -1461,19 +1461,20 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
-  test("committed decision-view grants match the canonical role registry", () => {
+  test("latest committed decision-view grants match the canonical role registry", () => {
     const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) =>
         nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
       )
       .filter((path) => existsSync(path))
+      .toSorted()
       .map((path) => readFileSync(path, "utf-8"))
       .filter((source) =>
         source.includes("-- generated case-law decision view grants: start"),
       );
-    expect(migrations).toHaveLength(1);
-    const migration = migrations.at(0) ?? panic("Grant migration not found");
+    expect(migrations.length).toBeGreaterThan(0);
+    const migration = migrations.at(-1) ?? panic("Grant migration not found");
     const startMarker = "-- generated case-law decision view grants: start";
     const endMarker = "-- generated case-law decision view grants: end";
     const start = migration.indexOf(startMarker) + startMarker.length;

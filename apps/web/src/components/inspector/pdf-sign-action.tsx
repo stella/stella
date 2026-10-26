@@ -17,6 +17,10 @@ import {
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
 import type { DesktopRequiredDialogProps } from "@/features/desktop/desktop-action-gate";
+import type {
+  DesktopActionStatus,
+  DesktopSetupStep,
+} from "@/features/desktop/desktop-action-gate.logic";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
@@ -33,6 +37,10 @@ const LazyPdfSignPlacement = lazy(async () => {
 type PdfSignFlow = {
   /** What the action does in the current desktop presence, or that it runs. */
   label: string;
+  /** The action itself, for surfaces that show the desktop status beside it. */
+  actionLabel: string;
+  status: DesktopActionStatus;
+  setUp: (step: DesktopSetupStep) => void;
   isConnecting: boolean;
   /** A signing exchange is open in stella desktop. */
   isSigning: boolean;
@@ -57,6 +65,11 @@ export const usePdfSignFlow = (): PdfSignFlow => {
     label: signing.isSigning
       ? t("workspaces.files.pdfSigning.signingLabel")
       : gate.label,
+    actionLabel: signing.isSigning
+      ? t("workspaces.files.pdfSigning.signingLabel")
+      : t("workspaces.files.pdfSigning.placementTitle"),
+    status: gate.status,
+    setUp: gate.setUp,
     isConnecting: gate.isConnecting,
     isSigning: signing.isSigning,
     start: () => {

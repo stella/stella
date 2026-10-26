@@ -1040,6 +1040,9 @@ test("a blobless clone fetches every missing source blob in one round trip", () 
     };
     const base = commit("base");
     commit("head");
+    // Reachability bitmaps make the server, like GitHub, skip objects reachable
+    // from commits the client negotiates as present, including missing blobs.
+    run(source, "repack", "-a", "-d", "-b", "-q");
     run(root, "clone", "-q", "--filter=blob:none", `file://${source}`, clone);
 
     // Count the server round trips the clone makes from here on.

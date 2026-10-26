@@ -54,6 +54,7 @@ import type {
   DecisionDocumentOutcome,
   PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -165,7 +166,13 @@ const recordFailure = (
   // that, and it must not be escalated into the read it was recording a
   // failure for.
   Result.try(() => {
-    captureError(error, { source: CAPTURE_SOURCE, decisionId });
+    captureError(
+      error,
+      handlerErrorContext("decisions.recordFailure", {
+        source: CAPTURE_SOURCE,
+        decisionId,
+      }),
+    );
   }).unwrapOr(undefined);
 
 export const recordDocumentPacingOutcome = (
