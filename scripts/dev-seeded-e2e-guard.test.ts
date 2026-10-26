@@ -234,7 +234,11 @@ const findSeedNameReferences = (
     if (node.type === "Literal" && typeof node.value === "string") {
       text = node.value;
     } else if (node.type === "Literal" && "regex" in node) {
-      text = node.raw.replaceAll(/\\(.)/gu, "$1");
+      // The literal as written, `/pattern/flags`, without escapes.
+      text = `/${node.regex.pattern}/${node.regex.flags}`.replaceAll(
+        /\\(.)/gu,
+        "$1",
+      );
     } else if (
       node.type === "TemplateLiteral" &&
       node.expressions.length === 0

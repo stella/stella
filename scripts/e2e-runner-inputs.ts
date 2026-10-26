@@ -169,9 +169,7 @@ const createConfigReader = (tree: Program) => {
       return [(file) => glob.match(file.toLowerCase())];
     }
     if (resolved.type === "Literal" && "regex" in resolved) {
-      const text = resolved.raw;
-      const end = text.lastIndexOf("/");
-      const pattern = new RegExp(text.slice(1, end), text.slice(end + 1));
+      const pattern = new RegExp(resolved.regex.pattern, resolved.regex.flags);
       return [
         (file) => {
           pattern.lastIndex = 0;
