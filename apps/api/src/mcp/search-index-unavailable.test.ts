@@ -411,6 +411,7 @@ describe("search_index_unavailable", () => {
       new Error("undefined is not a function"),
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Search is temporarily unavailable",
       }),
     ]) {
