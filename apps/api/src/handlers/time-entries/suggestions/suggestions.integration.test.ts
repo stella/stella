@@ -285,6 +285,7 @@ const isListResponse = (
     durationMinutes: number;
     engagedMinutes: number;
     signalCount: number;
+    alreadyCovered: boolean;
     evidence: unknown[];
   }[];
 } =>
@@ -620,6 +621,83 @@ describe("time entry suggestions integration", () => {
             withoutEvidence,
           ]),
         );
+    }
+  });
+
+  const insertRecordedTime = async (
+    values: Pick<
+      typeof timeEntries.$inferInsert,
+      | "dateWorked"
+      | "durationMinutes"
+      | "source"
+      | "timerStartedAt"
+      | "timerStoppedAt"
+    >,
+  ) => {
+    const id = brandPersistedTimeEntryId(createSafeId<"timeEntry">());
+    await testDb.insert(timeEntries).values({
+      id,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      timezoneId: TIMEZONE,
+      billedMinutes: values.durationMinutes,
+      rateAtEntry: cents(0),
+      currency: "CZK",
+      narrative: "Recorded elsewhere",
+      billable: true,
+      status: "draft",
+      ...values,
+    });
+    return id;
+  };
+
+  test("a previous day's timer that runs past midnight covers this day's activity", async () => {
+    const before = await listFor(ids.userA1);
+    if (!isListResponse(before)) {
+      throw new Error(`unexpected list response: ${JSON.stringify(before)}`);
+    }
+    expect(before.items.length).toBeGreaterThan(0);
+    const previousDay = Temporal.PlainDate.from(DAY)
+      .subtract({ days: 1 })
+      .toString();
+    const timerId = await insertRecordedTime({
+      dateWorked: previousDay,
+      durationMinutes: 24 * 60,
+      source: "timer",
+      timerStartedAt: new Date(`${previousDay}T23:30:00Z`),
+      timerStoppedAt: at("23:30:00"),
+    });
+    try {
+      const after = await listFor(ids.userA1);
+      if (!isListResponse(after)) {
+        throw new Error(`unexpected list response: ${JSON.stringify(after)}`);
+      }
+      expect(after.items).toEqual([]);
+    } finally {
+      await testDb.delete(timeEntries).where(eq(timeEntries.id, timerId));
+    }
+  });
+
+  test("an accepted suggestion's minutes never mark other activity as covered", async () => {
+    const acceptedId = await insertRecordedTime({
+      dateWorked: DAY,
+      durationMinutes: 600,
+      source: "suggested",
+      timerStartedAt: null,
+      timerStoppedAt: null,
+    });
+    try {
+      const listed = await listFor(ids.userA1);
+      if (!isListResponse(listed)) {
+        throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
+      }
+      expect(listed.items.length).toBeGreaterThan(0);
+      expect(listed.items.map((item) => item.alreadyCovered)).not.toContain(
+        true,
+      );
+    } finally {
+      await testDb.delete(timeEntries).where(eq(timeEntries.id, acceptedId));
     }
   });
 

@@ -1,15 +1,18 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 
+import type { TimeEntrySource } from "@stll/api-contract";
 import { parseTimeEntrySuggestionEvidence } from "@stll/api-contract/time-entries";
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   chatMessages,
   chatThreads,
   entities,
+  TIME_ENTRY_SOURCE,
   timeEntries,
   timeEntrySuggestions,
 } from "@/api/db/schema";
@@ -159,6 +162,66 @@ const withoutDecidedFingerprints = <T extends { fingerprint: string }>(
   return clusters.filter(({ fingerprint }) => !decided.has(fingerprint));
 };
 
+// The day's logged time counts only entries booked to it; a timer booked to
+// the previous day that ran past midnight covers activity but is not logged here.
+const loggedMinutesOn = (
+  date: string,
+  recordedRows: readonly { dateWorked: string; durationMinutes: number }[],
+) => {
+  let minutes = 0;
+  for (const entry of recordedRows) {
+    if (entry.dateWorked === date) {
+      minutes += entry.durationMinutes;
+    }
+  }
+  return minutes;
+};
+
+type RecordedTimeScope = {
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  date: string;
+  range: { start: Date; end: Date };
+};
+
+// The timekeeper's time booked to the day, plus timed entries booked to
+// another day whose clock overlaps this one: a timer booked to the previous
+// day still covers this day's activity past midnight.
+const loadRecordedTime = async (
+  tx: Transaction,
+  { workspaceId, userId, date, range }: RecordedTimeScope,
+) =>
+  await tx
+    .select({
+      dateWorked: timeEntries.dateWorked,
+      source: timeEntries.source,
+      durationMinutes: timeEntries.durationMinutes,
+      startedAt: timeEntries.timerStartedAt,
+      endedAt: timeEntries.timerStoppedAt,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.userId, userId),
+        or(
+          eq(timeEntries.dateWorked, date),
+          and(
+            sql`${timeEntries.timerStartedAt} < ${range.end.toISOString()}::timestamptz`,
+            sql`${timeEntries.timerStoppedAt} > ${range.start.toISOString()}::timestamptz`,
+          ),
+        ),
+      ),
+    );
+
+// An accepted suggestion's entry paid for exactly the signals its decision
+// covers, which are already excluded before clustering; counting its minutes
+// again would mark unrelated activity as covered.
+const recordedOutsideSuggestions = <T extends { source: TimeEntrySource }>(
+  recordedRows: readonly T[],
+) =>
+  recordedRows.filter(({ source }) => source !== TIME_ENTRY_SOURCE.SUGGESTED);
+
 // Recomputes the day's suggested entries from the timekeeper's own signals in
 // this matter: the chat messages they sent and the audit rows their actions
 // wrote. Nothing here is visible to anyone but the signal's author, and the
@@ -280,20 +343,12 @@ export const loadTimeSuggestions = async function* ({
           ),
         );
 
-      const recordedRows = await tx
-        .select({
-          durationMinutes: timeEntries.durationMinutes,
-          startedAt: timeEntries.timerStartedAt,
-          endedAt: timeEntries.timerStoppedAt,
-        })
-        .from(timeEntries)
-        .where(
-          and(
-            eq(timeEntries.workspaceId, workspaceId),
-            eq(timeEntries.userId, userId),
-            eq(timeEntries.dateWorked, date),
-          ),
-        );
+      const recordedRows = await loadRecordedTime(tx, {
+        workspaceId,
+        userId,
+        date,
+        range,
+      });
 
       return {
         auditRows,
@@ -369,13 +424,10 @@ export const loadTimeSuggestions = async function* ({
   const loaded: LoadedTimeSuggestions = {
     date,
     pending: withoutDecidedFingerprints(
-      subtractRecordedTime(clusters, recordedRows),
+      subtractRecordedTime(clusters, recordedOutsideSuggestions(recordedRows)),
       decidedRows,
     ),
-    loggedMinutes: recordedRows.reduce(
-      (sum, entry) => sum + entry.durationMinutes,
-      0,
-    ),
+    loggedMinutes: loggedMinutesOn(date, recordedRows),
   };
   return loaded;
 };
