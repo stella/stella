@@ -273,7 +273,7 @@ describe("a citation card in the decision text", () => {
     ).toBeNull();
     expect(requests).toEqual([]);
 
-    const scrolled: Element[] = [];
+    const scrolled: HTMLElement[] = [];
     const scroll = spyOn(
       HTMLElement.prototype,
       "scrollIntoView",

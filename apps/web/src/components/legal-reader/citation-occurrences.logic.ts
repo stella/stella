@@ -2,7 +2,7 @@ import type { CitationAnchorSource } from "@stll/decision-reader/reader-types";
 import type { CitationSpan } from "@stll/legal-ast/citation-passage";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-export type CitationOccurrenceParagraph = {
+type CitationOccurrenceParagraph = {
   anchorId: string;
   blockId: string;
   /** The court's own number on the paragraph; null when it printed none. */
@@ -39,7 +39,11 @@ export const citationOccurrencesByDecision = ({
 > => {
   const byDecision = new Map<string, CitationOccurrences>();
   for (const block of blocks) {
-    for (const { source } of spansByBlockId[block.id] ?? []) {
+    const spans = spansByBlockId[block.id];
+    if (spans === undefined) {
+      continue;
+    }
+    for (const { source } of spans) {
       const decisionId = source.decision.id;
       let occurrences = byDecision.get(decisionId);
       if (occurrences === undefined) {
