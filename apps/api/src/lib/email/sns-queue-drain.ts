@@ -1,6 +1,7 @@
 import {
   ChangeMessageVisibilityBatchCommand,
   DeleteMessageCommand,
+  GetQueueAttributesCommand,
   type Message,
   ReceiveMessageCommand,
   SQSClient,
@@ -8,6 +9,7 @@ import {
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
 import type { SqsQueue } from "@/api/lib/email/sqs-queue-url";
@@ -23,6 +25,7 @@ const RUN_BUDGET_MS = 30_000;
 const RECEIVE_WAIT_SECONDS = 1;
 const DELETE_TIMEOUT_MS = 5000;
 const RELEASE_TIMEOUT_MS = 5000;
+const DEPTH_TIMEOUT_MS = 5000;
 
 // One client per region; credentials come from the SDK's default chain (the
 // task role in a deployment).
@@ -184,13 +187,18 @@ export const drainSnsQueue = async ({
   };
 
   const releaseMessages = async (messages: readonly Message[]) => {
+    // Batch entry ids are the message positions, so a failed id names its
+    // message without parsing it back.
+    const byEntryId = new Map(
+      messages.map((message, index) => [String(index), message] as const),
+    );
     const released = await Result.tryPromise({
       try: async () =>
         await client.send(
           new ChangeMessageVisibilityBatchCommand({
             QueueUrl: queueUrl,
-            Entries: messages.map((message, index) => ({
-              Id: String(index),
+            Entries: [...byEntryId].map(([id, message]) => ({
+              Id: id,
               ReceiptHandle: message.ReceiptHandle,
               VisibilityTimeout: 0,
             })),
@@ -200,14 +208,14 @@ export const drainSnsQueue = async ({
       catch: (cause) => cause,
     });
     const failedIds = released.isErr()
-      ? messages.map((_, index) => String(index))
+      ? [...byEntryId.keys()]
       : released.value.Failed?.map(({ Id }) => Id);
     // SQS omits `Failed` when every entry was released.
     if (failedIds === undefined) {
       return;
     }
     for (const failedId of failedIds) {
-      const message = messages.at(Number(failedId));
+      const message = byEntryId.get(failedId);
       releaseFailed += 1;
       logger.warn(`${logPrefix}.release_failed`, {
         "queue.delivery_id": message?.MessageId ?? "unknown",
@@ -266,3 +274,30 @@ export const drainSnsQueue = async ({
   }
   return summary(MAX_BATCHES_PER_RUN, "limitReached");
 };
+
+/** How many messages wait in a queue, as SQS approximates it. */
+export const readApproximateQueueDepth = async ({
+  client,
+  queueUrl,
+}: {
+  client: Pick<SQSClient, "send">;
+  queueUrl: string;
+}): Promise<Result<number, unknown>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const attributes = await client.send(
+        new GetQueueAttributesCommand({
+          QueueUrl: queueUrl,
+          AttributeNames: ["ApproximateNumberOfMessages"],
+        }),
+        { abortSignal: AbortSignal.timeout(DEPTH_TIMEOUT_MS) },
+      );
+      const depth = attributes.Attributes?.ApproximateNumberOfMessages;
+      return depth === undefined
+        ? 0
+        : parseIntegerToken(depth, { sign: "unsigned" }).unwrap(
+            "SQS reports a queue depth as a whole number",
+          );
+    },
+    catch: (cause) => cause,
+  });

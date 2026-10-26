@@ -15,16 +15,16 @@ import * as ReportExportStatus from "@stll/transactional/emails/report-export-st
 import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
 import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
 
-import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
-import { readAccountEmailUndeliverable } from "@/api/lib/db/account-row";
 import {
   emailAddressSchema,
   normalizeEmail,
 } from "@/api/lib/email/normalized-email";
-import { errorTag } from "@/api/lib/errors/error-tag";
+import { readRecipientRefusal } from "@/api/lib/email/recipient-deliverability";
 import type { SupportedLang } from "@/api/lib/locale";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isSyntheticPrincipal } from "@/api/lib/synthetic-principal/constants";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
@@ -89,6 +89,12 @@ const resolveTransport = (): EmailTransport => {
   }
 };
 
+// A failed lookup sends anyway; it is observed, never fatal to the send.
+const deliverabilityUnread = failureSink({
+  event: "email.send.deliverability_unread",
+  expected: [],
+});
+
 /**
  * Whether the provider has refused this recipient's account address, so a
  * send would only be dropped. A failed read sends anyway: the provider still
@@ -100,16 +106,10 @@ const isRefusedRecipient = async (to: string): Promise<boolean> => {
     return false;
   }
   const refusal = await Result.tryPromise(
-    async () =>
-      await readAccountEmailUndeliverable(
-        rootDb,
-        normalizeEmail(address.output),
-      ),
+    async () => await readRecipientRefusal(normalizeEmail(address.output)),
   );
   if (refusal.isErr()) {
-    logger.warn("email.send.deliverability_unread", {
-      "error.type": errorTag(refusal.error),
-    });
+    observeFailure(refusal.error, { sink: deliverabilityUnread });
     return false;
   }
   if (refusal.value === undefined) {
