@@ -22,6 +22,28 @@ import {
 import { importProblems } from "./install-free-ci";
 import { maskSourceNonCode } from "./test-input-readers";
 
+test("the external contract Markdown reader has an isolated owner check", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const reader = markdownReaders(root).find(
+    ({ file }) => file === "scripts/external-contract-evidence.ts",
+  );
+  expect(reader?.kind).toBe("check");
+  if (reader?.kind !== "check") {
+    throw new TypeError(
+      "External contract Markdown reader has no isolated check",
+    );
+  }
+  expect(reader.command).toEqual([
+    "bun",
+    "scripts/external-contract-evidence.ts",
+    "--check",
+  ]);
+  expect(markdownChecks({ root, changed: ["README.md"] })).toContainEqual(
+    reader.command,
+  );
+  expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+}, 30_000);
+
 const repository = (
   run: (root: string, write: (file: string, text: string) => void) => void,
 ) => {
@@ -416,21 +438,22 @@ test("the exact README change derives its genuine readers without package jobs",
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
   const checks = markdownChecks({ changed });
-  expect(checks).toHaveLength(6);
-  expect(checks).toContainEqual([
-    "bun",
-    "scripts/check-railway-template-shape.ts",
-  ]);
-  expect(checks).toContainEqual(["bun", "scripts/check-marketing-content.ts"]);
-  expect(checks).toContainEqual([
-    "bun",
-    "test",
-    "scripts/capability-catalog-readers.test.ts",
-  ]);
-  expect(checks).toContainEqual([
-    "bun",
-    "packages/scripts/src/workspace-hygiene.ts",
-  ]);
+  expect(checks).toHaveLength(7);
+  expect(
+    new Set(
+      checks
+        .filter((command) => command.at(0) === "bun")
+        .map((command) => command.join(" ")),
+    ),
+  ).toEqual(
+    new Set([
+      "bun scripts/external-contract-evidence.ts --check",
+      "bun scripts/check-railway-template-shape.ts",
+      "bun scripts/check-marketing-content.ts",
+      "bun test scripts/capability-catalog-readers.test.ts",
+      "bun packages/scripts/src/workspace-hygiene.ts",
+    ]),
+  );
   expect(
     markdownReaders()
       .filter((reader) => reader.file.startsWith(".github/workflows/ci.yml:"))
@@ -1665,6 +1688,7 @@ test("named Markdown checks cannot hide a different owner or computed command", 
   }
 });
 
+// timeout: Reads all tracked sources and resolves the repository-wide Markdown reader graph.
 test("every tracked named Markdown input declaration enters the reader census", () => {
   const root = path.resolve(import.meta.dir, "..");
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], {

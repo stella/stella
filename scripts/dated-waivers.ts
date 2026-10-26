@@ -20,6 +20,11 @@ import {
 } from "./check-stll-quarantine-excludes";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import {
+  EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
+  type ExternalContractPinAllowance,
+  readExternalContractPinAllowances,
+} from "./external-contract-pin-allowances";
+import {
   parseRegistry,
   type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
@@ -47,6 +52,8 @@ export const PENDING_CONTRACT_MIGRATIONS_SOURCE =
   "apps/api/src/lib/db/pending-contract-migrations/registry.ts";
 
 export const RECHECK_INSTRUCTIONS = {
+  "external-contract-pin":
+    "Replay the offline SDK contract fixtures and remove the pin allowance.",
   "no-llms-txt": "Check canonical llms.txt and register an available source.",
   "release-age-exclusion":
     "Verify the pinned release passes the normal release-age gate, then remove the temporary exclusion.",
@@ -115,6 +122,7 @@ type CollectWaiversOptions = {
     name: string;
     expiresAt: string;
   }[];
+  externalContractPinAllowances?: readonly ExternalContractPinAllowance[];
 };
 
 export const collectWaivers = ({
@@ -126,6 +134,7 @@ export const collectWaivers = ({
   quarantineSources = {},
   flakyTestQuarantines = [],
   pendingContractMigrations = [],
+  externalContractPinAllowances = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
   const entries: DatedWaiver[] = docs.map((entry) => ({
     source: DOC_SOURCE_FILE,
@@ -275,6 +284,23 @@ export const collectWaivers = ({
       probe: {
         command: ["test", "-d", `apps/api/drizzle/${entry.name}`],
         attempts: TEST_ATTEMPTS,
+      },
+    });
+  }
+  for (const allowance of externalContractPinAllowances) {
+    entries.push({
+      source: EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
+      line: sourceLine(
+        read(EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH),
+        allowance.id,
+      ),
+      id: allowance.id,
+      kind: "external-contract-pin",
+      checkedAt: allowance.checkedAt,
+      expiresAt: allowance.expiresAt,
+      probe: {
+        command: ["bun", "scripts/check-external-contracts.ts", "--check"],
+        attempts: 1,
       },
     });
   }
@@ -585,6 +611,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",
       PENDING_CONTRACT_MIGRATIONS_SOURCE,
+      EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
       ...RELEASE_AGE_EXCEPTION_SOURCES,
       ...files,
     ]),
@@ -615,6 +642,9 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
       : [];
   return collectWaivers({
     read,
+    externalContractPinAllowances: readExternalContractPinAllowances(
+      read(EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH),
+    ),
     docs: DOC_SOURCE_EXCLUSIONS,
     audit,
     bunfigs: files,

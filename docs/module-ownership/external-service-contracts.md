@@ -1,0 +1,7 @@
+# Registering external service replay coverage and version pins
+
+Generated from `scripts/ownership/external-service-contracts.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                                   | Owner                                                                 | Enforcement | Summary                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `external-service-contracts` — Registering external service replay coverage and version pins | `packages/external-contracts/`, `scripts/check-external-contracts.ts` | none        | One closed registry assigns outbound owners and external SDKs to service contracts. Offline checks read the real manifest, lockfile, patch, image and API-version pins, compare fixture receipts, and prevent the uncharacterised set from growing. |

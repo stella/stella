@@ -1553,6 +1553,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
   "FLAKY_TEST_QUARANTINE_REGISTRY",
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
+  // Offline Git regression fixtures trace child processes to prove no fetch ran.
+  "GIT_TRACE2_EVENT",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   "HEAVY_ONLY",

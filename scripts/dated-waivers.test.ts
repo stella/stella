@@ -23,6 +23,7 @@ import {
   RECHECK_INSTRUCTIONS,
   uncoveredExpirySources,
 } from "./dated-waivers";
+import { EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH } from "./external-contract-pin-allowances";
 import {
   type QuarantineEntry,
   REGISTRY_FILE as FLAKY_TEST_QUARANTINE_FILE,
@@ -464,11 +465,24 @@ const exceptionInventory = (contents: string) =>
   }).filter(({ kind }) => kind === "release-age-exception");
 
 test("all waiver kinds retain their keys when unrelated lines shift their locators", () => {
+  const pinAllowance = {
+    id: "sdk-pin",
+    system: "fixture-system",
+    pins: { "fixture-sdk": "1.2.3" },
+    checkedAt: "2026-10-01T00:00:00.000Z",
+    expiresAt: "2026-10-08T00:00:00.000Z",
+    reason: "Offline replay pending.",
+  };
   const quarantined =
     '// test-quarantine-expires: 2026-10-05\ntest.skip("case", () => {});';
   const entriesAt = (prefix: string) =>
     collectWaivers({
-      read: (file) => prefix + read(file),
+      read: (file) =>
+        prefix +
+        (file === EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH
+          ? JSON.stringify({ allowances: [pinAllowance] })
+          : read(file)),
+      externalContractPinAllowances: [pinAllowance],
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
       bunfigs: ["bunfig.toml"],

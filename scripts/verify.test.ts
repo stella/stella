@@ -733,7 +733,7 @@ case "$1" in
   */verify.ts|*fixture-typegen.ts|*autofix-protected-paths.ts) exec '${process.execPath}' "$@" ;;
   run) if [[ "$2" == typegen ]]; then exec '${process.execPath}' "$@"; fi ;;
   *check-tauri-package-alignment.ts) printf false ;;
-  scripts/*|apps/*|packages/*|test|fmt|--bun|--no-install) ;;
+  scripts/*|apps/*|packages/*|test|fmt|--bun|--no-install|--preload) ;;
   *) echo "Unexpected fixture Bun command: $1" >&2; exit 127 ;;
 esac
 printf '%s executed' "$TEST_ENTRY" > "$TEST_ENTRY_RECEIPT"

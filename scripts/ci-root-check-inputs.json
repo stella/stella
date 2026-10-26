@@ -253,6 +253,7 @@
       "scripts/**",
       "bunfig.toml"
     ],
+    "External service contracts": ["**"],
     "Outbound transport ownership": [
       "apps/api/**",
       "apps/collab/src/**",

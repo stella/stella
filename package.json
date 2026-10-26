@@ -98,6 +98,7 @@
     "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
     "check:toast-errors": "bun test scripts/toast-error-census.test.ts && bun scripts/toast-error-census.ts",
     "check:design-tokens": "bun scripts/design-tokens-doc.ts --check",
+    "check:external-contracts": "bun scripts/check-external-contracts.ts --check && bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts scripts/external-contract-pin-allowances.test.ts",
     "check:module-ownership": "bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts && bun scripts/ownership.ts --check && bun scripts/outbound-transport-ownership.ts --check && bun test scripts/outbound-transport-ownership.test.ts scripts/document-identity-guard.test.ts && bun scripts/document-identity-guard.ts",
     "check:standalone-lockfiles": "bun scripts/check-standalone-lockfiles.ts",
     "check:standalone-negated-shell": "bun scripts/check-standalone-negated-shell.ts",

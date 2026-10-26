@@ -890,6 +890,7 @@ test("closed tasks require a merged resolution included in the probe commit", as
 });
 
 const recoveryCases = {
+  "external-contract-pin": "changed-source",
   "no-llms-txt": "later-green",
   "release-age-exclusion": "later-green",
   "release-age-exception": "later-green",

@@ -1009,6 +1009,17 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/external-contracts": {
+      "name": "@stll/external-contracts",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+      },
+    },
     "packages/fetch": {
       "name": "@stll/fetch",
       "version": "0.0.0",
@@ -3224,6 +3235,8 @@
     "@stll/errors": ["@stll/errors@workspace:packages/errors"],
 
     "@stll/extension": ["@stll/extension@workspace:apps/extension"],
+
+    "@stll/external-contracts": ["@stll/external-contracts@workspace:packages/external-contracts"],
 
     "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 

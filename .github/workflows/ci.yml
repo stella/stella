@@ -2807,6 +2807,46 @@ jobs:
           CI_CHECK_POOL_NEEDS_JSON
           CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-rest
 
+      - name: External service contracts
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Compares merge-base SDK pins and runtime usage, and checks dated allowance expiry."
+          STELLA_VERIFY: check
+          CHECK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'origin/main' }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          # Full history is present, so resolving the base needs no promisor remote.
+          # Keep this command offline: the contract guard must not acquire GitHub access.
+          base="$(git -c protocol.allow=never merge-base --end-of-options HEAD "$CHECK_BASE_REF")" || {
+            echo "::error::ExternalContractBaselineUnavailable: cannot resolve merge-base with $CHECK_BASE_REF"
+            exit 1
+          }
+          echo "External contract merge-base: $base"
+          baseline_path=packages/external-contracts/src/registry.ts
+          if [ -n "$(git ls-tree --name-only "$base" -- "$baseline_path")" ]; then
+            # Hydrate a partial clone before verification disables Git transport.
+            git show "$base:$baseline_path" > /dev/null
+          fi
+          # Hydrate parsed source/config blobs; data leaves use tree object identities.
+          git ls-tree -r --name-only "$base" > "$RUNNER_TEMP/external-contract-baseline-paths"
+          while IFS= read -r file; do
+            case "$file" in
+              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|package.json|*/package.json|tsconfig*.json|*/tsconfig*.json|packages/typescript-config/*.json|bun.lock)
+                printf '%s:%s\n' "$base" "$file" ;;
+            esac
+          done < "$RUNNER_TEMP/external-contract-baseline-paths" > "$RUNNER_TEMP/external-contract-baseline-objects"
+          while IFS= read -r file; do
+            printf '%s:%s\n' "$base" "$file"
+          done < <(bun scripts/check-external-contracts.ts --list-baseline-pin-source-files) >> "$RUNNER_TEMP/external-contract-baseline-objects"
+          git cat-file --batch < "$RUNNER_TEMP/external-contract-baseline-objects" > /dev/null
+          # A changed patch pin can also reference a patch removed from the head.
+          git ls-tree -r --name-only "$base" -- patches > "$RUNNER_TEMP/external-contract-baseline-patches"
+          while IFS= read -r file; do
+            git show "$base:$file" > /dev/null
+          done < "$RUNNER_TEMP/external-contract-baseline-patches"
+          bun --preload ./scripts/offline-network-preload.ts scripts/check-external-contracts.ts --check
+          bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts scripts/external-contract-pin-allowances.test.ts
+
       - name: Record static check receipts
         id: static_receipt_record
         if: success() && github.event_name == 'merge_group' && steps.static_receipts.outputs.artifact_name != ''

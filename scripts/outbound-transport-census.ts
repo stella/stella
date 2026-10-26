@@ -621,6 +621,18 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:posthog-node"],
   },
   {
+    path: "apps/web/src/lib/analytics/posthog.ts",
+    class: "vendor-sdk",
+    reason: "Sends configured browser analytics events to the PostHog service.",
+    transports: ["module:posthog-js"],
+  },
+  {
+    path: "apps/web/src/lib/api-request-context.ts",
+    class: "vendor-sdk",
+    reason: "Reads the browser analytics SDK session ID for request headers.",
+    transports: ["module:posthog-js"],
+  },
+  {
     path: "apps/api/src/lib/email/inbound/authentication.ts",
     class: "vendor-sdk",
     reason:
@@ -699,7 +711,18 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Posts collaboration requests to the configured API and uses WebSocket transport for collaboration sessions.",
-    transports: ["global:WebSocket", "global:fetch"],
+    transports: [
+      "global:WebSocket",
+      "global:fetch",
+      "module:@hocuspocus/extension-redis",
+    ],
+  },
+  {
+    path: "apps/collab/src/server-test-process.ts",
+    class: "vendor-sdk",
+    reason:
+      "Runs the collaboration Redis pub/sub adapter in a local server process.",
+    transports: ["module:@hocuspocus/extension-redis"],
   },
   {
     path: "apps/web/src/boot-prefetch.ts",
@@ -780,7 +803,7 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Sends collaboration requests to the configured API and downloads seed documents.",
-    transports: ["module:@stll/fetch"],
+    transports: ["module:@hocuspocus/provider", "module:@stll/fetch"],
   },
   {
     path: "apps/web/src/components/inspector/external-reference-panel.tsx",

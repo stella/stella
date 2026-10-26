@@ -184,6 +184,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
   "packages/analytics-config/src/**/*.ts",
+  "packages/external-contracts/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
   "packages/auth-model/src/**/*.ts",
   "packages/calculations/src/**/*.ts",

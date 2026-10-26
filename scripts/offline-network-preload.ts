@@ -10,6 +10,9 @@ import { syncBuiltinESMExports } from "node:module";
 import net from "node:net";
 import tls from "node:tls";
 
+// Capture the restricted baseline reader before denying general subprocesses.
+import "./offline-git-read";
+
 // The preload is confined to verification: refresh commands retain their transport.
 class OfflineCheckNetworkError extends TaggedError("OfflineCheckNetworkError")<{
   message: string;

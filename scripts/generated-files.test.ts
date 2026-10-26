@@ -44,11 +44,11 @@ import {
 } from "./generated-files";
 import {
   checkRouteGeneratorVersion,
-  isGeneratedCandidate,
   isRegisteredGeneratedFile,
   isUnregisteredGeneratedFile,
   routeGeneratorVersionsMatch,
 } from "./generated-files-guard";
+import { isGeneratedCandidate } from "./generated-source-identification";
 import { isChangedLintPath } from "./lint-paths";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 

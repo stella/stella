@@ -10,6 +10,7 @@ import {
   type ProbeKind,
   ZERO_AGE_OVERRIDE,
 } from "./dated-waivers";
+import { readExternalContractPinAllowances } from "./external-contract-pin-allowances";
 import {
   parseRegistry,
   serializeRegistry,
@@ -195,6 +196,39 @@ const removeReleaseAgeException = (
   return lines.join("\n");
 };
 
+const removeExternalContractPinAllowance = (
+  before: string,
+  entry: DatedWaiver,
+): string => {
+  const allowances = readExternalContractPinAllowances(before);
+  const allowance = allowances.find(({ id }) => id === entry.id);
+  if (!allowance || allowance.expiresAt !== entry.expiresAt) {
+    panic(`External contract pin allowance anchor missing: ${entry.id}`);
+  }
+  return `${JSON.stringify({ allowances: allowances.filter(({ id }) => id !== entry.id) }, null, 2)}\n`;
+};
+
+const removeFlakyTestQuarantine = (
+  before: string,
+  entry: DatedWaiver,
+): string => {
+  const parsed = parseRegistry(JSON.parse(before));
+  if (parsed.status === "invalid") {
+    return panic(parsed.errors.join("\n"));
+  }
+  const { entries } = parsed.registry;
+  if (
+    entries.filter(
+      ({ id, expires }) => id === entry.id && expires === entry.expiresAt,
+    ).length !== 1
+  ) {
+    panic(`Flaky-test quarantine anchor missing: ${entry.id}`);
+  }
+  return serializeRegistry({
+    entries: entries.filter(({ id }) => id !== entry.id),
+  });
+};
+
 export const removeWaiver = (
   entry: DatedWaiver,
   read: (file: string) => string,
@@ -205,6 +239,9 @@ export const removeWaiver = (
   const before = read(entry.source);
   let after: string;
   switch (entry.kind) {
+    case "external-contract-pin":
+      after = removeExternalContractPinAllowance(before, entry);
+      break;
     case "no-llms-txt":
       after = removeDocumentation(before, entry);
       break;
@@ -367,24 +404,9 @@ export const removeWaiver = (
         { source: waiver.file, before: content, after: updated },
       ];
     }
-    case "flaky-test-quarantine": {
-      const parsed = parseRegistry(JSON.parse(before));
-      if (parsed.status === "invalid") {
-        return panic(parsed.errors.join("\n"));
-      }
-      const { entries } = parsed.registry;
-      if (
-        entries.filter(
-          ({ id, expires }) => id === entry.id && expires === entry.expiresAt,
-        ).length !== 1
-      ) {
-        panic(`Flaky-test quarantine anchor missing: ${entry.id}`);
-      }
-      after = serializeRegistry({
-        entries: entries.filter(({ id }) => id !== entry.id),
-      });
+    case "flaky-test-quarantine":
+      after = removeFlakyTestQuarantine(before, entry);
       break;
-    }
     case "pending-contract-migration":
       return panic(`Automatic removal is disabled for ${entry.kind}`);
     default:

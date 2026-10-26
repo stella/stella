@@ -746,6 +746,9 @@ export type RequestSchemaSidecar = {
   /** `sha256` is `specificationSha256` of the document at `url`. */
   source: { retrievedAt: string; sha256: string; url: string };
   extractedBy: string;
+  characterisedAt: Readonly<Record<string, string>>;
+  coveredOwners: readonly string[];
+  coveredSdks: readonly string[];
   notes?: readonly string[] | undefined;
 };
 
@@ -776,6 +779,45 @@ export const readRecordedSource = (
     typeof url === "string"
     ? { retrievedAt, sha256, url }
     : undefined;
+};
+
+/** Downloading a specification does not re-characterise the adapters. Preserve their replay receipt. */
+export const readCharacterisationReceipt = (
+  id: string,
+): Pick<
+  RequestSchemaSidecar,
+  "characterisedAt" | "coveredOwners" | "coveredSdks"
+> => {
+  const parsed: unknown = JSON.parse(readFileSync(sidecarPath(id), "utf-8"));
+  const pins = isRecord(parsed) ? parsed["characterisedAt"] : undefined;
+  if (!isRecord(pins)) {
+    return panic(
+      `${id}: missing characterisation pins; replay the provider corpus before enrolling its schema.`,
+    );
+  }
+  const entries = Object.entries(pins).map(([key, value]) => {
+    if (typeof value !== "string") {
+      return panic(`${id}: invalid characterisation pin ${key}.`);
+    }
+    return [key, value] as const;
+  });
+  const coveredOwners = isRecord(parsed) ? parsed["coveredOwners"] : undefined;
+  const coveredSdks = isRecord(parsed) ? parsed["coveredSdks"] : undefined;
+  if (
+    !isUnknownArray(coveredOwners) ||
+    !coveredOwners.every((value) => typeof value === "string") ||
+    !isUnknownArray(coveredSdks) ||
+    !coveredSdks.every((value) => typeof value === "string")
+  ) {
+    return panic(
+      `${id}: missing characterisation scope; replay the provider corpus before enrolling its schema.`,
+    );
+  }
+  return {
+    characterisedAt: Object.fromEntries(entries),
+    coveredOwners,
+    coveredSdks,
+  };
 };
 
 const resolveUrl = async (source: RequestSchemaSource): Promise<string> =>
@@ -835,6 +877,7 @@ const writeAll = async () => {
       selection: source.selection,
       source: { retrievedAt, sha256, url },
       extractedBy: "apps/api/scripts/provider-request-schemas.ts",
+      ...readCharacterisationReceipt(source.id),
       ...(source.notes === undefined ? {} : { notes: source.notes }),
     };
     writeFileSync(schemaPath(source.id), toJsonText(schema));

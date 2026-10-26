@@ -67,7 +67,8 @@ the root cause without retries, date extensions or weakened checks.
 Tasks carry the consumer label `dated-waiver-failure`, declared once as
 `DATED_WAIVER_AUTOFIX_LABEL`; labels are provisioned idempotently before use.
 An earlier failure also requires resolution evidence before removal. Repository
-probes (suppression waivers and quarantined tests) require a changed commit and
+probes (suppression waivers, quarantined tests and external contract pin
+allowances) require a changed commit and
 source fingerprint, or a closed task linked to a merged change included in the
 probe commit. URL, release-age and dependency-audit probes can recover as their
 external state changes: a later full N/N green observation qualifies even on the
@@ -105,3 +106,10 @@ Entries in `scripts/flaky-test-quarantine.json` are inventoried as
 elapsed entry only annotates pull requests and merge groups, because the
 scheduled flaky-test quarantine workflow enforces it on main (see
 [flaky-test-quarantine.md](flaky-test-quarantine.md)).
+
+External contract pin allowances live in
+`scripts/external-contract-pin-allowances.json`. Each names a system and exact
+drifting pins, with canonical UTC `checkedAt` and `expiresAt` timestamps no more
+than seven days apart. Expiry fails the existing dated-waiver gate even when
+the pin is outside the changed lines. Healing removes the allowance and runs
+`bun scripts/check-external-contracts.ts --check` once, entirely offline.

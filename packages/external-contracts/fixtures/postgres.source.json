@@ -1,0 +1,12 @@
+{
+  "characterisedAt": {
+    "scripts/ci-service-images.json#postgres": "docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336"
+  },
+  "fixtureSet": "apps/api/src/lib/db/lock-for-write.postgres.test.ts",
+  "provenance": {
+    "type": "authored",
+    "kind": "synthetic-from-spec"
+  },
+  "coveredOwners": [],
+  "coveredSdks": []
+}
