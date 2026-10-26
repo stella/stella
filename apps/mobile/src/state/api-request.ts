@@ -6,7 +6,7 @@ import { fetchWithTimeout } from "@/connection/http";
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 
-class ApiRequestError extends TaggedError("ApiRequestError")<{
+export class ApiRequestError extends TaggedError("ApiRequestError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
@@ -67,12 +67,30 @@ const requestJson = async <TSchema extends v.GenericSchema>(
 };
 
 /**
+ * Runs `request` on a current access token. A rejected token is spent
+ * whatever its clock says, so it is dropped and the request runs once more
+ * on a fresh one; a second rejection is the server's answer.
+ */
+export const withAccessToken = async <T>(
+  source: AccessTokenSource,
+  request: (accessToken: string) => Promise<Result<T, ApiRequestError>>,
+): Promise<Result<T, ApiError>> =>
+  await Result.gen(async function* () {
+    const token = yield* Result.await(source.accessToken());
+    const first = await request(token);
+    if (Result.isOk(first) || first.error.status !== 401) {
+      return first;
+    }
+    source.invalidate();
+    const fresh = yield* Result.await(source.accessToken());
+    return await request(fresh);
+  });
+
+/**
  * A GET on the signed-in server, read through `schema`. The server is
  * validated against at runtime rather than trusted by type: a phone runs
  * whatever build it installed, so the server it talks to may be newer than
- * the app. A rejected token is spent whatever its clock says, so it is
- * dropped and the request runs once more on a fresh one; a second rejection
- * is the server's answer.
+ * the app.
  */
 export const getApiJson = async <TSchema extends v.GenericSchema>({
   fetch,
@@ -84,15 +102,10 @@ export const getApiJson = async <TSchema extends v.GenericSchema>({
   readonly path: string;
   readonly schema: TSchema;
   readonly source: AccessTokenSource;
-}): Promise<Result<v.InferOutput<TSchema>, ApiError>> =>
-  await Result.gen(async function* () {
-    const url = `${source.session().serverUrl}${path}`;
-    const token = yield* Result.await(source.accessToken());
-    const first = await requestJson(fetch, url, token, schema);
-    if (Result.isOk(first) || first.error.status !== 401) {
-      return first;
-    }
-    source.invalidate();
-    const fresh = yield* Result.await(source.accessToken());
-    return await requestJson(fetch, url, fresh, schema);
-  });
+}): Promise<Result<v.InferOutput<TSchema>, ApiError>> => {
+  const url = `${source.session().serverUrl}${path}`;
+  return await withAccessToken(
+    source,
+    async (token) => await requestJson(fetch, url, token, schema),
+  );
+};

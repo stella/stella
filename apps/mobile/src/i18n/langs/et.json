@@ -23,7 +23,16 @@
       "yesterday": "Eile",
       "week": "Viimased 7 päeva",
       "earlier": "Varem"
-    }
+    },
+    "newChat": "Uus vestlus",
+    "composerPlaceholder": "Küsi stellalt",
+    "send": "Saada",
+    "stop": "Peata",
+    "sendFailed": "Sõnumit ei õnnestunud saata. Proovige uuesti.",
+    "answerWorking": "Töötan…",
+    "answerStopped": "Peatatud.",
+    "answerNeedsInput": "See vastus vajab teie sisendit. Jätkake seda stella veebirakenduses.",
+    "answerFailed": "Vastust ei õnnestunud lõpetada."
   },
   "tasks": {
     "description": "Vaadake, mis vajab tähelepanu, ilma kogu tööruumi avamata.",

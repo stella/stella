@@ -23,7 +23,16 @@
       "yesterday": "Vakar",
       "week": "Pēdējās 7 dienas",
       "earlier": "Agrāk"
-    }
+    },
+    "newChat": "Jauna saruna",
+    "composerPlaceholder": "Jautājiet stellai",
+    "send": "Sūtīt",
+    "stop": "Apturēt",
+    "sendFailed": "Ziņojumu neizdevās nosūtīt. Mēģiniet vēlreiz.",
+    "answerWorking": "Strādāju…",
+    "answerStopped": "Apturēts.",
+    "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
+    "answerFailed": "Atbildi neizdevās pabeigt."
   },
   "tasks": {
     "description": "Skatiet, kam nepieciešama uzmanība, neatverot visu darbvietu.",

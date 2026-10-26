@@ -27,6 +27,7 @@ const messageSchema = v.object({
 const messagesPageSchema = v.object({
   messages: v.array(messageSchema),
   olderCursor: v.nullable(v.string()),
+  activeTurnId: v.optional(v.nullable(v.string()), null),
 });
 
 /** A message as the thread shows it: its text, and the tools the assistant used on the way. */
@@ -38,10 +39,14 @@ export type ChatEntry = {
   readonly tools: readonly string[];
 };
 
-/** Messages oldest first, and the cursor for the page before them, or null at the thread's start. */
+/**
+ * Messages oldest first, the cursor for the page before them (null at the
+ * thread's start), and the turn still answering, if one is.
+ */
 export type ChatMessagesPage = {
   readonly entries: readonly ChatEntry[];
   readonly olderCursor: string | null;
+  readonly activeTurnId: string | null;
 };
 
 type StoredMessage = v.InferOutput<typeof messageSchema>;
@@ -84,6 +89,7 @@ const toPage = (
 ): ChatMessagesPage => ({
   entries: page.messages.flatMap((message) => toChatEntry(message) ?? []),
   olderCursor: page.olderCursor,
+  activeTurnId: page.activeTurnId,
 });
 
 /** An older page in front of what is loaded, without a message twice. */

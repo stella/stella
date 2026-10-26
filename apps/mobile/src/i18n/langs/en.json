@@ -23,7 +23,16 @@
       "yesterday": "Yesterday",
       "week": "Previous 7 days",
       "earlier": "Earlier"
-    }
+    },
+    "newChat": "New conversation",
+    "composerPlaceholder": "Ask stella",
+    "send": "Send",
+    "stop": "Stop",
+    "sendFailed": "Your message could not be sent. Try again.",
+    "answerWorking": "Working…",
+    "answerStopped": "Stopped.",
+    "answerNeedsInput": "This answer needs your input. Continue it in stella on the web.",
+    "answerFailed": "The answer could not be completed."
   },
   "tasks": {
     "description": "See what needs attention without opening the full workspace.",

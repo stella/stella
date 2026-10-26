@@ -23,7 +23,16 @@
       "yesterday": "Wczoraj",
       "week": "Ostatnie 7 dni",
       "earlier": "Wcześniej"
-    }
+    },
+    "newChat": "Nowa rozmowa",
+    "composerPlaceholder": "Zapytaj stellę",
+    "send": "Wyślij",
+    "stop": "Zatrzymaj",
+    "sendFailed": "Nie udało się wysłać wiadomości. Spróbuj ponownie.",
+    "answerWorking": "Pracuję…",
+    "answerStopped": "Zatrzymano.",
+    "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
+    "answerFailed": "Nie udało się dokończyć odpowiedzi."
   },
   "tasks": {
     "description": "Sprawdź, co wymaga uwagi, bez otwierania całego obszaru roboczego.",

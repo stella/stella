@@ -23,7 +23,16 @@
       "yesterday": "Ontem",
       "week": "Últimos 7 dias",
       "earlier": "Anteriores"
-    }
+    },
+    "newChat": "Nova conversa",
+    "composerPlaceholder": "Pergunte à stella",
+    "send": "Enviar",
+    "stop": "Parar",
+    "sendFailed": "Não foi possível enviar sua mensagem. Tente novamente.",
+    "answerWorking": "Trabalhando…",
+    "answerStopped": "Interrompido.",
+    "answerNeedsInput": "Esta resposta precisa da sua ação. Continue-a na stella pela web.",
+    "answerFailed": "Não foi possível concluir a resposta."
   },
   "tasks": {
     "description": "Veja o que precisa de atenção sem abrir todo o espaço de trabalho.",
