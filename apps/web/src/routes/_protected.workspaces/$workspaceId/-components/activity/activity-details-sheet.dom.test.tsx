@@ -7,9 +7,13 @@ import type { MatterActivityItem } from "@/lib/workspaces/queries";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, render, screen } = await import("@testing-library/react");
+const { QueryClient, QueryClientProvider } =
+  await import("@tanstack/react-query");
+const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
-const { ActivityDetailsDialog, ActivityWorkspaceContext } =
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { ActivityDetailsSheet, ActivityWorkspaceContext } =
   await import("./activity-panel");
 
 afterEach(cleanup);
@@ -18,6 +22,7 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
+const WORKSPACE_ID = "workspace-1";
 const EVENT_ID = "019df73f-0000-7000-8000-000000000001";
 const OTHER_EVENT_ID = "019df73f-0000-7000-8000-000000000002";
 
@@ -48,23 +53,48 @@ const createItem = (id: string): MatterActivityItem => ({
   trigger: { source: "chat", type: "direct", user: null },
 });
 
-const renderDialog = (
-  group: Parameters<typeof ActivityDetailsDialog>[0]["group"],
-) =>
-  render(
-    <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
-      <ActivityWorkspaceContext value="workspace-1">
-        <ActivityDetailsDialog
+type SheetGroup = Parameters<typeof ActivityDetailsSheet>[0]["group"];
+
+// The sheet's "Open" action navigates, so it renders under a router.
+const renderSheet = async (group: SheetGroup) => {
+  const rootRoute = router.createRootRoute({
+    component: () => (
+      <ActivityWorkspaceContext value={WORKSPACE_ID}>
+        <ActivityDetailsSheet
           group={group}
           onOpenChange={() => {}}
-          workspaceId="workspace-1"
+          workspaceId={WORKSPACE_ID}
         />
       </ActivityWorkspaceContext>
-    </IntlProvider>,
+    ),
+  });
+  const appRouter = router.createRouter({
+    routeTree: rootRoute,
+    history: router.createMemoryHistory({
+      initialEntries: [`/workspaces/${WORKSPACE_ID}`],
+    }),
+    isServer: false,
+  });
+  await appRouter.load();
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <router.RouterProvider router={appRouter} />
+        </FormattingProvider>
+      </IntlProvider>
+    </QueryClientProvider>,
   );
+  await screen.findByText(
+    englishMessages.workspaces.overview.activity.details.title,
+  );
+};
 
-test("shows the date and time but never the raw event id", () => {
-  renderDialog({
+test("shows the date and time but never the raw event id", async () => {
+  await renderSheet({
     id: "group-1",
     items: [createItem(EVENT_ID)],
     type: "single",
@@ -75,8 +105,8 @@ test("shows the date and time but never the raw event id", () => {
   expect(body).not.toContain(EVENT_ID);
 });
 
-test("a document batch lists each document without its event id", () => {
-  renderDialog({
+test("a document batch lists each document without its event id", async () => {
+  await renderSheet({
     id: "group-2",
     items: [createItem(EVENT_ID), createItem(OTHER_EVENT_ID)],
     type: "document_batch",

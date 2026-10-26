@@ -30,16 +30,6 @@ import {
 } from "@stll/ui/combobox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/dialog";
-import {
   AiActionIcon,
   ChevronDownIcon,
   Clock3Icon,
@@ -71,6 +61,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import {
+  Sheet,
+  SheetClose,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetPanel,
+  SheetPopup,
+  SheetTitle,
+} from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -758,7 +758,7 @@ const ActivityTimeline = ({
       <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
         {activityContent}
       </div>
-      <ActivityDetailsDialog
+      <ActivityDetailsSheet
         group={selectedGroup}
         onOpenChange={(open) => {
           if (!open) {
@@ -1369,7 +1369,7 @@ const ActivityList = ({
   );
 };
 
-export const ActivityDetailsDialog = ({
+export const ActivityDetailsSheet = ({
   group,
   onOpenChange,
   workspaceId,
@@ -1510,17 +1510,17 @@ export const ActivityDetailsDialog = ({
   ];
 
   return (
-    <Dialog onOpenChange={onOpenChange} open>
-      <DialogPopup>
-        <DialogHeader>
-          <DialogTitle>
+    <Sheet onOpenChange={onOpenChange} open>
+      <SheetPopup side="inline-end" variant="inset">
+        <SheetHeader>
+          <SheetTitle>
             {t("workspaces.overview.activity.details.title")}
-          </DialogTitle>
-          <DialogDescription className="text-foreground pe-8">
+          </SheetTitle>
+          <SheetDescription className="text-foreground pe-8">
             <ActivityTriplet group={group} size="default" />
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel>
+          </SheetDescription>
+        </SheetHeader>
+        <SheetPanel>
           <DetailsGrid>
             {rows.map((row) => (
               <DetailsItem key={row.label} label={row.label}>
@@ -1528,22 +1528,22 @@ export const ActivityDetailsDialog = ({
               </DetailsItem>
             ))}
           </DetailsGrid>
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
+        </SheetPanel>
+        <SheetFooter>
+          <SheetClose render={<Button variant="ghost" />}>
             {t("common.close")}
-          </DialogClose>
+          </SheetClose>
           {openTarget && (
-            <DialogClose
+            <SheetClose
               onClick={openTarget}
               render={<Button variant="default" />}
             >
               {t("workspaces.overview.activity.details.openTarget")}
-            </DialogClose>
+            </SheetClose>
           )}
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+        </SheetFooter>
+      </SheetPopup>
+    </Sheet>
   );
 };
 
