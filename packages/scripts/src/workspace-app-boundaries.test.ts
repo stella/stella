@@ -378,6 +378,7 @@ describe("workspace app boundaries", () => {
     writeFileSync(path.join(rootDir, LEDGER_PATH), "[]\n");
     initializeGitRoot(rootDir);
     const tree = execFileSync("git", ["rev-parse", "HEAD^{tree}"], {
+      maxBuffer: 2 ** 30,
       cwd: rootDir,
       encoding: "utf-8",
     }).trim();
@@ -485,14 +486,20 @@ const writePackage = (
 
 const initializeGitRoot = (rootDir: string, branch = "main") => {
   execFileSync("git", ["init", "--quiet", `--initial-branch=${branch}`], {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
   });
   execFileSync("git", ["config", "user.email", "test@example.invalid"], {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
   });
-  execFileSync("git", ["config", "user.name", "Test"], { cwd: rootDir });
-  execFileSync("git", ["add", "--all"], { cwd: rootDir });
+  execFileSync("git", ["config", "user.name", "Test"], {
+    maxBuffer: 2 ** 30,
+    cwd: rootDir,
+  });
+  execFileSync("git", ["add", "--all"], { maxBuffer: 2 ** 30, cwd: rootDir });
   execFileSync("git", ["commit", "--quiet", "--message", "baseline"], {
+    maxBuffer: 2 ** 30,
     cwd: rootDir,
   });
 };

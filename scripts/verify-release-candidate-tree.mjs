@@ -107,6 +107,7 @@ const compareCodeUnit = (left, right) =>
 
 try {
   execFileSync("git", ["merge-base", "--is-ancestor", mainSha, candidateSha], {
+    maxBuffer: 2 ** 30,
     stdio: "ignore",
   });
 } catch {
