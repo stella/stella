@@ -125,6 +125,68 @@ test("snapshot names track workspace CSS and published package versions", async 
   }
 });
 
+const workspaceThemeFixture = async (
+  manifest: Readonly<Record<string, unknown>>,
+  importSpecifier: string,
+) => {
+  const fixture = await mkdtemp(
+    path.join(repositoryRoot, ".tailwind-workspace-cache-test-"),
+  );
+  const workspace = path.join(fixture, "packages", "theme");
+  const workspaceLink = path.join(fixture, "node_modules", "@fixture", "theme");
+  await mkdir(path.join(workspace, "src"), { recursive: true });
+  await mkdir(path.dirname(workspaceLink), { recursive: true });
+  await symlink(workspace, workspaceLink, "dir");
+  const writeManifest = (version: string) =>
+    writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({ name: "@fixture/theme", version, ...manifest }),
+    );
+  await writeManifest("1.0.0");
+  const palette = path.join(workspace, "src", "palette.css");
+  await writeFile(palette, "@theme { --color-palette: red; }\n");
+  const entry = path.join(fixture, "entry.css");
+  await writeFile(entry, `@import "${importSpecifier}";\n`);
+  return {
+    fixture,
+    palette,
+    writeManifest,
+    snapshotName: () => path.basename(cacheArtifactPaths(entry).json),
+  };
+};
+
+test("snapshot names track workspace CSS reached through a wildcard export", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./styles/*": "./src/*.css" } },
+    "@fixture/theme/styles/palette",
+  );
+  try {
+    const original = theme.snapshotName();
+    await theme.writeManifest("2.0.0");
+    expect(theme.snapshotName()).toBe(original);
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
+test("an unresolvable workspace CSS import keys on the package's stylesheets", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./other.css": "./src/other.css" } },
+    "@fixture/theme/palette.css",
+  );
+  try {
+    const original = theme.snapshotName();
+    await theme.writeManifest("2.0.0");
+    expect(theme.snapshotName()).toBe(original);
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
 const lintFixture = async ({
   cache,
   source,
