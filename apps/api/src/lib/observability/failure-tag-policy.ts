@@ -349,6 +349,7 @@ export const TAGGED_FAILURE_REASON = {
   ReplayStageError: "tagged_failure",
   ReportExportInspectionError: "tagged_failure",
   ReportExportRequeueError: "tagged_failure",
+  RequestBodyTooLargeError: "tagged_failure",
   ResearchPassageRetrievalError: "tagged_failure",
   ResponsePolicyError: "tagged_failure",
   ReviewAccountCommandError: "tagged_failure",

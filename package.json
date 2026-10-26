@@ -133,7 +133,7 @@
     "setup:mcp": "bun install --cwd .claude/mcp --frozen-lockfile",
     "setup:worktree": "bash scripts/setup-worktree.sh",
     "hooks:install": "lefthook install",
-    "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts && knip-bun",
+    "knip": "bun scripts/knip-generated-entries.ts && bun apps/api/scripts/generate-capability-runtime.ts >&2 && knip-bun",
     "hooks:uninstall": "lefthook uninstall",
     "postinstall": "bun run lint:ws && bun run generate",
     "dependencies:check": "DATABASE_URL=postgresql://invalid bun --no-env-file run knip --no-progress --include dependencies,unlisted",

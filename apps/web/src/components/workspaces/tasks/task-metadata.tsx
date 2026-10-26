@@ -259,7 +259,7 @@ export const OwnerPicker = ({
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
   const membersView = useQueryView(membersQuery);
-  useQueryViewError(membersView);
+  useQueryViewError(membersView, "OwnerPicker:query");
   const members = membersView.type === "items" ? membersView.items : undefined;
   const selectableMembers = members?.filter(
     (member) => member.user && member.user.id !== owner?.id,
@@ -350,7 +350,7 @@ export const AssigneePicker = ({
   const tCommon = useTranslations("common");
   const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
   const membersView = useQueryView(membersQuery);
-  useQueryViewError(membersView);
+  useQueryViewError(membersView, "AssigneePicker:query");
   const members = membersView.type === "items" ? membersView.items : undefined;
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));

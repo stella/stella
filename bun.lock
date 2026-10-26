@@ -360,6 +360,7 @@
       "dependencies": {
         "@stll/api": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/scripts": "workspace:*",
@@ -707,6 +708,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/errors": "workspace:*",
         "better-result": "catalog:",
       },
       "devDependencies": {
@@ -721,6 +723,7 @@
       "dependencies": {
         "@stll/aho-corasick": "catalog:",
         "@stll/anonymize-chat": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/template-conditions": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -1082,6 +1085,7 @@
         "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/concurrency": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
@@ -1237,6 +1241,7 @@
       "name": "@stll/redis-config",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/errors": "workspace:*",
         "@stll/time": "0.4.1",
         "better-result": "catalog:",
         "valibot": "catalog:",

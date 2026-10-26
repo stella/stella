@@ -160,7 +160,15 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+                },
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -176,7 +184,15 @@ export const Route = createFileRoute(
               toISODate(weekEnd),
             ),
             (error: unknown) => {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey:
+                  "workspaces.workspaceId.viewId.route.loader:failure-2",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+                },
+              });
             },
           ),
           "workspace-view.prefetch",
@@ -192,7 +208,15 @@ export const Route = createFileRoute(
             toISODate(prevWeekEnd),
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-3",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+              },
+            });
           },
         ),
         "workspace-view.prefetch",
@@ -215,7 +239,15 @@ export const Route = createFileRoute(
           queryClient,
           correspondenceAddressOptions(workspaceId),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.route.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate: "/_protected/workspaces/$workspaceId/$viewId",
+              },
+            });
           },
         ),
       ]);

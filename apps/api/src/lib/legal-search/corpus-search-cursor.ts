@@ -194,7 +194,7 @@ const serializePhase = (phase: CorpusSearchPhase): string => {
   if (validated === null) {
     return panic("A search phase does not satisfy the corpus cursor grammar");
   }
-  return `${PHASE_SEGMENT_PREFIX}${Buffer.from(JSON.stringify(validated)).toString("base64url")}`;
+  return `${PHASE_SEGMENT_PREFIX}${Buffer.from(JSON.stringify(validated)).toBase64({ alphabet: "base64url", omitPadding: true })}`;
 };
 
 /** The excluded-groups segment, or null when there is nothing to carry. */
@@ -288,7 +288,9 @@ const parsePhase = (segment: string): CorpusSearchPhase | null => {
     return null;
   }
   const decoded = Buffer.from(payload, "base64url");
-  if (decoded.toString("base64url") !== payload) {
+  if (
+    decoded.toBase64({ alphabet: "base64url", omitPadding: true }) !== payload
+  ) {
     return null;
   }
   const parsed = Result.try({
