@@ -202,7 +202,6 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Maintenance checkpoints belong to the database owner, never request roles.
   "database_backfill_states",
   "case_law_sitemap_changes",
-  "case_law_sitemap_month_horizons",
   "case_law_replay_batches",
   "case_law_replay_blocked",
   "case_law_replay_daily_rows",

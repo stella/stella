@@ -8,6 +8,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import { compareCodeUnit } from "@stll/collation";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   caseLawDecisions,
@@ -47,7 +48,6 @@ import {
 } from "@/api/lib/legal-search/partial-observation-sql";
 import { isRecord } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { installPgliteCaseLawSitemapChanges } from "@/api/tests/pglite-schema";
 import {
   createTestPglite,
   withPublicLawReaderRole,
@@ -104,7 +104,6 @@ const decision = (
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client });
-  await installPgliteCaseLawSitemapChanges(db);
   // SAFETY: the refresh reads and writes through the root handle's
   // transaction surface, which the PGlite handle provides.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test database stands in for the root pool
@@ -261,14 +260,30 @@ const fullRecount = async (): Promise<Shard[]> => {
     .toSorted(byShardKey);
 };
 
-/** Consecutive runs, as the scheduler's continuations would make them. */
+/** One run, and how many log rows it left for the next. */
+const refreshOnce = async (
+  ...args: Parameters<typeof refreshCaseLawSitemapShards>
+) => {
+  const outcome = await refreshCaseLawSitemapShards(...args);
+  const [left] = await db
+    .select({ rows: sql<number>`count(*)::int` })
+    .from(caseLawSitemapChanges);
+  return { outcome, left: left?.rows ?? 0 };
+};
+
+/**
+ * Consecutive runs, as the scheduler's continuations and its next hourly
+ * runs would make them, until one finishes with nothing left logged. A month
+ * a run has already worked waits for the next run if it is logged again
+ * meanwhile (as a whole-country expansion logs it).
+ */
 const refreshUntilDone = async (
   ...args: Parameters<typeof refreshCaseLawSitemapShards>
 ) => {
   for (let run = 0; run < 1000; run += 1) {
     // db-await-in-loop: consecutive scheduler runs, each continuing from the rows still logged
-    const outcome = await refreshCaseLawSitemapShards(...args);
-    if (outcome.type === "refreshed") {
+    const { outcome, left } = await refreshOnce(...args);
+    if (outcome.type === "refreshed" && left === 0) {
       return { outcome, runs: run + 1 };
     }
   }
@@ -561,9 +576,8 @@ test(
     expect(await loggedMonths()).toEqual([
       `${SITEMAP_WHOLE_COUNTRY}/${SITEMAP_WHOLE_COUNTRY}/${SITEMAP_WHOLE_COUNTRY}`,
     ]);
-    const opened = await refreshUntilDone(refreshDb);
-    // One run lists the countries, the next recounts them.
-    expect(opened.runs).toBeGreaterThan(1);
+    await refreshUntilDone(refreshDb);
+    expect(await loggedMonths()).toEqual([]);
     expect(await snapshot()).toEqual(await fullRecount());
     expect(
       (await snapshot()).some(
@@ -645,93 +659,6 @@ test(
     expect(runs).toBe(logged.length);
     expect(await loggedMonths()).toEqual([]);
     expect(await snapshot()).toEqual(await fullRecount());
-  },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
-);
-
-/**
- * The test handle, running `pause` once after the first transaction that
- * counted a month commits and before the run writes that count.
- */
-const pausingAfterCount = (pause: () => Promise<void>) => {
-  const dialect = new PgDialect();
-  let paused = false;
-  const pausing = {
-    transaction: async (work: (tx: unknown) => Promise<unknown>) => {
-      let counted = false;
-      const result = await db.transaction(
-        async (tx) =>
-          await work(
-            new Proxy(tx, {
-              get: (target, property, receiver) =>
-                property === "execute"
-                  ? async (query: SQL) => {
-                      counted ||= dialect
-                        .sqlToQuery(query)
-                        .sql.includes("count(*)::int AS total");
-                      return await target.execute(query);
-                    }
-                  : Reflect.get(target, property, receiver),
-            }),
-          ),
-      );
-      if (counted && !paused) {
-        paused = true;
-        await pause();
-      }
-      return result;
-    },
-  };
-  // SAFETY: forwards every call to the PGlite handle.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
-  return pausing as unknown as RefreshDb;
-};
-
-test(
-  "a run that counted before an overlapping run wrote a newer count cannot overwrite it",
-  async () => {
-    await refreshUntilDone(refreshDb);
-    await insertOne({ decisionDate: "2010-10-10" });
-    // Run A counts October, then waits while run B counts a newer change of
-    // the same month, writes it and consumes its log rows.
-    const runA = pausingAfterCount(async () => {
-      await insertOne({ decisionDate: "2010-10-20" });
-      await refreshUntilDone(refreshDb);
-      expect(await loggedMonths()).toEqual([]);
-    });
-    expect(await refreshCaseLawSitemapShards(runA)).toMatchObject({
-      type: "refreshed",
-      months: 0,
-    });
-    expect(
-      (await snapshot()).find(
-        (shard) =>
-          shard.country === "CZE" &&
-          shard.year === "2010" &&
-          shard.month === "10",
-      )?.total,
-    ).toBe(2);
-    expect(await snapshot()).toEqual(await fullRecount());
-  },
-  DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
-);
-
-test(
-  "rows of transactions still running when a run begins wait for a later run",
-  async () => {
-    await refreshUntilDone(refreshDb);
-    // A row as an in-flight writer leaves it: its transaction id is past the
-    // oldest one running when the refresh reads its horizon.
-    await db.execute(sql`
-      INSERT INTO ${caseLawSitemapChanges} (country, year, month, xact)
-      VALUES ('CZE', '2020', '03', (pg_current_xact_id()::text::bigint + 1000)::text::xid8)
-    `);
-    await refreshUntilDone(refreshDb);
-    expect(await loggedMonths()).toEqual(["CZE/2020/03"]);
-    // No writer will ever commit it.
-    await db
-      .delete(caseLawSitemapChanges)
-      .where(eq(caseLawSitemapChanges.country, "CZE"));
   },
   DB_TEST_TIMEOUT_MS, // timeout: an embedded Postgres runs each statement and the schema push in WASM
 );
@@ -1114,7 +1041,7 @@ test(
           expect(await loggedMonths()).toEqual([]);
         },
       ),
-      { numRuns: 25, seed: 1026 },
+      propertyConfig({ numRuns: 25 }),
     );
   },
   DB_TEST_TIMEOUT_MS * 3, // timeout: 25 generated write sequences, each refreshed and recounted on an embedded Postgres

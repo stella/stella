@@ -2503,9 +2503,9 @@ export const caseLawSitemapShards = p.pgTable(
  * `20261026090000_case_law_sitemap_changes`): the month a decision left and
  * the month it entered. A month of `*` asks for a whole country, and a
  * country of `*` for every country (a source's redistribution changed). The
- * refresh recounts each logged month and deletes the rows it consumed,
- * consuming only rows whose writing transaction had finished when the run
- * began. One row per month per transaction, so a bulk write logs each month
+ * refresh recounts each logged month and deletes exactly the rows its count's
+ * own snapshot saw, so a row is consumed only by a count that includes its
+ * change. One row per month per transaction, so a bulk write logs each month
  * once. A queue, not a watermark: ids order nothing.
  */
 export const caseLawSitemapChanges = p.pgTable(
@@ -2524,39 +2524,9 @@ export const caseLawSitemapChanges = p.pgTable(
   },
   (t) => [
     p
-      .unique("case_law_sitemap_changes_xact_month_key")
-      .on(t.xact, t.country, t.year, t.month),
+      .unique("case_law_sitemap_changes_month_xact_key")
+      .on(t.country, t.year, t.month, t.xact),
     p.pgPolicy("case_law_sitemap_change_owner_access", {
-      for: "all",
-      to: "public",
-      using: sql`true`,
-      withCheck: sql`true`,
-    }),
-  ],
-);
-
-/**
- * The snapshot horizon of the count each sitemap month's shard rows were
- * written from: the oldest transaction still running when that count read.
- * The refresh replaces a month only from a count at least as new, so an
- * overlapping run that counted earlier cannot overwrite a newer count. Kept
- * apart from `case_law_sitemap_shards` because an emptied month has no shard
- * row left to carry it, and its horizon still fences an older count.
- */
-export const caseLawSitemapMonthHorizons = p.pgTable(
-  "case_law_sitemap_month_horizons",
-  {
-    country: p.text().notNull(),
-    year: p.text().notNull(),
-    month: p.text().notNull(),
-    countedHorizon: xid8("counted_horizon").notNull(),
-  },
-  (t) => [
-    p.primaryKey({
-      name: "case_law_sitemap_month_horizons_pkey",
-      columns: [t.country, t.year, t.month],
-    }),
-    p.pgPolicy("case_law_sitemap_month_horizon_owner_access", {
       for: "all",
       to: "public",
       using: sql`true`,

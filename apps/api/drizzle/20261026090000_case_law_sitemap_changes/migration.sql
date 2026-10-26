@@ -8,13 +8,15 @@ SET statement_timeout = '30s';--> statement-breakpoint
 -- country of `*` for every country. One row per month per transaction: a bulk
 -- write logs each month once, and two transactions never share an `xact`, so
 -- the conflict a repeated month meets is always the transaction's own row.
+-- Led by the month, so the same constraint finds a month's rows for the
+-- refresh that consumes them.
 CREATE TABLE "case_law_sitemap_changes" (
   "id" bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "case_law_sitemap_changes_id_seq"),
   "country" text NOT NULL,
   "year" text NOT NULL,
   "month" text NOT NULL,
   "xact" xid8 DEFAULT pg_current_xact_id() NOT NULL,
-  CONSTRAINT "case_law_sitemap_changes_xact_month_key" UNIQUE ("xact", "country", "year", "month")
+  CONSTRAINT "case_law_sitemap_changes_month_xact_key" UNIQUE ("country", "year", "month", "xact")
 );--> statement-breakpoint
 
 ALTER TABLE "case_law_sitemap_changes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -26,25 +28,6 @@ ALTER TABLE "case_law_sitemap_changes" FORCE ROW LEVEL SECURITY;--> statement-br
 CREATE POLICY "case_law_sitemap_change_owner_access" ON "case_law_sitemap_changes"
   AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_changes" FROM stella;--> statement-breakpoint
-
--- The snapshot horizon of the count each sitemap month was written from. A
--- month is replaced only from a count at least as new, so an overlapping run
--- that counted earlier cannot overwrite a newer count; an emptied month keeps
--- its row here, with no shard row left to carry the horizon.
-CREATE TABLE "case_law_sitemap_month_horizons" (
-  "country" text NOT NULL,
-  "year" text NOT NULL,
-  "month" text NOT NULL,
-  "counted_horizon" xid8 NOT NULL,
-  CONSTRAINT "case_law_sitemap_month_horizons_pkey" PRIMARY KEY ("country", "year", "month")
-);--> statement-breakpoint
-
-ALTER TABLE "case_law_sitemap_month_horizons" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "case_law_sitemap_month_horizons" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
--- stella-migration-safety: reviewed permissive-policy - privileges, not this policy, decide access: the owner holds them all and stella none (revoked below); no other role is granted
-CREATE POLICY "case_law_sitemap_month_horizon_owner_access" ON "case_law_sitemap_month_horizons"
-  AS PERMISSIVE FOR ALL TO public USING (true) WITH CHECK (true);--> statement-breakpoint
-REVOKE ALL PRIVILEGES ON TABLE "case_law_sitemap_month_horizons" FROM stella;--> statement-breakpoint
 
 -- A decision's shard is its country and month, the bucket of its id, its
 -- source (the redistribution gate), its updated_at (the shard's last
@@ -69,7 +52,7 @@ BEGIN
       COALESCE(to_char(OLD.decision_date, 'YYYY'), 'undated'),
       COALESCE(to_char(OLD.decision_date, 'MM'), '00')
     )
-    ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_xact_month_key DO NOTHING;
+    ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
   END IF;
   IF TG_OP <> 'DELETE'
     AND public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
@@ -80,7 +63,7 @@ BEGIN
       COALESCE(to_char(NEW.decision_date, 'YYYY'), 'undated'),
       COALESCE(to_char(NEW.decision_date, 'MM'), '00')
     )
-    ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_xact_month_key DO NOTHING;
+    ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
   END IF;
   RETURN NULL;
 END
@@ -100,7 +83,7 @@ AS $function$
 BEGIN
   INSERT INTO public.case_law_sitemap_changes (country, year, month)
   VALUES ('*', '*', '*')
-  ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_xact_month_key DO NOTHING;
+  ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_month_xact_key DO NOTHING;
   RETURN NULL;
 END
 $function$;--> statement-breakpoint

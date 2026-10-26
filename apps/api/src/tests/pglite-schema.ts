@@ -1038,8 +1038,7 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
 
 /**
  * Install the sitemap change-log functions and triggers from the production
- * migration after schema push. Installed by the suites that exercise them,
- * so every other suite's decision writes stay unlogged.
+ * migration after schema push.
  */
 export const installPgliteCaseLawSitemapChanges = async (
   db: PgliteSchemaDb,

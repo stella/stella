@@ -1,22 +1,24 @@
 /**
  * The sitemap change log against the schema the migrations build, where its
- * triggers are installed, with a second session holding a writer open: a
- * change whose transaction is still running when a refresh begins waits for
- * a later run, and the run after its commit counts it.
+ * triggers are installed, in the shared test database other suites write to
+ * at the same time: a change is consumed only by a count that sees it, a
+ * writer still open through a whole run waits for the run after its commit,
+ * and overlapping runs never interleave on one month.
+ *
+ * Each test owns its own years of one synthetic country and reads only them.
  *
  * Runs in the Postgres job; skipped elsewhere.
  */
 import { panic } from "better-result";
 import type { SQL as BunSql } from "bun";
 import { describe, expect, test } from "bun:test";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
   caseLawDecisions,
   caseLawSitemapChanges,
-  caseLawSitemapMonthHorizons,
   caseLawSitemapShards,
   caseLawSources,
 } from "@/api/db/schema";
@@ -63,9 +65,6 @@ if (!databaseUrl || !runPostgresTests) {
       await db
         .delete(caseLawSitemapChanges)
         .where(eq(caseLawSitemapChanges.country, COUNTRY));
-      await db
-        .delete(caseLawSitemapMonthHorizons)
-        .where(eq(caseLawSitemapMonthHorizons.country, COUNTRY));
     });
 
     const insertDecisions = async (decisionDate: string, count: number) => {
@@ -96,7 +95,8 @@ if (!databaseUrl || !runPostgresTests) {
       return ids;
     };
 
-    const loggedMonths = async () =>
+    /** The fixture country's logged months of one year, oldest row first. */
+    const loggedMonths = async (year: string) =>
       (
         await db
           .select({
@@ -106,9 +106,12 @@ if (!databaseUrl || !runPostgresTests) {
           .from(caseLawSitemapChanges)
           .where(eq(caseLawSitemapChanges.country, COUNTRY))
           .orderBy(asc(caseLawSitemapChanges.id))
-      ).map(({ year, month }) => `${year}/${month}`);
+      )
+        .filter((logged) => logged.year === year)
+        .map(({ month }) => `${year}/${month}`);
 
-    const listedMonths = async () =>
+    /** The fixture country's listed months of one year, with their totals. */
+    const listedMonths = async (year: string) =>
       (
         await db
           .select({
@@ -119,20 +122,35 @@ if (!databaseUrl || !runPostgresTests) {
           })
           .from(caseLawSitemapShards)
           .where(eq(caseLawSitemapShards.country, COUNTRY))
-          .orderBy(
-            asc(caseLawSitemapShards.year),
-            asc(caseLawSitemapShards.month),
-          )
-      ).map(({ year, month, bucket, total }) => {
-        expect(bucket).toBe(SITEMAP_ALL_BUCKET);
-        return `${year}/${month}:${String(total)}`;
-      });
+          .orderBy(asc(caseLawSitemapShards.month))
+      )
+        .filter((listed) => listed.year === year)
+        .map(({ month, bucket, total }) => {
+          expect(bucket).toBe(SITEMAP_ALL_BUCKET);
+          return `${year}/${month}:${String(total)}`;
+        });
 
-    const refreshUntilDone = async (handle: RefreshDb = refreshDb) => {
+    /** One run, and whether it left a row of the fixture country logged. */
+    const refreshOnce = async () => {
+      const outcome = await refreshCaseLawSitemapShards(refreshDb);
+      const [left] = await db
+        .select({ id: caseLawSitemapChanges.id })
+        .from(caseLawSitemapChanges)
+        .where(eq(caseLawSitemapChanges.country, COUNTRY))
+        .limit(1);
+      return outcome.type === "refreshed" && left === undefined;
+    };
+
+    /**
+     * Consecutive runs until one finishes with nothing of the fixture country
+     * logged. A month a run has already worked waits for the next run if it
+     * is logged again meanwhile (as a whole-country expansion logs it), and
+     * other suites keep logging their own countries.
+     */
+    const refreshUntilDone = async () => {
       for (let run = 0; run < 100; run += 1) {
         // db-await-in-loop: consecutive scheduler runs, each continuing from the rows still logged
-        const outcome = await refreshCaseLawSitemapShards(handle);
-        if (outcome.type === "refreshed") {
+        if (await refreshOnce()) {
           return;
         }
       }
@@ -140,11 +158,11 @@ if (!databaseUrl || !runPostgresTests) {
     };
 
     test("the migrated triggers log one row per month per transaction", async () => {
-      await refreshUntilDone();
       const ids = await insertDecisions("1901-01-15", 3);
-      expect(await loggedMonths()).toEqual(["1901/01"]);
+      expect(await loggedMonths("1901")).toEqual(["1901/01"]);
       await refreshUntilDone();
-      expect(await listedMonths()).toEqual(["1901/01:3"]);
+      expect(await listedMonths("1901")).toEqual(["1901/01:3"]);
+      expect(await loggedMonths("1901")).toEqual([]);
 
       await db.transaction(async (tx) => {
         await tx
@@ -156,10 +174,10 @@ if (!databaseUrl || !runPostgresTests) {
           .set({ updatedAt: new Date("2026-01-02T00:00:00.000Z") })
           .where(inArray(caseLawDecisions.id, ids));
       });
-      expect(await loggedMonths()).toEqual(["1901/01"]);
+      expect(await loggedMonths("1901")).toEqual(["1901/01"]);
       await refreshUntilDone();
-      expect(await listedMonths()).toEqual(["1901/01:3"]);
-      expect(await loggedMonths()).toEqual([]);
+      expect(await listedMonths("1901")).toEqual(["1901/01:3"]);
+      expect(await loggedMonths("1901")).toEqual([]);
 
       await db.transaction(async (tx) => {
         await tx
@@ -167,10 +185,10 @@ if (!databaseUrl || !runPostgresTests) {
           .set({ decisionDate: "1901-02-15" })
           .where(inArray(caseLawDecisions.id, ids.slice(0, 2)));
       });
-      expect(await loggedMonths()).toEqual(["1901/01", "1901/02"]);
+      expect(await loggedMonths("1901")).toEqual(["1901/01", "1901/02"]);
       await refreshUntilDone();
-      expect(await listedMonths()).toEqual(["1901/01:1", "1901/02:2"]);
-      expect(await loggedMonths()).toEqual([]);
+      expect(await listedMonths("1901")).toEqual(["1901/01:1", "1901/02:2"]);
+      expect(await loggedMonths("1901")).toEqual([]);
     });
 
     /**
@@ -179,8 +197,9 @@ if (!databaseUrl || !runPostgresTests) {
      * nor the application role can read or write the log itself.
      */
     test("writers log months only through the owner-run trigger", async () => {
-      await insertDecisions("1903-03-15", 1);
+      await insertDecisions("1905-03-15", 1);
       await refreshUntilDone();
+      expect(await loggedMonths("1905")).toEqual([]);
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const session = openClient().sql;
         const id = createSafeId<"caseLawDecision">();
@@ -188,9 +207,9 @@ if (!databaseUrl || !runPostgresTests) {
         await session.begin(async (tx) => {
           await tx`SET LOCAL ROLE stella_ingestion`;
           await tx`INSERT INTO case_law_decisions (id, source_id, source_document_id, country, language, court, case_number, decision_date, metadata)
-            VALUES (${id}::uuid, ${sourceId}::uuid, ${`sitemap-changes-${id}`}, ${COUNTRY}, 'xx', 'Sitemap change log fixture court', ${id}, '1903-01-15', '{}'::jsonb)`;
+            VALUES (${id}::uuid, ${sourceId}::uuid, ${`sitemap-changes-${id}`}, ${COUNTRY}, 'xx', 'Sitemap change log fixture court', ${id}, '1905-01-15', '{}'::jsonb)`;
         });
-        expect(await loggedMonths()).toEqual(["1903/01"]);
+        expect(await loggedMonths("1905")).toEqual(["1905/01"]);
 
         const refused = async (
           role: string,
@@ -219,23 +238,23 @@ if (!databaseUrl || !runPostgresTests) {
             await refused(
               role,
               async (tx) =>
-                await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1903', '02')`,
+                await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1905', '02')`,
             ),
           ).toMatch(/permission denied/u);
         }
-        expect(await loggedMonths()).toEqual(["1903/01"]);
+        expect(await loggedMonths("1905")).toEqual(["1905/01"]);
       });
       await refreshUntilDone();
-      expect(await loggedMonths()).toEqual([]);
+      expect(await loggedMonths("1905")).toEqual([]);
+      expect(await listedMonths("1905")).toEqual(["1905/01:1", "1905/03:1"]);
     });
 
-    test("a change still uncommitted when a run begins waits for the run after its commit", async () => {
-      const [moved] = await insertDecisions("1902-01-15", 2);
+    test("a change still uncommitted through a whole run waits for the run after its commit", async () => {
+      const moved =
+        (await insertDecisions("1902-01-15", 2)).at(0) ??
+        panic("Expected a decision to move");
       await refreshUntilDone();
-      expect(await listedMonths()).toContain("1902/01:2");
-      if (moved === undefined) {
-        return panic("Expected a decision to move");
-      }
+      expect(await listedMonths("1902")).toEqual(["1902/01:2"]);
 
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const writer = openClient();
@@ -251,106 +270,85 @@ if (!databaseUrl || !runPostgresTests) {
         });
         await opened.promise;
 
-        // The writer commits after the run has read its horizon and before
-        // it lists the logged months, so its committed rows are visible to
-        // the run but were written by a transaction it saw running.
-        let transactions = 0;
-        const interposed = {
-          transaction: async (work: (tx: unknown) => Promise<unknown>) => {
-            const result = await db.transaction(work);
-            transactions += 1;
-            if (transactions === 1) {
-              release.resolve(undefined);
-              await writing;
-            }
-            return result;
-          },
-        };
-        // SAFETY: forwards every transaction to the gated handle.
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
-        const interposedDb = interposed as unknown as RefreshDb;
-        expect(await refreshCaseLawSitemapShards(interposedDb)).toMatchObject({
-          type: "refreshed",
-        });
+        // The writer's log rows are invisible to the whole run, so nothing
+        // of its change is counted or consumed.
+        await refreshUntilDone();
+        expect(await listedMonths("1902")).toEqual(["1902/01:2"]);
+
+        release.resolve(undefined);
+        await writing;
       });
 
       // Committed, logged, and not yet counted.
-      expect(await loggedMonths()).toEqual(["1902/01", "1902/02"]);
-      expect(await listedMonths()).toContain("1902/01:2");
+      expect(await loggedMonths("1902")).toEqual(["1902/01", "1902/02"]);
       await refreshUntilDone();
-      expect(await loggedMonths()).toEqual([]);
-      const listed = await listedMonths();
-      expect(listed).toContain("1902/01:1");
-      expect(listed).toContain("1902/02:1");
-      const [counted] = await db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(caseLawDecisions)
-        .where(
-          and(
-            eq(caseLawDecisions.country, COUNTRY),
-            sql`${caseLawDecisions.decisionDate} >= '1902-02-01' AND ${caseLawDecisions.decisionDate} < '1902-03-01'`,
-          ),
-        );
-      expect(counted?.total).toBe(1);
+      expect(await loggedMonths("1902")).toEqual([]);
+      expect(await listedMonths("1902")).toEqual(["1902/01:1", "1902/02:1"]);
     });
 
-    test("a run that counted before an overlapping run wrote a newer count cannot overwrite it", async () => {
-      await insertDecisions("1903-01-15", 1);
+    test("overlapping runs never interleave on a month, and a change one count misses stays logged", async () => {
+      await insertDecisions("1904-01-15", 1);
       await refreshUntilDone();
-      expect(await listedMonths()).toContain("1903/01:1");
-      await insertDecisions("1903-01-16", 1);
+      expect(await listedMonths("1904")).toEqual(["1904/01:1"]);
+      await insertDecisions("1904-01-16", 1);
 
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         // SAFETY: the second session's refresh opens its transactions
         // through the gated handle, the same surface the root pool provides.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- second test session stands in for an overlapping run
         const runB = openClient().db as unknown as RefreshDb;
-        let paused = false;
-        // Run A counts January, then waits while run B, in its own session,
-        // counts a newer change of the same month, writes it and consumes
-        // its log rows.
+        const state = { paused: false };
+        // Run A counts January and, before writing that count, waits while
+        // a newer change of the month commits and run B works the log in
+        // its own session.
+        const dialect = new PgDialect();
+        const pause = async () => {
+          await insertDecisions("1904-01-17", 1);
+          await refreshCaseLawSitemapShards(runB);
+          // B found the month held and left it, with its newer row, alone.
+          expect(await listedMonths("1904")).toEqual(["1904/01:1"]);
+          expect(await loggedMonths("1904")).toEqual(["1904/01", "1904/01"]);
+        };
         const runA = {
-          transaction: async (work: (tx: unknown) => Promise<unknown>) => {
-            let counted = false;
-            const result = await db.transaction(
+          transaction: async (work: (tx: unknown) => Promise<unknown>) =>
+            await db.transaction(
               async (tx) =>
                 await work(
                   new Proxy(tx, {
                     get: (target, property, receiver) =>
                       property === "execute"
                         ? async (query: SQL) => {
-                            counted ||= new PgDialect()
-                              .sqlToQuery(query)
-                              .sql.includes("count(*)::int AS total");
-                            return await target.execute(query);
+                            const result = await target.execute(query);
+                            const rendered = dialect.sqlToQuery(query);
+                            if (
+                              !state.paused &&
+                              rendered.sql.includes("count(*)::int AS total") &&
+                              rendered.params.includes("1904")
+                            ) {
+                              state.paused = true;
+                              await pause();
+                            }
+                            return result;
                           }
                         : Reflect.get(target, property, receiver),
                   }),
                 ),
-            );
-            if (counted && !paused) {
-              paused = true;
-              await insertDecisions("1903-01-17", 1);
-              await refreshUntilDone(runB);
-              expect(await listedMonths()).toContain("1903/01:3");
-              expect(await loggedMonths()).toEqual([]);
-            }
-            return result;
-          },
+            ),
         };
         // SAFETY: forwards every transaction to the gated handle.
         // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- interposing wrapper around the test handle
         const runADb = runA as unknown as RefreshDb;
-        expect(await refreshCaseLawSitemapShards(runADb)).toMatchObject({
-          type: "refreshed",
-          months: 0,
-        });
-        expect(paused).toBe(true);
+        await refreshCaseLawSitemapShards(runADb);
+        expect(state.paused).toBe(true);
       });
 
-      // Run A's write was refused: the month keeps run B's newer count.
-      expect(await listedMonths()).toContain("1903/01:3");
-      expect(await loggedMonths()).toEqual([]);
+      // A wrote the count its snapshot saw and consumed only the row in it;
+      // the change committed after A counted is still logged.
+      expect(await listedMonths("1904")).toEqual(["1904/01:2"]);
+      expect(await loggedMonths("1904")).toEqual(["1904/01"]);
+      await refreshUntilDone();
+      expect(await listedMonths("1904")).toEqual(["1904/01:3"]);
+      expect(await loggedMonths("1904")).toEqual([]);
     });
   });
 }
