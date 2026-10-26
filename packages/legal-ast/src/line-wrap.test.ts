@@ -223,10 +223,10 @@ const WRAPPED_SLOVAK_DECISION = [
 ] as const;
 
 describe("line boundaries a wrapped Slovak decision continues", () => {
-  const joinAfter = (line: string): LineJoin => {
-    const index = WRAPPED_SLOVAK_DECISION.indexOf(
-      line as (typeof WRAPPED_SLOVAK_DECISION)[number],
-    );
+  const joinAfter = (
+    line: (typeof WRAPPED_SLOVAK_DECISION)[number],
+  ): LineJoin => {
+    const index = WRAPPED_SLOVAK_DECISION.indexOf(line);
     const classification = classifyLineWrap(WRAPPED_SLOVAK_DECISION);
     return lineJoinOf(
       classification,
