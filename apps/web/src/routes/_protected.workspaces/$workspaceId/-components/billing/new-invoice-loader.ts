@@ -1,8 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { expensesOptions } from "@/lib/workspaces/queries/expenses";
 import { timeEntriesOptions } from "@/lib/workspaces/queries/time-entries";
 
@@ -14,7 +15,7 @@ type PendingApprovalsLoad = {
 
 /**
  * Warms the invoice composer's pending-approval counts for an approver. The
- * counts are a hint the page reads on its own: a failed list settles here and
+ * counts are a hint the page reads on its own: a failed list is reported and
  * never rejects, so the composer still opens.
  */
 export const prefetchPendingApprovals = async ({
@@ -31,12 +32,19 @@ export const prefetchPendingApprovals = async ({
   ) {
     return;
   }
+  const captureError = (error: unknown) => {
+    getAnalytics().captureError(error);
+  };
   await Promise.all([
-    queryClient.prefetchQuery(
+    prefetchRouteQuery(
+      queryClient,
       timeEntriesOptions(workspaceId, userId, { status: "draft" }),
+      captureError,
     ),
-    queryClient.prefetchQuery(
+    prefetchRouteQuery(
+      queryClient,
       expensesOptions(workspaceId, { status: "draft" }),
+      captureError,
     ),
   ]);
 };
