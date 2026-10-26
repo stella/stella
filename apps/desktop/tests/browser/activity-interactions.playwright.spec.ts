@@ -76,7 +76,14 @@ type InstallNativeBoundaryOptions = {
   batchReceipt?: "save" | "fail-first" | "keep-pending";
   historyDeletion?:
     "available" | "keyMissing" | "unreadable" | "mixed" | "incompatible";
+  /** How long the first paint may take; the default suits small fixtures. */
+  firstRenderTimeoutMs?: number;
 };
+
+// timeout: A review of 101 matters with 101 timeline segments renders every
+// row before its heading paints; on a loaded CI runner that has taken just over
+// the 5 s expectation default.
+const LARGE_REVIEW_FIRST_RENDER_TIMEOUT_MS = 15_000;
 
 const installNativeBoundary = async ({
   page,
@@ -86,6 +93,7 @@ const installNativeBoundary = async ({
   batchValidation = "accept",
   batchReceipt = "save",
   historyDeletion = "available",
+  firstRenderTimeoutMs,
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await setFixedBrowserTime(page, new Date(`${snapshot.today}T10:00:00Z`));
@@ -356,7 +364,9 @@ const installNativeBoundary = async ({
       }),
     ).toBeVisible();
   } else {
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
+      timeout: firstRenderTimeoutMs,
+    });
   }
   if (
     (snapshot.recordingStatus !== "off" ||
@@ -622,6 +632,7 @@ test("more than 100 selected matters keep the review editable until the selectio
   }));
   await installNativeBoundary({
     page,
+    firstRenderTimeoutMs: LARGE_REVIEW_FIRST_RENDER_TIMEOUT_MS,
     snapshot: {
       ...SNAPSHOT,
       manualAssignments,
