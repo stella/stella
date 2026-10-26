@@ -74,6 +74,28 @@ test("a change to the guard's own sources selects every family", () => {
   ).toBe(0);
 });
 
+test("the census resolves a filtered workspace script and fails on an unknown command form", () => {
+  const skills =
+    GENERATORS.find(({ id }) => id === "skill-manifests") ??
+    panic("Missing skill-manifests");
+  // `bun --filter @stll/skills generate` runs packages/skills/scripts/generate-manifests.ts.
+  const undeclared = {
+    ...skills,
+    write: ["bun", "--filter", "@stll/skills", "generate"],
+    inputs: [],
+    checkInputs: [],
+  } satisfies Generator;
+  expect(generatorInputCensus([undeclared])).toContain(
+    "skill-manifests: undeclared import packages/skills/scripts/generate-manifests.ts",
+  );
+  // A form the census cannot resolve fails instead of contributing nothing.
+  expect(() =>
+    generatorInputCensus([
+      { ...skills, write: ["bun", "--some-new-flag", "something"] },
+    ]),
+  ).toThrow("Census cannot resolve the command");
+});
+
 test("selects direct, output, and transitive changes while unrelated files select none", () => {
   const direct = affectedGeneratorIds(GENERATORS, [
     "apps/web/src/components/example.tsx",

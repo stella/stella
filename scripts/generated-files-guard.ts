@@ -293,7 +293,72 @@ const commandModules = (command: readonly string[], base = "."): string[] => {
       );
     }
   }
+  // Every `bun` invocation must resolve to modules: `--filter <package>
+  // <script>` through that workspace's package script, the forms above as
+  // matched. Any other form fails, so the census never skips a command.
+  const tokens = joined.split(/\s+/u);
+  for (const [index, token] of tokens.entries()) {
+    if (token !== "bun") {
+      continue;
+    }
+    const next = tokens[index + 1] ?? "";
+    if (next === "--filter" || next.startsWith("--filter=")) {
+      const name =
+        next === "--filter"
+          ? tokens[index + 2]
+          : next.slice("--filter=".length);
+      let scriptIndex = next === "--filter" ? index + 3 : index + 2;
+      if (tokens[scriptIndex] === "run") {
+        scriptIndex += 1;
+      }
+      const script = tokens[scriptIndex];
+      if (name === undefined || script === undefined) {
+        panic(`Census cannot resolve the command: ${joined}`);
+      }
+      const directory = workspaceDirectory(name);
+      modules.push(
+        ...commandModules([packageScript(directory, script)], directory),
+      );
+      continue;
+    }
+    const resolved =
+      BUN_BUILTIN_COMMANDS.has(next) ||
+      next === "run" ||
+      next.startsWith("--cwd") ||
+      tokens
+        .slice(index + 1)
+        .some((argument) => /\.[cm]?[jt]sx?$/u.test(argument));
+    if (!resolved) {
+      panic(`Census cannot resolve the command: ${joined}`);
+    }
+  }
   return [...new Set(modules)];
+};
+
+/**
+ * Bun's own subcommands that run no repository module (the formatter reads
+ * only its configuration). Extend deliberately: an unlisted form fails.
+ */
+const BUN_BUILTIN_COMMANDS: ReadonlySet<string> = new Set(["fmt"]);
+
+/** The workspace directory of a package, by its manifest name. */
+const workspaceDirectory = (name: string): string => {
+  for (const manifest of new Bun.Glob(
+    "{apps,packages}/*/package.json",
+  ).scanSync({ cwd: ROOT.pathname })) {
+    const parsed: unknown = JSON.parse(
+      readFileSync(path.join(ROOT.pathname, manifest), "utf-8"),
+    );
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "name" in parsed &&
+      parsed.name === name
+    ) {
+      return path.posix.dirname(manifest);
+    }
+  }
+  return panic(`No workspace package named ${name}`);
 };
 
 const IMPLICIT_MODULE_INPUTS: Readonly<
