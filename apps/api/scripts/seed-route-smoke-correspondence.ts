@@ -3,6 +3,10 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+import {
+  ROUTE_SMOKE_SCALE_SIZES,
+  routeSmokeScaleEmail,
+} from "@stll/scripts/src/e2e-feature-access-fixture";
 
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -41,7 +45,9 @@ const db = openMaintenanceDb({ readOnly: false });
 const organizationId = toSafeId<"organization">(organizationValue);
 if (
   filerEmail !== "test@stella.dev" &&
-  !/^route-smoke-scale-[\da-f-]+@stella\.dev$/u.test(filerEmail)
+  !ROUTE_SMOKE_SCALE_SIZES.some(
+    (size) => filerEmail === routeSmokeScaleEmail(size, organizationId),
+  )
 ) {
   panic("Correspondence fixture requires a route smoke principal");
 }
