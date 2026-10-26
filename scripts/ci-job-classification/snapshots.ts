@@ -455,7 +455,7 @@ const gitBase = (root: string) => {
 const usage = () =>
   new AdmissionError({
     message:
-      "usage: bun scripts/ci-job-classification/snapshots.ts --check | --write --source <owner>/<repo>@<sha>=<checkout-dir> [...]",
+      "usage: bun scripts/ci-job-classification/snapshots.ts --check | --write [--base <sha>] --source <owner>/<repo>@<sha>=<checkout-dir> [...]",
   });
 
 const parseSources = (args: string[]) => {
@@ -494,7 +494,15 @@ const run = () => {
   if (mode !== "--write") {
     throw usage();
   }
-  writeSnapshots({ root: ".", sources: parseSources(args) });
+  const base = args[0] === "--base" ? args[1] : undefined;
+  if (args[0] === "--base" && !/^[0-9a-f]{40}$/u.test(base ?? "")) {
+    throw usage();
+  }
+  writeSnapshots({
+    root: ".",
+    sources: parseSources(base === undefined ? args : args.slice(2)),
+    base,
+  });
   return 0;
 };
 

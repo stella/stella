@@ -110,7 +110,7 @@ test("classification snapshots use read-only, bounded pinned source checkouts", 
   expect(sourceJob).toMatch(/ref: \$\{\{ matrix\.sha \}\}/u);
   expect(sourceJob).toContain("persist-credentials: false");
   expect(workflow).toMatch(
-    /bun scripts\/ci-job-classification\/snapshots\.ts --write "\$\{source_args\[@\]\}"/u,
+    /bun scripts\/ci-job-classification\/snapshots\.ts --write --base "\$BASE_SHA" "\$\{source_args\[@\]\}"/u,
   );
 });
 
@@ -171,7 +171,11 @@ describe("Dependabot Bun autofix boundary", () => {
     expect(actionsJob).toContain("!cancelled()");
     expect(actionsJob).toContain("dependabot/github_actions/");
     expect(actionsJob).toContain(
-      `bun scripts/ci-job-classification/snapshots.ts --write "\${source_args[@]}"`,
+      `bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "\${source_args[@]}"`,
+    );
+    // The job runs the head's code, so the head may change only pins.
+    expect(actionsJob).toContain(
+      `':(exclude).github/workflows/**' ':(exclude).github/actions/**'`,
     );
     expect(actionsJob).toContain(
       'bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"',

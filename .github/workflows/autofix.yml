@@ -549,11 +549,17 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: >-
-          git diff --quiet "$BASE_SHA" "$HEAD_SHA" --
-          scripts/ci-job-classification
-          package.json
-          bun.lock
+        # This job runs the head's code, so the head may change nothing but
+        # the workflow and action pins an actions update bumps.
+        run: |
+          set -euo pipefail
+          unexpected="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- . \
+            ':(exclude).github/workflows/**' ':(exclude).github/actions/**')"
+          if [[ -n "$unexpected" ]]; then
+            echo "::error::A workflow snapshot autofix runs only on pin updates; this head also changes:"
+            printf '%s\n' "$unexpected"
+            exit 1
+          fi
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
@@ -583,7 +589,7 @@ jobs:
           while IFS= read -r spec_file; do
             source_args+=(--source "$(cat "$spec_file")=$(dirname "$spec_file")/source")
           done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
-          bun scripts/ci-job-classification/snapshots.ts --write "${source_args[@]}"
+          bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "${source_args[@]}"
           bun scripts/check-ci-job-classification.ts --write --base "$BASE_SHA"
 
       - name: Restrict generated changes
@@ -824,13 +830,14 @@ jobs:
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           if [[ ",$GENERATOR_IDS," == *,ci-job-classification-digests,* ]]; then
             source_args=()
             while IFS= read -r spec_file; do
               source_args+=(--source "$(cat "$spec_file")=$(dirname "$spec_file")/source")
             done < <(find "$RUNNER_TEMP/classification-sources" -name source-spec -type f | sort)
-            bun scripts/ci-job-classification/snapshots.ts --write "${source_args[@]}"
+            bun scripts/ci-job-classification/snapshots.ts --write --base "$BASE_SHA" "${source_args[@]}"
           fi
           if [[ -n "$GENERATOR_IDS" ]]; then
             bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
