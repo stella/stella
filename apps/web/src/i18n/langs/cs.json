@@ -1112,8 +1112,7 @@
       "runEstimate": "{rows, plural, one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázek}} na této stránce: {cells, plural, one {vznikne # odpověď} few {vzniknou # odpovědi} other {vznikne # odpovědí}}.",
       "runTitle": "Odpovědět na této stránce",
       "savedQuestions": "Uložené otázky",
-      "title": "Rešeršní tabulky",
-      "updated": "Naposledy upraveno {date}"
+      "title": "Rešeršní tabulky"
     },
     "results": {
       "excerpt": {

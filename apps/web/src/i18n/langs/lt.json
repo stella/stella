@@ -1112,8 +1112,7 @@
       "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
       "runTitle": "Atsakyti šiame puslapyje",
       "savedQuestions": "Išsaugoti klausimai",
-      "title": "Tyrimo lentelės",
-      "updated": "Paskutinį kartą redaguota {date}"
+      "title": "Tyrimo lentelės"
     },
     "results": {
       "excerpt": {

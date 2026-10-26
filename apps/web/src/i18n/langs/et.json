@@ -1112,8 +1112,7 @@
       "runEstimate": "{rows, plural, one {# lahend} other {# lahendit}} × {columns, plural, one {# küsimus} other {# küsimust}} sellel leheküljel: luuakse {cells, plural, one {# vastus} other {# vastust}}.",
       "runTitle": "Vasta sellel leheküljel",
       "savedQuestions": "Salvestatud küsimused",
-      "title": "Uurimistabelid",
-      "updated": "Viimati muudetud {date}"
+      "title": "Uurimistabelid"
     },
     "results": {
       "excerpt": {
