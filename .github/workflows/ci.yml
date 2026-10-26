@@ -2457,7 +2457,7 @@ jobs:
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
           ${{ toJSON(needs) }}
           CI_CHECK_POOL_NEEDS_JSON
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-policy
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-policy
 
       - name: Record static check receipts
         id: static_receipt_record
@@ -2803,7 +2803,7 @@ jobs:
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
           ${{ toJSON(needs) }}
           CI_CHECK_POOL_NEEDS_JSON
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run ci-checks-rest
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run ci-checks-rest
 
       - name: Record static check receipts
         id: static_receipt_record
@@ -3698,7 +3698,7 @@ jobs:
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
           ${{ toJSON(needs) }}
           CI_CHECK_POOL_NEEDS_JSON
-          CI_CHECK_POOL_NEEDS_FILE="$needs_file" bun scripts/ci-check-pool.ts run code-quality-web-rest
+          CI_CHECK_POOL_NEEDS_FILE="$needs_file" exec bun scripts/ci-check-pool.ts run code-quality-web-rest
 
       - *merge_group_cancel
 

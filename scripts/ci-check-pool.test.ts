@@ -19,7 +19,9 @@ import {
   type CheckResult,
   conditionHolds,
   continueOnErrorHolds,
+  cpuSeconds,
   failedCheckAnnotation,
+  failedCheckCause,
   type Launched,
   partitionChecks,
   planChecks,
@@ -27,18 +29,22 @@ import {
   POOL_CONTEXT_ROOTS,
   poolContext,
   processLauncher,
+  processTree,
   resolveEnv,
   runChecks,
   selectChecks,
+  stopDetail,
   summaryTable,
 } from "./ci-check-pool";
 import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
+  checkBudgetMinutes,
   checkPoolJob,
   checkPoolStepRun,
   parseCheckPool,
   type PoolCheck,
+  readCheckBudgets,
   readCheckPool,
 } from "./ci-check-pool-registry";
 import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
@@ -56,7 +62,6 @@ const check = (name: string, extra: Partial<PoolCheck> = {}): PoolCheck => ({
   condition: "true",
   run: "true",
   env: {},
-  timeoutMinutes: undefined,
   continueOnError: undefined,
   step: { name },
   ...extra,
@@ -222,11 +227,10 @@ test("the registry rejects fields the pool cannot honour", () => {
     "    uses: actions/checkout@v4\n",
     "    background: true\n",
     "    shell: sh\n",
-    "    timeout-minutes: 0\n",
+    // A check's time limit is its generated budget, never a step field.
+    "    timeout-minutes: 5\n",
   ]) {
-    expect(() => parseCheckPool(entry(field))).toThrow(
-      /unsupported fields|timeout-minutes/u,
-    );
+    expect(() => parseCheckPool(entry(field))).toThrow("unsupported fields");
   }
   expect(() =>
     parseCheckPool(`${entry("")}  - name: A\n    if: x\n    run: y\n`),
@@ -438,7 +442,7 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
             running -= 1;
             return {
               exitCode: entries[index]?.fails === true ? 1 : 0,
-              timedOut: false,
+              stopped: undefined,
               maxRssBytes: undefined,
             };
           },
@@ -462,13 +466,17 @@ test("the pool bounds concurrency, reports in order and reports every failure", 
 test("a launched check runs as a bash step with its env, output and timeout", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-"));
   try {
-    const launch = processLauncher({ root, directory });
+    const launch = processLauncher({
+      root,
+      directory,
+      budgetMinutes: () => 1,
+    });
     const passed = await launch(
       0,
       check("passes", { run: 'echo "out $POOL_VALUE"\necho err >&2\n' }),
       { POOL_VALUE: "set" },
     );
-    expect(passed).toMatchObject({ exitCode: 0, timedOut: false });
+    expect(passed).toMatchObject({ exitCode: 0, stopped: undefined });
     expect(readFileSync(path.join(directory, "000.log"), "utf-8")).toBe(
       "out set\nerr\n",
     );
@@ -483,6 +491,127 @@ test("a launched check runs as a bash step with its env, output and timeout", as
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+const launchIn = async (
+  run: string,
+  options: { budgetMinutes?: number; stuckAfterMs: number },
+) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "ci-check-pool-watch-"));
+  try {
+    const launch = processLauncher({
+      root,
+      directory,
+      budgetMinutes: () => options.budgetMinutes ?? 1,
+      stuckAfterMs: options.stuckAfterMs,
+      sampleMs: 50,
+    });
+    const launched = await launch(0, check("watched", { run }), {});
+    return {
+      launched,
+      log: readFileSync(path.join(directory, "000.log"), "utf-8"),
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+test("a slow check that keeps writing output is never stopped", async () => {
+  const { launched } = await launchIn(
+    'for step in $(seq 1 15); do echo "step $step"; sleep 0.1; done',
+    { stuckAfterMs: 500 },
+  );
+  expect(launched).toMatchObject({ exitCode: 0, stopped: undefined });
+});
+
+// `ps` reports CPU time in whole seconds on Linux, so the busy loop outlasts
+// two of them inside one stuck window.
+// timeout: the loop runs a fixed 4 s of CPU; the default 5 s leaves no slack.
+test("a silent check that keeps using CPU is never stopped", async () => {
+  const { launched } = await launchIn(
+    "end=$((SECONDS + 4)); while (( SECONDS < end )); do :; done",
+    { stuckAfterMs: 2500 },
+  );
+  expect(launched).toMatchObject({ exitCode: 0, stopped: undefined });
+}, 15_000);
+
+test("a silent, idle check is stopped as stuck with its process tree", async () => {
+  const started = performance.now();
+  const { launched, log } = await launchIn("echo started\nsleep 600", {
+    stuckAfterMs: 500,
+  });
+  expect(performance.now() - started).toBeLessThan(10_000);
+  expect(launched.stopped).toEqual({ reason: "stuck", idleMinutes: 0 });
+  expect(launched.exitCode).not.toBe(0);
+  expect(log).toStartWith("started\n");
+  expect(log).toContain(
+    "error: stuck: no output and no CPU progress for 0 min; its processes when stopped:",
+  );
+  expect(log).toMatch(/^\s*PID\s+PPID\s+PGID/mu);
+  expect(log).toContain("sleep 600");
+});
+
+test("a check that keeps progressing still stops at its budget", async () => {
+  const { launched, log } = await launchIn(
+    "while true; do echo tick; sleep 0.05; done",
+    { budgetMinutes: 0.01, stuckAfterMs: 60_000 },
+  );
+  expect(launched.stopped).toEqual({
+    reason: "over-budget",
+    budgetMinutes: 0.01,
+  });
+  expect(log).toContain("error: over budget: still running after 0.01 min");
+});
+
+test("a stopped check reports its stop as the failure cause", () => {
+  const detail = stopDetail({ reason: "stuck", idleMinutes: 10 });
+  expect(
+    failedCheckCause({ detail }, "(fail) earlier test\nerror: unrelated\n"),
+  ).toBe("stuck: no output and no CPU progress for 10 min");
+});
+
+test("ps CPU times parse on Linux and macOS", () => {
+  expect(cpuSeconds("00:01:05")).toBe(65);
+  expect(cpuSeconds("1-02:00:00")).toBe(93_600);
+  expect(cpuSeconds("0:00.50")).toBe(0.5);
+  expect(cpuSeconds("12:03.25")).toBeCloseTo(723.25);
+});
+
+test("a check's process tree follows descendants that left its group", () => {
+  const row = (pid: number, ppid: number, pgid: number) => ({
+    pid,
+    ppid,
+    pgid,
+    cpu: 0,
+  });
+  const rows = [
+    row(10, 1, 10),
+    row(11, 10, 10),
+    // Started its own session, then forked.
+    row(12, 11, 12),
+    row(13, 12, 12),
+    // Reparented to init but still in the check's group.
+    row(14, 1, 10),
+    row(20, 1, 20),
+    row(21, 20, 20),
+  ];
+  expect(processTree(rows, 10).map(({ pid }) => pid)).toEqual([
+    10, 11, 12, 13, 14,
+  ]);
+});
+
+test("every pooled check has exactly one budget", () => {
+  const budgets = readCheckBudgets(root);
+  for (const job of CHECK_POOL_JOBS) {
+    const names = readCheckPool(job).map(({ name }) => name);
+    expect(Object.keys(budgets[job]).toSorted()).toEqual(names.toSorted());
+    for (const name of names) {
+      expect(checkBudgetMinutes(budgets, job, name)).toBeGreaterThanOrEqual(5);
+    }
+  }
+  expect(() =>
+    checkBudgetMinutes(budgets, "ci-checks-rest", "No such check"),
+  ).toThrow("no budget");
 });
 
 // timeout: The signal fixture has a 10 s child watchdog; allow its forced
@@ -532,6 +661,22 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
       ].map((entry) => ({ ...entry, if: "true" })),
     }),
   );
+  const names = [
+    "Blocked first",
+    "Buffered failure",
+    ...Array.from({ length: 9 }, (_, index) => `Buffered log ${index}`),
+    "Later check",
+  ];
+  writeFileSync(
+    path.join(registry, "budgets.json"),
+    JSON.stringify({
+      "ci-checks-policy": {},
+      "ci-checks-rest": Object.fromEntries(
+        names.map((name) => [name, { minutes: 30, samples: 0 }]),
+      ),
+      "code-quality-web-rest": {},
+    }),
+  );
   const child = Bun.spawn(
     [
       process.execPath,
@@ -577,6 +722,8 @@ test("cancellation retains bounded running and buffered failure diagnostics and 
     expect(await stderr).toBe("");
     expect(status).toBe("signalled");
     expect(await child.exited).toBe(130);
+    expect(output).toContain("::group::Processes of running checks");
+    expect(output).toContain("sleep 600");
     expect(output).toContain("Interrupted check: Blocked first (running)");
     expect(output).toContain("| Checking fixture-generator");
     expect(output).toContain("Interrupted check: Buffered failure (completed)");
@@ -657,7 +804,7 @@ test("continue-on-error lets a failed check pass the pool only when it holds", a
       report: () => undefined,
       launch: async (): Promise<Launched> => ({
         exitCode: 1,
-        timedOut: false,
+        stopped: undefined,
         maxRssBytes: undefined,
       }),
     });
@@ -691,7 +838,7 @@ test("an undecidable continue-on-error fails closed", async () => {
     report: () => undefined,
     launch: async (): Promise<Launched> => ({
       exitCode: 1,
-      timedOut: false,
+      stopped: undefined,
       maxRssBytes: undefined,
     }),
   });

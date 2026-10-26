@@ -28,9 +28,11 @@ import path from "node:path";
 
 import {
   CHECK_POOL_JOBS,
+  checkBudgetMinutes,
   type CheckPoolJob,
   checkPoolResultsPath,
   type PoolCheck,
+  readCheckBudgets,
   readCheckPool,
 } from "./ci-check-pool-registry";
 import {
@@ -212,9 +214,13 @@ export const planChecks = (
     }
   });
 
+/** Why the pool stopped a check before it exited by itself. */
+export type StopVerdict =
+  | { reason: "stuck"; idleMinutes: number }
+  | { reason: "over-budget"; budgetMinutes: number };
 export type Launched = {
   exitCode: number;
-  timedOut: boolean;
+  stopped: StopVerdict | undefined;
   maxRssBytes: number | undefined;
 };
 export type CheckResult = {
@@ -231,15 +237,18 @@ export type CheckResult = {
 /** A failed check's detail when it printed no failed test or error line. */
 export const exitCodeDetail = (exitCode: number) => `exit code ${exitCode}`;
 
+// A stopped check's detail is its cause: its log ends in the process dump.
+const STOPPED_DETAIL = /^(?:stuck|over budget): /u;
+export const stopDetail = (verdict: StopVerdict) =>
+  verdict.reason === "stuck"
+    ? `stuck: no output and no CPU progress for ${verdict.idleMinutes} min`
+    : `over budget: still running after ${verdict.budgetMinutes} min`;
+
 const launchedOutcome = (
   launched: Launched,
-  check: PoolCheck,
 ): Pick<CheckResult, "outcome" | "detail"> => {
-  if (launched.timedOut) {
-    return {
-      outcome: "failure",
-      detail: `timed out after ${check.timeoutMinutes ?? 0} min`,
-    };
+  if (launched.stopped !== undefined) {
+    return { outcome: "failure", detail: stopDetail(launched.stopped) };
   }
   return launched.exitCode === 0
     ? { outcome: "success", detail: "passed" }
@@ -318,7 +327,7 @@ export const runChecks = async ({
       try {
         const launched = await launch(item.index, item.check, item.env);
         const seconds = (now() - started) / 1000;
-        const outcome = launchedOutcome(launched, item.check);
+        const outcome = launchedOutcome(launched);
         settle(item.index, {
           ...base,
           seconds,
@@ -366,16 +375,121 @@ const killGroup = (pid: number) => {
     // The group already exited.
   }
 };
+const killPid = (pid: number) => {
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // The process already exited.
+  }
+};
 
-type ProcessLauncherOptions = { root: string; directory: string };
-/** Run a check's script the way a `shell: bash` step does, in its own group. */
+type ProcessRow = { pid: number; ppid: number; pgid: number; cpu: number };
+
+/** `ps` CPU time, `[[dd-]hh:]mm:ss[.ff]`, in seconds. */
+export const cpuSeconds = (value: string) => {
+  const [days, clock] = value.includes("-")
+    ? [Number(value.split("-")[0]), value.split("-")[1] ?? ""]
+    : [0, value];
+  return clock
+    .split(":")
+    .toReversed()
+    .reduce(
+      (total, part, position) => total + Number(part) * 60 ** position,
+      days * 86_400,
+    );
+};
+
+const processTable = (): ProcessRow[] => {
+  const listed = Bun.spawnSync(["ps", "-A", "-o", "pid=,ppid=,pgid=,time="], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  return listed.stdout
+    .toString()
+    .split("\n")
+    .flatMap((line) => {
+      const [pid, ppid, pgid, time] = line.trim().split(/\s+/u);
+      return pid === undefined || time === undefined
+        ? []
+        : [
+            {
+              pid: Number(pid),
+              ppid: Number(ppid),
+              pgid: Number(pgid),
+              cpu: cpuSeconds(time),
+            },
+          ];
+    });
+};
+
+/**
+ * A check's processes: its group, plus every descendant, since a child can
+ * leave the group (setsid, detached spawns) and still hold the check open.
+ */
+export const processTree = (rows: readonly ProcessRow[], root: number) => {
+  const tree = new Set(
+    rows.filter(({ pgid }) => pgid === root).map(({ pid }) => pid),
+  );
+  tree.add(root);
+  for (let grown = true; grown;) {
+    grown = false;
+    for (const { pid, ppid } of rows) {
+      if (!tree.has(pid) && tree.has(ppid)) {
+        tree.add(pid);
+        grown = true;
+      }
+    }
+  }
+  return rows.filter(({ pid }) => tree.has(pid));
+};
+
+const processDump = (pids: readonly number[]) => {
+  const listed = Bun.spawnSync(
+    [
+      "ps",
+      "-ww",
+      "-o",
+      "pid,ppid,pgid,stat,etime,time,rss,args",
+      "-p",
+      pids.join(","),
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  return `${listed.stdout.toString()}${listed.stderr.toString()}`;
+};
+
+/** A sample of what a running check has done so far. */
+export type Progress = { outputBytes: number; cpuSeconds: number };
+
+type ProcessLauncherOptions = {
+  root: string;
+  directory: string;
+  /** The check's wall-time cap; it applies only while the check progresses. */
+  budgetMinutes: (check: PoolCheck) => number;
+  /** No output and no CPU time for this long is a stuck check. */
+  stuckAfterMs?: number;
+  sampleMs?: number;
+};
+/**
+ * Run a check's script the way a `shell: bash` step does, in its own group.
+ * A check that neither writes output nor uses CPU for `stuckAfterMs` is stuck;
+ * one that keeps progressing runs until its budget. Either stop dumps the
+ * check's process tree into its log, then kills the tree.
+ */
 export const processLauncher =
-  ({ root, directory }: ProcessLauncherOptions) =>
+  ({
+    root,
+    directory,
+    budgetMinutes,
+    stuckAfterMs = 10 * 60_000,
+    sampleMs = 30_000,
+  }: ProcessLauncherOptions) =>
   async (
     index: number,
     check: PoolCheck,
     env: Record<string, string>,
   ): Promise<Launched> => {
+    const budget = budgetMinutes(check);
     const script = path.join(directory, `${String(index).padStart(3, "0")}.sh`);
     writeFileSync(script, check.run);
     const log = openSync(logPath(directory, index), "w");
@@ -394,24 +508,69 @@ export const processLauncher =
       },
     );
     active.add(child.pid);
-    let timedOut = false;
-    const timer =
-      check.timeoutMinutes === undefined
-        ? undefined
-        : setTimeout(() => {
-            timedOut = true;
-            killGroup(child.pid);
-          }, check.timeoutMinutes * 60_000);
+    let stopped: StopVerdict | undefined;
+    let dump = "";
+    const stop = (verdict: StopVerdict) => {
+      if (stopped !== undefined) {
+        return;
+      }
+      stopped = verdict;
+      const tree = processTree(processTable(), child.pid).map(({ pid }) => pid);
+      dump = processDump(tree);
+      for (const pid of tree) {
+        killPid(pid);
+      }
+      killGroup(child.pid);
+    };
+    const sample = (): Progress => ({
+      outputBytes: fstatSync(log).size,
+      cpuSeconds: processTree(processTable(), child.pid).reduce(
+        (total, { cpu }) => total + cpu,
+        0,
+      ),
+    });
+    let last = sample();
+    let progressedAt = performance.now();
+    const watch = setInterval(() => {
+      const now = sample();
+      if (
+        now.outputBytes > last.outputBytes ||
+        now.cpuSeconds > last.cpuSeconds
+      ) {
+        progressedAt = performance.now();
+      }
+      last = {
+        outputBytes: Math.max(now.outputBytes, last.outputBytes),
+        cpuSeconds: Math.max(now.cpuSeconds, last.cpuSeconds),
+      };
+      if (performance.now() - progressedAt >= stuckAfterMs) {
+        stop({
+          reason: "stuck",
+          idleMinutes: Math.round((stuckAfterMs / 60_000) * 10) / 10,
+        });
+      }
+    }, sampleMs);
+    const cap = setTimeout(
+      () => stop({ reason: "over-budget", budgetMinutes: budget }),
+      budget * 60_000,
+    );
     const exitCode = await child.exited;
-    clearTimeout(timer);
+    clearInterval(watch);
+    clearTimeout(cap);
     // Nothing a check starts may outlive it and contend with the next one.
     killGroup(child.pid);
     active.delete(child.pid);
+    if (stopped !== undefined) {
+      writeSync(
+        log,
+        `\nerror: ${stopDetail(stopped)}; its processes when stopped:\n${dump}`,
+      );
+    }
     closeSync(log);
     const usage = child.resourceUsage();
     return {
       exitCode,
-      timedOut,
+      stopped,
       maxRssBytes: usage?.maxRSS,
     };
   };
@@ -567,6 +726,9 @@ export const failedCheckCause = (
   result: Pick<CheckResult, "detail">,
   output: string,
 ) => {
+  if (STOPPED_DETAIL.test(result.detail)) {
+    return result.detail;
+  }
   const lines = output.split(/\r?\n/u);
   const failureIndex = lines.findIndex((line) =>
     line.trimStart().startsWith("(fail) "),
@@ -774,6 +936,14 @@ const main = async () => {
   );
   const unreported = new Map<number, UnreportedCheck>();
   const stop = () => {
+    const running = [...active].flatMap((pid) =>
+      processTree(processTable(), pid).map((row) => row.pid),
+    );
+    if (running.length > 0) {
+      writeOut(
+        `::group::Processes of running checks\n${processDump(running)}::endgroup::\n`,
+      );
+    }
     for (const pid of active) {
       killGroup(pid);
     }
@@ -786,7 +956,12 @@ const main = async () => {
   process.on("SIGINT", stop);
   process.on("SIGTERM", stop);
   const started = performance.now();
-  const launch = processLauncher({ root, directory });
+  const budgets = readCheckBudgets(root);
+  const launch = processLauncher({
+    root,
+    directory,
+    budgetMinutes: ({ name }) => checkBudgetMinutes(budgets, job, name),
+  });
   const results = await runChecks({
     planned,
     concurrency,

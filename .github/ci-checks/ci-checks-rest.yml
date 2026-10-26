@@ -556,7 +556,6 @@ checks:
     run: bun test scripts/ci-store-save.test.ts
 
   - name: Workflow lint
-    timeout-minutes: 2
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Workflow lint')) }}
     env:
       CI_CHECK_KIND: CONTEXTUAL
@@ -844,7 +843,6 @@ checks:
 
   - name: Catalogue pinned-content check
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Catalogue pinned-content check')) }}
-    timeout-minutes: 5
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Fetches remote source data or pinned upstream resource bytes."
@@ -955,7 +953,6 @@ checks:
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_066
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_066 != 'true') }}
-    timeout-minutes: 1
     run: timeout 30s bun test scripts/docker-source-closure.test.ts
 
   # The same transformation decides what every published tarball exports.
