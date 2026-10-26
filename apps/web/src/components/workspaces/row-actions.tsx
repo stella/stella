@@ -91,7 +91,11 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { useRetryCell } from "@/components/workspaces/hooks/use-retry-cell";
-import { requestManualOcr } from "@/components/workspaces/request-manual-ocr";
+import { WithOcrBatchHelp } from "@/components/workspaces/ocr-batch-help";
+import {
+  manualOcrSuccessKey,
+  requestManualOcr,
+} from "@/components/workspaces/request-manual-ocr";
 import {
   canRunManualOcr,
   getDesktopEditLockState,
@@ -1038,7 +1042,7 @@ export const RowActions = ({
 
     setIsOcrPending(true);
     try {
-      const { outcome } = await requestManualOcr({
+      const response = await requestManualOcr({
         entityId: entity.entityId,
         fieldId: source.fieldId,
         workspaceId,
@@ -1047,11 +1051,7 @@ export const RowActions = ({
         queryKey: entitiesKeys.all(workspaceId),
       });
       stellaToast.add({
-        title: t(
-          outcome === "already_processed"
-            ? "workspaces.files.ocrAlreadyProcessed"
-            : "workspaces.files.ocrQueued",
-        ),
+        title: t(manualOcrSuccessKey(response)),
         type: "success",
       });
     } catch (error) {
@@ -1389,31 +1389,36 @@ export const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <CapabilityAction action={{ capability: "ocr" }}>
-          {(capabilityProps) => (
-            <MenuItem
-              disabled={isPending}
-              onClick={() =>
-                detached(onRun(selectedSource), "row-actions.run-ocr")
-              }
-              {...capabilityProps}
-            >
-              <ScanTextIcon />
-              {t("workspaces.files.runOcr")}
-            </MenuItem>
-          )}
-        </CapabilityAction>
+        <WithOcrBatchHelp>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
+              <MenuItem
+                className="min-w-0 flex-1"
+                disabled={isPending}
+                onClick={() =>
+                  detached(onRun(selectedSource), "row-actions.run-ocr")
+                }
+                {...capabilityProps}
+              >
+                <ScanTextIcon />
+                {t("workspaces.files.queueForOcr")}
+              </MenuItem>
+            )}
+          </CapabilityAction>
+        </WithOcrBatchHelp>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <CapabilityAction action={{ capability: "ocr" }}>
-            {(capabilityProps) => (
-              <MenuSubTrigger {...capabilityProps}>
-                <ScanTextIcon />
-                {t("workspaces.files.runOcr")}
-              </MenuSubTrigger>
-            )}
-          </CapabilityAction>
+          <WithOcrBatchHelp>
+            <CapabilityAction action={{ capability: "ocr" }}>
+              {(capabilityProps) => (
+                <MenuSubTrigger className="min-w-0 flex-1" {...capabilityProps}>
+                  <ScanTextIcon />
+                  {t("workspaces.files.queueForOcr")}
+                </MenuSubTrigger>
+              )}
+            </CapabilityAction>
+          </WithOcrBatchHelp>
           <MenuSubPopup>
             {rowSources.map((source) => (
               <CapabilityAction

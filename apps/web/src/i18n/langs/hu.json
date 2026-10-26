@@ -6056,8 +6056,10 @@
       "itemLimitReached": "Ez az ügy elérte az elemek korlátját.",
       "maxEntitiesReached": "Elérte a maximális elemszámot",
       "ocrAlreadyProcessed": "A szövegfelismerés már befejeződött",
+      "ocrBatchHelp": "A sorban álló dokumentumokat a következő OCR-köteg dolgozza fel.",
       "ocrQueueFailed": "A szövegfelismerést nem sikerült várólistára tenni",
-      "ocrQueued": "A szövegfelismerés bekerült a következő OCR-kötegbe",
+      "ocrQueued": "A szövegfelismerés sorba került",
+      "ocrQueuedForBatch": "A szövegfelismerés bekerült a következő OCR-kötegbe",
       "pdfSigning": {
         "alreadySigningTitle": "Az aláírás már folyamatban van a stella desktopban",
         "cancelledBaseVersionDescription": "A dokumentum aláírás közben megváltozott. Nyisd meg a legújabb verziót, és írd alá újra.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Válassz aláíró tanúsítványt a stella desktop alkalmazásban a PDF aláírásához.",
         "waitingTitle": "Várakozás a stella desktopra"
       },
+      "queueForOcr": "Sorba állítás OCR-hez",
       "rateLimited": "Sebességkorlát; folytatás {seconds, number} mp múlva",
       "referencedUpload": {
         "choiceLabel": "Mi történjen a(z) {fileName} fájllal",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Dokumentum metaadatainak eltávolítása",
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "retryFailed": "{count, plural, one {# fájl} other {# fájl}} újrapróbálása",
-      "runOcr": "OCR sorba állítása",
       "scrubFailed": "A fájl metaadatai nem távolíthatók el, ezért nem történt letöltés",
       "uploadedPartially": "{failed, plural, one {# fájl} other {# fájl}} feltöltése sikertelen a {total, number} fájlból",
       "uploadedSuccessfully": "Fájlok sikeresen feltöltve",

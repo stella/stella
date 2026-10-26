@@ -6056,8 +6056,10 @@
       "itemLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums.",
       "maxEntitiesReached": "Sasniegts maksimālais ierakstu skaits",
       "ocrAlreadyProcessed": "Teksta atpazīšana jau ir pabeigta",
+      "ocrBatchHelp": "Rindā esošie dokumenti tiek apstrādāti nākamajā OCR pakotnē.",
       "ocrQueueFailed": "Neizdevās ievietot teksta atpazīšanu rindā",
-      "ocrQueued": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
+      "ocrQueued": "Teksta atpazīšana ievietota rindā",
+      "ocrQueuedForBatch": "Teksta atpazīšana pievienota nākamajai OCR pakotnei",
       "pdfSigning": {
         "alreadySigningTitle": "Parakstīšana stella desktop jau notiek",
         "cancelledBaseVersionDescription": "Dokuments parakstīšanas laikā mainījās. Atveriet jaunāko versiju un parakstiet to vēlreiz.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Lietotnē stella desktop izvēlieties parakstīšanas sertifikātu, lai parakstītu šo PDF.",
         "waitingTitle": "Gaida stella desktop"
       },
+      "queueForOcr": "Ievietot OCR rindā",
       "rateLimited": "Ātruma ierobežojums; atsākšana pēc {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Ko darīt ar failu {fileName}",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Noņemt dokumenta metadatus",
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
-      "runOcr": "Ievietot OCR rindā",
       "scrubFailed": "Neizdevās noņemt šī faila metadatus, tāpēc nekas netika lejupielādēts",
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",

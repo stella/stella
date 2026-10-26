@@ -6056,8 +6056,10 @@
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
+      "ocrBatchHelp": "Os documentos na fila são processados no próximo lote de OCR.",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
-      "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
+      "ocrQueued": "Reconhecimento de texto adicionado à fila",
+      "ocrQueuedForBatch": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Já há uma assinatura em andamento no stella desktop",
         "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
@@ -6114,6 +6116,7 @@
         "waitingDescription": "Escolha um certificado de assinatura no stella desktop para assinar este PDF.",
         "waitingTitle": "Aguardando o stella desktop"
       },
+      "queueForOcr": "Colocar na fila de OCR",
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "O que fazer com {fileName}",
@@ -6125,7 +6128,6 @@
       "removeMetadata": "Remover metadados do documento",
       "renamedToAvoidConflicts": "{count, plural, one {# arquivo renomeado para evitar conflitos} many {# arquivos renomeados para evitar conflitos} other {# arquivos renomeados para evitar conflitos}}",
       "retryFailed": "Tentar novamente {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}}",
-      "runOcr": "Colocar OCR na fila",
       "scrubFailed": "Não foi possível remover os metadados deste arquivo, portanto nada foi baixado",
       "uploadedPartially": "{failed, plural, one {# arquivo falhou} many {# arquivos falharam} other {# arquivos falharam}} de {total, number}",
       "uploadedSuccessfully": "Arquivos enviados com sucesso",
