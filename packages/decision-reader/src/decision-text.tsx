@@ -592,6 +592,7 @@ const buildAnchorsByPieceId = ({
             decision: span.source.decision,
             citation: span.source,
             treatment: span.source.treatment,
+            blockId,
             children: marked,
           });
         },

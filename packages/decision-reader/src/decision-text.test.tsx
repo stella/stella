@@ -180,6 +180,7 @@ test("a decision renders numbered anchored text and resolved marks without readi
       renderedCitations.push(citation.id);
       expect(citation.decision).toBe(props.decision);
       expect(citation.treatment).toBe(props.treatment);
+      expect(props.blockId).toBe("paragraph");
       return fakeReaderAdapters.renderDecisionLink({ citation, ...props });
     },
     loadProvisionPreview: async () => {
