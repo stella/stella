@@ -76,8 +76,12 @@ const scrollerOf = (element: Element): HTMLElement | undefined =>
   [...scrollers].find(
     (scroller) => scroller !== element && scroller.contains(element),
   );
+// An open popover's focus guards around its trigger are visually hidden and
+// fixed, so they take no row.
 const contentTop = (scroller: HTMLElement, element: Element): number =>
-  [...scroller.querySelectorAll("*")].indexOf(element) * ROW_PX;
+  [...scroller.querySelectorAll(":not([data-base-ui-focus-guard])")].indexOf(
+    element,
+  ) * ROW_PX;
 const setScrollTop = (scroller: HTMLElement, value: number) => {
   scrollTops.set(scroller, Math.max(0, value));
 };

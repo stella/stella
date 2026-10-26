@@ -237,9 +237,7 @@ for (const [locale, messages] of [
       },
     });
 
-    expect(ui.getAllByRole("button", { name: /1 C 11\/2020/u })).toHaveLength(
-      1,
-    );
+    expect(ui.getAllByRole("link", { name: /1 C 11\/2020/u })).toHaveLength(1);
     fireEvent.change(
       ui.getByRole("searchbox", { name: messages.common.court }),
       {
@@ -258,7 +256,7 @@ for (const [locale, messages] of [
       citingYear: 2020,
       citingSort: "newest",
     });
-    expect(ui.getByRole("button", { name: /1 C 11\/2020/u })).toBeTruthy();
+    expect(ui.getByRole("link", { name: /1 C 11\/2020/u })).toBeTruthy();
 
     fireEvent.click(ui.getByRole("combobox", { name: messages.common.sort }));
     const citationSort = await ui.findByRole("option", {

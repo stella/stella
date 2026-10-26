@@ -134,7 +134,7 @@ for (const [locale, messages, localizedThree] of [
       </QueryClientProvider>,
     );
 
-    expect(ui.getByRole("button", { name: /1 C 1\/2020/u })).toBeTruthy();
+    expect(ui.getByRole("link", { name: /1 C 1\/2020/u })).toBeTruthy();
     const row = ui.container;
     // The row names its decision once: the case number is the trigger, and
     // no chip repeats it or the court badge beside the court's name.
@@ -292,7 +292,7 @@ test("opens a citing decision at its excerpt", async () => {
       </IntlProvider>
     </QueryClientProvider>,
   );
-  fireEvent.focus(ui.getByRole("button", { name: /1 C 1\/2020/u }));
+  fireEvent.focus(ui.getByRole("link", { name: /1 C 1\/2020/u }));
   const open = await ui.findByRole("link", { name: en.common.openInStella });
   expect(
     new URL(
