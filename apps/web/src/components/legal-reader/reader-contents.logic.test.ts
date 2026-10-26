@@ -250,9 +250,9 @@ describe("reader contents", () => {
     );
   });
 
-  test("reader contents gives a section the trail of the heading it is in", () => {
+  test("reader contents gives a section the trail of the heading it is in, and marks a model's trail", () => {
     assertProperty(
-      "reader contents gives a section the trail of the heading it is in",
+      "reader contents gives a section the trail of the heading it is in, and marks a model's trail",
       fc.property(documentArbitrary, ({ blocks, sections }) => {
         const headings = readerBreadcrumbPaths(blocks);
         const outline = analysisOutline(sections);
@@ -265,15 +265,20 @@ describe("reader contents", () => {
           const trail = trails.get(row.anchorId);
           if (isHeadingRow(row)) {
             enclosing = headings.paths.get(row.anchorId) ?? [];
-            expect(trail?.at(-1)).toEqual({
+            expect(trail?.segments.at(-1)).toEqual({
               anchorId: row.anchorId,
               title: row.title,
             });
-            expect(trail).toEqual(enclosing);
+            expect(trail).toEqual({ type: "document", segments: enclosing });
           } else if (headings.headings.length === 0) {
-            expect(trail).toEqual(outline.sections.paths.get(row.anchorId));
+            // Only a model titled this trail, so it says so.
+            expect(trail).toEqual({
+              type: "analysis",
+              segments: outline.sections.paths.get(row.anchorId),
+              disclosure: "caseLaw",
+            });
           } else {
-            expect(trail).toEqual(enclosing);
+            expect(trail).toEqual({ type: "document", segments: enclosing });
           }
         }
       }),

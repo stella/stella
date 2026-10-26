@@ -18,11 +18,10 @@ import {
   fitReaderPath,
   readerProvisionNumber,
 } from "./reader-breadcrumb.logic";
-import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
-import type { ReaderContentsRow } from "./reader-contents.logic";
+import type { ReaderContentsRow, ReaderTrail } from "./reader-contents.logic";
 
 type ReaderBreadcrumbProps = {
-  path: readonly ReaderBreadcrumbSegment[];
+  trail: ReaderTrail;
   rows: readonly ReaderContentsRow[];
   /** The row being read, which Contents marks as the current location. */
   activeAnchorId: string | null;
@@ -150,12 +149,25 @@ const ReaderContentsList = ({
 };
 
 export const ReaderBreadcrumb = ({
-  path,
+  trail,
   rows,
   activeAnchorId,
   onJump,
 }: ReaderBreadcrumbProps) => {
   const t = useTranslations();
+  const path = trail.segments;
+  // A model's titles are named as AI-generated wherever the trail shows them.
+  const nameOf = (title: string) => {
+    switch (trail.type) {
+      case "document":
+        return title;
+      case "analysis":
+        return t("legalReader.contents.aiSection", { section: title });
+      default:
+        trail satisfies never;
+        return panic("Unhandled reader trail");
+    }
+  };
   const { visible, hidden } = compactReaderPath(path);
   const [layout, setLayout] = useState<ReturnType<typeof fitReaderPath>>();
   const [contentsOpen, setContentsOpen] = useState(false);
@@ -189,8 +201,11 @@ export const ReaderBreadcrumb = ({
           ? Math.max(44, (number?.getBoundingClientRect().width ?? 0) + 16)
           : 16,
       );
+      // The AI mark beside an analysis trail keeps its own width.
+      const mark = node.querySelector<HTMLElement>("[data-breadcrumb-ai-mark]");
       const fitted = fitReaderPath({
-        available: node.clientWidth,
+        available:
+          node.clientWidth - (mark?.getBoundingClientRect().width ?? 0),
         separatorWidth: 16,
         middleWidth: hidden.length === 0 ? 0 : 60,
         naturalWidths,
@@ -219,6 +234,7 @@ export const ReaderBreadcrumb = ({
       {hidden.map(({ anchorId, title }) => (
         <li key={anchorId}>
           <Button
+            aria-label={nameOf(title)}
             className="min-h-11 w-full justify-start text-start whitespace-normal"
             onClick={() => {
               onJump(anchorId);
@@ -246,7 +262,7 @@ export const ReaderBreadcrumb = ({
         aria-label={
           title === undefined
             ? t("statutes.outline")
-            : `${t("statutes.outline")}: ${title}`
+            : `${t("statutes.outline")}: ${nameOf(title)}`
         }
         render={
           <Button
@@ -287,7 +303,7 @@ export const ReaderBreadcrumb = ({
       ref={measure}
     >
       <span aria-atomic="true" aria-live="polite" className="sr-only">
-        {path.map(({ title }) => title).join(" › ")}
+        {path.map(({ title }) => nameOf(title)).join(" › ")}
       </span>
       <div
         aria-hidden="true"
@@ -325,7 +341,7 @@ export const ReaderBreadcrumb = ({
                   />
                 )}
               <Button
-                aria-label={segment.title}
+                aria-label={nameOf(segment.title)}
                 className="h-11 min-w-0 sm:h-11"
                 size="xs"
                 onClick={() => onJump(segment.anchorId)}
@@ -414,6 +430,18 @@ export const ReaderBreadcrumb = ({
               ...(current === undefined ? {} : { title: current.title }),
               ...(currentWidth === undefined ? {} : { width: currentWidth }),
             })}
+            {trail.type === "analysis" && current !== undefined && (
+              // A control of its own, so it sits beside the trigger.
+              <span
+                className="text-muted-foreground shrink-0 px-1 text-xs"
+                data-breadcrumb-ai-mark=""
+              >
+                <ReaderAiLabel
+                  context={trail.disclosure}
+                  label={t("caseLaw.notesFilter.ai")}
+                />
+              </span>
+            )}
           </li>
         )}
       </ol>

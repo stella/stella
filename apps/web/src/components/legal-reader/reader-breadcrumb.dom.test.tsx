@@ -11,7 +11,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register();
-const { act, cleanup, fireEvent, render, screen, waitFor } =
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
@@ -66,8 +66,8 @@ const mount = (onJump: (id: string) => void) =>
         <ReaderBreadcrumb
           activeAnchorId={path.at(-1)?.anchorId ?? null}
           onJump={onJump}
-          path={path}
           rows={rows}
+          trail={{ type: "document", segments: path }}
         />
       </TooltipProvider>
     </IntlProvider>,
@@ -80,8 +80,8 @@ test("Contents stays attached to its trigger as the visible heading path changes
         <ReaderBreadcrumb
           activeAnchorId={visiblePath.at(-1)?.anchorId ?? null}
           onJump={() => {}}
-          path={visiblePath}
           rows={rows}
+          trail={{ type: "document", segments: visiblePath }}
         />
       </TooltipProvider>
     </IntlProvider>
@@ -335,14 +335,11 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
   );
   try {
     const assertContentsAndJump = async () => {
+      const trailName = "Contents: Outcome (AI-generated section)";
       await waitFor(() =>
-        expect(
-          screen.getByRole("button", { name: "Contents: Outcome" }),
-        ).toBeTruthy(),
+        expect(screen.getByRole("button", { name: trailName })).toBeTruthy(),
       );
-      const contents = screen.getByRole("button", {
-        name: "Contents: Outcome",
-      });
+      const contents = screen.getByRole("button", { name: trailName });
       await act(async () => fireEvent.click(contents));
       expect(
         document
@@ -352,7 +349,9 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
       await act(async () => fireEvent.click(contents));
       await act(async () =>
         fireEvent.click(
-          screen.getByRole("button", { name: "Court reasoning" }),
+          within(screen.getByRole("navigation")).getByRole("button", {
+            name: "Court reasoning (AI-generated section)",
+          }),
         ),
       );
       expect(viewport.scrollTop).toBe(36);
@@ -363,6 +362,104 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
     rerender(reader("main"));
     await assertContentsAndJump();
   } finally {
+    viewport.remove();
+  }
+});
+
+test("a headings-less decision marks its analysis trail as AI-generated", async () => {
+  const { LegalReaderBreadcrumb } = await import("./legal-reader-breadcrumb");
+  jest.useFakeTimers();
+  const viewport = document.createElement("div");
+  const content = document.createElement("article");
+  const blocks = ["p-1", "p-2", "p-3"].map(
+    (anchorId) =>
+      ({
+        type: "paragraph",
+        id: anchorId,
+        anchorId,
+        plainText: `Paragraph ${anchorId}`,
+        inlines: [],
+      }) satisfies Block,
+  );
+  for (const [index, { anchorId }] of blocks.entries()) {
+    const paragraph = document.createElement("p");
+    paragraph.dataset["anchor"] = anchorId;
+    paragraph.getBoundingClientRect = () =>
+      new DOMRect(0, 100 + index * 100 - viewport.scrollTop, 200, 24);
+    content.append(paragraph);
+  }
+  viewport.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+  Object.defineProperties(viewport, {
+    clientHeight: { value: 300 },
+    scrollHeight: { value: 1000 },
+  });
+  viewport.append(content);
+  document.body.append(viewport);
+  const tree = [
+    {
+      id: "a-1",
+      label: "Facts",
+      category: "facts",
+      startAnchorId: "p-1",
+      endAnchorId: "p-1",
+      annotations: [],
+      children: [
+        {
+          id: "a-2",
+          label: "Procedural history",
+          category: "procedural-history",
+          startAnchorId: "p-2",
+          endAnchorId: "p-2",
+          annotations: [],
+          children: [],
+        },
+      ],
+    },
+  ];
+  const Reader = () => {
+    const analysis = useAnalysisReaderOutline(tree);
+    return (
+      <AnalysisProviders>
+        <LegalReaderBreadcrumb
+          analysis={analysis}
+          blocks={blocks}
+          content={content}
+          viewport={viewport}
+        />
+      </AnalysisProviders>
+    );
+  };
+  try {
+    render(<Reader />);
+    const navigation = screen.getByRole("navigation", {
+      name: messages.statutes.outline,
+    });
+    // Before the first section, the trail shows nothing a model wrote.
+    expect(navigation.querySelector('[data-slot="ai-label"]')).toBeNull();
+    await act(async () => {
+      viewport.scrollTop = 140;
+      viewport.dispatchEvent(new Event("scroll"));
+      jest.advanceTimersByTime(220);
+    });
+    const trigger = within(navigation).getByRole("button", {
+      name: "Contents: Procedural history (AI-generated section)",
+    });
+    expect(trigger.textContent).toBe("Procedural history");
+    expect(
+      within(navigation).getByRole("button", {
+        name: "Facts (AI-generated section)",
+      }),
+    ).toBeTruthy();
+    const mark = navigation.querySelector("[data-breadcrumb-ai-mark]");
+    expect(mark?.closest("li")).toBe(trigger.closest("li"));
+    expect(mark?.querySelector('[data-slot="ai-label"]')?.textContent).toBe(
+      messages.caseLaw.notesFilter.ai,
+    );
+    expect(navigation.querySelector('[aria-live="polite"]')?.textContent).toBe(
+      "Facts (AI-generated section) › Procedural history (AI-generated section)",
+    );
+  } finally {
+    cleanup();
     viewport.remove();
   }
 });
@@ -777,8 +874,8 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
           <ReaderBreadcrumb
             activeAnchorId={path.at(-1)?.anchorId ?? null}
             onJump={() => {}}
-            path={path}
             rows={rows}
+            trail={{ type: "document", segments: path }}
           />
         </div>
       </TooltipProvider>
@@ -1084,6 +1181,11 @@ test("Contents places streamed analysis sections among the headings without movi
     );
     expect(rowAt("b3")?.getAttribute("aria-current")).toBe("location");
     expect(rowAt("b2")?.hasAttribute("aria-current")).toBe(false);
+    expect(
+      screen
+        .getByRole("navigation", { name: messages.statutes.outline })
+        .querySelector("[data-breadcrumb-ai-mark]"),
+    ).toBeNull();
   } finally {
     positioned.mockRestore();
     cleanup();

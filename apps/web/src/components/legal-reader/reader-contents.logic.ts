@@ -28,10 +28,19 @@ export type ReaderContentsRow =
       disclosure: AiDisclosureContext;
     };
 
+/** The breadcrumb trail, and whether the document or a model titled it. */
+export type ReaderTrail =
+  | { type: "document"; segments: readonly ReaderBreadcrumbSegment[] }
+  | {
+      type: "analysis";
+      segments: readonly ReaderBreadcrumbSegment[];
+      disclosure: AiDisclosureContext;
+    };
+
 export type ReaderContents = {
   rows: readonly ReaderContentsRow[];
   /** The breadcrumb trail while each row's anchor is the one being read. */
-  trails: ReadonlyMap<string, readonly ReaderBreadcrumbSegment[]>;
+  trails: ReadonlyMap<string, ReaderTrail>;
 };
 
 type ReaderContentsOptions = {
@@ -110,15 +119,18 @@ export const readerContents = ({
   // outline's; otherwise a section keeps the trail of the heading it is in.
   const analysisTrails =
     headings.headings.length === 0 ? analysis?.sections.paths : undefined;
-  const trails = new Map<string, readonly ReaderBreadcrumbSegment[]>();
-  let enclosing: readonly ReaderBreadcrumbSegment[] = [];
+  const trails = new Map<string, ReaderTrail>();
+  let enclosing: ReaderTrail = { type: "document", segments: [] };
   for (const row of ordered) {
     switch (row.type) {
       case "heading":
       case "headingWithAnalysis": {
-        enclosing =
-          headings.paths.get(row.anchorId) ??
-          panic("Document heading has no breadcrumb path");
+        enclosing = {
+          type: "document",
+          segments:
+            headings.paths.get(row.anchorId) ??
+            panic("Document heading has no breadcrumb path"),
+        };
         trails.set(row.anchorId, enclosing);
         break;
       }
@@ -127,8 +139,13 @@ export const readerContents = ({
           row.anchorId,
           analysisTrails === undefined
             ? enclosing
-            : (analysisTrails.get(row.anchorId) ??
-                panic("Analysis section has no breadcrumb path")),
+            : {
+                type: "analysis",
+                segments:
+                  analysisTrails.get(row.anchorId) ??
+                  panic("Analysis section has no breadcrumb path"),
+                disclosure: row.disclosure,
+              },
         );
         break;
       }

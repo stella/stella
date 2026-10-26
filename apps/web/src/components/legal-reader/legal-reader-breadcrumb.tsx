@@ -13,9 +13,11 @@ import {
   observeReaderBreadcrumb,
   scrollReaderBreadcrumbToHeading,
 } from "./reader-breadcrumb-scroll";
-import type { ReaderBreadcrumbSegment } from "./reader-breadcrumb.logic";
 import { readerContents } from "./reader-contents.logic";
-import type { ReaderAnalysisOutline } from "./reader-contents.logic";
+import type {
+  ReaderAnalysisOutline,
+  ReaderTrail,
+} from "./reader-contents.logic";
 
 type LegalReaderBreadcrumbProps = {
   blocks: readonly Block[];
@@ -24,14 +26,11 @@ type LegalReaderBreadcrumbProps = {
   viewport: HTMLElement | null;
 };
 
-type ReaderPosition = {
-  anchorId: string;
-  trail: readonly ReaderBreadcrumbSegment[];
-};
+type ReaderPosition = { anchorId: string; trail: ReaderTrail };
 
 // Before the first row, one stable empty trail keeps the bar's measurement
 // from re-running on every render.
-const NO_TRAIL: readonly ReaderBreadcrumbSegment[] = [];
+const NO_TRAIL: ReaderTrail = { type: "document", segments: [] };
 
 export const LegalReaderBreadcrumb = ({
   blocks,
@@ -70,7 +69,9 @@ export const LegalReaderBreadcrumb = ({
         // Sections streaming in rebuild the rows but keep each heading's
         // trail, so the bar and its live region stay as they are.
         setPosition((previous) =>
-          previous?.anchorId === anchorId && previous.trail === trail
+          previous?.anchorId === anchorId &&
+          previous.trail.type === trail.type &&
+          previous.trail.segments === trail.segments
             ? previous
             : { anchorId, trail },
         );
@@ -80,7 +81,7 @@ export const LegalReaderBreadcrumb = ({
   return (
     <ReaderBreadcrumb
       activeAnchorId={position?.anchorId ?? null}
-      path={position?.trail ?? NO_TRAIL}
+      trail={position?.trail ?? NO_TRAIL}
       rows={contents.rows}
       onJump={(anchorId) => {
         if (content === null || viewport === null) {
