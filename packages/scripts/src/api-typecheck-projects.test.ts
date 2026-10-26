@@ -193,7 +193,7 @@ test("Bun consumers read referenced declarations instead of source", () => {
         "--listFilesOnly",
         "--project=tests/tsconfig.json",
       ],
-      { cwd: directory, encoding: "utf-8" },
+      { maxBuffer: 2 ** 30, cwd: directory, encoding: "utf-8" },
     );
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
@@ -264,7 +264,7 @@ test("the API declaration command emits its public surface", () => {
     const result = spawnSync(
       process.execPath,
       [path.resolve(REPO_ROOT, "apps/api", wrapper), ...args],
-      { cwd: directory, encoding: "utf-8" },
+      { maxBuffer: 2 ** 30, cwd: directory, encoding: "utf-8" },
     );
     expect(result.error).toBeUndefined();
     expect(result.status, result.stdout + result.stderr).toBe(0);

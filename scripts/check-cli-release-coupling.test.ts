@@ -528,6 +528,7 @@ test("release contract reads committed data without installed dependencies or de
         expect(archive.error).toBeUndefined();
         expect(archive.status, archive.stderr.toString()).toBe(0);
         const extracted = spawnSync("tar", ["-x", "-C", root], {
+          maxBuffer: 2 ** 30,
           input: archive.stdout,
           timeout: 10_000,
         });
@@ -582,7 +583,11 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
   try {
     copyNoInstallFiles(root);
     const git = (...args: string[]) => {
-      const result = spawnSync("git", args, { cwd: root, encoding: "utf-8" });
+      const result = spawnSync("git", args, {
+        maxBuffer: 2 ** 30,
+        cwd: root,
+        encoding: "utf-8",
+      });
       expect(result.status).toBe(0);
       return result.stdout.trim();
     };

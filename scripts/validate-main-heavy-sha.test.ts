@@ -84,7 +84,11 @@ const runActionScript = async (
 };
 
 const runGit = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+  execFileSync("git", args, {
+    maxBuffer: 2 ** 30,
+    cwd,
+    encoding: "utf-8",
+  }).trim();
 
 const runStep = (
   script: string,
