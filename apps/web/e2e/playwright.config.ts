@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { resolveE2eExecutionProfile } from "./execution-profile";
@@ -12,6 +13,9 @@ const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const IS_CI = process.env["CI"] !== undefined;
 const E2E_OUTPUT_DIR = process.env["E2E_OUTPUT_DIR"] ?? "test-results";
 const E2E_BLOB_OUTPUT_DIR = path.join(E2E_OUTPUT_DIR, "blob-report");
+// Workers inherit this coordinator token, including replacement workers.
+process.env["E2E_ROUTE_SMOKE_RUN_ID"] ??= randomUUID();
+
 const executionProfile = resolveE2eExecutionProfile(
   process.env["E2E_EXECUTION_PROFILE"],
 );

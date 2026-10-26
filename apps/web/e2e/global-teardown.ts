@@ -10,6 +10,7 @@ import {
   type E2eCleanupTarget,
   readDeferredE2eCleanup,
 } from "./helpers/deferred-cleanup";
+import { cleanupSmokeWorlds } from "./helpers/smoke-world";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
@@ -60,8 +61,16 @@ const globalTeardown = async (config: FullConfig): Promise<void> => {
       result: await readDeferredE2eCleanup(outputDirectory),
     })),
   );
+  const scaleCleanup = await Promise.allSettled(
+    outputDirectories.map(cleanupSmokeWorlds),
+  );
   const targets = cleanupByDirectory.flatMap(({ result }) => result.targets);
   const failures = cleanupByDirectory.flatMap(({ result }) => result.failures);
+  for (const result of scaleCleanup) {
+    if (result.status === "rejected") {
+      failures.push(result.reason);
+    }
+  }
 
   if (targets.length === 0) {
     if (failures.length > 0) {

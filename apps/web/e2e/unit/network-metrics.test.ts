@@ -11,6 +11,7 @@ import {
   normalizeApiPath,
   responseSizeAllowance,
   type RouteNetworkMetrics,
+  summarizeCapture,
   waitForQuietPeriod,
 } from "../helpers/network";
 
@@ -107,11 +108,14 @@ const metrics = (
   responseSizes: Record<string, number> = {},
   missingResponseSizeCounts: Record<string, number> = {},
 ): RouteNetworkMetrics => ({
+  requestCosts: {},
   requests: [...requests].toSorted(),
   requestCounts,
   depth,
   depthChain: [],
   dbQueries,
+  transactions: {},
+  missingTransactionCounts: {},
   missingDbQueryCounts,
   responseSizes,
   missingResponseSizeCounts,
@@ -818,5 +822,55 @@ describe("merge-base scoped comparison", () => {
         results,
       ).problems,
     ).toEqual([]);
+  });
+});
+
+describe("per-request scale evidence", () => {
+  test("retains every normalized request cost instead of only its maximum", () => {
+    const costs = [1, 4, 2];
+    const capture = {
+      depthChain: [["GET /v1/entities/:id"]],
+      requests: costs.map((count) => ({
+        method: "GET",
+        pathname: `/v1/entities/${UUID}`,
+        dbQueries: count,
+        dbQueryHeaderMissing: false,
+        transactions: count - 1,
+        transactionHeaderMissing: false,
+        responseBytes: count * 100,
+        responseBytesUnavailable: false,
+      })),
+    };
+    const result = summarizeCapture(capture);
+    const key = "GET /v1/entities/:id";
+    expect(result.requestCosts[key]).toEqual(
+      costs.map((count) => ({
+        dbQueries: count,
+        transactions: count - 1,
+        responseBytes: count * 100,
+      })),
+    );
+    expect(result.transactions[key]).toBe(3);
+    expect(result.requestCounts[key]).toBe(3);
+  });
+
+  test("retains missing transaction headers as missing evidence", () => {
+    const result = summarizeCapture({
+      depthChain: [],
+      requests: [
+        {
+          method: "GET",
+          pathname: "/v1/contacts",
+          dbQueries: 0,
+          dbQueryHeaderMissing: false,
+          transactions: null,
+          transactionHeaderMissing: true,
+          responseBytes: 2,
+          responseBytesUnavailable: false,
+        },
+      ],
+    });
+    expect(result.missingTransactionCounts).toEqual({ "GET /v1/contacts": 1 });
+    expect(result.transactions).toEqual({});
   });
 });

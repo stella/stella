@@ -1540,6 +1540,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_LANDING_URL",
   "E2E_NETWORK_BASELINE",
   "E2E_OUTPUT_DIR",
+  // Playwright coordinator token persists isolated route worlds across worker replacement.
+  "E2E_ROUTE_SMOKE_RUN_ID",
   "E2E_SOAK_REPLAY",
   "E2E_SOAK_SEED",
   "E2E_SOAK_STEPS",

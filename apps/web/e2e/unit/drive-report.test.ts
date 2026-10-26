@@ -25,6 +25,8 @@ const sample = (overrides: Partial<MeasureSample> = {}): MeasureSample => ({
 const request = (dbQueries: number | null, responseBytes: number | null) => ({
   dbQueries,
   dbQueryHeaderMissing: dbQueries === null,
+  transactions: 0,
+  transactionHeaderMissing: false,
   method: "GET",
   pathname: "/v1/contacts",
   responseBytes,
