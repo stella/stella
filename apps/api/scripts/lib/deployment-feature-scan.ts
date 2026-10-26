@@ -27,9 +27,19 @@
 //      under a prefix declared always-on; the rest are unclassified.
 
 import { panic } from "better-result";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
+import {
+  type CallExpression,
+  isObjectLiteralProperty,
+  type MemberExpression,
+  type Node,
+  type ObjectExpression,
+  type ObjectPattern,
+  parseSource,
+  type Program,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 export type SourceRecord = { file: string; source: string };
 
@@ -124,7 +134,7 @@ export const BASELINABLE_KINDS: ReadonlySet<Finding["kind"]> = new Set([
 // --- AST helpers -------------------------------------------------------------
 
 type ParsedSource = {
-  sourceFile: ts.SourceFile;
+  program: Program;
   flagReads?: FlagRead[];
 };
 
@@ -147,88 +157,113 @@ const parsedSource = (
   if (cached !== undefined) {
     return cached;
   }
-  const parsed: ParsedSource = {
-    sourceFile: ts.createSourceFile(
-      file,
-      source,
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    ),
-  };
+  const parsed: ParsedSource = { program: parseSource(file, source).program };
   byText.set(source, parsed);
   return parsed;
 };
 
-const parse = (cache: ParseCache, record: SourceRecord): ts.SourceFile =>
-  parsedSource(cache, record).sourceFile;
+const parse = (cache: ParseCache, record: SourceRecord): Program =>
+  parsedSource(cache, record).program;
 
-const unwrap = (node: ts.Expression): ts.Expression => {
+const unwrap = (node: Node): Node => {
   let current = node;
   while (
-    ts.isParenthesizedExpression(current) ||
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isTypeAssertionExpression(current)
+    current.type === "ChainExpression" ||
+    current.type === "ParenthesizedExpression" ||
+    current.type === "TSAsExpression" ||
+    current.type === "TSNonNullExpression" ||
+    current.type === "TSSatisfiesExpression" ||
+    current.type === "TSTypeAssertion"
   ) {
     current = current.expression;
   }
   return current;
 };
 
-const literalText = (node: ts.Node | undefined): string | undefined =>
-  node !== undefined &&
-  (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
-    ? node.text
+const literalText = (node: Node | undefined): string | undefined => {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return node.value;
+  }
+  return node?.type === "TemplateLiteral" && node.expressions.length === 0
+    ? (node.quasis.at(0)?.value.cooked ?? undefined)
     : undefined;
+};
 
 const featureName = (name: string | undefined): string | undefined =>
   name?.startsWith(FEATURE_PREFIX) === true ? name : undefined;
 
-const propertyNameText = (name: ts.PropertyName): string | undefined =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+/** A non-computed identifier or string key, as TypeScript reads its text. */
+const propertyNameText = (
+  node:
+    | ObjectExpression["properties"][number]
+    | ObjectPattern["properties"][number],
+): string | undefined => {
+  if (node.type === "SpreadElement") {
+    return undefined;
+  }
+  if (node.type === "RestElement") {
+    return node.argument.type === "Identifier" ? node.argument.name : undefined;
+  }
+  if (node.computed) {
+    return undefined;
+  }
+  if (node.key.type === "Identifier") {
+    return node.key.name;
+  }
+  return node.key.type === "Literal" && typeof node.key.value === "string"
+    ? node.key.value
+    : undefined;
+};
+
+/** The name of a non-computed member, spelled as TypeScript's `name.text`. */
+const memberName = (node: MemberExpression): string | undefined => {
+  if (node.computed) {
+    return undefined;
+  }
+  return node.property.type === "PrivateIdentifier"
+    ? `#${node.property.name}`
+    : node.property.name;
+};
 
 /** `process.env`, `globalThis.process.env`, `Bun.env`, `import.meta.env`. */
-const isProcessEnvObject = (node: ts.Expression): boolean => {
+const isProcessEnvObject = (node: Node): boolean => {
   const target = unwrap(node);
-  if (!ts.isPropertyAccessExpression(target) || target.name.text !== "env") {
+  if (target.type !== "MemberExpression" || memberName(target) !== "env") {
     return false;
   }
-  const owner = unwrap(target.expression);
-  if (ts.isIdentifier(owner)) {
-    return owner.text === "process" || owner.text === "Bun";
+  const owner = unwrap(target.object);
+  if (owner.type === "Identifier") {
+    return owner.name === "process" || owner.name === "Bun";
   }
-  if (ts.isMetaProperty(owner)) {
-    return owner.keywordToken === ts.SyntaxKind.ImportKeyword;
+  if (owner.type === "MetaProperty") {
+    return owner.meta.name === "import";
   }
+  if (owner.type !== "MemberExpression") {
+    return false;
+  }
+  const name = memberName(owner);
   return (
-    ts.isPropertyAccessExpression(owner) &&
-    ts.isIdentifier(owner.expression) &&
-    owner.expression.text === "globalThis" &&
-    (owner.name.text === "process" || owner.name.text === "Bun")
+    owner.object.type === "Identifier" &&
+    owner.object.name === "globalThis" &&
+    (name === "process" || name === "Bun")
   );
 };
 
-const isApiEnvObject = (node: ts.Expression): boolean => {
+const isApiEnvObject = (node: Node): boolean => {
   const target = unwrap(node);
-  return ts.isIdentifier(target) && target.text === "env";
+  return target.type === "Identifier" && target.name === "env";
 };
 
-const memberKey = (
-  node: ts.PropertyAccessExpression | ts.ElementAccessExpression,
-): string | undefined =>
-  ts.isPropertyAccessExpression(node)
-    ? node.name.text
-    : literalText(node.argumentExpression);
+const memberKey = (node: MemberExpression): string | undefined =>
+  node.computed ? literalText(node.property) : memberName(node);
 
-const isOwnerCall = (node: ts.CallExpression): boolean => {
-  const callee = unwrap(node.expression);
-  return ts.isIdentifier(callee) && callee.text === OWNER_CALL;
+const isOwnerCall = (node: CallExpression): boolean => {
+  const callee = unwrap(node.callee);
+  return callee.type === "Identifier" && callee.name === OWNER_CALL;
 };
 
 /** The read form of a member or destructuring on `object`, if it is an env object. */
-const envReadForm = (object: ts.Expression): FlagReadForm | undefined => {
+const envReadForm = (object: Node): FlagReadForm | undefined => {
   if (isProcessEnvObject(object)) {
     return "process-env-read";
   }
@@ -236,54 +271,47 @@ const envReadForm = (object: ts.Expression): FlagReadForm | undefined => {
 };
 
 /** Every literal deployment-flag read under `root`, in source order. */
-const collectFlagReads = (file: string, root: ts.Node): FlagRead[] => {
+const collectFlagReads = (file: string, root: Node): FlagRead[] => {
   const reads: FlagRead[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && isOwnerCall(node)) {
+  walk(root, (node, ancestors) => {
+    if (node.type === "CallExpression" && isOwnerCall(node)) {
       const flag = featureName(literalText(node.arguments[0]));
       if (flag !== undefined) {
         reads.push({ file, flag, form: "owner-call" });
       }
     } else if (
-      ts.isPropertyAssignment(node) &&
-      FEATURE_TAG_PROPERTIES.has(propertyNameText(node.name) ?? "")
+      isObjectLiteralProperty(node, ancestors.at(-1)) &&
+      node.kind === "init" &&
+      !node.method &&
+      !node.shorthand &&
+      FEATURE_TAG_PROPERTIES.has(propertyNameText(node) ?? "")
     ) {
-      const flag = featureName(literalText(unwrap(node.initializer)));
+      const flag = featureName(literalText(unwrap(node.value)));
       if (flag !== undefined) {
         reads.push({ file, flag, form: "feature-tag" });
       }
-    } else if (
-      ts.isPropertyAccessExpression(node) ||
-      ts.isElementAccessExpression(node)
-    ) {
+    } else if (node.type === "MemberExpression") {
       const flag = featureName(memberKey(node));
-      const form = envReadForm(node.expression);
+      const form = envReadForm(node.object);
       if (flag !== undefined && form !== undefined) {
         reads.push({ file, flag, form });
       }
     } else if (
-      ts.isVariableDeclaration(node) &&
-      node.initializer !== undefined &&
-      ts.isObjectBindingPattern(node.name)
+      node.type === "VariableDeclarator" &&
+      node.init !== null &&
+      node.id.type === "ObjectPattern"
     ) {
-      const form = envReadForm(node.initializer);
+      const form = envReadForm(node.init);
       if (form !== undefined) {
-        for (const element of node.name.elements) {
-          const key = element.propertyName ?? element.name;
-          const flag = featureName(
-            ts.isIdentifier(key) || ts.isStringLiteral(key)
-              ? key.text
-              : undefined,
-          );
+        for (const element of node.id.properties) {
+          const flag = featureName(propertyNameText(element));
           if (flag !== undefined) {
             reads.push({ file, flag, form });
           }
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(root);
+  });
   return reads;
 };
 
@@ -298,36 +326,31 @@ const declaredFlagsFromOwner = (
   cache: ParseCache,
   ownerSource: string,
 ): string[] => {
-  const sourceFile = parse(cache, {
+  const program = parse(cache, {
     file: DEPLOYMENT_FEATURE_OWNER_FILE,
     source: ownerSource,
   });
   const flags: string[] = [];
-  const visit = (node: ts.Node): void => {
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === OWNER_MAP_NAME &&
-      node.initializer !== undefined
+      node.type !== "VariableDeclarator" ||
+      node.id.type !== "Identifier" ||
+      node.id.name !== OWNER_MAP_NAME ||
+      node.init === null
     ) {
-      const literal = unwrap(node.initializer);
-      if (ts.isObjectLiteralExpression(literal)) {
-        for (const property of literal.properties) {
-          const name =
-            property.name === undefined
-              ? undefined
-              : propertyNameText(property.name);
-          const flag = featureName(name);
-          if (flag !== undefined) {
-            flags.push(flag);
-          }
+      return undefined;
+    }
+    const literal = unwrap(node.init);
+    if (literal.type === "ObjectExpression") {
+      for (const property of literal.properties) {
+        const flag = featureName(propertyNameText(property));
+        if (flag !== undefined) {
+          flags.push(flag);
         }
       }
-      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    return "skip-children";
+  });
   return flags.toSorted();
 };
 
@@ -362,7 +385,7 @@ export type ScanResult = {
 
 const fileFlagReads = (cache: ParseCache, record: SourceRecord): FlagRead[] => {
   const parsed = parsedSource(cache, record);
-  parsed.flagReads ??= collectFlagReads(record.file, parsed.sourceFile);
+  parsed.flagReads ??= collectFlagReads(record.file, parsed.program);
   return parsed.flagReads;
 };
 
