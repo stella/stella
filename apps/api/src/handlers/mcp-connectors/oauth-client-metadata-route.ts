@@ -5,7 +5,7 @@ import { routes } from "@/api/http/route";
 // OAuth Client ID Metadata Documents (draft-ietf-oauth-client-id-metadata-
 // document): external MCP authorization servers fetch the first URL to resolve
 // stella's client metadata, and the second identifies the stella CLI, so the
-// routes must stay public (no auth macro).
+// routes must stay public (no caller authentication).
 export const mcpOAuthClientMetadataRoute = routes(
   {
     "/oauth/client-metadata.json": { GET: metadataHandler },

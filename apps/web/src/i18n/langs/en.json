@@ -507,6 +507,24 @@
     "addEntry": "Add entry",
     "amount": "Amount",
     "amountMustBePositive": "Amount must be greater than zero",
+    "approval": {
+      "approveSelected": "Approve {count, plural, one {# selected entry} other {# selected entries}}",
+      "empty": "Nothing on this matter is waiting for approval.",
+      "failed": "The change was not saved. Try again.",
+      "myTime": "My time",
+      "refusals": {
+        "invalidEntry": "Add a description and check the work date, then approve the entry.",
+        "notApprover": "Only the entry's assigned approver or an administrator can approve it.",
+        "notFound": "This entry no longer exists. Refresh the list.",
+        "runningTimer": "Stop the running timer before approving this entry.",
+        "unpriced": "This entry has no rate. Set a rate for this matter, then approve it.",
+        "wrongStatus": "This entry is no longer a draft. Refresh the list."
+      },
+      "returnComment": "Reason for returning",
+      "selectEntry": "Select entry",
+      "timeEntries": "Time entries",
+      "title": "Approvals"
+    },
     "approve": "Approve",
     "approveSelected": "Approve selected",
     "batchActions": "Batch actions",
@@ -594,6 +612,7 @@
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
       "outsideScope": "Outside the scope of VAT, 0 %",
+      "pendingApprovals": "{count, plural, one {# item is awaiting approval} other {# items are awaiting approval}}. Review approvals.",
       "rate": "Rate",
       "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.",
       "readyTitle": "Ready to issue",
@@ -1024,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Human"
+      "human": "Human",
+      "toggleState": "{label}: {state, select, on {on} other {off}}"
     },
     "pagination": {
       "goToPage": "Go to page {page}",
@@ -1147,6 +1167,7 @@
       "citedDecisionPassage": "Passage in the decision",
       "cites": "Cites",
       "dissentByline": "Dissenting: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Go to paragraph} other {Go to paragraphs}}",
       "judgeRole": {
         "advocateGeneral": "Advocate General",
         "dissenting": "Dissenting opinion",
@@ -1486,7 +1507,7 @@
       "label": "Mock AI"
     },
     "modelSelector": {
-      "allModels": "All models ({count, number})",
+      "allModels": "All models",
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",
       "belowFrontier": "Below the best trade-offs",
@@ -2056,7 +2077,6 @@
       "orLetUsKnowAt": "or let us know at",
       "viewDocumentation": "View documentation"
     },
-    "enterKey": "↵",
     "error": "Error",
     "expenses": "Expenses",
     "export": {
@@ -2205,10 +2225,12 @@
     "scrollToTop": "Scroll to top",
     "search": "Search...",
     "searchIn": "Search in",
+    "searchMembers": "Search members…",
     "selectAMatter": "Select a matter",
     "selectARole": "Select a role",
     "selectAll": "Select all",
     "selectDate": "Select date…",
+    "selected": "Selected",
     "sessions": "Sessions",
     "settings": "Settings",
     "showAll": "Show all",
@@ -4253,6 +4275,8 @@
       "commentPlaceholder": "Write a comment…",
       "commentText": "Comment text",
       "commentedPassage": "Commented passage",
+      "editComment": "Edit comment",
+      "editedAt": "Edited {time}",
       "guestAuthor": "You",
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.",
       "guestMigrationComplete": "Highlights and notes saved.",
@@ -4770,6 +4794,7 @@
     "modelError": "The model could not finish this answer.",
     "networkError": "The connection was interrupted. Try again.",
     "regenerate": "Regenerate answer",
+    "selectionError": "Select text from the decision itself.",
     "send": "Send follow-up",
     "share": "Share with team",
     "timeoutError": "The answer timed out. Try again.",
@@ -5359,7 +5384,7 @@
     "importDescription": "Styles are extracted into a fresh, content-free DOCX.",
     "importTitle": "Import style set",
     "loadFailed": "Style sets could not be loaded",
-    "newDocument": "New document",
+    "newDocument": "New DOCX document",
     "pickerDescription": "Choose the formatting system for the new file.",
     "renameTitle": "Rename style set",
     "replace": "Replace source",
@@ -5643,7 +5668,7 @@
     "moveToMatter": "Save to matter",
     "moveToMatterAnyway": "Save anyway",
     "myDefaultLookupFormat": "My default",
-    "newFromTemplate": "New document from template",
+    "newFromTemplate": "New DOCX document from template",
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.",
     "newTemplate": "New template",
     "noTemplates": "No templates yet",
@@ -6014,6 +6039,7 @@
         "action": "Edit in desktop",
         "authRequiredDescription": "Refresh stella and sign in again before using desktop editing.",
         "authRequiredTitle": "Your session expired",
+        "editInApplication": "Edit in <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edit this file locally and sync changes with stella.",
         "forceRelease": "Force release",
         "notOpenedDescription": "stella desktop did not confirm that <bdi>{application}</bdi> opened. Start stella desktop and try again.",
@@ -6037,13 +6063,15 @@
         "alreadyInstalled": "Already installed? Connect it",
         "connect": "Connect stella desktop",
         "connected": "stella desktop is connected",
+        "download": "Download stella desktop",
         "editNone": "Download stella desktop to edit this file",
         "editOutdated": "Update stella desktop to edit",
         "editReason": "Desktop editing opens the file in an app on your computer through stella desktop.",
         "signCurrent": "Sign with stella desktop",
         "signNone": "Download stella desktop to sign this PDF",
         "signOutdated": "Update stella desktop to sign",
-        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop."
+        "signReason": "Signing uses the certificate on your computer, so it runs in stella desktop.",
+        "update": "Update stella desktop"
       },
       "downloadAs": "Download as…",
       "downloadAsZip": "Download as ZIP",
@@ -6056,8 +6084,10 @@
       "itemLimitReached": "This matter has reached its item limit.",
       "maxEntitiesReached": "Maximum number of items reached",
       "ocrAlreadyProcessed": "Text recognition has already completed",
+      "ocrBatchHelp": "Queued documents are processed in the next OCR batch.",
       "ocrQueueFailed": "Couldn't queue text recognition",
-      "ocrQueued": "Text recognition queued for the next OCR batch",
+      "ocrQueued": "Text recognition queued",
+      "ocrQueuedForBatch": "Text recognition queued for the next OCR batch",
       "pdfSigning": {
         "alreadySigningTitle": "Signing is already in progress in stella desktop",
         "cancelledBaseVersionDescription": "The document changed while it was being signed. Open the newest version and sign again.",
@@ -6114,6 +6144,7 @@
         "waitingDescription": "Choose a signing certificate in stella desktop to sign this PDF.",
         "waitingTitle": "Waiting for stella desktop"
       },
+      "queueForOcr": "Queue for OCR",
       "rateLimited": "Rate limited; resuming in {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "What to do with {fileName}",
@@ -6125,7 +6156,6 @@
       "removeMetadata": "Remove document metadata",
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
-      "runOcr": "Queue OCR",
       "scrubFailed": "This file's metadata could not be removed, so nothing was downloaded",
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
       "uploadedSuccessfully": "Files uploaded successfully",
@@ -6204,8 +6234,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Set lead",
-        "noLead": "No lead",
-        "searchMembers": "Search members…"
+        "noLead": "No lead"
       },
       "to": "To"
     },
@@ -6267,6 +6296,7 @@
       "deleteAll": "Delete all",
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?",
       "hideColumn": "Hide column",
+      "moveFailed": "{failed, plural, one {# of {total} items could not be moved.} other {# of {total} items could not be moved.}}",
       "readOnlyGrouping": "This grouping is read-only",
       "selectPropertyHint": "Select a property to group by in the toolbar",
       "uploadDocument": "Upload document",
@@ -6285,10 +6315,10 @@
       "addMember": "Add to matter",
       "addMemberDescription": "Choose an existing team member to add to this matter",
       "alreadyMember": "User is already a member",
+      "alreadyOnMatter": "Already on this matter",
       "cannotRemoveLast": "Cannot remove the last member",
       "noMembersFound": "No members found",
-      "removeMemberConfirm": "Remove this member from the matter?",
-      "selectMember": "Select a member"
+      "removeMemberConfirm": "Remove this member from the matter?"
     },
     "newDocument": "New document",
     "newFolder": "New folder",
@@ -6326,7 +6356,6 @@
           "approvedBy": "Approved by",
           "channel": "Channel",
           "dateTime": "Date and time",
-          "eventId": "Event ID",
           "notAvailable": "Not available",
           "openTarget": "Open item",
           "runId": "Run ID",
@@ -6413,6 +6442,7 @@
       "addParty": "Add party",
       "changeClient": "Change client",
       "client": "Client",
+      "movedToClient": "Moved <bdi>{matterName}</bdi> to <bdi>{clientName}</bdi>",
       "noClient": "No client assigned",
       "noClientOptional": "No client (optional)",
       "noParties": "No parties added to this matter.",
@@ -6431,7 +6461,9 @@
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
       "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
+      "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
       "promotedSuccess": "Matter promoted",
+      "recentClients": "Recent clients",
       "removeClient": "Remove client",
       "removeParty": "Remove party",
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?",
@@ -6506,6 +6538,11 @@
       },
       "passwordLabel": "Enter the PDF password",
       "previousPage": "Previous page",
+      "selection": {
+        "explainPassagePrompt": "Explain this passage of {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "pp. {start}–{end}"
+      },
       "showOriginal": "Show original pages",
       "unlock": "Unlock"
     },
@@ -6643,6 +6680,12 @@
     "referenceTaken": "This reference number is already in use",
     "sections": {
       "parties": "Parties"
+    },
+    "switcher": {
+      "searchPlaceholder": "Find a matter…",
+      "trigger": "Switch matter",
+      "viewAll": "View all matters",
+      "viewAllForClient": "View all matters for {clientName}"
     },
     "table": {
       "clearFlags": "Clear flags",

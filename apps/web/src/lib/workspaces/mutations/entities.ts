@@ -23,8 +23,10 @@ import { replaceCachedFileName } from "@/lib/files/queries";
 import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
-import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
-import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import {
+  invalidateDeletedEntityQueries,
+  invalidateRenamedEntityQueries,
+} from "@/lib/workspaces/mutations/entities.logic";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 
 type CreateEntitiesVars = {
@@ -86,6 +88,7 @@ export const useDeleteEntities = () => {
       await invalidateDeletedEntityQueries({
         queryClient,
         workspaceId,
+        entityIds,
       });
     },
     onError: (error) => {
@@ -310,8 +313,10 @@ export const useRenameEntity = (
       detached(
         (async () => {
           await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: entitiesKeys.all(workspaceId),
+            invalidateRenamedEntityQueries({
+              queryClient,
+              workspaceId,
+              entityId,
             }),
             queryClient.invalidateQueries({
               queryKey: entityViewKeys.all(activeOrganizationId, userId),
@@ -403,6 +408,27 @@ type UpsertFieldVars = {
   content: UpsertFieldContent;
 };
 
+/**
+ * Write one field. The bare request, for a caller that settles a batch of
+ * writes itself (one invalidation, one toast) instead of per write.
+ */
+export const upsertFieldRequest = async ({
+  workspaceId,
+  propertyId,
+  entityId,
+  content,
+}: UpsertFieldVars) => {
+  const response = await api
+    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .post({
+      propertyId: toSafeId<"property">(propertyId),
+      entityId: toSafeId<"entity">(entityId),
+      content,
+    });
+
+  return unwrapApiResponse(response);
+};
+
 type UpdateKanbanPlacementVars = {
   workspaceId: string;
   entityId: string;
@@ -413,41 +439,25 @@ type UpdateKanbanPlacementVars = {
   }[];
 };
 
-export const useUpdateKanbanPlacement = () => {
-  const analytics = useAnalytics();
-  const t = useTranslations();
+/** Move one card to a subgroup cell: its column and lane in one request. */
+export const updateKanbanPlacementRequest = async ({
+  workspaceId,
+  entityId,
+  status,
+  fields,
+}: UpdateKanbanPlacementVars) => {
+  const response = await api
+    .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    ["kanban-placement"].patch({
+      entityId: toSafeId<"entity">(entityId),
+      ...(status !== undefined && { status }),
+      fields: fields.map(({ propertyId, content }) => ({
+        propertyId: toSafeId<"property">(propertyId),
+        content,
+      })),
+    });
 
-  return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      entityId,
-      status,
-      fields,
-    }: UpdateKanbanPlacementVars) => {
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["kanban-placement"].patch({
-          entityId: toSafeId<"entity">(entityId),
-          ...(status !== undefined && { status }),
-          fields: fields.map(({ propertyId, content }) => ({
-            propertyId: toSafeId<"property">(propertyId),
-            content,
-          })),
-        });
-
-      return unwrapApiResponse(response);
-    },
-    onError: (error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "useUpdateKanbanPlacement:failure",
-        scope: {
-          type: "handler",
-          handlerId: "useUpdateKanbanPlacement:failure",
-        },
-      });
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
+  return unwrapApiResponse(response);
 };
 
 export const useUpsertField = () => {
@@ -455,22 +465,7 @@ export const useUpsertField = () => {
   const t = useTranslations();
 
   return useMutation({
-    mutationFn: async ({
-      workspaceId,
-      propertyId,
-      entityId,
-      content,
-    }: UpsertFieldVars) => {
-      const response = await api
-        .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .post({
-          propertyId: toSafeId<"property">(propertyId),
-          entityId: toSafeId<"entity">(entityId),
-          content,
-        });
-
-      return unwrapApiResponse(response);
-    },
+    mutationFn: upsertFieldRequest,
 
     onError: (error) => {
       analytics.captureError(error, {

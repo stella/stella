@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { LOCAL_SEED_SCRIPTS } from "../apps/api/scripts/seed-local-scripts";
 import { cachedForRepository } from "./ci-repository-cache";
 import { GENERATORS } from "./generated-files";
 
@@ -280,6 +281,63 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
   return undefined;
 };
 
+type LocalImportWalkOptions = {
+  root: string;
+  pending: string[];
+  dependencies: Set<string>;
+  packageScopes: Set<string>;
+};
+
+// Follows local imports from `pending` file by file and records the workspace
+// packages they reach as units. Returns why an import cannot be resolved.
+const walkLocalImports = ({
+  root,
+  pending,
+  dependencies,
+  packageScopes,
+}: LocalImportWalkOptions) => {
+  for (const file of pending) {
+    if (dependencies.has(file)) {
+      continue;
+    }
+    dependencies.add(file);
+    if (!/\.[cm]?[jt]sx?$/u.test(file)) {
+      continue;
+    }
+    for (const { path: specifier } of sourceImports(root, file)) {
+      if (specifier.startsWith("@stll/")) {
+        const name = workspacePackageName(specifier);
+        const scope = `packages/${name}/`;
+        if (packageScopes.has(scope)) {
+          continue;
+        }
+        if (!existsSync(path.join(root, scope, "package.json"))) {
+          // Published @stll packages are dependency inputs, covered by bun.lock.
+          continue;
+        }
+        packageScopes.add(scope);
+        continue;
+      }
+      let candidate: string;
+      if (specifier.startsWith("@/api/")) {
+        candidate = `apps/api/src/${specifier.slice("@/api/".length)}`;
+      } else if (specifier.startsWith(".")) {
+        candidate = path.posix.normalize(
+          path.posix.join(path.posix.dirname(file), specifier),
+        );
+      } else {
+        continue;
+      }
+      const resolved = resolveLocalImport(candidate, root);
+      if (resolved === undefined) {
+        return `Unresolved service-suite import: ${file}: ${specifier}`;
+      }
+      pending.push(...resolved);
+    }
+  }
+  return undefined;
+};
+
 /** Workspace packages are scoped as units, including exports and non-code assets.
  * Local API/collaboration imports are followed file by file. No install is needed
  * in ci-plan: package discovery uses the checkout, not node_modules.
@@ -337,51 +395,11 @@ export const serviceSuiteDependencies = (
       }
     }
   }
-  for (const file of pending) {
-    if (dependencies.has(file)) {
-      continue;
-    }
-    dependencies.add(file);
-    if (!/\.[cm]?[jt]sx?$/u.test(file)) {
-      continue;
-    }
-    for (const { path: specifier } of sourceImports(root, file)) {
-      if (specifier.startsWith("@stll/")) {
-        const name = workspacePackageName(specifier);
-        const scope = `packages/${name}/`;
-        if (packageScopes.has(scope)) {
-          continue;
-        }
-        if (!existsSync(path.join(root, scope, "package.json"))) {
-          // Published @stll packages are dependency inputs, covered by bun.lock.
-          continue;
-        }
-        packageScopes.add(scope);
-        continue;
-      }
-      let candidate: string;
-      if (specifier.startsWith("@/api/")) {
-        candidate = `apps/api/src/${specifier.slice("@/api/".length)}`;
-      } else if (specifier.startsWith(".")) {
-        candidate = path.posix.normalize(
-          path.posix.join(path.posix.dirname(file), specifier),
-        );
-      } else {
-        continue;
-      }
-      const resolved = resolveLocalImport(candidate, root);
-      if (resolved === undefined) {
-        return {
-          status: "unresolved" as const,
-          message: `Unresolved service-suite import: ${file}: ${specifier}`,
-        };
-      }
-      pending.push(...resolved);
-    }
-  }
-  const packageError = expandWorkspaceScopes(packageScopes, root);
-  if (packageError !== undefined) {
-    return { status: "unresolved" as const, message: packageError };
+  const walkError =
+    walkLocalImports({ root, pending, dependencies, packageScopes }) ??
+    expandWorkspaceScopes(packageScopes, root);
+  if (walkError !== undefined) {
+    return { status: "unresolved" as const, message: walkError };
   }
   for (const scope of packageScopes) {
     dependencies.add(`${scope}package.json`);
@@ -398,10 +416,81 @@ export const serviceSuiteDependencies = (
   return { status: "complete" as const, dependencies, packageScopes };
 };
 
+// `bun run agent:up` migrates its database with the committed migrations, then
+// runs db:seed-local, which spawns each of its scripts by file name.
+const DEV_SEED_ENTRY_POINTS = [
+  "apps/api/src/db/migrate.ts",
+  "apps/api/scripts/seed-local.ts",
+  ...LOCAL_SEED_SCRIPTS.map((script) => `apps/api/scripts/${script}`),
+];
+
+// What the seed reads without importing it: the migrations, its fixtures, the
+// environment template CI seeds with, and any non-code API source asset.
+const devSeedDirectlyRequired = (file: string) =>
+  infrastructurePaths.has(file) ||
+  file.startsWith("patches/") ||
+  file.startsWith("docker/postgres/") ||
+  [
+    "apps/api/package.json",
+    "apps/api/tsconfig.json",
+    "apps/api/bunfig.toml",
+    "apps/api/.env.example",
+  ].includes(file) ||
+  file.startsWith("apps/api/drizzle/") ||
+  file.startsWith("apps/api/scripts/__fixtures__/") ||
+  (file.startsWith("apps/api/src/") && !/\.[cm]?[jt]sx?$/u.test(file));
+
+/** The files `db:seed-local` runs on a freshly migrated database. */
+export const devSeedDependencies = (root = repositoryRoot) => {
+  const missing = DEV_SEED_ENTRY_POINTS.find(
+    (file) => !existsSync(path.join(root, file)),
+  );
+  if (missing !== undefined) {
+    return {
+      status: "unresolved" as const,
+      message: `Missing dev seed entry point: ${missing}`,
+    };
+  }
+  const dependencies = new Set<string>();
+  const packageScopes = new Set<string>();
+  const walkError =
+    walkLocalImports({
+      root,
+      pending: [...DEV_SEED_ENTRY_POINTS],
+      dependencies,
+      packageScopes,
+    }) ?? expandWorkspaceScopes(packageScopes, root);
+  if (walkError !== undefined) {
+    return { status: "unresolved" as const, message: walkError };
+  }
+  return { status: "complete" as const, dependencies, packageScopes };
+};
+
+type DependencyGraph =
+  | ReturnType<typeof serviceSuiteDependencies>
+  | ReturnType<typeof devSeedDependencies>;
+
+// An unreadable graph cannot prove a change outside it.
+const graphSelects = (
+  graph: DependencyGraph,
+  files: readonly string[],
+): boolean => {
+  if (graph.status === "unresolved") {
+    console.error(graph.message);
+    return true;
+  }
+  return files.some(
+    (file) =>
+      graph.dependencies.has(file) ||
+      [...graph.packageScopes].some((scope) => file.startsWith(scope)),
+  );
+};
+
 const suiteGraphs = new Map<
   string,
   ReturnType<typeof serviceSuiteDependencies>
 >();
+const devSeedGraphs = new Map<string, ReturnType<typeof devSeedDependencies>>();
 const suiteConfigurations = new Map<string, ReturnType<typeof loadSuites>>();
 
 const suiteConfiguration = (root: string) =>
@@ -409,44 +498,47 @@ const suiteConfiguration = (root: string) =>
     loadSuites(root),
   );
 
+type ServiceSuitePlan = Record<ServiceSuite | "devSeed", boolean>;
+
 export const planServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
-) => {
+): ServiceSuitePlan => {
   const configuration = suiteConfiguration(root);
   if (configuration.status === "unresolved") {
     console.error(configuration.message);
-    return { postgres: true, corpus: true, valkey: true, collab: true };
+    return {
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: true,
+      devSeed: true,
+    };
   }
-  const required = (suite: ServiceSuite): boolean => {
-    if (files.some((file) => directlyRequired(file, suite))) {
-      return true;
-    }
-    const graph = cachedForRepository(suiteGraphs, { root, key: suite }, () =>
-      serviceSuiteDependencies(root, suite),
+  const required = (suite: ServiceSuite): boolean =>
+    files.some((file) => directlyRequired(file, suite)) ||
+    graphSelects(
+      cachedForRepository(suiteGraphs, { root, key: suite }, () =>
+        serviceSuiteDependencies(root, suite),
+      ),
+      files,
     );
-    let selected: boolean;
-    switch (graph.status) {
-      case "unresolved":
-        console.error(graph.message);
-        selected = true;
-        break;
-      case "complete":
-        selected = files.some(
-          (file) =>
-            graph.dependencies.has(file) ||
-            [...graph.packageScopes].some((scope) => file.startsWith(scope)),
-        );
-        break;
-    }
-    return selected;
-  };
+  const devSeed =
+    files.some(devSeedDirectlyRequired) ||
+    graphSelects(
+      cachedForRepository(devSeedGraphs, { root, key: root }, () =>
+        devSeedDependencies(root),
+      ),
+      files,
+    );
   return {
-    postgres: required("postgres"),
+    // The dev seed runs in the Postgres service job, so it selects that job.
+    postgres: devSeed || required("postgres"),
     corpus: required("corpus"),
     valkey: required("valkey"),
     collab: required("collab"),
-  } as const satisfies Record<ServiceSuite, boolean>;
+    devSeed,
+  };
 };
 
 export const requiresServiceSuites = (

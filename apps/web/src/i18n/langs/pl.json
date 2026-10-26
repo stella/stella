@@ -507,6 +507,24 @@
     "addEntry": "Dodaj wpis",
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
+    "approval": {
+      "approveSelected": "Zatwierdź {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
+      "empty": "W tej sprawie nic nie czeka na zatwierdzenie.",
+      "failed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+      "myTime": "Mój czas",
+      "refusals": {
+        "invalidEntry": "Dodaj opis i sprawdź datę pracy, a potem zatwierdź wpis.",
+        "notApprover": "Ten wpis może zatwierdzić tylko przypisany zatwierdzający lub administrator.",
+        "notFound": "Ten wpis już nie istnieje. Odśwież listę.",
+        "runningTimer": "Zatrzymaj działający stoper przed zatwierdzeniem wpisu.",
+        "unpriced": "Ten wpis nie ma stawki. Ustaw stawkę dla tej sprawy, a potem zatwierdź wpis.",
+        "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
+      },
+      "returnComment": "Powód zwrotu",
+      "selectEntry": "Wybierz wpis",
+      "timeEntries": "Wpisy czasu",
+      "title": "Zatwierdzenia"
+    },
     "approve": "Zatwierdź",
     "approveSelected": "Zatwierdź zaznaczone",
     "batchActions": "Działania zbiorcze",
@@ -594,6 +612,7 @@
       "openInvoice": "Otwórz fakturę",
       "otherCurrency": "{count, plural, one {# pozycja jest zapisana} few {# pozycje są zapisane} many {# pozycji jest zapisanych} other {# pozycji jest zapisanych}} w innej walucie niż {currency} i czekają na osobną fakturę.",
       "outsideScope": "Niepodlegające opodatkowaniu VAT w kraju, 0 %",
+      "pendingApprovals": "{count, plural, one {# pozycja czeka} few {# pozycje czekają} many {# pozycji czeka} other {# pozycji czeka}} na zatwierdzenie. Przejrzyj zatwierdzenia.",
       "rate": "Stawka",
       "readyDescription": "Wystawienie nadaje fakturze kolejny numer z serii i blokuje ją. Szkic można dalej edytować.",
       "readyTitle": "Gotowa do wystawienia",
@@ -1024,7 +1043,8 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ludzkie"
+      "human": "Ludzkie",
+      "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
     },
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
@@ -1147,6 +1167,7 @@
       "citedDecisionPassage": "Fragment orzeczenia",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Przejdź do akapitu} few {Przejdź do akapitów} many {Przejdź do akapitów} other {Przejdź do akapitów}}",
       "judgeRole": {
         "advocateGeneral": "Rzecznik generalny",
         "dissenting": "Zdanie odrębne",
@@ -1486,7 +1507,7 @@
       "label": "Symulowane AI"
     },
     "modelSelector": {
-      "allModels": "Wszystkie modele ({count, number})",
+      "allModels": "Wszystkie modele",
       "autoDescription": "Automatycznie wybiera model i poziom rozumowania.",
       "autoLabel": "Automatycznie",
       "belowFrontier": "Poniżej najlepszych kompromisów",
@@ -2056,7 +2077,6 @@
       "orLetUsKnowAt": "albo napisz do nas na",
       "viewDocumentation": "Zobacz dokumentację"
     },
-    "enterKey": "↵",
     "error": "Błąd",
     "expenses": "Wydatki",
     "export": {
@@ -2205,10 +2225,12 @@
     "scrollToTop": "Przewiń do góry",
     "search": "Szukaj...",
     "searchIn": "Szukaj w",
+    "searchMembers": "Szukaj członków…",
     "selectAMatter": "Wybierz sprawę",
     "selectARole": "Wybierz rolę",
     "selectAll": "Zaznacz wszystkie",
     "selectDate": "Wybierz datę…",
+    "selected": "Zaznaczone",
     "sessions": "Sesje",
     "settings": "Ustawienia",
     "showAll": "Pokaż wszystko",
@@ -4253,6 +4275,8 @@
       "commentPlaceholder": "Napisz komentarz…",
       "commentText": "Treść komentarza",
       "commentedPassage": "Skomentowany fragment",
+      "editComment": "Edytuj komentarz",
+      "editedAt": "Edytowano {time}",
       "guestAuthor": "Ty",
       "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
       "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
@@ -4770,6 +4794,7 @@
     "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
     "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
     "regenerate": "Wygeneruj odpowiedź ponownie",
+    "selectionError": "Zaznacz tekst z samego orzeczenia.",
     "send": "Wyślij dodatkowe pytanie",
     "share": "Udostępnij zespołowi",
     "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
@@ -5359,7 +5384,7 @@
     "importDescription": "Style są wyodrębniane do nowego pliku DOCX bez treści.",
     "importTitle": "Importuj zestaw stylów",
     "loadFailed": "Nie udało się wczytać zestawów stylów",
-    "newDocument": "Nowy dokument",
+    "newDocument": "Nowy dokument DOCX",
     "pickerDescription": "Wybierz system formatowania nowego pliku.",
     "renameTitle": "Zmień nazwę zestawu stylów",
     "replace": "Zastąp źródło",
@@ -5643,7 +5668,7 @@
     "moveToMatter": "Zapisz do sprawy",
     "moveToMatterAnyway": "Zapisz mimo to",
     "myDefaultLookupFormat": "Mój domyślny",
-    "newFromTemplate": "Nowy dokument z szablonu",
+    "newFromTemplate": "Nowy dokument DOCX z szablonu",
     "newFromTemplateFillHint": "Wypełnij pola; dokument zostanie utworzony w tej sprawie.",
     "newTemplate": "Nowy szablon",
     "noTemplates": "Brak szablonów",
@@ -6014,6 +6039,7 @@
         "action": "Edytuj w aplikacji desktopowej",
         "authRequiredDescription": "Odśwież stella i zaloguj się ponownie przed użyciem edycji na komputerze.",
         "authRequiredTitle": "Sesja wygasła",
+        "editInApplication": "Edytuj w aplikacji <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edytuj ten plik lokalnie i synchronizuj zmiany ze stella.",
         "forceRelease": "Wymuś zwolnienie",
         "notOpenedDescription": "stella desktop nie potwierdził otwarcia aplikacji <bdi>{application}</bdi>. Uruchom stella desktop i spróbuj ponownie.",
@@ -6037,13 +6063,15 @@
         "alreadyInstalled": "Masz już zainstalowane? Połącz",
         "connect": "Połącz stella desktop",
         "connected": "stella desktop jest połączony",
+        "download": "Pobierz stella desktop",
         "editNone": "Pobierz stella desktop, aby edytować ten plik",
         "editOutdated": "Zaktualizuj stella desktop, aby edytować",
         "editReason": "Edycja na komputerze otwiera plik w aplikacji na Twoim komputerze przez stella desktop.",
         "signCurrent": "Podpisz w stella desktop",
         "signNone": "Pobierz stella desktop, aby podpisać ten PDF",
         "signOutdated": "Zaktualizuj stella desktop, aby podpisywać",
-        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop."
+        "signReason": "Podpis korzysta z certyfikatu na Twoim komputerze, dlatego odbywa się w stella desktop.",
+        "update": "Zaktualizuj stella desktop"
       },
       "downloadAs": "Pobierz jako…",
       "downloadAsZip": "Pobierz plik .zip",
@@ -6056,8 +6084,10 @@
       "itemLimitReached": "Ta sprawa osiągnęła limit elementów.",
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
       "ocrAlreadyProcessed": "Rozpoznawanie tekstu zostało już ukończone",
+      "ocrBatchHelp": "Dokumenty w kolejce zostaną przetworzone w następnej partii OCR.",
       "ocrQueueFailed": "Nie udało się dodać rozpoznawania tekstu do kolejki",
-      "ocrQueued": "Rozpoznawanie tekstu dodane do następnej partii OCR",
+      "ocrQueued": "Rozpoznawanie tekstu dodane do kolejki",
+      "ocrQueuedForBatch": "Rozpoznawanie tekstu dodane do następnej partii OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Podpisywanie w stella desktop już trwa",
         "cancelledBaseVersionDescription": "Dokument zmienił się w trakcie podpisywania. Otwórz najnowszą wersję i podpisz go ponownie.",
@@ -6114,6 +6144,7 @@
         "waitingDescription": "Wybierz w stella desktop certyfikat podpisu, aby podpisać ten plik PDF.",
         "waitingTitle": "Czekam na stella desktop"
       },
+      "queueForOcr": "Dodaj do kolejki OCR",
       "rateLimited": "Ograniczenie szybkości; wznowienie za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Co zrobić z plikiem {fileName}",
@@ -6125,7 +6156,6 @@
       "removeMetadata": "Usuń metadane dokumentu",
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
       "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} many {# plików} other {# plików}}",
-      "runOcr": "Dodaj OCR do kolejki",
       "scrubFailed": "Nie udało się usunąć metadanych tego pliku, więc nic nie pobrano",
       "uploadedPartially": "{failed, plural, one {# plik nie został przesłany} few {# pliki nie zostały przesłane} many {# plików nie zostało przesłanych} other {# plików nie zostało przesłanych}} z {total, number}",
       "uploadedSuccessfully": "Pliki przesłane pomyślnie",
@@ -6204,8 +6234,7 @@
         "lead": "Prowadzący",
         "leadActive": "Prowadzący",
         "leadInactive": "Ustaw prowadzącego",
-        "noLead": "Brak prowadzącego",
-        "searchMembers": "Szukaj członków…"
+        "noLead": "Brak prowadzącego"
       },
       "to": "Do"
     },
@@ -6267,6 +6296,7 @@
       "deleteAll": "Usuń wszystkie",
       "deleteAllConfirm": "Usunąć wszystkie {count} elementy z kolumny „{column}”?",
       "hideColumn": "Ukryj kolumnę",
+      "moveFailed": "{failed, plural, one {Nie udało się przenieść # z {total} elementów.} few {Nie udało się przenieść # z {total} elementów.} many {Nie udało się przenieść # z {total} elementów.} other {Nie udało się przenieść # z {total} elementów.}}",
       "readOnlyGrouping": "To grupowanie jest tylko do odczytu",
       "selectPropertyHint": "Wybierz właściwość do grupowania na pasku narzędzi",
       "uploadDocument": "Prześlij dokument",
@@ -6285,10 +6315,10 @@
       "addMember": "Dodaj członka",
       "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
+      "alreadyOnMatter": "Już należy do tej sprawy",
       "cannotRemoveLast": "Nie można usunąć ostatniego członka",
       "noMembersFound": "Nie znaleziono członków",
-      "removeMemberConfirm": "Usunąć tego członka ze sprawy?",
-      "selectMember": "Wybierz członka"
+      "removeMemberConfirm": "Usunąć tego członka ze sprawy?"
     },
     "newDocument": "Nowy dokument",
     "newFolder": "Nowy folder",
@@ -6326,7 +6356,6 @@
           "approvedBy": "Zatwierdził(a)",
           "channel": "Kanał",
           "dateTime": "Data i godzina",
-          "eventId": "ID zdarzenia",
           "notAvailable": "Niedostępne",
           "openTarget": "Otwórz element",
           "runId": "ID uruchomienia",
@@ -6413,6 +6442,7 @@
       "addParty": "Dodaj stronę",
       "changeClient": "Zmień klienta",
       "client": "Klient",
+      "movedToClient": "Sprawa <bdi>{matterName}</bdi> przeniesiona do klienta <bdi>{clientName}</bdi>",
       "noClient": "Brak przypisanego klienta",
       "noClientOptional": "Bez klienta (opcjonalnie)",
       "noParties": "Do tej sprawy nie dodano żadnych stron.",
@@ -6431,7 +6461,9 @@
       "personalLabel": "Osobista",
       "promoteCta": "Awansuj na sprawę kliencką",
       "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne — awansowane sprawy nie mogą wrócić do osobistych.",
+      "promoteToClientConfirm": "Sprawa <bdi>{matterName}</bdi> zostanie przypisana do klienta <bdi>{clientName}</bdi> i udostępniona zespołowi. Nie będzie można przywrócić jej jako osobistej.",
       "promotedSuccess": "Sprawa awansowana",
+      "recentClients": "Ostatni klienci",
       "removeClient": "Usuń klienta",
       "removeParty": "Usuń stronę",
       "removePartyConfirm": "Czy na pewno chcesz usunąć tę stronę ze sprawy?",
@@ -6506,6 +6538,11 @@
       },
       "passwordLabel": "Wprowadź hasło do pliku PDF",
       "previousPage": "Poprzednia strona",
+      "selection": {
+        "explainPassagePrompt": "Wyjaśnij ten fragment {citation}:\n\n„{quote}”",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Pokaż oryginalne strony",
       "unlock": "Odblokuj"
     },
@@ -6643,6 +6680,12 @@
     "referenceTaken": "Ten numer referencyjny jest już w użyciu",
     "sections": {
       "parties": "Strony"
+    },
+    "switcher": {
+      "searchPlaceholder": "Znajdź sprawę…",
+      "trigger": "Przełącz sprawę",
+      "viewAll": "Pokaż wszystkie sprawy",
+      "viewAllForClient": "Pokaż wszystkie sprawy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Wyczyść oznaczenia",

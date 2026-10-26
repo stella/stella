@@ -4,6 +4,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
 import { aiUnavailableResponse } from "@/__fixtures__/ai-availability";
 import messages from "@/i18n/langs/en.json";
 import type { WorkspaceProperty } from "@/lib/types";
@@ -119,7 +121,7 @@ for (const triggerVariant of Object.values(triggerVariants)) {
       role: "member",
       ai: false,
       deepl: false,
-      ocr: false,
+      ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
       desktop: "none",
       settings: undefined,
     });

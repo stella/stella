@@ -3,6 +3,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -262,7 +263,8 @@ test("suggested prompts usage refusal calls no model and persists nothing", asyn
         promptCachingEnabled: false,
         query: {},
         request: new Request("https://example.test/prompts"),
-        route: "/prompts",
+        route:
+          "/v1/chat/threads/:threadId/suggested-prompts" satisfies ApiRoutePath,
         safeDb: db.safeDb,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },

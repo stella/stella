@@ -59,6 +59,10 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "createdAt",
   // Profile modification time is not displayed in avatar previews.
   "updatedAt",
+  // Mail provider refusals are account delivery state, not a display profile.
+  "emailUndeliverableAddress",
+  "emailUndeliverableReason",
+  "emailUndeliverableAt",
 ] as const satisfies readonly (keyof UserRow)[];
 
 const USER_PROFILE_PREVIEW_COLUMNS = {

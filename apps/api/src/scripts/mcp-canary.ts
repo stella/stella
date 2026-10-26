@@ -2010,6 +2010,11 @@ const signInReviewAccount = async ({
       body: JSON.stringify({ email, password }),
     },
   );
+  // Reviewers have only the password: a second step (an emailed code, a
+  // verification or two-factor challenge) would strand them at sign-in.
+  if (v.is(v.object({ twoFactorRedirect: v.literal(true) }), signedIn)) {
+    reject("expected the password alone to sign in, without a second step");
+  }
   if (
     !v.is(
       v.object({ user: v.object({ email: v.literal(email) }) }),
