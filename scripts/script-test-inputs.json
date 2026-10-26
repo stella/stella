@@ -169,6 +169,7 @@
     "scripts/ledger-membership.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/legal-atlas-image-scope.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/main-heavy-classification.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/marketing-screenshot-verdict.test.ts": "Reads only in-memory report fixtures; the file reads belong to the command-line entry.",
     "scripts/marketing-screenshots-publish.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/merge-web-assets.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/migration-rehearsal-writer-gap.test.ts": "Uses only temporary fixtures and its static import closure.",

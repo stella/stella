@@ -18,6 +18,7 @@ import {
   gitInvocation,
   parseScriptTestArguments,
   prepareStrace,
+  resolverDirectories,
   SCAN_PRELOAD_PATH,
   selectScriptTests,
   tracedAllowance,
@@ -555,6 +556,38 @@ describe("directory scan coverage", () => {
     });
   });
 
+  test("listings of directories module resolution walks are not scans", () => {
+    withTrackedFixture(({ root, tracked }) => {
+      const resolved = resolverDirectories(
+        new Set(["scripts/subject.test.ts", "apps/web/src/value.ts"]),
+      );
+      expect([...resolved].toSorted()).toEqual([
+        "",
+        "apps",
+        "apps/web",
+        "apps/web/src",
+        "scripts",
+      ]);
+      const trace = [
+        `1 getdents64(3<${root}>, 0x5555 /* 9 entries */, 32768) = 80`,
+        `1 getdents64(4<${root}/apps/web/src>, 0x5555 /* 3 entries */, 32768) = 80`,
+        `1 getdents64(5<${root}/data>, 0x5555 /* 3 entries */, 32768) = 80`,
+      ].join("\n");
+      // The data directory holds no imported module, so its listing still
+      // needs a declaration.
+      expect(
+        uncoveredScans({
+          scanLog: "",
+          trace,
+          declared: [],
+          tracked,
+          root,
+          resolved,
+        }),
+      ).toEqual([{ directory: path.join(root, "data"), listing: true }]);
+    });
+  });
+
   test("a directory listing through any API is a scan", () => {
     withTrackedFixture(({ root, tracked }) => {
       // A named node:fs import bypasses the preload; the listing still
@@ -568,7 +601,7 @@ describe("directory scan coverage", () => {
           tracked,
           root,
         }),
-      ).toEqual([{ directory: path.join(root, "data") }]);
+      ).toEqual([{ directory: path.join(root, "data"), listing: true }]);
       expect(
         uncoveredScans({
           scanLog: "",
