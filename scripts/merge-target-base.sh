@@ -29,11 +29,12 @@ if [[ "$EVENT_NAME" == pull_request ]]; then
   fi
 elif [[ "$EVENT_NAME" == merge_group ]]; then
   ref="${TARGET_REF#refs/heads/}"
-  fetch=(bash "$retry_script" git fetch --quiet --no-tags --filter=blob:none)
+  unshallow=()
   if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
-    fetch+=(--unshallow)
+    unshallow=(--unshallow)
   fi
-  if [[ -n "$ref" ]] && "${fetch[@]}" origin "$ref" &&
+  if [[ -n "$ref" ]] &&
+    bash "$retry_script" git fetch --quiet --no-tags --filter=blob:none ${unshallow[@]+"${unshallow[@]}"} origin "$ref" &&
     target="$(git rev-parse FETCH_HEAD)" &&
     merge_base="$(git merge-base "$target" HEAD)"; then
     base="$merge_base"

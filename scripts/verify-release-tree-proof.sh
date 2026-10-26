@@ -157,7 +157,7 @@ for commit in "${commits[@]}"; do
   metadata=$(bash "$gh_retry_script" api "repos/$repo/commits/$commit")
   jq -e --arg sha "$commit" '.sha == $sha' <<< "$metadata" >/dev/null || refuse 'commit is unavailable in repository'
   if ! git cat-file -e "$commit^{commit}"; then
-    bash "$retry_script" git fetch --no-tags "https://github.com/$repo.git" "$commit"
+    bash "$retry_script" git fetch --no-tags "https://github.com/$repo.git" "$commit" >&2
   fi
   tree=$(git rev-parse --verify "$commit^{tree}")
   jq -e --arg tree "$tree" '.commit.tree.sha == $tree' <<< "$metadata" >/dev/null || refuse 'repository tree does not match local commit'

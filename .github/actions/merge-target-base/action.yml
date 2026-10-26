@@ -22,4 +22,4 @@ runs:
         PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         TARGET_REF: ${{ github.event.merge_group.base_ref }}
-      run: bash "$GITHUB_ACTION_PATH/../../../scripts/retry.sh" bash "$GITHUB_ACTION_PATH/../../../scripts/merge-target-base.sh"
+      run: bash "$GITHUB_ACTION_PATH/../../../scripts/merge-target-base.sh"

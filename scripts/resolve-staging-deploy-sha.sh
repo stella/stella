@@ -19,7 +19,7 @@ fetch_options=(--no-tags)
 if [[ "$(git rev-parse --is-shallow-repository)" == true ]]; then
   fetch_options+=(--unshallow)
 fi
-bash "$retry_script" git fetch "${fetch_options[@]}" origin +refs/heads/main:refs/remotes/origin/main
+bash "$retry_script" git fetch "${fetch_options[@]}" origin +refs/heads/main:refs/remotes/origin/main >&2
 
 main=$(git rev-parse --verify --quiet 'origin/main^{commit}') \
   || { echo "::error::STAGING_SHA_REFUSED: origin/main is not available in this checkout" >&2; exit 1; }
