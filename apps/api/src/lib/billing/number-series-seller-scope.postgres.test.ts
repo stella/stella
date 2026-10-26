@@ -8,6 +8,7 @@ import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import createSeries from "@/api/handlers/number-series/create";
 import setDefault from "@/api/handlers/number-series/default/update";
 import updateSeries from "@/api/handlers/number-series/update";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   allocateNumber,
   findDefaultNumberSeries,
@@ -104,7 +105,7 @@ if (!databaseUrl || !runPostgresTests) {
         request: new Request("https://example.test/v1/number-series", {
           method: "POST",
         }),
-        route: "/v1/number-series",
+        route: "/v1/number-series" satisfies ApiRoutePath,
         recordAuditEvent: async () => {},
         featureAccessSnapshot: enrolledTimeBillingSnapshot({
           organizationId: orgId,

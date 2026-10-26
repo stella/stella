@@ -695,6 +695,38 @@ describe("replaceFileFieldId", () => {
     expect(tab).toMatchObject({ facet: "preview", type: "pdf" });
   });
 
+  test("reopening an open file applies a requested facet and keeps the reader's otherwise", () => {
+    const contract = {
+      id: "field-contract",
+      entityId: "entity-1",
+      label: "Contract",
+      fileName: "contract.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+      propertyId: "property-1",
+      workspaceId: "workspace-1",
+    };
+    const contractTab = () =>
+      useInspectorTabsStore
+        .getState()
+        .tabs.find((item) => item.id === contract.id);
+    useInspectorTabsStore.getState().openFile(contract);
+    useInspectorTabsStore.getState().setFileFacet(contract.id, "metadata");
+
+    useInspectorTabsStore
+      .getState()
+      .openFile({ ...contract, facet: "versions" });
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore.getState().openFile(contract);
+    expect(contractTab()).toMatchObject({ facet: "versions", type: "pdf" });
+
+    useInspectorTabsStore
+      .getState()
+      .openFileForEntity({ ...contract, facet: "preview" });
+    expect(contractTab()).toMatchObject({ facet: "preview", type: "pdf" });
+  });
+
   test("openFileForEntity drops a stale tab whose id collides with the new field", () => {
     useInspectorTabsStore.getState().openFile({
       id: "field-shared",

@@ -109,7 +109,7 @@ const useLiveActionCapabilities = (
     role: role.type === "items" ? role.items : undefined,
     ai: ai.type === "items" ? ai.items.available : undefined,
     deepl: deepl.type === "items" ? deepl.items.configured : undefined,
-    ocr: ocr.type === "items" ? ocr.items.available : undefined,
+    ocr: ocr.type === "items" ? ocr.items : undefined,
     desktop: desktop.type === "items" ? desktop.items.type : undefined,
     settings: settings.type === "items" ? settings.items : undefined,
   });

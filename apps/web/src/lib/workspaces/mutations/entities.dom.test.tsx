@@ -403,7 +403,7 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );
-    expect(invalidate).toHaveBeenCalledTimes(4);
+    expect(invalidate).toHaveBeenCalledTimes(5);
   } finally {
     refresh.resolve(undefined);
     invalidate.mockRestore();

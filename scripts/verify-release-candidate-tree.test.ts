@@ -93,6 +93,9 @@ const withCandidate = (
   try {
     mkdirSync(path.join(directory, "packages/widget"), { recursive: true });
     mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
+    mkdirSync(path.join(directory, "apps/landing/src/data"), {
+      recursive: true,
+    });
     mkdirSync(path.join(directory, "scripts"), { recursive: true });
     mkdirSync(path.join(directory, "packages/cli/src/generated"), {
       recursive: true,
@@ -149,6 +152,48 @@ test("accepts the regenerated CLI version that matches its package bump", () =>
     },
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
   ));
+
+test("accepts release-date notes and nullable publication timestamps", () =>
+  withCandidate(
+    (directory) =>
+      writeFileSync(
+        path.join(
+          directory,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        '{"_note":"Published timestamp source","v1.2.4":null}\n',
+      ),
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("rejects changeset README edits and malformed release-date records", () => {
+  withCandidate(
+    (directory) => {
+      mkdirSync(path.join(directory, ".changeset"), { recursive: true });
+      writeFileSync(path.join(directory, ".changeset/README.md"), "changed\n");
+    },
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(".changeset/README.md");
+    },
+  );
+  withCandidate(
+    (directory) =>
+      writeFileSync(
+        path.join(
+          directory,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        '{"v1.2.4": false}\n',
+      ),
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "must map release names to timestamps or null",
+      );
+    },
+  );
+});
 
 test.each([
   [
@@ -494,3 +539,58 @@ test("keeps the 2 MiB bound for release data outside the generated classes", () 
       expect(stderrText(result)).toContain("2 MiB review bound");
     },
   ));
+
+// Every caller, found by scanning rather than listed by hand, passes the
+// verifier its whole contract: main, candidate and the owner/name repository.
+// A workflow step that runs it also carries the token its GitHub reads need.
+test("every caller passes the full contract and a workflow token", async () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const record = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+  const invocation =
+    /\bnode\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)/iu;
+  const files = git(root, "ls-files", ".github", "scripts")
+    .split("\n")
+    .filter((file) => /\.(?:ya?ml|sh)$/u.test(file));
+  const callers: string[] = [];
+  for (const file of files) {
+    const source = await Bun.file(path.join(root, file)).text();
+    for (const [index, line] of source.split("\n").entries()) {
+      const match = invocation.exec(line);
+      if (match === null) {
+        continue;
+      }
+      const label = `${file}:${index + 1}`;
+      callers.push(file);
+      expect(match[2]?.trim().split(/\s+/u), label).toHaveLength(3);
+    }
+    if (!file.startsWith(".github/workflows/")) {
+      continue;
+    }
+    const parsed: unknown = Bun.YAML.parse(source);
+    const jobs = record(parsed) ? parsed["jobs"] : undefined;
+    const workflowEnv = record(parsed) ? parsed["env"] : undefined;
+    for (const [name, job] of Object.entries(record(jobs) ? jobs : {})) {
+      const steps =
+        record(job) && Array.isArray(job["steps"]) ? job["steps"] : [];
+      for (const step of steps.filter(record)) {
+        if (typeof step["run"] !== "string" || !invocation.test(step["run"])) {
+          continue;
+        }
+        const scopes = [
+          step["env"],
+          record(job) ? job["env"] : undefined,
+          workflowEnv,
+        ];
+        expect(
+          scopes.some(
+            (scope) => record(scope) && typeof scope["GH_TOKEN"] === "string",
+          ),
+          `${file}:${name} runs the verifier without GH_TOKEN`,
+        ).toBe(true);
+      }
+    }
+  }
+  expect(callers).toContain(".github/workflows/release.yml");
+  expect(callers).toContain("scripts/verify-release-tree-proof.sh");
+});

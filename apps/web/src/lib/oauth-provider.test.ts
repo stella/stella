@@ -5,7 +5,9 @@ import {
   getOauthClientDisplayName,
   getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQuery,
   getSignedOauthQueryFromHash,
+  hasOauthPrompt,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 
@@ -34,6 +36,53 @@ describe("getSignedOauthQueryFromHash", () => {
   test("ignores hash fragments without signed OAuth params", () => {
     expect(getSignedOauthQueryFromHash("#oauth_query=redirectTo%3D%252F")).toBe(
       null,
+    );
+  });
+});
+
+describe("getSignedOauthQuery", () => {
+  const query = "client_id=client-123&prompt=login&sig=abc123";
+
+  test("reads the hash bridge first", () => {
+    expect(
+      getSignedOauthQuery({
+        hash: `#${getOauthHashFragment(query)}`,
+        searchStr: "?client_id=other&sig=other",
+      }),
+    ).toBe(query);
+  });
+
+  test("falls back to a signed page query without its question mark", () => {
+    expect(getSignedOauthQuery({ hash: "", searchStr: `?${query}` })).toBe(
+      query,
+    );
+  });
+
+  test("ignores unsigned queries", () => {
+    expect(
+      getSignedOauthQuery({ hash: "", searchStr: "?redirectTo=%2F" }),
+    ).toBe(null);
+  });
+});
+
+describe("hasOauthPrompt", () => {
+  test("finds each prompt value of a space-separated list", () => {
+    const query = "client_id=client-123&prompt=consent+login&sig=abc123";
+    expect(hasOauthPrompt(query, "login")).toBe(true);
+    expect(hasOauthPrompt(query, "select_account")).toBe(false);
+  });
+
+  test("matches whole values only", () => {
+    expect(hasOauthPrompt("prompt=logins&sig=abc123", "login")).toBe(false);
+    expect(
+      hasOauthPrompt("prompt=select_account&sig=abc123", "select_account"),
+    ).toBe(true);
+  });
+
+  test("is false without a signed request or prompt", () => {
+    expect(hasOauthPrompt(null, "login")).toBe(false);
+    expect(hasOauthPrompt("client_id=client-123&sig=abc123", "login")).toBe(
+      false,
     );
   });
 });

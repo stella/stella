@@ -13,7 +13,7 @@ import type {
 } from "./check-write-contracts";
 
 const handler = "apps/api/src/handlers/example/update.ts";
-const owner = "apps/api/src/lib/write-contract.ts";
+const owner = "apps/api/src/lib/write-contract/write-contract.ts";
 const UPDATED_AT = {
   contract: "replace",
   precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
@@ -67,7 +67,7 @@ const baselineFor = (
 /** The example handler module: one safe factory call around `body`. */
 const handlerSource = (body: string, imports = "") =>
   `import { createSafeHandler } from '@/api/lib/api-handlers';
-  import { enforceWritePrecondition } from '@/api/lib/write-contract';
+  import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract';
   ${imports}
   export default createSafeHandler({contract: 'replace'}, async ({ body }) => { ${body} });`;
 const withHandler = (source: string) => new Map([[handler, source]]);
@@ -349,7 +349,7 @@ describe("a replacement reaches the owner's enforcement", () => {
 
   test("a required token schema cannot authorize an unconditional replacement", () => {
     const guarded = `import { createSafeHandler } from '@/api/lib/api-handlers';
-      import { enforceWritePrecondition as enforce } from '@/api/lib/write-contract';
+      import { enforceWritePrecondition as enforce } from '@/api/lib/write-contract/write-contract';
       export default createSafeHandler({contract: 'replace'}, async ({body, scopedDb}) =>
         scopedDb.transaction(async (tx) => {
           const stored = await tx.readForUpdate();
@@ -370,7 +370,7 @@ describe("a replacement reaches the owner's enforcement", () => {
 
   test("owner identity, field and invoked helper reachability are required", () => {
     const helper = "apps/api/src/handlers/example/write.ts";
-    const helperSource = `import { enforceWritePrecondition } from '@/api/lib/write-contract';
+    const helperSource = `import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract';
       export const write = (body) => { const conflict = enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt', expectedUpdatedAt: body.expectedUpdatedAt, storedUpdatedAt: new Date(), resource: 'Example'}); if (conflict) return conflict; return {}; };`;
     const invoked = `import { createSafeHandler } from '@/api/lib/api-handlers'; import {write} from './write';
       export default createSafeHandler({contract: 'replace'}, async ({body}) => write(body));`;
@@ -390,7 +390,10 @@ describe("a replacement reaches the owner's enforcement", () => {
       expect(run(changed)).toContainEqual(missing);
     }
     for (const changed of [
-      helperSource.replace("@/api/lib/write-contract", "./lookalike"),
+      helperSource.replace(
+        "@/api/lib/write-contract/write-contract",
+        "./lookalike",
+      ),
       helperSource.replace("field: 'expectedUpdatedAt'", "field: 'revision'"),
     ]) {
       expect(run(invoked, changed)).toContainEqual(missing);
@@ -400,15 +403,15 @@ describe("a replacement reaches the owner's enforcement", () => {
   test("lookalike factories and opaque wrappers cannot stand in for the handler", () => {
     const enforced = `const conflict = ${call}; if (conflict) return conflict; return {};`;
     for (const source of [
-      `import { createSafeHandler } from './lookalike'; import { enforceWritePrecondition } from '@/api/lib/write-contract'; export default createSafeHandler({}, async ({ body }) => { ${enforced} });`,
-      `import { createSafeHandler } from '@/api/lib/api-handlers'; import { enforceWritePrecondition } from '@/api/lib/write-contract'; const createEndpoint = (condition) => condition ? createSafeHandler({}, async ({ body }) => { ${enforced} }) : opaque(); export default createEndpoint();`,
-      `import { createSafeHandler } from '@/api/lib/api-handlers'; import { enforceWritePrecondition } from '@/api/lib/write-contract'; const createEndpoint = (condition) => condition ? createSafeHandler({}, async ({ body }) => { ${enforced} }) : createSafeHandler({}, async () => ({})); export default createEndpoint();`,
+      `import { createSafeHandler } from './lookalike'; import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract'; export default createSafeHandler({}, async ({ body }) => { ${enforced} });`,
+      `import { createSafeHandler } from '@/api/lib/api-handlers'; import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract'; const createEndpoint = (condition) => condition ? createSafeHandler({}, async ({ body }) => { ${enforced} }) : opaque(); export default createEndpoint();`,
+      `import { createSafeHandler } from '@/api/lib/api-handlers'; import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract'; const createEndpoint = (condition) => condition ? createSafeHandler({}, async ({ body }) => { ${enforced} }) : createSafeHandler({}, async () => ({})); export default createEndpoint();`,
     ]) {
       expect(enforcementOf(source)).toContainEqual(missing);
     }
     expect(
       enforcementOf(
-        `import { createSafeHandler } from '@/api/lib/api-handlers'; import { enforceWritePrecondition } from '@/api/lib/write-contract'; const createEndpoint = (dependencies = {}) => createSafeHandler({}, async ({ body }) => { ${enforced} }); export default createEndpoint();`,
+        `import { createSafeHandler } from '@/api/lib/api-handlers'; import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract'; const createEndpoint = (dependencies = {}) => createSafeHandler({}, async ({ body }) => { ${enforced} }); export default createEndpoint();`,
       ),
     ).toEqual([]);
   });
@@ -467,7 +470,7 @@ describe("a replacement reaches the owner's enforcement", () => {
 
   test("an invoked helper must propagate its conflict through the handler", () => {
     const helper = "apps/api/src/handlers/example/write.ts";
-    const helperSource = `import { enforceWritePrecondition } from '@/api/lib/write-contract';
+    const helperSource = `import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract';
       export const write = () => enforceWritePrecondition({type: 'updatedAt', field: 'expectedUpdatedAt'});`;
     const run = (body: string) =>
       check({
@@ -504,7 +507,7 @@ describe("a replacement reaches the owner's enforcement", () => {
       },
     };
     const guarded = `import { createSafeHandler } from '@/api/lib/api-handlers';
-      import { enforceWritePrecondition } from '@/api/lib/write-contract';
+      import { enforceWritePrecondition } from '@/api/lib/write-contract/write-contract';
       export default createSafeHandler({contract: 'replace'}, async ({body}) => {
         const baseConflict = enforceWritePrecondition({type: 'revision', field: 'baseRevision', expectedRevision: body.baseRevision, storedRevision: 1, resource: 'Example'});
         if (baseConflict) return baseConflict;
