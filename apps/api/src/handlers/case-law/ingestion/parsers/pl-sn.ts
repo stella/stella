@@ -1,6 +1,9 @@
 // parser-output-unchanged: [pl-kis] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
 // parser-output-unchanged: [pl-uokik] the Supreme Court page reading is opt-in; the default reading is byte-identical, pinned by a recorded-output digest test.
 // parser-output-unchanged: [cz-uohs] reads through extractPlPdfSeparatedContent, which the Supreme Court page reading never reaches.
+// parser-output-unchanged: [pl-sn] the letterhead reading is opt-in and the Supreme Court reading passes it nothing new; its replay fingerprint is unchanged.
+// parser-output-unchanged: [pl-kis] the letterhead reading is opt-in; the default reading keeps its replay fingerprint and recorded-output digest.
+// parser-output-unchanged: [cz-uohs] the letterhead reading is opt-in and never reached from extractPlPdfSeparatedContent; its replay fingerprint is unchanged.
 /**
  * Polish Supreme Court (Sąd Najwyższy) document reader.
  *
@@ -142,6 +145,13 @@ type ExtractedLine = {
   readonly right?: number | undefined;
   /** Superscripts the text layer printed as a line of their own above it. */
   readonly superscripts?: readonly SuperscriptMark[] | undefined;
+  /** The line's height up the page; read only where spacing is asked for. */
+  readonly y?: number | undefined;
+  /**
+   * Where the line's first printed character starts: past `x` where the
+   * line opens with spaces typed as an indent.
+   */
+  readonly printedX?: number | undefined;
 };
 
 /**
@@ -410,6 +420,35 @@ const NUMBERED_POINT = /^(?:\d{1,3}[.)]|\p{Ll}\))\s/u;
 const TAKES_A_NUMBER =
   /(?:(?:^|\s)(?:art|ust|pkt|lit|poz|nr|zd|par|rozdz|tom|str|s|k)\.?|§)$/iu;
 
+/** How a publisher marks the points and paragraphs a line can open. */
+type PointMarkers = {
+  /** A list point's own number or bullet. */
+  readonly list: RegExp;
+  /** A number no wrapped sentence starts with. */
+  readonly numbered: RegExp;
+  /**
+   * The number a publisher hangs out left of each paragraph: it opens one
+   * where the line below starts further right. A sentence can wrap onto the
+   * same characters (`w pkt 3 podpkt.` / `(1) i (2) pisma`), set flush with
+   * the lines around it, so the characters alone are not a point.
+   */
+  readonly paragraphNumber?: RegExp | undefined;
+};
+
+const POINT_MARKERS: PointMarkers = {
+  list: LIST_MARKER,
+  numbered: NUMBERED_POINT,
+};
+
+/** The number an authority sets before each paragraph: `(12)`, `[12]`. */
+const PARAGRAPH_NUMBER = /^(?:\(\d{1,3}\)|\[\d{1,3}\])\s/u;
+
+const NUMBERED_PARAGRAPH_MARKERS: PointMarkers = {
+  list: LIST_MARKER,
+  numbered: NUMBERED_POINT,
+  paragraphNumber: PARAGRAPH_NUMBER,
+};
+
 /** A line ending a sentence or a list point, closing quotes included. */
 const ENDS_SENTENCE = /[.;:!?…]["”')\]]*$/u;
 /** A capital, or an opening bracket or quote: also how a clerk's mark (`[SOP]`) starts. */
@@ -428,13 +467,14 @@ const ranOutOfRoom = (
   previous: ExtractedLine,
   line: ExtractedLine,
   rightEdge: number,
+  markers: PointMarkers,
 ): boolean => {
   const opening = line.text.trimStart();
   if (
     previous.right === undefined ||
     line.right === undefined ||
     (ENDS_SENTENCE.test(previous.text.trimEnd()) &&
-      (STARTS_SENTENCE.test(opening) || LIST_MARKER.test(opening)))
+      (STARTS_SENTENCE.test(opening) || markers.list.test(opening)))
   ) {
     return false;
   }
@@ -454,10 +494,21 @@ const ranOutOfRoom = (
  * point opens a paragraph wherever it starts, though nothing indents it.
  */
 const opensBlockParagraph = (
-  previous: ExtractedLine | undefined,
-  line: ExtractedLine,
+  {
+    previous,
+    line,
+    next,
+  }: {
+    readonly previous: ExtractedLine | undefined;
+    readonly line: ExtractedLine;
+    /** The line below on the same page, where there is one. */
+    readonly next: ExtractedLine | undefined;
+  },
   indented: boolean,
-  rightEdge: number,
+  {
+    rightEdge,
+    markers,
+  }: { readonly rightEdge: number; readonly markers: PointMarkers },
 ): boolean => {
   if (previous === undefined || previous.text.length === 0) {
     return indented;
@@ -467,19 +518,24 @@ const opensBlockParagraph = (
   // Dashes, initials (`C. B.`) and abbreviations (`w. z`) wrap inside
   // sentences, so only the full-line test reads those.
   if (
-    NUMBERED_POINT.test(line.text.trimStart()) &&
-    !TAKES_A_NUMBER.test(previous.text.trimEnd())
+    (markers.numbered.test(line.text.trimStart()) &&
+      !TAKES_A_NUMBER.test(previous.text.trimEnd())) ||
+    (markers.paragraphNumber?.test(line.text.trimStart()) === true &&
+      next !== undefined &&
+      next.text.length > 0 &&
+      next.x - line.x >= INDENT_THRESHOLD_PT)
   ) {
     return true;
   }
-  const full = ranOutOfRoom(previous, line, rightEdge);
+  const full = ranOutOfRoom(previous, line, rightEdge, markers);
   if (!indented) {
-    return !full && LIST_MARKER.test(line.text.trimStart());
+    return !full && markers.list.test(line.text.trimStart());
   }
   return !(
     full &&
     (line.x - previous.x < INDENT_THRESHOLD_PT ||
-      LIST_MARKER.test(previous.text.trimStart()))
+      markers.list.test(previous.text.trimStart()) ||
+      markers.paragraphNumber?.test(previous.text.trimStart()) === true)
   );
 };
 
@@ -492,6 +548,12 @@ const readPage = (
     readonly rightEdge: number;
     /** The previous page's last line, which a block may run on from. */
     readonly carried: ExtractedLine | undefined;
+    /**
+     * The document's usual distance from one line to the next, where the
+     * publisher sets paragraphs apart by spacing rather than by blank lines.
+     */
+    readonly linePitch?: number | undefined;
+    readonly markers?: PointMarkers | undefined;
   },
 ): PlSnLine[] => {
   const margin =
@@ -502,20 +564,75 @@ const readPage = (
       return { type: "blank" as const };
     }
     const indented = opensParagraph(line.x - margin, paragraphStart);
+    const above = lines[index - 1];
+    const spacedApart =
+      blocks?.linePitch !== undefined &&
+      above?.y !== undefined &&
+      line.y !== undefined &&
+      above.y - line.y > blocks.linePitch * PARAGRAPH_SPACING_RATIO;
     return {
       type: "text" as const,
       runs: runsOfLine(line),
       indented:
         blocks === undefined
           ? indented
-          : opensBlockParagraph(
-              index === 0 ? blocks.carried : lines[index - 1],
-              line,
+          : spacedApart ||
+            opensBlockParagraph(
+              {
+                previous: index === 0 ? blocks.carried : above,
+                line,
+                next: lines[index + 1],
+              },
               indented,
-              blocks.rightEdge,
+              {
+                rightEdge: blocks.rightEdge,
+                markers: blocks.markers ?? POINT_MARKERS,
+              },
             ),
     };
   });
+};
+
+/**
+ * How much further apart than its lines a paragraph is set from the next.
+ * Observed: 20pt between paragraphs whose lines are 14pt apart.
+ */
+const PARAGRAPH_SPACING_RATIO = 1.25;
+
+/**
+ * The distance from one line of running text to the next that occurs most
+ * often, read off lines that follow each other on a page. Undefined for a
+ * document of no two consecutive lines.
+ */
+const linePitchOf = (
+  pages: readonly (readonly ExtractedLine[])[],
+): number | undefined => {
+  const counts = new Map<number, number>();
+  for (const lines of pages) {
+    for (const [index, line] of lines.entries()) {
+      const above = lines[index - 1];
+      if (
+        above?.y !== undefined &&
+        line.y !== undefined &&
+        above.text.length > 0 &&
+        line.text.length > 0
+      ) {
+        const pitch = Math.round((above.y - line.y) * 2) / 2;
+        if (pitch > 0) {
+          counts.set(pitch, (counts.get(pitch) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  let pitch: number | undefined;
+  let best = 0;
+  for (const [candidate, count] of counts) {
+    if (count > best) {
+      pitch = candidate;
+      best = count;
+    }
+  }
+  return pitch;
 };
 
 type SeparatedPdfContent = {
@@ -824,9 +941,11 @@ export const plSnParagraphsToHtml = (
     )
     .join("");
 
-type PdfTextLine = ReturnType<
+type PdfTextPage = ReturnType<
   ReturnType<PDF["getPages"]>[number]["extractText"]
->["lines"][number];
+>;
+
+type PdfTextLine = PdfTextPage["lines"][number];
 
 const extractedLineOf = (
   line: PdfTextLine,
@@ -836,6 +955,8 @@ const extractedLineOf = (
   text: normalizeSpanText(line.text),
   x: line.bbox.x,
   right: line.bbox.x + line.bbox.width,
+  y: line.bbox.y,
+  printedX: printedCharactersOf(line).at(0)?.bbox.x,
   ...(superscripts === undefined || superscripts.length === 0
     ? {}
     : { superscripts }),
@@ -947,27 +1068,329 @@ export const extractPlSnLines = async (
     );
   }
 
-  const bodySize = bodyFontSizeOf(textPages.flatMap(({ lines }) => lines));
   const pages = textPages.map(({ height, lines }, pageIndex) => {
     const first = lines.findIndex(({ text }) => text.trim().length > 0);
     const header = lines[first];
     // A header is the page's first line, printed in its top margin: the same
     // number opening the body further down is text.
-    return liftSuperscripts(
-      pageIndex > 0 &&
-        header !== undefined &&
-        height - header.bbox.y <= height * RUNNING_HEADER_ZONE_RATIO &&
-        isRunningHeader(
-          normalizeSpanText(header.text),
-          supremeCourt.docket,
-          pageIndex + 1,
-        )
-        ? lines.toSpliced(first, 1)
-        : lines,
-      bodySize,
-    );
+    return pageIndex > 0 &&
+      header !== undefined &&
+      height - header.bbox.y <= height * RUNNING_HEADER_ZONE_RATIO &&
+      isRunningHeader(
+        normalizeSpanText(header.text),
+        supremeCourt.docket,
+        pageIndex + 1,
+      )
+      ? lines.toSpliced(first, 1)
+      : lines;
   });
-  const bodyPages = pages.map((lines) => {
+  return readSetPages(textPages, pages, paragraphStart, SUPREME_COURT_READING)
+    .body;
+};
+
+export type PlPdfSeparatedContent = {
+  body: PlSnLine[];
+  notes: PlSnLine[];
+};
+
+/** How a publisher's set pages are read, past their furniture. */
+type SetPageReading = {
+  /** Read each page's footnotes out of its text, not where they are printed. */
+  readonly separateNotes: boolean;
+  /** Open a paragraph where a line sits further below the one above. */
+  readonly paragraphSpacing: boolean;
+  /**
+   * Measure a line's indent from its first printed character, so an indent
+   * typed as spaces is one.
+   */
+  readonly printedIndent: boolean;
+  readonly markers: PointMarkers;
+};
+
+const SUPREME_COURT_READING: SetPageReading = {
+  separateNotes: false,
+  paragraphSpacing: false,
+  printedIndent: false,
+  markers: POINT_MARKERS,
+};
+
+const LETTERHEAD_READING: SetPageReading = {
+  separateNotes: true,
+  paragraphSpacing: true,
+  printedIndent: true,
+  markers: NUMBERED_PARAGRAPH_MARKERS,
+};
+
+/**
+ * How far into the page from its top or bottom edge a letterhead, a footer or
+ * a page number sits. The furthest observed, a three-line footer, reaches 11%
+ * up the page; the body's first and last lines start further in.
+ */
+const EDGE_ZONE_RATIO = 0.15;
+
+/** How far apart the same footer may sit on two pages and still be one. */
+const SAME_PLACE_PT = 2;
+
+/** `3`, `- 3 -`, `3/16`, `Strona 3 z 16`, `str. 3`: page 3's own number. */
+const isPageNumber = (text: string, pageNumber: number): boolean => {
+  const match =
+    /^(?:(?:strona|str\.)\s*)?[-–—]?\s*(?<page>\d{1,4})\s*[-–—]?(?:\s*(?:z|\/)\s*\d{1,4})?$/iu.exec(
+      text.replace(/\s+/gu, " ").trim(),
+    );
+  return match?.groups?.["page"] === String(pageNumber);
+};
+
+/**
+ * Each page's lines without what the publisher prints around the text: a
+ * letterhead or footer line repeated at the same place on most pages, and
+ * the page's own number.
+ *
+ * Only lines in the edge zones are weighed, and a line is repeated only
+ * where it sits at the same height, so a footnote's number at the foot of
+ * many pages is never one. A footer whose two lines the text layer read as
+ * one on some page (`gdansk@uokik.gov.pl www.uokik.gov.pl 2 ul. Podwale`) is
+ * still the footer: every piece of it is a repeated line. Each line is
+ * judged on its own, never by where it sits against the footer, because a
+ * page number printed down the margin sits beside the text, not below it.
+ */
+const withoutRepeatedFurniture = (
+  pages: readonly PdfTextPage[],
+): PdfTextLine[][] => {
+  const inEdgeZone = (line: PdfTextLine, height: number): boolean =>
+    line.bbox.y < height * EDGE_ZONE_RATIO ||
+    line.bbox.y > height * (1 - EDGE_ZONE_RATIO);
+  // A footer's text with its page number left out, so every page's copy reads
+  // the same.
+  const keyOf = (line: PdfTextLine): string =>
+    normalizeSpanText(line.text)
+      .replace(/\d+/gu, "#")
+      .replace(/\s+/gu, " ")
+      .trim();
+  // A line of digits alone is a page number or a footnote's: the first is
+  // told by its value, and the second sits at the same place on many pages
+  // whenever a page's one note is a line long, so neither is weighed here.
+  const placed = new Map<string, { page: number; y: number }[]>();
+  for (const [page, { height, lines }] of pages.entries()) {
+    for (const line of lines) {
+      const key = keyOf(line);
+      if (/\p{L}/u.test(key) && inEdgeZone(line, height)) {
+        placed.set(key, [...(placed.get(key) ?? []), { page, y: line.bbox.y }]);
+      }
+    }
+  }
+  const repeatedOn = Math.max(2, Math.ceil(pages.length / 2));
+  const repeatedAt = (key: string, at: number): boolean =>
+    new Set(
+      (placed.get(key) ?? [])
+        .filter(({ y }) => Math.abs(y - at) <= SAME_PLACE_PT)
+        .map(({ page }) => page),
+    ).size >= repeatedOn;
+  // Longest first, so a piece is taken whole before a shorter one inside it.
+  const repeatedKeys = [...placed]
+    .filter(([key, places]) => places.some(({ y }) => repeatedAt(key, y)))
+    .map(([key]) => key)
+    .toSorted((left, right) => right.length - left.length);
+  const isMergedFooter = (key: string): boolean => {
+    let rest = key;
+    let pieces = 0;
+    for (const repeated of repeatedKeys) {
+      pieces += rest.split(repeated).length - 1;
+      rest = rest.replaceAll(repeated, " ");
+    }
+    return pieces >= 2 && rest.trim().length === 0;
+  };
+
+  return pages.map(({ height, lines }, page) =>
+    lines.filter((line) => {
+      if (!inEdgeZone(line, height)) {
+        return true;
+      }
+      const key = keyOf(line);
+      return !(
+        isPageNumber(normalizeSpanText(line.text), page + 1) ||
+        (key.length > 0 &&
+          (repeatedAt(key, line.bbox.y) || isMergedFooter(key)))
+      );
+    }),
+  );
+};
+
+/**
+ * How much smaller than the body a footnote is set. Notes are set a point or
+ * two below the body (10pt under 11pt), where a superscript is set far
+ * smaller still.
+ */
+const NOTE_TYPE_RATIO = 0.95;
+
+const printedSpansOf = (line: ExtractedLine): readonly PdfSpan[] =>
+  line.spans.filter(({ text }) => text.trim().length > 0);
+
+/**
+ * The number a footnote opens with, and the note's runs without it: a line
+ * of the number alone in small type, the number raised over the note's
+ * first word, or the number set in small type before it on the same line.
+ */
+const noteOpeningOf = (
+  line: ExtractedLine,
+  bodySize: number,
+): { label: string; runs: PlSnRun[] } | undefined => {
+  const [first] = printedSpansOf(line);
+  const leading = line.superscripts?.at(0);
+  if (leading !== undefined && leading.after === 0) {
+    return /^\d{1,3}$/u.test(leading.text)
+      ? {
+          label: leading.text,
+          runs: runsOfLine({
+            ...line,
+            superscripts: line.superscripts?.slice(1),
+          }),
+        }
+      : undefined;
+  }
+  if (
+    first === undefined ||
+    first.fontSize > bodySize * SMALL_TYPE_RATIO ||
+    !/^\d{1,3}$/u.test(first.text.trim())
+  ) {
+    return undefined;
+  }
+  const label = first.text.trim();
+  const runs = runsOfLine(line);
+  const [head, ...tail] = runs;
+  if (head === undefined) {
+    return undefined;
+  }
+  const rest = head.text.trimStart().slice(label.length).trimStart();
+  return {
+    label,
+    runs: rest.length === 0 ? tail : [{ ...head, text: rest }, ...tail],
+  };
+};
+
+type PageNotes = {
+  /** The page's lines down to its first footnote. */
+  readonly body: readonly ExtractedLine[];
+  /** Each note's opening and the lines it runs on to. */
+  readonly notes: readonly {
+    readonly label: string;
+    readonly runs: readonly PlSnRun[];
+    readonly lines: readonly ExtractedLine[];
+  }[];
+};
+
+/**
+ * A page's footnotes, read off the foot of its text: from the first line
+ * that opens a note with a number some superscript above it on the page
+ * refers to, where that line and every line below it are set smaller than
+ * the body. Requiring the reference is what keeps a table set in small type,
+ * its rows numbered, in the body.
+ *
+ * A page whose foot opens no such note keeps every line, and so do lines set
+ * small above the first note (an evidence citation, or a note carried over
+ * from the page before): left in the body they interrupt a paragraph, where
+ * a guess would file text under the wrong note.
+ */
+const pageNotesOf = (
+  lines: readonly ExtractedLine[],
+  bodySize: number,
+): PageNotes => {
+  let start = lines.length;
+  while (
+    start > 0 &&
+    printedSpansOf(lines[start - 1] ?? { spans: [], text: "", x: 0 }).every(
+      ({ fontSize }) => fontSize < bodySize * NOTE_TYPE_RATIO,
+    )
+  ) {
+    start -= 1;
+  }
+  const references = new Set(
+    lines
+      .slice(0, start)
+      .flatMap(({ superscripts }) =>
+        (superscripts ?? []).map(({ text }) => text),
+      ),
+  );
+  const referencedOpening = (line: ExtractedLine) => {
+    const opening = noteOpeningOf(line, bodySize);
+    return opening !== undefined && references.has(opening.label)
+      ? opening
+      : undefined;
+  };
+  const first = lines.findIndex(
+    (line, index) => index >= start && referencedOpening(line) !== undefined,
+  );
+  if (first === -1) {
+    return { body: lines, notes: [] };
+  }
+  const notes: { label: string; runs: PlSnRun[]; lines: ExtractedLine[] }[] =
+    [];
+  for (const line of lines.slice(first)) {
+    const opening = referencedOpening(line);
+    if (opening !== undefined) {
+      notes.push({ ...opening, lines: [] });
+    } else if (line.text.length > 0) {
+      notes.at(-1)?.lines.push(line);
+    }
+  }
+  return { body: lines.slice(0, first), notes };
+};
+
+/**
+ * Lines of set pages, their furniture already dropped, read as the body and,
+ * where asked for, the footnotes printed at each page's foot.
+ *
+ * - superscripts are set back into the line they are printed over;
+ * - empty lines at a page's edges, and empty lines set in small type, end no
+ *   paragraph: the first set off a header or footer, the second are spacing
+ *   marks left inside running text;
+ * - an indented block keeps its lines in one paragraph: a line continues the
+ *   one above it when that line ran out of room for this line's first word
+ *   and this line sits no deeper than it;
+ * - where the reading asks, a line set further below the one above than the
+ *   document's lines usually are opens a paragraph, and each footnote becomes
+ *   a paragraph of its own, labelled with its number and kept out of the
+ *   body, so a note printed at a page's foot never interrupts a paragraph
+ *   that runs on to the next page.
+ */
+const readSetPages = (
+  textPages: readonly PdfTextPage[],
+  pages: readonly (readonly PdfTextLine[])[],
+  paragraphStart: PlPdfParagraphStart,
+  reading: SetPageReading,
+): PlPdfSeparatedContent => {
+  const bodySize = bodyFontSizeOf(textPages.flatMap(({ lines }) => lines));
+  const notes: PlSnLine[] = [];
+  const noteIds = new Set<string>();
+
+  const bodyPages = pages.map((pageLines) => {
+    const lifted = liftSuperscripts(pageLines, bodySize).map((line) =>
+      reading.printedIndent && line.printedX !== undefined
+        ? { ...line, x: line.printedX }
+        : line,
+    );
+    let lines: readonly ExtractedLine[] = lifted;
+    if (reading.separateNotes) {
+      const page = pageNotesOf(lifted, bodySize);
+      lines = page.body;
+      for (const note of page.notes) {
+        // A decision that numbers its notes per page repeats a number.
+        let noteId = `footnote-${note.label}`;
+        for (let repeat = 2; noteIds.has(noteId); repeat += 1) {
+          noteId = `footnote-${note.label}-${String(repeat)}`;
+        }
+        noteIds.add(noteId);
+        const footnote = { label: note.label, noteId };
+        notes.push(
+          { type: "text", runs: note.runs, indented: true, footnote },
+          ...note.lines.map((line): PlSnLine => ({
+            type: "text",
+            runs: runsOfLine(line),
+            indented: false,
+            footnote,
+          })),
+        );
+      }
+    }
     const start = lines.findIndex(({ text }) => text.length > 0);
     const end = lines.findLastIndex(({ text }) => text.length > 0);
     return start === -1
@@ -983,7 +1406,10 @@ export const extractPlSnLines = async (
           );
   });
   const rightEdge = rightEdgeOf(bodyPages.flat());
-  return bodyPages.flatMap((lines, pageIndex) =>
+  const linePitch = reading.paragraphSpacing
+    ? linePitchOf(bodyPages)
+    : undefined;
+  const body = bodyPages.flatMap((lines, pageIndex) =>
     readPage(
       lines,
       paragraphStart,
@@ -994,14 +1420,33 @@ export const extractPlSnLines = async (
             rightEdge,
             carried:
               pageIndex === 0 ? undefined : bodyPages[pageIndex - 1]?.at(-1),
+            linePitch,
+            markers: reading.markers,
           },
     ),
   );
+  return { body, notes };
 };
 
-export type PlPdfSeparatedContent = {
-  body: PlSnLine[];
-  notes: PlSnLine[];
+/**
+ * The body and the footnotes of a decision an authority sets on letterhead:
+ * a footer or letterhead repeated on every page, and the page's own number,
+ * are dropped (`withoutRepeatedFurniture`); the rest is read as
+ * `readSetPages` describes. Each note's first line is marked indented, so
+ * `assemblePlSnParagraphs` reads every note as a paragraph of its own.
+ */
+export const extractPlPdfLetterheadContent = async (
+  pdfBytes: Uint8Array,
+  paragraphStart: PlPdfParagraphStart,
+): Promise<PlPdfSeparatedContent> => {
+  const pdf = await PDF.load(pdfBytes);
+  const textPages = pdf.getPages().map((page) => page.extractText());
+  return readSetPages(
+    textPages,
+    withoutRepeatedFurniture(textPages),
+    paragraphStart,
+    LETTERHEAD_READING,
+  );
 };
 
 /** Structured form for adapters that emit linked footnote blocks. */

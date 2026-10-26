@@ -15,6 +15,7 @@ import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
   parsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
+  plUokikDocumentContent,
   plUokikDocumentLines,
   readPlUokikRulingHeader,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
@@ -33,6 +34,30 @@ const DOK_9_2011 = new URL(
 /** A 2024 decision with named bold faces and hanging-indent paragraphs. */
 const RGD_16_2024 = new URL(
   "__fixtures__/pl-uokik-rgd-16-2024.pdf",
+  import.meta.url,
+);
+
+/** A 2009 decision whose TrueType fonts name `ż` the legacy way, `zdot`. */
+const RLO_15_2009 = new URL(
+  "__fixtures__/pl-uokik-rlo-15-2009.pdf",
+  import.meta.url,
+);
+
+/** A 2026 decision with a page-numbered footer, footnotes and a quoted statement. */
+const RGD_9_2026 = new URL(
+  "__fixtures__/pl-uokik-rgd-9-2026.pdf",
+  import.meta.url,
+);
+
+/** A 2017 decision setting paragraphs apart by spacing, numbered at the foot. */
+const DDK_2_2017 = new URL(
+  "__fixtures__/pl-uokik-ddk-2-2017.pdf",
+  import.meta.url,
+);
+
+/** A 2017 decision numbering its pages `Strona N z M`, indented with spaces. */
+const DIH_48_2017 = new URL(
+  "__fixtures__/pl-uokik-dih-48-2017.pdf",
   import.meta.url,
 );
 
@@ -58,7 +83,8 @@ const inputOf = (pdfs: Uint8Array[]): ParsePlUokikDocumentInput => ({
  * whole, as a reader reads it.
  */
 const printedLines = async (pdfs: Uint8Array[]): Promise<string[]> =>
-  (await plUokikDocumentLines(pdfs))
+  Object.values(await plUokikDocumentContent(pdfs))
+    .flat()
     .flatMap((line) =>
       line.type === "text" ? [line.runs.map(({ text }) => text).join("")] : [],
     )
@@ -90,6 +116,10 @@ describe("a UOKiK decision PDF", () => {
   test.each([
     ["a 2011 decision", DOK_9_2011],
     ["a 2024 decision", RGD_16_2024],
+    ["a 2009 decision", RLO_15_2009],
+    ["a 2026 decision", RGD_9_2026],
+    ["a 2017 decision set apart by spacing", DDK_2_2017],
+    ["a 2017 decision numbering its pages", DIH_48_2017],
   ])("%s keeps every word its text layer prints", async (_, fixture) => {
     const pdfs = [await bytesOf(fixture)];
     const parsed = await parsePlUokikDocument(inputOf(pdfs));
@@ -175,6 +205,172 @@ describe("a UOKiK decision PDF", () => {
 
   test("no file with a text layer is no document, not an empty one", async () => {
     expect(await parsePlUokikDocument(inputOf([]))).toBeNull();
+  });
+});
+
+// ── The page as the office sets it ───────────────────────
+
+const parsedOf = async (fixture: URL) => {
+  const parsed = await parsePlUokikDocument(inputOf([await bytesOf(fixture)]));
+  expect(parsed).not.toBeNull();
+  return {
+    fulltext: parsed?.fulltext ?? "",
+    blocks: parsed?.documentAst.blocks ?? [],
+  };
+};
+
+const bodyOf = (blocks: readonly Block[]): Block[] =>
+  blocks.filter(
+    (block) => block.type !== "paragraph" || block.note === undefined,
+  );
+
+const superscriptsOf = (inlines: readonly Inline[]): string[] =>
+  inlines.flatMap((inline) => {
+    if (inline.type === "superscript") {
+      return [
+        inline.children
+          .map((child) => (child.type === "text" ? child.text : ""))
+          .join(""),
+      ];
+    }
+    return "children" in inline ? superscriptsOf(inline.children) : [];
+  });
+
+/** The text a block prints before each of its superscripts, and the index. */
+const raisedAfter = (inlines: readonly Inline[]): [string, string][] => {
+  const out: [string, string][] = [];
+  let before = "";
+  const walk = (nodes: readonly Inline[]): void => {
+    for (const node of nodes) {
+      if (node.type === "superscript") {
+        out.push([before, superscriptsOf([node]).join("")]);
+      } else if (node.type === "text") {
+        before += node.text;
+      } else if ("children" in node) {
+        walk(node.children);
+      }
+    }
+  };
+  walk(inlines);
+  return out;
+};
+
+describe("a UOKiK decision read as the office sets its pages", () => {
+  test.each([
+    ["DOK-9/2011", DOK_9_2011],
+    ["RGD-16/2024", RGD_16_2024],
+    ["RŁO-15/2009", RLO_15_2009],
+    ["RGD-9/2026", RGD_9_2026],
+    ["DDK-2/2017", DDK_2_2017],
+    ["DIH-48/2017", DIH_48_2017],
+  ])("%s stores no footer and no page number", async (_, fixture) => {
+    const { blocks } = await parsedOf(fixture);
+    const texts = blocks.map(({ plainText }) => plainText);
+    expect(texts.filter((text) => /^\d{1,3}$/u.test(text))).toEqual([]);
+    expect(texts.filter((text) => /Strona \d+ z \d+/u.test(text))).toEqual([]);
+    expect(texts.filter((text) => text.includes("gdansk@uokik"))).toEqual([]);
+  });
+
+  test("a sentence a page break interrupts reads whole", async () => {
+    const { blocks } = await parsedOf(DDK_2_2017);
+    const texts = bodyOf(blocks).map(({ plainText }) => plainText);
+    // The page's number used to land between `art.` and its number.
+    expect(texts.filter((text) => text.endsWith("mowa w art."))).toEqual([]);
+    expect(
+      texts.some((text) =>
+        text.includes("mowa w art. 24 ust. 2 pkt 3 ustawy z dnia 16 lutego"),
+      ),
+    ).toBe(true);
+  });
+
+  test("letters a font names the legacy way read as the letters they are", async () => {
+    const { fulltext } = await parsedOf(RLO_15_2009);
+    for (const word of [
+      "jeżeli uzna",
+      "karę pieniężną",
+      "do budżetu państwa",
+      "Skarżyska-Kamiennej",
+    ]) {
+      expect(fulltext).toContain(word);
+    }
+    for (const garbled of ["je eli", "pienię:ną", "budGetu", "SkarGyska"]) {
+      expect(fulltext).not.toContain(garbled);
+    }
+  });
+
+  test("an article's raised index stays on its article", async () => {
+    const { blocks } = await parsedOf(RLO_15_2009);
+    const raised = bodyOf(blocks).flatMap((block) =>
+      raisedAfter(inlinesOf(block)),
+    );
+    expect(
+      raised.some(
+        ([before, index]) => before.endsWith("art. 479") && index === "45",
+      ),
+    ).toBe(true);
+    // Never a paragraph of its own, nor the next line's first word.
+    expect(
+      bodyOf(blocks).some(({ plainText }) => /^45 /u.test(plainText)),
+    ).toBe(false);
+  });
+
+  test("footnotes follow the body as notes, referenced where printed", async () => {
+    const { blocks } = await parsedOf(RGD_9_2026);
+    const notes = blocks.flatMap((block) =>
+      block.type === "paragraph" && block.note !== undefined
+        ? [{ label: block.note.label, text: block.plainText }]
+        : [],
+    );
+    expect(notes.map(({ label }) => label)).toEqual(
+      Array.from({ length: 11 }, (_, index) => String(index + 1)),
+    );
+    expect(notes[0]?.text.startsWith("Patrz: https://www.finbo.pl/")).toBe(
+      true,
+    );
+    const body = bodyOf(blocks);
+    // Neither a note's text nor its reference's number opens a body paragraph.
+    expect(
+      body.filter(({ plainText }) => /^\d{1,2} \p{L}/u.test(plainText)),
+    ).toEqual([]);
+    expect(
+      body
+        .flatMap((block) => raisedAfter(inlinesOf(block)))
+        .some(
+          ([before, index]) =>
+            before.endsWith("(wcześniej do 15.000 zł)") && index === "1",
+        ),
+    ).toBe(true);
+  });
+
+  test("an indented quoted statement is one paragraph", async () => {
+    const { blocks } = await parsedOf(RGD_9_2026);
+    const statement = blocks.find(({ plainText }) =>
+      plainText.startsWith("„W związku z decyzją Prezesa Urzędu"),
+    );
+    expect(statement?.plainText).toContain(
+      "decyzja była każdorazowo podejmowana przez pożyczkodawców we własnym zakresie.",
+    );
+  });
+
+  test("numbered points set apart by spacing are paragraphs of their own", async () => {
+    const { blocks } = await parsedOf(DDK_2_2017);
+    const texts = blocks.map(({ plainText }) => plainText);
+    for (const point of [
+      "1. obowiązku uwzględnienia",
+      "2. obowiązku zwrócenia",
+      "3. obowiązku poinformowania",
+    ]) {
+      expect(texts.filter((text) => text.startsWith(point))).toHaveLength(1);
+    }
+  });
+
+  test("a paragraph indented with typed spaces opens a paragraph", async () => {
+    const { blocks } = await parsedOf(DIH_48_2017);
+    expect(
+      blocks.some(({ plainText }) =>
+        plainText.startsWith("Po dokonanym zakupie kontrolnym"),
+      ),
+    ).toBe(true);
   });
 });
 

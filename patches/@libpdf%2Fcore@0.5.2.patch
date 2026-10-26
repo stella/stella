@@ -1,8 +1,77 @@
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 27ae20847211562a874f02c165d58e6edf6637f7..024bee6464f58845acf40089ecc2e5bae21e976b 100644
+index 27ae20847211562a874f02c165d58e6edf6637f7..6456df8deef16769a380a057179706603864789e 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -35419,8 +35419,7 @@
+@@ -14379,10 +14379,66 @@ const GLYPH_TO_UNICODE = {
+ 	sfthyphen: 173
+ };
+ /**
+-* Get Unicode code point for a glyph name.
++* Adobe Glyph List names for Latin-1 Supplement and Latin Extended-A letters
++* that GLYPH_TO_UNICODE knows only under their AGLFN spelling. Fonts written by
++* older drivers name glyphs this way (`zdot` for `zdotaccent`).
++*/
++const LEGACY_GLYPH_TO_UNICODE = {
++	verticalbar: 124,
++	nonbreakingspace: 160,
++	softhyphen: 173,
++	overscore: 175,
++	mu1: 181,
++	middot: 183,
++	Cdot: 266,
++	cdot: 267,
++	Dslash: 272,
++	dmacron: 273,
++	Edot: 278,
++	edot: 279,
++	Gdot: 288,
++	gdot: 289,
++	Gcedilla: 290,
++	gcedilla: 291,
++	Idot: 304,
++	Kcedilla: 310,
++	kcedilla: 311,
++	Lcedilla: 315,
++	lcedilla: 316,
++	Ldotaccent: 319,
++	ldotaccent: 320,
++	Ncedilla: 325,
++	ncedilla: 326,
++	quoterightn: 329,
++	Odblacute: 336,
++	odblacute: 337,
++	Rcedilla: 342,
++	rcedilla: 343,
++	Tcedilla: 354,
++	tcedilla: 355,
++	Udblacute: 368,
++	udblacute: 369,
++	Zdot: 379,
++	zdot: 380,
++	slong: 383
++};
++const listedGlyphToUnicode = (name) => Object.hasOwn(GLYPH_TO_UNICODE, name) ? GLYPH_TO_UNICODE[name] : Object.hasOwn(LEGACY_GLYPH_TO_UNICODE, name) ? LEGACY_GLYPH_TO_UNICODE[name] : void 0;
++/**
++* Get Unicode code point for a glyph name, by the Adobe Glyph List
++* specification: a listed name, else the base name before a `.` suffix, else
++* `uniXXXX` or `uXXXX`-`uXXXXXX` naming one code point.
+ */
+ function glyphToUnicode(name) {
+-	return GLYPH_TO_UNICODE[name];
++	const listed = listedGlyphToUnicode(name);
++	if (listed !== void 0) return listed;
++	const base = name.split(".", 1)[0];
++	const baseListed = listedGlyphToUnicode(base);
++	if (baseListed !== void 0) return baseListed;
++	const uni = /^uni([0-9A-F]{4})$/.exec(base) ?? /^u([0-9A-F]{4,6})$/.exec(base);
++	if (uni === null) return;
++	const codePoint = Number.parseInt(uni[1], 16);
++	if (codePoint >= 55296 && codePoint <= 57343 || codePoint > 1114111) return;
++	return codePoint;
+ }
+ //#endregion
+ //#region src/fonts/encodings/differences.ts
+@@ -35419,8 +35475,7 @@ function createEmbeddedFileStream(data, filename, options = {}) {
  	const params = new PdfDict(paramsEntries);
  	const streamEntries = [["Type", PdfName.of("EmbeddedFile")], ["Params", params]];
  	if (mimeType) {

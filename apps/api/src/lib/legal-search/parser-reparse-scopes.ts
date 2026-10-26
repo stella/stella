@@ -321,11 +321,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UOKIK]: {
-    version: 11,
+    version: 12,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read UOKiK PDFs: page furniture, footnotes, superscripts, paragraph breaks and glyph names change text and blocks.",
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {

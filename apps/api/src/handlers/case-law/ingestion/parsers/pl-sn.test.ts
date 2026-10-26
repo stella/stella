@@ -187,14 +187,20 @@ describe("raised reference markers", () => {
 });
 
 describe("reading recorded PDF lines", () => {
-  test("the default reader keeps its byte-identical UOKiK output", async () => {
+  test("the default reader keeps its byte-identical output on a UOKiK PDF", async () => {
     const bytes = new Uint8Array(await Bun.file(UOKIK_PDF).arrayBuffer());
     const lines = await extractPlSnLines(bytes);
     const digest = sha256Hex(JSON.stringify(lines));
 
+    // Re-pinned once: the PDF reader now reads glyphs its fonts name the
+    // legacy way (`zdot`), so `nało-enia` and `pienię'ną` read `nałożenia`
+    // and `pieniężną`; nothing else in the reading changed.
     expect(digest).toBe(
-      "63491377b0a8cc8d1f205d0a43b32add539c1e0e6ef4f281ad252f9311d27592",
+      "c75a70f07bf9fb4bf8233e263b9f39e506f6832aab76e8a7452c07fe406ca0c7",
     );
+    const text = JSON.stringify(lines);
+    expect(text).toContain("nałożenia kary pieniężnej");
+    expect(text).not.toContain("nało-enia");
   });
 
   test("the separated reader retains the UOKiK footnote zone as typed lines", async () => {
