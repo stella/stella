@@ -32,7 +32,7 @@ const createItem = (id: string): MatterActivityItem => ({
   approval: { status: "not_required", user: null },
   category: "documents",
   id: toSafeId<"auditLog">(id),
-  performer: { name: "Jane Doe", type: "user" },
+  performer: { id: "user-1", image: null, name: "Jane Doe", type: "user" },
   renameOnly: false,
   runId: null,
   target: {
