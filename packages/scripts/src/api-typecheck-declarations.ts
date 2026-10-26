@@ -2,8 +2,6 @@
 import { panic } from "better-result";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { parseSync, Visitor } from "oxc-parser";
-import type { CallExpression, NewExpression } from "oxc-parser";
 import ts from "typescript6";
 import * as v from "valibot";
 
@@ -201,32 +199,33 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
   ) {
     return true;
   }
-  const parsed = parseSync(source.fileName, source.text);
   // Local names bound to a constructor, and namespaces that carry one.
   const constructors = new Set<string>();
   const namespaces = new Map<string, readonly string[]>();
-  for (const statement of parsed.program.body) {
+  for (const statement of source.statements) {
     if (
-      statement.type !== "ImportDeclaration" ||
-      statement.importKind === "type"
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteralLike(statement.moduleSpecifier) ||
+      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
     ) {
       continue;
     }
     const names =
-      RUNTIME_CONSTRUCTORS[constructorModule(statement.source.value, relative)];
-    if (!names) {
+      RUNTIME_CONSTRUCTORS[
+        constructorModule(statement.moduleSpecifier.text, relative)
+      ];
+    const bindings = statement.importClause?.namedBindings;
+    if (!names || !bindings) {
       continue;
     }
-    for (const specifier of statement.specifiers) {
-      if (specifier.type === "ImportNamespaceSpecifier") {
-        namespaces.set(specifier.local.name, names);
-      } else if (
-        specifier.type === "ImportSpecifier" &&
-        specifier.importKind !== "type" &&
-        specifier.imported.type === "Identifier" &&
-        names.includes(specifier.imported.name)
-      ) {
-        constructors.add(specifier.local.name);
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.set(bindings.name.text, names);
+      continue;
+    }
+    for (const element of bindings.elements) {
+      const imported = element.propertyName?.text ?? element.name.text;
+      if (!element.isTypeOnly && names.includes(imported)) {
+        constructors.add(element.name.text);
       }
     }
   }
@@ -234,25 +233,27 @@ const isApiRuntimeBoundary = (source: ts.SourceFile) => {
     return false;
   }
   let boundary = false;
-  const construction = (node: CallExpression | NewExpression) => {
-    const callee = node.callee;
-    if (callee.type === "Identifier") {
-      boundary ||= constructors.has(callee.name);
-    } else if (
-      callee.type === "MemberExpression" &&
-      !callee.computed &&
-      callee.object.type === "Identifier" &&
-      callee.property.type === "Identifier"
-    ) {
-      boundary ||=
-        namespaces.get(callee.object.name)?.includes(callee.property.name) ??
-        false;
+  const visit = (node: ts.Node): void => {
+    if (boundary) {
+      return;
     }
+    if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
+      const callee = node.expression;
+      if (ts.isIdentifier(callee)) {
+        boundary = constructors.has(callee.text);
+      } else if (
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        ts.isIdentifier(callee.name)
+      ) {
+        boundary =
+          namespaces.get(callee.expression.text)?.includes(callee.name.text) ??
+          false;
+      }
+    }
+    ts.forEachChild(node, visit);
   };
-  new Visitor({
-    CallExpression: construction,
-    NewExpression: construction,
-  }).visit(parsed.program);
+  visit(source);
   return boundary;
 };
 
