@@ -45,7 +45,7 @@ export type ActionDescriptor = { capability: Capability | null };
 export type ActionCapabilities = {
   role: "admin" | "member";
   capabilities: Record<Capability, CapabilityAvailability>;
-  /** When an admitted OCR request runs; unknown until observed. */
+  /** Whether a worker is live or requests wait for a batch; unknown until observed. */
   documentOcr: DocumentOcrAvailability | undefined;
 };
 export const isCapabilityActionVisible = (

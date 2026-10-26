@@ -37,10 +37,11 @@ const createOcrBody = v.object({ fieldId: resourceIdSchema("field") });
 const config = {
   contract: "patch",
   description:
-    "Queue an unencrypted PDF field for searchable-text recognition. " +
-    "Returns the durable run, whether it runs now (`live`) or in the next " +
-    "recognition batch (`batched`), and reports when that source was " +
-    "already processed. Refused when the deployment would not process it.",
+    "Queue an unencrypted PDF field for the next searchable-text " +
+    "recognition batch. Returns the durable run and the OCR availability " +
+    "it was accepted under (`live` or `batched`), and reports when that " +
+    "source was already processed. Refused when the deployment would not " +
+    "process it.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {

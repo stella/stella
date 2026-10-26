@@ -68,7 +68,7 @@ const QUEUED_OCR_TOAST_KEYS = {
   TranslationKey
 >;
 
-/** The success toast for a manual OCR request: done, running now, or batched. */
+/** The success toast for a manual OCR request: done, queued, or batched. */
 export const manualOcrSuccessKey = (
   response: ManualOcrResponse,
 ): TranslationKey => {
