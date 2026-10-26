@@ -2403,11 +2403,13 @@ const readCaseLawSearchFacets = async ({
   // A matrix-only consumer has no filter rail; derive its presentation from
   // the courts the matrix itself returned without a second aggregation.
   const matrixCourtCounts = new Map<string, number>();
-  for (const bucket of read.value.courtYear?.buckets ?? []) {
-    matrixCourtCounts.set(
-      bucket.court,
-      (matrixCourtCounts.get(bucket.court) ?? 0) + bucket.count,
-    );
+  if (read.value.courtYear !== null) {
+    for (const bucket of read.value.courtYear.buckets) {
+      matrixCourtCounts.set(
+        bucket.court,
+        (matrixCourtCounts.get(bucket.court) ?? 0) + bucket.count,
+      );
+    }
   }
   const matrixCourts = groupCourtsByTier({
     buckets: [...matrixCourtCounts].map(([value, count]) => ({

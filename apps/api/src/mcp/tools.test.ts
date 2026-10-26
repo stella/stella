@@ -1456,8 +1456,8 @@ describe("OpenAI-compatible MCP tools", () => {
           type: "array",
           items: { type: "string", enum: [...CASE_LAW_SEARCH_FACET_NAMES] },
           maxItems: CASE_LAW_SEARCH_FACET_NAMES.length,
-          description:
-            "Facet names to compute for the first phrasing on page one. Omit for hits and total only. Request courtYear explicitly for a court/year visual.",
+          description: "Opt-in facet names; first phrasing, page one only.",
+          default: [],
         },
         queries: {
           type: "array",
