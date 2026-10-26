@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   existsSync,
   mkdirSync,
@@ -1937,7 +1937,59 @@ export const checkDockerSource = (
   return [...new Set(problems)];
 };
 
-export const checkRepositoryDockerSources = (root: string): string[] => {
+type TurboPrune = {
+  directory: string;
+  child: Bun.Subprocess<"ignore", "ignore", "pipe">;
+  stderr: Promise<string>;
+};
+
+// Each prune writes thousands of files. All of them start before the first
+// check, so they overlap each other and the checks of earlier Dockerfiles.
+// Invalid prune scopes still fail at their own Dockerfile, in order.
+const startTurboPrunes = (
+  root: string,
+  dockerfiles: readonly string[],
+  scratch: string,
+  prunes: Map<string, TurboPrune>,
+) => {
+  for (const [index, file] of dockerfiles.entries()) {
+    const scopes = Result.try(() => dockerPruneScopes(text(root, file)));
+    const scope = scopes.isOk() ? scopes.value : [];
+    if (scope.length !== 1) {
+      continue;
+    }
+    const directory = path.join(
+      scratch,
+      String(index),
+      file.replaceAll("/", "-"),
+    );
+    const child = Bun.spawn(
+      [
+        path.join(root, "node_modules/.bin/turbo"),
+        "prune",
+        ...(scope[0] ?? []),
+        "--docker",
+        `--out-dir=${directory}`,
+      ],
+      {
+        cwd: root,
+        env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" },
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "pipe",
+      },
+    );
+    prunes.set(file, {
+      directory,
+      child,
+      stderr: new Response(child.stderr).text(),
+    });
+  }
+};
+
+export const checkRepositoryDockerSources = async (
+  root: string,
+): Promise<string[]> => {
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   if (tracked.exitCode !== 0) {
     panic("Cannot enumerate Docker sources");
@@ -1952,7 +2004,9 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
   const scratch = mkdtempSync(
     path.join(scratchParent, "docker-source-closure-"),
   );
+  const prunes = new Map<string, TurboPrune>();
   try {
+    startTurboPrunes(root, dockerfiles, scratch, prunes);
     for (const file of dockerfiles) {
       const specificIgnore = `${file}.dockerignore`;
       const ignore = text(
@@ -1973,25 +2027,14 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
       }
       const pruned: SourceTree = new Map();
       if (scopes.length === 1) {
-        const directory = path.join(
-          scratch,
-          String(problems.length),
-          file.replaceAll("/", "-"),
-        );
-        const prune = Bun.spawnSync(
-          [
-            path.join(root, "node_modules/.bin/turbo"),
-            "prune",
-            ...(scopes[0] ?? []),
-            "--docker",
-            `--out-dir=${directory}`,
-          ],
-          { cwd: root, env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" } },
-        );
-        if (prune.exitCode !== 0) {
-          panic(`Turbo prune failed for ${file}: ${prune.stderr.toString()}`);
+        const prune = prunes.get(file);
+        if (prune === undefined) {
+          panic(`Turbo prune was not started for ${file}`);
         }
-        for (const entry of filesBelow(path.join(directory, "full"))) {
+        if ((await prune.child.exited) !== 0) {
+          panic(`Turbo prune failed for ${file}: ${await prune.stderr}`);
+        }
+        for (const entry of filesBelow(path.join(prune.directory, "full"))) {
           if (inDockerContext(entry, ignore)) {
             pruned.set(`/app/${entry}`, entry);
           }
@@ -2004,6 +2047,11 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
       );
     }
   } finally {
+    // A failed check stops the prunes still writing before their removal.
+    for (const { child } of prunes.values()) {
+      child.kill();
+      await child.exited;
+    }
     rmSync(scratch, { recursive: true, force: true });
   }
   return problems;
@@ -2022,7 +2070,7 @@ if (import.meta.main) {
     process.exit(0);
   }
   const start = performance.now();
-  const problems = checkRepositoryDockerSources(
+  const problems = await checkRepositoryDockerSources(
     path.resolve(import.meta.dir, ".."),
   );
   if (problems.length > 0) {
