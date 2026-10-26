@@ -1728,6 +1728,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
   "CI_CHECK_POOL_CONCURRENCY",
+  "CI_COMPARISON_BASE",
   // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
   "CI_CHECK_POOL_PARTITION",
   // Test-only: the commit ci-checks-partition.test.ts compares the head with.

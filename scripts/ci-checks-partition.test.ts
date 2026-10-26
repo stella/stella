@@ -53,6 +53,9 @@ const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
                 "CI_CHECK_KIND",
                 "CI_CHECK_INPUTS",
                 "CI_CHECK_CONTEXT",
+                // The pool supplies this to every child; it does not alter a
+                // check's command or classification.
+                "CI_COMPARISON_BASE",
                 // Matrix metadata selects a disjoint slice of the same pool;
                 // it does not change the check represented by this step.
                 "CI_CHECK_POOL_PARTITION",
@@ -1157,6 +1160,16 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  if (
+    step.name === "Test remaining repository scripts" &&
+    isDeepStrictEqual(fields.env, {
+      BASE_SHA: `\${{ needs.ci-plan.outputs.target_base_sha }}`,
+    })
+  ) {
+    const migrated = { ...step };
+    delete migrated["env"];
+    return migrated;
+  }
   if (step.name === "CLI sharded registry and derived runtime guard") {
     const run = v.parse(v.string(), fields.run);
     const continuation = " \\";

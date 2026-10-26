@@ -107,7 +107,6 @@ checks:
     env:
       CI_CHECK_KIND: CONTEXTUAL
       CI_CHECK_CONTEXT: "Selects tests from the merge-base diff, static import closures, and declared data inputs."
-      BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
     id: remaining_scripts
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.

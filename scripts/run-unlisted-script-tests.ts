@@ -23,9 +23,14 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { buildImportGraph } from "./api-test-impact";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import { changedFilesSince, comparisonBase } from "./ci-comparison-base";
 import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
+
+const declaredInputs = new Map(Object.entries(scriptTestInputs.inputs));
 
 type ScriptTestArguments =
   | { readonly type: "valid"; readonly timeout: number | undefined }
@@ -133,6 +138,35 @@ export const unlistedTestCommands = ({
 };
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+
+const APT_TIMEOUT_MS = 180_000;
+/** Install strace on a CI runner, through the repository's retry owner. */
+const installStrace = () => {
+  const started = performance.now();
+  for (const args of [
+    ["sudo", "apt-get", "update", "-qq"],
+    [
+      "sudo",
+      "apt-get",
+      "install",
+      "-y",
+      "-qq",
+      "--no-install-recommends",
+      "strace",
+    ],
+  ]) {
+    const installed = Bun.spawnSync(
+      ["bash", path.join(REPO_ROOT, "scripts/retry.sh"), ...args],
+      { stdout: "inherit", stderr: "inherit", timeout: APT_TIMEOUT_MS },
+    );
+    if (installed.exitCode !== 0) {
+      panic(`Installing strace failed: ${args.join(" ")}`);
+    }
+  }
+  console.log(
+    `Installed strace in ${((performance.now() - started) / 1000).toFixed(1)} s.`,
+  );
+};
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
 const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
 
@@ -154,6 +188,7 @@ type SelectScriptTestsOptions = {
   readonly changed: readonly string[];
   readonly root?: string;
   readonly inputs?: Readonly<Record<string, readonly string[]>>;
+  readonly exemptions?: Readonly<Record<string, string>>;
 };
 
 /** Select tests only when HEAD proves their code or declared data changed. */
@@ -161,7 +196,8 @@ export const selectScriptTests = ({
   tests,
   changed,
   root = REPO_ROOT,
-  inputs = scriptTestInputs,
+  inputs = scriptTestInputs.inputs,
+  exemptions = scriptTestInputs.noTrackedInputs,
 }: SelectScriptTestsOptions): ScriptTestSelection => {
   const realRoot = realpathSync(root);
   const graph = buildImportGraph(realRoot, [
@@ -187,7 +223,9 @@ export const selectScriptTests = ({
     return (
       [...closure].some(
         (file) => graph.readers.has(file) || graph.scanners.has(file),
-      ) && !Object.hasOwn(inputs, test)
+      ) &&
+      (!Object.hasOwn(inputs, test) || inputs[test]?.length === 0) &&
+      !Object.hasOwn(exemptions, test)
     );
   });
   const unresolved = tests.filter((test) =>
@@ -223,49 +261,6 @@ export const selectScriptTests = ({
   return { files, skipped: tests.length - files.length };
 };
 
-const gitOutput = (args: readonly string[]): string | undefined => {
-  const result = Bun.spawnSync(["git", ...args], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "ignore",
-  });
-  return result.exitCode === 0 ? result.stdout.toString().trim() : undefined;
-};
-
-const gitSucceeds = (args: readonly string[]): boolean =>
-  Bun.spawnSync(["git", ...args], {
-    cwd: REPO_ROOT,
-    stdout: "ignore",
-    stderr: "ignore",
-  }).exitCode === 0;
-
-export const comparisonBase = (
-  environment: Readonly<Record<string, string | undefined>> = process.env,
-): string | undefined => {
-  const planned = environment["BASE_SHA"]?.trim();
-  if (planned && gitSucceeds(["cat-file", "-e", `${planned}^{commit}`])) {
-    return planned;
-  }
-  const baseRef = environment["GITHUB_BASE_REF"]?.trim();
-  if (!baseRef) {
-    return undefined;
-  }
-  return gitOutput(["merge-base", "HEAD", `origin/${baseRef}`]);
-};
-
-export const changedSince = (base: string): string[] => {
-  const output = gitOutput([
-    "diff",
-    "--name-only",
-    "--diff-filter=ACMRD",
-    `${base}...HEAD`,
-  ]);
-  if (output === undefined) {
-    panic(`Cannot compare HEAD with ${base}`);
-  }
-  return output === "" ? [] : output.split("\n");
-};
-
 /** Workflow text minus comment lines: a mention in a comment runs nothing. */
 const withoutComments = (workflowText: string): string =>
   workflowText
@@ -291,12 +286,91 @@ const scan = (pattern: string): string[] => [
  * running at once never interleave their reports. Files, not pipes: a piped
  * stdout is truncated for large test reports.
  */
-const run = async (command: readonly string[]): Promise<boolean> => {
+const trackedFiles = (): Set<string> => {
+  const result = Bun.spawnSync(["git", "ls-files", "-z"], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    panic("Could not list tracked repository files");
+  }
+  return new Set(result.stdout.toString().split("\0").filter(Boolean));
+};
+
+export const undeclaredTracedFiles = ({
+  trace,
+  closure,
+  declared,
+  tracked,
+}: {
+  readonly trace: string;
+  readonly closure: ReadonlySet<string>;
+  readonly declared: readonly string[];
+  readonly tracked: ReadonlySet<string>;
+}): string[] => {
+  const globs = declared.map((pattern) => new Bun.Glob(pattern));
+  const opened = new Set<string>();
+  for (const line of trace.split("\n")) {
+    const match =
+      /(?:open|openat|openat2|execve)\([^"]*"((?:\\.|[^"])*)"/u.exec(line);
+    if (match?.[1] === undefined) {
+      continue;
+    }
+    const openedPath = match[1].replaceAll('\\"', '"');
+    const directory = /(?:AT_FDCWD|\d+)<([^>]+)>[^"]*"/u.exec(line)?.[1];
+    const absolute = path.isAbsolute(openedPath)
+      ? path.normalize(openedPath)
+      : path.resolve(directory ?? REPO_ROOT, openedPath);
+    const relative = repoRelativePath(REPO_ROOT, absolute);
+    if (
+      relative.startsWith("../") ||
+      relative.startsWith("node_modules/") ||
+      relative.startsWith(".git/") ||
+      closure.has(relative) ||
+      !tracked.has(relative) ||
+      globs.some((glob) => glob.match(relative))
+    ) {
+      continue;
+    }
+    opened.add(relative);
+  }
+  return [...opened].toSorted();
+};
+
+type RunOptions = {
+  readonly command: readonly string[];
+  readonly testFile: string;
+  readonly trace: boolean;
+  readonly graph: ReturnType<typeof buildImportGraph>;
+  readonly tracked: ReadonlySet<string>;
+};
+
+const run = async ({
+  command,
+  testFile,
+  trace,
+  graph,
+  tracked,
+}: RunOptions): Promise<boolean> => {
   const directory = mkdtempSync(path.join(tmpdir(), "unlisted-script-tests-"));
   const stdoutPath = path.join(directory, "stdout.log");
   const stderrPath = path.join(directory, "stderr.log");
   try {
-    const child = Bun.spawn([...command], {
+    const tracePath = path.join(directory, "trace.log");
+    const invoked = trace
+      ? [
+          "strace",
+          "-f",
+          "-yy",
+          "-e",
+          "trace=open,openat,openat2,execve",
+          "-o",
+          tracePath,
+          ...command,
+        ]
+      : [...command];
+    const started = performance.now();
+    const child = Bun.spawn(invoked, {
       cwd: REPO_ROOT,
       stdout: Bun.file(stdoutPath),
       stderr: Bun.file(stderrPath),
@@ -305,6 +379,21 @@ const run = async (command: readonly string[]): Promise<boolean> => {
     console.log(`$ ${command.join(" ")}`);
     process.stdout.write(readFileSync(stdoutPath, "utf-8"));
     process.stderr.write(readFileSync(stderrPath, "utf-8"));
+    if (trace) {
+      console.log(
+        `Traced ${testFile} in ${Math.round(performance.now() - started)}ms.`,
+      );
+      const undeclared = undeclaredTracedFiles({
+        trace: readFileSync(tracePath, "utf-8"),
+        closure: graph.closure(testFile),
+        declared: declaredInputs.get(testFile) ?? [],
+        tracked,
+      });
+      for (const file of undeclared) {
+        console.error(`${testFile} opened undeclared tracked file ${file}`);
+      }
+      return exitCode === 0 && undeclared.length === 0;
+    }
     return exitCode === 0;
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -339,7 +428,7 @@ if (import.meta.main) {
           }
         : selectScriptTests({
             tests: unlisted,
-            changed: changedSince(base),
+            changed: changedFilesSince(base),
           });
     console.log(
       `Selected ${selection.files.length} and skipped ${selection.skipped} unlisted script test file(s).`,
@@ -347,14 +436,65 @@ if (import.meta.main) {
     if (selection.reason !== undefined) {
       console.log(`Full run: ${selection.reason}.`);
     }
-    const commands = unlistedTestCommands({
-      files: selection.files,
-      timeout: options.timeout,
-      groups: UNLISTED_TEST_GROUPS,
-      weightOf: (file) => statSync(path.join(REPO_ROOT, file)).size,
-    });
-    const results = await Promise.all(
-      commands.map(async (command) => await run(command)),
+    const hasStrace = () =>
+      Bun.spawnSync(["sh", "-c", "command -v strace"], { stdout: "ignore" })
+        .exitCode === 0;
+    // Hosted runner images ship without strace. CI installs it only when a
+    // test will run, so a change that selects none pays nothing for it.
+    if (
+      process.env["CI"] === "true" &&
+      selection.files.length > 0 &&
+      !hasStrace()
+    ) {
+      installStrace();
+    }
+    const straceAvailable = hasStrace();
+    if (process.env["CI"] === "true" && !straceAvailable) {
+      panic(
+        "strace is required in CI; install it with: sudo apt-get install strace",
+      );
+    }
+    if (!straceAvailable) {
+      console.log("Tracing skipped: strace is not installed.");
+    }
+    const graph = buildImportGraph(REPO_ROOT, [
+      ...selection.files.filter((file) => file.endsWith(".ts")),
+      RUNNER_PATH,
+    ]);
+    const tracked = trackedFiles();
+    const commands = selection.files.map((file) => ({
+      file,
+      command:
+        unlistedTestCommands({
+          files: [file],
+          timeout: options.timeout,
+          groups: UNLISTED_TEST_GROUPS,
+          weightOf: (entry) => statSync(path.join(REPO_ROOT, entry)).size,
+        })[0] ?? panic(`No command for ${file}`),
+    }));
+    let nextCommand = 0;
+    const results: boolean[] = [];
+    await Promise.all(
+      Array.from(
+        { length: Math.min(UNLISTED_TEST_GROUPS, commands.length) },
+        async () => {
+          while (nextCommand < commands.length) {
+            const entry = commands[nextCommand];
+            nextCommand += 1;
+            if (entry !== undefined) {
+              results.push(
+                await run({
+                  command: entry.command,
+                  testFile: entry.file,
+                  trace: straceAvailable,
+                  graph,
+                  tracked,
+                }),
+              );
+            }
+          }
+        },
+      ),
     );
     if (results.includes(false)) {
       panic("Unlisted script tests failed");

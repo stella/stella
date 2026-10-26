@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import { comparisonBase } from "./ci-comparison-base";
 import {
   balanceTestFiles,
-  comparisonBase,
   parseScriptTestArguments,
   selectScriptTests,
+  undeclaredTracedFiles,
   unlistedTestCommands,
   unlistedTests,
 } from "./run-unlisted-script-tests";
@@ -277,6 +278,46 @@ describe("script test impact selection", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  test("fails the census for an empty reader declaration", () => {
+    const root = makeFixture();
+    try {
+      expect(() =>
+        selectScriptTests({
+          tests: ["scripts/reader.test.ts"],
+          changed: [],
+          root,
+          inputs: { "scripts/reader.test.ts": [] },
+        }),
+      ).toThrow("undeclared data inputs");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+test("tracing names tracked reads outside the closure and declarations", () => {
+  expect(
+    undeclaredTracedFiles({
+      trace: `1 openat(AT_FDCWD, "${path.resolve("apps/api/Dockerfile")}", O_RDONLY) = 3\n1 openat(AT_FDCWD, "${path.resolve("scripts/subject.test.ts")}", O_RDONLY) = 3`,
+      closure: new Set(["scripts/subject.test.ts"]),
+      declared: [],
+      tracked: new Set(["apps/api/Dockerfile", "scripts/subject.test.ts"]),
+    }),
+  ).toEqual(["apps/api/Dockerfile"]);
+});
+
+test("the Dockerfile reader's trace is covered by its declaration", () => {
+  const dockerfile = "apps/api/Dockerfile";
+  expect(
+    undeclaredTracedFiles({
+      trace: `1 openat(AT_FDCWD, "${path.resolve(dockerfile)}", O_RDONLY) = 3`,
+      closure: new Set(["scripts/api-dockerfile-entrypoints.test.ts"]),
+      declared:
+        scriptTestInputs.inputs["scripts/api-dockerfile-entrypoints.test.ts"],
+      tracked: new Set([dockerfile]),
+    }),
+  ).toEqual([]);
 });
 
 describe("repository script test census", () => {
@@ -291,7 +332,8 @@ describe("repository script test census", () => {
       tests,
       changed: ["docs/changelog/selection-proof.md"],
       root,
-      inputs: scriptTestInputs,
+      inputs: scriptTestInputs.inputs,
+      exemptions: scriptTestInputs.noTrackedInputs,
     });
     expect(selection.files).toEqual([]);
     expect(selection.skipped).toBe(tests.length);

@@ -2450,6 +2450,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -2795,6 +2796,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
           CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
@@ -3693,6 +3695,7 @@ jobs:
           CI_CHECK_POOL_STEPS: ${{ toJSON(steps) }}
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
+          CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
         run: |
           needs_file=$(mktemp)
           cat > "$needs_file" <<'CI_CHECK_POOL_NEEDS_JSON'
