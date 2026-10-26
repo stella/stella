@@ -19,7 +19,7 @@ import type { logger as appLogger } from "@/api/lib/observability/logger";
 // SQS caps a message body at 256 KiB. A longer body did not come from the
 // configured queue and is not worth parsing.
 export const MAX_QUEUE_MESSAGE_CHARS = 262_144;
-const MAX_MESSAGES_PER_BATCH = 10;
+export const MAX_MESSAGES_PER_BATCH = 10;
 const MAX_BATCHES_PER_RUN = 10;
 const RUN_BUDGET_MS = 30_000;
 const RECEIVE_WAIT_SECONDS = 1;
@@ -100,6 +100,16 @@ export type SnsQueueDelivery = {
 /** `acknowledge` deletes the delivery; `keep` leaves it for redelivery. */
 export type SnsQueueDisposition = "acknowledge" | "keep";
 
+/**
+ * What handling one delivery did. `work` counts the units of the run's work
+ * budget it spent (for example, one per recipient row written or attempted);
+ * a delivery that touched no rows spends zero.
+ */
+export type SnsQueueHandled = {
+  disposition: SnsQueueDisposition;
+  work: number;
+};
+
 export type SnsQueueDrainSummary = {
   batches: number;
   stoppedBecause: "drained" | "aborted" | "limitReached";
@@ -112,7 +122,15 @@ type DrainSnsQueueOptions = {
   queueUrl: string;
   /** Must outlast the handling of one whole batch. */
   visibilityTimeoutSeconds: number;
-  handle: (delivery: SnsQueueDelivery) => Promise<SnsQueueDisposition>;
+  handle: (delivery: SnsQueueDelivery) => Promise<SnsQueueHandled>;
+  /**
+   * Work units one run may spend. Once spent, the run leases no further batch
+   * and stops with `limitReached`. A leased batch is always finished, since a
+   * released delivery still counts toward the redrive limit, so a run spends
+   * less than the budget plus one batch of deliveries at their fan-out cap;
+   * each consumer caps a delivery's fan-out where it parses the delivery.
+   */
+  workBudget: number;
   signal: AbortSignal;
   logger: typeof appLogger;
   /** Prefix of this queue's log events, such as `inbound_mail.queue`. */
@@ -123,13 +141,15 @@ type DrainSnsQueueOptions = {
  * Leases bounded batches and hands each delivery to `handle` in turn. A
  * delivery is deleted only when `handle` acknowledges it; anything else stays
  * on the queue for its visibility timeout and redrive policy. An abort
- * releases the deliveries that have not started.
+ * releases the deliveries that have not started; a spent work budget stops
+ * the run before its next lease.
  */
 export const drainSnsQueue = async ({
   client,
   queueUrl,
   visibilityTimeoutSeconds,
   handle,
+  workBudget,
   signal,
   logger,
   logPrefix,
@@ -138,6 +158,7 @@ export const drainSnsQueue = async ({
 > => {
   let deleteFailed = 0;
   let releaseFailed = 0;
+  let workSpent = 0;
   const deadline = Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS;
 
   // Leases one batch. Batches are sequential: a lease taken before the
@@ -235,12 +256,13 @@ export const drainSnsQueue = async ({
   // Read through a call: the signal can abort during any await, so a
   // narrowed `signal.aborted` would be stale.
   const aborted = () => signal.aborted;
+  const budgetSpent = () => workSpent >= workBudget;
 
   for (let batch = 0; batch < MAX_BATCHES_PER_RUN; batch += 1) {
     if (aborted()) {
       return summary(batch, "aborted");
     }
-    if (Temporal.Now.instant().epochMilliseconds >= deadline) {
+    if (budgetSpent() || Temporal.Now.instant().epochMilliseconds >= deadline) {
       return summary(batch, "limitReached");
     }
     const received = await receiveBatch();
@@ -263,11 +285,12 @@ export const drainSnsQueue = async ({
       }
       // One delivery at a time, so an abort leaves none half-acknowledged.
       const deliveryId = message.MessageId ?? "unknown";
-      const disposition = await handle({
+      const { disposition, work } = await handle({
         body: message.Body,
         deliveryId,
         receiveCount: message.Attributes?.ApproximateReceiveCount ?? "unknown",
       });
+      workSpent += work;
       if (disposition === "acknowledge") {
         await remove(message, deliveryId);
       }
