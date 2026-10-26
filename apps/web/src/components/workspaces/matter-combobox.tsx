@@ -14,7 +14,6 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-  useComboboxFilter,
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -27,6 +26,7 @@ import { MatterOptionLabel } from "@/components/matter-option-label";
 import {
   groupMatterOptions,
   isBrowsingMatters,
+  matchesMatterOption,
   MATTER_OPTION_GROUP,
   MATTER_PICKER_RECENT_LIMIT,
 } from "@/components/workspaces/matter-combobox.logic";
@@ -105,7 +105,6 @@ export const MatterCombobox = ({
   value,
 }: MatterComboboxProps) => {
   const t = useTranslations();
-  const { contains } = useComboboxFilter({ sensitivity: "base", value });
   const [query, setQuery] = useState(value?.name ?? "");
   const pinnedOrder = usePinnedStore((state) => state.pinnedOrder);
   const {
@@ -157,13 +156,9 @@ export const MatterCombobox = ({
   return (
     <div className="flex flex-col gap-2">
       <Combobox
-        // A matter matches on its name or its client's, accent- and
-        // case-insensitively. While the input still shows the chosen
-        // matter's name, the filter keeps every matter in view.
-        filter={(matter: MatterOption, search) =>
-          contains(matter, search, matterName) ||
-          contains(matter, search, matterClientName)
-        }
+        // While the input still shows the chosen matter's name, Base UI
+        // skips the filter and keeps every matter in view.
+        filter={matchesMatterOption}
         isItemEqualToValue={(item, selected) => item.id === selected.id}
         items={items}
         itemToStringLabel={(matter) => matter.name}
@@ -227,11 +222,3 @@ export const MatterCombobox = ({
     </div>
   );
 };
-
-function matterName(matter: MatterOption): string {
-  return matter.name;
-}
-
-function matterClientName(matter: MatterOption): string {
-  return matter.clientName ?? "";
-}

@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize";
 
 type Client = {
   displayName: string;
@@ -19,45 +19,33 @@ type TeamMember = {
 export const filterWorkspacesBySearch = <T extends MatterSearchWorkspace>(
   workspaces: readonly T[],
   search: string,
-) => {
-  const query = search.toLowerCase();
-  const hasQuery = search.trim().length > 0;
-  return workspaces.filter(
-    (workspace) =>
-      !hasQuery ||
-      containsSearchMatchKey(workspace.name.toLowerCase(), query) ||
-      containsSearchMatchKey(workspace.reference.toLowerCase(), query) ||
-      (workspace.client !== null &&
-        containsSearchMatchKey(
-          workspace.client.displayName.toLowerCase(),
-          query,
-        )),
-  );
-};
+) =>
+  filterBySearchQuery({
+    items: workspaces,
+    query: search,
+    fields: ({ client, name, reference }) => [
+      name,
+      reference,
+      client?.displayName,
+    ],
+  });
 
 export const filterClientsBySearch = <T extends Client>(
   clients: readonly T[],
   search: string,
-) => {
-  const query = search.trim().toLowerCase();
-  return query
-    ? clients.filter((client) =>
-        containsSearchMatchKey(client.displayName.toLowerCase(), query),
-      )
-    : clients;
-};
+) =>
+  filterBySearchQuery({
+    items: clients,
+    query: search,
+    fields: ({ displayName }) => [displayName],
+  });
 
 export const filterTeamMembersBySearch = <T extends TeamMember>(
   members: readonly T[],
   search: string,
-) => {
-  const query = search.trim().toLowerCase();
-  return query
-    ? members.filter(
-        (member) =>
-          containsSearchMatchKey(member.userName.toLowerCase(), query) ||
-          containsSearchMatchKey(member.userEmail.toLowerCase(), query) ||
-          containsSearchMatchKey(member.userId.toLowerCase(), query),
-      )
-    : members;
-};
+) =>
+  filterBySearchQuery({
+    items: members,
+    query: search,
+    fields: ({ userEmail, userId, userName }) => [userName, userEmail, userId],
+  });

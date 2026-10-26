@@ -1,5 +1,5 @@
 import { compareByLocale } from "@stll/collation";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize";
 
 type CountryOption = { code: string; name: string };
 
@@ -18,7 +18,6 @@ export const filterJurisdictionOptions = <TCountry extends CountryOption>({
   selectedCodes,
   suggestedCodes,
 }: FilterJurisdictionOptions<TCountry>): TCountry[] => {
-  const normalizedQuery = query.trim().toLowerCase();
   const selectedSet = new Set(selectedCodes);
   const suggestedSet = new Set(suggestedCodes);
   const compareName = compareByLocale(locale);
@@ -38,13 +37,9 @@ export const filterJurisdictionOptions = <TCountry extends CountryOption>({
     return compareName(a.name, b.name);
   });
 
-  if (!normalizedQuery) {
-    return sorted;
-  }
-
-  return sorted.filter(
-    (country) =>
-      containsSearchMatchKey(country.name.toLowerCase(), normalizedQuery) ||
-      containsSearchMatchKey(country.code.toLowerCase(), normalizedQuery),
-  );
+  return filterBySearchQuery({
+    items: sorted,
+    query,
+    fields: ({ code, name }) => [name, code],
+  });
 };

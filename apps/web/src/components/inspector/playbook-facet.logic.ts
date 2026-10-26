@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize";
 
 type PlaybookWithName = {
   name: string;
@@ -7,14 +7,9 @@ type PlaybookWithName = {
 export const filterPlaybooksByName = <T extends PlaybookWithName>(
   playbooks: readonly T[],
   query: string,
-) => {
-  const normalizedFilter = query.trim().toLocaleLowerCase();
-  return normalizedFilter.length === 0
-    ? playbooks
-    : playbooks.filter((playbook) =>
-        containsSearchMatchKey(
-          playbook.name.toLocaleLowerCase(),
-          normalizedFilter,
-        ),
-      );
-};
+) =>
+  filterBySearchQuery({
+    items: playbooks,
+    query,
+    fields: ({ name }) => [name],
+  });

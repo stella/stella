@@ -7,6 +7,7 @@ import type {
   EntityKind,
   ResourceRef,
 } from "@stll/api-contract";
+import { filterBySearchQuery } from "@stll/text-normalize";
 
 import { ChatMentionNode } from "@/components/chat-mention-node";
 
@@ -142,11 +143,11 @@ export const selectChatSuggestionItems = ({
   query,
   searchedItems,
 }: SelectChatSuggestionItemsOptions): ChatMentionOption[] => {
-  const lower = query.toLowerCase();
-
-  const filteredLocalItems = lower
-    ? localItems.filter((item) => item.label.toLowerCase().includes(lower))
-    : localItems;
+  const filteredLocalItems = filterBySearchQuery({
+    items: localItems,
+    query,
+    fields: ({ label }) => [label],
+  });
   const all = [...filteredLocalItems, ...searchedItems];
 
   // Cap per category to keep the list balanced

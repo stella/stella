@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize";
 
 type TemplateWithName = {
   name: string;
@@ -7,11 +7,9 @@ type TemplateWithName = {
 export const filterTemplatesByName = <T extends TemplateWithName>(
   templates: readonly T[],
   query: string,
-) => {
-  const normalizedQuery = query.trim().toLowerCase();
-  return normalizedQuery === ""
-    ? templates
-    : templates.filter((template) =>
-        containsSearchMatchKey(template.name.toLowerCase(), normalizedQuery),
-      );
-};
+) =>
+  filterBySearchQuery({
+    items: templates,
+    query,
+    fields: ({ name }) => [name],
+  });

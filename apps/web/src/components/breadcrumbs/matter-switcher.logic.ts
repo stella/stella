@@ -1,6 +1,5 @@
 import { compareCodeUnit } from "@stll/collation";
-import { foldSearchMatchText } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 type SiblingCandidate = {
@@ -49,15 +48,9 @@ type SearchableMatter = {
 export const filterMattersByQuery = <TMatter extends SearchableMatter>(
   matters: readonly TMatter[],
   query: string,
-): readonly TMatter[] => {
-  const folded = foldSearchMatchText(query.trim());
-  if (folded === "") {
-    return matters;
-  }
-  return matters.filter(
-    ({ name, reference }) =>
-      containsSearchMatchKey(foldSearchMatchText(name), folded) ||
-      (reference !== null &&
-        containsSearchMatchKey(foldSearchMatchText(reference), folded)),
-  );
-};
+): readonly TMatter[] =>
+  filterBySearchQuery({
+    items: matters,
+    query,
+    fields: ({ name, reference }) => [name, reference],
+  });

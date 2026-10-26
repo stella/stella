@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize";
 
 type EntityWithOptionalName = {
   name: string | null;
@@ -7,9 +7,9 @@ type EntityWithOptionalName = {
 export const filterEntitiesByName = <T extends EntityWithOptionalName>(
   entities: readonly T[],
   query: string,
-) => {
-  const normalizedQuery = query.toLowerCase();
-  return entities.filter((entity) =>
-    containsSearchMatchKey((entity.name ?? "").toLowerCase(), normalizedQuery),
-  );
-};
+) =>
+  filterBySearchQuery({
+    items: entities,
+    query,
+    fields: ({ name }) => [name],
+  });

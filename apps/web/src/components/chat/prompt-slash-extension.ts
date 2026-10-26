@@ -4,6 +4,8 @@ import { ReactRenderer } from "@tiptap/react";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
+import { filterBySearchQuery } from "@stll/text-normalize";
+
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
@@ -107,37 +109,21 @@ export const PromptSlash = Extension.create<PromptSlashOptions>({
   },
 });
 
-const matchesQuery = (
-  haystack: string | null | undefined,
-  needle: string,
-): boolean => (haystack ? haystack.toLowerCase().includes(needle) : false);
-
-const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
-  const trimmed = query.trim().toLowerCase();
-  if (!trimmed) {
-    return items;
+const slashItemSearchFields = (item: SlashItem) => {
+  if (item.kind === "command") {
+    const { name, command } = item.command;
+    return [name, command];
   }
-  return items.filter((item) => {
-    if (item.kind === "command") {
-      const { name, command } = item.command;
-      return matchesQuery(name, trimmed) || matchesQuery(command, trimmed);
-    }
-    if (item.kind === "prompt") {
-      const { name, command, body } = item.prompt;
-      return (
-        matchesQuery(name, trimmed) ||
-        matchesQuery(command, trimmed) ||
-        matchesQuery(body, trimmed)
-      );
-    }
-    const { name, slug, description } = item.skill;
-    return (
-      matchesQuery(name, trimmed) ||
-      matchesQuery(slug, trimmed) ||
-      matchesQuery(description, trimmed)
-    );
-  });
+  if (item.kind === "prompt") {
+    const { name, command, body } = item.prompt;
+    return [name, command, body];
+  }
+  const { name, slug, description } = item.skill;
+  return [name, slug, description];
 };
+
+const filterItems = (items: SlashItem[], query: string): SlashItem[] =>
+  filterBySearchQuery({ items, query, fields: slashItemSearchFields });
 
 /**
  * Build the Suggestion config used by `PromptSlash`. `getItems`
