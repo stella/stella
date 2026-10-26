@@ -860,11 +860,16 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
+      {/* At `lg` the notes column stands at the text's inline start, so the
+          layout's margin is that column's width and the controls bar and the
+          docked composer start past it; below `lg` the grid is one column
+          and the margin is zero. */}
       <div
         className={cn(
           LEGAL_READER_LAYOUT_CLASS_NAME,
-          "relative min-h-0 flex-1",
+          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
         )}
+        style={{ "--reader-aside-width": `${panelWidth}px` }}
       >
         <LegalReaderControls
           textScale={textScale}
@@ -896,22 +901,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             pressed={provisions.expandProvisions}
           />
         </div>
-        {/* The text column is the grid's inline-end column at every width, so
-            the bar's corner of this box is the text's corner, as in the
-            inspector's reader. */}
-
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        {/* The composer centres on the text column, not on the pane: at `lg`
-            the analysis column stands beside the text, so the docked
-            composer's start inset is that column's width; below `lg` the
-            grid is one column and the inset is zero. */}
-        <div
-          className="h-full [--docked-composer-inset-start:0px] lg:[--docked-composer-inset-start:var(--reader-aside-width)]"
-          style={{ "--reader-aside-width": `${panelWidth}px` }}
-        >
+        {/* The composer centres on the text column, not on the pane. */}
+        <div className="h-full [--docked-composer-inset-start:var(--reader-margin-width)]">
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
             aiMode={props.aiMode}
@@ -986,7 +981,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
+                  gridTemplateColumns:
+                    "var(--reader-aside-width) minmax(0, 1fr)",
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
