@@ -68,6 +68,11 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
+
 beforeEach(() => {
   describeStoredTemplateMock.mockReset();
   executeRegistryLookupMock.mockReset();

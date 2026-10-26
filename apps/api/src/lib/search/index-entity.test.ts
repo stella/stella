@@ -193,7 +193,7 @@ beforeEach(() => {
   selectLimitMock.mockResolvedValue([
     { semanticUpdatedAtToken, extractedAtToken, versionSetToken: "[]" },
   ]);
-  findFirstMock.mockClear();
+  findFirstMock.mockReset();
   findFirstMock.mockResolvedValue(entityRow);
   selectedEntityRow = entityRow;
   versionRows = currentVersionOnly();

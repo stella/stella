@@ -506,32 +506,10 @@ const isModuleMockCreation = (
   );
 };
 
-const hookScope = (context: ScopeContext, node: AstNode): unknown => {
-  let current: unknown = node;
-  while (isAstNode(current)) {
-    if (FUNCTION_TYPES.has(current.type)) {
-      const callback = current;
-      const hookCall = callback.parent;
-      if (
-        !isAstNode(hookCall) ||
-        hookCall.type !== "CallExpression" ||
-        !Array.isArray(hookCall.arguments) ||
-        !hookCall.arguments.includes(callback) ||
-        !FILE_HOOK_EXPORTS.has(bunTestExport(context, hookCall.callee) ?? "")
-      ) {
-        return null;
-      }
-      return enclosingBlock(hookCall).node;
-    }
-    current = current.parent;
-  }
-  return null;
-};
-
 const enclosingHook = (
   context: ScopeContext,
   node: AstNode,
-): { exportName: string; scope: unknown } | null => {
+): { exportName: string; scope: unknown; call: AstNode } | null => {
   let current: unknown = node;
   while (isAstNode(current)) {
     if (FUNCTION_TYPES.has(current.type)) {
@@ -548,7 +526,7 @@ const enclosingHook = (
       if (exportName === null || !FILE_HOOK_EXPORTS.has(exportName)) {
         return null;
       }
-      return { exportName, scope: enclosingBlock(call).node };
+      return { exportName, scope: enclosingBlock(call).node, call };
     }
     current = current.parent;
   }
@@ -558,7 +536,7 @@ const enclosingHook = (
 const enclosingSpyLifecycle = (
   context: ScopeContext,
   node: AstNode,
-): "beforeEach" | null => {
+): "beforeEach" | "test" | null => {
   let current: unknown = node;
   while (isAstNode(current)) {
     if (FUNCTION_TYPES.has(current.type)) {
@@ -571,13 +549,115 @@ const enclosingSpyLifecycle = (
       ) {
         return null;
       }
-      const exportName = bunTestExport(context, call.callee);
-      if (exportName === "beforeEach") {
+      if (bunTestExport(context, call.callee) === "beforeEach") {
         return "beforeEach";
       }
-      return null;
+      // A spy created in a test body outlives the test unless an enclosing
+      // afterEach restores it.
+      return testRegistration(context, call)?.kind === TEST_KIND.test
+        ? "test"
+        : null;
     }
     current = current.parent;
+  }
+  return null;
+};
+
+// What one hook call does to module mocks, in order.
+type HookCalls = {
+  scope: unknown;
+  resets: Set<string>;
+  reinstalled: Set<string>;
+  clears: Set<string>;
+};
+
+/** Whether a hook leaves `binding` reset with its default before a test. */
+const keepsDefault = (
+  calls: HookCalls,
+  binding: string,
+  hasDefault: boolean,
+  isOverridden: boolean,
+): boolean =>
+  (calls.resets.has(binding) &&
+    (!hasDefault || calls.reinstalled.has(binding))) ||
+  (calls.clears.has(binding) && !isOverridden);
+
+const resetRequirement = (hasDefault: boolean, isOverridden: boolean) => {
+  if (!hasDefault) {
+    return "use mockReset() in an enclosing hook";
+  }
+  return isOverridden
+    ? "use mockReset() and reinstall its default implementation in the same enclosing hook"
+    : "use mockReset() and reinstall its default implementation, or use mockClear() because nothing overrides it";
+};
+
+/** Whether a spy's own test restores it in a `finally` block. */
+const restoredByOwnTest = (
+  spy: { test: AstNode | null; binding: string | null },
+  finallyRestores: ReadonlyMap<AstNode, ReadonlySet<string>>,
+): boolean =>
+  spy.test !== null &&
+  [...(finallyRestores.get(spy.test) ?? [])].some(
+    (name) => name === "*" || name === spy.binding,
+  );
+
+/** The callback of the test registration a node runs in, if any. */
+const enclosingTestCallback = (
+  context: ScopeContext,
+  node: AstNode,
+): AstNode | null => {
+  let current: unknown = node;
+  while (isAstNode(current)) {
+    if (FUNCTION_TYPES.has(current.type)) {
+      const call = current.parent;
+      return isAstNode(call) &&
+        call.type === "CallExpression" &&
+        Array.isArray(call.arguments) &&
+        call.arguments.includes(current) &&
+        testRegistration(context, call)?.kind === TEST_KIND.test
+        ? current
+        : null;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+/** Whether a node sits in the `finally` block of a try statement. */
+const inFinally = (node: AstNode): boolean => {
+  let current: unknown = node;
+  while (isAstNode(current) && !FUNCTION_TYPES.has(current.type)) {
+    const parent: unknown = current.parent;
+    if (
+      isAstNode(parent) &&
+      parent.type === "TryStatement" &&
+      parent.finalizer === current
+    ) {
+      return true;
+    }
+    current = parent;
+  }
+  return false;
+};
+
+/** The variable a spy is bound to, through chained configuration calls. */
+const spyBinding = (node: AstNode): string | null => {
+  let current: unknown = node;
+  while (isAstNode(current)) {
+    const parent: unknown = current.parent;
+    if (!isAstNode(parent)) {
+      return null;
+    }
+    if (parent.type === "VariableDeclarator") {
+      return identifierName(parent.id);
+    }
+    if (
+      parent.type !== "MemberExpression" &&
+      parent.type !== "CallExpression"
+    ) {
+      return null;
+    }
+    current = parent;
   }
   return null;
 };
@@ -745,16 +825,23 @@ export default eslintCompatPlugin({
           moduleSpy:
             "A module-level spy is detached as soon as `mock.restore()` runs. Create it in `beforeEach` and restore it with `mock.restore()` in an enclosing `afterEach`.",
           missingSpyRestore:
-            "This spy must be restored with `mock.restore()` in an enclosing `afterEach`; a restore in `beforeEach` detaches it before the test runs.",
+            "This spy must be restored with `mock.restore()` in an enclosing `afterEach`, or, when the test creates it, by the test's own `finally`; a restore in `beforeEach` detaches it before the test runs.",
         },
       },
       createOnce(context) {
         const moduleMocks = new Map<string, AstNode>();
         const tests: { node: AstNode; title: string }[] = [];
-        const hookResets = new Map<unknown, Set<string>>();
-        const hookImplementations = new Map<unknown, Set<string>>();
+        // Per hook call: what it resets, reinstalls after resetting, and clears.
+        const hookCalls = new Map<AstNode, HookCalls>();
         const overriddenMocks = new Set<string>();
-        const spies: { node: AstNode; scopes: unknown[] }[] = [];
+        const spies: {
+          node: AstNode;
+          scopes: unknown[];
+          test: AstNode | null;
+          binding: string | null;
+        }[] = [];
+        // Per test callback: spies its `finally` blocks restore ("*" for all).
+        const finallyRestores = new Map<AstNode, Set<string>>();
         const afterEachRestoreScopes = new Set<unknown>();
         const recordTest = (node: AstNode) => {
           if (testRegistration(context, node)?.kind !== TEST_KIND.test) {
@@ -801,7 +888,28 @@ export default eslintCompatPlugin({
             bunTestExport(context, unwrapExpression(node.callee)) === "spyOn" &&
             enclosingSpyLifecycle(context, node) !== null
           ) {
-            spies.push({ node, scopes: enclosingTestScopes(context, node) });
+            spies.push({
+              node,
+              scopes: enclosingTestScopes(context, node),
+              test: enclosingTestCallback(context, node),
+              binding: spyBinding(node),
+            });
+          }
+          const test =
+            member === null ? null : enclosingTestCallback(context, node);
+          if (test !== null && member !== null && inFinally(node)) {
+            const restored =
+              member.property === "restore" &&
+              bunTestExport(context, member.object) === "mock"
+                ? "*"
+                : member.property === "mockRestore"
+                  ? identifierName(member.object)
+                  : null;
+            if (restored !== null) {
+              const names = finallyRestores.get(test) ?? new Set<string>();
+              names.add(restored);
+              finallyRestores.set(test, names);
+            }
           }
           const hook = enclosingHook(context, node);
           if (
@@ -824,7 +932,7 @@ export default eslintCompatPlugin({
           }
         };
         const recordHookReset = (
-          scope: unknown,
+          hook: NonNullable<ReturnType<typeof enclosingHook>>,
           member: NonNullable<ReturnType<typeof calledMember>>,
         ) => {
           if (
@@ -837,29 +945,30 @@ export default eslintCompatPlugin({
           if (name === null) {
             return;
           }
+          const calls = hookCalls.get(hook.call) ?? {
+            scope: hook.scope,
+            resets: new Set<string>(),
+            reinstalled: new Set<string>(),
+            clears: new Set<string>(),
+          };
+          hookCalls.set(hook.call, calls);
           if (member.property === "mockReset") {
-            const resets = hookResets.get(scope) ?? new Set<string>();
-            resets.add(name);
-            hookResets.set(scope, resets);
+            calls.resets.add(name);
           } else if (MOCK_DEFAULT_METHODS.has(member.property)) {
-            if (hookResets.get(scope)?.has(name) === true) {
-              const implementations =
-                hookImplementations.get(scope) ?? new Set<string>();
-              implementations.add(name);
-              hookImplementations.set(scope, implementations);
+            // Only a reinstall after the reset in this same hook restores the
+            // default before the next test.
+            if (calls.resets.has(name)) {
+              calls.reinstalled.add(name);
             }
           } else if (member.property === "mockClear") {
-            const resets = hookResets.get(scope) ?? new Set<string>();
-            resets.add(`${name}:clear`);
-            hookResets.set(scope, resets);
+            calls.clears.add(name);
           }
         };
         return {
           before() {
             moduleMocks.clear();
             tests.length = 0;
-            hookResets.clear();
-            hookImplementations.clear();
+            hookCalls.clear();
             overriddenMocks.clear();
             spies.length = 0;
             afterEachRestoreScopes.clear();
@@ -875,18 +984,19 @@ export default eslintCompatPlugin({
             }
             const member = calledMember(node);
             recordSpyLifecycle(node, member);
-            const scope = hookScope(context, node);
-            if (scope === null) {
+            const hook = enclosingHook(context, node);
+            if (hook === null) {
               recordOverride(member);
               return;
             }
             if (member !== null) {
-              recordHookReset(scope, member);
+              recordHookReset(hook, member);
             }
           },
           "Program:exit"() {
             for (const spy of spies) {
               if (
+                !restoredByOwnTest(spy, finallyRestores) &&
                 !spy.scopes.some((scope) => afterEachRestoreScopes.has(scope))
               ) {
                 context.report({
@@ -902,17 +1012,13 @@ export default eslintCompatPlugin({
               const isOverridden = overriddenMocks.has(binding);
               const uncovered = tests.find(
                 ({ node }) =>
-                  !enclosingTestScopes(context, node).some((scope) => {
-                    const resets = hookResets.get(scope);
-                    return (
-                      (resets?.has(binding) === true &&
-                        (!hasDefault ||
-                          hookImplementations.get(scope)?.has(binding) ===
-                            true)) ||
-                      (resets?.has(`${binding}:clear`) === true &&
-                        !isOverridden)
-                    );
-                  }),
+                  !enclosingTestScopes(context, node).some((scope) =>
+                    [...hookCalls.values()].some(
+                      (calls) =>
+                        calls.scope === scope &&
+                        keepsDefault(calls, binding, hasDefault, isOverridden),
+                    ),
+                  ),
               );
               if (uncovered !== undefined) {
                 context.report({
@@ -921,11 +1027,7 @@ export default eslintCompatPlugin({
                   data: {
                     binding,
                     test: uncovered.title,
-                    required: !hasDefault
-                      ? "use mockReset() in an enclosing hook"
-                      : isOverridden
-                        ? "use mockReset() and reinstall its default implementation in the same enclosing hook"
-                        : "use mockReset() and reinstall its default implementation, or use mockClear() because nothing overrides it",
+                    required: resetRequirement(hasDefault, isOverridden),
                   },
                 });
               }

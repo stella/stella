@@ -4,12 +4,18 @@ import {
   afterEach,
   expect,
   jest,
+  mock,
   setSystemTime,
   spyOn,
   test,
 } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 

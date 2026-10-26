@@ -329,7 +329,7 @@ let analytics: RecordingAnalytics;
 beforeEach(() => {
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });

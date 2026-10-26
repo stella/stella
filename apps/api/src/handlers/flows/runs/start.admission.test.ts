@@ -1,4 +1,4 @@
-import { describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
 
@@ -20,6 +20,11 @@ import * as queuedActionAdmission from "@/api/lib/rate-limit/queued-action-admis
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 describe("manual flow start admission response", () => {
   test.each([

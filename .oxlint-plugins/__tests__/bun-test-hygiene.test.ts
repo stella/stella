@@ -170,6 +170,94 @@ test("reports a spy when restore is in beforeEach", async () => {
   ).toEqual([2]);
 });
 
+test("reports a spy created in a test that nothing restores", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { spyOn, test } from "bun:test";',
+        'test("leaks", () => spyOn(console, "log"));',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([2]);
+});
+
+test("accepts a spy created in a test and restored in afterEach", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { afterEach, mock, spyOn, test } from "bun:test";',
+        "afterEach(() => mock.restore());",
+        'test("restored", () => spyOn(console, "log"));',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});
+
+test("accepts a test that restores its own spy in finally", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { spyOn, test } from "bun:test";',
+        'test("restores", () => {',
+        '  const log = spyOn(console, "log").mockImplementation(() => {});',
+        "  try {",
+        "    console.log(1);",
+        "  } finally {",
+        "    log.mockRestore();",
+        "  }",
+        "});",
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([]);
+});
+
+test("reports a test whose own restore skips failures or another spy", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { spyOn, test } from "bun:test";',
+        'test("restores only on success", () => {',
+        '  const log = spyOn(console, "log");',
+        "  log.mockRestore();",
+        "});",
+        'test("restores another spy", () => {',
+        '  const warn = spyOn(console, "warn");',
+        '  const log = spyOn(console, "log");',
+        "  try {",
+        "    console.log(1);",
+        "  } finally {",
+        "    log.mockRestore();",
+        "  }",
+        "});",
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([3, 7]);
+});
+
+test("reports a reset and a reinstall split across two hooks", async () => {
+  expect(
+    await lintSingleRule(
+      rule,
+      [
+        'import { afterEach, beforeEach, mock, test } from "bun:test";',
+        "const dependency = mock(() => 1);",
+        "beforeEach(() => dependency.mockReset());",
+        "afterEach(() => dependency.mockImplementation(() => 1));",
+        'test("starts without its default", () => {});',
+      ].join("\n"),
+      { plugin },
+    ),
+  ).toEqual([5]);
+});
+
 test("inherits a parent describe afterEach for a nested spy", async () => {
   expect(
     await lintSingleRule(
