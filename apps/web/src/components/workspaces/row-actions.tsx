@@ -1323,9 +1323,9 @@ export const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <CapabilityAction action={{ capability: "ocr" }}>
-          {(capabilityProps) => (
-            <WithOcrBatchHelp>
+        <WithOcrBatchHelp>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
               <MenuItem
                 className="min-w-0 flex-1"
                 disabled={isPending}
@@ -1337,22 +1337,22 @@ export const RowOcrMenuActions = ({
                 <ScanTextIcon />
                 {t("workspaces.files.queueForOcr")}
               </MenuItem>
-            </WithOcrBatchHelp>
-          )}
-        </CapabilityAction>
+            )}
+          </CapabilityAction>
+        </WithOcrBatchHelp>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <CapabilityAction action={{ capability: "ocr" }}>
-            {(capabilityProps) => (
-              <WithOcrBatchHelp>
+          <WithOcrBatchHelp>
+            <CapabilityAction action={{ capability: "ocr" }}>
+              {(capabilityProps) => (
                 <MenuSubTrigger className="min-w-0 flex-1" {...capabilityProps}>
                   <ScanTextIcon />
                   {t("workspaces.files.queueForOcr")}
                 </MenuSubTrigger>
-              </WithOcrBatchHelp>
-            )}
-          </CapabilityAction>
+              )}
+            </CapabilityAction>
+          </WithOcrBatchHelp>
           <MenuSubPopup>
             {rowSources.map((source) => (
               <CapabilityAction

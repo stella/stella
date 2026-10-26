@@ -68,13 +68,22 @@ const QUEUED_OCR_TOAST_KEYS = {
   TranslationKey
 >;
 
+const OCR_ALREADY_PROCESSED_TOAST_KEY =
+  "workspaces.files.ocrAlreadyProcessed" as const satisfies TranslationKey;
+
+// The literal keys, not `TranslationKey`: `t()` over the whole key union is
+// too complex for the checker to represent.
+type ManualOcrSuccessKey =
+  | typeof OCR_ALREADY_PROCESSED_TOAST_KEY
+  | (typeof QUEUED_OCR_TOAST_KEYS)[keyof typeof QUEUED_OCR_TOAST_KEYS];
+
 /** The success toast for a manual OCR request: done, queued, or batched. */
 export const manualOcrSuccessKey = (
   response: ManualOcrResponse,
-): TranslationKey => {
+): ManualOcrSuccessKey => {
   switch (response.outcome) {
     case "already_processed":
-      return "workspaces.files.ocrAlreadyProcessed";
+      return OCR_ALREADY_PROCESSED_TOAST_KEY;
     case "queued":
       return QUEUED_OCR_TOAST_KEYS[response.availability.type];
     default:

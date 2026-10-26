@@ -7,6 +7,7 @@ import type {
   AcceptingDocumentOcrAvailability,
   DocumentOcrAvailability,
 } from "@stll/api-contract/document-ocr-availability";
+import { classifyFailure } from "@stll/errors";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -193,15 +194,18 @@ export const requestManualOcrHandler = async function* ({
   const availability = await readAvailability();
   if (!acceptsDocumentOcrRequests(availability)) {
     return Result.err(
-      new HandlerError({
-        status: 503,
-        message:
-          "Searchable-text recognition is not available on this deployment",
-        hint:
-          "Call organization-settings.document-ocr-availability.get and " +
-          "retry once it reports live or batched.",
-        retryable: true,
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 503,
+          message:
+            "Searchable-text recognition is not available on this deployment",
+          hint:
+            "Call organization-settings.document-ocr-availability.get and " +
+            "retry once it reports live or batched.",
+          retryable: true,
+        }),
+        "document_ocr_unconfigured",
+      ),
     );
   }
   const source = yield* Result.await(
