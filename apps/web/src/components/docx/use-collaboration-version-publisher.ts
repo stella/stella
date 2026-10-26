@@ -3,10 +3,11 @@ import type { RefObject } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";

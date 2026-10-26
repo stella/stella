@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import createAllowedSender from "@/api/handlers/organization-settings/correspondence/allowed-senders/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import {
   assertUserIsNotSoleOrgOwner,
   reassignActiveTaskAssignmentsAndDropMemberships,
@@ -26,6 +27,7 @@ import {
 } from "@/api/lib/db/account-row";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -101,7 +103,7 @@ if (!databaseUrl || !runPostgresTests) {
                 asTestRaw<Parameters<typeof createAllowedSender.handler>[0]>({
                   safeDb: database,
                   route:
-                    "/organization-settings/correspondence/allowed-senders",
+                    "/v1/organization-settings/correspondence/allowed-senders" satisfies ApiRoutePath,
                   memberRole: sessionMemberRole("owner"),
                   session: { activeOrganizationId: organizationId },
                   user: { id: userId },
@@ -161,6 +163,10 @@ if (!databaseUrl || !runPostgresTests) {
               name: "Correspondence lock fixture",
               slug: `correspondence-lock-${suffix}`,
               createdAt: new Date(),
+            });
+            await recordNewOrganizationAccessState(writerDb, {
+              organizationId,
+              now: new Date(),
             });
             await writerDb.insert(user).values({
               id: userId,

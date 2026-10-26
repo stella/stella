@@ -1,9 +1,10 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { PlayIcon } from "@stll/ui/icons";
 
 import type { aiColumnRunScope } from "@/components/workspaces/ai-column-run.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type AiColumnRunButtonProps = {

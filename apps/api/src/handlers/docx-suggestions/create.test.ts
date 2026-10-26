@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { chatThreads, docxSuggestions, entities } from "@/api/db/schema";
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -86,7 +87,8 @@ describe("DOCX suggestion creation", () => {
     );
     const context = asTestRaw<CreateDocxSuggestionsContext>({
       request: new Request("https://api.example.test/handler"),
-      route: "/v1/workspaces/:workspaceId/docx-suggestions",
+      route:
+        "/v1/docx-suggestions/:workspaceId/entity/:entityId" satisfies ApiRoutePath,
       body: {
         originThreadId: THREAD_ID,
         suggestions: [
@@ -136,7 +138,8 @@ describe("DOCX suggestion creation", () => {
     );
     const context = asTestRaw<CreateDocxSuggestionsContext>({
       request: new Request("https://api.example.test/handler"),
-      route: "/v1/workspaces/:workspaceId/docx-suggestions",
+      route:
+        "/v1/docx-suggestions/:workspaceId/entity/:entityId" satisfies ApiRoutePath,
       body: {
         suggestions: [
           {

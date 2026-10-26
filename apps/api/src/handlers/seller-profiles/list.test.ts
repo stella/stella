@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -38,7 +39,7 @@ describe("seller profile listing", () => {
       asTestRaw<ListContext>({
         query: {},
         request: new Request("https://example.test/v1/seller-profiles"),
-        route: "/v1/seller-profiles",
+        route: "/v1/seller-profiles" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: organizationId },
         memberRole: sessionMemberRole("owner"),

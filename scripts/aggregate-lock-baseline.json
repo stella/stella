@@ -2137,12 +2137,6 @@
   },
   {
     "file": "apps/api/src/lib/auth.ts",
-    "fingerprint": "38e1a023923ad43deb5b333910104f2ec77a4ff518ca75809ef3db696be6ec13",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/auth.ts",
     "fingerprint": "9a14b7509d10db09c76c4d2f8a82e9da70a9f37fc308a150e1503736badc561c",
     "count": 1,
     "reason": "for key share in apps/api/src/lib/auth.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2152,6 +2146,12 @@
     "fingerprint": "af292a4848b1eee87119c9cf70e1cb6110bb553c917485b12bb3f3c0af9ed6f2",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+  },
+  {
+    "file": "apps/api/src/lib/auth.ts",
+    "fingerprint": "d68156f694d31a8cc9e479924e72740eb410534a18d42d4be1b0a662525c9eb8",
+    "count": 1,
+    "reason": "The provider write transaction now also holds the account credential fence before inserting an OAuth token; the authorization-code client lock and the single in-transaction create are unchanged."
   },
   {
     "file": "apps/api/src/lib/auth/registration-adapter.ts",
@@ -3511,9 +3511,9 @@
   },
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
-    "fingerprint": "a0846317815e79f4371155bc4ca39ca1c3330db81bc4e223f99cdd5155ee297a",
+    "fingerprint": "a7c827e34f756c889e227513cea958284558b2daddcb017314e6f47731d3222b",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing root transaction runner on (options.database ?? rootDb); opens the owning database transaction for this module."
+    "reason": "The key root transaction first holds the live session credential fence for issuance and hands it to the issuer; the transaction boundary, organization lock and owner predicates are unchanged."
   },
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
