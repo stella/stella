@@ -61,9 +61,9 @@ SET search_path = pg_catalog, public, pg_temp
 AS $function$
 BEGIN
   IF TG_OP <> 'INSERT'
-    AND case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
+    AND public.case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
   THEN
-    INSERT INTO case_law_sitemap_changes (country, year, month)
+    INSERT INTO public.case_law_sitemap_changes (country, year, month)
     VALUES (
       OLD.country,
       COALESCE(to_char(OLD.decision_date, 'YYYY'), 'undated'),
@@ -72,9 +72,9 @@ BEGIN
     ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_xact_month_key DO NOTHING;
   END IF;
   IF TG_OP <> 'DELETE'
-    AND case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
+    AND public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
   THEN
-    INSERT INTO case_law_sitemap_changes (country, year, month)
+    INSERT INTO public.case_law_sitemap_changes (country, year, month)
     VALUES (
       NEW.country,
       COALESCE(to_char(NEW.decision_date, 'YYYY'), 'undated'),
@@ -98,7 +98,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $function$
 BEGIN
-  INSERT INTO case_law_sitemap_changes (country, year, month)
+  INSERT INTO public.case_law_sitemap_changes (country, year, month)
   VALUES ('*', '*', '*')
   ON CONFLICT ON CONSTRAINT case_law_sitemap_changes_xact_month_key DO NOTHING;
   RETURN NULL;
@@ -109,13 +109,13 @@ REVOKE ALL ON FUNCTION "log_case_law_sitemap_source_change"() FROM PUBLIC;--> st
 CREATE TRIGGER "case_law_decisions_sitemap_insert"
 AFTER INSERT ON "case_law_decisions"
 FOR EACH ROW
-WHEN (case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at))
+WHEN (public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at))
 EXECUTE FUNCTION "log_case_law_sitemap_decision_change"();--> statement-breakpoint
 
 CREATE TRIGGER "case_law_decisions_sitemap_delete"
 AFTER DELETE ON "case_law_decisions"
 FOR EACH ROW
-WHEN (case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at))
+WHEN (public.case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at))
 EXECUTE FUNCTION "log_case_law_sitemap_decision_change"();--> statement-breakpoint
 
 CREATE TRIGGER "case_law_decisions_sitemap_update"
@@ -123,8 +123,8 @@ AFTER UPDATE OF "id", "country", "decision_date", "source_id", "updated_at", "me
 FOR EACH ROW
 WHEN (
   (
-    case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
-    OR case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
+    public.case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
+    OR public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
   )
   AND (
     OLD.id IS DISTINCT FROM NEW.id
@@ -132,8 +132,8 @@ WHEN (
     OR OLD.decision_date IS DISTINCT FROM NEW.decision_date
     OR OLD.source_id IS DISTINCT FROM NEW.source_id
     OR OLD.updated_at IS DISTINCT FROM NEW.updated_at
-    OR case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
-      IS DISTINCT FROM case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
+    OR public.case_law_statute_citation_is_published(OLD.metadata, OLD.redacted_at)
+      IS DISTINCT FROM public.case_law_statute_citation_is_published(NEW.metadata, NEW.redacted_at)
   )
 )
 EXECUTE FUNCTION "log_case_law_sitemap_decision_change"();--> statement-breakpoint

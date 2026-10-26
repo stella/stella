@@ -7,6 +7,7 @@
  * Runs in the Postgres job; skipped elsewhere.
  */
 import { panic } from "better-result";
+import type { SQL as BunSql } from "bun";
 import { describe, expect, test } from "bun:test";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -169,6 +170,62 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await loggedMonths()).toEqual(["1901/01", "1901/02"]);
       await refreshUntilDone();
       expect(await listedMonths()).toEqual(["1901/01:1", "1901/02:2"]);
+      expect(await loggedMonths()).toEqual([]);
+    });
+
+    /**
+     * Under the deployed roles: the ingestion role's decision write logs its
+     * month through the owner-run trigger, while neither the ingestion role
+     * nor the application role can read or write the log itself.
+     */
+    test("writers log months only through the owner-run trigger", async () => {
+      await insertDecisions("1903-03-15", 1);
+      await refreshUntilDone();
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const session = openClient().sql;
+        const id = createSafeId<"caseLawDecision">();
+        decisionIds.push(id);
+        await session.begin(async (tx) => {
+          await tx`SET LOCAL ROLE stella_ingestion`;
+          await tx`INSERT INTO case_law_decisions (id, source_id, source_document_id, country, language, court, case_number, decision_date, metadata)
+            VALUES (${id}::uuid, ${sourceId}::uuid, ${`sitemap-changes-${id}`}, ${COUNTRY}, 'xx', 'Sitemap change log fixture court', ${id}, '1903-01-15', '{}'::jsonb)`;
+        });
+        expect(await loggedMonths()).toEqual(["1903/01"]);
+
+        const refused = async (
+          role: string,
+          query: (tx: BunSql) => Promise<unknown>,
+        ) =>
+          await session
+            .begin(async (tx) => {
+              await tx.unsafe(`SET LOCAL ROLE ${role}`);
+              await query(tx);
+              return "allowed";
+            })
+            .catch((error: unknown) =>
+              error instanceof Error ? error.message : String(error),
+            );
+        for (const role of ["stella_ingestion", "stella"]) {
+          // db-await-in-loop: each role is probed in its own transaction
+          expect(
+            await refused(
+              role,
+              async (tx) =>
+                await tx`SELECT count(*) FROM case_law_sitemap_changes`,
+            ),
+          ).toMatch(/permission denied/u);
+          // db-await-in-loop: each role is probed in its own transaction
+          expect(
+            await refused(
+              role,
+              async (tx) =>
+                await tx`INSERT INTO case_law_sitemap_changes (country, year, month) VALUES (${COUNTRY}, '1903', '02')`,
+            ),
+          ).toMatch(/permission denied/u);
+        }
+        expect(await loggedMonths()).toEqual(["1903/01"]);
+      });
+      await refreshUntilDone();
       expect(await loggedMonths()).toEqual([]);
     });
 
