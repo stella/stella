@@ -13,6 +13,7 @@ import {
   createDocumentCompareHandler,
   mapCompareDocxError,
 } from "@/api/handlers/documents/compare";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -304,7 +305,8 @@ const createHarness = ({
     },
     params: { workspaceId, documentId },
     request: new Request("http://localhost/documents/compare"),
-    route: "/documents/:workspaceId/document/:documentId/compare",
+    route:
+      "/v1/documents/:workspaceId/document/:documentId/compare" satisfies ApiRoutePath,
     safeDb,
     scopedDb,
     // A credential without a browser session, such as an agent's.

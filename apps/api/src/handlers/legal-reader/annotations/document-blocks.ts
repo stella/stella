@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
+import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import {
@@ -54,6 +55,7 @@ const resolveDecision = async (
       const [decisionRow] = await tx
         .select({
           astS3Key: publishedCaseLawDecisions.astS3Key,
+          caseNumberType: publishedCaseLawDecisions.caseNumberType,
           contentHash: publishedCaseLawDecisions.contentHash,
           documentAst: publishedCaseLawDecisions.documentAst,
           id: publishedCaseLawDecisions.id,
@@ -85,8 +87,9 @@ const resolveDecision = async (
     // Outside the gate's transaction: the AST lives in object storage.
     readBlocks: async () => {
       // No usable AST is a decision the reader shows as flat text: no blocks.
+      // A mark lands only on text the reader shows, never on a hidden block.
       const ast = await readDecisionAnalysisAst(row, readCorpusTombstones);
-      return ast === null ? [] : ast.blocks;
+      return visibleDecisionBlocks(ast, row.caseNumberType);
     },
   };
 };
