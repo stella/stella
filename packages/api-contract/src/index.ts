@@ -79,6 +79,7 @@ export {
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
   TIME_ENTRY_SUGGESTION_STATUSES,
+  UNPRICED_TIME_ENTRY_CURRENCY,
 } from "./billing";
 export type {
   ExpenseCategory,
@@ -456,6 +457,7 @@ export type {
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  OAuthConsentClient,
   VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";

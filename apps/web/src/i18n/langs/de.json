@@ -507,6 +507,24 @@
     "addEntry": "Eintrag hinzufügen",
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
+    "approval": {
+      "approveSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} freigeben",
+      "empty": "In dieser Akte wartet nichts auf Freigabe.",
+      "failed": "Die Änderung wurde nicht gespeichert. Versuchen Sie es erneut.",
+      "myTime": "Meine Zeit",
+      "refusals": {
+        "invalidEntry": "Ergänzen Sie eine Beschreibung, prüfen Sie das Arbeitsdatum und geben Sie den Eintrag dann frei.",
+        "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag freigeben.",
+        "notFound": "Dieser Eintrag existiert nicht mehr. Aktualisieren Sie die Liste.",
+        "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag freigeben.",
+        "unpriced": "Für diesen Eintrag ist kein Tarif hinterlegt. Legen Sie einen Tarif für diese Akte fest und geben Sie den Eintrag dann frei.",
+        "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
+      },
+      "returnComment": "Grund für Rückgabe",
+      "selectEntry": "Eintrag auswählen",
+      "timeEntries": "Zeiteinträge",
+      "title": "Freigaben"
+    },
     "approve": "Freigeben",
     "approveSelected": "Auswahl freigeben",
     "batchActions": "Massenaktionen",
@@ -594,6 +612,7 @@
       "openInvoice": "Rechnung öffnen",
       "otherCurrency": "{count, plural, one {# Position ist} other {# Positionen sind}} in einer anderen Währung als {currency} erfasst und bleiben für eine eigene Rechnung offen.",
       "outsideScope": "Im Inland nicht steuerbar, 0 %",
+      "pendingApprovals": "{count, plural, one {# Position wartet} other {# Positionen warten}} auf Freigabe. Freigaben prüfen.",
       "rate": "Satz",
       "readyDescription": "Beim Ausstellen erhält die Rechnung die nächste Nummer aus Ihrem Nummernkreis und wird gesperrt. Ein Entwurf bleibt bearbeitbar.",
       "readyTitle": "Bereit zum Ausstellen",
@@ -892,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
       "dateUnavailable": "Datum nicht verfügbar",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
+      "goToMention": "Zur {number}. Erwähnung springen",
+      "goToParagraph": "Zu Randnummer {paragraph} springen",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
+      "mentionMark": "{number}. Erwähnung",
+      "mentionsInDecision": "{count, plural, one {In dieser Entscheidung einmal zitiert} other {In dieser Entscheidung #-mal zitiert}}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
       "none": "Noch keine Zitierungen erfasst.",
+      "notInStella": "Noch nicht in stella",
       "openAtCitation": "An der Zitatstelle öffnen",
       "openDecision": "Entscheidung öffnen",
       "paragraphLabel": "Randnummer {paragraph}",
@@ -1024,7 +1048,8 @@
     },
     "notesFilter": {
       "ai": "KI",
-      "human": "Mensch"
+      "human": "Mensch",
+      "toggleState": "{label}: {state, select, on {ein} other {aus}}"
     },
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
@@ -1147,6 +1172,7 @@
       "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Zum Absatz springen} other {Zu den Absätzen springen}}",
       "judgeRole": {
         "advocateGeneral": "Generalanwalt",
         "dissenting": "Sondervotum",
@@ -2056,7 +2082,6 @@
       "orLetUsKnowAt": "oder schreiben Sie uns an",
       "viewDocumentation": "Dokumentation ansehen"
     },
-    "enterKey": "↵",
     "error": "Fehler",
     "expenses": "Ausgaben",
     "export": {
@@ -2205,10 +2230,12 @@
     "scrollToTop": "Nach oben scrollen",
     "search": "Suchen...",
     "searchIn": "Suchen in",
+    "searchMembers": "Mitglieder suchen…",
     "selectAMatter": "Akte auswählen",
     "selectARole": "Rolle auswählen",
     "selectAll": "Alle auswählen",
     "selectDate": "Datum wählen…",
+    "selected": "Ausgewählt",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
@@ -4255,6 +4282,8 @@
       "commentPlaceholder": "Kommentar schreiben…",
       "commentText": "Kommentartext",
       "commentedPassage": "Kommentierte Textstelle",
+      "editComment": "Kommentar bearbeiten",
+      "editedAt": "Bearbeitet {time}",
       "guestAuthor": "Sie",
       "guestLimitReached": "Dieser Tab kann bis zu {count} Hervorhebungen und Notizen speichern. Erstellen Sie ein Konto, um mehr zu speichern.",
       "guestMigrationComplete": "Hervorhebungen und Notizen gespeichert.",
@@ -6212,8 +6241,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Lead festlegen",
-        "noLead": "Kein Lead",
-        "searchMembers": "Mitglieder suchen…"
+        "noLead": "Kein Lead"
       },
       "to": "Bis"
     },
@@ -6275,6 +6303,7 @@
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",
+      "moveFailed": "{failed, plural, one {# von {total} Elementen konnte nicht verschoben werden.} other {# von {total} Elementen konnten nicht verschoben werden.}}",
       "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
       "uploadDocument": "Dokument hochladen",
@@ -6293,10 +6322,10 @@
       "addMember": "Mitglied hinzufügen",
       "addMemberDescription": "Ein Teammitglied zu dieser Akte hinzufügen",
       "alreadyMember": "Benutzer ist bereits Mitglied",
+      "alreadyOnMatter": "Bereits in dieser Akte",
       "cannotRemoveLast": "Das letzte Mitglied kann nicht entfernt werden",
       "noMembersFound": "Keine Mitglieder gefunden",
-      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?",
-      "selectMember": "Mitglied auswählen"
+      "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?"
     },
     "newDocument": "Neues Dokument",
     "newFolder": "Neuer Ordner",
@@ -6334,7 +6363,6 @@
           "approvedBy": "Genehmigt von",
           "channel": "Kanal",
           "dateTime": "Datum und Uhrzeit",
-          "eventId": "Ereignis-ID",
           "notAvailable": "Nicht verfügbar",
           "openTarget": "Element öffnen",
           "runId": "Ausführungs-ID",
@@ -6517,6 +6545,11 @@
       },
       "passwordLabel": "PDF-Passwort eingeben",
       "previousPage": "Vorherige Seite",
+      "selection": {
+        "explainPassagePrompt": "Erkläre diese Passage aus {citation}:\n\n„{quote}“",
+        "pageLocator": "S. {page}",
+        "pageRangeLocator": "S. {start}–{end}"
+      },
       "showOriginal": "Originalseiten anzeigen",
       "unlock": "Entsperren"
     },

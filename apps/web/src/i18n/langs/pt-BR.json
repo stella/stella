@@ -507,6 +507,24 @@
     "addEntry": "Adicionar entrada",
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
+    "approval": {
+      "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "empty": "Nada aguarda aprovação neste caso.",
+      "failed": "A alteração não foi salva. Tente novamente.",
+      "myTime": "Meu tempo",
+      "refusals": {
+        "invalidEntry": "Adicione uma descrição e confira a data do trabalho; depois aprove o registro.",
+        "notApprover": "Somente o aprovador designado ou um administrador pode aprovar este registro.",
+        "notFound": "Este registro não existe mais. Atualize a lista.",
+        "runningTimer": "Pare o cronômetro em andamento antes de aprovar este registro.",
+        "unpriced": "Este registro não tem taxa. Defina uma taxa para este caso e depois aprove o registro.",
+        "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
+      },
+      "returnComment": "Motivo da devolução",
+      "selectEntry": "Selecionar registro",
+      "timeEntries": "Registros de tempo",
+      "title": "Aprovações"
+    },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
     "batchActions": "Ações em lote",
@@ -594,6 +612,7 @@
       "openInvoice": "Abrir fatura",
       "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
       "outsideScope": "Fora do âmbito do IVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# item aguarda} other {# itens aguardam}} aprovação. Revisar aprovações.",
       "rate": "Valor/hora",
       "readyDescription": "Ao emitir, a fatura recebe o próximo número da sua série e fica bloqueada. Um rascunho ainda pode ser editado.",
       "readyTitle": "Pronta para emitir",
@@ -892,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
       "dateUnavailable": "Data indisponível",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
+      "goToMention": "Ir para a menção {number}",
+      "goToParagraph": "Ir para o parágrafo {paragraph}",
       "lastNegative": "última citação negativa em {year}",
+      "mentionMark": "menção {number}",
+      "mentionsInDecision": "{count, plural, one {Citada uma vez nesta decisão} other {Citada # vezes nesta decisão}}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "none": "Nenhuma citação registrada ainda.",
+      "notInStella": "Ainda não está no stella",
       "openAtCitation": "Abrir na citação",
       "openDecision": "Abrir a decisão",
       "paragraphLabel": "Parágrafo {paragraph}",
@@ -1024,7 +1048,8 @@
     },
     "notesFilter": {
       "ai": "IA",
-      "human": "Humanas"
+      "human": "Humanas",
+      "toggleState": "{label}: {state, select, on {ligado} other {desligado}}"
     },
     "pagination": {
       "goToPage": "Ir para a página {page}",
@@ -1147,6 +1172,7 @@
       "citedDecisionPassage": "Trecho da decisão",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ir para o parágrafo} other {Ir para os parágrafos}}",
       "judgeRole": {
         "advocateGeneral": "Advogado-geral",
         "dissenting": "Voto divergente",
@@ -2056,7 +2082,6 @@
       "orLetUsKnowAt": "ou deixe-nos saber em",
       "viewDocumentation": "Ver documentação"
     },
-    "enterKey": "↵",
     "error": "Erro",
     "expenses": "Despesas",
     "export": {
@@ -2205,10 +2230,12 @@
     "scrollToTop": "Rolar para o topo",
     "search": "Pesquisar...",
     "searchIn": "Pesquisar em",
+    "searchMembers": "Pesquisar membros…",
     "selectAMatter": "Selecione um caso",
     "selectARole": "Selecione uma função",
     "selectAll": "Selecionar tudo",
     "selectDate": "Selecionar data…",
+    "selected": "Selecionado",
     "sessions": "Sessões",
     "settings": "Configurações",
     "showAll": "Mostrar tudo",
@@ -4255,6 +4282,8 @@
       "commentPlaceholder": "Escreva um comentário…",
       "commentText": "Texto do comentário",
       "commentedPassage": "Passagem comentada",
+      "editComment": "Editar comentário",
+      "editedAt": "Editado {time}",
       "guestAuthor": "Você",
       "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
       "guestMigrationComplete": "Destaques e notas salvos.",
@@ -6212,8 +6241,7 @@
         "lead": "Responsável",
         "leadActive": "Responsável",
         "leadInactive": "Definir responsável",
-        "noLead": "Sem responsável",
-        "searchMembers": "Pesquisar membros…"
+        "noLead": "Sem responsável"
       },
       "to": "Até"
     },
@@ -6275,6 +6303,7 @@
       "deleteAll": "Excluir tudo",
       "deleteAllConfirm": "Excluir todos os itens {count} em \"{column}\"?",
       "hideColumn": "Ocultar coluna",
+      "moveFailed": "{failed, plural, one {Não foi possível mover # de {total} itens.} other {Não foi possível mover # de {total} itens.}}",
       "readOnlyGrouping": "Este agrupamento é somente leitura",
       "selectPropertyHint": "Selecione uma propriedade para agrupar na barra de ferramentas",
       "uploadDocument": "Carregar documento",
@@ -6293,10 +6322,10 @@
       "addMember": "Adicionar ao caso",
       "addMemberDescription": "Escolha um membro existente da equipe para adicionar a este caso",
       "alreadyMember": "O usuário já é membro",
+      "alreadyOnMatter": "Já está neste caso",
       "cannotRemoveLast": "Não é possível remover o último membro",
       "noMembersFound": "Nenhum membro encontrado",
-      "removeMemberConfirm": "Remover este membro do caso?",
-      "selectMember": "Selecione um membro"
+      "removeMemberConfirm": "Remover este membro do caso?"
     },
     "newDocument": "Novo documento",
     "newFolder": "Nova pasta",
@@ -6334,7 +6363,6 @@
           "approvedBy": "Aprovado por",
           "channel": "Canal",
           "dateTime": "Data e hora",
-          "eventId": "ID do evento",
           "notAvailable": "Não disponível",
           "openTarget": "Abrir item",
           "runId": "ID da execução",
@@ -6517,6 +6545,11 @@
       },
       "passwordLabel": "Digite a senha do PDF",
       "previousPage": "Página anterior",
+      "selection": {
+        "explainPassagePrompt": "Explique esta passagem de {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}-{end}"
+      },
       "showOriginal": "Mostrar páginas originais",
       "unlock": "Desbloquear"
     },

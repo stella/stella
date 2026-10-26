@@ -8,7 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
  * and a target language, asks the API for a two-column copy of the document
  * (source text left, a copy to translate right) and links to the new document.
  */
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -41,6 +41,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type BilingualDocumentDialogProps = {
   workspaceId: string;
@@ -63,10 +64,7 @@ export const BilingualDocumentDialog = ({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   // The dialogs live on the document route; the view stays, the document changes.
-  const viewId = useParams({
-    strict: false,
-    select: (params) => params.viewId ?? "all",
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
 
   const [open, setOpen] = useState(false);
   const [sourceLang, setSourceLang] = useState<DeepLTargetLanguageCode>(

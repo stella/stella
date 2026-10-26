@@ -146,7 +146,7 @@ describe("KanbanCardShell sticky header", () => {
     // Shown on a pointer that cannot hover, they were a dead zone in the
     // corner of every card: a long press there never reached the card, so it
     // never started the card's drag.
-    expect(wrapper).not.toContain("hover:none");
+    expect(wrapper).not.toContain("pointer-coarse");
   });
 
   test("reveals hover actions on the active card, the route a finger has", () => {

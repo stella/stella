@@ -3,9 +3,11 @@ import { panic } from "better-result";
 import { parseApiErrorValue } from "@stll/api-contract";
 import {
   parsePolishedTimeEntryNarrativeResponse,
+  parseTimeApprovalBatch,
   parseTimeEntryDeleteResponse,
   parseTimeEntryIdResponse,
   parseTimeEntryListPage,
+  parseTimeEntryReturnResponse,
   parseTimeEntrySplitResponse,
   parseTimeEntrySuggestionDecision,
   parseTimeEntrySuggestionsResponse,
@@ -29,6 +31,8 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { toAPIError } from "@/lib/errors/api";
 
+type TimeApprovalBatch = NonNullable<ReturnType<typeof parseTimeApprovalBatch>>;
+
 const TIME_ENTRY_REQUEST_TIMEOUT_MS = 30_000;
 
 type TimeEntryQueryValue = boolean | number | string | undefined;
@@ -41,7 +45,8 @@ type TimeEntryRequestOptions<T> = {
   path: "" | `/${string}`;
   query?: Record<string, TimeEntryQueryValue>;
   signal?: AbortSignal | undefined;
-  workspaceId: string;
+  /** The matter the route is scoped to; null for organization-wide routes. */
+  workspaceId: string | null;
 };
 
 const requestTimeEntries = async <T>({
@@ -56,7 +61,11 @@ const requestTimeEntries = async <T>({
 }: TimeEntryRequestOptions<T>): Promise<T> => {
   await waitForSimulatedApiDelay();
   const url = new URL(
-    apiUrl(`/time-entries/${encodeURIComponent(workspaceId)}${path}`),
+    apiUrl(
+      workspaceId === null
+        ? `/time-entries${path}`
+        : `/time-entries/${encodeURIComponent(workspaceId)}${path}`,
+    ),
   );
   if (query) {
     for (const [key, value] of Object.entries(query)) {
@@ -266,4 +275,35 @@ export const polishTimeEntryNarrative = async ({
     parse: parsePolishedTimeEntryNarrativeResponse,
     path: "/polish-narrative",
     workspaceId,
+  });
+
+/**
+ * Approves entries across the organization's matters in one call; the API
+ * answers per entry, approved or refused with its reason.
+ */
+export const approveTimeEntries = async (
+  ids: readonly string[],
+): Promise<TimeApprovalBatch> =>
+  await requestTimeEntries({
+    body: { ids },
+    method: "POST",
+    parse: parseTimeApprovalBatch,
+    path: "/approve",
+    workspaceId: null,
+  });
+
+/** Returns one draft or approved entry to its owner with a comment. */
+export const returnTimeEntry = async ({
+  comment,
+  id,
+}: {
+  comment: string;
+  id: string;
+}) =>
+  await requestTimeEntries({
+    body: { comment, id },
+    method: "POST",
+    parse: parseTimeEntryReturnResponse,
+    path: "/approval-queue/return",
+    workspaceId: null,
   });

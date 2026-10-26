@@ -8,7 +8,7 @@ import {
   reviewedMigrationStatements,
   splitMigrationAlterActions,
 } from "./check-migration-safety";
-import { REQUEST_IDEMPOTENCY_LOCK_ALLOWANCES } from "./migration-lock-allowances/20261025180100_request_idempotency_receipts";
+import { REQUEST_IDEMPOTENCY_LOCK_ALLOWANCES } from "./migration-lock-allowances/20261026100100_request_idempotency_receipts";
 
 type LockMode =
   | "ACCESS SHARE"
@@ -1072,6 +1072,18 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     form: "create-policy",
     reason:
       "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261026100000_account_email_undeliverable",
+    form: "add-column",
+    reason:
+      "The three refusal columns are nullable and default-free, a catalog-only addition to user without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026100000_account_email_undeliverable",
+    form: "add-constraint",
+    reason:
+      "The refusal-shape CHECK is added NOT VALID without scanning existing users, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
   },
 ];
 export type LockBaselineEntry = {

@@ -104,6 +104,8 @@ import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { resolveCanonicalDocumentDestinationQuery } from "@/lib/workspaces/resolve-document-destination-query";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { FillClausesSection } from "./fill-clauses-section";
 import { TemplatePrefillPanel } from "./template-prefill-panel";
@@ -2685,6 +2687,7 @@ export const useFillToMatterSaveTarget = (
 ): Extract<SaveTarget, { kind: "chooseMatter" }> => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const currentView = useCurrentWorkspaceView();
   return {
     kind: "chooseMatter",
     onCreated: (created) => {
@@ -2701,7 +2704,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId/document",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
               search: { entity: entityId, field: created.fieldId },
             }),
             "template-form.navigate",
@@ -2711,7 +2714,7 @@ export const useFillToMatterSaveTarget = (
           detached(
             navigate({
               to: "/workspaces/$workspaceId/$viewId",
-              params: { workspaceId, viewId: "all" },
+              params: resolveWorkspaceViewParams(workspaceId, currentView),
             }),
             "template-form.navigate",
           );

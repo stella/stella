@@ -148,13 +148,15 @@ const mount = (seeded: ReturnType<typeof comment>[]) => {
   render(
     <IntlProvider locale="en" messages={messages}>
       <QueryClientProvider client={client}>
-        <AuthenticatedUserProvider user={me}>
-          <ClaimComments
-            claim={claim}
-            runId={runId}
-            workspaceId={workspaceId}
-          />
-        </AuthenticatedUserProvider>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <AuthenticatedUserProvider user={me}>
+            <ClaimComments
+              claim={claim}
+              runId={runId}
+              workspaceId={workspaceId}
+            />
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
       </QueryClientProvider>
     </IntlProvider>,
   );
@@ -178,7 +180,9 @@ test("a colleague's shared comment reads without controls; the reviewer's own ca
   expect(screen.getByText("Check the minutes.")).toBeTruthy();
   // One comment is the reviewer's: one edit and one delete control.
   expect(
-    screen.getAllByRole("button", { name: messages.common.edit }),
+    screen.getAllByRole("button", {
+      name: messages.legalReader.annotations.editComment,
+    }),
   ).toHaveLength(1);
   expect(
     screen.getAllByRole("button", { name: messages.common.delete }),
@@ -223,7 +227,11 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
 
   answers.push(Response.json({ ok: true }));
   answers.push(page([{ ...added, body: "Ask for the signed minutes." }]));
-  fireEvent.click(screen.getByRole("button", { name: messages.common.edit }));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: messages.legalReader.annotations.editComment,
+    }),
+  );
   fireEvent.change(
     screen.getByRole("textbox", { name: messages.folio.comment }),
     { target: { value: "Ask for the signed minutes." } },
@@ -258,7 +266,11 @@ test("editing and sharing a private comment stores its words before sharing them
   const own = comment({ id: "comment-own", body: "Draft.", mine: true });
   mount([own]);
   const edit = () => {
-    fireEvent.click(screen.getByRole("button", { name: messages.common.edit }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: messages.legalReader.annotations.editComment,
+      }),
+    );
     fireEvent.change(
       screen.getByRole("textbox", { name: messages.folio.comment }),
       { target: { value: "Final." } },
@@ -318,7 +330,7 @@ test("a comment still being stored offers no controls until the server answers",
   // share it by: the server has not given it an id yet.
   expect(screen.getByText("Ask for the minutes.")).toBeTruthy();
   for (const name of [
-    messages.common.edit,
+    messages.legalReader.annotations.editComment,
     messages.common.delete,
     messages.legalReader.annotations.visibilityShared,
   ]) {
@@ -332,7 +344,9 @@ test("a comment still being stored offers no controls until the server answers",
   );
   await waitFor(() =>
     expect(
-      screen.getByRole("button", { name: messages.common.edit }),
+      screen.getByRole("button", {
+        name: messages.legalReader.annotations.editComment,
+      }),
     ).toBeTruthy(),
   );
   expect(
