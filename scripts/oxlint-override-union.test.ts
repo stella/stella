@@ -117,6 +117,14 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
+    scope:
+      "packages/ui/src/**/*.test.{ts,tsx}, packages/ui/src/**/*.dom.test.tsx",
+    drops: ["pattern:@stll/*|@stll/*/**"],
+    reason:
+      "@stll/ui tests may import the workspace test-helper packages (UI_TEST_HELPER_PACKAGES); the same scope re-declares the pattern with those packages excepted, and tsdown builds no test file, so nothing ships.",
+  },
+  {
+    rule: "no-restricted-imports",
     scope: "packages/ui/src/kanban/drag-interactions.ts",
     drops: [
       "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
