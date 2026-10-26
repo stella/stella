@@ -9,7 +9,7 @@ const PACKAGE_JSON_PATTERN = /^packages\/[^/]+\/package\.json$/u;
 const CLI_PACKAGE_PATH = "packages/cli/package.json";
 const CLI_VERSION_PATH = "packages/cli/src/generated/cli-version.ts";
 const DATA_PATH_PATTERNS = [
-  /^\.changeset\/[^/]+\.md$/u,
+  /^\.changeset\/(?!README\.md$)[^/]+\.md$/u,
   /^docs\/changelog\/v[^/]+\.md$/u,
   /^packages\/[^/]+\/CHANGELOG\.md$/u,
 ];
@@ -332,7 +332,16 @@ if (!VERSION_PATTERN.test(candidateVersion)) {
 
 for (const path of FIXED_DATA_PATHS) {
   if (path.endsWith(".json") && changedPaths.includes(path)) {
-    parseJson(show(candidateSha, path), path);
+    const value = parseJson(show(candidateSha, path), path);
+    if (
+      path === "apps/landing/src/data/changelog-release-dates.json" &&
+      (!isRecord(value) ||
+        Object.values(value).some(
+          (date) => date !== null && typeof date !== "string",
+        ))
+    ) {
+      refuse(`${path} must map release names to timestamps or null`);
+    }
   }
 }
 
