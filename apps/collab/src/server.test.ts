@@ -1155,9 +1155,9 @@ describe("collaboration server", () => {
       fakeApi.setLoadResponse({
         generation: 0,
         loadOutcome: "loaded",
-        snapshotBase64: Buffer.from(encodeStateAsUpdate(replacement)).toString(
-          "base64",
-        ),
+        snapshotBase64: Buffer.from(
+          encodeStateAsUpdate(replacement),
+        ).toBase64(),
         snapshotRevision: 1,
       });
       fakeApi.releaseFirstStore();

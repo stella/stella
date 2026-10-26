@@ -186,14 +186,14 @@ export const SkillAvailabilitySummary = ({
       enabled: boundWorkspaceId !== null,
     }),
   );
-  useQueryViewError(navigationView);
+  useQueryViewError(navigationView, "SkillAvailabilitySummary:navigation");
   const clientView = useQueryView(
     useQuery({
       ...contactOptions(activeOrganizationId, boundClientId ?? ""),
       enabled: boundClientId !== null,
     }),
   );
-  useQueryViewError(clientView);
+  useQueryViewError(clientView, "SkillAvailabilitySummary:clients");
   const matterName =
     navigationView.type === "items"
       ? (navigationView.items.workspaces.find(
