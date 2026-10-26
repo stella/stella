@@ -40,7 +40,14 @@ const SPACE_BESIDE_NO_BREAK_SPACE = new RegExp(` ?${NO_BREAK_SPACE} ?`, "gu");
  * block's edge, a break `<pre>` preserves) and is never padding.
  */
 const HORIZONTAL_WHITESPACE = /[ \t\r\f]+/gu;
-const TRAILING_WHITESPACE = /[ \t\n\r\f]+$/u;
+const INDEX_WHITESPACE = /[ \t\n\r\f]/u;
+const trailingIndexWhitespace = (text: string): string => {
+  let start = text.length;
+  while (start > 0 && INDEX_WHITESPACE.test(text.charAt(start - 1))) {
+    start -= 1;
+  }
+  return text.slice(start);
+};
 
 /**
  * Shorter than this, a line ended where the court ended it: a name, a line
@@ -242,7 +249,7 @@ const withSpaceAfterIndices = (inlines: readonly Inline[]): Inline[] => {
           const source = owed.includes("\n")
             ? `${owed}${inline.text}`
             : inline.text;
-          const trailing = TRAILING_WHITESPACE.exec(source)?.at(0) ?? "";
+          const trailing = trailingIndexWhitespace(source);
           const breaks = trailing.replaceAll(/[^\n]/gu, "");
           if (breaks !== "") {
             owed = breaks;
