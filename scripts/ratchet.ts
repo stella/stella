@@ -32,12 +32,26 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { analyse } from "scslre";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import {
+  type CallExpression,
+  type EcmaScriptModule,
+  type Expression,
+  isObjectLiteralProperty,
+  type JSXAttributeName,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  type Program,
+  type StaticImportEntry,
+  type StaticMemberExpression,
+  type TSAsExpression,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -57,7 +71,12 @@ import {
   ROOT_CONNECTION_DOORS,
   STATUS_TRANSITION_OWNERSHIP,
 } from "./ownership";
-import { memoizeRecent, parseSource, sourceDialect } from "./parse-memo";
+import {
+  memoizeRecent,
+  parseSyntax,
+  type SyntaxDialect,
+  syntaxDialect,
+} from "./parse-memo";
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_SOURCE_GLOBS,
@@ -339,90 +358,124 @@ const literalStrippedLines = (content: string): readonly string[] =>
 // The same lines with block comments removed as well.
 const codeLines = (content: string): readonly string[] => lexFile(content).code;
 
+// The nodes under `node`, not `node` itself.
+const walkChildren = (node: Node, visit: (node: Node) => unknown): void => {
+  walk(node, (child) => (child === node ? undefined : visit(child)));
+};
+
+const isConstAssertion = (node: TSAsExpression): boolean =>
+  node.typeAnnotation.type === "TSTypeReference" &&
+  node.typeAnnotation.typeName.type === "Identifier" &&
+  node.typeAnnotation.typeName.name === "const";
+
 const countAsCasts: FileCounter = (content, { file }) => {
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
 
-  const visit = (node: ts.Node): void => {
-    if (!ts.isAsExpression(node)) {
-      ts.forEachChild(node, visit);
-      return;
+  const visit = (node: Node): "skip-children" | undefined => {
+    if (node.type !== "TSAsExpression") {
+      return undefined;
     }
-    const isConstAssertion =
-      ts.isTypeReferenceNode(node.type) &&
-      ts.isIdentifier(node.type.typeName) &&
-      node.type.typeName.text === "const";
-    if (isConstAssertion) {
-      ts.forEachChild(node.expression, visit);
-      return;
+    if (isConstAssertion(node)) {
+      walkChildren(node.expression, visit);
+      return "skip-children";
     }
     total += 1;
-    if (
-      ts.isAsExpression(node.expression) &&
-      node.expression.type.kind === ts.SyntaxKind.UnknownKeyword
-    ) {
-      ts.forEachChild(node.expression.expression, visit);
-      return;
-    }
-    ts.forEachChild(node.expression, visit);
+    const operand = node.expression;
+    walkChildren(
+      operand.type === "TSAsExpression" &&
+        operand.typeAnnotation.type === "TSUnknownKeyword"
+        ? operand.expression
+        : operand,
+      visit,
+    );
+    return "skip-children";
   };
 
-  visit(source);
+  walk(program, visit);
   return total;
 };
 
-const isObviousNumericCoercionLiteral = (node: ts.Expression): boolean => {
+const isNumberLiteral = (node: Node): boolean =>
+  node.type === "Literal" &&
+  (typeof node.value === "number" || typeof node.value === "bigint");
+
+// A string, number, bigint, boolean or null literal, or a signed number.
+const isObviousNumericCoercionLiteral = (node: Node): boolean => {
   let expression = node;
-  while (ts.isParenthesizedExpression(expression)) {
+  while (expression.type === "ParenthesizedExpression") {
     expression = expression.expression;
   }
-  if (
-    ts.isStringLiteralLike(expression) ||
-    ts.isNumericLiteral(expression) ||
-    ts.isBigIntLiteral(expression) ||
-    expression.kind === ts.SyntaxKind.TrueKeyword ||
-    expression.kind === ts.SyntaxKind.FalseKeyword ||
-    expression.kind === ts.SyntaxKind.NullKeyword
-  ) {
-    return true;
+  if (expression.type === "Literal") {
+    return !("regex" in expression);
+  }
+  if (expression.type === "TemplateLiteral") {
+    return expression.expressions.length === 0;
   }
   return (
-    ts.isPrefixUnaryExpression(expression) &&
-    (expression.operator === ts.SyntaxKind.PlusToken ||
-      expression.operator === ts.SyntaxKind.MinusToken) &&
-    (ts.isNumericLiteral(expression.operand) ||
-      ts.isBigIntLiteral(expression.operand))
+    expression.type === "UnaryExpression" &&
+    (expression.operator === "+" || expression.operator === "-") &&
+    isNumberLiteral(expression.argument)
   );
 };
 
+const NUMBER_PARSERS: ReadonlySet<string> = new Set(["parseInt", "parseFloat"]);
+
+// `object.name`: a member read by a plain name, not `object[key]` or
+// `object.#name`.
+const isPropertyAccess = (node: Node): node is StaticMemberExpression =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.property.type === "Identifier";
+
+const isIdentifierNamed = (node: Node, name: string): boolean =>
+  node.type === "Identifier" && node.name === name;
+
+// `key: value` in an object literal: not a shorthand, method or accessor.
+const isPropertyAssignment = (
+  node: Node,
+  parent: Node | undefined,
+): node is ObjectProperty =>
+  isObjectLiteralProperty(node, parent) &&
+  node.kind === "init" &&
+  !node.method &&
+  !node.shorthand;
+
+// A string literal's value; a template literal is not one.
+const stringLiteralValue = (node: Node): string | null =>
+  node.type === "Literal" && typeof node.value === "string" ? node.value : null;
+
+// A key written as a name or a string: `name` or `"name"`.
+const keyText = (key: Node): string | null =>
+  key.type === "Identifier" ? key.name : stringLiteralValue(key);
+
+const propertyNameText = (property: ObjectProperty): string | null =>
+  property.computed ? null : keyText(property.key);
+
 const countRawNumericCoercions: FileCounter = (content, { file }) => {
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      const isGlobalCoercion =
-        ts.isIdentifier(callee) &&
-        (callee.text === "Number" ||
-          callee.text === "parseInt" ||
-          callee.text === "parseFloat");
-      const isNumberParser =
-        ts.isPropertyAccessExpression(callee) &&
-        ts.isIdentifier(callee.expression) &&
-        callee.expression.text === "Number" &&
-        (callee.name.text === "parseInt" || callee.name.text === "parseFloat");
-      const argument = node.arguments.at(0);
-      if (
-        (isGlobalCoercion || isNumberParser) &&
-        argument !== undefined &&
-        !isObviousNumericCoercionLiteral(argument)
-      ) {
-        total += 1;
-      }
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    const callee = node.callee;
+    const isGlobalCoercion =
+      callee.type === "Identifier" &&
+      (callee.name === "Number" || NUMBER_PARSERS.has(callee.name));
+    const isNumberParser =
+      isPropertyAccess(callee) &&
+      isIdentifierNamed(callee.object, "Number") &&
+      NUMBER_PARSERS.has(callee.property.name);
+    const argument = node.arguments.at(0);
+    if (
+      (isGlobalCoercion || isNumberParser) &&
+      argument !== undefined &&
+      !isObviousNumericCoercionLiteral(argument)
+    ) {
+      total += 1;
+    }
+  });
   return total;
 };
 
@@ -459,102 +512,131 @@ const CLASS_LIST_NAME = /class(?:_?names?|es)?$/iu;
 
 type StringPosition = "class-list" | "other";
 
-const isClassListBinding = (name: ts.Node): boolean =>
-  (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
-  CLASS_LIST_NAME.test(name.text);
+// A binding or key named like a class list. Computed keys never are.
+const isClassListBinding = (name: Node): boolean => {
+  const text = keyText(name);
+  return text !== null && CLASS_LIST_NAME.test(text);
+};
 
 const isClassListHelperCall = (
-  node: ts.Node,
+  node: Node | undefined,
   helper?: string,
-): node is ts.CallExpression =>
-  ts.isCallExpression(node) &&
-  ts.isIdentifier(node.expression) &&
+): node is CallExpression =>
+  node?.type === "CallExpression" &&
+  node.callee.type === "Identifier" &&
   (helper === undefined
-    ? CLASS_LIST_HELPERS.has(node.expression.text)
-    : node.expression.text === helper);
-
-// Operators whose right operand is the expression's value
-// (`open && "transition"`); a comparison's operands are not.
-const VALUE_OPERATORS: ReadonlySet<ts.SyntaxKind> = new Set([
-  ts.SyntaxKind.AmpersandAmpersandToken,
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-]);
+    ? CLASS_LIST_HELPERS.has(node.callee.name)
+    : node.callee.name === helper);
 
 const CVA_VARIANTS_KEY = "variants";
 
-// `cva(base, { variants: { size: { sm: "…" } } })`: the option's value.
-const isCvaVariantValue = (option: ts.PropertyAssignment): boolean => {
-  const options = option.parent;
-  const variant = options.parent;
-  if (!ts.isPropertyAssignment(variant)) {
+// `cva(base, { variants: { size: { sm: "…" } } })`: whether the option at
+// `lineage[at]` holds a variant value.
+const isCvaVariantValue = (lineage: readonly Node[], at: number): boolean => {
+  if (at < 6) {
     return false;
   }
-  const variants = variant.parent.parent;
+  const [config, variants, sizes, variant, options] = lineage.slice(at - 5, at);
   if (
-    !ts.isPropertyAssignment(variants) ||
-    !ts.isIdentifier(variants.name) ||
-    variants.name.text !== CVA_VARIANTS_KEY
+    config === undefined ||
+    variants === undefined ||
+    sizes === undefined ||
+    variant === undefined ||
+    options === undefined ||
+    !isPropertyAssignment(variant, sizes) ||
+    variant.value !== options ||
+    !isPropertyAssignment(variants, config) ||
+    variants.value !== sizes ||
+    variants.computed ||
+    !isIdentifierNamed(variants.key, CVA_VARIANTS_KEY)
   ) {
     return false;
   }
-  const config = variants.parent;
+  const call = lineage[at - 6];
   return (
-    isClassListHelperCall(config.parent, "cva") &&
-    config.parent.arguments.some((argument) => argument === config)
+    isClassListHelperCall(call, "cva") &&
+    call.arguments.some((argument) => argument === config)
   );
 };
 
-// Whether `node` is a class-list value: a class-helper argument, a class
-// attribute or binding value, or a branch that flows into one unchanged
-// (`&&`/`||`/`??` right operand, ternary branch, array element, clsx object
-// key, cva variant value). A comparison operand, a switch case or an argument
-// to any other call is not.
-const classValuePosition = (node: ts.Node): StringPosition => {
-  const parent = node.parent;
-  if (ts.isSourceFile(parent)) {
+const jsxAttributeName = (name: JSXAttributeName): string =>
+  name.type === "JSXNamespacedName"
+    ? `${name.namespace.name}:${name.name.name}`
+    : name.name;
+
+// Parents that pass a value through unchanged.
+const CLASS_VALUE_WRAPPERS: ReadonlySet<string> = new Set([
+  "ArrayExpression",
+  "JSXExpressionContainer",
+  "JSXSpreadChild",
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSSatisfiesExpression",
+  "TemplateLiteral",
+]);
+
+// Whether the node at `lineage[at]` (its ancestors before it) is a class-list
+// value: a class-helper argument, a class attribute or binding value, or a
+// branch that flows into one unchanged (`&&`/`||`/`??` right operand, ternary
+// branch, array element, clsx object key, cva variant value). A comparison
+// operand, a switch case or an argument to any other call is not.
+const classValuePosition = (
+  lineage: readonly Node[],
+  at = lineage.length - 1,
+): StringPosition => {
+  const node = lineage[at];
+  const parent = lineage[at - 1];
+  if (node === undefined || parent === undefined) {
     return "other";
   }
-  if (ts.isCallExpression(parent)) {
+  const parentPosition = () => classValuePosition(lineage, at - 1);
+  if (parent.type === "CallExpression") {
     return isClassListHelperCall(parent) &&
       parent.arguments.some((argument) => argument === node)
       ? "class-list"
       : "other";
   }
-  if (ts.isJsxAttribute(parent)) {
-    return CLASS_LIST_NAME.test(parent.name.getText()) ? "class-list" : "other";
-  }
-  if (
-    ts.isJsxExpression(parent) ||
-    ts.isParenthesizedExpression(parent) ||
-    ts.isAsExpression(parent) ||
-    ts.isSatisfiesExpression(parent) ||
-    ts.isArrayLiteralExpression(parent) ||
-    ts.isSpreadElement(parent) ||
-    ts.isTemplateSpan(parent) ||
-    ts.isTemplateExpression(parent)
-  ) {
-    return classValuePosition(parent);
-  }
-  if (ts.isBinaryExpression(parent)) {
-    return parent.right === node &&
-      VALUE_OPERATORS.has(parent.operatorToken.kind)
-      ? classValuePosition(parent)
-      : "other";
-  }
-  if (ts.isConditionalExpression(parent)) {
-    return parent.condition === node ? "other" : classValuePosition(parent);
-  }
-  if (ts.isPropertyAssignment(parent)) {
-    if (parent.name === node) {
-      return classValuePosition(parent.parent);
-    }
-    return isClassListBinding(parent.name) || isCvaVariantValue(parent)
+  if (parent.type === "JSXAttribute") {
+    return CLASS_LIST_NAME.test(jsxAttributeName(parent.name))
       ? "class-list"
       : "other";
   }
-  if (ts.isVariableDeclaration(parent) || ts.isPropertyDeclaration(parent)) {
-    return parent.initializer === node && isClassListBinding(parent.name)
+  if (CLASS_VALUE_WRAPPERS.has(parent.type)) {
+    return parentPosition();
+  }
+  if (parent.type === "SpreadElement") {
+    // An object spread copies keys; it is not a class-list branch.
+    return lineage[at - 2]?.type === "ObjectExpression"
+      ? "other"
+      : parentPosition();
+  }
+  if (parent.type === "LogicalExpression") {
+    return parent.right === node ? parentPosition() : "other";
+  }
+  if (parent.type === "ConditionalExpression") {
+    return parent.test === node ? "other" : parentPosition();
+  }
+  if (isPropertyAssignment(parent, lineage[at - 2])) {
+    if (parent.key === node) {
+      return parent.computed ? "other" : classValuePosition(lineage, at - 2);
+    }
+    return (!parent.computed && isClassListBinding(parent.key)) ||
+      isCvaVariantValue(lineage, at - 1)
+      ? "class-list"
+      : "other";
+  }
+  if (parent.type === "VariableDeclarator") {
+    return parent.init === node && isClassListBinding(parent.id)
+      ? "class-list"
+      : "other";
+  }
+  if (
+    parent.type === "PropertyDefinition" ||
+    parent.type === "AccessorProperty"
+  ) {
+    return parent.value === node &&
+      !parent.computed &&
+      isClassListBinding(parent.key)
       ? "class-list"
       : "other";
   }
@@ -666,39 +748,42 @@ const countLegacyPaintCssTransitions = (content: string): number => {
   return count;
 };
 
+// The text of a string literal or of one literal piece of a template.
+const stringText = (node: Node): string | undefined => {
+  if (node.type === "TemplateElement") {
+    return node.value.cooked ?? node.value.raw;
+  }
+  return stringLiteralValue(node) ?? undefined;
+};
+
 const countLegacyPaintScriptTransitions = (
   content: string,
   file: string,
 ): number => {
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isStringLiteral(node) ||
-      ts.isNoSubstitutionTemplateLiteral(node) ||
-      ts.isTemplateHead(node) ||
-      ts.isTemplateMiddle(node) ||
-      ts.isTemplateTail(node)
-    ) {
+  walk(program, (node, ancestors) => {
+    const text = stringText(node);
+    if (text !== undefined) {
       // Walking ancestors is only needed when the bare utility can occur.
-      const position = node.text.includes(BARE_TRANSITION_UTILITY)
-        ? classValuePosition(node)
+      const position = text.includes(BARE_TRANSITION_UTILITY)
+        ? classValuePosition([...ancestors, node])
         : "other";
-      total += countLegacyPaintTransitionTokens(node.text, position);
+      total += countLegacyPaintTransitionTokens(text, position);
     }
     // clsx object syntax: `{ transition: open }` names the class by its key.
+    const parent = ancestors.at(-1);
     if (
-      ts.isIdentifier(node) &&
-      node.text === BARE_TRANSITION_UTILITY &&
-      ts.isPropertyAssignment(node.parent) &&
-      node.parent.name === node &&
-      classValuePosition(node) === "class-list"
+      isIdentifierNamed(node, BARE_TRANSITION_UTILITY) &&
+      parent !== undefined &&
+      isPropertyAssignment(parent, ancestors.at(-2)) &&
+      parent.key === node &&
+      !parent.computed &&
+      classValuePosition([...ancestors, node]) === "class-list"
     ) {
       total += 1;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return total;
 };
 
@@ -707,9 +792,10 @@ const countLegacyPaintScriptTransitions = (
 // Tailwind class lists (`class`, `class:list`, `contentClass`, ...).
 const ASTRO_FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---/u;
 // A <script> or <style> element; an end tag may carry whitespace or
-// attributes, as browsers accept.
+// attributes, as browsers accept. A self-closing `<script … />` holds no
+// text, so it opens nothing.
 const ASTRO_RAW_TEXT_ELEMENT =
-  /<(script|style)\b[^>]*>([\s\S]*?)<\/\1\b[^>]*>/giu;
+  /<(script|style)\b[^>]*(?<!\/)>([\s\S]*?)<\/\1\b[^>]*>/giu;
 const ASTRO_STYLE_ELEMENT = "style";
 const ASTRO_CLASS_LIST_DIRECTIVE = "class:list";
 const ASTRO_STYLE_ATTRIBUTE = "style";
@@ -1024,54 +1110,46 @@ const countLegacyRealtimeInvalidationProducers: FileCounter = (
 // metrics inspect import sources and SQL literals. Only parser-recognized
 // comment trivia is blanked, with line breaks retained so tokens cannot join.
 const stripCommentTrivia = ({ content, file }: SourceText): string => {
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const ranges = new Map<number, ts.CommentRange>();
-  const collect = (comments: readonly ts.CommentRange[] | undefined): void => {
-    for (const comment of comments ?? []) {
-      ranges.set(comment.pos, comment);
-    }
-  };
-  const visit = (node: ts.Node): void => {
-    collect(ts.getLeadingCommentRanges(content, node.getFullStart()));
-    collect(ts.getTrailingCommentRanges(content, node.getEnd()));
-    for (const child of node.getChildren(sourceFile)) {
-      visit(child);
-    }
-  };
-  visit(sourceFile);
-
+  const { comments } = parseSyntax({ fileName: file, text: content });
   let output = "";
   let previousEnd = 0;
-  for (const range of [...ranges.values()].toSorted(
-    (left, right) => left.pos - right.pos,
-  )) {
-    if (range.pos < previousEnd) {
-      continue;
-    }
-    output += content.slice(previousEnd, range.pos);
-    output += content.slice(range.pos, range.end).replace(/[^\r\n]/gu, " ");
-    previousEnd = range.end;
+  for (const comment of comments) {
+    output += content.slice(previousEnd, comment.start);
+    output += content
+      .slice(comment.start, comment.end)
+      .replace(/[^\r\n]/gu, " ");
+    previousEnd = comment.end;
   }
   return output + content.slice(previousEnd);
 };
 
 // Most counters over one file strip its comments; they share the result.
 const recentStrippedComments = {
-  [ts.ScriptKind.TS]: memoizeRecent<string>(2),
-  [ts.ScriptKind.TSX]: memoizeRecent<string>(2),
+  js: memoizeRecent<string>(2),
+  jsx: memoizeRecent<string>(2),
+  ts: memoizeRecent<string>(2),
+  tsx: memoizeRecent<string>(2),
 } as const satisfies Record<
-  ReturnType<typeof sourceDialect>,
+  SyntaxDialect,
   (text: string, compute: () => string) => string
 >;
 
 const stripComments = ({ content, file }: SourceText): string =>
-  recentStrippedComments[sourceDialect(file)](content, () =>
+  recentStrippedComments[syntaxDialect(file)](content, () =>
     stripCommentTrivia({ content, file }),
   );
 
 // An identifier spells its name, or writes it with a `\u` escape.
 const mayNameIdentifier = (content: string, name: string): boolean =>
   content.includes(name) || content.includes("\\u");
+
+// The export a `{ name }` or `{ name as local }` import entry reads; null for
+// default and namespace imports.
+const namedImport = ({ importName }: StaticImportEntry): string | null => {
+  // oxc-parser declares the import kinds as an ambient const enum of strings.
+  const kind: string = importName.kind;
+  return kind === "Name" ? importName.name : null;
+};
 
 // Without a spelling of `importedName`, no import can bind it under another
 // name, so only the name itself is a binding.
@@ -1090,22 +1168,14 @@ const importedLocalBindings = ({
   if (!mayNameIdentifier(content, importedName)) {
     return bindings;
   }
-  const sourceFile = parseSource({ fileName: file, text: content });
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== moduleName
-    ) {
+  const { module } = parseSyntax({ fileName: file, text: content });
+  for (const declaration of module.staticImports) {
+    if (declaration.moduleRequest.value !== moduleName) {
       continue;
     }
-    const bindingsNode = statement.importClause?.namedBindings;
-    if (!bindingsNode || !ts.isNamedImports(bindingsNode)) {
-      continue;
-    }
-    for (const specifier of bindingsNode.elements) {
-      if ((specifier.propertyName ?? specifier.name).text === importedName) {
-        bindings.add(specifier.name.text);
+    for (const entry of declaration.entries) {
+      if (namedImport(entry) === importedName) {
+        bindings.add(entry.localName.value);
       }
     }
   }
@@ -1198,23 +1268,23 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
 const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
 
 export const countPublicCorpusMembership: FileCounter = (content, { file }) => {
-  const source = parseSource({ fileName: file, text: content });
-  for (const statement of source.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  for (const topLevel of program.body) {
+    const statement =
+      topLevel.type === "ExportNamedDeclaration"
+        ? topLevel.declaration
+        : topLevel;
+    if (statement?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        !ts.isIdentifier(declaration.name) ||
-        declaration.name.text !== "PUBLIC_CORPUS_BOOKKEEPING_TABLES"
+        !isIdentifierNamed(declaration.id, "PUBLIC_CORPUS_BOOKKEEPING_TABLES")
       ) {
         continue;
       }
-      const initializer = declaration.initializer;
-      if (
-        initializer === undefined ||
-        !ts.isArrayLiteralExpression(initializer)
-      ) {
+      const initializer = declaration.init;
+      if (initializer?.type !== "ArrayExpression") {
         panic("Corpus membership must be an explicit array literal");
       }
       return initializer.elements.length;
@@ -1258,48 +1328,44 @@ const countInlineClipboardWrites = (content: string): number =>
  * identifier — the shape the gate replaced — and nothing else.
  */
 const countDirectRedistributableCalls: FileCounter = (content, { file }) => {
-  const sourceFile = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
 
   let total = 0;
-  const visit = (node: ts.Node) => {
+  walk(program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "isRedistributable"
+      node.type === "CallExpression" &&
+      isIdentifierNamed(node.callee, "isRedistributable")
     ) {
       total += 1;
     }
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
+  });
   return total;
 };
 
 // A satisfies tie only checks fresh literal keys. Forwarded domain objects
 // need projectionPayload's recursive exactness gate before return annotations.
 const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
-  const visit = (node: ts.Node) => {
-    if (ts.isSatisfiesExpression(node)) {
-      const type = node.type;
-      if (
-        ts.isTypeReferenceNode(type) &&
-        ts.isQualifiedName(type.typeName) &&
-        type.typeName.right.text === "InferInput" &&
-        type.typeArguments?.some(
-          (argument) =>
-            ts.isTypeQueryNode(argument) &&
-            ts.isIdentifier(argument.exprName) &&
-            argument.exprName.text.endsWith("_PROJECTION"),
-        )
-      ) {
-        total += 1;
-      }
+  walk(program, (node) => {
+    if (node.type !== "TSSatisfiesExpression") {
+      return;
     }
-    node.forEachChild(visit);
-  };
-  visit(source);
+    const type = node.typeAnnotation;
+    if (
+      type.type === "TSTypeReference" &&
+      type.typeName.type === "TSQualifiedName" &&
+      type.typeName.right.name === "InferInput" &&
+      type.typeArguments?.params.some(
+        (argument) =>
+          argument.type === "TSTypeQuery" &&
+          argument.exprName.type === "Identifier" &&
+          argument.exprName.name.endsWith("_PROJECTION"),
+      ) === true
+    ) {
+      total += 1;
+    }
+  });
   return total;
 };
 
@@ -1327,36 +1393,29 @@ const countSuperLinearRegexes: FileCounter = (content, { file }) => {
   // and the parser's recovery can swallow the rest of the file — which
   // would silently hide regexes from a guard whose whole value is that
   // it cannot be evaded.
-  const source = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
 
   let total = 0;
-  const visit = (node: ts.Node): void => {
-    if (node.kind === ts.SyntaxKind.RegularExpressionLiteral) {
-      const literal = node.getText(source);
-      const lastSlash = literal.lastIndexOf("/");
-      let expression: RegExp;
-      try {
-        expression = new RegExp(
-          literal.slice(1, lastSlash),
-          literal.slice(lastSlash + 1),
-        );
-      } catch {
-        // A pattern this runtime cannot compile cannot run either.
-        return;
-      }
-      try {
-        if (analyse(expression).reports.length > 0) {
-          total += 1;
-        }
-      } catch {
-        // The analyser bails on constructs it does not model; an
-        // unanalysable pattern is not evidence of a finding.
-      }
+  walk(program, (node) => {
+    if (node.type !== "Literal" || !("regex" in node)) {
       return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    let expression: RegExp;
+    try {
+      expression = new RegExp(node.regex.pattern, node.regex.flags);
+    } catch {
+      // A pattern this runtime cannot compile cannot run either.
+      return;
+    }
+    try {
+      if (analyse(expression).reports.length > 0) {
+        total += 1;
+      }
+    } catch {
+      // The analyser bails on constructs it does not model; an
+      // unanalysable pattern is not evidence of a finding.
+    }
+  });
   return total;
 };
 
@@ -1672,6 +1731,31 @@ const webImporterSlice = (file: string): string => {
   return SHARED_IMPORTER;
 };
 
+// A dynamic import's argument when it is a literal path.
+const LITERAL_MODULE_REQUEST = /^(?:"([^"\\]*)"|'([^'\\]*)'|`([^`\\$]*)`)$/u;
+
+// The modules `content` imports, re-exports from, or loads by a literal
+// dynamic import, one entry per site.
+const importedSpecifiers = ({ content, file }: SourceText): string[] => {
+  const { module } = parseSyntax({ fileName: file, text: content });
+  const dynamic = module.dynamicImports.flatMap(({ moduleRequest }) => {
+    const literal = LITERAL_MODULE_REQUEST.exec(
+      content.slice(moduleRequest.start, moduleRequest.end),
+    );
+    const spec = literal?.at(1) ?? literal?.at(2) ?? literal?.at(3);
+    return spec === undefined ? [] : [spec];
+  });
+  return [
+    ...module.staticImports.map(({ moduleRequest }) => moduleRequest.value),
+    ...module.staticExports.flatMap(({ entries }) =>
+      entries.flatMap(({ moduleRequest }) =>
+        moduleRequest === null ? [] : [moduleRequest.value],
+      ),
+    ),
+    ...dynamic,
+  ];
+};
+
 const countSliceOwnedWebComponents: RepoCounter = (context) => {
   const sources = scanRepoFiles(context, [WEB_SOURCE_GLOB]);
   const known = new Set(sources);
@@ -1679,10 +1763,9 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
   for (const file of sources) {
     const slice = webImporterSlice(file);
     const content = readSource(context, file);
-    // The compiler's import pre-scan, not the per-line MODULE_SPECIFIER scan:
-    // a lazily loaded component is formatted as a multi-line `import(...)`.
-    const { importedFiles } = ts.preProcessFile(content, true, true);
-    for (const { fileName: spec } of importedFiles) {
+    // The parser's module record, not the per-line MODULE_SPECIFIER scan: a
+    // lazily loaded component is formatted as a multi-line `import(...)`.
+    for (const spec of importedSpecifiers({ content, file })) {
       const resolved = resolveSpecifier(file, spec);
       if (resolved === null || !resolved.startsWith(WEB_COMPONENTS_PREFIX)) {
         continue;
@@ -2015,31 +2098,23 @@ type FailureSinkBindings = {
 };
 
 const importedFailureBindings = (
-  sourceFile: ts.SourceFile,
+  module: EcmaScriptModule,
   file: string,
 ): { captures: Set<string>; helpers: Set<string>; loggers: Set<string> } => {
   const captures = new Set<string>();
   const helpers = new Set<string>();
   const loggers = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings === undefined || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    const modulePath = resolvedModulePath(file, statement.moduleSpecifier.text);
-    for (const specifier of bindings.elements) {
-      if (specifier.isTypeOnly) {
+  for (const declaration of module.staticImports) {
+    const modulePath = resolvedModulePath(
+      file,
+      declaration.moduleRequest.value,
+    );
+    for (const entry of declaration.entries) {
+      const imported = namedImport(entry);
+      if (entry.isType || imported === null) {
         continue;
       }
-      const imported = (specifier.propertyName ?? specifier.name).text;
-      const local = specifier.name.text;
+      const local = entry.localName.value;
       if (
         modulePath === FAILURE_SINK_MODULES.capture &&
         TERMINAL_CAPTURE_EXPORTS.has(imported)
@@ -2057,216 +2132,232 @@ const importedFailureBindings = (
   return { captures, helpers, loggers };
 };
 
-const propertyNameText = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : null;
-
 // Initializers of `const x = …` in the file, for following a name to the
 // value it was bound to.
-const constInitializers = (
-  sourceFile: ts.SourceFile,
-): Map<string, ts.Expression> => {
-  const initializers = new Map<string, ts.Expression>();
-  const visit = (node: ts.Node): void => {
+const constInitializers = (program: Program): Map<string, Expression> => {
+  const initializers = new Map<string, Expression>();
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer !== undefined
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      node.init !== null
     ) {
-      initializers.set(node.name.text, node.initializer);
+      initializers.set(node.id.name, node.init);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return initializers;
 };
 
+// The local name a destructured entry binds, defaulted or not.
+const boundName = (pattern: Node): string | null => {
+  if (pattern.type === "Identifier") {
+    return pattern.name;
+  }
+  return pattern.type === "AssignmentPattern" &&
+    pattern.left.type === "Identifier"
+    ? pattern.left.name
+    : null;
+};
+
 const loggerMethodAliases = (
-  sourceFile: ts.SourceFile,
+  program: Program,
   loggers: ReadonlySet<string>,
 ): Set<string> => {
   const aliases = new Set<string>();
-  const visit = (node: ts.Node): void => {
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isObjectBindingPattern(node.name) &&
-      node.initializer !== undefined &&
-      ts.isIdentifier(node.initializer) &&
-      loggers.has(node.initializer.text)
+      node.type !== "VariableDeclarator" ||
+      node.id.type !== "ObjectPattern" ||
+      node.init?.type !== "Identifier" ||
+      !loggers.has(node.init.name)
     ) {
-      for (const element of node.name.elements) {
-        const method = element.propertyName ?? element.name;
-        if (
-          ts.isIdentifier(method) &&
-          FAILURE_LOGGER_METHODS.has(method.text) &&
-          ts.isIdentifier(element.name)
-        ) {
-          aliases.add(element.name.text);
-        }
+      return;
+    }
+    for (const element of node.id.properties) {
+      // `{ warn }`, `{ warn: log }` or `{ ...warn }`: the method read and the
+      // name it is bound to.
+      const local = boundName(
+        element.type === "RestElement" ? element.argument : element.value,
+      );
+      let method = local;
+      if (element.type !== "RestElement") {
+        method =
+          !element.computed && element.key.type === "Identifier"
+            ? element.key.name
+            : null;
+      }
+      if (
+        method !== null &&
+        local !== null &&
+        FAILURE_LOGGER_METHODS.has(method)
+      ) {
+        aliases.add(local);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return aliases;
 };
 
 const MAX_ATTRIBUTE_FOLLOW_DEPTH = 3;
 
 // A key or member name, not a value reference that could be followed.
-const isNameOfParent = (node: ts.Identifier): boolean => {
-  const parent = node.parent;
-  return (
-    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-    (ts.isPropertyAssignment(parent) && parent.name === node)
-  );
-};
+const isNameOfParent = (
+  node: Node,
+  parent: Node | undefined,
+  grandparent: Node | undefined,
+): boolean =>
+  parent !== undefined &&
+  ((isPropertyAccess(parent) && parent.property === node) ||
+    (isPropertyAssignment(parent, grandparent) &&
+      !parent.computed &&
+      parent.key === node));
 
 // Whether an attribute expression carries error fields: an `error.*` key, or
 // a folded helper called or spread anywhere inside it. A name is followed to
 // its initializer, so a record assembled in a local still counts.
 const carriesErrorFields = (
-  expression: ts.Node,
+  expression: Node,
   bindings: FailureSinkBindings,
-  initializers: ReadonlyMap<string, ts.Expression>,
+  initializers: ReadonlyMap<string, Expression>,
   depth = 0,
 ): boolean => {
   let found = false;
-  const visit = (node: ts.Node): void => {
+  walk(expression, (node, ancestors) => {
     if (found) {
-      return;
+      return "skip-children";
     }
+    const parent = ancestors.at(-1);
     if (
-      (ts.isPropertyAssignment(node) ||
-        ts.isShorthandPropertyAssignment(node)) &&
-      propertyNameText(node.name)?.startsWith(ERROR_ATTRIBUTE_PREFIX) === true
+      isObjectLiteralProperty(node, parent) &&
+      node.kind === "init" &&
+      !node.method &&
+      propertyNameText(node)?.startsWith(ERROR_ATTRIBUTE_PREFIX) === true
     ) {
       found = true;
-      return;
+      return "skip-children";
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      bindings.helpers.has(node.expression.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      bindings.helpers.has(node.callee.name)
     ) {
       found = true;
-      return;
+      return "skip-children";
     }
     if (
-      ts.isIdentifier(node) &&
+      node.type === "Identifier" &&
       depth < MAX_ATTRIBUTE_FOLLOW_DEPTH &&
-      !isNameOfParent(node)
+      !isNameOfParent(node, parent, ancestors.at(-2))
     ) {
-      const initializer = initializers.get(node.text);
+      const initializer = initializers.get(node.name);
       if (
         initializer !== undefined &&
         initializer !== expression &&
         carriesErrorFields(initializer, bindings, initializers, depth + 1)
       ) {
         found = true;
-        return;
+        return "skip-children";
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(expression);
+    return undefined;
+  });
   return found;
 };
 
 // `logger.warn(…)`, `logger["warn"](…)`, or a destructured `warn(…)`: the
 // method called, or null for any other call.
 const failureLoggerMethod = (
-  call: ts.CallExpression,
+  call: CallExpression,
   bindings: FailureSinkBindings,
 ): string | null => {
-  const callee = call.expression;
-  if (ts.isIdentifier(callee)) {
-    return bindings.loggerMethods.has(callee.text) ? callee.text : null;
+  const callee = call.callee;
+  if (callee.type === "Identifier") {
+    return bindings.loggerMethods.has(callee.name) ? callee.name : null;
   }
   if (
-    ts.isPropertyAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    bindings.loggers.has(callee.expression.text)
+    callee.type !== "MemberExpression" ||
+    callee.object.type !== "Identifier" ||
+    !bindings.loggers.has(callee.object.name)
   ) {
-    return FAILURE_LOGGER_METHODS.has(callee.name.text)
-      ? callee.name.text
+    return null;
+  }
+  if (isPropertyAccess(callee)) {
+    return FAILURE_LOGGER_METHODS.has(callee.property.name)
+      ? callee.property.name
       : null;
   }
-  if (
-    ts.isElementAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    bindings.loggers.has(callee.expression.text) &&
-    ts.isStringLiteral(callee.argumentExpression) &&
-    FAILURE_LOGGER_METHODS.has(callee.argumentExpression.text)
-  ) {
-    return callee.argumentExpression.text;
-  }
-  return null;
+  const method = callee.computed ? stringLiteralValue(callee.property) : null;
+  return method !== null && FAILURE_LOGGER_METHODS.has(method) ? method : null;
 };
 
-const isProcessStreamWrite = (call: ts.CallExpression): boolean => {
-  const callee = call.expression;
+// A string or substitution-free template literal's value.
+const stringLiteralLikeValue = (node: Node): string | null => {
+  if (node.type === "TemplateLiteral") {
+    return node.expressions.length === 0
+      ? (node.quasis.at(0)?.value.cooked ?? null)
+      : null;
+  }
+  return stringLiteralValue(node);
+};
+
+const isProcessStreamWrite = (call: CallExpression): boolean => {
+  const callee = call.callee;
   const target = call.arguments.at(0);
   return (
-    ts.isPropertyAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    callee.expression.text === "Bun" &&
-    callee.name.text === "write" &&
+    isPropertyAccess(callee) &&
+    isIdentifierNamed(callee.object, "Bun") &&
+    callee.property.name === "write" &&
     target !== undefined &&
-    ts.isPropertyAccessExpression(target) &&
-    ts.isIdentifier(target.expression) &&
-    target.expression.text === "Bun" &&
-    PROCESS_STREAMS.has(target.name.text)
+    isPropertyAccess(target) &&
+    isIdentifierNamed(target.object, "Bun") &&
+    PROCESS_STREAMS.has(target.property.name)
   );
 };
 
 const isTerminalCapture = (
-  call: ts.CallExpression,
+  call: CallExpression,
   bindings: FailureSinkBindings,
 ): boolean => {
-  const callee = call.expression;
-  if (ts.isIdentifier(callee)) {
-    return bindings.captures.has(callee.text);
+  const callee = call.callee;
+  if (callee.type === "Identifier") {
+    return bindings.captures.has(callee.name);
   }
   // A capture reached as a member (`telemetry.captureRequestError(…)`) is the
   // same terminal call; the adapter seams' `captureError` members are counted
   // by their own inventory metric instead.
   return (
-    ts.isPropertyAccessExpression(callee) &&
-    callee.name.text === "captureRequestError"
+    isPropertyAccess(callee) && callee.property.name === "captureRequestError"
   );
 };
 
 const countDirectFailureSinksAs = (content: string, file: string): number => {
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const imported = importedFailureBindings(sourceFile, file);
+  const { module, program } = parseSyntax({ fileName: file, text: content });
+  const imported = importedFailureBindings(module, file);
   const bindings: FailureSinkBindings = {
     ...imported,
-    loggerMethods: loggerMethodAliases(sourceFile, imported.loggers),
+    loggerMethods: loggerMethodAliases(program, imported.loggers),
   };
-  const initializers = constInitializers(sourceFile);
+  const initializers = constInitializers(program);
   const isRunner = file.startsWith(RUNNER_SOURCE_PREFIX);
   let count = 0;
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const method = failureLoggerMethod(node, bindings);
-      const attributes =
-        method === "request" ? node.arguments.at(0) : node.arguments.at(1);
-      if (
-        isTerminalCapture(node, bindings) ||
-        isProcessStreamWrite(node) ||
-        (isRunner &&
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === RUNNER_ERROR_WRITER) ||
-        (method !== null &&
-          attributes !== undefined &&
-          carriesErrorFields(attributes, bindings, initializers))
-      ) {
-        count += 1;
-      }
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+    const method = failureLoggerMethod(node, bindings);
+    const attributes =
+      method === "request" ? node.arguments.at(0) : node.arguments.at(1);
+    if (
+      isTerminalCapture(node, bindings) ||
+      isProcessStreamWrite(node) ||
+      (isRunner && isIdentifierNamed(node.callee, RUNNER_ERROR_WRITER)) ||
+      (method !== null &&
+        attributes !== undefined &&
+        carriesErrorFields(attributes, bindings, initializers))
+    ) {
+      count += 1;
+    }
+  });
   return count;
 };
 
@@ -2276,19 +2367,17 @@ const countDirectFailureSinks: FileCounter = (content, { file }) =>
 // `callbacks.captureError(…)`-shaped seams: adapters that also do generation
 // bookkeeping, inventoried apart from the terminal sinks above.
 const countAnalyticsCallbackSeams: FileCounter = (content, { file }) => {
-  const sourceFile = parseSource({ fileName: file, text: content });
+  const { program } = parseSyntax({ fileName: file, text: content });
   let count = 0;
-  const visit = (node: ts.Node): void => {
+  walk(program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "captureError"
+      node.type === "CallExpression" &&
+      isPropertyAccess(node.callee) &&
+      node.callee.property.name === "captureError"
     ) {
       count += 1;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return count;
 };
 
@@ -2298,42 +2387,39 @@ const FAILURE_SINK_FACTORY = "failureSink";
 const failureSinkSpecs = ({
   content,
   file,
-}: SourceText): ts.ObjectLiteralExpression[] => {
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const specs: ts.ObjectLiteralExpression[] = [];
-  const visit = (node: ts.Node): void => {
-    const spec = ts.isCallExpression(node) ? node.arguments.at(0) : undefined;
+}: SourceText): ObjectExpression[] => {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  const specs: ObjectExpression[] = [];
+  walk(program, (node) => {
+    const spec =
+      node.type === "CallExpression" ? node.arguments.at(0) : undefined;
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === FAILURE_SINK_FACTORY &&
-      spec !== undefined &&
-      ts.isObjectLiteralExpression(spec)
+      node.type === "CallExpression" &&
+      isIdentifierNamed(node.callee, FAILURE_SINK_FACTORY) &&
+      spec?.type === "ObjectExpression"
     ) {
       specs.push(spec);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return specs;
 };
 
 const specProperty = (
-  spec: ts.ObjectLiteralExpression,
+  spec: ObjectExpression,
   name: string,
-): ts.PropertyAssignment | undefined =>
+): ObjectProperty | undefined =>
   spec.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) &&
-      propertyNameText(property.name) === name,
+    (property): property is ObjectProperty =>
+      isPropertyAssignment(property, spec) &&
+      propertyNameText(property) === name,
   );
 
 // One per local expectation a sink handle declares.
 const countFailureSinkExpectations: FileCounter = (content, { file }) => {
   let total = 0;
   for (const spec of failureSinkSpecs({ content, file })) {
-    const expected = specProperty(spec, "expected")?.initializer;
-    if (expected !== undefined && ts.isArrayLiteralExpression(expected)) {
+    const expected = specProperty(spec, "expected")?.value;
+    if (expected?.type === "ArrayExpression") {
       total += expected.elements.length;
     }
   }
@@ -2357,21 +2443,26 @@ const GRADED_HANDLER_CODES: ReadonlySet<string> = new Set(
   Object.keys(GRADED_HANDLER_CODE_REASON),
 );
 
-const mayAnswerServerError = (expression: ts.Expression): boolean => {
+const mayAnswerServerError = (expression: Node): boolean => {
   let found = false;
-  const visit = (node: ts.Node): void => {
-    if (ts.isNumericLiteral(node) && SERVER_ERROR_STATUSES.has(node.text)) {
-      found = true;
-      return;
+  walk(expression, (node) => {
+    if (found) {
+      return "skip-children";
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(expression);
+    if (
+      node.type === "Literal" &&
+      typeof node.value === "number" &&
+      SERVER_ERROR_STATUSES.has(String(node.value))
+    ) {
+      found = true;
+    }
+    return undefined;
+  });
   return found;
 };
 
-const unwrapParentheses = (expression: ts.Expression): ts.Expression =>
-  ts.isParenthesizedExpression(expression)
+const unwrapParentheses = (expression: Node): Node =>
+  expression.type === "ParenthesizedExpression"
     ? unwrapParentheses(expression.expression)
     : expression;
 
@@ -2386,42 +2477,36 @@ const countUnclassifiedHandlerFailures: FileCounter = (content, { file }) => {
   if (!content.includes(HANDLER_ERROR_CLASS)) {
     return 0;
   }
-  const sourceFile = parseSource({ fileName: file, text: content });
-  const classified = new Set<ts.Node>();
+  const { program } = parseSyntax({ fileName: file, text: content });
+  const classified = new Set<Node>();
   let count = 0;
-  const visit = (node: ts.Node): void => {
+  walk(program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === CLASSIFY_FAILURE
+      node.type === "CallExpression" &&
+      isIdentifierNamed(node.callee, CLASSIFY_FAILURE)
     ) {
       const branded = node.arguments.at(0);
       if (branded !== undefined) {
         classified.add(unwrapParentheses(branded));
       }
     }
-    const spec = ts.isNewExpression(node) ? node.arguments?.at(0) : undefined;
+    const spec =
+      node.type === "NewExpression" ? node.arguments.at(0) : undefined;
     if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === HANDLER_ERROR_CLASS &&
-      spec !== undefined &&
-      ts.isObjectLiteralExpression(spec) &&
+      node.type === "NewExpression" &&
+      isIdentifierNamed(node.callee, HANDLER_ERROR_CLASS) &&
+      spec?.type === "ObjectExpression" &&
       !classified.has(node)
     ) {
-      const status = specProperty(spec, "status")?.initializer;
-      const code = specProperty(spec, "code")?.initializer;
-      const graded =
-        code !== undefined &&
-        ts.isStringLiteralLike(code) &&
-        GRADED_HANDLER_CODES.has(code.text);
+      const status = specProperty(spec, "status")?.value;
+      const code = specProperty(spec, "code")?.value;
+      const codeText = code === undefined ? null : stringLiteralLikeValue(code);
+      const graded = codeText !== null && GRADED_HANDLER_CODES.has(codeText);
       if (status !== undefined && mayAnswerServerError(status) && !graded) {
         count += 1;
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return count;
 };
 
@@ -7427,7 +7512,7 @@ const runSelfTest = (): number => {
     // hand-rolled gate the metric is holding at zero.
     const redistributableCases = [
       {
-        code: "if (!isRedistributable(row.descriptor)) return null;",
+        code: "() => {\n  if (!isRedistributable(row.descriptor)) return null;\n};",
         expected: 1,
       },
       {
@@ -7438,7 +7523,10 @@ const runSelfTest = (): number => {
         code: 'const message = "call isRedistributable(x) instead";',
         expected: 0,
       },
-      { code: "if (source.isRedistributable(row)) return row;", expected: 0 },
+      {
+        code: "() => {\n  if (source.isRedistributable(row)) return row;\n};",
+        expected: 0,
+      },
       {
         code: "isRedistributable(a); isRedistributable(b);",
         expected: 2,
