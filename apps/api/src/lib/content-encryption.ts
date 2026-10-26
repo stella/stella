@@ -16,7 +16,7 @@ import { hkdf } from "node:crypto";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
+import { getContentEncryptionMasterKey as getMasterKey } from "@/api/env-content-encryption";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
@@ -24,14 +24,6 @@ const AES_KEY_BYTES = 32;
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
 const ALGORITHM = "AES-GCM";
-
-const getMasterKey = (): Buffer | null => {
-  const hex = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
-  if (!hex) {
-    return null;
-  }
-  return Buffer.from(hex, "hex");
-};
 
 /**
  * Derive a 256-bit key using HKDF-SHA256. The scope is the
@@ -114,16 +106,14 @@ const decryptScopedContent = async (
   ciphertext: Buffer,
   iv: Buffer,
 ): Promise<string> => {
+  const masterKey = getMasterKey();
   // All-zero IV means the content was stored as plaintext
-  // (no-op envelope). Return UTF-8 regardless of whether
-  // the master key is currently set, so plaintext rows
-  // survive key rotation without silent data loss.
+  // (no-op envelope). Local development can read it without a key,
+  // while strict deployments still require their configured key.
   const isPlaintext = iv.every((b) => b === 0);
   if (isPlaintext) {
     return ciphertext.toString("utf-8");
   }
-
-  const masterKey = getMasterKey();
 
   if (!masterKey) {
     throw new ConfigurationError({

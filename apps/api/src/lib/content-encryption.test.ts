@@ -15,10 +15,8 @@ import {
  * Behavioural coverage for the real AES-256-GCM envelope. `CONTENT_ENCRYPTION_KEY`
  * is set by `tests/setup-env.ts`, so every case below runs the production cipher.
  *
- * Not covered: the `ConfigurationError` raised when the master key is absent at
- * decrypt time. The key is read through the validated `envDocumentProcessingWorker`
- * object, which is built once from `process.env` at import; exercising the missing-key
- * branch would mean mutating that module's export for the whole shared test process.
+ * The separate environment subprocess test covers strict missing-key refusal
+ * without changing this process's shared encryption settings.
  */
 
 const organizationId = toSafeId<"organization">(

@@ -323,6 +323,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   saved_searches: { type: "exported" },
   saved_time_narratives: { type: "exported" },
   search_history_entries: { type: "exported" },
+  search_history_jurisdiction_clears: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   search_history_owners: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,

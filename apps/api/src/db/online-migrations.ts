@@ -92,6 +92,11 @@ import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
+import {
+  SEARCH_HISTORY_JURISDICTION_CONSTRAINT_VALIDATION,
+  SEARCH_HISTORY_JURISDICTION_CONSTRAINTS,
+} from "./search-history-jurisdiction-constraint-validation";
+import { SEARCH_HISTORY_JURISDICTION_REPAIR } from "./search-history-jurisdiction-repair";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -199,6 +204,24 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   CASE_LAW_PARSE_PENDING_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "search_history_entries_legacy_documents_pending_idx" ON public."search_history_entries" (id) WHERE jurisdiction IS NULL AND kind <> \'search\'',
+    definitionBody:
+      "ON public.search_history_entries USING btree (id) WHERE ((jurisdiction IS NULL) AND (kind <> 'search'::text))",
+    isUnique: false,
+    name: "search_history_entries_legacy_documents_pending_idx",
+    tableName: "search_history_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "search_history_entries_owner_jurisdiction_recent_idx" ON public."search_history_entries" (organization_id, user_id, jurisdiction, last_used_at, id)',
+    definitionBody:
+      "ON public.search_history_entries USING btree (organization_id, user_id, jurisdiction, last_used_at, id)",
+    isUnique: false,
+    name: "search_history_entries_owner_jurisdiction_recent_idx",
+    tableName: "search_history_entries",
+  },
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "agent_skills_bound_workspace_idx" ON public."agent_skills" (bound_workspace_id) WHERE bound_workspace_id IS NOT NULL',
@@ -830,6 +853,8 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+  SEARCH_HISTORY_JURISDICTION_REPAIR,
+  SEARCH_HISTORY_JURISDICTION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
   ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
@@ -858,6 +883,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...DECISION_DATE_CEILING_CONSTRAINTS,
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
+    ...SEARCH_HISTORY_JURISDICTION_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
     ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,

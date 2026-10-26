@@ -89,6 +89,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "saved_searches",
   "saved_time_narratives",
   "search_history_entries",
+  "search_history_jurisdiction_clears",
   "search_history_owners",
   "search_history_tombstones",
   "session",

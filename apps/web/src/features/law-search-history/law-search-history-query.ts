@@ -10,8 +10,12 @@ import { useMatch } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { PublicCountry } from "@stll/api-contract/public-country-capability";
 import type { SafeId } from "@stll/api-contract/safe-id";
-import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
+import {
+  searchHistoryEntryMatch,
+  searchHistoryPathJurisdiction,
+} from "@stll/api-contract/search-history-identity";
 import { buildSearchHistoryTitle } from "@stll/api-contract/search-history-title";
 import type { SearchHistoryTitleParts } from "@stll/api-contract/search-history-title";
 import { Temporal } from "@stll/time";
@@ -40,7 +44,11 @@ import {
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type HistoryInput = Parameters<(typeof api)["search-history"]["post"]>[0];
-type SearchRecordInput = Extract<HistoryInput, { kind: "search" }>;
+/** A search is recorded in the country the page lists history for. */
+type SearchRecordInput = Omit<
+  Extract<HistoryInput, { kind: "search" }>,
+  "jurisdiction"
+>;
 type OpenedDocumentKind = Exclude<HistoryInput["kind"], "search">;
 /** A decision or statute opened; the page that renders it supplies its path. */
 type OpenedDocumentInput = {
@@ -90,11 +98,13 @@ export const lawHistoryKeys = {
   lists: (scope: LawHistoryScope) => [...lawHistoryKeys.owner(scope), "list"],
   list: ({
     scope,
+    jurisdiction,
     filter,
   }: {
     scope: LawHistoryScope;
+    jurisdiction: PublicCountry | null;
     filter: LawRecentFilter;
-  }) => [...lawHistoryKeys.lists(scope), filter],
+  }) => [...lawHistoryKeys.lists(scope), jurisdiction, filter],
 };
 
 /** The owner-scoped TanStack query shares this import across mounted readers. */
@@ -188,7 +198,7 @@ type HistoryWrite = { scope: LawHistoryOwner } & (
         id: SafeId<"searchHistoryEntry">;
       };
     }
-  | { type: "clear" }
+  | { type: "clear"; jurisdiction: PublicCountry }
 );
 
 type CoordinateHistoryWriteOptions = {
@@ -219,11 +229,18 @@ const coordinateHistoryWrite = async ({
     write.type === "clear"
       ? null
       : `${write.entry.kind}:${searchHistoryEntryMatch(write.entry)}`;
+  // A clear erases one country's history, and the searches that never said
+  // where they ran, as the server does.
+  const clearedHere = (entry: (typeof snapshots)[number]["entries"][number]) =>
+    write.type !== "clear" ||
+    entry.kind === "search" ||
+    searchHistoryPathJurisdiction(entry.path) === write.jurisdiction;
   const capturedMatches = new Set(
     write.type === "record"
       ? []
       : snapshots.flatMap(({ entries }) =>
           entries
+            .filter(clearedHere)
             .map(localIdentity)
             .filter((key) => target === null || key === target),
         ),
@@ -283,7 +300,15 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
       );
       return;
     case "clear":
-      unwrapApiResponse(await api["search-history"].delete({}, request));
+      unwrapApiResponse(
+        await api["search-history"].delete(
+          {},
+          {
+            ...request,
+            query: { ...request.query, jurisdiction: write.jurisdiction },
+          },
+        ),
+      );
       return;
     default:
       write satisfies never;
@@ -291,7 +316,11 @@ const sendHistoryWrite = async (write: HistoryWrite) => {
   }
 };
 
-const useLawHistoryState = (filter: LawRecentFilter) => {
+/** `jurisdiction` lists one country's history; `null` lists every country's. */
+const useLawHistoryState = (
+  filter: LawRecentFilter,
+  jurisdiction: PublicCountry | null,
+) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const sessionView = useQueryView(useQuery(sessionOptions));
@@ -308,7 +337,11 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
   const importView = useQueryView(importQuery);
   useQueryViewError(importView, "useLawHistory:query-2");
   const query = useQuery({
-    queryKey: lawHistoryKeys.list({ scope: scope ?? keyScope, filter }),
+    queryKey: lawHistoryKeys.list({
+      scope: scope ?? keyScope,
+      jurisdiction,
+      filter,
+    }),
     enabled,
     retry: false,
     queryFn: async ({ signal }) => {
@@ -322,10 +355,11 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
       const readPage = async () =>
         unwrapApiResponse(
           await api["search-history"].get({
-            query:
-              filter === "all"
-                ? { limit: LAW_HISTORY_DISPLAY_LIMIT }
-                : { limit: LAW_HISTORY_DISPLAY_LIMIT, kind: filter },
+            query: {
+              limit: LAW_HISTORY_DISPLAY_LIMIT,
+              ...(filter === "all" ? {} : { kind: filter }),
+              ...(jurisdiction === null ? {} : { jurisdiction }),
+            },
             fetch: { signal },
           }),
         );
@@ -396,7 +430,16 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
     }
     switch (entry.kind) {
       case "search":
-        mutation.mutate({ type: "record", scope, entry });
+        mutation.mutate({
+          type: "record",
+          scope,
+          entry: {
+            ...entry,
+            jurisdiction:
+              jurisdiction ??
+              panic("A search is recorded only where one country is listed"),
+          },
+        });
         return;
       case "decision":
       case "statute":
@@ -421,7 +464,16 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
   );
   const clearEntries = useLatestCallback(
     (capturedScope: LawHistoryOwner, options: { onSuccess: () => void }) => {
-      mutation.mutate({ type: "clear", scope: capturedScope }, options);
+      mutation.mutate(
+        {
+          type: "clear",
+          scope: capturedScope,
+          jurisdiction:
+            jurisdiction ??
+            panic("History is cleared only where one country is listed"),
+        },
+        options,
+      );
     },
   );
   const list = (() => {
@@ -457,8 +509,11 @@ const useLawHistoryState = (filter: LawRecentFilter) => {
 };
 
 /** Opened documents record through `useRecordOpenedLawDocument` only. */
-export const useLawHistory = (filter: LawRecentFilter = "all") => {
-  const { record, ...history } = useLawHistoryState(filter);
+export const useLawHistory = (
+  jurisdiction: PublicCountry,
+  filter: LawRecentFilter = "all",
+) => {
+  const { record, ...history } = useLawHistoryState(filter, jurisdiction);
   const searchRecord: { mutate: (entry: SearchRecordInput) => void } = record;
   return { ...history, record: searchRecord };
 };
@@ -470,7 +525,7 @@ export const useLawHistory = (filter: LawRecentFilter = "all") => {
  * would file the document under the page being navigated to.
  */
 export const useRecordOpenedLawDocument = (entry: OpenedDocumentInput) => {
-  const { enabled, record } = useLawHistoryState("all");
+  const { enabled, record } = useLawHistoryState("all", null);
   const renderedPath = useMatch({
     strict: false,
     select: (match) => match.pathname,

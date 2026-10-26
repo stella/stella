@@ -235,7 +235,9 @@ const reporterEnv = Object.fromEntries(
 );
 
 test("real Bun test batches produce distinct JUnit artifacts and retain reporter output", async () => {
-  const fixture = createFixture();
+  // Real Bun startup competes with other CI batches; watchdog fixtures below
+  // retain the short 2s budget while this child gets time to load its runner.
+  const fixture = createFixture({ childTimeoutMs: 5000, deadlineMs: 15_000 });
   const junitPaths: string[] = [];
   try {
     for (const label of ["first", "second"]) {
@@ -270,7 +272,10 @@ import { expect, test } from "bun:test";
         identity: { kind: "batch", label, files: [testFile], lane: 0 },
         mode: "buffered",
       });
-      expect(result.exitCode).toBe(0);
+      expect(
+        result.exitCode,
+        `${result.output}\n${fixture.diagnostics.join("")}`,
+      ).toBe(0);
       expect(result.output).toContain("normal fixture stdout");
       expect(result.output).toContain(testName);
       expect(result.output).toContain("(pass)");

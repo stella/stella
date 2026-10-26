@@ -42,6 +42,8 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:corpus-index-job-detail-backfill",
   "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts":
     "system:legislation-expression-id-backfill",
+  "apps/api/src/db/search-history-jurisdiction-repair.ts":
+    "system:search-history-jurisdiction-repair",
   "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts":
     "system:audit-retention",
   "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts":

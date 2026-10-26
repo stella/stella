@@ -4220,9 +4220,11 @@ describe("personal search history capabilities", () => {
           }
           if (table === searchHistoryTombstones) {
             return {
-              values: (row: typeof searchHistoryTombstones.$inferInsert) => ({
+              values: (
+                rows: readonly (typeof searchHistoryTombstones.$inferInsert)[],
+              ) => ({
                 onConflictDoUpdate: async () => {
-                  tombstoneRows.push(row);
+                  tombstoneRows.push(...rows);
                 },
               }),
             };

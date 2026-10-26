@@ -4647,6 +4647,9 @@ const config = defineConfig({
               // Side-effect-free schema modules are the API's environment
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
+              // Content encryption validates only its key, so online repair
+              // does not pull in unrelated worker S3 and Redis settings.
+              "apps/api/src/env-content-encryption.ts",
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",

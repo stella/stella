@@ -700,6 +700,42 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261026102000_search_history_jurisdiction",
+    form: "add-column",
+    reason:
+      "The three nullable, default-free history and owner columns are catalog additions without rewriting existing history rows; acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  },
+  {
+    migration: "20261026102000_search_history_jurisdiction",
+    form: "add-constraint",
+    reason:
+      "The jurisdiction CHECK is NOT VALID, so adding it enforces new writes without scanning old history; the registered online phase validates old rows after release of the schema lock.",
+  },
+  {
+    migration: "20261026102000_search_history_jurisdiction",
+    form: "create-table-references",
+    reason:
+      "The new empty jurisdiction-clear table adds foreign keys to existing organization, user, and owner rows without scanning a populated child table; referenced-table lock acquisition is bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261026102000_search_history_jurisdiction",
+    form: "row-level-security",
+    reason:
+      "ENABLE and FORCE RLS affect only the newly created empty jurisdiction-clear table and are catalog changes under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026102000_search_history_jurisdiction",
+    form: "create-policy",
+    reason:
+      "The tenant and owner policies are installed only on the new empty jurisdiction-clear table; each catalog statement has 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026102000_search_history_jurisdiction",
+    form: "create-trigger",
+    reason:
+      "Installing the two stale-import fence triggers on existing history entries is catalog-only without a row scan; the writer-blocking lock has 1s acquisition and 5s statement bounds.",
+  },
+  {
     migration: "20261025130000_reader_answer_continuation_spans",
     form: "add-column",
     reason:

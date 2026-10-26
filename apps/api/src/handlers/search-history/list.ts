@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
@@ -20,6 +20,7 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { brandPersistedSearchHistoryEntryId } from "@/api/lib/safe-id-boundaries";
 
 import {
+  searchHistoryJurisdictionSchema,
   searchHistoryKindSchema,
   toSearchHistoryEntryResponse,
 } from "./entries";
@@ -27,7 +28,7 @@ import {
 const config = {
   contract: "patch",
   description:
-    "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Pass `kind` to list one kind, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
+    "List your own search history in the active organization, most recently used first: law searches you ran and the decisions and statutes you opened. Each entry is private to you; nobody else in the organization can read it. Each entry names its `jurisdiction`, the country it belongs to; it is null on entries recorded before history was kept per country. Pass `jurisdiction` to list one country's history (entries without one are included), `kind` to list one kind, and `cursor` from `nextCursor` for older entries. Delete an entry with `search-history.delete`, or all of it with `search-history.clear`; pass the returned `scope.organizationId` as `expectedOrganizationId` and `scope.userId` as `expectedUserId` on either mutation.",
   permissions: { searchHistory: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
@@ -38,6 +39,7 @@ const config = {
     readClass: "tenant",
   },
   query: v.object({
+    jurisdiction: v.optional(searchHistoryJurisdictionSchema),
     kind: v.optional(searchHistoryKindSchema),
     cursor: v.optional(paginationCursorSchema()),
     limit: v.optional(
@@ -63,6 +65,7 @@ const UNSELECTED_HISTORY_COLUMNS = [
   "organizationId",
   "userId",
   "lookupKey",
+  "jurisdictionRepairFailedAt",
 ] as const satisfies readonly (keyof typeof searchHistoryEntries.$inferSelect)[];
 
 const searchHistoryCursor = createTimestampIdCursorCodec({
@@ -81,6 +84,15 @@ const listSearchHistory = createSafeRootHandler(
       eq(searchHistoryEntries.organizationId, organizationId),
       eq(searchHistoryEntries.userId, user.id),
     ];
+    if (query.jurisdiction !== undefined) {
+      const inCountry = or(
+        eq(searchHistoryEntries.jurisdiction, query.jurisdiction),
+        isNull(searchHistoryEntries.jurisdiction),
+      );
+      if (inCountry) {
+        conditions.push(inCountry);
+      }
+    }
     if (query.kind !== undefined) {
       conditions.push(eq(searchHistoryEntries.kind, query.kind));
     }
@@ -112,6 +124,7 @@ const listSearchHistory = createSafeRootHandler(
             id: searchHistoryEntries.id,
             kind: searchHistoryEntries.kind,
             courtId: searchHistoryEntries.courtId,
+            jurisdiction: searchHistoryEntries.jurisdiction,
             ciphertext: searchHistoryEntries.ciphertext,
             iv: searchHistoryEntries.iv,
             firstUsedAt: searchHistoryEntries.firstUsedAt,

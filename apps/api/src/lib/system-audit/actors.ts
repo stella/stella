@@ -60,6 +60,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:file-comparison-sweep": ["sweptUploads"],
   "system:corpus-index-job-detail-backfill": ["movedJobs"],
   "system:legislation-expression-id-backfill": ["claimedDocuments"],
+  "system:search-history-jurisdiction-repair": ["classified", "unclassifiable"],
   "system:audit-retention": ["deletedRuns"],
   "system:case-law-background-replay": [
     "attempted",

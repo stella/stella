@@ -12,6 +12,7 @@ import {
   prepareSearchHistoryRows,
   toSearchHistoryEntryResponse,
 } from "./entries";
+import type { SearchHistoryUse } from "./entries";
 
 const words = fc.array(
   fc.constantFrom("náhrada", "škody", "café", "řízení", "smlouva", "89/2012"),
@@ -31,16 +32,19 @@ describe("search history normalization", () => {
     const first = canonicalSearchHistoryEntry({
       kind: "search",
       query: accented,
+      jurisdiction: "CZE",
     });
     const second = canonicalSearchHistoryEntry({
       kind: "search",
       query: decomposed,
+      jurisdiction: "CZE",
     });
 
     expect(first?.match).toBe(second?.match);
     expect(first?.entry).toEqual({
       kind: "search",
       query: "Řízení O NÁHRADĚ ŠKODY",
+      jurisdiction: "CZE",
     });
   });
 
@@ -51,6 +55,7 @@ describe("search history normalization", () => {
         const canonical = canonicalSearchHistoryEntry({
           kind: "search",
           query,
+          jurisdiction: "CZE",
         });
         if (canonical === null) {
           expect(query.trim()).toBe("");
@@ -75,11 +80,17 @@ describe("search history normalization", () => {
           )}\n`;
           expect(variant).not.toBe(normal);
           expect(
-            canonicalSearchHistoryEntry({ kind: "search", query: variant })
-              ?.match,
+            canonicalSearchHistoryEntry({
+              kind: "search",
+              query: variant,
+              jurisdiction: "CZE",
+            })?.match,
           ).toBe(
-            canonicalSearchHistoryEntry({ kind: "search", query: normal })
-              ?.match,
+            canonicalSearchHistoryEntry({
+              kind: "search",
+              query: normal,
+              jurisdiction: "CZE",
+            })?.match,
           );
         },
       ),
@@ -203,16 +214,20 @@ describe("search history normalization", () => {
         }),
         async (tokens, times) => {
           const base = tokens.join(" ");
-          const uses = times.map((time, index) => ({
-            entry: {
-              kind: "search" as const,
-              query:
-                index % 2 === 0
-                  ? base.toUpperCase()
-                  : normalizeUnicode(base, "NFD"),
-            },
-            usedAt: new Date(Date.UTC(2020, 0, 1) + time),
-          }));
+          const uses = times.map(
+            (time, index) =>
+              ({
+                entry: {
+                  kind: "search" as const,
+                  query:
+                    index % 2 === 0
+                      ? base.toUpperCase()
+                      : normalizeUnicode(base, "NFD"),
+                  jurisdiction: "CZE",
+                },
+                usedAt: new Date(Date.UTC(2020, 0, 1) + time),
+              }) satisfies SearchHistoryUse,
+          );
           const rows = await prepareSearchHistoryRows(owner, uses);
           expect(rows).toHaveLength(1);
           const row = rows.at(0);

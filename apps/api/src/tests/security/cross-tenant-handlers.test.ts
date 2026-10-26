@@ -49,6 +49,7 @@ import {
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
+  searchHistoryOwners,
   sellerProfiles,
   signals,
   templateLookupFormats,
@@ -2892,7 +2893,11 @@ testState.beforeAll(async () => {
     { organizationId: ids.orgB, userId: ids.userA1 },
     [
       {
-        entry: { kind: "search", query: "Firm B research" },
+        entry: {
+          kind: "search",
+          query: "Firm B research",
+          jurisdiction: "CZE",
+        },
         usedAt: new Date(),
       },
     ],
@@ -2900,6 +2905,10 @@ testState.beforeAll(async () => {
   if (searchHistoryRowB === undefined) {
     throw new Error("Search history fixture was not prepared");
   }
+  await testDb
+    .insert(searchHistoryOwners)
+    .values({ organizationId: ids.orgB, userId: ids.userA1 })
+    .onConflictDoNothing();
   await testDb
     .insert(searchHistoryEntries)
     .values({ ...searchHistoryRowB, id: searchHistoryEntryB });

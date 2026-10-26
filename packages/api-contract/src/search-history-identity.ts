@@ -2,6 +2,11 @@ import { panic } from "better-result";
 
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { parseCaseLawDecisionPath } from "./case-law-decision-route";
+import { isPublicCountry } from "./public-country-capability";
+import type { PublicCountry } from "./public-country-capability";
+import { parseStatutePath } from "./statute-route";
+
 type SearchHistoryIdentity =
   | { kind: "search"; query: string }
   | { kind: "decision" | "statute"; documentId: string };
@@ -21,4 +26,14 @@ export const searchHistoryEntryMatch = (entry: SearchHistoryIdentity) => {
       entry satisfies never;
       return panic("Unhandled search history identity");
   }
+};
+
+/** The country whose law page a recorded decision or statute path opens. */
+export const searchHistoryPathJurisdiction = (
+  path: string,
+): PublicCountry | null => {
+  const country = (
+    parseCaseLawDecisionPath(path) ?? parseStatutePath(path)
+  )?.country.toUpperCase();
+  return country !== undefined && isPublicCountry(country) ? country : null;
 };

@@ -1,24 +1,20 @@
 import { Result } from "better-result";
-import { and, desc, eq, lte, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import {
-  searchHistoryEntries,
-  searchHistoryOwners,
-  searchHistoryTombstones,
-} from "@/api/db/schema";
+import { searchHistoryEntries, searchHistoryOwners } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { searchHistoryAuditEvent } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 import {
   holdSearchHistoryOwnerAccess,
   lockSearchHistoryOwner,
+  recordSearchHistoryTombstones,
 } from "./entries";
 import {
   assertSearchHistoryScope,
@@ -89,78 +85,7 @@ const deleteSearchHistoryEntry = createSafeRootHandler(
         if (!row) {
           return null;
         }
-        await tx
-          .insert(searchHistoryTombstones)
-          .values({
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-            kind: row.kind,
-            lookupKey: row.lookupKey,
-            deletedAt: sql`date_trunc('milliseconds', clock_timestamp())`,
-          })
-          .onConflictDoUpdate({
-            target: [
-              searchHistoryTombstones.organizationId,
-              searchHistoryTombstones.userId,
-              searchHistoryTombstones.kind,
-              searchHistoryTombstones.lookupKey,
-            ],
-            set: {
-              deletedAt: sql`GREATEST(${searchHistoryTombstones.deletedAt}, excluded.deleted_at)`,
-            },
-          });
-        const retained = await tx
-          .select({ deletedAt: searchHistoryTombstones.deletedAt })
-          .from(searchHistoryTombstones)
-          .where(
-            and(
-              eq(
-                searchHistoryTombstones.organizationId,
-                session.activeOrganizationId,
-              ),
-              eq(searchHistoryTombstones.userId, user.id),
-            ),
-          )
-          .orderBy(
-            desc(searchHistoryTombstones.deletedAt),
-            desc(searchHistoryTombstones.kind),
-            desc(searchHistoryTombstones.lookupKey),
-          )
-          .offset(LIMITS.searchHistoryTombstonesMax)
-          .limit(1);
-        const oldestExcess = retained.at(0);
-        if (oldestExcess !== undefined) {
-          // Retiring an identity must retain its ordering barrier for other devices.
-          await tx
-            .update(searchHistoryOwners)
-            .set({
-              tombstoneCutoffAt: sql`GREATEST(${searchHistoryOwners.tombstoneCutoffAt}, ${oldestExcess.deletedAt}::timestamptz)`,
-            })
-            .where(
-              and(
-                eq(
-                  searchHistoryOwners.organizationId,
-                  session.activeOrganizationId,
-                ),
-                eq(searchHistoryOwners.userId, user.id),
-              ),
-            );
-          await tx
-            .delete(searchHistoryTombstones)
-            .where(
-              and(
-                eq(
-                  searchHistoryTombstones.organizationId,
-                  session.activeOrganizationId,
-                ),
-                eq(searchHistoryTombstones.userId, user.id),
-                lte(
-                  searchHistoryTombstones.deletedAt,
-                  sql`${oldestExcess.deletedAt}::timestamptz`,
-                ),
-              ),
-            );
-        }
+        await recordSearchHistoryTombstones(tx, owner, [row]);
         await recordAuditEvent(
           tx,
           searchHistoryAuditEvent({

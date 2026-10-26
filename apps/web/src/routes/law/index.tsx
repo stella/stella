@@ -257,7 +257,6 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 );
 
 function LawHome() {
-  const { record: historyRecord } = useLawHistory();
   const t = useTranslations();
   const format = useFormatter();
   const uiLocale = useLocale();
@@ -286,6 +285,7 @@ function LawHome() {
   const scope =
     publicCaseLawCountryFromParam(country) ??
     panic("The law route rendered without a launch-ready country.");
+  const { record: historyRecord } = useLawHistory(scope);
   const countryParam = toCaseLawCountryParam(scope);
   // The results page reads this jurisdiction's stored excerpt length too, so
   // the lookup below and the list it falls back to share one cached result set.
@@ -522,7 +522,7 @@ function LawHome() {
           <LandingEmpty>{t("lawHome.noSignals")}</LandingEmpty>
         )}
       </LandingSection>
-      <LawRecent onSearch={rerunSearch} />
+      <LawRecent jurisdiction={scope} onSearch={rerunSearch} />
     </LandingLayout>
   );
 }

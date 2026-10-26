@@ -58,6 +58,7 @@ import {
   pendingUploads,
   rateEntries,
   searchHistoryEntries,
+  searchHistoryJurisdictionClears,
   searchHistoryOwners,
   searchHistoryTombstones,
   sharepointConnections,
@@ -1343,6 +1344,7 @@ export const deletePersonalBillingRates = async (
 
 const DELETE_SEARCH_HISTORY_TABLES = [
   searchHistoryEntries,
+  searchHistoryJurisdictionClears,
   searchHistoryOwners,
   searchHistoryTombstones,
 ] as const satisfies readonly PgTable[];
