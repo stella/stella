@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
 import {
+  type BindingProperty,
   type ExportAllDeclaration,
   type ExportNamedDeclaration,
   type Expression,
@@ -124,7 +125,7 @@ const isPropertyAssignment = (
   node.kind === "init" &&
   !node.method &&
   !node.shorthand;
-const keyName = (property: ObjectProperty) =>
+const keyName = (property: ObjectProperty | BindingProperty) =>
   property.computed ? undefined : propertyName(property.key);
 const isFunctionValue = (node: Expression | undefined) =>
   node?.type === "ArrowFunctionExpression" ||
