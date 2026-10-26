@@ -260,8 +260,7 @@
     "openai": "6.49.0",
     "pdfjs-dist": "^6.4.299",
     "saxes": "catalog:",
-    "tsrs": "catalog:",
-    "typescript6": "catalog:"
+    "tsrs": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {
