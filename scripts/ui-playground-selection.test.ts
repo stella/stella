@@ -137,7 +137,7 @@ test("selects loader, transitive, spec, and shared harness changes", () => {
   expect(
     selectGeometrySpecs(["apps/web/e2e/ui-playground/README.md"], ROOT),
   ).toEqual(inventory.specs);
-}, 30_000);
+});
 
 test("an incomplete visual mapping fails closed", () => {
   const root = mkdtempSync(path.join(tmpdir(), "ui-playground-selection-"));
@@ -173,7 +173,7 @@ test("an incomplete visual mapping fails closed", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-}, 15_000);
+});
 
 test("replay summarizes how many change sets select specs", () => {
   const harness = "apps/web/src/routes/dev/-visual-metadata.ts";
