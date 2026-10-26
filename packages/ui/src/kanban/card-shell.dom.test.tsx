@@ -2,20 +2,23 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 
 import { KanbanCardShell } from "./card-shell";
+import type { KanbanCardShellProps } from "./card-shell";
 
 GlobalRegistrator.register({ url: "https://example.test" });
-const { cleanup, fireEvent, render, screen } =
-  await import("@testing-library/react");
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
 
 afterEach(() => cleanup());
 afterAll(async () => GlobalRegistrator.unregister());
 
-const renderCard = (
-  props: Partial<Parameters<typeof KanbanCardShell>[0]> = {},
-) => {
+type SelectionClick = NonNullable<KanbanCardShellProps["onSelectionClick"]>;
+
+const renderCard = (props: Partial<KanbanCardShellProps> = {}) => {
   const onOpen = mock(() => undefined);
-  const onSelectionClick = mock(() => undefined);
-  render(
+  const selectionClick: SelectionClick = () => undefined;
+  const onSelectionClick = mock(selectionClick);
+  // Queries bound to this render's document: another file in the run may have
+  // loaded Testing Library against an earlier DOM, which `screen` keeps.
+  const view = render(
     <KanbanCardShell
       onOpen={onOpen}
       onSelectionClick={onSelectionClick}
@@ -25,7 +28,7 @@ const renderCard = (
     </KanbanCardShell>,
   );
   return {
-    card: screen.getByRole("button"),
+    card: view.getByRole("button"),
     onOpen,
     onSelectionClick,
   };
@@ -68,8 +71,8 @@ describe("KanbanCardShell selection clicks", () => {
     const { card } = renderCard({ active: true, selected: true });
     const wrapper = card.parentElement;
 
-    expect(wrapper?.dataset.kanbanCard).toBe("");
-    expect(wrapper?.dataset.selected).toBe("true");
+    expect(wrapper?.dataset["kanbanCard"]).toBe("");
+    expect(wrapper?.dataset["selected"]).toBe("true");
     expect(card.className).toContain("ring-primary ");
     expect(card.className).not.toContain("ring-primary/30");
   });
