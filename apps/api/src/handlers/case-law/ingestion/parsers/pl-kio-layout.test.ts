@@ -45,15 +45,57 @@ describe("reading the converter's layout", () => {
       const html = await gzFixtureText(`pl-kio-content-${id}.html.gz`);
       const before = withoutSpacing(visibleText(cheerio.load(html)));
       const $ = cheerio.load(html);
-      readPlKioLayout($);
+      const { pageNumbers } = readPlKioLayout($);
       const after = withoutSpacing(visibleText($));
-      const pages = (html.match(/<hr\b/giu)?.length ?? 0) + 1;
 
-      const omitted = omittedFrom(before, after);
-      expect(omitted, id).toBeDefined();
-      expect(omitted ?? "", id).toMatch(/^\d*$/u);
-      expect((omitted ?? "").length, id).toBeLessThanOrEqual(pages * 3);
+      // Only the page numbers the reader names went, in order, and they
+      // run as a page sequence does.
+      expect(omittedFrom(before, after), id).toBe(pageNumbers.join(""));
+      const values = pageNumbers.map(Number);
+      expect(
+        values.every(
+          (value, index) => index === 0 || value > (values[index - 1] ?? 0),
+        ),
+        id,
+      ).toBe(true);
     }
+  });
+
+  test("a number a citation word claims is no page number", () => {
+    // The page breaks between an article and its number; a paged document
+    // keeps it because nothing else in the sequence vouches for it.
+    const article = cheerio.load(
+      "<html><body><p>Zgodnie z art.<br>353</p><hr><p>Kodeksu cywilnego.</p></body></html>",
+    );
+    expect(readPlKioLayout(article).pageNumbers).toEqual([]);
+    expect(visibleText(article)).toContain("353");
+
+    // An annex number ending a document the converter did not page.
+    const annex = cheerio.load(
+      "<html><body><p>Załącznik nr</p><p>12</p></body></html>",
+    );
+    expect(readPlKioLayout(annex).pageNumbers).toEqual([]);
+    expect(visibleText(annex)).toContain("12");
+  });
+
+  test("a paragraph runs on across a page only when page furniture alone lies between", () => {
+    const $ = cheerio.load(
+      [
+        "<html><body>",
+        // The second line is the page's widest, so it reads as full and its
+        // sentence as running on past the page break.
+        "<p>Wartości<br>zamówienia, zgodnie z kosztorysem przedstawionym przez zamawiającego, wynoszą</p>",
+        "<table><tr><td>100 zł</td></tr></table>",
+        "<hr>",
+        "<p>oraz obejmują podatek.</p>",
+        "</body></html>",
+      ].join(""),
+    );
+    readPlKioLayout($);
+
+    const text = withoutSpacing(visibleText($));
+    expect(text.indexOf("100zł")).toBeLessThan(text.indexOf("orazobejmują"));
+    expect($("p").length).toBe(2);
   });
 
   test("a long printed ruling reads without its page numbers and with its indices raised", async () => {

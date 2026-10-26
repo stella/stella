@@ -17,9 +17,12 @@
  * - a `<br>` the converter set after a printed line joins the two lines when
  *   the first one ran out of room, opens a paragraph where the next line is
  *   indented or opens a list point, and otherwise stays a line break;
- * - a bare number closing a page is its page number, and goes;
- * - a paragraph cut by a page break, or by a block the converter closed with
- *   no space after it, runs on into the next block the same way a line does;
+ * - a bare number closing a page goes as its page number where the footer's
+ *   other evidence stands beside it (see `pageNumbersOf`), and stays
+ *   otherwise;
+ * - a paragraph cut by a page break with nothing but page furniture between
+ *   its parts, or by a block the converter closed with no space after it,
+ *   runs on into the next block the same way a line does;
  * - a number of up to three digits in type well below the body's, set
  *   against the word before it, is that word's superscript;
  * - Word's numbering, which the converter prints as a box flush against the
@@ -222,31 +225,68 @@ const textOf = (node: AnyNode): string => {
   return isTag(node) ? node.children.map(textOf).join("") : "";
 };
 
-/** The font size most of the document's text is set in. */
-const bodySizeOf = (root: Element): number | undefined => {
-  const lengths = new Map<number, number>();
-  const walk = (node: AnyNode, size: number | undefined): void => {
+const FONT_FAMILY = /(?:^|;)\s*font-family\s*:\s*(?<families>[^;]+)/iu;
+const FONT_SHORTHAND_FAMILY =
+  /(?:^|;)\s*font\s*:\s*(?:[^;]*?\s)?-?\d+(?:\.\d+)?pt(?:\/\S+)?\s+(?<families>[^;]+)/iu;
+
+/** The first family a style names, as a key: `'Arial','sans-serif'` → `arial`. */
+const familyOf = (style: string): string | undefined =>
+  (
+    FONT_FAMILY.exec(style)?.groups?.["families"] ??
+    FONT_SHORTHAND_FAMILY.exec(style)?.groups?.["families"]
+  )
+    ?.split(",")
+    .at(0)
+    ?.replace(/["']/gu, "")
+    .trim()
+    .toLowerCase();
+
+/** The size and family a stretch of text is set in, where its markup says. */
+type Typeface = {
+  readonly size: number | undefined;
+  readonly family: string | undefined;
+};
+
+/** Each typeface `root` sets text in, with how many characters it sets. */
+const typefacesOf = (
+  root: Element,
+): Map<string, { type: Typeface; length: number }> => {
+  const counted = new Map<string, { type: Typeface; length: number }>();
+  const walk = (node: AnyNode, type: Typeface): void => {
     if (isText(node)) {
       const length = node.data.trim().length;
-      if (size !== undefined && length > 0) {
-        lengths.set(size, (lengths.get(size) ?? 0) + length);
+      if (length > 0) {
+        const key = `${type.size ?? ""}|${type.family ?? ""}`;
+        counted.set(key, {
+          type,
+          length: (counted.get(key)?.length ?? 0) + length,
+        });
       }
       return;
     }
     if (!isTag(node)) {
       return;
     }
-    const own = pointsOf(styleOf(node), FONT_SIZE) ?? size;
+    const style = styleOf(node);
+    const own = {
+      size: pointsOf(style, FONT_SIZE) ?? type.size,
+      family: familyOf(style) ?? type.family,
+    };
     for (const child of node.children) {
       walk(child, own);
     }
   };
-  walk(root, undefined);
-  let body: number | undefined;
+  walk(root, { size: undefined, family: undefined });
+  return counted;
+};
+
+/** The typeface most of the text under `root` is set in. */
+const bodyTypefaceOf = (root: Element): Typeface => {
+  let body: Typeface = { size: undefined, family: undefined };
   let most = 0;
-  for (const [size, length] of lengths) {
+  for (const { type, length } of typefacesOf(root).values()) {
     if (length > most) {
-      body = size;
+      body = type;
       most = length;
     }
   }
@@ -440,14 +480,58 @@ const nextContent = (node: AnyNode): AnyNode | null => {
 
 type Junction = { readonly before: Block; readonly after: Block };
 
-const junctionsOf = (blocks: readonly Block[]): Junction[] => {
+/** Markup that holds text, or stands for content the reader would see. */
+const holdsContent = (node: AnyNode): boolean => {
+  if (isText(node)) {
+    return node.data.trim().length > 0;
+  }
+  if (!isTag(node)) {
+    return false;
+  }
+  return (
+    node.name === "table" ||
+    node.name === "img" ||
+    node.children.some(holdsContent)
+  );
+};
+
+/**
+ * Whether only page furniture stands between two blocks: the page
+ * separator, a page number the reader takes out, and empty markup. A table,
+ * a figure or any text between them is content the run-on would jump.
+ */
+const onlyFurnitureBetween = (
+  before: Block,
+  after: Block,
+  pageNumbers: ReadonlySet<Element>,
+): boolean => {
+  for (let node = before.element.next; node !== null; node = node.next) {
+    if (node === after.element) {
+      return true;
+    }
+    const furniture =
+      (isTag(node) && (node.name === "hr" || pageNumbers.has(node))) ||
+      !holdsContent(node);
+    if (!furniture) {
+      return false;
+    }
+  }
+  return false;
+};
+
+const junctionsOf = (
+  blocks: readonly Block[],
+  pageNumbers: ReadonlySet<Element>,
+): Junction[] => {
   const spacingStated = statesBlockSpacing(blocks);
   return blocks.slice(1).flatMap((after, index) => {
     const before = blocks[index];
     if (before === undefined) {
       return [];
     }
-    const pageBreak = after.page !== before.page;
+    const pageBreak =
+      after.page !== before.page &&
+      onlyFurnitureBetween(before, after, pageNumbers);
     const cutByConverter =
       spacingStated &&
       nextContent(before.element) === after.element &&
@@ -539,7 +623,7 @@ const splitAt = ($: CheerioAPI, br: Element): void => {
 /** The block's lines, its page number left out. */
 const bodyLinesOf = (
   block: Block,
-  numbered: ReadonlySet<Block>,
+  numbered: ReadonlyMap<Block, string>,
 ): readonly BlockLine[] =>
   numbered.has(block)
     ? block.lines.slice(0, lastLineIndex(block.lines))
@@ -563,21 +647,135 @@ const removePageNumber = ($: CheerioAPI, block: Block): void => {
   }
 };
 
-/** Each page's last block with text, where its last line is a bare number. */
-const numberedPageEndsOf = (blocks: readonly Block[]): Set<Block> => {
-  const numbered = new Set<Block>();
-  const seen = new Set<number>();
-  for (const block of blocks.toReversed()) {
-    const last = block.lines[lastLineIndex(block.lines)];
-    if (last === undefined || seen.has(block.page)) {
-      continue;
-    }
-    seen.add(block.page);
-    if (PAGE_NUMBER.test(last.text)) {
-      numbered.add(block);
-    }
+/** A line ending on a word a number belongs to: `art.`, `nr`, `z dnia`. */
+const citesANumber = (text: string): boolean =>
+  takesANumber(text) || /(?:^|\s)dnia$/iu.test(text.trimEnd());
+
+/** Whether the page separator, or the document's end, follows `block`. */
+const closesPage = (block: Block): boolean => {
+  const next = nextContent(block.element);
+  if (next !== null) {
+    return isTag(next) && next.name === "hr";
   }
-  return numbered;
+  const parent = block.element.parent;
+  return parent !== null && isTag(parent) && parent.name === "body";
+};
+
+type PageNumberCandidate = {
+  readonly block: Block;
+  readonly value: number;
+  /** Whether the number is the block's only line. */
+  readonly alone: boolean;
+  /** Whether the line above ends on a word the number could belong to. */
+  readonly afterCitation: boolean;
+};
+
+/**
+ * A page's last line that may be its number: a bare number on a line of its
+ * own, right before the page separator or the document's end.
+ */
+const pageNumberCandidateOf = (
+  block: Block,
+  lineBefore: BlockLine | undefined,
+): PageNumberCandidate | undefined => {
+  const index = lastLineIndex(block.lines);
+  const line = block.lines[index];
+  if (
+    line === undefined ||
+    !PAGE_NUMBER.test(line.text) ||
+    !closesPage(block)
+  ) {
+    return undefined;
+  }
+  const inBlock = block.lines
+    .slice(0, index)
+    .findLast(({ text }) => text.length > 0);
+  const above = inBlock ?? lineBefore;
+  const ownLine =
+    inBlock === undefined ||
+    block.lines[index - 1]?.end?.parent === block.element;
+  if (!ownLine) {
+    return undefined;
+  }
+  return {
+    block,
+    value: Number(line.text),
+    alone: inBlock === undefined,
+    afterCitation: above !== undefined && citesANumber(above.text),
+  };
+};
+
+/**
+ * How many pages that close on a number agree with this one: each sits as
+ * many pages away as the two numbers differ.
+ */
+const agreeingPagesOf = (
+  candidate: PageNumberCandidate,
+  candidates: readonly PageNumberCandidate[],
+): number =>
+  candidates.filter(
+    (other) =>
+      other !== candidate &&
+      other.value - candidate.value === other.block.page - candidate.block.page,
+  ).length;
+
+const differsFrom = (type: Typeface, body: Typeface): boolean =>
+  type.size !== body.size || type.family !== body.family;
+
+type PageNumbersOptions = {
+  blocks: readonly Block[];
+  bodyTypeface: Typeface;
+};
+
+/**
+ * The blocks closing on a page number, which the reader takes out, with
+ * the number each closes on.
+ *
+ * A number closing a page is a page number only with the footer's other
+ * evidence beside it. On a paged document it continues the page sequence:
+ * another page closes on a number as many pages away as the two numbers
+ * differ, and two such pages where the line above ends on a word the number
+ * could belong to (`art.`, `nr`, `z dnia`). A document the converter did not
+ * page keeps only its last page's footer: a number alone at the very end,
+ * after no such word, set in a typeface the body is not. Without that
+ * evidence the number stays.
+ */
+const pageNumbersOf = ({
+  blocks,
+  bodyTypeface,
+}: PageNumbersOptions): Map<Block, string> => {
+  const candidates: PageNumberCandidate[] = [];
+  let lineBefore: BlockLine | undefined;
+  for (const block of blocks) {
+    const candidate = pageNumberCandidateOf(block, lineBefore);
+    if (candidate !== undefined) {
+      candidates.push(candidate);
+    }
+    lineBefore =
+      block.lines.findLast(({ text }) => text.length > 0) ?? lineBefore;
+  }
+  const paged = blocks.some(({ page }) => page > 0);
+  const accepted = candidates.filter((candidate) => {
+    if (paged) {
+      // After `art.` or `poz.` one agreeing page could be chance; two
+      // pin the number to the sequence.
+      return (
+        agreeingPagesOf(candidate, candidates) >=
+        (candidate.afterCitation ? 2 : 1)
+      );
+    }
+    const [footer] = typefacesOf(candidate.block.element).values();
+    return (
+      candidate.alone &&
+      !candidate.afterCitation &&
+      candidate.block === blocks.at(-1) &&
+      footer !== undefined &&
+      differsFrom(footer.type, bodyTypeface)
+    );
+  });
+  return new Map(
+    accepted.map(({ block, value }) => [block, String(value)] as const),
+  );
 };
 
 type ReadBlocksOptions = {
@@ -615,7 +813,7 @@ type Reflow = {
 /** How each printed line, and each block a page or the converter cut, goes on. */
 const reflowOf = (
   blocks: readonly Block[],
-  numbered: ReadonlySet<Block>,
+  numbered: ReadonlyMap<Block, string>,
 ): Reflow => {
   const textLinesOf = (block: Block): BlockLine[] =>
     bodyLinesOf(block, numbered).filter(({ text }) => text.length > 0);
@@ -630,15 +828,22 @@ const reflowOf = (
     RIGHT_EDGE_QUANTILE,
   );
   const withText = blocks.filter((block) => textLinesOf(block).length > 0);
-  const merges = junctionsOf(withText).flatMap(({ before, after }) => {
-    const above = textLinesOf(before).at(-1);
-    const below = textLinesOf(after).at(0);
-    return above !== undefined &&
-      below !== undefined &&
-      joinOf(above, below, rightEdge) === LINE_JOINS.JOIN
-      ? [{ before, after, joiner: joinerOf(above, below) }]
-      : [];
-  });
+  const removedBlocks = new Set(
+    [...numbered.keys()]
+      .filter((block) => textLinesOf(block).length === 0)
+      .map(({ element }) => element),
+  );
+  const merges = junctionsOf(withText, removedBlocks).flatMap(
+    ({ before, after }) => {
+      const above = textLinesOf(before).at(-1);
+      const below = textLinesOf(after).at(0);
+      return above !== undefined &&
+        below !== undefined &&
+        joinOf(above, below, rightEdge) === LINE_JOINS.JOIN
+        ? [{ before, after, joiner: joinerOf(above, below) }]
+        : [];
+    },
+  );
   const breaks = blocks.flatMap((block) => {
     const lines = bodyLinesOf(block, numbered);
     return lines.slice(1).flatMap((line, index) => {
@@ -659,26 +864,33 @@ const reflowOf = (
   return { merges, breaks };
 };
 
+/** What the layout reader took out of the document. */
+export type PlKioLayoutReading = {
+  /** The page numbers removed, in document order. */
+  readonly pageNumbers: readonly string[];
+};
+
 /**
  * Read the converter's page furniture, printed lines and small type back into
  * the markup the decision states. Mutates `$`.
  */
-export const readPlKioLayout = ($: CheerioAPI): void => {
+export const readPlKioLayout = ($: CheerioAPI): PlKioLayoutReading => {
   const body = $("body").get(0);
   if (body === undefined) {
-    return;
+    return { pageNumbers: [] };
   }
-  const bodySize = bodySizeOf(body) ?? DEFAULT_BODY_SIZE;
+  const bodyTypeface = bodyTypefaceOf(body);
+  const bodySize = bodyTypeface.size ?? DEFAULT_BODY_SIZE;
   const authorBreaks = authorBreaksOf($);
   removeBidiMarks(body);
   liftSmallTypeIndices($, bodySize);
   spaceWordNumbering($);
 
   const blocks = readBlocks($, { bodySize, authorBreaks });
-  const numbered = numberedPageEndsOf(blocks);
+  const numbered = pageNumbersOf({ blocks, bodyTypeface });
   const { merges, breaks } = reflowOf(blocks, numbered);
 
-  for (const block of numbered) {
+  for (const block of numbered.keys()) {
     removePageNumber($, block);
   }
   // From the last: a block merged into the one before it brings along the
@@ -697,4 +909,5 @@ export const readPlKioLayout = ($: CheerioAPI): void => {
       splitAt($, br);
     }
   }
+  return { pageNumbers: [...numbered.values()] };
 };
