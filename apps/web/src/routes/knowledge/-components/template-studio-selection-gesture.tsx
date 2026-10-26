@@ -403,7 +403,15 @@ export const useTemplateStudioSelectionGesture = ({
       return;
     }
     if (error) {
-      getAnalytics().captureError(toAPIError(error));
+      getAnalytics().captureError(toAPIError(error), {
+        fingerprintKey:
+          "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        scope: {
+          type: "handler",
+          handlerId:
+            "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       return;
     }
@@ -440,7 +448,13 @@ export const useTemplateStudioSelectionGesture = ({
       if (sequence !== enrichSeqRef.current) {
         return;
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useTemplateStudioSelectionGesture:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useTemplateStudioSelectionGesture:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       notifyUserError(error, t("errors.actionFailed"));
     });

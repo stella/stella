@@ -757,7 +757,10 @@ export const handleCompareDocumentsTool = async (
     }),
   );
   if (Result.isError(compared)) {
-    return internalFailureResult(compared.error);
+    return internalFailureResult(
+      compared.error,
+      "mcp.handleCompareDocumentsTool.compared_error",
+    );
   }
 
   return toolDataResult(toToolOutput(compared.value));

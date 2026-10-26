@@ -543,6 +543,7 @@ test("reused depth prevents every nonstructural CI job and expensive planner ste
         "github.event.action": "reopened",
         "github.event.pull_request.draft": false,
         "inputs.heavy_only": false,
+        "inputs.pr_depth_only": false,
         "needs.ci-plan.result": "success",
         "needs.ci-plan.outputs.run_required": "false",
         "steps.completed-depth.outputs.run_required": "false",

@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@stll/api-contract": "workspace:*",
+    "@stll/errors": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {
