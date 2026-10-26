@@ -303,14 +303,194 @@ const readTsconfig = async (
 const edgeKey = (edge: AppBoundaryEdge) =>
   `${edge.kind}\u0000${edge.source}\u0000${edge.specifier}\u0000${edge.target}`;
 
-// A script without a type, or with a module or JavaScript type, runs as code;
-// any other type (JSON, JSON-LD, templates) is data and is not parsed.
-const isCodeScriptType = (attributes: string): boolean => {
-  const type = /\btype\s*=\s*["']?([^"'\s>]+)/iu.exec(attributes)?.at(1);
-  return (
-    type === undefined ||
-    /^(?:module|(?:text|application)\/(?:java|type)script)$/iu.test(type)
-  );
+type TagAttribute = {
+  /** Lowercased attribute name; empty for an Astro `{...spread}`. */
+  readonly name: string;
+  /** Literal value, or null for a bare attribute or an Astro expression. */
+  readonly value: string | null;
+  readonly expression: boolean;
+};
+
+type OpeningTag = {
+  readonly attributes: readonly TagAttribute[];
+  /** Offset just past the tag's `>`. */
+  readonly end: number;
+  readonly selfClosing: boolean;
+};
+
+const isSpace = (character: string | undefined) =>
+  character !== undefined && /\s/u.test(character);
+
+/** Offset just past the `}` closing the Astro expression opened at `start`. */
+const expressionEnd = (text: string, start: number): number | null => {
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"' || character === "'" || character === "`") {
+      for (index += 1; index < text.length; index += 1) {
+        if (text[index] === "\\") {
+          index += 1;
+        } else if (text[index] === character) {
+          break;
+        }
+      }
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index + 1;
+      }
+    }
+  }
+  return null;
+};
+
+/**
+ * Reads the attributes of an opening tag from `start`, just after its name.
+ * Quoted values and Astro `{…}` expressions are read whole, so a `>` or an
+ * attribute-like text inside a value neither ends the tag nor names an
+ * attribute.
+ */
+const readOpeningTag = (text: string, start: number): OpeningTag | null => {
+  const attributes: TagAttribute[] = [];
+  let index = start;
+  while (index < text.length) {
+    while (isSpace(text[index])) {
+      index += 1;
+    }
+    if (text[index] === ">") {
+      return { attributes, end: index + 1, selfClosing: false };
+    }
+    if (text.startsWith("/>", index)) {
+      return { attributes, end: index + 2, selfClosing: true };
+    }
+    if (text[index] === "{") {
+      const end = expressionEnd(text, index);
+      if (end === null) {
+        return null;
+      }
+      attributes.push({ expression: true, name: "", value: null });
+      index = end;
+      continue;
+    }
+    let nameEnd = index;
+    while (nameEnd < text.length && !/[\s"'<>/=]/u.test(text[nameEnd] ?? "")) {
+      nameEnd += 1;
+    }
+    if (nameEnd === index) {
+      // A stray `/`, quote or `=` carries no attribute.
+      index += 1;
+      continue;
+    }
+    const name = text.slice(index, nameEnd).toLowerCase();
+    index = nameEnd;
+    while (isSpace(text[index])) {
+      index += 1;
+    }
+    if (text[index] !== "=") {
+      attributes.push({ expression: false, name, value: null });
+      continue;
+    }
+    index += 1;
+    while (isSpace(text[index])) {
+      index += 1;
+    }
+    const quote = text[index];
+    if (quote === '"' || quote === "'" || quote === "`") {
+      const close = text.indexOf(quote, index + 1);
+      if (close === -1) {
+        return null;
+      }
+      attributes.push({
+        expression: false,
+        name,
+        value: text.slice(index + 1, close),
+      });
+      index = close + 1;
+    } else if (quote === "{") {
+      const end = expressionEnd(text, index);
+      if (end === null) {
+        return null;
+      }
+      attributes.push({ expression: true, name, value: null });
+      index = end;
+    } else {
+      let valueEnd = index;
+      while (valueEnd < text.length && !/[\s>]/u.test(text[valueEnd] ?? "")) {
+        valueEnd += 1;
+      }
+      attributes.push({
+        expression: false,
+        name,
+        value: text.slice(index, valueEnd),
+      });
+      index = valueEnd;
+    }
+  }
+  return null;
+};
+
+// The HTML JavaScript MIME type essences, `module`, an empty type and the
+// TypeScript types Astro compiles.
+const CODE_SCRIPT_TYPE =
+  /^(?:|module|(?:text|application)\/(?:x-)?(?:java|ecma|type)script|text\/javascript1\.[0-5]|text\/(?:jscript|livescript))$/u;
+
+/**
+ * A script without a `type` attribute, or with a module or JavaScript type,
+ * runs as code; any other literal type (JSON, JSON-LD, import maps,
+ * templates) is data and is not parsed. A type computed by an expression
+ * cannot be read statically, so that script is parsed as code.
+ */
+const isCodeScript = (attributes: readonly TagAttribute[]): boolean => {
+  const type = attributes.find(({ name }) => name === "type");
+  if (type === undefined || type.expression || type.value === null) {
+    return true;
+  }
+  const essence = type.value.split(";").at(0)?.trim().toLowerCase() ?? "";
+  return CODE_SCRIPT_TYPE.test(essence);
+};
+
+/**
+ * The frontmatter and every code script body of an Astro component. Script
+ * tags are read from the template after the frontmatter only.
+ */
+const astroSourceTexts = (sourcePath: string, text: string): string[] => {
+  const frontmatter = /^﻿?---\r?\n([\s\S]*?)\r?\n---/u.exec(text);
+  const sourceTexts = [frontmatter?.at(1) ?? ""];
+  const scriptOpen = /<script(?=[\s/>])/giu;
+  scriptOpen.lastIndex = frontmatter === null ? 0 : frontmatter[0].length;
+  for (
+    let open = scriptOpen.exec(text);
+    open !== null;
+    open = scriptOpen.exec(text)
+  ) {
+    const tag = readOpeningTag(text, scriptOpen.lastIndex);
+    if (tag === null) {
+      panic(
+        `${sourcePath}: the <script> tag at offset ${open.index} never closes; fix the markup before rerunning`,
+      );
+    }
+    let bodyEnd = tag.end;
+    if (!tag.selfClosing) {
+      const scriptClose = /<\/script\s*>/giu;
+      scriptClose.lastIndex = tag.end;
+      const close = scriptClose.exec(text);
+      if (close === null) {
+        panic(
+          `${sourcePath}: the <script> element at offset ${open.index} has no </script>; fix the markup before rerunning`,
+        );
+      }
+      bodyEnd = close.index;
+      scriptOpen.lastIndex = scriptClose.lastIndex;
+    } else {
+      scriptOpen.lastIndex = tag.end;
+    }
+    if (isCodeScript(tag.attributes)) {
+      sourceTexts.push(text.slice(tag.end, bodyEnd));
+    }
+  }
+  return sourceTexts;
 };
 
 // A dynamic import or require of a string or a template without
@@ -330,13 +510,7 @@ const staticSpecifier = (argument: Node | undefined): string | null => {
 
 const sourceImportSpecifiers = (sourcePath: string, text: string): string[] => {
   const sourceTexts = sourcePath.endsWith(".astro")
-    ? [
-        /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---/u.exec(text)?.at(1) ?? "",
-        ...text
-          .matchAll(/<script\b([^>]*?)(?:\/>|>([\s\S]*?)<\/script\s*>)/giu)
-          .filter((match) => isCodeScriptType(match.at(1) ?? ""))
-          .map((match) => match.at(2) ?? ""),
-      ]
+    ? astroSourceTexts(sourcePath, text)
     : [text];
   const importedFiles: string[] = [];
   for (const sourceText of sourceTexts) {

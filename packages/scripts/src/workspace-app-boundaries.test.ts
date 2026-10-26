@@ -157,6 +157,47 @@ describe("workspace app boundaries", () => {
     ).toBe(false);
   });
 
+  test("reads an Astro script's exact type attribute to decide whether it is code", async () => {
+    const rootDir = createRoot();
+    writePackage(rootDir, "apps/api", { name: "@stll/api" });
+    writePackage(rootDir, "apps/landing", { name: "@stll/landing" });
+    writeFileSync(
+      path.join(rootDir, "apps/landing/src/scripts.astro"),
+      [
+        "---",
+        'const marker = "<script type=\\"application/json\\">";',
+        "---",
+        '<script data-type="application/json" type="module">import type { A } from "@stll/api/data-type-first";</script>',
+        '<script type=module>import type { B } from "@stll/api/unquoted";</script>',
+        "<script type='module'>import type { C } from \"@stll/api/single-quoted\";</script>",
+        '<script type="text/javascript">import type { D } from "@stll/api/double-quoted";</script>',
+        '<script>import type { E } from "@stll/api/untyped";</script>',
+        '<script data-note=\'type="application/json"\'>import type { F } from "@stll/api/type-in-value";</script>',
+        '<script is:inline define:vars={{ ready: 1 > 0, label: "}" }} type="module">import type { G } from "@stll/api/expression-value";</script>',
+        '<SCRIPT TYPE="Module">import type { H } from "@stll/api/upper-case";</SCRIPT>',
+        '<script data-type="module" type="application/ld+json">{"@context": "https://schema.org"}</script>',
+        '<script type="application/json" data-note="type=module">{"data": true}</script>',
+        '<script type=importmap>{"imports": {}}</script>',
+        '<script type="application/json" set:html={JSON.stringify({ a: 1 })} />',
+      ].join("\n"),
+    );
+
+    const specifiers = (await collectAppBoundaryEdges(rootDir))
+      .filter(({ source }) => source === "apps/landing/src/scripts.astro")
+      .map(({ specifier }) => specifier)
+      .toSorted();
+    expect(specifiers).toEqual([
+      "@stll/api/data-type-first",
+      "@stll/api/double-quoted",
+      "@stll/api/expression-value",
+      "@stll/api/single-quoted",
+      "@stll/api/type-in-value",
+      "@stll/api/unquoted",
+      "@stll/api/untyped",
+      "@stll/api/upper-case",
+    ]);
+  });
+
   test("resolves inherited TypeScript paths and includes", async () => {
     const rootDir = createRoot();
     writePackage(rootDir, "apps/api", { name: "@stll/api" });
