@@ -150,11 +150,11 @@ describe("marks in the original text", () => {
  * and separators.
  */
 const FOLD_CHARACTERS = [
-  ..."aAzZ09 .,-§\t",
-  ..."ßẞæÆœŒﬁﬂĳłŁøØđıİ",
-  ..."ÁáčČěŘšůžÉéèçÖöÜü",
-  ..."ΣσςΛΌ",
-  ..."ﺍﺣﻤﺪأإآةهـًٌَ٢",
+  ...Array.from("aAzZ09 .,-§\t"),
+  ...Array.from("ßẞæÆœŒﬁﬂĳłŁøØđıİ"),
+  ...Array.from("ÁáčČěŘšůžÉéèçÖöÜü"),
+  ...Array.from("ΣσςΛΌ"),
+  ...Array.from("ﺍﺣﻤﺪأإآةهـًٌَ٢"),
   "½",
   "⑴",
   "é",
