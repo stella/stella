@@ -17,10 +17,10 @@ export const parseRenderCensus = (value: unknown): RenderCensus =>
 
 export const readRenderCensus = async (page: Page): Promise<RenderCensus> =>
   parseRenderCensus(
-    await page.evaluate(
-      (key) => Reflect.get(globalThis, key) ?? null,
-      RENDER_CENSUS_GLOBAL,
-    ),
+    await page.evaluate((key) => {
+      const value: unknown = Reflect.get(globalThis, key);
+      return value ?? null;
+    }, RENDER_CENSUS_GLOBAL),
   );
 
 export type RouteRenderMetrics = {

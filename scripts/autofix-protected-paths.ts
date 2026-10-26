@@ -15,6 +15,7 @@ export const AUTOFIX_PROTECTED_PATHS = [
   "apps/api/src/tests/read-scaling/mcp-scaling-ledger.json",
   "apps/api/src/tests/security/matter-access-census.allowlist.json",
   "apps/api/src/tests/security/public-response-text-bounds.allowlist.json",
+  "apps/web/e2e/route-scale-ledger.json",
   "scripts/chat-fixture-guard-ledger.json",
   "scripts/calendar-day-ledger.json",
   "scripts/contract-domain-ledger.json",

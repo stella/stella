@@ -50,6 +50,22 @@ const userId = toSafeId<"user">(input.userId);
 const workspaceId = toSafeId<"workspace">(input.workspaceId);
 const db = openMaintenanceDb({ readOnly: false });
 
+type SeedPhase =
+  | "owner"
+  | "enrollment"
+  | "scoped-lookup"
+  | "entities"
+  | "versions"
+  | "lists-and-contacts"
+  | "chat"
+  | "cardinalities";
+
+const recordSeedPhase = (phase: SeedPhase): void => {
+  process.stderr.write(
+    `${JSON.stringify({ event: "route_smoke_scale.seed_phase", phase })}\n`,
+  );
+};
+
 type SmokeCardinalityScope = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -100,6 +116,7 @@ const readSmokeCardinalities = async (
 await runScriptWithErrorOutput(async () => {
   // This maintenance command can augment only an isolated fixture created by
   // the HTTP helpers, never an operator's existing organization or matter.
+  recordSeedPhase("owner");
   const principal = await withAggregateTransaction(db, async (tx) =>
     (
       await tx
@@ -128,6 +145,7 @@ await runScriptWithErrorOutput(async () => {
   ) {
     panic("Scale fixture requires an isolated route smoke owner and matter");
   }
+  recordSeedPhase("enrollment");
   await withAggregateTransaction(db, async (tx) => {
     await tx.insert(featureEnrolments).values({
       organizationId,
@@ -138,6 +156,7 @@ await runScriptWithErrorOutput(async () => {
 
   const scopedDb = createRootMembershipScopedDb({ organizationId, userId });
   await scopedDb(async (tx) => {
+    recordSeedPhase("scoped-lookup");
     const document = await tx.query.entities.findFirst({
       where: {
         id: { eq: toSafeId<"entity">(input.documentId) },
@@ -155,7 +174,7 @@ await runScriptWithErrorOutput(async () => {
       document === undefined ||
       contact === undefined
     ) {
-      return panic("Scale fixture requires its uploaded document and contact");
+      panic("Scale fixture requires its uploaded document and contact");
     }
     const sourceFields = await tx
       .select()
@@ -181,6 +200,7 @@ await runScriptWithErrorOutput(async () => {
       }).name,
       position: String(index).padStart(4, "0"),
     }));
+    recordSeedPhase("entities");
     await insertEntityBatch({
       tx,
       entityRows: [
@@ -233,6 +253,7 @@ await runScriptWithErrorOutput(async () => {
       createdBy: userId,
       versionNumber: index + 2,
     }));
+    recordSeedPhase("versions");
     await insertEntityVersions({ tx, values: history, stampOrigin: "issued" });
     await tx.insert(fields).values(
       history.flatMap((version) =>
@@ -243,6 +264,7 @@ await runScriptWithErrorOutput(async () => {
         })),
       ),
     );
+    recordSeedPhase("lists-and-contacts");
     const listId = createSafeId<"legalList">();
     await tx.insert(legalLists).values({
       id: listId,
@@ -272,8 +294,10 @@ await runScriptWithErrorOutput(async () => {
       userId,
       workspaceId,
     });
+    recordSeedPhase("chat");
     await tx.insert(chatThreads).values(chat.threads);
     await tx.insert(chatMessages).values(chat.messages);
+    recordSeedPhase("cardinalities");
     const cardinalities = await readSmokeCardinalities(tx, {
       organizationId,
       userId,
