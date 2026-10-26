@@ -86,7 +86,7 @@ const trackContextNetwork = (context: BrowserContext) => {
 
 // Playwright's test workers use Node; the agent driver uses Bun. Keep the
 // bundler in Bun in both cases, with one cached build per caller process.
-const buildProbe = (): Promise<string> =>
+const buildProbe = async (): Promise<string> =>
   new Promise((resolve, reject) => {
     execFile(
       "bun",
