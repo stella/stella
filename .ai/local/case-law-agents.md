@@ -715,7 +715,20 @@ and nowhere else. Writers validate against the strict schema; the
 persisted reader degrades vocabulary it does not declare instead of
 failing the document — a role becomes the declared fallback, an unknown
 inline kind collapses to the text its children carried, an unknown block
-kind is dropped — and reports each one through `StoredAstDegradedError`.
+kind is dropped, a block `id` or `anchorId` an earlier block holds is
+re-keyed — and reports each one through `StoredAstDegradedError`.
+Writers re-key repeated identities by the same rule
+(`withUniqueBlockIdentities`, applied in `sanitizeResult`) before the
+strict schema checks them. A stored value that is not an AST even so is
+read through `readPersistedCorpusAst` (and `readCorpusAst` for an object)
+as a typed `unreadable` answer, never thrown, and reported through
+`reportUnreadableStoredAst`. The decision read serves the decision from
+its fulltext, or as `documentReadFailed`; other readers answer it
+through `persistedAstOrAbsent`, which reads it as absent so the text
+serves instead. A write or index path (the corpus index projection, EU
+completion) uses `persistedAstOrTextFallback`: absent only beside usable
+text, and otherwise the typed refusal fails the write as an unreadable
+payload, so an empty document is never recorded as done.
 
 ## Decision analysis
 
