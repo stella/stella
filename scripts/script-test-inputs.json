@@ -44,10 +44,10 @@
     "scripts/ci-root-check-inputs.test.ts": [".github/**"],
     "scripts/ci-root-checks.test.ts": [".github/**"],
     "scripts/ci-runner-loss.test.ts": [".github/**"],
-    "scripts/ci-scoped-install.test.ts": ["*"],
+    "scripts/ci-scoped-install.test.ts": ["**"],
     "scripts/ci-static-checks.test.ts": [".github/**"],
     "scripts/cla-workflow.test.ts": [".github/**"],
-    "scripts/code-quality-task-budget.test.ts": ["*"],
+    "scripts/code-quality-task-budget.test.ts": ["**"],
     "scripts/decision-reader-surfaces.test.ts": ["**"],
     "scripts/dependency-audit-workflow.test.ts": [".github/**"],
     "scripts/dependency-review-workflow.test.ts": [".github/**"],
@@ -56,7 +56,7 @@
     "scripts/dev-seeded-e2e-guard.test.ts": ["**"],
     "scripts/extension-release-step.test.ts": [".github/**"],
     "scripts/failure-tags.test.ts": ["**"],
-    "scripts/flake-gate-command.test.ts": ["*"],
+    "scripts/flake-gate-command.test.ts": ["**"],
     "scripts/flake-gate.test.ts": ["**"],
     "scripts/generated-conflicts-workflows.test.ts": [".github/**"],
     "scripts/generated-files-guard.test.ts": ["**"],
@@ -78,7 +78,7 @@
       "apps/web/public/**"
     ],
     "scripts/public-law-surface-consumers.test.ts": ["**"],
-    "scripts/publish-package-selection.test.ts": ["packages/*"],
+    "scripts/publish-package-selection.test.ts": ["packages/**"],
     "scripts/release-health-workflow.test.ts": [".github/**"],
     "scripts/root-connection-shapes.test.ts": [
       "apps/**",
@@ -86,7 +86,7 @@
       "scripts/**"
     ],
     "scripts/run-unlisted-script-tests.test.ts": ["**"],
-    "scripts/rust-toolchain-pins.test.ts": ["*"],
+    "scripts/rust-toolchain-pins.test.ts": ["**"],
     "scripts/status-write-shapes.test.ts": [
       "apps/**",
       "packages/**",
@@ -108,8 +108,8 @@
       "scripts/**"
     ],
     "scripts/workflow-api-probes.test.ts": [
-      "*",
-      "apps/api/src/lib/file-scan/yara/*"
+      "**",
+      "apps/api/src/lib/file-scan/yara/**"
     ],
     "scripts/workflow-dispatch-run.test.ts": [".github/**"],
     "scripts/workflow-git-environment.test.ts": [".github/**"],

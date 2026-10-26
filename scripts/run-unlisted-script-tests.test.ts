@@ -361,47 +361,24 @@ describe("directory scan coverage", () => {
     }
   };
 
-  test("a directory scan needs a wildcard that covers files added there", () => {
+  test("a directory scan requires one structural recursive declaration", () => {
     withTrackedFixture(({ root, tracked }) => {
       const scanLog = `${JSON.stringify({ directory: "data" })}\n`;
-      expect(
-        uncoveredScans({
-          scanLog,
-          declared: ["data/a.txt"],
-          tracked,
-          root,
-        }),
-      ).toEqual([{ directory: "data" }]);
-      expect(
-        uncoveredScans({
-          scanLog,
-          declared: ["data/*"],
-          tracked,
-          root,
-        }),
-      ).toEqual([]);
-    });
-  });
-
-  test("a scan pattern cannot narrow directory-level coverage", () => {
-    withTrackedFixture(({ root, tracked }) => {
-      const scanLog = `${JSON.stringify({ directory: "data", pattern: "*.txt" })}\n`;
-      expect(
-        uncoveredScans({
-          scanLog,
-          declared: ["data/*.txt"],
-          tracked,
-          root,
-        }),
-      ).toEqual([{ directory: "data", pattern: "*.txt" }]);
-      expect(
-        uncoveredScans({
-          scanLog,
-          declared: ["data/*"],
-          tracked,
-          root,
-        }),
-      ).toEqual([]);
+      for (const declared of [
+        "data/*",
+        "data/*.txt",
+        "data/**/_*",
+        "data/**/*.json",
+      ]) {
+        expect(
+          uncoveredScans({ scanLog, declared: [declared], tracked, root }),
+        ).toEqual([{ directory: "data" }]);
+      }
+      for (const declared of ["data/**", "**"]) {
+        expect(
+          uncoveredScans({ scanLog, declared: [declared], tracked, root }),
+        ).toEqual([]);
+      }
     });
   });
 
@@ -420,7 +397,7 @@ describe("directory scan coverage", () => {
       expect(
         uncoveredScans({
           scanLog,
-          declared: ["empty/*"],
+          declared: ["empty/**"],
           tracked: new Set(),
           root,
         }),
@@ -428,30 +405,25 @@ describe("directory scan coverage", () => {
     });
   });
 
-  test("recursive scans need a recursive declaration", () => {
+  test("an ancestor recursive declaration covers a nested scan", () => {
     withTrackedFixture(({ root, tracked }) => {
-      const scanLog = `${JSON.stringify({ directory: "data", recursive: true })}\n`;
+      const scanLog = `${JSON.stringify({ directory: "parent/data" })}\n`;
       expect(
-        uncoveredScans({ scanLog, declared: ["data/*"], tracked, root }),
-      ).toEqual([{ directory: "data", recursive: true }]);
-      expect(
-        uncoveredScans({ scanLog, declared: ["data/**"], tracked, root }),
-      ).toEqual([]);
-      expect(
-        uncoveredScans({ scanLog, declared: ["data/**/*"], tracked, root }),
+        uncoveredScans({ scanLog, declared: ["parent/**"], tracked, root }),
       ).toEqual([]);
     });
   });
 
-  test("recognizes a subprocess git ls-files scan as recursive", () => {
+  test("recognizes a subprocess git ls-files scan", () => {
     withTrackedFixture(({ root, tracked }) => {
-      // `git ls-files -- data` also lists data/nested/new.txt once it exists.
-      const trace =
-        '1 execve("/usr/bin/git", ["git", "ls-files", "--", "data"], 0x0) = 0';
+      const trace = [
+        `1 openat(AT_FDCWD<${root}>, ".git", O_RDONLY) = 3`,
+        '1 execve("/usr/bin/git", ["git", "ls-files", "--", "data"], 0x0) = 0',
+      ].join("\n");
       for (const declared of [["data/a.txt"], ["data/*"]]) {
         expect(
           uncoveredScans({ scanLog: "", trace, declared, tracked, root }),
-        ).toEqual([{ directory: path.join(root, "data"), recursive: true }]);
+        ).toEqual([{ directory: path.join(root, "data") }]);
       }
       expect(
         uncoveredScans({
@@ -481,7 +453,7 @@ describe("directory scan coverage", () => {
   test("resolves subprocess scans against the process working directory", () => {
     withTrackedFixture(({ root, tracked }) => {
       const trace = [
-        '1 execve("/bin/sh", ["sh", "-c", "cd sub && ls data"], 0x0) = 0',
+        `1 openat(AT_FDCWD<${root}>, ".", O_RDONLY) = 3`,
         '1 chdir("sub") = 0',
         '1 execve("/usr/bin/ls", ["ls", "data"], 0x0) = 0',
       ].join("\n");
@@ -489,26 +461,27 @@ describe("directory scan coverage", () => {
         uncoveredScans({
           scanLog: "",
           trace,
-          declared: ["sub/*"],
+          declared: ["sub/**"],
           tracked,
           root,
         }),
-      ).toEqual([{ directory: path.join(root, "sub/data") }]);
+      ).toEqual([]);
     });
   });
 
-  test("inherits working directories across traced process creation", () => {
+  test("uses a child's annotation before a parent's resumed clone", () => {
     withTrackedFixture(({ root, tracked }) => {
       const trace = [
-        '1 execve("/bin/sh", ["sh", "-c", "ls data"], 0x0) = 0',
-        "1 clone(child_stack=NULL) = 2",
+        "1 clone(child_stack=NULL <unfinished ...>",
         '2 execve("/usr/bin/ls", ["ls", "data"], 0x0) = 0',
+        `2 openat(AT_FDCWD<${root}>, ".", O_RDONLY) = 3`,
+        "1 <... clone resumed>) = 2",
       ].join("\n");
       expect(
         uncoveredScans({
           scanLog: "",
           trace,
-          declared: ["data/*"],
+          declared: ["data/**"],
           tracked,
           root,
         }),

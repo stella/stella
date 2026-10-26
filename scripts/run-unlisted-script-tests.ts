@@ -344,7 +344,7 @@ export const undeclaredTracedFiles = ({
 }): string[] => {
   const globs = declared.map((pattern) => new Bun.Glob(pattern));
   const opened = new Set<string>();
-  for (const line of trace.split("\n")) {
+  for (const line of joinedTraceRecords(trace)) {
     assertWholeRecord(line);
     const match =
       /(?:open|openat|openat2|execve)\([^"]*"((?:\\.|[^"])*)"/u.exec(line);
@@ -375,7 +375,6 @@ export const undeclaredTracedFiles = ({
 type ScanRecord = {
   readonly directory: string;
   readonly pattern?: string;
-  readonly recursive?: true;
   readonly command?: string;
 };
 
@@ -410,30 +409,18 @@ const scanCovered = ({
   if (repository === undefined) {
     return true;
   }
-  const directoryDepth = repository.relative.split("/").filter(Boolean).length;
-  const directEntry = repository.relative
-    ? `${repository.relative}/__script_scan_entry__`
-    : "__script_scan_entry__";
-  const nestedEntry = `${directEntry}/__script_scan_nested_entry__`;
+  const directorySegments = repository.relative.split("/").filter(Boolean);
   return declared.some((pattern) => {
     const segments = pattern.split("/");
-    const wildcardDepth = segments.findIndex(
-      (segment) => segment === "*" || segment === "**",
-    );
-    if (wildcardDepth === -1 || wildcardDepth > directoryDepth) {
+    if (
+      segments.at(-1) !== "**" ||
+      segments.length > directorySegments.length + 1
+    ) {
       return false;
     }
-    if (wildcardDepth < directoryDepth && segments[wildcardDepth] !== "**") {
-      return false;
-    }
-    if (record.recursive === true && segments[wildcardDepth] !== "**") {
-      return false;
-    }
-    const declaredGlob = new Bun.Glob(pattern);
-    return (
-      declaredGlob.match(directEntry) &&
-      (record.recursive !== true || declaredGlob.match(nestedEntry))
-    );
+    return segments
+      .slice(0, -1)
+      .every((segment, index) => segment === directorySegments[index]);
   });
 };
 
@@ -445,15 +432,9 @@ const updateWorkingDirectory = (
   pid: string,
   workingDirectories: Map<string, string>,
 ): boolean => {
-  const childPid = /\b(?:clone(?:3)?|fork|vfork)\([^)]*\)\s+=\s+(\d+)/u.exec(
-    line,
-  )?.[1];
-  if (childPid !== undefined) {
-    const cwd = workingDirectories.get(pid);
-    if (cwd !== undefined) {
-      workingDirectories.set(childPid, cwd);
-    }
-    return true;
+  const annotatedDirectory = /\bAT_FDCWD<([^>]+)>/u.exec(line)?.[1];
+  if (annotatedDirectory !== undefined) {
+    workingDirectories.set(pid, annotatedDirectory);
   }
   const changedDirectory = /\bchdir\("((?:\\.|[^"\\])*)"\)\s+=\s+0/u.exec(
     line,
@@ -475,18 +456,56 @@ const updateWorkingDirectory = (
   return true;
 };
 
-const commandScans = (trace: string, initialCwd: string): ScanRecord[] => {
-  const scans: ScanRecord[] = [];
-  const workingDirectories = new Map<string, string>();
+const joinedTraceRecords = (trace: string): string[] => {
+  const records: string[] = [];
+  const unfinished = new Map<string, string>();
   for (const line of trace.split("\n")) {
     const pid = tracePid(line);
     if (pid === undefined) {
       continue;
     }
-    if (workingDirectories.size === 0) {
-      workingDirectories.set(pid, initialCwd);
+    if (line.includes("<unfinished ...>")) {
+      unfinished.set(pid, line.replace(/\s*<unfinished \.\.\.>\s*$/u, ""));
+      continue;
     }
-    if (updateWorkingDirectory(line, pid, workingDirectories)) {
+    const resumed = /^\s*\d+\s+<\.\.\.\s+\S+\s+resumed>(.*)$/u.exec(line);
+    if (resumed !== null) {
+      const start = unfinished.get(pid);
+      if (start !== undefined) {
+        records.push(`${start}${resumed[1] ?? ""}`);
+        unfinished.delete(pid);
+      }
+      continue;
+    }
+    records.push(line);
+  }
+  return records;
+};
+
+const commandScans = (trace: string): ScanRecord[] => {
+  const scans: ScanRecord[] = [];
+  const workingDirectories = new Map<string, string>();
+  const pending = new Map<string, ScanRecord[]>();
+  for (const line of joinedTraceRecords(trace)) {
+    const pid = tracePid(line);
+    if (pid === undefined) {
+      continue;
+    }
+    const workingDirectoryChanged = updateWorkingDirectory(
+      line,
+      pid,
+      workingDirectories,
+    );
+    const annotatedCwd = workingDirectories.get(pid);
+    if (annotatedCwd !== undefined) {
+      for (const record of pending.get(pid) ?? []) {
+        scans.push({
+          directory: path.resolve(annotatedCwd, record.directory),
+        });
+      }
+      pending.delete(pid);
+    }
+    if (workingDirectoryChanged) {
       continue;
     }
     assertWholeRecord(line);
@@ -501,23 +520,17 @@ const commandScans = (trace: string, initialCwd: string): ScanRecord[] => {
     const cwd = workingDirectories.get(pid);
     const gitSubcommand = executable === "git" ? args[1] : undefined;
     let operands: string[];
-    let recursive = false;
     if (gitSubcommand === "ls-files") {
       const separator = args.indexOf("--");
       operands = (
         separator === -1 ? args.slice(2) : args.slice(separator + 1)
       ).filter((argument) => !argument.startsWith("-"));
-      // A pathspec matches everything below it, so a git listing of a
-      // directory operand is recursive too.
-      recursive = true;
     } else if (gitSubcommand === "grep") {
       const separator = args.indexOf("--");
       operands = separator === -1 ? [] : args.slice(separator + 1);
-      recursive = true;
     } else if (gitSubcommand === "diff" && args.includes("--name-only")) {
       const separator = args.indexOf("--");
       operands = separator === -1 ? [] : args.slice(separator + 1);
-      recursive = true;
     } else if (executable === "find") {
       const findArguments = args.slice(1);
       const expression = findArguments.findIndex(
@@ -526,24 +539,26 @@ const commandScans = (trace: string, initialCwd: string): ScanRecord[] => {
       );
       operands =
         expression === -1 ? findArguments : findArguments.slice(0, expression);
-      recursive = !args.some(
-        (argument, index) =>
-          argument === "-maxdepth" && args[index + 1] === "1",
-      );
     } else if (executable === "ls") {
       operands = args.slice(1).filter((arg) => !arg.startsWith("-"));
     } else {
       continue;
     }
     for (const directory of operands.length === 0 ? ["."] : operands) {
-      scans.push({
+      const record = {
         directory: cwd === undefined ? directory : path.resolve(cwd, directory),
-        ...(recursive ? { recursive: true } : {}),
         ...(cwd === undefined ? { command: executable } : {}),
-      });
+      };
+      if (cwd === undefined) {
+        const records = pending.get(pid) ?? [];
+        records.push(record);
+        pending.set(pid, records);
+      } else {
+        scans.push(record);
+      }
     }
   }
-  return scans;
+  return [...scans, ...pending.values()].flat();
 };
 
 export const uncoveredScans = ({
@@ -580,16 +595,14 @@ export const uncoveredScans = ({
       return {
         directory: parsed.directory,
         pattern: parsed.pattern,
-        ...("recursive" in parsed ? { recursive: true } : {}),
       };
     }
     return {
       directory: parsed.directory,
-      ...("recursive" in parsed ? { recursive: true } : {}),
     };
   };
   const records = scanLog.split("\n").filter(Boolean).map(parseRecord);
-  const commandRecords = commandScans(trace, root);
+  const commandRecords = commandScans(trace);
   const unresolvedCommand = commandRecords.find(
     (record) => record.command !== undefined,
   )?.command;

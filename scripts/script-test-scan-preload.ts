@@ -6,7 +6,6 @@ const logPath = process.env["SCRIPT_TEST_SCAN_LOG"];
 type ScanRecord = {
   readonly directory: string;
   readonly pattern?: string;
-  readonly recursive?: true;
 };
 
 const writeScan = (record: ScanRecord) => {
@@ -31,16 +30,7 @@ const wrapDirectoryFunction = <Arguments extends unknown[], Result>(
   original: (...args: Arguments) => Result,
 ) =>
   function (this: unknown, ...args: Arguments): Result {
-    const options = args[1];
-    writeScan({
-      directory: resolvedDirectoryName(args[0]),
-      ...(typeof options === "object" &&
-      options !== null &&
-      "recursive" in options &&
-      options.recursive === true
-        ? { recursive: true as const }
-        : {}),
-    });
+    writeScan({ directory: resolvedDirectoryName(args[0]) });
     return original.apply(this, args);
   };
 
@@ -99,9 +89,6 @@ class ScanRecordingGlob extends Bun.Glob {
     writeScan({
       directory: globDirectory(options),
       pattern: this.#pattern,
-      ...(this.#pattern.split("/").includes("**")
-        ? { recursive: true as const }
-        : {}),
     });
     return super.scan(options);
   }
@@ -110,9 +97,6 @@ class ScanRecordingGlob extends Bun.Glob {
     writeScan({
       directory: globDirectory(options),
       pattern: this.#pattern,
-      ...(this.#pattern.split("/").includes("**")
-        ? { recursive: true as const }
-        : {}),
     });
     return super.scanSync(options);
   }
