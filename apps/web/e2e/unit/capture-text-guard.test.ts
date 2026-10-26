@@ -1,6 +1,76 @@
-import { describe, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
-import { findCaptureTextViolations } from "../marketing/capture-text-guard";
+import { unregisterDomEnvironment } from "../../src/test-dom-environment";
+import {
+  collectCaptureText,
+  findCaptureTextViolations,
+} from "../marketing/capture-text-guard";
+
+describe("marketing capture text collection", () => {
+  beforeAll(() => {
+    GlobalRegistrator.register({ url: "https://app.example.test" });
+  });
+  afterAll(async () => {
+    await unregisterDomEnvironment();
+  });
+
+  // happy-dom has no layout, so these pages skip the layout test.
+  const markersOn = (html: string) => {
+    // safe-html: the fixed string literals of the tests below; no external input.
+    document.body.innerHTML = html;
+    return findCaptureTextViolations(
+      collectCaptureText({ checkLayout: false }),
+    ).map(({ element, marker }) => ({ element, marker }));
+  };
+
+  test("reads a decision row's text with its landmark", () => {
+    expect(
+      markersOn('<main><p role="row">DEMO 31 ÚS 903/2026</p></main>'),
+    ).toEqual([
+      { element: 'p[role="row"]', marker: "DEMO" },
+      { element: 'p[role="row"]', marker: "synthetic case number" },
+    ]);
+  });
+
+  test("reads the value a form field shows", () => {
+    expect(
+      markersOn(
+        '<form aria-label="Contact"><input value="example.com"></form>',
+      ),
+    ).toEqual([
+      { element: 'form[aria-label="Contact"]', marker: "example.com" },
+    ]);
+  });
+
+  test("reads the placeholder an empty field shows", () => {
+    expect(
+      markersOn(
+        '<main><input placeholder="Lorem ipsum"><textarea placeholder="TODO"></textarea></main>',
+      ),
+    ).toEqual([
+      { element: "main", marker: "Lorem" },
+      { element: "main", marker: "ipsum" },
+      { element: "main", marker: "TODO" },
+    ]);
+  });
+
+  test("does not read what a field hides", () => {
+    expect(
+      markersOn(
+        '<main><input type="password" value="TEST"><input type="hidden" value="TODO"></main>',
+      ),
+    ).toEqual([]);
+  });
+
+  test("accepts a real search field and real decisions", () => {
+    expect(
+      markersOn(
+        '<main><input placeholder="Case number, ECLI or words, e.g. 22 Cdo 2653/2012"><p>10 As 124/2025</p><p>Nejvyšší správní soud</p></main>',
+      ),
+    ).toEqual([]);
+  });
+});
 
 const scan = (text: string) =>
   findCaptureTextViolations([{ descriptor: "main > article", text }]);

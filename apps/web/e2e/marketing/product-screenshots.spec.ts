@@ -17,7 +17,7 @@ import {
   settleMarketingAgentThread,
 } from "./agent-thread";
 import {
-  type CaptureTextElement,
+  collectCaptureText,
   findCaptureTextViolations,
 } from "./capture-text-guard";
 import { CAPTURE_DPR } from "./captures";
@@ -545,16 +545,20 @@ test("capture landing product screenshots", async ({
         `,
       });
 
-      // Placeholder or fixture text fails the capture before it is shot.
-      const visibleText = await captureVisibleText(page);
-      for (const violation of findCaptureTextViolations(visibleText)) {
-        expect
-          .soft(
-            violation,
-            `${capture.name}: banned marketing text in ${violation.element}: ${JSON.stringify(violation.matchedText)}`,
+      // Placeholder or fixture text fails the capture before it is shot: a
+      // hard stop, so an update run can never write it into a baseline.
+      const violations = findCaptureTextViolations(
+        await page.evaluate(collectCaptureText, { checkLayout: true }),
+      );
+      expect(
+        violations,
+        `${capture.name}: banned marketing text ${violations
+          .map(
+            ({ element, matchedText }) =>
+              `${JSON.stringify(matchedText)} in ${element}`,
           )
-          .toBeUndefined();
-      }
+          .join(", ")}`,
+      ).toEqual([]);
 
       const themeSuffix = theme === "dark" ? "-dark" : "";
       // Soft, so one run reports every drifted capture; a hard assertion
@@ -585,48 +589,6 @@ test("capture landing product screenshots", async ({
     }
   }
 });
-
-/** Each visible element's own text, so a hit names the element it sits in. */
-const captureVisibleText = async (page: Page): Promise<CaptureTextElement[]> =>
-  await page.evaluate(() => {
-    const visible = (element: HTMLElement) => {
-      const style = getComputedStyle(element);
-      const bounds = element.getBoundingClientRect();
-      return (
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        bounds.width > 0 &&
-        bounds.height > 0
-      );
-    };
-    const descriptorFor = (element: HTMLElement) => {
-      const landmark = element.closest<HTMLElement>(
-        "[id], [data-slot], [role], [aria-label], main, article, nav, aside, header, footer",
-      );
-      const described = landmark ?? element;
-      if (described.id) {
-        return `#${CSS.escape(described.id)}`;
-      }
-      for (const attribute of ["data-slot", "role", "aria-label"] as const) {
-        const value = described.getAttribute(attribute);
-        if (value) {
-          return `${described.localName}[${attribute}=${JSON.stringify(value)}]`;
-        }
-      }
-      return described.localName;
-    };
-    return [...document.body.querySelectorAll<HTMLElement>("*")]
-      .filter(visible)
-      .flatMap((element) => {
-        const text = [...element.childNodes]
-          .filter((node) => node.nodeType === Node.TEXT_NODE)
-          .map((node) => node.textContent ?? "")
-          .join(" ")
-          .replaceAll(/\s+/gu, " ")
-          .trim();
-        return text ? [{ descriptor: descriptorFor(element), text }] : [];
-      });
-  });
 
 // Each product capture owns its Inspector state. Full navigation creates a
 // fresh store, while removing the persisted Inspector state prevents an editor
