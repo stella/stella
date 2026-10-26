@@ -19,7 +19,7 @@ await mock.module("@tauri-apps/api/core", () => ({
   },
 }));
 
-const { act, cleanup, render, screen } = await import("@testing-library/react");
+const { act, cleanup, render } = await import("@testing-library/react");
 const { flushSync } = await import("react-dom");
 const { useBillingDraftSettings } =
   await import("../src/activity/ActivityBillingDrafts");
@@ -55,13 +55,13 @@ test("a settings validation continuation cannot restore a disabled account's res
     flushSync(() => view.rerender(<Settings enabled={false} />));
     flushSync(() => view.rerender(<Settings enabled />));
   });
-  expect(screen.getByRole("status").textContent).not.toContain(
+  expect(view.getByRole("status").textContent).not.toContain(
     "stale preference",
   );
-  expect(screen.getByRole("status").textContent).toContain('"loading"');
+  expect(view.getByRole("status").textContent).toContain('"loading"');
   const fresh = takeRequest();
   await act(async () => fresh.resolve(settingsResponse("fresh preference")));
-  expect(screen.getByRole("status").textContent).toBe(
+  expect(view.getByRole("status").textContent).toBe(
     JSON.stringify({
       type: "ready",
       consent: "granted",
@@ -76,7 +76,7 @@ test("settings schema rejects invalid responses and keeps disabled organizations
   await act(async () =>
     invalid.resolve({ ...settingsResponse(null), consent: "unknown" }),
   );
-  expect(screen.getByRole("status").textContent).toBe('{"type":"unavailable"}');
+  expect(view.getByRole("status").textContent).toBe('{"type":"unavailable"}');
   view.rerender(<Settings enabled={false} />);
   view.rerender(<Settings enabled />);
   const disabled = takeRequest();
@@ -86,5 +86,5 @@ test("settings schema rejects invalid responses and keeps disabled organizations
       organizationMode: "disabled",
     }),
   );
-  expect(screen.getByRole("status").textContent).toBe('{"type":"unavailable"}');
+  expect(view.getByRole("status").textContent).toBe('{"type":"unavailable"}');
 });
