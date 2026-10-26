@@ -64,6 +64,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/retry.sh
             scripts/check-release-candidate.sh
             scripts/verify-release-candidate-tree.mjs
           sparse-checkout-cone-mode: false
@@ -72,6 +73,8 @@ jobs:
         run: |
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
+          cp "$GITHUB_WORKSPACE/.gh-retry/scripts/retry.sh" "$RUNNER_TEMP/retry.sh"
+          echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/retry.sh" >> "$GITHUB_ENV"
 
       - name: Preserve release candidate verifier across source checkouts
         run: |
@@ -129,13 +132,14 @@ jobs:
           persist-credentials: false
 
       - name: Verify release source
+        timeout-minutes: 4
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.release.outputs.ref }}
           RELEASE_SHA: ${{ steps.release.outputs.sha }}
           VERSION: ${{ steps.release.outputs.version }}
         run: |
-          git fetch --no-tags origin main:refs/remotes/origin/main
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin main:refs/remotes/origin/main
           if ! git merge-base --is-ancestor "$RELEASE_SHA" origin/main; then
             echo "::error::Release tag $RELEASE_REF is not reachable from protected main"
             exit 1
@@ -189,7 +193,7 @@ jobs:
           # head, where the bots' commits are.
           release_pr_number="$(jq -r '.number' <<<"$release_pull")"
           release_pr_head="$(jq -r '.head' <<<"$release_pull")"
-          git fetch --no-tags origin "+refs/pull/${release_pr_number}/head:refs/remotes/origin/release-pr-head"
+          bash "$NETWORK_RETRY_SCRIPT" git fetch --no-tags origin "+refs/pull/${release_pr_number}/head:refs/remotes/origin/release-pr-head"
           if [[ "$(git rev-parse refs/remotes/origin/release-pr-head)" != "$release_pr_head" ]]; then
             echo "::error::Release PR #${release_pr_number} head moved after merge"
             exit 1
