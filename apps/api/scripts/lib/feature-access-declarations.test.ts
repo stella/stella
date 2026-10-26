@@ -656,11 +656,11 @@ describe("parsed declaration sources", () => {
     const source = "export const value = 1;";
     const first = parseDeclarationSource(file, source);
     expect(parseDeclarationSource(file, source)).toBe(first);
-    expect(first.getFullText()).toBe(source);
+    expect(first.parsed.sourceText).toBe(source);
 
     const changed = parseDeclarationSource(file, "export const value = 2;");
     expect(changed).not.toBe(first);
-    expect(changed.getFullText()).toBe("export const value = 2;");
+    expect(changed.parsed.sourceText).toBe("export const value = 2;");
 
     const renamed = parseDeclarationSource(
       "apps/api/src/feature/parse-cache-other.ts",
