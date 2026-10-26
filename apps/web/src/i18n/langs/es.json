@@ -1486,7 +1486,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos los modelos ({count, number})",
+      "allModels": "Todos los modelos",
       "autoDescription": "Elige automáticamente el modelo y el nivel de razonamiento.",
       "autoLabel": "Automático",
       "belowFrontier": "Por debajo de los mejores equilibrios",

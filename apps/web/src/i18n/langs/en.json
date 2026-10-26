@@ -1486,7 +1486,7 @@
       "label": "Mock AI"
     },
     "modelSelector": {
-      "allModels": "All models ({count, number})",
+      "allModels": "All models",
       "autoDescription": "Automatically chooses the model and effort.",
       "autoLabel": "Auto",
       "belowFrontier": "Below the best trade-offs",
