@@ -359,4 +359,62 @@ describe("paragraphs across the PDF's line wraps", () => {
     ]).map((block) => block.plainText);
     expect(texts.at(-1)).toBe(point);
   });
+
+  const PROSE = Array.from({ length: 8 }, () =>
+    plain(
+      "Súd uviedol všetky rozhodujúce skutkové okolnosti a vykonal dokazovanie",
+    ),
+  );
+
+  test("numbered points opening in lowercase stay apart", () => {
+    const first =
+      "1. žalovaný je povinný zaplatiť žalobcovi trovy konania vo výške 100 eur";
+    const second =
+      "2. žalobcovi sa priznáva právo na náhradu trov odvolacieho konania";
+    const texts = blocksOf([
+      ...PROSE,
+      bold("rozhodol:"),
+      plain(first),
+      plain(second),
+    ]).map((block) => block.plainText);
+    expect(texts.slice(-2)).toEqual([first, second]);
+  });
+
+  test("the next point in sequence opening with a year stays a point", () => {
+    const ninth =
+      "9. Súd posúdil námietku tak, ako ju oprávnený uviedol vo svojom bode 22.";
+    const tenth =
+      "10. 2023 bol rokom, v ktorom došlo k zaplateniu celej dlžnej sumy.";
+    const texts = blocksOf([
+      ...PROSE,
+      bold("rozhodol:"),
+      plain(ninth),
+      plain(tenth),
+    ]).map((block) => block.plainText);
+    expect(texts.slice(-2)).toEqual([ninth, tenth]);
+  });
+
+  test("a signature after the closing date stays a signature", () => {
+    const blocks = blocksOf([
+      ...Array.from({ length: 8 }, () =>
+        plain("Súd vo veci vykonal dokazovanie a zistil"),
+      ),
+      bold("Poučenie:"),
+      plain("Odvolanie sa podáva do pätnástich dní."),
+      plain("V Bratislave dňa 30. septembra 2026"),
+      plain("JUDr. Jana Novotná, predsedníčka senátu"),
+    ]);
+    expect(
+      blocks.slice(-2).map(({ plainText, ...block }) => ({
+        plainText,
+        role: "role" in block ? block.role : undefined,
+      })),
+    ).toEqual([
+      { plainText: "V Bratislave dňa 30. septembra 2026", role: "closing" },
+      {
+        plainText: "JUDr. Jana Novotná, predsedníčka senátu",
+        role: "signature",
+      },
+    ]);
+  });
 });

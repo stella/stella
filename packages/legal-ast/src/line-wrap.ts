@@ -238,15 +238,20 @@ const isHeadingLike = (line: string, width: number): boolean =>
 
 /** A numeric date ("12. 3. 1998", "1.2.1999") continues a sentence. */
 const NUMERIC_DATE_START_RE = /^\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}\b/u;
-/** A day number ending a line: "dňa 22." */
-const DAY_END_RE = /(?:^|\s)(?:0?[1-9]|[12]\d|3[01])\.$/u;
+/**
+ * A day number ending a line after a word that introduces a date: "dňa 22.",
+ * "zo 22.", "od 22.", "do 22." (Slovak, Czech and Polish). A bare number
+ * ("v bode 22.") is not a day: the next line may open the next point.
+ */
+const DAY_END_RE =
+  /(?:^|\s)(?:dňa|dna|dne|dnia|od|do|zo|ze|z|k|ku)\s+(?:0?[1-9]|[12]\d|3[01])\.$/iu;
 /** A month and a year opening a line: "10. 2003". */
 const MONTH_YEAR_START_RE = /^(?:0?[1-9]|1[0-2])\.\s?\d{4}\b/u;
 
 /**
  * A numeric date the wrapper split after its day ("dňa 22." / "10. 2003"):
- * the month opens the next line like a numbered point would, but no point
- * is numbered and followed by a year.
+ * the month opens the next line like a numbered point would, but a point is
+ * not introduced by "dňa" and followed by a year.
  */
 const splitsDate = (previous: string, next: string): boolean =>
   DAY_END_RE.test(previous) && MONTH_YEAR_START_RE.test(next);

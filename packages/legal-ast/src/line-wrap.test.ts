@@ -293,4 +293,30 @@ describe("line boundaries a wrapped Slovak decision continues", () => {
       ),
     ).toBe(LINE_JOIN.BREAK);
   });
+
+  test("a day number without a date word before it is not a split date", () => {
+    const lines = [
+      ...Array.from(
+        { length: 8 },
+        () =>
+          "Súd uviedol všetky rozhodujúce skutkové okolnosti a vykonal dokazovanie",
+      ),
+      "9. Súd posúdil námietku tak, ako ju oprávnený uviedol vo svojom bode 22.",
+      "10. 2023 bol rokom, v ktorom došlo k zaplateniu celej dlžnej sumy.",
+    ];
+    expect(planLineWrap(lines).joins.at(-1)).toBe(LINE_JOIN.BREAK);
+  });
+
+  test("a date word before the day reads the next line's month and year", () => {
+    const classification = classifyLineWrap(WRAPPED_SLOVAK_DECISION);
+    for (const previous of [
+      "Návrh, ktorý povinný podal na súd prvého stupňa, bol doručený zo dňa 22.",
+      "Povinný bol v pracovnom pomere u oprávneného na plný úväzok len od 22.",
+      "Exekútor viedol konanie a dlžnú sumu vymáhal od povinného až do 22.",
+    ]) {
+      expect(
+        lineJoinOf(classification, previous, "10. 2003 a potom ho ukončil."),
+      ).toBe(LINE_JOIN.SPACE);
+    }
+  });
 });

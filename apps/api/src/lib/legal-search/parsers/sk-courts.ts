@@ -431,10 +431,10 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
  * Whether each line continues the sentence of the line before it, as the
  * shared line-wrap reader decides: the line above was full, ended by the
  * layout inside a sentence, as in `dňa 22.` / `10. 2003` or `exekútora` /
- * `JUDr. A. B.`. Such a line opens nothing, whatever its first word looks
- * like. Bold lines (section markers, headings) and the title are not
- * running prose, so they neither count toward the page's line width nor
- * continue anything.
+ * `JUDr. A. B.`. Whether such a line still opens a point or a signature is
+ * `continuesPastStart`'s call. Bold lines (section markers, headings) and
+ * the title are not running prose, so they neither count toward the page's
+ * line width nor continue anything.
  */
 const sentenceContinuations = (lines: readonly PdfLine[]): boolean[] => {
   const prose = lines.map(({ text, bold, fontSize }) =>
@@ -449,10 +449,50 @@ const sentenceContinuations = (lines: readonly PdfLine[]): boolean[] => {
   );
 };
 
+/** An Arabic numbered point opening a line: "2. ", "10. ". */
+const NUMBERED_POINT_RE = /^(\d{1,3})\.\s/u;
+
+/**
+ * Where a line opening with an academic title may still be running text.
+ * From the instruction on, such a line is the signature.
+ */
+const TITLE_MAY_CONTINUE_SENTENCE = {
+  preamble: true,
+  holding: true,
+  reasoning: true,
+  instruction: false,
+  closing: false,
+} as const satisfies Record<Section, boolean>;
+
+/**
+ * Whether a structural-looking line the line-wrap reader continues opens
+ * nothing after all. Only two openings can be a wrapped sentence's next
+ * word: a number (a date's month, `dňa 22.` / `10. 2003`) and an academic
+ * title (`exekútora` / `JUDr. A. B.`). The number goes on only when it
+ * cannot be the next point: neither the one after the last point nor a
+ * list starting again at 1. The title goes on only in running text.
+ */
+const continuesPastStart = (
+  line: PdfLine,
+  section: Section,
+  lastPoint: number,
+): boolean => {
+  const point = NUMBERED_POINT_RE.exec(line.text)?.[1];
+  if (point !== undefined) {
+    const number = Number(point);
+    return number !== 1 && number !== lastPoint + 1;
+  }
+  return (
+    SK_JUDGE_TITLE_RE.test(line.text) && TITLE_MAY_CONTINUE_SENTENCE[section]
+  );
+};
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
   const continuations = sentenceContinuations(lines);
   let section: Section = "preamble";
+  /** The number of the last numbered point opened, 0 before any. */
+  let lastPoint = 0;
 
   for (const [index, line] of lines.entries()) {
     if (line.bold && isSkHoldingMarker(line.text)) {
@@ -473,8 +513,8 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     // - first line
     // - bold changed
     // - font size changed
-    // - line is a structural start (numbered, section marker) that does
-    //   not continue the previous line's sentence
+    // - line is a structural start (numbered, section marker), unless
+    //   it continues the previous line's sentence (`continuesPastStart`)
     // - previous line was bold (section markers are standalone)
     // Font size tolerance: libpdf/core may report
     // slightly different sizes across pages (e.g., 10.0
@@ -482,7 +522,11 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     const fontSizeChanged =
       Math.abs(line.fontSize - (prev?.fontSize ?? 0)) > 0.5;
     const structuralStart =
-      continuations[index] !== true && isStructuralStart(line, section);
+      isStructuralStart(line, section) &&
+      !(
+        continuations[index] === true &&
+        continuesPastStart(line, section, lastPoint)
+      );
 
     // SK ÚS PDFs sometimes bold a short continuation
     // (e.g., "zrušuje.", "1 014,41 eur ...") that belongs
@@ -505,6 +549,10 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
         ...line,
         segments: [...line.segments],
       });
+      const point = NUMBERED_POINT_RE.exec(line.text)?.[1];
+      if (point !== undefined) {
+        lastPoint = Number(point);
+      }
     } else {
       // Continuation: append text and segments.
       // Keep latest pageIndex for page boundary detection.
