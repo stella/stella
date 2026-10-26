@@ -277,6 +277,7 @@ test("a failed real editor autosave and failed close-save keep the tab and its d
   fireEvent.change(view.getByLabelText(messages.common.name), {
     target: { value: draftName },
   });
+  // real-time: the draft autosave fires only after its debounce
   await waitFor(() => expect(putBodies).toHaveLength(1), { timeout: 5000 });
   await waitFor(() =>
     expect(

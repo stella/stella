@@ -446,4 +446,50 @@ describe("no-literal-wait-timeout", () => {
       ),
     ).toEqual([2, 5]);
   });
+
+  test("follows an aliased Playwright expect import", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect as check } from "@playwright/test";',
+          "await check.poll(read, { timeout: 1000 }).toBe(true);",
+          "await check(locator).toBeVisible({ timeout: 3000 });",
+        ].join("\n"),
+      ),
+    ).toEqual([2, 3]);
+  });
+
+  test("accepts waits on the shared guard and named Playwright budgets", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect } from "@playwright/test";',
+          "const COLD_COMPILE_TIMEOUT = 60_000;",
+          "await waitFor(ready);",
+          "await screen.findByText('done');",
+          "await expect(locator).toBeVisible({ timeout: COLD_COMPILE_TIMEOUT });",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  test("accepts a reasoned DOM timeout but never a reasoned Playwright number", async () => {
+    expect(
+      await lintLiteralWaitTimeouts(
+        [
+          'import { expect } from "@playwright/test";',
+          "// real-time: the hook polls the status on its own interval",
+          "await waitFor(ready, { timeout: 5000 });",
+          "// real-time: the lazy chunk's first load outlasts the guard",
+          "await screen.findByText('done', undefined, {",
+          "  timeout: 15_000,",
+          "});",
+          "// real-time: the poll interval is the behaviour under test",
+          "await expect.poll(read, { timeout: 1000 }).toBe(true);",
+          "// timeout: a reason under a different tag",
+          "await waitFor(ready, { timeout: 5000 });",
+        ].join("\n"),
+      ),
+    ).toEqual([9, 11]);
+  });
 });

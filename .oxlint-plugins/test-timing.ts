@@ -68,7 +68,8 @@
 //   and numeric expressions are rejected there.
 //   Flagged:
 //     Testing Library `waitFor`, `waitForElementToBeRemoved`, and `findBy*` /
-//       `findAllBy*` calls with any `timeout` option
+//       `findAllBy*` calls with any `timeout` option, unless
+//       `// real-time: <reason>` says why the subject outlasts the hang guard
 //     Playwright `expect.poll`, `toPass`, and locator assertions with a
 //       bare numeric `timeout` option (including numeric expressions)
 //
@@ -831,11 +832,13 @@ const PLAYWRIGHT_TEST_ROOTS: ReadonlySet<string> = new Set([
 
 // The identifier a member/call chain starts from: `test` in
 // `test.info().setTimeout`, `testInfo` in `testInfo.setTimeout`.
-const chainRoot = (node: unknown): string | null => {
+const chainRootIdentifier = (
+  node: unknown,
+): (AstNode & { type: "Identifier"; name: string }) | null => {
   let current = unwrapExpression(node);
   while (isAstNode(current)) {
     if (isIdentifier(current)) {
-      return current.name;
+      return current;
     }
     if (current.type === "MemberExpression") {
       current = unwrapExpression(current.object);
@@ -847,6 +850,9 @@ const chainRoot = (node: unknown): string | null => {
   }
   return null;
 };
+
+const chainRoot = (node: unknown): string | null =>
+  chainRootIdentifier(node)?.name ?? null;
 
 // A Playwright test-level timeout or retry change.
 const raisedPlaywrightTimeout = (call: AstNode): RaisedTimeout | null => {
@@ -935,7 +941,13 @@ const memberChainNames = (node: unknown): string[] => {
   return names;
 };
 
-type LiteralWaitTimeout = { node: AstNode; pattern: string };
+// A DOM wait may outlast the shared hang guard when its subject runs on the
+// real clock; `reasonable` marks the sites that can say so with a reason.
+type LiteralWaitTimeout = {
+  node: AstNode;
+  pattern: string;
+  reasonable: boolean;
+};
 
 const literalTimeoutOption = (
   options: unknown,
@@ -952,7 +964,7 @@ const literalTimeoutOption = (
     return null;
   }
   if (mode === "any") {
-    return { node, pattern };
+    return { node, pattern, reasonable: true };
   }
   const isBareNumber = (candidate: unknown): boolean => {
     const expression = unwrapExpression(candidate);
@@ -968,7 +980,7 @@ const literalTimeoutOption = (
         isBareNumber(expression.right))
     );
   };
-  return isBareNumber(node) ? { node, pattern } : null;
+  return isBareNumber(node) ? { node, pattern, reasonable: false } : null;
 };
 
 const literalWaitTimeout = (
@@ -987,15 +999,16 @@ const literalWaitTimeout = (
   if (/^find(?:All)?By\p{Lu}/u.test(method)) {
     return literalTimeoutOption(args.at(2), method, "any");
   }
+  // The chain's root binding, so an aliased `expect` import still counts.
   const expectBinding = resolveImportedExpressionForEnforcement(
     context,
-    ownNodes(call.callee).find((node) => isIdentifier(node, "expect")),
+    chainRootIdentifier(call.callee),
   );
   const playwrightExpect =
     expectBinding?.imported === "expect" &&
     (expectBinding.source === "@playwright/test" ||
       /(?:^|\/)helpers\/test$/u.test(expectBinding.source));
-  if (playwrightExpect && method === "poll" && names.at(-2) === "expect") {
+  if (playwrightExpect && method === "poll" && names.length === 2) {
     return literalTimeoutOption(args.at(1), "expect.poll", "bare-number");
   }
   if (playwrightExpect && (method === "toPass" || /^to\p{Lu}/u.test(method))) {
@@ -1227,11 +1240,15 @@ export default eslintCompatPlugin({
         schema: [],
         messages: {
           timeout:
-            "`{{pattern}}` uses a disallowed per-call timeout. DOM condition waits use the suite's shared hang guard; Playwright waits express numeric budgets as named constants.",
+            "`{{pattern}}` uses a disallowed per-call timeout. DOM condition waits use the suite's shared hang guard unless `// real-time: <reason>` says why the subject outlasts it; Playwright waits express numeric budgets as named constants.",
         },
       },
       createOnce(context) {
+        let comments: readonly SourceComment[] | null = null;
         return {
+          before() {
+            comments = null;
+          },
           CallExpression(call) {
             const node: unknown = call;
             if (!isAstNode(node)) {
@@ -1239,6 +1256,20 @@ export default eslintCompatPlugin({
             }
             const timeout = literalWaitTimeout(context, node);
             if (timeout === null) {
+              return;
+            }
+            comments ??= context.sourceCode
+              .getAllComments()
+              .filter(isSourceComment);
+            if (
+              timeout.reasonable &&
+              hasTaggedCommentInAncestors({
+                comments,
+                node: timeout.node,
+                pattern: REAL_TIME_REASON,
+                text: context.sourceCode.text,
+              })
+            ) {
               return;
             }
             context.report({

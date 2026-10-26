@@ -29,6 +29,7 @@ import {
   emptyColor,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
+import { offersCellReview } from "@/components/workspaces/row-actions.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type {
@@ -99,12 +100,14 @@ const PropertyCellContent = ({
   if (property.content.type === "file" || fieldContent?.type === "file") {
     return (
       <span className="flex min-w-0 items-center gap-1.5">
-        <CellMetadataFlags
-          entityId={entity.entityId}
-          metadata={cellMetadata}
-          propertyId={property.id}
-          workspaceId={property.workspaceId}
-        />
+        {offersCellReview("file") && (
+          <CellMetadataFlags
+            entityId={entity.entityId}
+            metadata={cellMetadata}
+            propertyId={property.id}
+            workspaceId={property.workspaceId}
+          />
+        )}
         <EditableField
           content={fieldContent}
           displayVariant="table"

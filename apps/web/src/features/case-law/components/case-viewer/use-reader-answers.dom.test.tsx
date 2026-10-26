@@ -1072,6 +1072,7 @@ test.each(["never", "hanging"] as const)(
       ),
     );
     server.releaseRecovery();
+    // real-time: the test exercises the answer polling timeout itself
     await waitFor(
       () =>
         expect(

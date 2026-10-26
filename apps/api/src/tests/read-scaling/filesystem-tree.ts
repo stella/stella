@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { queryEntities } from "@/api/lib/entities/query-entities";
@@ -28,7 +29,8 @@ export const measureReadFilesystemTree = async (
         request: new Request(
           "https://example.test/v1/entities/filesystem-tree",
         ),
-        route: "/v1/entities/:workspaceId/filesystem-tree",
+        route:
+          "/v1/entities/:workspaceId/filesystem-tree" satisfies ApiRoutePath,
       }),
     );
     if (response instanceof HttpStatusResponse) {

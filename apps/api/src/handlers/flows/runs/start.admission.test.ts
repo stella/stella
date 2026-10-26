@@ -6,6 +6,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
 import { env } from "@/api/env";
 import startFlowRunHandler from "@/api/handlers/flows/runs/start";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteDefinition } from "@/api/http/route";
@@ -114,7 +115,8 @@ describe("manual flow start admission response", () => {
               asTestRaw({
                 set,
                 request,
-                route: "/flow-start",
+                route:
+                  "/v1/workspaces/:workspaceId/flows/runs" satisfies ApiRoutePath,
                 workspaceId,
                 user: { id: userId },
                 session: { activeOrganizationId: organizationId },
