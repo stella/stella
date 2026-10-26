@@ -24,13 +24,13 @@ import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/read
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
+import { servedBlockText } from "@/api/lib/case-law/served-paragraph-number";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
 import {
   MCP_CONTENT_MAX_CHARS,
   resolveTextWindowBounds,
-  servedBlockText,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
 

@@ -1682,6 +1682,7 @@ const ecjDecisionFromParts = ({
     return undefined;
   }
 
+  const celexCaseNumber = celexToCaseNumber(celex);
   const caseNumber = ecjCaseNumber(celex, [
     ...(bibliography?.caseNumber ?? []),
     ...(facts?.caseIdentifier ?? []),
@@ -1732,6 +1733,11 @@ const ecjDecisionFromParts = ({
       // docket's other documents find no null-id row and are inserted, which is
       // the collapse being undone.
       ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
+      // Those rows were stored under the CELEX reading of the docket, which
+      // gives a case numbered before 1989 a letter it never had (`C-120/78`).
+      ...(caseNumber === celexCaseNumber
+        ? {}
+        : { legacyCaseNumber: celexCaseNumber }),
       ecli,
       court: statedCourt,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,

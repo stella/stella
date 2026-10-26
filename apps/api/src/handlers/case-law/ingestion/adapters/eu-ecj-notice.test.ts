@@ -1075,7 +1075,11 @@ describe("what the notice adds to a stored row", () => {
       throw new TypeError(`Expected parsed, got ${outcome.type}`);
     }
     expect(outcome.result.caseNumber).toBe("128/22");
-    expect((await decisionFrom(noticeEn)).caseNumber).toBe("C-128/22");
+    // A row an earlier release stored under the CELEX reading is still found.
+    expect(outcome.result.legacyCaseNumber).toBe("C-128/22");
+    const lettered = await decisionFrom(noticeEn);
+    expect(lettered.caseNumber).toBe("C-128/22");
+    expect(lettered.legacyCaseNumber).toBeUndefined();
   });
 
   test("emits the rapporteur and the Advocate General as the bench", async () => {

@@ -981,6 +981,111 @@ describe("the oldest layout", () => {
     },
   );
 
+  /**
+   * The grounds of a decision in the oldest layout, one `<p>` per line, set
+   * as the recorded pages set them (`61978CJ0120.en`): the contents line,
+   * then each section behind its anchor code.
+   */
+  const legacyGrounds = (lines: readonly string[]): Block[] =>
+    parseEcjDecisionHtml({
+      caseNumber: "120/78",
+      ecli: undefined,
+      court: "Court of Justice",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      celex: "61978CJ0120",
+      html: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body>',
+        '<div class="listNotice"><div class="texte">',
+        '<p><a href="#I1">Parties</a><br/><a href="#MO">Grounds</a><br/>',
+        '<a href="#DI">Operative part</a><br/></p>',
+        '<a name="I1"/><h2 class="rech">Parties</h2><p>IN CASE 120/78</p>',
+        '<a name="MO"/><h2 class="rech">Grounds</h2>',
+        ...lines.map((line) => `<p>${line}</p>`),
+        '<a name="DI"/><h2 class="rech">Operative part</h2>',
+        "<p>THE COURT HEREBY RULES:</p>",
+        "</div></div></body></html>",
+      ].join(""),
+    }).documentAst.blocks;
+
+  /** Each paragraph's number, or null, with its text. */
+  const numberedLines = (blocks: readonly Block[]) =>
+    blocks.flatMap((block) =>
+      block.type === "paragraph" && block.role === undefined
+        ? [[block.number ?? null, block.plainText] as const]
+        : [],
+    );
+
+  test("a quoted list item never takes the number of the Court's next paragraph", () => {
+    // The quoted item is numbered `2.`, the Court's own `2` follows it: the
+    // number expected next is printed twice.
+    const blocks = legacyGrounds([
+      "1 The national court asks whether either of two readings applies:",
+      "2. Second alternative.",
+      "2 The Court's next paragraph.",
+      "3 It follows that the rule applies.",
+      "4 The costs are not recoverable.",
+    ]);
+    expect(numberedLines(blocks)).toEqual([
+      [1, "The national court asks whether either of two readings applies:"],
+      [null, "2. Second alternative."],
+      [2, "The Court's next paragraph."],
+      [3, "It follows that the rule applies."],
+      [4, "The costs are not recoverable."],
+    ]);
+  });
+
+  test("a quoted list running ahead of the Court's numbering stays quoted", () => {
+    const blocks = legacyGrounds([
+      "1 The provision reads:",
+      "2. The Member States shall ensure that the rule applies.",
+      "3. They shall inform the Commission.",
+      "2 That provision does not apply.",
+      "3 It follows that the action is dismissed.",
+      "4 The costs are not recoverable.",
+    ]);
+    expect(numberedLines(blocks).map(([number]) => number)).toEqual([
+      1,
+      null,
+      null,
+      2,
+      3,
+      4,
+    ]);
+  });
+
+  test("a date opening the grounds is not the first paragraph", () => {
+    const blocks = legacyGrounds([
+      "1 May 2000 is the date of the contested decision.",
+      "1 By application lodged at the Court the applicant seeks annulment.",
+      "2 The applicant relies on two pleas.",
+    ]);
+    expect(numberedLines(blocks)).toEqual([
+      [null, "1 May 2000 is the date of the contested decision."],
+      [1, "By application lodged at the Court the applicant seeks annulment."],
+      [2, "The applicant relies on two pleas."],
+    ]);
+  });
+
+  test("a number that two paragraphs carry alike numbers neither", () => {
+    // Written the same way, a quoted item and the Court's paragraph cannot
+    // be told apart; both keep their figure as text, and the run goes on.
+    const blocks = legacyGrounds([
+      "1. The national court asks:",
+      "2. Second alternative.",
+      "2. The Court's next paragraph.",
+      "3. It follows that the rule applies.",
+    ]);
+    expect(numberedLines(blocks)).toEqual([
+      [1, "The national court asks:"],
+      [null, "2. Second alternative."],
+      [null, "2. The Court's next paragraph."],
+      [3, "It follows that the rule applies."],
+    ]);
+  });
+
   test("a quoted question opening with `1 .` keeps its number as text", async () => {
     const blocks = await parseStem("61978CJ0120.en");
     const question = blocks.find((block) =>

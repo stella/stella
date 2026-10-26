@@ -6,8 +6,14 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import {
+  type DecisionIdentityRow,
+  docketFamilyCitationKeys,
+  type lookupDecisionsByIdentity,
+} from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
+import { ecjCaseNumber } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { bareCitationKey } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   admitLawRead,
   type LawReadAdmission,
@@ -465,6 +471,41 @@ describe("decision legal resolution", () => {
         },
       ],
     });
+  });
+
+  test("resolves a Court of Justice case by the docket its adapter stores", async () => {
+    // Before 1989 the Court numbered cases without a letter; the adapter
+    // stores the docket as the publisher states it, and a reader copies it.
+    for (const [celex, statement] of [
+      ["61978CJ0120", "Case 120/78."],
+      ["61955CJ0008", "Case 8-55."],
+      ["62022CJ0128", "Case C-128/22"],
+    ] as const) {
+      const caseNumber = ecjCaseNumber(celex, [statement]);
+      const stored = {
+        ...row(caseNumber),
+        country: "EU",
+        court: "Court of Justice",
+        courtAbbreviation: null,
+        ecli: null,
+        language: "en",
+      };
+      // The read side of the stored row: the key ingestion writes for its
+      // docket is one the reference's family is looked up under.
+      const lookup: typeof lookupDecisionsByIdentity = async ({ locator }) =>
+        locator.kind === "docket" &&
+        docketFamilyCitationKeys(locator).includes(bareCitationKey(caseNumber))
+          ? [stored]
+          : [];
+      const result = await resolveDecision({
+        admission,
+        country: "EU",
+        identifier: caseNumber,
+        dependencies: { lookup, read: readableDecision },
+      });
+      expect([caseNumber, result.status]).toEqual([caseNumber, "resolved"]);
+    }
+    expect(ecjCaseNumber("61978CJ0120", ["Case 120/78."])).toBe("120/78");
   });
 
   test("never resolves a printed part to the one decision of its file", async () => {

@@ -643,11 +643,36 @@ type BlockBuilder = {
    * names none of them.
    */
   pointsAreNumbering: boolean;
-  /** The last paragraph number read off printed text, 0 before the first. */
-  printedNumber: number;
+  /** How this walk treats numbers the oldest layout prints. */
+  printedNumbers: PrintedNumbering;
   /** A printed report page marker waiting for the block it precedes. */
   pendingPage: string | undefined;
 };
+
+/**
+ * A number printed at the start of one of the oldest layout's paragraphs,
+ * which may be the Court's numbering or may not: a quoted list item, a
+ * date, an amount.
+ */
+type PrintedNumberCandidate = {
+  /** The paragraph's position among the walked elements. */
+  index: number;
+  number: number;
+  /** `2. Text` is dotted; `2 Text` and `2TEXT` are bare. */
+  marker: "dotted" | "bare";
+  /** The text after the number reads as a month and a year (`1 May 2000`). */
+  dated: boolean;
+};
+
+/**
+ * Which printed numbers are the Court's can only be told from the whole
+ * sequence, so the oldest layout is walked twice: a `survey` collects every
+ * candidate, and the `settled` walk numbers the paragraphs at the positions
+ * `settlePrintedNumbers` chose.
+ */
+type PrintedNumbering =
+  | { type: "survey"; candidates: PrintedNumberCandidate[] }
+  | { type: "settled"; numbers: ReadonlyMap<number, number> };
 
 const nextId = (builder: BlockBuilder): string => {
   builder.counter += 1;
@@ -768,25 +793,14 @@ const buildBlocks = (
       const id = $(marker).attr("id") ?? "";
       return POINT_ID.test(id) ? [id] : [];
     });
-  const builder: BlockBuilder = {
-    blocks: [],
-    sequence: 0,
-    counter: 0,
-    zone: "header",
-    inTitleRun: true,
-    layout:
-      $document.find(LEGACY_DOCUMENT_CONTAINER).length > 0
-        ? "legacy"
-        : "classed",
-    pointsAreNumbering: new Set(pointIds).size === pointIds.length,
-    printedNumber: 0,
-    pendingPage: undefined,
-  };
+  const layout =
+    $document.find(LEGACY_DOCUMENT_CONTAINER).length > 0 ? "legacy" : "classed";
+  const pointsAreNumbering = new Set(pointIds).size === pointIds.length;
 
   // The operative part is everything between the last numbered
   // paragraph and the signature/footnote tail. Locating its start needs
   // a look-ahead, so resolve it before the forward walk.
-  const lastPointIndex = builder.pointsAreNumbering
+  const lastPointIndex = pointsAreNumbering
     ? children.findLastIndex((child) =>
         $(child)
           .find(sel(CLASS.count))
@@ -795,11 +809,33 @@ const buildBlocks = (
       )
     : -1;
 
-  for (const [index, child] of children.entries()) {
-    visitChild({ $, builder, $el: $(child), index, lastPointIndex });
-  }
+  const walk = (printedNumbers: PrintedNumbering): Block[] => {
+    const builder: BlockBuilder = {
+      blocks: [],
+      sequence: 0,
+      counter: 0,
+      zone: "header",
+      inTitleRun: true,
+      layout,
+      pointsAreNumbering,
+      printedNumbers,
+      pendingPage: undefined,
+    };
+    for (const [index, child] of children.entries()) {
+      visitChild({ $, builder, $el: $(child), index, lastPointIndex });
+    }
+    return builder.blocks;
+  };
 
-  return builder.blocks;
+  if (layout === "classed") {
+    return walk({ type: "settled", numbers: new Map() });
+  }
+  const candidates: PrintedNumberCandidate[] = [];
+  walk({ type: "survey", candidates });
+  return walk({
+    type: "settled",
+    numbers: settlePrintedNumbers(candidates),
+  });
 };
 
 const tagNameOf = (node: AnyNode | undefined): string | undefined =>
@@ -948,7 +984,7 @@ const visitChild = ({
   }
 
   if (builder.layout === "legacy" && tag === "p") {
-    visitLegacyParagraph(builder, inlines);
+    visitLegacyParagraph(builder, inlines, index);
     return;
   }
 
@@ -1033,7 +1069,130 @@ const REPORT_PAGE_MARKER = /^\p{L}{1,4}\s*\.\s*(?<page>\d{1,4})$/u;
  * never the Court's numbering.
  */
 const PRINTED_PARAGRAPH_NUMBER =
-  /^(?<number>\d{1,4})(?:\.?\s+(?=[\p{L}\p{N}\p{Pi}\p{Ps}"'])|(?=\p{Lu}))/u;
+  /^(?<number>\d{1,4})(?:(?<dot>\.)?\s+(?=[\p{L}\p{N}\p{Pi}\p{Ps}"'])|(?=\p{Lu}))/u;
+
+/**
+ * A paragraph that opens with a day of the month rather than a number:
+ * the text after the figure is a month and a year (`1 May 2000`, `3 mai
+ * 1999`, `12. März 1987`). Read as the text after the figure, so it holds
+ * in every language that writes the day first.
+ */
+const MONTH_AND_YEAR = /^\p{L}{3,}\.?\s+\d{4}(?!\d)/u;
+
+/** Highest day of a month; a larger figure is never a date. */
+const DAYS_IN_MONTH_MAX = 31;
+
+/**
+ * Settle which printed numbers are the Court's paragraph numbering.
+ *
+ * The numbering runs 1, 2, 3… and every number is taken from the
+ * candidates that continue it, so the choice can look ahead:
+ *
+ * - a candidate whose run continues further is preferred, so a stray
+ *   number that the rest of the sequence does not follow is passed over;
+ * - among those, one that does not open a date (`1 May 2000`);
+ * - then one written the way the Court writes its numbers in this
+ *   document (`2 Text` or `2. Text`), read off the numbers that only one
+ *   paragraph carries: a quoted list (`2. Second alternative.`) is
+ *   numbered the other way.
+ *
+ * Where that still leaves more than one, no paragraph takes the number:
+ * a quoted item and the Court's paragraph look alike, and naming the
+ * wrong one would cite text the Court never numbered. The run goes on
+ * from the earliest of them.
+ */
+const settlePrintedNumbers = (
+  candidates: readonly PrintedNumberCandidate[],
+): ReadonlyMap<number, number> => {
+  // How far the numbering runs from each candidate, read backwards: one
+  // more than the longest run of the next number among those after it.
+  const runFrom = new Map<number, number>();
+  const reached: ReachedCandidate[] = [];
+  for (const candidate of candidates.toReversed()) {
+    const reach = 1 + (runFrom.get(candidate.number + 1) ?? 0);
+    reached.push({ candidate, reach });
+    runFrom.set(
+      candidate.number,
+      Math.max(runFrom.get(candidate.number) ?? 0, reach),
+    );
+  }
+  const byNumber = Map.groupBy(
+    reached.toReversed(),
+    ({ candidate }) => candidate.number,
+  );
+
+  const courtMarker = courtMarkerOf(byNumber.values());
+
+  const numbers = new Map<number, number>();
+  let after = -1;
+  for (let expected = 1; ; expected += 1) {
+    const open = candidatesAfter(byNumber.get(expected) ?? [], after);
+    if (open.length === 0) {
+      return numbers;
+    }
+    const pool = preferredCandidates({ courtMarker, open });
+    const [chosen, ...alike] = pool;
+    if (chosen !== undefined && alike.length === 0) {
+      numbers.set(chosen.index, expected);
+      after = chosen.index;
+    } else {
+      after = Math.min(...pool.map((candidate) => candidate.index));
+    }
+  }
+};
+
+type ReachedCandidate = { candidate: PrintedNumberCandidate; reach: number };
+
+const candidatesAfter = (
+  entries: readonly ReachedCandidate[],
+  after: number,
+): ReachedCandidate[] =>
+  entries.filter(({ candidate }) => candidate.index > after);
+
+/**
+ * How the Court writes its numbers in this document: the marker most of
+ * the numbers only one paragraph carries are written with, if one is.
+ */
+const courtMarkerOf = (
+  groups: Iterable<readonly ReachedCandidate[]>,
+): PrintedNumberCandidate["marker"] | undefined => {
+  const lone = [...groups].flatMap(([only, ...others]) =>
+    only !== undefined && others.length === 0 && !only.candidate.dated
+      ? [only.candidate.marker]
+      : [],
+  );
+  const dotted = lone.filter((marker) => marker === "dotted").length;
+  const bare = lone.length - dotted;
+  if (dotted === bare) {
+    return undefined;
+  }
+  return dotted > bare ? "dotted" : "bare";
+};
+
+const preferring = <T>(pool: T[], test: (item: T) => boolean): T[] => {
+  const preferred = pool.filter(test);
+  return preferred.length > 0 ? preferred : pool;
+};
+
+/** The candidates for one number left once every preference is applied. */
+const preferredCandidates = ({
+  courtMarker,
+  open,
+}: {
+  courtMarker: PrintedNumberCandidate["marker"] | undefined;
+  open: readonly ReachedCandidate[];
+}): PrintedNumberCandidate[] => {
+  const longest = Math.max(...open.map((entry) => entry.reach));
+  return preferring(
+    preferring(
+      open
+        .filter((entry) => entry.reach === longest)
+        .map(({ candidate }) => candidate),
+      (candidate) => !candidate.dated,
+    ),
+    (candidate) => candidate.marker === courtMarker,
+  );
+};
 
 /**
  * Longest sub-heading of the oldest layout. Its headings are a line of a
@@ -1073,12 +1232,14 @@ const isLegacyHeading = (text: string): boolean =>
  * and a bare phrase between the numbered paragraphs becomes a heading.
  * Only the grounds and the costs are numbered or sub-headed, so the
  * parties and the operative part keep their lines as they are. A number
- * is taken only as the next in sequence, so a date, an amount or a quoted
- * list item that happens to open a paragraph is never read as one.
+ * is taken only where the whole sequence settles it as the Court's
+ * (`settlePrintedNumbers`), so a date, an amount or a quoted list item
+ * that happens to open a paragraph is never read as one.
  */
 const visitLegacyParagraph = (
   builder: BlockBuilder,
   walked: readonly Inline[],
+  index: number,
 ): void => {
   const line = normalizeInlineLine(walked);
   const page = REPORT_PAGE_MARKER.exec(line.plainText)?.groups?.["page"];
@@ -1101,10 +1262,25 @@ const visitLegacyParagraph = (
     PRINTED_PARAGRAPH_NUMBER,
   );
   const printed = match?.groups?.["number"];
+  const { printedNumbers } = builder;
+  if (
+    printed !== undefined &&
+    body.plainText !== "" &&
+    printedNumbers.type === "survey"
+  ) {
+    const value = Number.parseInt(printed, 10);
+    printedNumbers.candidates.push({
+      index,
+      number: value,
+      marker: match?.groups?.["dot"] === undefined ? "bare" : "dotted",
+      dated: value <= DAYS_IN_MONTH_MAX && MONTH_AND_YEAR.test(body.plainText),
+    });
+  }
   const number =
-    printed === undefined ? undefined : Number.parseInt(printed, 10);
-  if (number === builder.printedNumber + 1 && body.plainText !== "") {
-    builder.printedNumber = number;
+    printedNumbers.type === "settled"
+      ? printedNumbers.numbers.get(index)
+      : undefined;
+  if (number !== undefined) {
     pushParagraph(builder, {
       number,
       anchorId: `point${number}`,

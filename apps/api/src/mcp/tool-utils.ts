@@ -14,7 +14,6 @@ import {
 } from "@stll/agent-input";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
 import { declareFailureClass } from "@stll/errors";
-import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import {
   closestNames,
   MAX_TOOL_NAME_CHARS,
@@ -26,6 +25,10 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  servedBlockText,
+  type ServedTextBlock,
+} from "@/api/lib/case-law/served-paragraph-number";
 import {
   parseStrippingUndeclaredKeys,
   reportToolOutputDegrade,
@@ -1219,7 +1222,7 @@ export const toPlainCorpusText = ({
   blocks,
   fulltext,
 }: {
-  blocks: readonly CorpusTextBlock[] | null;
+  blocks: readonly ServedTextBlock[] | null;
   fulltext: string | null;
 }): string | null => {
   if (typeof fulltext === "string" && fulltext.length > 0) {
@@ -1234,33 +1237,6 @@ export const toPlainCorpusText = ({
       block.plainText === "" ? [] : [servedBlockText(block)],
     )
     .join("\n\n");
-};
-
-type CorpusTextBlock = {
-  plainText: string;
-  type: string;
-  number?: number | undefined;
-};
-
-/** The sign the served text prints before a court's paragraph number. */
-const COURT_PARAGRAPH_SIGN = "¶";
-
-/**
- * One block as the served text prints it: a paragraph the court numbered
- * opens with that number (`¶ 134 It follows…`).
- *
- * Parsers keep the court's number as structure (`ParagraphBlock.number`)
- * rather than in `plainText`, so that a search for the paragraph's words
- * does not also find its number. Text read without the structure beside it
- * would then carry no number at all, and a paragraph could be quoted but
- * not cited. `¶` keeps the number apart from text that itself opens with a
- * figure, in every court's numbering style.
- */
-export const servedBlockText = (block: CorpusTextBlock): string => {
-  const number = courtParagraphNumber(block);
-  return number === null
-    ? block.plainText
-    : `${COURT_PARAGRAPH_SIGN} ${String(number)} ${block.plainText}`;
 };
 
 /**
