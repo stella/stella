@@ -21,7 +21,7 @@ const OPERATION_EFFECT = {
   "scalar" | "structural"
 >;
 
-export class BillingDraftValidationError extends TaggedError(
+class BillingDraftValidationError extends TaggedError(
   "BillingDraftValidationError",
 )<{ message: string }> {}
 
