@@ -309,7 +309,7 @@ test("readers without a copy adapter expose no permalink control", () => {
 test("a supplied copy adapter preserves existing permalink markup", () => {
   // Serialized copy controls before the optional adapter: placement and browser href stay exact.
   const anchorClass =
-    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
   const previousControls = [
     `<a aria-label="Copy link" class="${anchorClass} ms-1" data-reader-chrome="" href="#h-1">¶</a>`,
     `<a aria-label="Copy link" class="${anchorClass} absolute end-full top-0 me-1" data-reader-chrome="" href="#p-7">¶</a>`,
