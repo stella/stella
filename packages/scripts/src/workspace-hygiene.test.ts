@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import repositoryPackage from "../../../package.json";
-import { validateWorkspaceRoot } from "./workspace-hygiene";
+import {
+  RETIRED_TYPESCRIPT6_MESSAGE,
+  validateWorkspaceRoot,
+} from "./workspace-hygiene";
 
 // The temporary roots have no Git history; a pinned local environment keeps
 // the app-boundary baseline out of these checks wherever the tests run.
@@ -697,69 +700,72 @@ describe("workspace hygiene", () => {
           path: "apps/web/package.json",
         },
         {
-          message:
-            "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
+          message: RETIRED_TYPESCRIPT6_MESSAGE,
           path: "apps/web/package.json",
         },
       ]),
     );
   });
 
-  test("rejects the TypeScript 6 compiler API in the ported scripts package", async () => {
-    const rootDir = createWorkspaceRoot({
-      rootPackageJson: {},
-      webPackageJson: {
-        dependencies: {},
-        name: "@stll/web",
-      },
-    });
-    writeFileSync(
-      path.join(rootDir, "packages/scripts/package.json"),
-      JSON.stringify({
-        dependencies: { typescript6: "catalog:" },
-        name: "@stll/scripts",
-        scripts: {
-          typecheck: "bun check --no-pretty --all --project=tsconfig.json",
-        },
-      }),
-    );
-
-    expect(await validateWorkspaceRoot(rootDir, LOCAL)).toContainEqual({
-      message:
-        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
-      path: "packages/scripts/package.json",
-    });
-  });
-
-  test("rejects the TypeScript 6 compiler API in apps/api", async () => {
-    const apiTypecheck = "bun ../../packages/scripts/src/api-typecheck.ts";
-    const declaring = createWorkspaceRoot({
-      apiPackageJson: {
-        devDependencies: { typescript6: "catalog:" },
-        name: "@stll/api",
-        scripts: { typecheck: apiTypecheck },
-      },
-      rootPackageJson: {},
-      webPackageJson: { name: "@stll/web" },
-    });
-    expect(await validateWorkspaceRoot(declaring, LOCAL)).toContainEqual({
-      message:
-        "The TypeScript 6 compiler API is compatibility-only and may only be declared by the root",
-      path: "apps/api/package.json",
-    });
-
+  test("bans the retired typescript6 alias in every workspace and the root", async () => {
     const clean = createWorkspaceRoot({
-      apiPackageJson: {
-        devDependencies: { tsrs: "catalog:" },
-        name: "@stll/api",
-        scripts: { typecheck: apiTypecheck },
-      },
       rootPackageJson: {},
       webPackageJson: { name: "@stll/web" },
     });
     expect(await validateWorkspaceRoot(clean, LOCAL)).not.toContainEqual(
-      expect.objectContaining({ path: "apps/api/package.json" }),
+      expect.objectContaining({ message: RETIRED_TYPESCRIPT6_MESSAGE }),
     );
+
+    for (const field of ["dependencies", "devDependencies"]) {
+      const declaring = createWorkspaceRoot({
+        apiPackageJson: {
+          [field]: { typescript6: "catalog:" },
+          name: "@stll/api",
+          scripts: {
+            typecheck: "bun ../../packages/scripts/src/api-typecheck.ts",
+          },
+        },
+        rootPackageJson: {},
+        webPackageJson: { name: "@stll/web" },
+      });
+      writeFileSync(
+        path.join(declaring, "packages/scripts/package.json"),
+        JSON.stringify({
+          [field]: { typescript6: "catalog:" },
+          name: "@stll/scripts",
+          scripts: {
+            typecheck: "bun check --no-pretty --all --project=tsconfig.json",
+          },
+        }),
+      );
+      expect(await validateWorkspaceRoot(declaring, LOCAL)).toEqual(
+        expect.arrayContaining([
+          {
+            message: RETIRED_TYPESCRIPT6_MESSAGE,
+            path: "apps/api/package.json",
+          },
+          {
+            message: RETIRED_TYPESCRIPT6_MESSAGE,
+            path: "packages/scripts/package.json",
+          },
+        ]),
+      );
+    }
+
+    for (const rootPackageJson of [
+      { devDependencies: { typescript6: "catalog:" } },
+      { catalog: { typescript6: "npm:typescript@6.0.3" } },
+      { catalogs: { legacy: { typescript6: "npm:typescript@6.0.3" } } },
+    ]) {
+      const declaring = createWorkspaceRoot({
+        rootPackageJson,
+        webPackageJson: { name: "@stll/web" },
+      });
+      expect(await validateWorkspaceRoot(declaring, LOCAL)).toContainEqual({
+        message: RETIRED_TYPESCRIPT6_MESSAGE,
+        path: "package.json",
+      });
+    }
   });
 });
 
@@ -793,13 +799,16 @@ const createWorkspaceRoot = ({
         : {}),
       oxlint: repositoryPackage.catalog.oxlint,
       tsrs: repositoryPackage.catalog.tsrs,
-      typescript6: "npm:typescript@6.0.3",
     },
-    catalogs: { ts6: { typescript: "6.0.3" } },
+    catalogs: {
+      ...(isRecord(rootPackageJson["catalogs"])
+        ? rootPackageJson["catalogs"]
+        : {}),
+      ts6: { typescript: "6.0.3" },
+    },
     devDependencies: {
       "@stll/oxlint-config":
         repositoryPackage.devDependencies["@stll/oxlint-config"],
-      typescript6: "catalog:",
       "oxlint-tsgolint": "7.0.2003",
       tsrs: "catalog:",
       ...rootDevDependencies,

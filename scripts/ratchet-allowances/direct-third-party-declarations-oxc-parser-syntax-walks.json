@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
   "delta": 2,
-  "reason": "oxc-parser replaces the typescript6 compiler API for syntax walks in scripts and git hooks: packages/scripts declares it for packages/scripts/src/syntax-tree.ts, and the root declares it because git hooks load that module. typescript6 is removed at the end of the TypeScript 6 removal stack, which pays this increase back."
+  "reason": "oxc-parser replaced the TypeScript 6 compiler API for syntax walks in scripts and git hooks: packages/scripts declares it for packages/scripts/src/syntax-tree.ts, and the root declares it because git hooks load that module. Removing the TypeScript 6 compiler package paid this increase back."
 }

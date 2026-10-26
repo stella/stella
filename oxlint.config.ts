@@ -668,7 +668,7 @@ const noZodImport = {
 const noClassicTypeScriptImport = {
   name: "typescript",
   message:
-    "'typescript' is only the copy linters peer on, not a dependency. Use 'typescript6' for the classic API, or 'tsrs/unstable/*' for the TypeScript 7 API.",
+    "'typescript' is only the copy linters peer on, not a dependency. Read syntax with oxc-parser (packages/scripts/src/syntax-tree.ts) and use 'tsrs/unstable/*' for the TypeScript 7 API.",
 };
 
 // The API serves its routes from its own HTTP core on Bun.serve

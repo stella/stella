@@ -175,7 +175,6 @@
     "stylelint": "catalog:",
     "tsrs": "catalog:",
     "turbo": "2.11.7",
-    "typescript6": "catalog:",
     "valibot": "catalog:"
   },
   "resolutions": {
@@ -293,7 +292,6 @@
     "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.0",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
-    "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
     "valibot": "1.5.0",
     "vite": "8.3.4",

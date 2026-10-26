@@ -6,12 +6,13 @@ import { repoRelativePath } from "../packages/portable-path/src/index";
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 
 // The repository depends on no `typescript` package: what resolves there is
-// whichever copy a linter peers on. The classic API is `typescript6`, the
-// TypeScript 7 API is `tsrs/unstable/*`. The lint rule covers static imports in linted files;
-// this census also covers `require`, dynamic `import()`, and files the linter
-// never reads (shell scripts that embed `bun -e` programs, plain .mjs).
+// whichever copy a linter peers on. The retired `typescript6` alias is gone
+// too. Syntax walks use oxc-parser, programs use `tsrs/unstable/*`. The lint
+// rule covers static imports in linted files; this census also covers
+// `require`, dynamic `import()`, and files the linter never reads (shell
+// scripts that embed `bun -e` programs, plain .mjs).
 const CLASSIC_API_IMPORT =
-  /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|^\s*import\s+)(["'])typescript\1/mu;
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|^\s*import\s+)(["'])typescript6?\1/mu;
 
 const SCANNED = /\.(?:[cm]?[jt]sx?|sh)$/u;
 // This file names the forbidden forms as fixtures.
@@ -36,12 +37,14 @@ test("the pattern recognizes every import form", () => {
     'const ts = await import("typescript");',
     'const ts = require("typescript");',
     'import "typescript";',
+    'import ts from "typescript6";',
+    'const ts = require("typescript6");',
   ]) {
     expect(CLASSIC_API_IMPORT.test(source)).toBe(true);
   }
   for (const source of [
-    'import ts from "typescript6";',
     'import { API } from "tsrs/unstable/sync";',
+    'import { parseSync } from "oxc-parser";',
     'const language = "typescript";',
   ]) {
     expect(CLASSIC_API_IMPORT.test(source)).toBe(false);

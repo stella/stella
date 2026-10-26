@@ -1,5 +1,5 @@
 {
   "metric": "direct-third-party-declarations",
-  "delta": 2,
-  "reason": "apps/api declares tsrs and typescript6 because its own scripts and source guards import those compiler APIs; a filtered install of apps/api links only declared packages. Both already exist as root catalog entries, so no new package enters the tree."
+  "delta": 1,
+  "reason": "apps/api declares tsrs because its own scripts and source guards build TypeScript programs with it; a filtered install of apps/api links only declared packages. tsrs already exists as a root catalog entry, so no new package enters the tree."
 }

@@ -639,13 +639,6 @@ const PROBED_WITHOUT_LLMS_TXT = [
     ],
   ],
   [
-    "typescript6",
-    [
-      "https://www.typescriptlang.org/llms.txt",
-      "https://raw.githubusercontent.com/microsoft/TypeScript/HEAD/llms.txt",
-    ],
-  ],
-  [
     "unified",
     ["https://unifiedjs.com/llms.txt", "https://unifiedjs.com/docs/llms.txt"],
   ],

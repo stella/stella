@@ -39,7 +39,6 @@
         "stylelint": "catalog:",
         "tsrs": "catalog:",
         "turbo": "2.11.7",
-        "typescript6": "catalog:",
         "valibot": "catalog:",
       },
     },
@@ -1753,7 +1752,6 @@
     "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.0",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
-    "typescript6": "npm:typescript@6.0.3",
     "use-intl": "4.14.9",
     "valibot": "1.5.0",
     "vite": "8.3.4",
@@ -5829,8 +5827,6 @@
     "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "typescript-auto-import-cache": ["typescript-auto-import-cache@0.3.6", "", { "dependencies": { "semver": "^7.3.8" } }, "sha512-RpuHXrknHdVdK7wv/8ug3Fr0WNsNi5l5aB8MYYuXhq2UH5lnEB1htJ1smhtD5VeCsGr2p8mUDtd83LCQDFVgjQ=="],
-
-    "typescript6": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "ua-parser-js": ["ua-parser-js@1.0.41", "", { "bin": { "ua-parser-js": "script/cli.js" } }, "sha512-LbBDqdIC5s8iROCUjMbW1f5dJQTEFB1+KO9ogbvlb3nm9n4YHa5p4KTvFPWvh2Hs8gZMBuiB1/8+pdfe/tDPug=="],
 
