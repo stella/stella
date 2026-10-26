@@ -18,10 +18,19 @@ import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
+import {
+  type CallExpression,
+  type Expression,
+  type Node,
+  type ObjectExpression,
+  type ParsedSource,
+  parseSource,
+  type PropertyKey,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import {
   formattedArtifactsLikeRepository,
@@ -141,27 +150,77 @@ export const schemaSourceFiles = (): string[] =>
  * The first sentence of the comment directly above `node`, flattened to one
  * line; empty when there is none.
  */
-export const leadingSummary = (node: ts.Node, source: string): string => {
-  const ranges = ts.getLeadingCommentRanges(source, node.getFullStart()) ?? [];
+const isLineBreak = (character: string | undefined) =>
+  character === "\n" ||
+  character === "\r" ||
+  character === "\u2028" ||
+  character === "\u2029";
+
+/**
+ * The comments that lead `node`: those after the line break that ends the
+ * previous token's line, or every one at the start of the file.
+ */
+const leadingCommentRanges = (node: Node, parsed: ParsedSource) => {
+  const { comments, sourceText } = parsed;
+  const commentEndingAt = new Map(
+    comments.map((comment) => [comment.end, comment]),
+  );
+  const commentStartingAt = new Map(
+    comments.map((comment) => [comment.start, comment]),
+  );
+  // Back over the whitespace and comments between the previous token and
+  // `node` to where the previous token ends.
+  let position = node.start;
+  for (;;) {
+    while (position > 0 && /\s/u.test(sourceText.charAt(position - 1))) {
+      position -= 1;
+    }
+    const comment = commentEndingAt.get(position);
+    if (comment === undefined) {
+      break;
+    }
+    position = comment.start;
+  }
+  const ranges: { start: number; end: number; multiLine: boolean }[] = [];
+  let collecting = position === 0;
+  while (position < node.start) {
+    const character = sourceText.charAt(position);
+    if (isLineBreak(character)) {
+      collecting = true;
+      position += 1;
+      continue;
+    }
+    const comment = commentStartingAt.get(position);
+    if (comment === undefined) {
+      position += 1;
+      continue;
+    }
+    if (collecting) {
+      ranges.push({
+        end: comment.end,
+        multiLine: comment.type === "Block",
+        start: comment.start,
+      });
+    }
+    position = comment.end;
+  }
+  return ranges;
+};
+
+export const leadingSummary = (node: Node, parsed: ParsedSource): string => {
+  const ranges = leadingCommentRanges(node, parsed);
   // A JSDoc block, or the run of line comments, nearest the declaration.
   const nearest = ranges.at(-1);
   if (nearest === undefined) {
     return "";
   }
-  const block =
-    nearest.kind === ts.SyntaxKind.MultiLineCommentTrivia
-      ? [nearest]
-      : ranges
-          .slice(
-            ranges.findLastIndex(
-              (range) => range.kind === ts.SyntaxKind.MultiLineCommentTrivia,
-            ) + 1,
-          )
-          .filter(
-            (range) => range.kind === ts.SyntaxKind.SingleLineCommentTrivia,
-          );
+  const block = nearest.multiLine
+    ? [nearest]
+    : ranges
+        .slice(ranges.findLastIndex((range) => range.multiLine) + 1)
+        .filter((range) => !range.multiLine);
   const text = block
-    .map((range) => source.slice(range.pos, range.end))
+    .map((range) => parsed.sourceText.slice(range.start, range.end))
     .join("\n")
     .split("\n")
     .map(commentLineText)
@@ -176,54 +235,86 @@ export const leadingSummary = (node: ts.Node, source: string): string => {
     : sentence;
 };
 
-const calleeName = (expression: ts.Expression): string | null => {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
+/** A string literal's or substitution-free template's text. */
+const stringText = (node: Node | undefined): string | undefined => {
+  if (node?.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
+  if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
+  }
+  return undefined;
+};
+
+const calleeName = (expression: Node): string | null => {
+  if (expression.type === "Identifier") {
+    return expression.name;
+  }
+  if (expression.type === "MemberExpression" && !expression.computed) {
+    return expression.property.type === "PrivateIdentifier"
+      ? `#${expression.property.name}`
+      : expression.property.name;
   }
   return null;
 };
 
+/** The first node, in source order, `match` reads a value from. */
+const findFirst = <T>(
+  root: Node,
+  match: (node: Node) => T | null,
+): T | null => {
+  let found: T | null = null;
+  walk(root, (node) => {
+    if (found !== null) {
+      return "skip-children";
+    }
+    found = match(node);
+    return found === null ? undefined : "skip-children";
+  });
+  return found;
+};
+
 /** The `pgTable(...)` call an exported initializer makes, if any. */
-const findTableCall = (node: ts.Node): ts.CallExpression | null => {
-  if (ts.isCallExpression(node)) {
-    const name = calleeName(node.expression);
-    if (name !== null && TABLE_BUILDERS.has(name)) {
-      return node;
+const findTableCall = (root: Node): CallExpression | null =>
+  findFirst(root, (node) => {
+    if (node.type === "CallExpression") {
+      const name = calleeName(node.callee);
+      if (name !== null && TABLE_BUILDERS.has(name)) {
+        return node;
+      }
     }
-  }
-  return ts.forEachChild(node, findTableCall) ?? null;
-};
+    return null;
+  });
 
-const findViewCall = (node: ts.Node): ts.CallExpression | null => {
-  if (ts.isCallExpression(node) && calleeName(node.expression) === "pgView") {
-    return node;
-  }
-  return ts.forEachChild(node, findViewCall) ?? null;
-};
+const findViewCall = (root: Node): CallExpression | null =>
+  findFirst(root, (node) =>
+    node.type === "CallExpression" && calleeName(node.callee) === "pgView"
+      ? node
+      : null,
+  );
 
-const findViewSource = (node: ts.Node): string | null => {
-  if (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === "from"
-  ) {
-    const source = node.arguments.at(0);
-    if (source !== undefined && ts.isIdentifier(source)) {
-      return source.text;
+const findViewSource = (root: Node): string | null =>
+  findFirst(root, (node) => {
+    if (
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      calleeName(node.callee) === "from"
+    ) {
+      const source = node.arguments.at(0);
+      if (source?.type === "Identifier") {
+        return source.name;
+      }
     }
-  }
-  return ts.forEachChild(node, findViewSource) ?? null;
-};
+    return null;
+  });
 
 /** `pgTable(...).enableRLS()`: RLS switched on by the declaration's own chain. */
-const enablesRls = (node: ts.Expression): boolean =>
-  ts.isCallExpression(node) &&
-  ts.isPropertyAccessExpression(node.expression) &&
-  (node.expression.name.text === "enableRLS" ||
-    enablesRls(node.expression.expression));
+const enablesRls = (node: Node): boolean =>
+  node.type === "CallExpression" &&
+  node.callee.type === "MemberExpression" &&
+  !node.callee.computed &&
+  (calleeName(node.callee) === "enableRLS" || enablesRls(node.callee.object));
 
 /**
  * A column builder chain, innermost call first: `p.text("x").notNull()` is
@@ -231,18 +322,19 @@ const enablesRls = (node: ts.Expression): boolean =>
  */
 const describeColumn = (
   key: string,
-  initializer: ts.Expression,
+  initializer: Expression,
 ): Pick<IndexedColumn, "builder" | "flags" | "sqlName"> => {
   const flags = new Set<string>();
-  let current: ts.Expression = initializer;
+  let current: Node = initializer;
   let builder = "?";
   let sqlName = key;
-  while (ts.isCallExpression(current)) {
-    const callee = current.expression;
+  while (current.type === "CallExpression") {
+    const callee = current.callee;
     const name = calleeName(callee) ?? "?";
     if (
-      ts.isPropertyAccessExpression(callee) &&
-      ts.isCallExpression(callee.expression)
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.object.type === "CallExpression"
     ) {
       switch (name) {
         case "notNull":
@@ -280,14 +372,11 @@ const describeColumn = (
         default:
           break;
       }
-      current = callee.expression;
+      current = callee.object;
       continue;
     }
     builder = name;
-    const named = current.arguments.at(0);
-    if (named !== undefined && ts.isStringLiteralLike(named)) {
-      sqlName = named.text;
-    }
+    sqlName = stringText(current.arguments.at(0)) ?? sqlName;
     break;
   }
   if (!flags.has("not null")) {
@@ -300,8 +389,8 @@ const describeColumn = (
   };
 };
 
-const propertyKey = (name: ts.PropertyName): string | null =>
-  ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? name.text : null;
+const propertyKey = (name: PropertyKey): string | null =>
+  name.type === "Identifier" ? name.name : (stringText(name) ?? null);
 
 type IndexSchemaSourceOptions = {
   fileName: string;
@@ -312,52 +401,36 @@ export const indexSchemaSource = ({
   fileName,
   source,
 }: IndexSchemaSourceOptions): IndexedTable[] => {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const lineOf = (node: ts.Node) =>
-    sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile)).line +
-    1;
+  const parsed = parseSource(fileName, source);
+  const lineOf = (node: Node) => parsed.locate(node.start).line;
+  const textOf = (node: Node) => source.slice(node.start, node.end);
   const tables: IndexedTable[] = [];
-  const declarations = sourceFile.statements.flatMap((statement) => {
+  const declarations = parsed.program.body.flatMap((statement) => {
     if (
-      !ts.isVariableStatement(statement) ||
-      !statement.modifiers?.some(
-        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-      )
+      statement.type !== "ExportNamedDeclaration" ||
+      statement.declaration?.type !== "VariableDeclaration"
     ) {
       return [];
     }
-    return statement.declarationList.declarations.filter(
-      (
-        declaration,
-      ): declaration is ts.VariableDeclaration & {
-        name: ts.Identifier;
-        initializer: ts.Expression;
-      } =>
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer !== undefined,
+    return statement.declaration.declarations.flatMap(({ id, init }) =>
+      id.type === "Identifier" && init !== null
+        ? [{ initializer: init, name: id.name, statement }]
+        : [],
     );
   });
-  const tableColumns = new Map<string, ts.ObjectLiteralExpression>();
+  const tableColumns = new Map<string, ObjectExpression>();
   for (const declaration of declarations) {
     const call = findTableCall(declaration.initializer);
     const columnsArgument = call?.arguments.at(1);
-    if (
-      columnsArgument !== undefined &&
-      ts.isObjectLiteralExpression(columnsArgument)
-    ) {
-      tableColumns.set(declaration.name.text, columnsArgument);
+    if (columnsArgument?.type === "ObjectExpression") {
+      tableColumns.set(declaration.name, columnsArgument);
     }
   }
   for (const declaration of declarations) {
     const tableCall = findTableCall(declaration.initializer);
     const viewCall = findViewCall(declaration.initializer);
     const call = tableCall ?? viewCall;
-    const nameArgument = call?.arguments.at(0);
+    const sqlName = stringText(call?.arguments.at(0));
     const ownColumnsArgument = tableCall?.arguments.at(1);
     const viewSource =
       viewCall === null ? null : findViewSource(declaration.initializer);
@@ -366,10 +439,8 @@ export const indexSchemaSource = ({
       (viewSource === null ? undefined : tableColumns.get(viewSource));
     if (
       call === null ||
-      nameArgument === undefined ||
-      !ts.isStringLiteralLike(nameArgument) ||
-      columnsArgument === undefined ||
-      !ts.isObjectLiteralExpression(columnsArgument)
+      sqlName === undefined ||
+      columnsArgument?.type !== "ObjectExpression"
     ) {
       continue;
     }
@@ -377,45 +448,46 @@ export const indexSchemaSource = ({
     for (const property of columnsArgument.properties) {
       // Columns a helper spreads in are listed by the helper's name, so a
       // reader knows to follow it rather than finding the table short.
-      if (ts.isSpreadAssignment(property)) {
-        const helper = property.expression.getText(sourceFile);
+      if (property.type === "SpreadElement") {
+        const helper = textOf(property.argument);
         columns.push({
           builder: "spread",
           flags: [],
           key: `{...${helper}}`,
           line: lineOf(property),
           sqlName: `{...${helper}}`,
-          summary: leadingSummary(property, source),
+          summary: leadingSummary(property, parsed),
         });
         continue;
       }
-      if (!ts.isPropertyAssignment(property)) {
+      // Only `key: value` entries; shorthand, methods and accessors are not
+      // columns.
+      if (property.kind !== "init" || property.method || property.shorthand) {
         continue;
       }
-      const key = propertyKey(property.name);
+      const key = property.computed ? null : propertyKey(property.key);
       if (key === null) {
         continue;
       }
       columns.push({
         key,
         line: lineOf(property),
-        summary: leadingSummary(property, source),
-        ...describeColumn(key, property.initializer),
+        summary: leadingSummary(property, parsed),
+        ...describeColumn(key, property.value),
       });
     }
-    const statement = declaration.parent.parent;
+    const { statement } = declaration;
     tables.push({
       columns,
-      exportName: declaration.name.text,
+      exportName: declaration.name,
       line: lineOf(statement),
       rls:
-        (tableCall !== null &&
-          calleeName(tableCall.expression) === "withRLS") ||
+        (tableCall !== null && calleeName(tableCall.callee) === "withRLS") ||
         enablesRls(declaration.initializer) ||
         (tableCall !== null &&
-          /Policies\(\)|pgPolicy\(/u.test(tableCall.getText(sourceFile))),
-      sqlName: nameArgument.text,
-      summary: leadingSummary(statement, source),
+          /Policies\(\)|pgPolicy\(/u.test(textOf(tableCall))),
+      sqlName,
+      summary: leadingSummary(statement, parsed),
     });
   }
   return tables;
