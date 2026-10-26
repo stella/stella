@@ -1279,6 +1279,7 @@ test("a question over the provider budget fails alone while the others are asked
     generation: {
       task: "classify",
       dataClass: "customer",
+      userId: null,
       orgAIConfig: null,
       managedAIResidency: "eu",
       organizationId,
