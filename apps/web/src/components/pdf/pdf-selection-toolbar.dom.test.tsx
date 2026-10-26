@@ -3,6 +3,8 @@ import { createRef } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, beforeEach, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
@@ -116,7 +118,7 @@ const mountViewer = (
             role: "member",
             ai: true,
             deepl: false,
-            ocr: false,
+            ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
             desktop: "none",
             settings: undefined,
           })}
