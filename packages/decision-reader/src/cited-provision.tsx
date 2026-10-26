@@ -1,26 +1,16 @@
 import { useState } from "react";
-import type {
-  KeyboardEvent,
-  MouseEventHandler,
-  ReactElement,
-  ReactNode,
-} from "react";
+import type { KeyboardEvent, MouseEventHandler, ReactNode } from "react";
 
 import { panic } from "better-result";
 
 import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { PanelRightIcon } from "@stll/ui/icons";
-import {
-  PreviewCard,
-  PreviewCardPopup,
-  PreviewCardTrigger,
-} from "@stll/ui/preview-card";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { LEGAL_CITATION_LINK_CLASS_NAME } from "./citation-link";
 import { BlockRenderer } from "./document-ast-text";
 import {
   fullProvisionOutcome,
@@ -46,134 +36,79 @@ import type {
   ProvisionPreviewData,
   ProvisionViewPayload,
 } from "./reader-types";
+import {
+  PEEK_ACTION_PRESENCE,
+  ReferencePeek,
+  ReferencePeekHeader,
+  usePeekActionItems,
+} from "./reference-peek";
+import type { PeekActionPresence, PeekMetaPart } from "./reference-peek";
+import type { ReferencePeekTarget } from "./reference-peek.logic";
 
-/**
- * The `·` before a header part belongs to the part, so a part that gives way
- * entirely takes its separator with it instead of leaving a stray dot.
- * Generated content with empty alternative text: seen, never announced.
- */
-const SEPARATED_PART =
-  "before:text-muted-foreground before:mx-1.5 before:content-['·'_/_'']";
-
-/**
- * Whether the header's open button waits for its card. A card in the text or
- * the margin sits beside many others, so its button appears only while the
- * reader points at or focuses that card; a hover card is already the one
- * thing the reader is looking at, so its button stays.
- */
-export const PROVISION_OPEN_BUTTON = {
-  always: "always",
-  revealOnCard: "reveal-on-card",
-} as const;
-
-type ProvisionOpenButton =
-  (typeof PROVISION_OPEN_BUTTON)[keyof typeof PROVISION_OPEN_BUTTON];
-
-/** The card a revealed open button belongs to. */
+/** The card a revealed header action belongs to (`PEEK_ACTION_PRESENCE`). */
 const PROVISION_CARD_GROUP = "group/provision-card";
 
-/**
- * Opacity alone, so the button keeps its slot (the date beside it never
- * reflows on hover) and its tab stop (focusing it reveals it). A coarse
- * pointer cannot hover, so there it always shows.
- */
-const OPEN_BUTTON_PRESENCE = {
-  always: "",
-  "reveal-on-card":
-    "opacity-0 transition-opacity group-hover/provision-card:opacity-100 group-focus-within/provision-card:opacity-100 pointer-coarse:opacity-100",
-} as const satisfies Record<ProvisionOpenButton, string>;
-
 type ProvisionCardHeaderProps = {
+  /** Whether the actions wait for their card to be pointed at or focused. */
+  actionPresence: PeekActionPresence;
   /** What the card is about, e.g. `§ 226 odst. 1`; never shortened. */
   label: string;
-  openButton: ProvisionOpenButton;
-  provision: ProvisionViewPayload;
+  provision: CitedProvisionTarget;
+};
+
+/** A provision's actions: the side panel, its act's page, no publisher copy. */
+const useProvisionPeekTarget = (
+  provision: CitedProvisionTarget,
+): ReferencePeekTarget => {
+  const { openProvision, provisionPageLink } = useReaderAdapters();
+  return {
+    kind: "provision",
+    actions: {
+      openInSidePanel: () => openProvision(provision.payload),
+      openInStella: provisionPageLink(provision),
+      openOriginal: null,
+    },
+  };
+};
+
+/** The provision's facts after its label: the act, then the wording's date. */
+const useProvisionHeaderMeta = (
+  provision: ProvisionViewPayload,
+): PeekMetaPart[] => {
+  const messages = useReaderMessages();
+  const actText = messages.provisionActText(provision);
+  const date = messages.formatValidityDate(provision.versionValidFrom);
+  return [
+    ...(actText === "" ? [] : [{ part: "act", text: actText }]),
+    {
+      part: "date",
+      text:
+        date === null
+          ? messages["statutes.wordingVersionUnknown"]
+          : messages.provisionEffectiveFrom(date),
+    },
+  ];
 };
 
 /**
- * The one header every cited-provision card draws, inline under a paragraph,
- * in the margin and in the citation's hover card: one row naming the
- * provision, the act by number and title, the date the quoted wording took
- * effect, and a button that opens the provision.
- *
- * The row never wraps, and the open button sits outside the part that gives
- * way, so it is always there to press. The provision label is what the card
- * is about, so it gives way last: the act's title goes first (it takes only
- * the room left once the label and the date fit), then the date, and the
- * label is cut only when it alone is wider than the row (its full text stays
- * in the tooltip).
+ * The header every cited-provision card draws, inline under a paragraph and
+ * in the margin: the peek header the citation's own peek draws, naming the
+ * provision, the act by number and title and the date the quoted wording
+ * took effect, with the provision's actions.
  */
 export const ProvisionCardHeader = ({
+  actionPresence,
   label,
-  openButton,
   provision,
-}: ProvisionCardHeaderProps) => {
-  const messages = useReaderMessages();
-  const { openProvision } = useReaderAdapters();
-  const actText = messages.provisionActText(provision);
-  const date = messages.formatValidityDate(provision.versionValidFrom);
-
-  return (
-    <span
-      className="reader-chrome flex min-w-0 items-center gap-1.5"
-      data-slot="provision-card-header"
-    >
-      <span
-        className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
-        data-slot="provision-card-summary"
-      >
-        <BidiText
-          as="span"
-          className="max-w-full shrink-0 truncate text-sm font-medium"
-          data-slot="provision-card-label"
-          title={label}
-        >
-          {label}
-        </BidiText>
-        {actText !== "" && (
-          <span
-            className={cn(
-              "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
-              SEPARATED_PART,
-            )}
-            data-slot="provision-card-act"
-            title={actText}
-          >
-            <BidiText>{actText}</BidiText>
-          </span>
-        )}
-        <span
-          className={cn(
-            "text-muted-foreground min-w-0 truncate text-xs",
-            SEPARATED_PART,
-          )}
-          data-slot="provision-card-date"
-        >
-          {date === null
-            ? messages["statutes.wordingVersionUnknown"]
-            : messages.provisionEffectiveFrom(date)}
-        </span>
-      </span>
-      <span
-        className={cn("flex shrink-0", OPEN_BUTTON_PRESENCE[openButton])}
-        data-slot="provision-card-open"
-      >
-        <Button
-          aria-label={messages["statutes.openProvision"]}
-          onClick={(event) => {
-            event.stopPropagation();
-            openProvision(provision);
-          }}
-          size="icon-xs"
-          tooltip={messages["statutes.openProvision"]}
-          variant="ghost"
-        >
-          <PanelRightIcon aria-hidden="true" className="size-3.5" />
-        </Button>
-      </span>
-    </span>
-  );
-};
+}: ProvisionCardHeaderProps) => (
+  <ReferencePeekHeader
+    actionPresence={actionPresence}
+    actions={usePeekActionItems(useProvisionPeekTarget(provision))}
+    kind="provision"
+    meta={useProvisionHeaderMeta(provision.payload)}
+    primary={label}
+  />
+);
 
 /**
  * Hides a one-line row whose text does not fit on its line, rather than
@@ -569,9 +504,9 @@ export const CitedProvisionExpansion = ({
       tabIndex={0}
     >
       <ProvisionCardHeader
+        actionPresence={PEEK_ACTION_PRESENCE.revealOnCard}
         label={label}
-        openButton={PROVISION_OPEN_BUTTON.revealOnCard}
-        provision={first.payload}
+        provision={first}
       />
       <div
         className={cn(
@@ -628,10 +563,9 @@ export const CitedProvisionExpansion = ({
 };
 
 /**
- * The hover card's content, read only while the card is open. Inline cards
- * grow with the reader's single scroll; the hover card floats over the
- * reader, so a long provision scrolls inside a viewport-bound cap instead of
- * running past the screen edge where the reader's scroll cannot reach it.
+ * The peek's body, read only while the peek is open: where the provision
+ * sits and its wording. The shell bounds its height and scrolls it, so a
+ * long provision never runs past the screen edge.
  */
 export const CitedProvisionPeek = ({
   provision,
@@ -644,51 +578,44 @@ export const CitedProvisionPeek = ({
   const wording = wordings.at(0)?.wording;
   const label = provision.payload.provisionLabel;
   return (
-    <ScrollArea
-      axis="vertical"
-      className="max-h-[min(24rem,calc(100dvh-6rem))]"
-      data-slot="provision-preview-scroll"
-      scrollFade
-    >
-      <div className="flex flex-col gap-1.5">
-        <ProvisionCardHeader
-          label={label}
-          openButton={PROVISION_OPEN_BUTTON.always}
-          provision={provision.payload}
-        />
-        <ProvisionTrailLine
-          language={wording?.language}
-          trail={provisionTrail({ label, passage, wording })}
-        />
-        <PassageBody passage={passage} />
-      </div>
-    </ScrollArea>
+    <>
+      <ProvisionTrailLine
+        language={wording?.language}
+        trail={provisionTrail({ label, passage, wording })}
+      />
+      <PassageBody passage={passage} />
+    </>
   );
 };
 
 type CitedProvisionLinkProps = {
   children: ReactNode;
+  className?: string | undefined;
   provision: CitedProvisionTarget;
-  previewOpen: boolean;
-  onPreviewOpenChange: (open: boolean) => void;
-  link: ReactElement;
-  /** The wording of `provision` alone, as the host read it. */
-  wordings: readonly CitedWording[];
+  /** The peek's body, which reads the wording once it is mounted. */
+  body: ReactNode;
 };
 
 /** Hover or a plain click peeks at wording without interrupting the sentence. */
 export const CitedProvisionLink = ({
   children,
+  className,
   provision,
-  previewOpen,
-  onPreviewOpenChange,
-  link,
-  wordings,
-}: CitedProvisionLinkProps) => (
-  <PreviewCard onOpenChange={onPreviewOpenChange} open={previewOpen}>
-    <PreviewCardTrigger render={link}>{children}</PreviewCardTrigger>
-    <PreviewCardPopup className="reader-chrome w-[min(32rem,calc(100vw-2rem))] max-w-none flex-col p-3">
-      <CitedProvisionPeek provision={provision} wordings={wordings} />
-    </PreviewCardPopup>
-  </PreviewCard>
-);
+  body,
+}: CitedProvisionLinkProps) => {
+  const { provisionPageLink } = useReaderAdapters();
+  return (
+    <ReferencePeek
+      body={body}
+      header={{
+        primary: provision.payload.provisionLabel,
+        meta: useProvisionHeaderMeta(provision.payload),
+      }}
+      target={useProvisionPeekTarget(provision)}
+      className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
+      trigger={{ type: "link", element: provisionPageLink(provision) }}
+    >
+      {children}
+    </ReferencePeek>
+  );
+};

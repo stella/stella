@@ -52,7 +52,7 @@ export const DecisionPassageCitation = ({
         }}
         passage={citation.excerpt}
         paragraphNumber={citation.courtParagraphNumber}
-        onOpen={() => onOpen(citation.anchorId)}
+        onOpenInSidePanel={() => onOpen(citation.anchorId)}
       />
     </>
   );

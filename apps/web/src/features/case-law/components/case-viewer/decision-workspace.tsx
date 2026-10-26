@@ -637,7 +637,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
-  const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const { citationAnchors, unresolvedCitationAnchors } =
+    useDecisionCitationAnchors(decisionId);
   const {
     anchors: provisionAnchors,
     externalAnchors: externalProvisionAnchors,
@@ -1190,6 +1191,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                       ),
                     ]}
                     citationAnchors={citationAnchors}
+                    unresolvedCitationAnchors={unresolvedCitationAnchors}
                     decision={decision}
                     decisionId={decisionId}
                     expandProvisions={

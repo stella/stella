@@ -1,25 +1,19 @@
-import { useState } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import { ReferencePeek } from "@stll/decision-reader/reference-peek";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import {
-  PreviewCard,
-  PreviewCardPopup,
-  PreviewCardTrigger,
-} from "@stll/ui/preview-card";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
+import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { ProvisionVersionBasisLabel } from "@/components/provision-version-basis";
 import type { ProvisionGroup } from "@/features/case-law/components/case-viewer/provisions-cited.logic";
 import type { ResolvedCitedStatute } from "@/features/case-law/queries/provisions";
+import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
@@ -39,21 +33,29 @@ type ProvisionReferenceChipProps = {
   /** What the cited anchor is cut on to find its provision's heading. */
   anchorSeparator: string | null;
   provision: ProvisionGroup;
+  /** The cited work's title and jurisdiction, as the side panel names them. */
+  statuteTitle: string;
+  jurisdiction: string;
   versionMarker: "group" | "exception";
 };
 
-/** A compact reference; wording is read only while its preview is open. */
-export const ProvisionReferenceChip = ({
-  target,
-  label,
+type ProvisionReferenceBodyProps = {
+  document: ProvisionDocument | null;
+  anchorSeparator: string | null;
+  provision: ProvisionGroup;
+};
+
+/**
+ * What the peek shows about the cited provision: the version it was read
+ * against, its wording and the decision's sentences citing it. Mounted only
+ * while the peek is open, so the wording is read only then.
+ */
+const ProvisionReferenceBody = ({
+  document,
   anchorSeparator,
   provision,
-  versionMarker,
-}: ProvisionReferenceChipProps) => {
-  const document = target.type === "hosted" ? target.document : null;
+}: ProvisionReferenceBodyProps) => {
   const t = useTranslations();
-  const format = useFormatter();
-  const [open, setOpen] = useState(false);
   const {
     data: wording,
     isError,
@@ -65,147 +67,164 @@ export const ProvisionReferenceChip = ({
       citedAnchor: provision.anchor,
       documentId: document?.id ?? "",
     }),
-    enabled: open && document !== null,
+    enabled: document !== null,
   });
-  const count = provision.occurrences.length;
 
   return (
-    <PreviewCard open={open} onOpenChange={setOpen}>
-      <PreviewCardTrigger
-        render={
+    <>
+      <ProvisionVersionBasisLabel basis={provision.versionBasis} />
+      {document !== null && isPending && <Skeleton className="h-12 w-full" />}
+      {isError && (
+        <div className="flex items-center gap-2">
+          <span className="text-muted-foreground text-xs">
+            {t("errors.actionFailed")}
+          </span>
           <Button
             size="xs"
-            variant="secondary"
-            className="h-auto max-w-full min-w-0 flex-wrap justify-start text-start"
-            // Focus already opens the preview; a click that follows it must not close it.
-            onClick={() => setOpen(true)}
-          />
-        }
-      >
-        <BidiText as="span" className="text-xs">
-          {label}
-        </BidiText>
-        {versionMarker === "exception" && (
-          <Tooltip>
-            <TooltipTrigger render={<span data-version-basis="exception" />}>
-              <ProvisionVersionBasisLabel
-                basis={provision.versionBasis}
-                compact
-              />
-            </TooltipTrigger>
-            <TooltipPopup>
-              <ProvisionVersionBasisLabel basis={provision.versionBasis} />
-            </TooltipPopup>
-          </Tooltip>
-        )}
-        {count > 1 && (
-          <span
-            className="text-muted-foreground text-2xs tabular-nums"
-            aria-label={t("caseLaw.viewer.provisionMentionsLabel", { count })}
+            variant="ghost"
+            onClick={() =>
+              detached(refetch(), "case-law.provision-preview-retry")
+            }
           >
-            {t("caseLaw.viewer.provisionMentions", { count })}
-          </span>
-        )}
-      </PreviewCardTrigger>
-      <PreviewCardPopup align="start" className="w-80 max-w-[calc(100vw-2rem)]">
-        <div className="flex min-w-0 flex-col gap-2">
-          <BidiText as="span" className="text-sm font-medium">
-            {label}
-          </BidiText>
-          <ProvisionVersionBasisLabel basis={provision.versionBasis} />
-          {document !== null && (
-            <BidiText as="span" className="text-muted-foreground text-2xs">
-              {formatValidityRange({
-                format,
-                openEnded: t("statutes.openEnded"),
-                validFrom: document.versionValidFrom,
-                validTo: document.versionValidTo,
-              })}
-            </BidiText>
-          )}
-          {document !== null && isPending && (
-            <Skeleton className="h-12 w-full" />
-          )}
-          {isError && (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-xs">
-                {t("errors.actionFailed")}
-              </span>
-              <Button
-                size="xs"
-                variant="ghost"
-                onClick={() =>
-                  detached(refetch(), "case-law.provision-preview-retry")
-                }
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
-          )}
-          {wording !== undefined && wording !== null && (
-            <BidiText
-              as="span"
-              className="line-clamp-6 text-xs leading-relaxed"
-              lang={wording.language}
-            >
-              {wording.blocks.map(({ text }) => text).join("\n\n")}
-            </BidiText>
-          )}
-          <span className="text-muted-foreground text-2xs">
-            {t("caseLaw.viewer.citedDecisionPassage")}
-          </span>
-          <ScrollArea axis="vertical" className="max-h-40" scrollFade>
-            <div className="flex flex-col gap-2">
-              {provision.occurrences.map(({ sentenceText, spanStart }) => (
-                <BidiText
-                  as="span"
-                  className="text-xs leading-relaxed"
-                  key={spanStart}
-                >
-                  {sentenceText}
-                </BidiText>
-              ))}
-            </div>
-          </ScrollArea>
-          {target.type === "external" && (
-            <Button
-              size="xs"
-              variant="outline"
-              className="w-fit"
-              render={
-                <a
-                  href={sanitizeHref(target.href)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                />
-              }
-            >
-              {t("chat.webSearch.openSource", { source: "EUR-Lex" })}
-            </Button>
-          )}
-          {document !== null && (
-            <Button
-              size="xs"
-              variant="outline"
-              className="w-fit"
-              render={
-                <Link
-                  hash={provision.anchor}
-                  {...createStatuteLinkTarget({
-                    country: document.country,
-                    documentId: document.id,
-                    eli: document.eli,
-                    slug: document.slug,
-                    versionValidFrom: document.versionValidFrom,
-                  })}
-                />
-              }
-            >
-              {t("statutes.openProvision")}
-            </Button>
-          )}
+            {t("common.retry")}
+          </Button>
         </div>
-      </PreviewCardPopup>
-    </PreviewCard>
+      )}
+      {wording !== undefined && wording !== null && (
+        <BidiText
+          as="span"
+          className="line-clamp-6 text-xs leading-relaxed"
+          lang={wording.language}
+        >
+          {wording.blocks.map(({ text }) => text).join("\n\n")}
+        </BidiText>
+      )}
+      <span className="text-muted-foreground text-2xs">
+        {t("caseLaw.viewer.citedDecisionPassage")}
+      </span>
+      {provision.occurrences.map(({ sentenceText, spanStart }) => (
+        <BidiText as="span" className="text-xs leading-relaxed" key={spanStart}>
+          {sentenceText}
+        </BidiText>
+      ))}
+    </>
+  );
+};
+
+/** A compact reference; wording is read only while its peek is open. */
+export const ProvisionReferenceChip = ({
+  target,
+  label,
+  anchorSeparator,
+  provision,
+  statuteTitle,
+  jurisdiction,
+  versionMarker,
+}: ProvisionReferenceChipProps) => {
+  const document = target.type === "hosted" ? target.document : null;
+  const t = useTranslations();
+  const format = useFormatter();
+  const inspector = useInspectorView();
+  const count = provision.occurrences.length;
+  const anchorId = provisionHeadingAnchor(provision.anchor, anchorSeparator);
+
+  return (
+    <ReferencePeek
+      body={
+        <ProvisionReferenceBody
+          anchorSeparator={anchorSeparator}
+          document={document}
+          provision={provision}
+        />
+      }
+      header={{
+        primary: label,
+        meta:
+          document === null
+            ? []
+            : [
+                {
+                  part: "date",
+                  text: formatValidityRange({
+                    format,
+                    openEnded: t("statutes.openEnded"),
+                    validFrom: document.versionValidFrom,
+                    validTo: document.versionValidTo,
+                  }),
+                },
+              ],
+      }}
+      target={{
+        kind: "provision",
+        actions: {
+          openInSidePanel:
+            document === null
+              ? null
+              : () =>
+                  inspector.open(
+                    createProvisionViewTab({
+                      anchorId,
+                      documentId: document.id,
+                      eli: document.eli,
+                      highlightAnchorId: provision.anchor,
+                      jurisdiction,
+                      provisionLabel: label,
+                      statuteTitle,
+                      versionCount: 1,
+                      versionValidFrom: document.versionValidFrom,
+                    }),
+                  ),
+          openInStella:
+            document === null ? null : (
+              <Link
+                hash={provision.anchor}
+                {...createStatuteLinkTarget({
+                  country: document.country,
+                  documentId: document.id,
+                  eli: document.eli,
+                  slug: document.slug,
+                  versionValidFrom: document.versionValidFrom,
+                })}
+              />
+            ),
+          openOriginal: target.type === "external" ? target.href : null,
+        },
+      }}
+      trigger={{
+        type: "button",
+        element: (
+          <Button
+            className="h-auto max-w-full min-w-0 flex-wrap justify-start text-start"
+            size="xs"
+            variant="secondary"
+          />
+        ),
+      }}
+    >
+      <BidiText as="span" className="text-xs">
+        {label}
+      </BidiText>
+      {versionMarker === "exception" && (
+        <Tooltip>
+          <TooltipTrigger render={<span data-version-basis="exception" />}>
+            <ProvisionVersionBasisLabel
+              basis={provision.versionBasis}
+              compact
+            />
+          </TooltipTrigger>
+          <TooltipPopup>
+            <ProvisionVersionBasisLabel basis={provision.versionBasis} />
+          </TooltipPopup>
+        </Tooltip>
+      )}
+      {count > 1 && (
+        <span
+          className="text-muted-foreground text-2xs tabular-nums"
+          aria-label={t("caseLaw.viewer.provisionMentionsLabel", { count })}
+        >
+          {t("caseLaw.viewer.provisionMentions", { count })}
+        </span>
+      )}
+    </ReferencePeek>
   );
 };

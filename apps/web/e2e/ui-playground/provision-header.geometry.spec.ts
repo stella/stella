@@ -1,12 +1,12 @@
 /**
- * The cited-provision header keeps to one row, keeps its open button, and
- * gives way in order.
+ * The cited-provision header, the shared peek header, keeps to one row,
+ * keeps its actions, and gives way in order.
  *
  * Measured on the bench at `/dev?visual=provision-header`, which draws the
  * product's own header with a label naming three cited parts at widths from
- * a roomy card down to one narrower than the row's fixed parts. At every
- * width: the row is one line, the open button lies inside the card and is
- * what a click at its centre hits, the date gives way only once the act's
+ * a roomy card down to one narrower than the label alone. At every width:
+ * the row is one line, every action lies inside the card, the first is what
+ * a click at its centre hits, the date gives way only once the act's
  * title is gone, and the label is cut only once the date is gone. Every
  * project runs it, so it holds right to left (`ar`) as well.
  */
@@ -20,7 +20,7 @@ import {
 } from "../helpers/stable-geometry";
 
 const SECTION = '[data-playground-section="provision-header"]';
-const BENCH_WIDTHS = [72, 120, 180, 240, 300, 360, 440, 560, 720];
+const BENCH_WIDTHS = [120, 180, 240, 300, 360, 440, 560, 720];
 const BENCH_LABEL = "§ 226 odst. 1, § 226 odst. 2, § 226 odst. 3";
 
 /** Sub-pixel rounding is not a part giving way. */
@@ -45,10 +45,10 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
   await waitForStableGeometry(page, page.locator(SECTION));
   return await page.evaluate(
     ({ sectionSelector, tolerance }) => {
-      const part = (section: Element, slot: string): HTMLElement => {
-        const element = section.querySelector(`[data-slot="${slot}"]`);
+      const part = (section: Element, selector: string): HTMLElement => {
+        const element = section.querySelector(selector);
         if (!(element instanceof HTMLElement)) {
-          throw new Error(`provision header bench is missing ${slot}`);
+          throw new Error(`provision header bench is missing ${selector}`);
         }
         return element;
       };
@@ -56,17 +56,25 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
         if (!(section instanceof HTMLElement)) {
           throw new Error("provision header bench section is not an element");
         }
-        const header = part(section, "provision-card-header");
-        const summary = part(section, "provision-card-summary");
-        const label = part(section, "provision-card-label");
-        const act = part(section, "provision-card-act");
-        const date = part(section, "provision-card-date");
+        const header = part(section, '[data-slot="reference-peek-header"]');
+        const summary = part(section, '[data-slot="reference-peek-summary"]');
+        const label = part(section, '[data-slot="reference-peek-primary"]');
+        const act = part(
+          section,
+          '[data-slot="reference-peek-meta"][data-part="act"]',
+        );
+        const date = part(
+          section,
+          '[data-slot="reference-peek-meta"][data-part="date"]',
+        );
+        const actions = part(section, '[data-slot="reference-peek-actions"]');
         const button = header.querySelector("button");
         if (!(button instanceof HTMLElement)) {
           throw new Error("provision header bench is missing its open button");
         }
         const card = section.getBoundingClientRect();
         const box = button.getBoundingClientRect();
+        const actionsBox = actions.getBoundingClientRect();
         const hit = document.elementFromPoint(
           box.left + box.width / 2,
           box.top + box.height / 2,
@@ -79,7 +87,9 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
           buttonInside:
             box.width > 0 &&
             box.left >= card.left - tolerance &&
-            box.right <= card.right + tolerance,
+            box.right <= card.right + tolerance &&
+            actionsBox.left >= card.left - tolerance &&
+            actionsBox.right <= card.right + tolerance,
           dateTruncated: date.scrollWidth > date.clientWidth,
           dateWidth: date.getBoundingClientRect().width,
           labelTitle: label.getAttribute("title"),
@@ -102,7 +112,9 @@ test("header measurements wait for a moving button inside a fixed section", asyn
   });
   await expect(page.locator(SECTION)).toHaveCount(BENCH_WIDTHS.length);
   const section = page.locator(SECTION).first();
-  const button = section.locator('[data-slot="provision-card-header"] button');
+  const button = section
+    .locator('[data-slot="reference-peek-header"] button')
+    .first();
   await expect(button).toBeVisible();
   const before = await readGeometry(page);
   expect(before.at(0)?.buttonInside).toBe(true);
@@ -168,7 +180,7 @@ test("the header keeps one row and its open button, and gives way act first, the
   await page.goto("/dev?visual=provision-header", { waitUntil: "commit" });
   await expect(page.locator(SECTION)).toHaveCount(BENCH_WIDTHS.length);
   await expect(
-    page.locator(`${SECTION} [data-slot="provision-card-date"]`).first(),
+    page.locator(`${SECTION} [data-part="date"]`).first(),
   ).toBeVisible();
 
   const headers = await readGeometry(page);

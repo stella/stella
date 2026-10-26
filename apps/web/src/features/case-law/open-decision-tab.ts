@@ -18,11 +18,11 @@ import type { MouseEvent } from "react";
 
 import { useNavigate } from "@tanstack/react-router";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import {
   createCaseDecisionViewTab,
-  isPlainPrimaryClick,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";

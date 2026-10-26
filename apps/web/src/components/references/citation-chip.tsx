@@ -39,7 +39,7 @@ const CITATION_RENDERERS: CitationRenderers = {
     preview,
     presentation,
     paragraphNumber,
-    onOpen,
+    onOpenInSidePanel,
     label,
     citingText,
   }) => (
@@ -47,7 +47,7 @@ const CITATION_RENDERERS: CitationRenderers = {
       citingText={citingText}
       decision={decision}
       label={label}
-      onOpen={onOpen}
+      onOpenInSidePanel={onOpenInSidePanel}
       paragraphNumber={paragraphNumber}
       passage={passage}
       presentation={presentation}

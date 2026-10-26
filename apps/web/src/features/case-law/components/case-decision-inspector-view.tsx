@@ -83,7 +83,8 @@ export const CaseDecisionInspectorView = ({
   const { payload } = tab;
   const textScale = useReaderTextScale("decision");
   const decisionId = toSafeId<"caseLawDecision">(payload.decisionId);
-  const citationAnchors = useDecisionCitationAnchors(decisionId);
+  const { citationAnchors, unresolvedCitationAnchors } =
+    useDecisionCitationAnchors(decisionId);
   const {
     data: decision,
     isError,
@@ -302,6 +303,7 @@ export const CaseDecisionInspectorView = ({
                   surface="inspector"
                   annotationAnchors={annotations.anchors}
                   citationAnchors={citationAnchors}
+                  unresolvedCitationAnchors={unresolvedCitationAnchors}
                   decision={decision}
                   decisionId={decisionId}
                   expandProvisions={provisions.expandProvisions}

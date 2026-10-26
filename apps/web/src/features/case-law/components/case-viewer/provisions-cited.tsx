@@ -394,7 +394,9 @@ const WorkReferences = ({
                 anchorSeparator={provisionAnchorSeparatorFor(
                   group.jurisdiction,
                 )}
+                jurisdiction={group.jurisdiction}
                 provision={provision}
+                statuteTitle={title}
                 versionMarker={
                   exceptions.has(provision.key) ? "exception" : "group"
                 }

@@ -17,6 +17,7 @@ import type {
   DecisionProvisionAnchor,
   DecisionStatuteCitationAnchor,
   ExternalDecisionProvisionAnchor,
+  UnresolvedCitationAnchorSource,
 } from "@stll/decision-reader/reader-types";
 import { visibleDecisionBlocks } from "@stll/legal-ast/case-law-reader";
 import { locateCitationSpans } from "@stll/legal-ast/citation-passage";
@@ -42,6 +43,8 @@ export type WebDecisionReaderProps = Omit<
   surface: DecisionReaderSurface;
   landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
+  unresolvedCitationAnchors?:
+    readonly UnresolvedCitationAnchorSource[] | undefined;
   externalProvisionAnchors?:
     readonly ExternalDecisionProvisionAnchor[] | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
@@ -69,6 +72,7 @@ const openEnclosingDisclosures = (target: HTMLElement) => {
 const WebDecisionReaderContent = ({
   annotationAnchors = NO_ANCHORS,
   citationAnchors = NO_ANCHORS,
+  unresolvedCitationAnchors = NO_ANCHORS,
   provisionAnchors = NO_ANCHORS,
   externalProvisionAnchors = NO_ANCHORS,
   statuteCitationAnchors = NO_ANCHORS,
@@ -141,6 +145,9 @@ const WebDecisionReaderContent = ({
     blocks,
     annotationAnchors: hydrated ? annotationAnchors : NO_ANCHORS,
     citationAnchors: citations,
+    unresolvedCitationAnchors: hydrated
+      ? unresolvedCitationAnchors
+      : NO_ANCHORS,
     provisionAnchors: hydrated ? provisionAnchors : NO_ANCHORS,
     externalProvisionAnchors: hydrated ? externalProvisionAnchors : NO_ANCHORS,
     statuteCitationAnchors: hydrated ? statuteCitationAnchors : NO_ANCHORS,

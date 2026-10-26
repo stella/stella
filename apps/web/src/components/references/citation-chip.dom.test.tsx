@@ -234,7 +234,7 @@ test("reader answer citations pick the paragraph chip for the open decision and 
         })
       }
       onCitation={() => undefined}
-      onOpen={() => undefined}
+      onOpenInSidePanel={() => undefined}
       onFollowUp={() => undefined}
       onRegenerate={() => undefined}
       onDelete={() => undefined}

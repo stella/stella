@@ -1321,7 +1321,7 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
         size="sm"
         variant="outline"
       >
-        {t("fileDetail.openInSidePanel")}
+        {t("common.openInSidePanel")}
       </Button>
     </div>
   );

@@ -1,27 +1,25 @@
-import { useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
+import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
+import { ReferencePeek } from "@stll/decision-reader/reference-peek";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
-import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
-import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
-import { ScrollArea } from "@stll/ui/scroll-area";
-import { containedEventHandler } from "@stll/ui/use-contained-handler";
+import { LandmarkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
+import { detached } from "@/lib/detached";
 
 export type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
@@ -31,7 +29,8 @@ export type DecisionCitationChipProps = {
   presentation?: DecisionCitationPresentation | undefined;
   /** The court's own number on the cited block; null when it printed none. */
   paragraphNumber?: number | null | undefined;
-  onOpen?: (() => void) | undefined;
+  /** Opens the decision beside the text; omitted where nothing can dock. */
+  onOpenInSidePanel?: (() => void) | undefined;
   /**
    * Prose that already names the decision ("III. ÚS 2429/24"). It becomes
    * the trigger itself, quietly underlined, instead of being followed by a
@@ -176,15 +175,13 @@ export const DecisionCitationChip = ({
   preview,
   presentation = DECISION_CITATION_PRESENTATION.compact,
   paragraphNumber = null,
-  onOpen,
+  onOpenInSidePanel,
   label,
   citingText,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLAnchorElement | null>(null);
-  const restoringFocus = useRef(false);
+  const navigate = useNavigate();
   const date =
     formatDecisionDate(decision.decisionDate, format) ??
     t("caseLaw.citation.dateUnavailable");
@@ -220,124 +217,79 @@ export const DecisionCitationChip = ({
   // The resolver validates a served reader route; native navigation stays on
   // this deployment even when source metadata names the public app origin.
   const readerHref = `${readerUrl.pathname}${readerUrl.search}${readerUrl.hash}`;
-  const originalUrl = sanitizeHref(links.source_url ?? "");
+  const originalUrl = sanitizeHref(links.source_url) ?? null;
+  // A plain click opens the full page in the app; every browser gesture
+  // follows the href.
+  const onOpenPage = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!isPlainPrimaryClick(event)) {
+      return;
+    }
+    event.preventDefault();
+    detached(navigate({ href: readerHref }), "decision-citation.open-page");
+  };
+  const body =
+    preview === undefined &&
+    paragraph === null &&
+    passage === undefined ? undefined : (
+      <>
+        {preview}
+        {preview === undefined && paragraph !== null && (
+          <span className="text-sm">
+            {t("caseLaw.citation.paragraphLabel", { paragraph })}
+          </span>
+        )}
+        {passage !== undefined && (
+          <div className="text-sm wrap-anywhere whitespace-pre-wrap" dir="auto">
+            {passage}
+          </div>
+        )}
+      </>
+    );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        aria-label={reference}
-        data-decision-citation={decision.decisionId}
-        data-citation-presentation={presentation}
-        nativeButton={false}
-        openOnHover
-        onFocus={(event) => {
-          if (event.currentTarget === event.target && !restoringFocus.current) {
-            setOpen(true);
-          }
-        }}
-        onClick={containedEventHandler((event) => {
-          // Focus or hover may already have opened the preview. A primary
-          // press opens it explicitly instead of toggling it closed.
-          event.preventBaseUIHandler();
-          if (!isPlainPrimaryClick(event)) {
-            return;
-          }
-          event.preventDefault();
-          setOpen(true);
-        })}
-        render={
+    <ReferencePeek
+      body={body}
+      header={{
+        primary: decision.caseNumber,
+        meta: [
+          { part: "court", text: decision.court },
+          { part: "date", text: date },
+        ],
+      }}
+      target={{
+        kind: "decision",
+        actions: {
+          openInSidePanel: onOpenInSidePanel ?? null,
+          openInStella: (
+            // oxlint-disable-next-line jsx-a11y/anchor-has-content -- a render element; the peek supplies its content
+            <a href={sanitizeHref(readerHref)} onClick={onOpenPage} />
+          ),
+          openOriginal: originalUrl,
+        },
+      }}
+      trigger={{
+        type: "link",
+        element: (
           <a
+            aria-label={reference}
             className={cn(
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
               triggerShapeClassName({ label, citingText }),
             )}
+            data-citation-presentation={presentation}
+            data-decision-citation={decision.decisionId}
             href={sanitizeHref(readerHref)}
-            ref={triggerRef}
           />
-        }
-      >
-        <DecisionCitationTriggerContent
-          citingText={citingText}
-          decision={decision}
-          label={label}
-          paragraph={paragraph}
-          presentation={presentation}
-        />
-      </PopoverTrigger>
-      <PopoverPanel
-        align="start"
-        className="w-80 max-w-[calc(100vw-2rem)]"
-        finalFocus={() => {
-          // Restoring keyboard focus after dismissal must not reopen the chip.
-          restoringFocus.current = true;
-          triggerRef.current?.focus({ preventScroll: true });
-          restoringFocus.current = false;
-          return false;
-        }}
-      >
-        {preview ?? (
-          <div className="flex flex-col gap-1">
-            <BidiText as="span" className="text-sm font-medium">
-              {decision.court}
-            </BidiText>
-            <BidiText as="span" className="text-sm">
-              {decision.caseNumber}
-            </BidiText>
-            {paragraph !== null && (
-              <span className="text-sm">
-                {t("caseLaw.citation.paragraphLabel", { paragraph })}
-              </span>
-            )}
-            <span className="text-muted-foreground text-xs">{date}</span>
-          </div>
-        )}
-        {passage !== undefined && (
-          <ScrollArea axis="vertical" className="max-h-64">
-            <div
-              className="text-sm wrap-anywhere whitespace-pre-wrap"
-              dir="auto"
-            >
-              {passage}
-            </div>
-          </ScrollArea>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button
-            render={<a href={sanitizeHref(readerHref)} />}
-            onClick={(event) => {
-              if (onOpen !== undefined && isPlainPrimaryClick(event)) {
-                event.preventDefault();
-                onOpen();
-                setOpen(false);
-              }
-            }}
-            size="sm"
-            variant="outline"
-          >
-            {t("common.openInStella")}
-          </Button>
-          {originalUrl ? (
-            <Button
-              render={
-                <a
-                  href={sanitizeHref(originalUrl)}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                />
-              }
-              size="sm"
-              variant="ghost"
-            >
-              {t("inspector.external.openOriginal")}
-              <ExternalLinkIcon aria-hidden="true" />
-            </Button>
-          ) : (
-            <Button disabled size="sm" variant="ghost">
-              {t("inspector.external.openOriginal")}
-            </Button>
-          )}
-        </div>
-      </PopoverPanel>
-    </Popover>
+        ),
+      }}
+    >
+      <DecisionCitationTriggerContent
+        citingText={citingText}
+        decision={decision}
+        label={label}
+        paragraph={paragraph}
+        presentation={presentation}
+      />
+    </ReferencePeek>
   );
 };

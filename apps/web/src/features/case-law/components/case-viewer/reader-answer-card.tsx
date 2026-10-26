@@ -61,7 +61,7 @@ const ReaderAnswerCitationChip = ({
         <CitationChip
           kind="decision"
           decision={target.decision}
-          onOpen={() => onCitation(citation)}
+          onOpenInSidePanel={() => onCitation(citation)}
           paragraphNumber={target.paragraphNumber}
           presentation="inline"
         />

@@ -10,6 +10,7 @@
   ],
   "exports": {
     "./annotation-anchors": "./src/annotation-anchors.tsx",
+    "./citation-click": "./src/citation-click.ts",
     "./citation-link": "./src/citation-link.tsx",
     "./citation-treatment": "./src/citation-treatment.ts",
     "./cited-provision": "./src/cited-provision.tsx",
@@ -37,6 +38,9 @@
     "./reader-text-scale.logic": "./src/reader-text-scale.logic.ts",
     "./reader-types": "./src/reader-types.ts",
     "./reader.css": "./src/reader.css",
+    "./reference-peek": "./src/reference-peek.tsx",
+    "./reference-peek-layering": "./src/reference-peek-layering.ts",
+    "./reference-peek.logic": "./src/reference-peek.logic.ts",
     "./sanitize-href": "./src/sanitize-href.ts",
     "./source-link-policy": "./src/source-link-policy.tsx",
     "./use-reader-text-scale": "./src/use-reader-text-scale.ts"

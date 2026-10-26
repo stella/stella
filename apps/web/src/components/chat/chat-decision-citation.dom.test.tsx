@@ -24,6 +24,8 @@ const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
 const { decisionOptions, decisionBySlugOptions } =
   await import("@/features/case-law/queries/decisions");
@@ -67,7 +69,9 @@ const mount = (client: InstanceType<typeof QueryClient>, children: ReactNode) =>
       <QueryClientProvider client={client}>
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
           <FormattingProvider locale="en" timeZone="UTC">
-            {children}
+            <WebReaderPresentationProvider>
+              {children}
+            </WebReaderPresentationProvider>
           </FormattingProvider>
         </IntlProvider>
       </QueryClientProvider>

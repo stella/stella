@@ -233,7 +233,7 @@ const anchors = [
 ];
 
 const cardLabel = (card: Element) =>
-  card.querySelector('[data-slot="provision-card-label"]')?.textContent;
+  card.querySelector('[data-slot="reference-peek-primary"]')?.textContent;
 
 const renderDecision = async (
   expandProvisions?: boolean,
@@ -402,13 +402,13 @@ describe("compact provision cards", () => {
     expect(cards).toHaveLength(3);
     for (const card of cards) {
       const headers = card.querySelectorAll(
-        '[data-slot="provision-card-header"]',
+        '[data-slot="reference-peek-header"]',
       );
       expect(headers).toHaveLength(1);
       const header = headers.item(0);
       expect(header.textContent).toContain(WORDING_VERSION_LABEL);
       const open = within(card).getByRole("button", {
-        name: messages.statutes.openProvision,
+        name: messages.common.openInSidePanel,
       });
       expect(header.contains(open)).toBe(true);
       // Icon-only: the name comes from the label, not from visible text.
@@ -422,7 +422,7 @@ describe("compact provision cards", () => {
       firstCard(view) ?? panic("Expected an expanded provision card");
     expect(card.getAttribute("aria-expanded")).toBe("false");
     const open = within(card).getByRole("button", {
-      name: messages.statutes.openProvision,
+      name: messages.common.openInSidePanel,
     });
     // Enter on the nested button leaves the card as it was: the browser's own
     // activation of that button is not cancelled by the card.
@@ -797,10 +797,11 @@ describe("one card per cited provision in a paragraph", () => {
 
 describe("the provision card header", () => {
   const headerParts = (header: Element) =>
-    [...header.querySelectorAll<HTMLElement>(":scope > *")].map((part) =>
-      part.matches("button")
-        ? "button"
-        : (part.dataset["slot"] ?? part.tagName.toLowerCase()),
+    [...header.querySelectorAll<HTMLElement | SVGElement>(":scope > *")].map(
+      (part) =>
+        part.dataset["part"] ??
+        part.dataset["slot"] ??
+        part.tagName.toLowerCase(),
     );
 
   const openPeek = async (
@@ -812,7 +813,7 @@ describe("the provision card header", () => {
     return await waitFor(
       () =>
         view.baseElement.querySelector<HTMLElement>(
-          '[data-slot="preview-card-content"]',
+          '[data-slot="reference-peek"]',
         ) ?? panic("The hover card did not open"),
     );
   };
@@ -820,14 +821,14 @@ describe("the provision card header", () => {
   test("the hover card and the inline card draw the same header", async () => {
     const view = await renderDecision(true);
     const inline =
-      view.container.querySelector('[data-slot="provision-card-header"]') ??
+      view.container.querySelector('[data-slot="reference-peek-header"]') ??
       panic("The inline card has no header");
     const peek = await openPeek(view, FIRST_CITATION);
     const peeked =
-      peek.querySelector('[data-slot="provision-card-header"]') ??
+      peek.querySelector('[data-slot="reference-peek-header"]') ??
       panic("The hover card has no header");
     expect(
-      peek.querySelectorAll('[data-slot="provision-card-header"]'),
+      peek.querySelectorAll('[data-slot="reference-peek-header"]'),
     ).toHaveLength(1);
     expect(peeked.className).toBe(inline.className);
     expect(headerParts(peeked)).toEqual(headerParts(inline));
@@ -837,38 +838,36 @@ describe("the provision card header", () => {
   // Which part gives way at which width is measured in a browser
   // (e2e/ui-playground/provision-header.geometry.spec.ts); this pins the
   // structure that measurement relies on, and runs on every pull request.
-  test("keeps the open button outside the part of the row that gives way", async () => {
+  test("keeps the actions outside the part of the row that gives way", async () => {
     const view = await renderDecision();
     const peek = await openPeek(view, FIRST_CITATION);
     const header =
-      peek.querySelector('[data-slot="provision-card-header"]') ??
+      peek.querySelector('[data-slot="reference-peek-header"]') ??
       panic("The hover card has no header");
     expect(headerParts(header)).toEqual([
-      "provision-card-summary",
-      "provision-card-open",
+      "reference-peek-kind",
+      "reference-peek-summary",
+      "reference-peek-actions",
     ]);
-    expect(
-      header.querySelector('[data-slot="provision-card-open"] > button'),
-    ).not.toBeNull();
     const summary =
-      header.querySelector('[data-slot="provision-card-summary"]') ??
+      header.querySelector('[data-slot="reference-peek-summary"]') ??
       panic("The header has no summary");
     // Each separator lives inside the part after it, so a part that gives
     // way entirely leaves no stray dot behind.
     expect(headerParts(summary)).toEqual([
-      "provision-card-label",
-      "provision-card-act",
-      "provision-card-date",
+      "reference-peek-primary",
+      "act",
+      "date",
     ]);
-    const classesOf = (slot: string) =>
-      header.querySelector(`[data-slot="${slot}"]`)?.classList ??
-      panic(`No ${slot}`);
+    const classesOf = (part: string) =>
+      header.querySelector(`[data-slot="${part}"], [data-part="${part}"]`)
+        ?.classList ?? panic(`No ${part}`);
     // One line that clips rather than wraps, beside a button it never clips.
     expect(
-      classesOf("provision-card-summary").contains("whitespace-nowrap"),
+      classesOf("reference-peek-summary").contains("whitespace-nowrap"),
     ).toBe(true);
     expect(
-      classesOf("provision-card-summary").contains("overflow-hidden"),
+      classesOf("reference-peek-summary").contains("overflow-hidden"),
     ).toBe(true);
     expect(header.classList.contains("overflow-hidden")).toBe(false);
     expect(header.classList.contains("flex-wrap")).toBe(false);
@@ -882,28 +881,28 @@ describe("the provision card header", () => {
       "min-w-0",
       "truncate",
     ]) {
-      expect(classesOf("provision-card-act").contains(token)).toBe(true);
+      expect(classesOf("act").contains(token)).toBe(true);
     }
     for (const token of ["min-w-0", "truncate"]) {
-      expect(classesOf("provision-card-date").contains(token)).toBe(true);
+      expect(classesOf("date").contains(token)).toBe(true);
     }
     for (const token of ["shrink-0", "max-w-full", "truncate"]) {
-      expect(classesOf("provision-card-label").contains(token)).toBe(true);
+      expect(classesOf("reference-peek-primary").contains(token)).toBe(true);
     }
     const label =
-      header.querySelector('[data-slot="provision-card-label"]') ??
+      header.querySelector('[data-slot="reference-peek-primary"]') ??
       panic("No label");
     expect(label.textContent).toBe(FIRST_CITATION);
     expect(label.getAttribute("title")).toBe(FIRST_CITATION);
-    expect(
-      header.querySelector('[data-slot="provision-card-act"]')?.textContent,
-    ).toBe("1/2026 Sb., Test Act");
-    expect(
-      header.querySelector('[data-slot="provision-card-date"]')?.textContent,
-    ).toBe(WORDING_VERSION_LABEL);
+    expect(header.querySelector('[data-part="act"]')?.textContent).toBe(
+      "1/2026 Sb., Test Act",
+    );
+    expect(header.querySelector('[data-part="date"]')?.textContent).toBe(
+      WORDING_VERSION_LABEL,
+    );
   });
 
-  test("a card's open button waits for its own card, stays reachable by keyboard and shows on touch", async () => {
+  test("a card's actions wait for their own card, stay reachable by keyboard and show on touch", async () => {
     const view = await renderDecision(true);
     const REVEAL = [
       "opacity-0",
@@ -922,13 +921,13 @@ describe("the provision card header", () => {
       // at the text must not light every card's button at once.
       expect(card.classList.contains("group/provision-card")).toBe(true);
       const slot =
-        card.querySelector<HTMLElement>('[data-slot="provision-card-open"]') ??
-        panic("The card has no open button slot");
+        card.querySelector<HTMLElement>('[data-slot="reference-peek-actions"]') ??
+        panic("The card has no actions slot");
       for (const token of REVEAL) {
         expect(slot.classList.contains(token)).toBe(true);
       }
       const open = within(card).getByRole("button", {
-        name: messages.statutes.openProvision,
+        name: messages.common.openInSidePanel,
       });
       expect(slot.contains(open)).toBe(true);
       // Hidden by opacity alone: still in the tab order, so focus reveals it.
@@ -941,11 +940,11 @@ describe("the provision card header", () => {
       expect(open.ownerDocument.activeElement).toBe(open);
       expect(card.contains(open.ownerDocument.activeElement)).toBe(true);
     }
-    // The hover card is already what the reader looks at: its button stays.
+    // The hover card is already what the reader looks at: its actions stay.
     const peek = await openPeek(view, FIRST_CITATION);
     const peekSlot =
-      peek.querySelector<HTMLElement>('[data-slot="provision-card-open"]') ??
-      panic("The hover card has no open button slot");
+      peek.querySelector<HTMLElement>('[data-slot="reference-peek-actions"]') ??
+      panic("The hover card has no actions slot");
     expect(peekSlot.classList.contains("opacity-0")).toBe(false);
   });
 
@@ -1021,11 +1020,11 @@ describe("the provision card header", () => {
     }
   });
 
-  test("the icon button opens the provision", async () => {
+  test("the side panel action opens the provision", async () => {
     const view = await renderDecision();
     const peek = await openPeek(view, FIRST_CITATION);
     const open = within(peek).getByRole("button", {
-      name: messages.statutes.openProvision,
+      name: messages.common.openInSidePanel,
     });
     expect(open.textContent).toBe("");
     fireEvent.click(open);

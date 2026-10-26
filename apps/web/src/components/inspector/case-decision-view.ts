@@ -5,6 +5,8 @@ import type {
   CaseLawDecisionRouteInput,
   CaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
+import type { CitationClick } from "@stll/decision-reader/citation-click";
 import { decisionTitle } from "@stll/decision-reader/decision-title";
 
 import type {
@@ -199,21 +201,6 @@ export const createCaseDecisionViewTab = ({
     },
   };
 };
-
-type CitationClick = Pick<
-  MouseEvent,
-  "altKey" | "button" | "ctrlKey" | "metaKey" | "shiftKey"
->;
-
-/** True only for an unmodified primary click; every other gesture stays native. */
-export const isPlainPrimaryClick = ({
-  altKey,
-  button,
-  ctrlKey,
-  metaKey,
-  shiftKey,
-}: CitationClick): boolean =>
-  button === 0 && !altKey && !ctrlKey && !metaKey && !shiftKey;
 
 /** Plain primary clicks stay in context; browser navigation gestures remain native. */
 export const opensCitationInInspector = (
