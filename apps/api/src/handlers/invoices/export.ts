@@ -131,6 +131,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
           catch: (cause) =>
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "The invoice export could not be stored.",
               cause,
             }),
