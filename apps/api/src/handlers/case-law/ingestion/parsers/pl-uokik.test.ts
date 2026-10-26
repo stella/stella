@@ -310,7 +310,7 @@ describe("a UOKiK decision read as the office sets its pages", () => {
     ).toBe(true);
     // Never a paragraph of its own, nor the next line's first word.
     expect(
-      bodyOf(blocks).some(({ plainText }) => /^45 /u.test(plainText)),
+      bodyOf(blocks).some(({ plainText }) => plainText.startsWith("45 ")),
     ).toBe(false);
   });
 

@@ -1236,7 +1236,7 @@ const noteOpeningOf = (
 ): { label: string; runs: PlSnRun[] } | undefined => {
   const [first] = printedSpansOf(line);
   const leading = line.superscripts?.at(0);
-  if (leading !== undefined && leading.after === 0) {
+  if (leading?.after === 0) {
     return /^\d{1,3}$/u.test(leading.text)
       ? {
           label: leading.text,
