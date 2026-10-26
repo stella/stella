@@ -6,6 +6,7 @@ import {
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -46,6 +47,7 @@ describe("document-stage observation windows", () => {
       const observations: DocumentStageObservation[] = [];
       const page = Result.ok({
         decisions: [decision("recovered text")],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: null,
       });
       expect(
@@ -108,7 +110,11 @@ describe("document-stage observation windows", () => {
           source: ADAPTER_KEYS.CZ_NSS,
           fetch: async () => new Response(null, { status: 503 }),
         });
-        return Result.ok({ decisions: [], nextCursor: null });
+        return Result.ok({
+          decisions: [],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: null,
+        });
       },
     });
     expect(observations.at(-1)).toMatchObject({
@@ -223,6 +229,7 @@ describe("document-stage observation windows", () => {
         decision("   "),
         { ...decision("text"), documentDelivery: "deferred" },
       ],
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: null,
     } satisfies SyncPage);
     const result = await withDocumentStageWindow({
@@ -294,7 +301,12 @@ describe("document-stage observation windows", () => {
     const observations: DocumentStageObservation[] = [];
     await withDocumentStageWindow({
       source: ADAPTER_KEYS.CZ_NSS,
-      fetchPage: async () => Result.ok({ decisions: [], nextCursor: null }),
+      fetchPage: async () =>
+        Result.ok({
+          decisions: [],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: null,
+        }),
       now: () => 42,
       observe: (event) => {
         observations.push(event);
@@ -325,6 +337,7 @@ describe("document-stage observation windows", () => {
       fetchPage: async () =>
         Result.ok({
           decisions: [{ ...decision(""), isListingOnly: true }],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: null,
         }),
     });
@@ -429,6 +442,7 @@ describe("document-stage observation windows", () => {
     let callbacks = 0;
     const page = Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: null,
     } satisfies SyncPage);
     const result = await withDocumentStageWindow({
@@ -484,6 +498,7 @@ describe("document-stage observation windows", () => {
                 source === ADAPTER_KEYS.CZ_NSS
                   ? [decision("text")]
                   : [{ ...decision(""), isListingOnly: true }],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor: null,
             });
           },
@@ -545,7 +560,11 @@ describe("document-stage observation windows", () => {
             }),
           ).toBe(response);
           expect(response.bodyUsed).toBe(false);
-          return Result.ok({ decisions: [], nextCursor: null });
+          return Result.ok({
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: null,
+          });
         },
       });
       expect(observations.at(0)).toEqual({

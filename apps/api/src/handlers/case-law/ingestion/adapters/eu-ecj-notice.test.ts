@@ -25,6 +25,7 @@ import {
   corpusIndexGenerations,
 } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildDecision,
@@ -470,7 +471,11 @@ describe("notice publication outcomes", () => {
           observations.push(event);
         },
         fetchPage: async () =>
-          Result.ok({ decisions: [refused], nextCursor: null }),
+          Result.ok({
+            decisions: [refused],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: null,
+          }),
       });
       expect(observations.at(-1)).toMatchObject({
         filled: 1,

@@ -1625,6 +1625,7 @@ export const createPlNsaCrawler = ({
             },
           }),
       sourceUrl: plNsaShardUrl(snapshot, target),
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNsaCursor(next, snapshot),
     });
   };

@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
@@ -27,6 +28,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -3224,6 +3226,7 @@ export const euEcjAdapter = defineSourceAdapter({
         if (abortSignal.aborted) {
           return {
             decisions,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: dateFrom,
             itemBuildFailures: { type: "item_build_failed", count: failed },
           };
@@ -3240,6 +3243,7 @@ export const euEcjAdapter = defineSourceAdapter({
 
         return {
           decisions,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           itemBuildFailures: { type: "item_build_failed", count: failed },
         };

@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: cursor counters are validated before fetching; decision parsing is unchanged.
 // parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -28,6 +29,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -2652,6 +2654,7 @@ export const czRegionalAdapter = defineSourceAdapter({
             const next = advanceDate(state.date, skip);
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
               nextCursor:
                 next <= today
                   ? makeCursor({ date: next, page: 0, emptyDays: empty })
@@ -2702,6 +2705,7 @@ export const czRegionalAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: refused },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: nextCzRegionalListingCursor({
             state,
             totalPages: json.totalPages,

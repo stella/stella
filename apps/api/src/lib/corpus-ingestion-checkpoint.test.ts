@@ -10,6 +10,8 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { Temporal } from "@stll/time";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -24,6 +26,10 @@ import {
   PUBLISHER_REQUEST,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { encodePlNsaCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import { encodePlUodoCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { encodePlUokikCursor } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -410,6 +416,7 @@ describe("case-law source ingestion lease", () => {
             documentAst: EMPTY_AST,
           }),
         ],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: "lifecycle-page-2",
       });
     };
@@ -524,7 +531,11 @@ describe("case-law last sync", () => {
   // the check, not what it held.
   test("moves when the publisher answered, even with nothing new", async () => {
     const lastSyncAt = await runOnePage(async () =>
-      Result.ok({ decisions: [], nextCursor: "quiet-page" }),
+      Result.ok({
+        decisions: [],
+        nextCursor: "quiet-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      }),
     );
     expect(lastSyncAt?.getTime()).toBeGreaterThan(previousSync.getTime());
   });
@@ -535,6 +546,17 @@ describe("case-law last sync", () => {
         decisions: [],
         nextCursor: "parked-at-end",
         publisherRequest: PUBLISHER_REQUEST.NONE,
+      }),
+    );
+    expect(lastSyncAt).toEqual(previousSync);
+  });
+
+  test("stays when the page states its requests failed", async () => {
+    const lastSyncAt = await runOnePage(async () =>
+      Result.ok({
+        decisions: [],
+        nextCursor: "held-page",
+        publisherRequest: PUBLISHER_REQUEST.FAILED,
       }),
     );
     expect(lastSyncAt).toEqual(previousSync);
@@ -553,4 +575,87 @@ describe("case-law last sync", () => {
     );
     expect(lastSyncAt).toEqual(previousSync);
   });
+});
+
+/**
+ * Real adapters, parked where their own cursor says there is nothing to ask
+ * this cycle, run through the real pipeline. Each answers without a request,
+ * so the source's last sync must stay where its last request left it.
+ */
+describe("a parked adapter run keeps the last sync", () => {
+  const previousSync = new Date("2026-01-01T00:00:00.000Z");
+  const today = Temporal.Now.plainDateISO("UTC").toString();
+  const parked = [
+    {
+      adapterKey: ADAPTER_KEYS.PL_UODO,
+      cursor: encodePlUodoCursor({
+        mtimeMs: 1,
+        afterId: undefined,
+        parkedOn: today,
+      }),
+    },
+    {
+      adapterKey: ADAPTER_KEYS.PL_UOKIK,
+      cursor: encodePlUokikCursor({
+        phase: "tip",
+        read: 1,
+        total: 1,
+        anchor: undefined,
+        parkedOn: today,
+      }),
+    },
+    {
+      adapterKey: ADAPTER_KEYS.PL_NSA,
+      cursor: encodePlNsaCursor(
+        { shard: PL_NSA_SNAPSHOT.shards.length, row: 0 },
+        PL_NSA_SNAPSHOT,
+      ),
+    },
+  ] as const;
+
+  test.each(parked)(
+    "$adapterKey parked asks nothing and keeps its last sync",
+    async ({ adapterKey, cursor }) => {
+      const sourceId = createSafeId<"caseLawSource">();
+      await db.insert(caseLawSources).values({
+        id: sourceId,
+        adapterKey,
+        name: `parked ${adapterKey}`,
+        syncCursor: cursor,
+        lastSyncAt: previousSync,
+      });
+      try {
+        const lease = await acquireCaseLawSourceIngestionLease({
+          scopedDb,
+          sourceId,
+        });
+        if (!lease) {
+          throw new Error("parked source lease was not acquired");
+        }
+        try {
+          const result = await runIngestionPipeline({
+            acquireStoredTotalAdmission: async () => "held",
+            maxPages: 1,
+            scopedDb,
+            source: lease.source,
+            sourceLease: lease,
+          });
+          expect(result.haltReason).toBeNull();
+          expect(result.nextCursor).toBe(cursor);
+        } finally {
+          await lease.release();
+        }
+        const stored = (
+          await db
+            .select({ lastSyncAt: caseLawSources.lastSyncAt })
+            .from(caseLawSources)
+            .where(eq(caseLawSources.id, sourceId))
+            .limit(1)
+        ).at(0);
+        expect(stored?.lastSyncAt).toEqual(previousSync);
+      } finally {
+        await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      }
+    },
+  );
 });

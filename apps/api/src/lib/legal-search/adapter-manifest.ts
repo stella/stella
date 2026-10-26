@@ -851,6 +851,14 @@ export type DeferredDocumentAdapterKey = {
 type AdapterManifestEntry =
   (typeof ADAPTER_MANIFESTS)[keyof typeof ADAPTER_MANIFESTS];
 
+/**
+ * The edition a stored source row's adapter declares, or null for a key no
+ * manifest names (a retired or unknown adapter).
+ */
+export const adapterEditionOf = (key: string): AdapterEdition | null =>
+  Object.values(ADAPTER_MANIFESTS).find((manifest) => manifest.key === key)
+    ?.edition ?? null;
+
 const deferredDocumentKeys = (
   manifest: AdapterManifestEntry,
 ): DeferredDocumentAdapterKey[] => {

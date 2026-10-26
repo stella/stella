@@ -7,7 +7,10 @@ import {
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { defineSourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  defineSourceAdapter,
+  PUBLISHER_REQUEST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listAdapters,
   listDocumentStageAdapters,
@@ -88,7 +91,11 @@ describe("registered document stages", () => {
   test("the factory wires its page entrypoint through the registered stage observer", async () => {
     for (const registered of listAdapters()) {
       const observations: DocumentStageObservation[] = [];
-      const page = Result.ok({ decisions: [], nextCursor: null });
+      const page = Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
       const adapter = defineSourceAdapter({
         ...registered,
         fetchPage: async () => {

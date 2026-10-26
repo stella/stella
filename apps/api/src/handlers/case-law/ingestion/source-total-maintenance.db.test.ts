@@ -15,6 +15,7 @@ import {
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
@@ -267,7 +268,11 @@ describe.skipIf(!enabled)(
             const warnings = spyOn(logger, "warn");
             let counts = 0;
             czNsAdapter.fetchPage = async () =>
-              Result.ok({ decisions: [], nextCursor: null });
+              Result.ok({
+                decisions: [],
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+                nextCursor: null,
+              });
             const run = async () => {
               const lease = await acquireCaseLawSourceIngestionLease({
                 scopedDb,

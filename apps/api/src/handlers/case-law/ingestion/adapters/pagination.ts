@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: completion batches use the shared owner with identical items and cursor boundaries; parsed content is unchanged.
 import { panic, Result } from "better-result";
@@ -16,6 +17,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   DecisionSupplement,
   IngestionItem,
@@ -852,6 +854,7 @@ export const createPagePaginatedFetch = <TResponse>(
             });
             return Result.ok({
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.FAILED,
               nextCursor: encode(pageStartOffset + opts.pageSize),
             });
           }
@@ -1050,6 +1053,7 @@ export const createPagePaginatedFetch = <TResponse>(
               }),
           ...(supplements.length === 0 ? {} : { supplements }),
           ...(unreadItems.length === 0 ? {} : { unreadItems }),
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           sourceUrl: url,
         });

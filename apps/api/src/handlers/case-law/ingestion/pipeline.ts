@@ -228,7 +228,7 @@ const pageItemCount = ({
 
 /** One when the publisher answered a request for the page, else zero. */
 const publisherAnsweredCount = ({ publisherRequest }: SyncPage): number =>
-  publisherRequest === PUBLISHER_REQUEST.NONE ? 0 : 1;
+  publisherRequest === PUBLISHER_REQUEST.ANSWERED ? 1 : 0;
 
 /** Whether a run heard from the publisher, from the pages it answered. */
 const publisherCheckOf = (answeredPages: number): PublisherCheck =>

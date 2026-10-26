@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
@@ -65,6 +66,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   sourceTotalRead,
@@ -1601,6 +1603,7 @@ const plTkFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: firstUrl,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlTkCursor({
         stage: stageAfter(stage),
         read: { ...cursor.read, [stage]: read },
@@ -1699,6 +1702,7 @@ const plTkFetchPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlTkCursor({
       stage,
       read: { ...cursor.read, [stage]: read + consumed },

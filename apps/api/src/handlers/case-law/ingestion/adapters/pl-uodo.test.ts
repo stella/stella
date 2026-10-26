@@ -15,6 +15,7 @@ import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -789,6 +790,7 @@ describe("the crawl over modification time", () => {
     expect(Result.isOk(again) && again.value).toEqual({
       decisions: [],
       nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
     });
     expect(model.requests).toEqual([]);
   });

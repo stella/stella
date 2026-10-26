@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -66,6 +67,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
@@ -1375,6 +1377,7 @@ const plSnFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlSnCursor(window),
     });
   }
@@ -1458,6 +1461,7 @@ const plSnFetchPage = async (
             },
           }),
       sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlSnCursor(window),
     });
   }
@@ -1477,6 +1481,7 @@ const plSnFetchPage = async (
             },
           }),
       sourceUrl: window.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlSnCursor({
         month: window.month,
         offset: window.offset + window.served,
@@ -1496,6 +1501,7 @@ const plSnFetchPage = async (
           },
         }),
     sourceUrl: window.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor:
       next === null
         ? // The current month's tail, which is where the crawl lives once it

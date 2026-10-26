@@ -24,6 +24,7 @@ import { caseLawSources } from "@/api/db/schema";
 import { loadAdapterByKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { boundedAll } from "@/api/lib/db/bounded-all";
+import { adapterEditionOf } from "@/api/lib/legal-search/adapter-manifest";
 import {
   CASE_LAW_SOURCE_ROWS_BOUND,
   CASE_LAW_SOURCE_ROWS_INVARIANT,
@@ -38,6 +39,7 @@ import {
   CHECKED_FIELDS,
   readAdapterHealthMetrics,
 } from "@/api/scripts/adapter-health-query";
+import { STUCK_PREFIX, stuckSyncIssue } from "@/api/scripts/adapter-stuck";
 
 // This tool only reads; the read-only session makes that a property of every
 // transaction rather than a promise, and takes no maintenance lane.
@@ -135,14 +137,8 @@ type HealthReport = {
 
 // ── Config ──────────────────────────────────────────────
 
-/** Adapter is "stuck" if no growth in this many hours. */
-const STUCK_THRESHOLD_HOURS = 12;
-
 /** Flag an issue when coverage drops below this percentage. */
 const COVERAGE_THRESHOLD_PCT = 80;
-
-/** Issue prefix for stuck detection (used in summary counts). */
-const STUCK_PREFIX = "Stuck:" as const;
 
 /** Timeout for each remote total fetch (ms). */
 // The slowest total is the NSS full-range count, which the source itself
@@ -353,15 +349,16 @@ const buildReport = async (
     // Detect issues
     const issues: string[] = [];
 
-    // Stuck detection uses lastSyncAt exclusively: if the
-    // adapter hasn't synced in STUCK_THRESHOLD_HOURS, it's
-    // stuck regardless of what the growth window shows.
-    if (
-      source.enabled &&
-      hoursSinceSync !== null &&
-      hoursSinceSync > STUCK_THRESHOLD_HOURS
-    ) {
-      issues.push(`${STUCK_PREFIX} no sync in ${Math.round(hoursSinceSync)}h`);
+    // Stuck detection uses lastSyncAt exclusively: a live adapter that
+    // hasn't synced in STUCK_THRESHOLD_HOURS is stuck regardless of what the
+    // growth window shows.
+    const stuck = stuckSyncIssue({
+      edition: adapterEditionOf(source.adapterKey),
+      enabled: source.enabled,
+      hoursSinceSync,
+    });
+    if (stuck !== null) {
+      issues.push(stuck);
     }
 
     if (source.enabled && source.syncCursor === null && total > 0) {

@@ -8,6 +8,7 @@ import {
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS } from "@stll/time";
 
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   createNalusFetch,
   NALUS_REQUEST_INTERVAL_MS,
@@ -112,7 +113,11 @@ describe("the NALUS publisher budget", () => {
             { fetchStage },
           );
           expect(Result.isError(result)).toBe(true);
-          return Result.ok({ decisions: [], nextCursor: null });
+          return Result.ok({
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: null,
+          });
         },
       });
       if (fetchStage === "document") {

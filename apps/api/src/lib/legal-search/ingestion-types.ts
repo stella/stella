@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: scopes adapter callbacks for telemetry while preserving their arguments, returned values and rejection behavior.
 // parser-output-unchanged: raw-envelope codecs move unchanged into their pure owner; bytes and validation are identical.
 // parser-output-unchanged: classifies thrown page-fetch failures at the shared adapter boundary.
@@ -639,15 +640,25 @@ export type SyncPage = {
    */
   sourceUrl?: string | undefined;
   /**
-   * `none` when the adapter answered without asking the publisher anything,
-   * as a fixed snapshot read to its end parks. Such a page is no sync: the
-   * source's `last_sync_at` stays where its last request left it. Absent, the
-   * page came from a request.
+   * Whether the publisher was heard while building this page. Required, so
+   * an adapter cannot leave it to a default: only `answered` moves the
+   * source's `last_sync_at`, which coverage reads as how current it is.
    */
-  publisherRequest?: typeof PUBLISHER_REQUEST.NONE | undefined;
+  publisherRequest: PublisherRequest;
 };
 
-export const PUBLISHER_REQUEST = { NONE: "none" } as const;
+/** What a page says about asking the publisher. */
+export const PUBLISHER_REQUEST = {
+  /** A request reached the publisher and it answered, whatever it held. */
+  ANSWERED: "answered",
+  /** Nothing was asked: the cursor is parked, waiting, or past the end. */
+  NONE: "none",
+  /** Every request this page made failed; the page holds the cursor. */
+  FAILED: "failed",
+} as const;
+
+export type PublisherRequest =
+  (typeof PUBLISHER_REQUEST)[keyof typeof PUBLISHER_REQUEST];
 
 /** A read that did not produce a listed item, in the read-outcome vocabulary. */
 export type UnreadOutcome = Extract<

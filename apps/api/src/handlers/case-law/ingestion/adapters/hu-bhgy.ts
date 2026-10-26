@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -73,6 +74,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1832,6 +1834,7 @@ const sweepPage = async (
         return Result.ok({
           ...collectedPage(collected.value),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursor,
         });
       }
@@ -1840,6 +1843,7 @@ const sweepPage = async (
         return Result.ok({
           ...collectedPage(collected.value),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodeHuBhgyCursor({
             ...start,
             year,
@@ -1852,6 +1856,7 @@ const sweepPage = async (
       return Result.ok({
         ...collectedPage(collected.value),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor:
           after === null
             ? // Every window is swept. The tip takes over from the boundary
@@ -1876,6 +1881,7 @@ const sweepPage = async (
       return Result.ok({
         decisions: [],
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: encodeHuBhgyCursor({
           phase: "tip",
           walk: "head",
@@ -1892,6 +1898,7 @@ const sweepPage = async (
   return Result.ok({
     decisions: [],
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodeHuBhgyCursor({ ...start, year, slug, offset }),
   });
 };
@@ -1943,6 +1950,7 @@ const tipPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
     });
   }
@@ -1956,6 +1964,7 @@ const tipPage = async (
     return Result.ok({
       ...collectedPage(collected.value),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -1964,6 +1973,7 @@ const tipPage = async (
     return Result.ok({
       ...collectedPage(collected.value),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -1984,6 +1994,7 @@ const tipPage = async (
   return Result.ok({
     ...collectedPage(collected.value),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodeHuBhgyCursor({
       phase: "tip",
       walk: "catch-up",

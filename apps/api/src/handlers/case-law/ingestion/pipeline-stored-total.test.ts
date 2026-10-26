@@ -8,6 +8,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -56,7 +57,11 @@ test("a real pipeline deadline admits one exact count and persists its pair", as
       panic("Expected source ingestion lease");
     }
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [], nextCursor: null });
+      Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
     const budgetMs = 300_000;
     const startedAt = performance.now();
     let admissions = 0;

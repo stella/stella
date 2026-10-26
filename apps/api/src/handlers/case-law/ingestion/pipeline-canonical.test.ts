@@ -11,6 +11,7 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
@@ -1037,7 +1038,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({
@@ -1084,7 +1089,11 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
 
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [decision], nextCursor: "cursor-2" }),
+        Result.ok({
+          decisions: [decision],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor: "cursor-2",
+        }),
       );
 
     const result = await runIngestionPipeline({

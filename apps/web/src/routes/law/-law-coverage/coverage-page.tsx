@@ -35,6 +35,7 @@ import { parseDeterministicDate } from "@/lib/deterministic-date";
 import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
+  UTC_CALENDAR_DATE_FORMAT,
 } from "@/lib/relative-time";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
@@ -459,6 +460,39 @@ const HealthSignal = ({ health }: { health: CaseLawCoverageHealth }) => {
   );
 };
 
+/**
+ * A source's freshness. A fixed snapshot states the day it was taken beside
+ * its status: that day, not the last run, is how current it can ever be.
+ */
+const SourceHealth = ({ source }: { source: CaseLawCoverageSource }) => {
+  const format = useFormatter();
+  const { edition } = source;
+
+  switch (edition.type) {
+    case "live":
+      return <HealthSignal health={source.health} />;
+    case "snapshot": {
+      const taken = parseDeterministicDate(edition.snapshotDate);
+      return (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+          <HealthSignal health={source.health} />
+          <time
+            className="text-muted-foreground text-xs"
+            dateTime={edition.snapshotDate}
+          >
+            {taken === null
+              ? edition.snapshotDate
+              : format.dateTime(taken, UTC_CALENDAR_DATE_FORMAT)}
+          </time>
+        </span>
+      );
+    }
+    default:
+      edition satisfies never;
+      return panic("Unhandled case-law source edition");
+  }
+};
+
 type TableBlockProps = PropsWithChildren<{
   title: string;
 }>;
@@ -654,7 +688,7 @@ const SourcesTable = ({
                 : format.number(source.storedDecisions)}
             </TableCell>
             <TableCell>
-              <HealthSignal health={source.health} />
+              <SourceHealth source={source} />
             </TableCell>
             <TableCell className={"text-muted-foreground text-end"}>
               {source.lastSyncAt === null

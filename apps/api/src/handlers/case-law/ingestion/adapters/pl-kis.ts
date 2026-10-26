@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 import { panic, Result } from "better-result";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -65,6 +66,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceField,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -2062,6 +2064,7 @@ const sweepPage = async (
                 },
               }),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursor,
         });
       }
@@ -2077,6 +2080,7 @@ const sweepPage = async (
                 },
               }),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodePlKisCursor({ ...start, month, page: page + 1 }),
         });
       }
@@ -2092,6 +2096,7 @@ const sweepPage = async (
               },
             }),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor:
           after === null
             ? tip()
@@ -2100,7 +2105,12 @@ const sweepPage = async (
     }
     const after = nextMonth();
     if (after === null) {
-      return Result.ok({ decisions: [], sourceUrl: url, nextCursor: tip() });
+      return Result.ok({
+        decisions: [],
+        sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: tip(),
+      });
     }
     month = after;
     page = 0;
@@ -2108,6 +2118,7 @@ const sweepPage = async (
   return Result.ok({
     decisions: [],
     ...(url === undefined ? {} : { sourceUrl: url }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor({ ...start, month, page }),
   });
 };
@@ -2161,6 +2172,7 @@ const tipPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
     });
   }
@@ -2181,6 +2193,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -2196,6 +2209,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -2219,6 +2233,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -2235,6 +2250,7 @@ const tipPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor({
       phase: "tip",
       walk: "catch-up",
@@ -2292,6 +2308,7 @@ const undatedPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -2306,6 +2323,7 @@ const undatedPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor(
       (start.page + 1) * CRAWL_PAGE_SIZE < undated
         ? { ...start, page: start.page + 1 }

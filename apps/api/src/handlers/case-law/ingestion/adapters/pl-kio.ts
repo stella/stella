@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
 import type * as cheerio from "cheerio";
@@ -27,6 +28,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1768,6 +1770,7 @@ const fetchTailPage = async (
           },
         }),
     sourceUrl: listed.value.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: aborted
       ? cursor
       : encodePlKioCursor({ ...parked, tail: parked.tail + rows.length }),
@@ -1808,6 +1811,7 @@ const plKioFetchPage = async (
             },
           }),
       sourceUrl: listed.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlKioCursor(cursor),
     });
   }
@@ -1824,6 +1828,7 @@ const plKioFetchPage = async (
             },
           }),
       sourceUrl: listed.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlKioCursor({ ...cursor, offset: reached }),
     });
   }
@@ -1839,6 +1844,7 @@ const plKioFetchPage = async (
           },
         }),
     sourceUrl: listed.url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKioCursor(
       next === null
         ? { ...cursor, offset: reached }

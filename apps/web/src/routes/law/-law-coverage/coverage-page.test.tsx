@@ -349,6 +349,33 @@ describe("the coverage page states what it counts", () => {
     expect(markup).toContain(messages.caseLaw.coverage.healthCurrent);
   });
 
+  // A fixed release's currency is the day it was taken, stated in the
+  // reader's locale beside the status, never a recent run.
+  test("a snapshot source states its status with the day it was taken", () => {
+    const snapshot: CaseLawCoverageSource = {
+      ...NEARLY_COMPLETE,
+      adapterKey: "pl-nsa",
+      health: "snapshot",
+      edition: { type: "snapshot", snapshotDate: "2025-03-06" },
+    };
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [{ ...CZECHIA, sources: [snapshot] }],
+        }}
+      />,
+    );
+
+    expect(markup).toContain(messages.caseLaw.coverage.healthSnapshot);
+    expect(markup).toContain('dateTime="2025-03-06"');
+    expect(markup).toContain("Mar 6, 2025");
+    // A live source states no such day.
+    expect(render(<CaseLawCoveragePage coverage={COVERAGE} />)).not.toContain(
+      "<time",
+    );
+  });
+
   test("a publisher's own count is named as such", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 

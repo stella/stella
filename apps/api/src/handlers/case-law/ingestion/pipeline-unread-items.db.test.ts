@@ -14,6 +14,7 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SyncPage,
@@ -152,13 +153,19 @@ const forbidden = (id: string): UnreadListedItem => ({
 /** One crawl cycle over one page; returns where the cursor stands after it. */
 const cycle = async (
   sourceId: SafeId<"caseLawSource">,
-  page: Omit<SyncPage, "nextCursor">,
+  page: Omit<SyncPage, "nextCursor" | "publisherRequest">,
 ) => {
   const sourceLease =
     (await acquireCaseLawSourceIngestionLease({ scopedDb, sourceId })) ??
     panic("expected the source lease to be free");
   czNsAdapter.fetchPage = async () =>
-    await Promise.resolve(Result.ok({ ...page, nextCursor: "page-2" }));
+    await Promise.resolve(
+      Result.ok({
+        ...page,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "page-2",
+      }),
+    );
   const run = await runIngestionPipeline({
     acquireStoredTotalAdmission: async () => "held",
     source: sourceLease.source,
@@ -362,6 +369,7 @@ describe("a listed item whose read stays unavailable", () => {
         Result.ok({
           decisions: [],
           unreadItems: [forbidden("slotted")],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: "page-2",
         }),
       );

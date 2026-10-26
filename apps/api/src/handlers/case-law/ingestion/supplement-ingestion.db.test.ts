@@ -25,6 +25,7 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
+import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   DecisionSupplement,
   IngestionResult,
@@ -901,6 +902,7 @@ test("the crawl places a page's reasons after its decisions, from the payload it
       Result.ok({
         decisions: [decisionOf(RULING)],
         supplements: [supplementOf(REASONS)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: null,
       }),
     );
