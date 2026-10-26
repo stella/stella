@@ -85,7 +85,10 @@ describe("marking the query's words inside a headnote", () => {
   });
 
   test("marks nothing when there is no query, so a browse row reads unmarked", () => {
-    const segments = highlightSegments("Nájemní smlouva.", []);
+    const segments = highlightSegments(
+      "Nájemní smlouva.",
+      queryHighlightTokens(undefined),
+    );
 
     expect(hasHighlight(segments)).toBe(false);
     expect(segments).toEqual([
