@@ -237,13 +237,15 @@ export const useEditSession = ({
 
     // A request that never gets an answer still has a cause to report.
     const sent = await Result.tryPromise(async () => {
-      const { data, error } = await api["desktop-edit-sessions"]({
+      const answered = await api["desktop-edit-sessions"]({
         sessionId: session.sessionId,
       }).checkpoint.post({
         file,
         sessionToken: session.sessionToken,
       });
-      return { data, error };
+      return answered.error
+        ? ({ error: answered.error, data: null } as const)
+        : ({ error: null, data: answered.data } as const);
     });
     if (Result.isError(sent)) {
       return { type: "unreachable", error: sent.error };

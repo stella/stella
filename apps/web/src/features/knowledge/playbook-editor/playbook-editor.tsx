@@ -1339,7 +1339,7 @@ const PlaybookEditorForm = ({
       organizationId,
       playbookId,
       onReadError: (error) => {
-        notifyUserProblem(t("common.unexpectedError"), {
+        notifyUserError(error, t("common.unexpectedError"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
       },

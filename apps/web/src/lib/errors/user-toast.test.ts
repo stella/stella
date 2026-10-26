@@ -129,13 +129,11 @@ describe("notifyUserError", () => {
     spyOn(getAnalytics(), "captureError").mockImplementation(() => undefined);
     const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
     const caught: unknown = new Error("caught");
-    const maybe: Error | undefined = new Error("maybe");
 
     notifyUserError(caught, FAILURE);
-    notifyUserError(maybe, FAILURE);
     notifyUserError(new Error("plain"), FAILURE);
 
-    expect(add).toHaveBeenCalledTimes(3);
+    expect(add).toHaveBeenCalledTimes(2);
   });
 
   test("reports two different notices of one cause", () => {
@@ -253,3 +251,13 @@ const missingCauseContract = () => {
   notifyUserError(null, FAILURE);
 };
 void missingCauseContract;
+
+// A cause that may be missing has to be checked before it is reported.
+const optionalCauseContract = (maybe: Error | undefined) => {
+  // @ts-expect-error check the optional cause; report it, or notify a problem
+  notifyUserError(maybe, FAILURE);
+  if (maybe !== undefined) {
+    notifyUserError(maybe, FAILURE);
+  }
+};
+void optionalCauseContract;

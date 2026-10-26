@@ -37,11 +37,15 @@ type ProblemToastOptions = Omit<
 >;
 
 /**
- * A user-facing error names its cause. `undefined` or `null` here means there
- * is nothing to report, which is a problem notice, not an error: that goes
- * through {@link notifyUserProblem}. A caught `unknown` still passes.
+ * A user-facing error names its cause. A cause that is, or may be, `undefined`
+ * or `null` has nothing to report: check it first, and send the cause-free
+ * message through {@link notifyUserProblem}. A caught `unknown` still passes.
  */
-type NamedCause<Cause> = [Cause] extends [undefined | null] ? never : unknown;
+type NamedCause<Cause> = unknown extends Cause
+  ? unknown
+  : [Extract<Cause, null | undefined>] extends [never]
+    ? unknown
+    : never;
 
 type UserVisibleErrorReportOptions = {
   notice?: string | undefined;

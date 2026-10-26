@@ -1315,7 +1315,7 @@ const RegistryAutofillControl = ({
     }
 
     if (data instanceof Response || data.type !== "lookup" || !data.hit) {
-      notifyUserError(error, t("templates.registryNotFound"));
+      notifyUserProblem(t("templates.registryNotFound"));
       return;
     }
 
