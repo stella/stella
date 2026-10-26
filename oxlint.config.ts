@@ -1937,7 +1937,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-browser-storage.ts",
     "./.oxlint-plugins/no-raw-history-state.ts",
     "./.oxlint-plugins/no-literal-view-id.ts",
-    "./.oxlint-plugins/no-view-id-from-path.ts",
+    "./.oxlint-plugins/no-route-identity-from-path.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -3365,14 +3365,17 @@ const config = defineConfig({
       },
     },
     {
-      // The view on screen is read from the route match; a path parser
-      // restates the route tree and reads sibling pages as views.
+      // The matter page on screen is read from the route matches; a path
+      // parser or regex restates the route tree and reads sibling pages as
+      // views or documents. Tests are out of scope: their fetch stubs route
+      // API requests by path, which names no page on screen.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
-        ".oxlint-plugins/__fixtures__/no-view-id-from-path.fixture.ts",
+        ".oxlint-plugins/__fixtures__/no-route-identity-from-path.fixture.ts",
       ],
+      excludeFiles: ["apps/web/src/**/*.test.ts", "apps/web/src/**/*.test.tsx"],
       rules: {
-        "no-view-id-from-path/no-view-id-from-path": "error",
+        "no-route-identity-from-path/no-route-identity-from-path": "error",
       },
     },
     {

@@ -9,7 +9,7 @@ export default {
   ],
   summary:
     "resolveWorkspaceViewParams keeps the view on screen for a destination in its matter and falls back to DEFAULT_WORKSPACE_VIEW_ID, the `$viewId` slug the matter route resolves to its first view. " +
-    "useWorkspaceViewParams reads the view on screen from the route match (useCurrentWorkspaceView in render, getCurrentWorkspaceView(router) in a handler; no-view-id-from-path rejects parsing it from the URL path); isWorkspaceViewId is the route's segment check.",
+    "useWorkspaceViewParams reads the view on screen from the route match; useCurrentWorkspaceView subscribes in render, and getCurrentWorkspaceView and getCurrentWorkspaceDocument read router.state.matches in a handler or beforeLoad matches in a route (no-route-identity-from-path rejects reading either from the URL path); isWorkspaceViewId is the route's segment check.",
   enforcement: {
     kind: "custom-rule",
     rule: "no-literal-view-id/no-literal-view-id",
