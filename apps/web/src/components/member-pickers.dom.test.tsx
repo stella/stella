@@ -445,10 +445,10 @@ describe("member pickers save the chosen member", () => {
         workspaceName: "Novák v. Horák",
       }),
     );
-    const seen: Record<string, string>[] = [];
+    const seen: Record<string, string | null>[] = [];
     await mount(() => {
       const [reassignments, setReassignments] = useState<
-        Record<string, string>
+        Record<string, string | null>
       >({});
       seen.push(reassignments);
       return (
