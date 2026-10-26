@@ -2,9 +2,17 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
+
+import {
+  type CallExpression,
+  type Node,
+  type ParsedSource,
+  parseSource,
+  type TemplateLiteral,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE = "apps/api/src/";
@@ -77,14 +85,8 @@ const defaultSourceLoader: SourceLoader = (file) => {
   return existsSync(absolute) ? readFileSync(absolute, "utf-8") : undefined;
 };
 
-const sourceFile = (file: string, source: string): ts.SourceFile =>
-  ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+const sourceFile = (file: string, source: string): ParsedSource =>
+  parseSource(file, source);
 
 const modulePath = (from: string, specifier: string): string | undefined => {
   if (specifier.startsWith("@/api/")) {
@@ -102,27 +104,57 @@ const modulePath = (from: string, specifier: string): string | undefined => {
   return resolved.endsWith(".ts") ? resolved : `${resolved}.ts`;
 };
 
-const unwrap = (node: ts.Expression): ts.Expression => {
+const unwrap = (node: Node): Node => {
   let current = node;
   while (
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current)
+    current.type === "TSAsExpression" ||
+    current.type === "TSSatisfiesExpression" ||
+    current.type === "ParenthesizedExpression" ||
+    current.type === "TSNonNullExpression" ||
+    current.type === "ChainExpression"
   ) {
     current = current.expression;
   }
   return current;
 };
 
+const stringText = (node: Node): string | undefined => {
+  if (node.type === "Literal") {
+    return typeof node.value === "string" ? node.value : undefined;
+  }
+  return node.type === "TemplateLiteral" && node.expressions.length === 0
+    ? (node.quasis.at(0)?.value.cooked ?? "")
+    : undefined;
+};
+
+const moduleExportName = (name: Node): string | undefined => {
+  if (name.type === "Identifier") {
+    return name.name;
+  }
+  return name.type === "Literal" && typeof name.value === "string"
+    ? name.value
+    : undefined;
+};
+
+// `object.name`, not computed.
+const memberName = (node: Node): string | undefined =>
+  node.type === "MemberExpression" &&
+  !node.computed &&
+  node.property.type === "Identifier"
+    ? node.property.name
+    : undefined;
+
+const isRawCall = (node: Node): node is CallExpression =>
+  node.type === "CallExpression" && memberName(node.callee) === "raw";
+
 type Resolver = {
-  resolve: (node: ts.Expression, file: string) => string | undefined;
+  resolve: (node: Node, file: string) => string | undefined;
   sqlNames: (file: string) => Set<string>;
 };
 
 const createResolver = (load: SourceLoader): Resolver => {
-  const files = new Map<string, ts.SourceFile>();
-  const getFile = (file: string): ts.SourceFile | undefined => {
+  const files = new Map<string, ParsedSource>();
+  const getFile = (file: string): ParsedSource | undefined => {
     const cached = files.get(file);
     if (cached !== undefined) {
       return cached;
@@ -140,7 +172,7 @@ const createResolver = (load: SourceLoader): Resolver => {
     file: string,
     name: string,
     visited = new Set<string>(),
-  ): { expression: ts.Expression; file: string } | undefined => {
+  ): { expression: Node; file: string } | undefined => {
     const key = `${file}:${name}`;
     if (visited.has(key)) {
       return undefined;
@@ -150,128 +182,136 @@ const createResolver = (load: SourceLoader): Resolver => {
     if (parsed === undefined) {
       return undefined;
     }
-    for (const statement of parsed.statements) {
-      if (ts.isVariableStatement(statement)) {
-        const declaration = statement.declarationList.declarations.find(
-          (entry) => ts.isIdentifier(entry.name) && entry.name.text === name,
+    for (const statement of parsed.program.body) {
+      const declaration =
+        statement.type === "ExportNamedDeclaration"
+          ? statement.declaration
+          : statement;
+      if (declaration?.type === "VariableDeclaration") {
+        const declarator = declaration.declarations.find(
+          (entry) => entry.id.type === "Identifier" && entry.id.name === name,
         );
-        if (declaration?.initializer !== undefined) {
-          return { expression: declaration.initializer, file };
+        if (declarator?.init) {
+          return { expression: declarator.init, file };
         }
       }
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.importClause?.namedBindings === undefined ||
-        !ts.isNamedImports(statement.importClause.namedBindings)
-      ) {
+      if (statement.type !== "ImportDeclaration") {
         continue;
       }
-      const imported = statement.importClause.namedBindings.elements.find(
-        (entry) => entry.name.text === name && !entry.isTypeOnly,
+      const imported = statement.specifiers.find(
+        (entry) =>
+          entry.type === "ImportSpecifier" &&
+          entry.local.name === name &&
+          entry.importKind !== "type",
       );
-      const target = modulePath(file, statement.moduleSpecifier.text);
-      if (imported !== undefined && target !== undefined) {
-        return binding(target, imported.propertyName?.text ?? name, visited);
+      const target = modulePath(file, statement.source.value);
+      if (imported?.type === "ImportSpecifier" && target !== undefined) {
+        return binding(
+          target,
+          moduleExportName(imported.imported) ?? name,
+          visited,
+        );
       }
     }
-    for (const statement of parsed.statements) {
+    for (const statement of parsed.program.body) {
       if (
-        !ts.isExportDeclaration(statement) ||
-        statement.moduleSpecifier === undefined ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
+        statement.type === "ExportAllDeclaration" &&
+        statement.exported === null
       ) {
-        continue;
-      }
-      const target = modulePath(file, statement.moduleSpecifier.text);
-      if (target === undefined) {
-        continue;
-      }
-      if (statement.exportClause === undefined) {
-        const found = binding(target, name, visited);
+        const target = modulePath(file, statement.source.value);
+        const found =
+          target === undefined ? undefined : binding(target, name, visited);
         if (found !== undefined) {
           return found;
         }
-      } else if (ts.isNamedExports(statement.exportClause)) {
-        const exported = statement.exportClause.elements.find(
-          (entry) => entry.name.text === name,
+        continue;
+      }
+      if (
+        statement.type !== "ExportNamedDeclaration" ||
+        statement.source === null
+      ) {
+        continue;
+      }
+      const target = modulePath(file, statement.source.value);
+      const exported = statement.specifiers.find(
+        (entry) => moduleExportName(entry.exported) === name,
+      );
+      if (target !== undefined && exported !== undefined) {
+        return binding(
+          target,
+          moduleExportName(exported.local) ?? name,
+          visited,
         );
-        if (exported !== undefined) {
-          return binding(target, exported.propertyName?.text ?? name, visited);
-        }
       }
     }
     return undefined;
   };
 
   const evaluate = (
-    expression: ts.Expression,
+    expression: Node,
     file: string,
     seen: Set<string>,
   ): string | undefined => {
     const node = unwrap(expression);
-    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-      return node.text;
+    const text = stringText(node);
+    if (text !== undefined) {
+      return text;
     }
-    if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.PlusToken
-    ) {
+    if (node.type === "BinaryExpression" && node.operator === "+") {
       return (
         (evaluate(node.left, file, seen) ?? UNKNOWN) +
         (evaluate(node.right, file, seen) ?? UNKNOWN)
       );
     }
-    if (ts.isIdentifier(node)) {
-      const key = `${file}:${node.text}`;
+    if (node.type === "Identifier") {
+      const key = `${file}:${node.name}`;
       if (seen.has(key)) {
         return undefined;
       }
-      const found = binding(file, node.text);
+      const found = binding(file, node.name);
       return found === undefined
         ? undefined
         : evaluate(found.expression, found.file, new Set([...seen, key]));
     }
-    if (ts.isPropertyAccessExpression(node)) {
-      const base = unwrap(node.expression);
-      if (!ts.isIdentifier(base)) {
+    const name = memberName(node);
+    if (node.type === "MemberExpression" && name !== undefined) {
+      const base = unwrap(node.object);
+      if (base.type !== "Identifier") {
         return undefined;
       }
-      const found = binding(file, base.text);
+      const found = binding(file, base.name);
       if (found === undefined) {
         return undefined;
       }
       const object = unwrap(found.expression);
-      if (!ts.isObjectLiteralExpression(object)) {
+      if (object.type !== "ObjectExpression") {
         return undefined;
       }
       const property = object.properties.find(
         (entry) =>
-          ts.isPropertyAssignment(entry) &&
-          (ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name)) &&
-          entry.name.text === node.name.text,
+          entry.type === "Property" &&
+          entry.kind === "init" &&
+          !entry.method &&
+          !entry.shorthand &&
+          !entry.computed &&
+          moduleExportName(entry.key) === name,
       );
-      return property !== undefined && ts.isPropertyAssignment(property)
-        ? evaluate(property.initializer, found.file, seen)
+      return property?.type === "Property"
+        ? evaluate(property.value, found.file, seen)
         : undefined;
     }
-    if (ts.isTemplateExpression(node)) {
-      let result = node.head.text;
-      for (const span of node.templateSpans) {
-        const value = evaluate(span.expression, file, seen);
+    if (node.type === "TemplateLiteral") {
+      let result = node.quasis.at(0)?.value.cooked ?? "";
+      for (const [index, part] of node.expressions.entries()) {
+        const value = evaluate(part, file, seen);
         if (value === undefined) {
           return undefined;
         }
-        result += value + span.literal.text;
+        result += value + (node.quasis.at(index + 1)?.value.cooked ?? "");
       }
       return result;
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "raw" &&
-      node.arguments.length === 1
-    ) {
+    if (isRawCall(node) && node.arguments.length === 1) {
       const [argument] = node.arguments;
       return argument === undefined
         ? undefined
@@ -282,19 +322,19 @@ const createResolver = (load: SourceLoader): Resolver => {
 
   const sqlNames = (file: string): Set<string> => {
     const names = new Set<string>();
-    for (const statement of getFile(file)?.statements ?? []) {
+    for (const statement of getFile(file)?.program.body ?? []) {
       if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !== "drizzle-orm" ||
-        statement.importClause?.namedBindings === undefined ||
-        !ts.isNamedImports(statement.importClause.namedBindings)
+        statement.type !== "ImportDeclaration" ||
+        statement.source.value !== "drizzle-orm"
       ) {
         continue;
       }
-      for (const entry of statement.importClause.namedBindings.elements) {
-        if ((entry.propertyName?.text ?? entry.name.text) === "sql") {
-          names.add(entry.name.text);
+      for (const entry of statement.specifiers) {
+        if (
+          entry.type === "ImportSpecifier" &&
+          moduleExportName(entry.imported) === "sql"
+        ) {
+          names.add(entry.local.name);
         }
       }
     }
@@ -304,28 +344,23 @@ const createResolver = (load: SourceLoader): Resolver => {
 };
 
 const templateText = (
-  template: ts.TemplateLiteral,
+  template: TemplateLiteral,
   file: string,
   resolver: Resolver,
 ): string => {
-  if (ts.isNoSubstitutionTemplateLiteral(template)) {
-    return template.text;
-  }
-  let result = template.head.text;
-  for (const span of template.templateSpans) {
-    const value = resolver.resolve(span.expression, file);
-    const isRaw =
-      ts.isCallExpression(span.expression) &&
-      ts.isPropertyAccessExpression(span.expression.expression) &&
-      span.expression.expression.name.text === "raw";
-    const alreadyQuoted =
-      result.endsWith("'") && span.literal.text.startsWith("'");
+  let result = template.quasis.at(0)?.value.cooked ?? "";
+  for (const [index, part] of template.expressions.entries()) {
+    const literal = template.quasis.at(index + 1)?.value.cooked ?? "";
+    const value = resolver.resolve(part, file);
+    const alreadyQuoted = result.endsWith("'") && literal.startsWith("'");
     let rendered = UNKNOWN;
     if (value !== undefined) {
       rendered =
-        isRaw || alreadyQuoted ? value : `'${value.replaceAll("'", "''")}'`;
+        isRawCall(part) || alreadyQuoted
+          ? value
+          : `'${value.replaceAll("'", "''")}'`;
     }
-    result += rendered + span.literal.text;
+    result += rendered + literal;
   }
   return result;
 };
@@ -386,66 +421,68 @@ export const findDedicatedOwnerViolations = (
   const parsed = sourceFile(DEDICATED_OWNER, source);
   const findings: TimeoutMutation[] = [];
   const setterAliases = new Set(SHARED_HANDLE_EXPORTS);
-  const record = (node: ts.Node, setting: string): void => {
+  const record = (node: Node, setting: string): void => {
     findings.push({
       file: DEDICATED_OWNER,
-      line:
-        parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
+      line: parsed.locate(node.start).line,
       setting,
     });
   };
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isImportDeclaration(node) &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      const target = modulePath(DEDICATED_OWNER, node.moduleSpecifier.text);
+  const recordImport = (node: Node, specifier: Node | undefined) => {
+    const text = specifier?.type === "Literal" ? specifier.value : undefined;
+    if (typeof text !== "string") {
+      record(node, "dynamic import");
+      return;
+    }
+    const target = modulePath(DEDICATED_OWNER, text);
+    if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
+      record(node, `shared-pool import ${text}`);
+    }
+  };
+  walk(parsed.program, (node) => {
+    if (node.type === "ImportDeclaration") {
+      const target = modulePath(DEDICATED_OWNER, node.source.value);
       if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
-        record(node, `shared-pool import ${node.moduleSpecifier.text}`);
+        record(node, `shared-pool import ${node.source.value}`);
       }
-      const bindings = node.importClause?.namedBindings;
-      if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const entry of bindings.elements) {
-          const importedName = entry.propertyName?.text ?? entry.name.text;
-          if (
-            SHARED_HANDLE_EXPORTS.has(importedName) ||
-            isSharedSetterName(importedName)
-          ) {
-            setterAliases.add(entry.name.text);
-            record(entry, `shared-pool binding ${entry.name.text}`);
-          }
+      for (const entry of node.specifiers) {
+        if (entry.type !== "ImportSpecifier") {
+          continue;
+        }
+        const importedName =
+          moduleExportName(entry.imported) ?? entry.local.name;
+        if (
+          SHARED_HANDLE_EXPORTS.has(importedName) ||
+          isSharedSetterName(importedName)
+        ) {
+          setterAliases.add(entry.local.name);
+          record(entry, `shared-pool binding ${entry.local.name}`);
         }
       }
+    } else if (node.type === "ImportExpression") {
+      recordImport(node, node.source);
     } else if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      node.callee.name === "require"
     ) {
-      const specifier = node.arguments.at(0);
-      if (specifier === undefined || !ts.isStringLiteral(specifier)) {
-        record(node, "dynamic import");
-      } else {
-        const target = modulePath(DEDICATED_OWNER, specifier.text);
-        if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
-          record(node, `shared-pool import ${specifier.text}`);
-        }
-      }
-    } else if (ts.isCallExpression(node)) {
-      const callee = node.expression;
+      recordImport(node, node.arguments.at(0));
+    } else if (node.type === "CallExpression") {
+      const { callee } = node;
+      const name = memberName(callee);
       if (
-        (ts.isIdentifier(callee) &&
-          (setterAliases.has(callee.text) ||
-            isSharedSetterName(callee.text))) ||
-        (ts.isPropertyAccessExpression(callee) &&
-          isSharedSetterName(callee.name.text))
+        (callee.type === "Identifier" &&
+          (setterAliases.has(callee.name) ||
+            isSharedSetterName(callee.name))) ||
+        (name !== undefined && isSharedSetterName(name))
       ) {
-        record(node, `shared-pool call ${callee.getText(parsed)}`);
+        record(
+          node,
+          `shared-pool call ${source.slice(callee.start, callee.end)}`,
+        );
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+  });
   return findings;
 };
 
@@ -467,9 +504,8 @@ export const findApiTimeoutMutations = (
   const sqlNames = resolver.sqlNames(file);
   const findings: TimeoutMutation[] = [];
   const seen = new Set<string>();
-  const record = (node: ts.Node, sql: string): void => {
-    const line =
-      parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1;
+  const record = (node: Node, sql: string): void => {
+    const { line } = parsed.locate(node.start);
     for (const setting of inspectSql(sql)) {
       const key = `${line}:${setting}`;
       if (seen.has(key)) {
@@ -479,50 +515,46 @@ export const findApiTimeoutMutations = (
       findings.push({ file, line, setting });
     }
   };
-  const visit = (node: ts.Node): void => {
-    if (ts.isTaggedTemplateExpression(node)) {
-      if (ts.isIdentifier(node.tag) && sqlNames.has(node.tag.text)) {
-        record(node, templateText(node.template, file, resolver));
+  walk(parsed.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    const tagged = parent?.type === "TaggedTemplateExpression";
+    if (node.type === "TaggedTemplateExpression") {
+      if (node.tag.type === "Identifier" && sqlNames.has(node.tag.name)) {
+        record(node, templateText(node.quasi, file, resolver));
       }
-    } else if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      sqlNames.has(node.expression.expression.text) &&
-      node.expression.name.text === "raw" &&
+      return;
+    }
+    if (
+      isRawCall(node) &&
+      node.callee.type === "MemberExpression" &&
+      node.callee.object.type === "Identifier" &&
+      sqlNames.has(node.callee.object.name) &&
       node.arguments.length === 1
     ) {
       const argument = node.arguments.at(0);
-      if (argument !== undefined) {
-        const value = resolver.resolve(argument, file);
+      const value =
+        argument === undefined ? undefined : resolver.resolve(argument, file);
+      if (value !== undefined) {
+        record(node, value);
+      }
+      return;
+    }
+    if (node.type === "BinaryExpression" && node.operator === "+") {
+      if (parent?.type !== "BinaryExpression" || parent.operator !== "+") {
+        const value = resolver.resolve(node, file);
         if (value !== undefined) {
           record(node, value);
         }
       }
-    } else if (
-      ts.isBinaryExpression(node) &&
-      node.operatorToken.kind === ts.SyntaxKind.PlusToken &&
-      (!ts.isBinaryExpression(node.parent) ||
-        node.parent.operatorToken.kind !== ts.SyntaxKind.PlusToken)
-    ) {
-      const value = resolver.resolve(node, file);
-      if (value !== undefined) {
-        record(node, value);
-      }
-    } else if (
-      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) &&
-      !ts.isTaggedTemplateExpression(node.parent)
-    ) {
-      record(node, node.text);
-    } else if (
-      ts.isTemplateExpression(node) &&
-      !ts.isTaggedTemplateExpression(node.parent)
-    ) {
+      return;
+    }
+    const text = stringText(node);
+    if (text !== undefined && !tagged) {
+      record(node, text);
+    } else if (node.type === "TemplateLiteral" && !tagged) {
       record(node, templateText(node, file, resolver));
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+  });
   return findings;
 };
 

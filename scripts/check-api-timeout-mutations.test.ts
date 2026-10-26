@@ -199,9 +199,12 @@ test("only exempts explicit owners, online migration modules, tests, and scripts
     "apps/api/src/handlers/example.test.ts",
   ]) {
     expect(isTimeoutMutationSource(file)).toBe(false);
-    expect(findApiTimeoutMutations(file, "SET statement_timeout = 0")).toEqual(
-      [],
-    );
+    expect(
+      findApiTimeoutMutations(
+        file,
+        'export const statement = "SET statement_timeout = 0";',
+      ),
+    ).toEqual([]);
   }
   expect(
     isTimeoutMutationSource("apps/api/src/handlers/fake-migration.ts"),
