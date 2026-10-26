@@ -53,6 +53,8 @@ describe("running headers", () => {
     "Pokračování řízení bylo nařízeno.",
     "pokračování 2 dny poté, co soud rozhodl",
     "pokračování -2- 52A 35/2012 a dále soud uvedl",
+    // A different docket after the header's opens the page's text.
+    "pokračování 2 1 As 23/2012-45 2 Afs 1/2010-50",
   ])("leaves %j in the text", (line) => {
     expect(isRunningHeaderLine(line)).toBe(false);
   });
@@ -84,6 +86,7 @@ describe("sentences a page break cut", () => {
     // A capital, a list item or the court's numbered paragraph opens text.
     "Krajský soud žalobu zamítl.",
     "a) náhradu škody,",
+    "2. žalobce doložil plnou moc,",
     "12. Žaloba je nedůvodná.",
     "[12] Žaloba je nedůvodná.",
   ])("do not go on with %j", (next) => {

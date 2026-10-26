@@ -350,6 +350,53 @@ describe("the hard invariants of a numbering", () => {
     expect(read("").type).toBe("rejected");
   });
 
+  test.each([
+    ["„ … ”", "„", "”"],
+    ["» … «", "»", "«"],
+  ])(
+    "a quotation printed %s sets its paragraph numbers apart",
+    (_, open, close) => {
+      const numbering = extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Osmý senát uvedl:",
+          `${open}[117] Citovaný soud rozhodl takto.`,
+          `[118] Citace pokračuje a končí.${close}`,
+          "[3] Soud dále uvážil.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+      expect(
+        numbering.blocks.map((block) =>
+          block.type === "paragraph" ? (block.number ?? null) : null,
+        ),
+      ).toEqual([1, 2, null, null, 3]);
+    },
+  );
+
+  test.each([
+    // Closed by a straight quote, which closes no Czech quotation.
+    ['[4] Soud cituje: „Takto rozhodl."', "[5] Soud uvážil."],
+    // Closed by the other pair's mark.
+    ["[4] Soud cituje: „Takto rozhodl.«", "[5] Soud uvážil."],
+  ])(
+    "an unmatched quotation leaves the court's markers its own: %s",
+    (quoting, next) => {
+      const numbering = extractCourtParagraphNumbers(
+        [
+          "[1] Soud uvážil.",
+          "[2] Soud uvážil dále.",
+          "[3] Soud uvážil znovu.",
+          quoting,
+          next,
+          "[6] Soud uvážil naposledy.",
+          "[4] Soud se vrací.",
+        ].map((text, index) => paragraph(index, text)),
+      );
+      // "[4]" after "[6]" goes backwards; no quotation explains it.
+      expect(numbering.type).toBe("rejected");
+    },
+  );
+
   test("consecutive lists that could own the court's next number reject the decision", () => {
     // Court 1, 2; list 1-3; list 1-2; court 3, 4, 5; list 1-2; court 6. The
     // first list's 3 could be the court's 3 with the second list following

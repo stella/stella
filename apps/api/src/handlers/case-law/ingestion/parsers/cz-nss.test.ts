@@ -265,6 +265,26 @@ describe("parseNssDecisionHtml", () => {
       expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
       expect(texts.some((t) => t.includes("Konf 4/2011"))).toBe(false);
     });
+
+    test("keeps a citation that opens the page behind the header", () => {
+      const { documentAst, fulltext } = parseNssDecisionHtml(
+        baseInput(`<html><body>
+          <p style="text-align:center"><span style="font-weight:bold">ROZSUDEK</span></p>
+          <p style="text-align:center"><span style="font-weight:bold">Odůvodnění:</span></p>
+          <p>[1] Soud odkázal na rozsudek ze dne 3. 2. 2011, č. j.</p>
+          <p>[OBRÁZEK]pokračování 2 1 As 23/2012-45 2 Afs 1/2010-50, podle něhož soud rozhodl.</p>
+          <p>[OBRÁZEK]pokračování 3 22 Cdo 4223/2018 22 Cdo 4223/2018-137 [2] Soud uvážil dále.</p>
+        </body></html>`),
+      );
+      const texts = documentAst.blocks.map((b) => b.plainText);
+
+      // A different docket after the header's is the page's text; the same
+      // docket repeated with its sheet is the header's.
+      expect(fulltext).toContain("2 Afs 1/2010-50, podle něhož soud rozhodl.");
+      expect(texts.some((t) => t.includes("pokračování"))).toBe(false);
+      expect(texts.some((t) => t.includes("4223/2018"))).toBe(false);
+      expect(fulltext).toContain("Soud uvážil dále.");
+    });
   });
 
   describe("section separators", () => {

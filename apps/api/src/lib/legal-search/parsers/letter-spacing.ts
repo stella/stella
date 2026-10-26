@@ -10,8 +10,8 @@
  * A run of single letters joined by single spaces is a spaced word when it
  * is long enough that no sentence produces it, four letters at least. A
  * shorter run (`s e`) is a spaced word only beside one, across a wide gap,
- * or set apart by wide gaps on both sides in a text that spaces its words
- * (`a věc   s e   mu   v r a c í`). Punctuation spaced after the last letter
+ * or set apart by wide gaps within the same spaced phrase:
+ * `věc   s e   mu   v r a c í`. Punctuation spaced after the last letter
  * belongs to the word.
  */
 
@@ -93,20 +93,74 @@ const isWideGap = (gap: string | undefined): boolean =>
   gap !== undefined && gap.length > 1;
 
 /**
+ * Most words a short run may sit from a long spaced word, every gap between
+ * them wide: `s e   mu   v r a c í` is one spaced phrase.
+ */
+const MAX_WORDS_TO_SPACED_WORD = 2;
+
+/**
+ * Whether a short run belongs to the spaced phrase of a long spaced word:
+ * wide gaps on both of its sides, and a chain of wide gaps over at most
+ * {@link MAX_WORDS_TO_SPACED_WORD} words to a long spaced word. A text that
+ * spaces one word elsewhere ("Soud rozhodoval   i o   nákladech; … z a m í
+ * t á") is no evidence for a short run in its ordinary prose.
+ */
+const inSpacedPhrase = (
+  run: Run,
+  tokens: readonly Token[],
+  strongTokens: ReadonlySet<number>,
+): boolean => {
+  if (!isWideGap(tokens[run.start]?.gap) || !isWideGap(tokens[run.end]?.gap)) {
+    return false;
+  }
+  // Rightwards: each token reached across a wide gap.
+  for (
+    let index = run.end;
+    index < tokens.length && index <= run.end + MAX_WORDS_TO_SPACED_WORD;
+    index++
+  ) {
+    if (!isWideGap(tokens[index]?.gap)) {
+      break;
+    }
+    if (strongTokens.has(index)) {
+      return true;
+    }
+  }
+  // Leftwards: each token before a wide gap.
+  for (
+    let index = run.start;
+    index > 0 && index >= run.start - MAX_WORDS_TO_SPACED_WORD;
+    index--
+  ) {
+    if (!isWideGap(tokens[index]?.gap)) {
+      break;
+    }
+    if (strongTokens.has(index - 1)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
  * The runs that are spaced words: long ones, short ones beside them, and
- * short ones the wide word gaps of a spaced text set apart.
+ * short ones in the spaced phrase of a long one.
  */
 const spacedRunsOf = (
   runs: readonly Run[],
   tokens: readonly Token[],
 ): Run[] => {
-  const spacesWords = runs.some((run) => run.letters >= STRONG_RUN_LETTERS);
+  const strongTokens = new Set(
+    runs
+      .filter((run) => run.letters >= STRONG_RUN_LETTERS)
+      .flatMap((run) =>
+        Array.from({ length: run.end - run.start }, (_, i) => run.start + i),
+      ),
+  );
   const spaced = runs.map(
     (run) =>
       run.letters >= STRONG_RUN_LETTERS ||
-      (spacesWords &&
-        isWideGap(tokens[run.start]?.gap) &&
-        isWideGap(tokens[run.end]?.gap)),
+      inSpacedPhrase(run, tokens, strongTokens),
   );
   let changed = true;
   while (changed) {

@@ -70,8 +70,18 @@ describe("letter-spaced emphasis", () => {
     "A. M., bytem SRN, a O. M., bytem, SRN",
     "společnosti s r. o. a a. s.",
     "Ústavní  soud  České  republiky",
+    // A spaced word elsewhere is no evidence for the prose around it.
+    "Soud rozhodoval   i o   nákladech řízení, protože žalobce uspěl.",
   ])("leaves ordinary text %j as it is", (text) => {
     expect(collapseLetterSpacing(text)).toBe(text);
+  });
+
+  test("reads the spaced words of mixed prose and emphasis, and only them", () => {
+    expect(
+      collapseLetterSpacing(
+        "Soud rozhodoval   i o   nákladech; návrh se z a m í t á .",
+      ),
+    ).toBe("Soud rozhodoval   i o   nákladech; návrh se zamítá.");
   });
 
   test("is idempotent", () => {

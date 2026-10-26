@@ -195,26 +195,71 @@ type Body = {
   readonly paragraphs: readonly number[];
   /** Body positions where a separate opinion begins. */
   readonly opinionStarts: ReadonlySet<number>;
-  /** Body positions that open inside a quotation begun before them. */
+  /** Body positions inside a closed quotation begun before them. */
   readonly quotedStarts: ReadonlySet<number>;
 };
 
 /**
- * Quotation marks that open and close a quotation in Czech and Slovak text:
- * „…“ and »…«. The English “…” pair only ever reads as closing here, so a
- * text quoting the English way never opens a quotation.
+ * The quotation pairs of Czech and Slovak text: „…“ (often printed „…”) and
+ * »…«. Each pair closes only with its own mark; a straight quote closes
+ * neither, and the English “…” never opens one here.
  */
-const OPENING_QUOTE_RE = /[„»]/gu;
-const CLOSING_QUOTE_RE = /[“”«]/gu;
+const QUOTE_PAIRS = [
+  { opening: /„/gu, closing: /[“”]/gu },
+  { opening: /»/gu, closing: /«/gu },
+] as const;
 
-/** Quotations a paragraph leaves open, from the depth it opens at. */
-const quoteDepthAfter = (depth: number, text: string): number =>
-  Math.max(
-    0,
-    depth +
-      (text.match(OPENING_QUOTE_RE)?.length ?? 0) -
-      (text.match(CLOSING_QUOTE_RE)?.length ?? 0),
+/** Quotations of each pair a paragraph leaves open, from those it opens at. */
+const openQuotesAfter = (open: readonly number[], text: string): number[] =>
+  QUOTE_PAIRS.map(({ opening, closing }, pair) =>
+    Math.max(
+      0,
+      (open[pair] ?? 0) +
+        (text.match(opening)?.length ?? 0) -
+        (text.match(closing)?.length ?? 0),
+    ),
   );
+
+/**
+ * Most paragraphs a quotation may run on past the one that opens it. A
+ * longer one, or one never closed by its own mark, is not evidence enough
+ * to set a marker apart from the court's numbering.
+ */
+const MAX_QUOTED_PARAGRAPHS = 8;
+
+/**
+ * Body positions that open inside a quotation an earlier paragraph began
+ * and a later one, at most {@link MAX_QUOTED_PARAGRAPHS} on, closes with
+ * the matching mark. A quotation never crosses a heading or the start of a
+ * separate opinion.
+ */
+const quotedStartsOf = (
+  texts: readonly string[],
+  sectionStarts: ReadonlySet<number>,
+): Set<number> => {
+  const quoted = new Set<number>();
+  for (let start = 0; start < texts.length; start++) {
+    let open = openQuotesAfter([], texts[start] ?? "");
+    for (
+      let end = start + 1;
+      open.some((count) => count > 0) &&
+      end < texts.length &&
+      end - start <= MAX_QUOTED_PARAGRAPHS &&
+      !sectionStarts.has(end);
+      end++
+    ) {
+      open = openQuotesAfter(open, texts[end] ?? "");
+      if (open.every((count) => count === 0)) {
+        for (let inside = start + 1; inside <= end; inside++) {
+          quoted.add(inside);
+        }
+        start = end - 1;
+        break;
+      }
+    }
+  }
+  return quoted;
+};
 
 /**
  * The body paragraphs, and where each separate opinion printed after the
@@ -224,17 +269,14 @@ const quoteDepthAfter = (depth: number, text: string): number =>
 const bodyOf = (blocks: readonly Block[]): Body => {
   const paragraphs: number[] = [];
   const opinionStarts = new Set<number>();
-  const quotedStarts = new Set<number>();
-  // A heading closes whatever quotation the text left open, so a quotation
-  // the court never closed reaches no further than its section.
-  let quoteDepth = 0;
+  /** Body positions a heading or a separate opinion opens. */
+  const sectionStarts = new Set<number>();
   let headingSinceBody = false;
   let inDissent = false;
   let inInstruction = false;
   for (const [index, block] of blocks.entries()) {
     if (block.type === "heading") {
       headingSinceBody = true;
-      quoteDepth = 0;
       inInstruction ||= INSTRUCTION_RE.test(block.plainText);
       continue;
     }
@@ -254,16 +296,18 @@ const bodyOf = (blocks: readonly Block[]): Body => {
     inInstruction = false;
     if (dissent && (!inDissent || headingSinceBody)) {
       opinionStarts.add(paragraphs.length);
-      quoteDepth = 0;
     }
-    if (quoteDepth > 0) {
-      quotedStarts.add(paragraphs.length);
+    if (headingSinceBody) {
+      sectionStarts.add(paragraphs.length);
     }
-    quoteDepth = quoteDepthAfter(quoteDepth, block.plainText);
     inDissent = dissent;
     headingSinceBody = false;
     paragraphs.push(index);
   }
+  const quotedStarts = quotedStartsOf(
+    paragraphs.map((blockIndex) => blocks[blockIndex]?.plainText ?? ""),
+    new Set([...sectionStarts, ...opinionStarts]),
+  );
   return { paragraphs, opinionStarts, quotedStarts };
 };
 

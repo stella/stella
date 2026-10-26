@@ -23,7 +23,9 @@ import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-n
  * to the register in some templates, `52A`), the register, number and year,
  * and the sheet.
  */
-const DOCKET = String.raw`(?:(?:sp\.|č\.)\s*(?:zn\.|j\.)\s*)?(?:\d+\s*)?\p{Lu}\p{L}*\s*\d+\s*\/\s*\d{4}(?:\s*-\s*\d+)?`;
+const DOCKET_PREFIX = String.raw`(?:(?:sp\.|č\.)\s*(?:zn\.|j\.)\s*)?`;
+const DOCKET_SHEET = String.raw`(?:\s*-\s*\d+)?`;
+const DOCKET = String.raw`${DOCKET_PREFIX}(?<headerDocket>(?:\d+\s*)?\p{Lu}\p{L}*\s*\d+\s*\/\s*\d{4})${DOCKET_SHEET}`;
 
 /** A page number, bare or between dashes: `2`, `-2-`, `- 2 -`. */
 const PAGE_NUMBER = String.raw`[-–]?\s*\d{1,3}\s*[-–]?`;
@@ -32,9 +34,11 @@ const PAGE_NUMBER = String.raw`[-–]?\s*\d{1,3}\s*[-–]?`;
  * The running header, unanchored, for a parser that composes it with page
  * furniture of its own. The docket is required: it is what keeps the word
  * "pokračování" and a number in ordinary prose from reading as a header.
- * Some templates print the docket twice, once with its sheet.
+ * Some templates print the docket twice, once with its sheet ("22 Cdo
+ * 4223/2018 22 Cdo 4223/2018-137"); only that same docket is the header's.
+ * A different one is the text of a page that opens mid-citation.
  */
-export const CZ_RUNNING_HEADER_SOURCE = String.raw`[Pp]okračování\s*${PAGE_NUMBER}\s*${DOCKET}(?:\s+${DOCKET})?`;
+export const CZ_RUNNING_HEADER_SOURCE = String.raw`[Pp]okračování\s*${PAGE_NUMBER}\s*${DOCKET}(?:\s+${DOCKET_PREFIX}\k<headerDocket>${DOCKET_SHEET})?`;
 
 const RUNNING_HEADER_LINE_RE = new RegExp(
   String.raw`^\s*${CZ_RUNNING_HEADER_SOURCE}\s*$`,
@@ -61,11 +65,12 @@ export const isPageNumberLine = (text: string): boolean =>
 const SENTENCE_END_RE = /[.!?:;][“”"'»«)\]]*\s*$/u;
 /**
  * What a cut sentence goes on with: a lowercase word, a section sign or a
- * number. A capital opens a sentence; a lettered or bulleted item opens an
- * item of a list.
+ * number. A capital opens a sentence; a numbered, lettered or bulleted item
+ * opens an item of a list, whatever case its text starts in ("2. žalobce
+ * doložil …").
  */
 const CONTINUATION_START_RE = /^\s*(?:\p{Ll}|§|\d)/u;
-const LIST_ITEM_RE = /^\s*(?:\p{L}\)|[-–•])\s/u;
+const LIST_ITEM_RE = /^\s*(?:\d{1,4}[.)]|\p{L}\)|[-–•])\s/u;
 /**
  * Shortest text a page can have cut. Short lines without closing
  * punctuation are names, labels and titles ("Josef Baxa" over "předseda

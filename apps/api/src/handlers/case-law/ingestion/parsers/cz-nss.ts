@@ -586,6 +586,7 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
           letterSpacing: false,
           fontSize: 12,
           listItemIndex: null,
+          decimalList: false,
           footnote: footnoteOf($el),
         });
       });
