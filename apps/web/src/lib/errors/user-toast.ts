@@ -37,15 +37,12 @@ type ProblemToastOptions = Omit<
 >;
 
 /**
- * A user-facing error names its cause. A cause that is, or may be, `undefined`
- * or `null` has nothing to report: check it first, and send the cause-free
- * message through {@link notifyUserProblem}. A caught `unknown` still passes.
+ * A user-facing error names its cause. A cause that is always `undefined` or
+ * `null` is a cause-free message, which goes through
+ * {@link notifyUserProblem}; a cause that may be missing is reported only when
+ * it is there (see {@link notifyUserError}).
  */
-type NamedCause<Cause> = unknown extends Cause
-  ? unknown
-  : [Extract<Cause, null | undefined>] extends [never]
-    ? unknown
-    : never;
+type NamedCause<Cause> = [Cause] extends [undefined | null] ? never : unknown;
 
 type UserVisibleErrorReportOptions = {
   notice?: string | undefined;
@@ -77,13 +74,17 @@ export const setUserErrorRouteTemplate = (routeTemplate: string): void => {
   currentRouteTemplate = routeTemplate;
 };
 
+/** Report a user-visible failure by its cause; without one there is nothing to report. */
 export const reportUserVisibleError = (
   error: unknown,
   feature: string | undefined,
   routeTemplate: string | undefined,
   { notice, occurrence }: UserVisibleErrorReportOptions = {},
 ): void => {
-  const reportable = error ?? new Error("UserVisibleError");
+  if (error === undefined || error === null) {
+    return;
+  }
+  const reportable = error;
   const template =
     (routeTemplate ?? currentRouteTemplate).split(/[?#]/u).at(0) ?? "unknown";
   const isApiError = APIError.is(error);
@@ -135,6 +136,23 @@ export const reportUserVisibleError = (
   });
 };
 
+/**
+ * Tell the user about a problem that has no error behind it: input a form
+ * refuses, a limit, a precondition. Nothing is reported, because there is no
+ * cause to report; a failure with one goes through {@link notifyUserError}.
+ */
+export const notifyUserProblem = (
+  title: string,
+  { toastId, ...options }: ProblemToastOptions = {},
+): void => {
+  const toast = { ...options, title, type: "error" } as const;
+  if (toastId !== undefined) {
+    stellaToast.update(toastId, toast);
+    return;
+  }
+  stellaToast.add(toast);
+};
+
 export const notifyUserError = <Cause>(
   error: Cause & NamedCause<Cause>,
   fallback: string,
@@ -146,6 +164,11 @@ export const notifyUserError = <Cause>(
     ...options
   }: UserErrorToastOptions = {},
 ): boolean => {
+  // An optional cause that is missing leaves a message with nothing behind it.
+  if (error === undefined || error === null) {
+    notifyUserProblem(fallback, { ...options, toastId });
+    return true;
+  }
   if (notifyStepUp(error)) {
     return false;
   }
@@ -213,23 +236,6 @@ export const notifyUserError = <Cause>(
   }
   stellaToast.add(toast);
   return true;
-};
-
-/**
- * Tell the user about a problem that has no error behind it: input a form
- * refuses, a limit, a precondition. Nothing is reported, because there is no
- * cause to report; a failure with one goes through {@link notifyUserError}.
- */
-export const notifyUserProblem = (
-  title: string,
-  { toastId, ...options }: ProblemToastOptions = {},
-): void => {
-  const toast = { ...options, title, type: "error" } as const;
-  if (toastId !== undefined) {
-    stellaToast.update(toastId, toast);
-    return;
-  }
-  stellaToast.add(toast);
 };
 
 const SERVER_ERROR_THRESHOLD = 500;

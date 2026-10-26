@@ -136,6 +136,27 @@ describe("notifyUserError", () => {
     expect(add).toHaveBeenCalledTimes(2);
   });
 
+  test("a missing optional cause shows the message and reports nothing", () => {
+    const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
+      () => undefined,
+    );
+    const add = spyOn(stellaToast, "add").mockReturnValue("failure-toast");
+    const optional = (cause: Error | undefined) => {
+      notifyUserError(cause, FAILURE, { description: "Try again." });
+    };
+
+    optional(undefined);
+    optional(new Error("refused"));
+
+    expect(add).toHaveBeenCalledTimes(2);
+    expect(add.mock.calls.at(0)?.[0]).toMatchObject({
+      title: FAILURE,
+      description: "Try again.",
+      type: "error",
+    });
+    expect(userVisibleReports(capture)).toHaveLength(1);
+  });
+
   test("reports two different notices of one cause", () => {
     const capture = spyOn(getAnalytics(), "captureError").mockImplementation(
       () => undefined,
@@ -251,13 +272,3 @@ const missingCauseContract = () => {
   notifyUserError(null, FAILURE);
 };
 void missingCauseContract;
-
-// A cause that may be missing has to be checked before it is reported.
-const optionalCauseContract = (maybe: Error | undefined) => {
-  // @ts-expect-error check the optional cause; report it, or notify a problem
-  notifyUserError(maybe, FAILURE);
-  if (maybe !== undefined) {
-    notifyUserError(maybe, FAILURE);
-  }
-};
-void optionalCauseContract;
