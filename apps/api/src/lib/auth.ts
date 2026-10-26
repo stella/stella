@@ -57,6 +57,7 @@ import {
 import {
   authorizeOwnerSyntheticSession,
   bindOwnerSyntheticSessionAuthorityReader,
+  isPartnerOAuthClient,
   rlsDb,
   rootDb,
 } from "@/api/db/root";
@@ -335,6 +336,7 @@ import {
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
+  getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
   MCP_OAUTH_SCOPES,
@@ -2418,6 +2420,10 @@ export const createAuth = (
             env.FRONTEND_URL,
             getAuthIssuerUrl(),
           ]),
+          partnerResource: {
+            url: getMcpResourceUrl(),
+            isPartnerClient: isPartnerOAuthClient,
+          },
         },
       ),
       oauthUiFragmentBridgePlugin,
