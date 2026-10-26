@@ -61,6 +61,8 @@
       "apps/api/src/tests/helpers/recorded-conversation-suites.ts",
       "apps/api/src/tests/module-mock-batching.ts",
       "apps/web/e2e/shard-count.ts",
+      "apps/web/src/features/case-law/components/decision-table.tsx",
+      "apps/web/src/routes/dev/-components/workspace-table-playground.tsx",
       "packages/collation/src/**",
       "packages/concurrency/src/**",
       "packages/portable-path/src/**",
