@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -527,7 +528,11 @@ describe("directory scan coverage", () => {
   });
 
   test("the preload logs scans and returns the native results unchanged", () => {
-    const root = mkdtempSync(path.join(tmpdir(), "scan-preload-"));
+    // The preload records real paths (process.cwd() resolves symlinks, such
+    // as macOS's /var -> /private/var), so the fixture root is resolved too.
+    const root = realpathSync(
+      mkdtempSync(path.join(tmpdir(), "scan-preload-")),
+    );
     const log = path.join(root, "scans.log");
     mkdirSync(path.join(root, "fixtures/data"), { recursive: true });
     writeFileSync(path.join(root, "fixtures/data/a.txt"), "a");

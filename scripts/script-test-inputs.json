@@ -22,6 +22,7 @@
       "packages/**",
       "scripts/**"
     ],
+    "scripts/child-output-buffer.test.ts": ["**"],
     "scripts/ci-affected-selection.test.ts": [".github/**"],
     "scripts/ci-api-bootstrap.test.ts": ["**"],
     "scripts/ci-api-test-plan.test.ts": [".github/**"],

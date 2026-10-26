@@ -231,6 +231,7 @@ const createRepository = (directory: string) => {
     html_url: `https://github.com/${repository}/pull/1`,
     number: 1,
     title: "chore: release v1.2.3",
+    draft: false,
     state: "closed",
     merged_at: "2026-01-01T00:00:00Z",
     merge_commit_sha: target,
@@ -890,6 +891,33 @@ describe("release health with reused proof", () => {
         expect(discoveredResult.stderr.toString()).toContain("missing");
       }),
   );
+
+  test("refuses a draft release PR as a candidate proof", async () =>
+    withRepository(
+      ({
+        base,
+        git,
+        mergedPullRequest,
+        proof,
+        publishPullRequests,
+        verify,
+      }) => {
+        publishPullRequests(proof, [
+          { ...mergedPullRequest, state: "open", merged_at: null },
+        ]);
+        git("update-ref", "refs/remotes/origin/main", base);
+        const ready = verify(proof, proof, true);
+        expect(ready.exitCode, ready.stderr.toString()).toBe(0);
+        publishPullRequests(proof, [
+          { ...mergedPullRequest, state: "open", merged_at: null, draft: true },
+        ]);
+        const draft = verify(proof, proof, true);
+        expect(draft.exitCode).not.toBe(0);
+        expect(draft.stderr.toString()).toContain(
+          "open release PR relation is unverified",
+        );
+      },
+    ));
 });
 
 describe("merge-group receipt in place of the heavy statuses", () => {
