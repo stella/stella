@@ -3,6 +3,7 @@ import { defineConfig, type DummyRuleMap, type OxlintConfig } from "oxlint";
 import oxlintConfig from "./oxlint.config.ts";
 
 const repository: OxlintConfig = oxlintConfig;
+const { tailwindcss } = repository.settings ?? {};
 
 const tailwindRules = (rules: DummyRuleMap | undefined): DummyRuleMap =>
   Object.fromEntries(
@@ -21,7 +22,7 @@ export default defineConfig({
   plugins: [],
   ignorePatterns: repository.ignorePatterns ?? [],
   jsPlugins: ["oxlint-tailwindcss"],
-  settings: { tailwindcss: repository.settings?.tailwindcss },
+  settings: { tailwindcss },
   rules: tailwindRules(repository.rules),
   overrides: (repository.overrides ?? []).flatMap(
     ({ files, excludeFiles, rules }) => {
