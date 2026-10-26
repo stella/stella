@@ -16,6 +16,7 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
+import { extractCitations } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   listPlTkPageFields,
   parsePlTkPage,
@@ -25,6 +26,7 @@ import {
   readPlTkRuling,
   validatePlTkBlocks,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
+import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -714,7 +716,8 @@ describe("the portal's typesetting, read as a browser lays it out", () => {
         .flatMap((block) => inlinesOf(block).flatMap(linksIn))
         .find(
           (link) =>
-            link.type === "link" && textLeaves(link.children).join("") === mark,
+            link.type === "link" &&
+            textLeaves(link.children).join("") === `[${mark}]`,
         );
       const href = reference?.type === "link" ? reference.href : "";
       const note = ruling?.blocks.find(
@@ -722,11 +725,40 @@ describe("the portal's typesetting, read as a browser lays it out", () => {
       );
 
       expect(href).toStartWith("#tresc-przypisu-");
+      // The note keeps the label the portal prints beside it.
       expect(note?.type === "paragraph" && note.note).toMatchObject({
         type: "footnote",
         label: mark,
       });
     }
+  });
+
+  test("a numbered footnote mark never runs into the docket it follows", async () => {
+    const ruling = (await everyRuling("pl-tk-case-k-44-16.html.gz")).find(
+      (candidate) => candidate.documentId === "16940",
+    );
+    const blocks = ruling?.blocks ?? [];
+    const marked = blocks.findIndex(
+      (block) => block.type === "paragraph" && block.number === 10,
+    );
+    // The text up to the marked paragraph, as the stored fulltext joins it.
+    const textThrough = (end: number): string =>
+      blocks
+        .slice(0, end)
+        .map((block) => block.plainText)
+        .filter((text) => text.length > 0)
+        .join("\n\n");
+    const citedIn = (text: string): string[] =>
+      extractCitations(segmentDecision(text)).map(
+        ({ citationText }) => citationText,
+      );
+
+    // Note 1 is printed raised right after the docket.
+    expect(blocks[marked]?.plainText).toContain("w sprawie K 39/16[1] ");
+    // No earlier paragraph names the docket, so the marked one is what
+    // the extractor reads it from.
+    expect(citedIn(textThrough(marked))).not.toContain("K 39/16");
+    expect(citedIn(textThrough(marked + 1))).toContain("K 39/16");
   });
 });
 

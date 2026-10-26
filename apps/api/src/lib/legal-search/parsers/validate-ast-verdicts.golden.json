@@ -6137,8 +6137,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 68613,
-        "astLength": 68512,
+        "originalLength": 68615,
+        "astLength": 68514,
         "retainedPct": 99.9,
         "blockCount": 121,
         "missingWords": [],
@@ -6160,7 +6160,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 314,
-          "textCharacters": 259560,
+          "textCharacters": 259562,
           "ancestorChecks": 507
         }
       }
@@ -6172,8 +6172,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 68613,
-        "astLength": 68355,
+        "originalLength": 68615,
+        "astLength": 68357,
         "retainedPct": 99.6,
         "blockCount": 120,
         "missingWords": [
@@ -6201,7 +6201,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 314,
-          "textCharacters": 259560,
+          "textCharacters": 259562,
           "ancestorChecks": 507
         }
       }
@@ -6219,8 +6219,8 @@
         }
       ],
       "stats": {
-        "originalLength": 68613,
-        "astLength": 68669,
+        "originalLength": 68615,
+        "astLength": 68671,
         "retainedPct": 100.1,
         "blockCount": 122,
         "missingWords": [],
@@ -6242,7 +6242,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 314,
-          "textCharacters": 259560,
+          "textCharacters": 259562,
           "ancestorChecks": 507
         }
       }
@@ -6254,8 +6254,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 68613,
-        "astLength": 68511,
+        "originalLength": 68615,
+        "astLength": 68513,
         "retainedPct": 99.9,
         "blockCount": 121,
         "missingWords": [],
@@ -6277,7 +6277,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 314,
-          "textCharacters": 259560,
+          "textCharacters": 259562,
           "ancestorChecks": 507
         }
       }
@@ -6289,8 +6289,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 68613,
-        "astLength": 68512,
+        "originalLength": 68615,
+        "astLength": 68514,
         "retainedPct": 99.9,
         "blockCount": 121,
         "missingWords": [],
@@ -6312,7 +6312,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 314,
-          "textCharacters": 259560,
+          "textCharacters": 259562,
           "ancestorChecks": 507
         }
       }
@@ -6324,8 +6324,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 68613,
-        "astLength": 68432,
+        "originalLength": 68615,
+        "astLength": 68434,
         "retainedPct": 99.7,
         "blockCount": 120,
         "missingWords": ["sentencja", "ogłoszona"],
@@ -6346,7 +6346,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 314,
-          "textCharacters": 259560,
+          "textCharacters": 259562,
           "ancestorChecks": 507
         }
       }
@@ -6358,8 +6358,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62227,
-        "astLength": 62025,
+        "originalLength": 62231,
+        "astLength": 62029,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -6380,7 +6380,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245246,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -6392,8 +6392,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62227,
-        "astLength": 61409,
+        "originalLength": 62231,
+        "astLength": 61413,
         "retainedPct": 98.7,
         "blockCount": 96,
         "missingWords": [
@@ -6430,7 +6430,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245246,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -6448,8 +6448,8 @@
         }
       ],
       "stats": {
-        "originalLength": 62227,
-        "astLength": 62641,
+        "originalLength": 62231,
+        "astLength": 62645,
         "retainedPct": 100.7,
         "blockCount": 98,
         "missingWords": [],
@@ -6470,7 +6470,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245246,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -6482,8 +6482,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62227,
-        "astLength": 62024,
+        "originalLength": 62231,
+        "astLength": 62028,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -6504,7 +6504,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245246,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -6516,8 +6516,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62227,
-        "astLength": 62025,
+        "originalLength": 62231,
+        "astLength": 62029,
         "retainedPct": 99.7,
         "blockCount": 97,
         "missingWords": [],
@@ -6538,7 +6538,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245246,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -6550,8 +6550,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 62227,
-        "astLength": 61740,
+        "originalLength": 62231,
+        "astLength": 61744,
         "retainedPct": 99.2,
         "blockCount": 96,
         "missingWords": [
@@ -6581,7 +6581,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 251,
-          "textCharacters": 245246,
+          "textCharacters": 245256,
           "ancestorChecks": 452
         }
       }
@@ -7330,8 +7330,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44571,
-        "astLength": 44394,
+        "originalLength": 44573,
+        "astLength": 44396,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": [],
@@ -7351,7 +7351,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172365,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -7363,8 +7363,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44571,
-        "astLength": 43594,
+        "originalLength": 44573,
+        "astLength": 43596,
         "retainedPct": 97.8,
         "blockCount": 86,
         "missingWords": ["odnosząc", "drugiego"],
@@ -7384,7 +7384,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172365,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -7402,8 +7402,8 @@
         }
       ],
       "stats": {
-        "originalLength": 44571,
-        "astLength": 45194,
+        "originalLength": 44573,
+        "astLength": 45196,
         "retainedPct": 101.4,
         "blockCount": 88,
         "missingWords": [],
@@ -7423,7 +7423,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172365,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -7435,8 +7435,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44571,
-        "astLength": 44393,
+        "originalLength": 44573,
+        "astLength": 44395,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": ["odnosząc"],
@@ -7456,7 +7456,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172365,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -7468,8 +7468,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44571,
-        "astLength": 44394,
+        "originalLength": 44573,
+        "astLength": 44396,
         "retainedPct": 99.6,
         "blockCount": 87,
         "missingWords": [],
@@ -7489,7 +7489,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172365,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }
@@ -7501,8 +7501,8 @@
       "ok": true,
       "issues": [],
       "stats": {
-        "originalLength": 44571,
-        "astLength": 44342,
+        "originalLength": 44573,
+        "astLength": 44344,
         "retainedPct": 99.5,
         "blockCount": 86,
         "missingWords": [],
@@ -7521,7 +7521,7 @@
         "markupResidue": [],
         "work": {
           "textComputations": 220,
-          "textCharacters": 172365,
+          "textCharacters": 172367,
           "ancestorChecks": 396
         }
       }

@@ -723,6 +723,12 @@ const tightenRaisedMark = ($: Root, mark: Element): void => {
  * table prints. The portal opens each note from its marker in a tooltip,
  * which is removed with the other widgets; the marker stays as a link to the
  * note's own anchor, or as its bare mark where the table prints no note.
+ *
+ * The portal prints the mark raised and nothing else sets it apart, so on
+ * the text axis a number would run into the word it follows (`K 39/16` and
+ * note 1 would read `K 39/161`). The mark is therefore bracketed, `[1]`, as
+ * the other sources' note references read, and the note keeps the label it
+ * prints.
  */
 const markFootnoteReferences = (
   $: Root,
@@ -748,10 +754,11 @@ const markFootnoteReferences = (
         marker.remove();
         return [];
       }
+      const mark = `[${label}]`;
       const reference =
         NOTE_REFERENCE.test(href) && printed.has(href)
-          ? $("<a></a>").attr("href", href).text(label)
-          : $("<sup></sup>").text(label);
+          ? $("<a></a>").attr("href", href).text(mark)
+          : $("<sup></sup>").text(mark);
       marker.replaceWith(reference);
       return reference.toArray().filter(isTag);
     });
