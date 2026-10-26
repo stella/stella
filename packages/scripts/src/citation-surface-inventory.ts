@@ -65,14 +65,12 @@ function nameOf(node: Node) {
     ? node.value
     : undefined;
 }
+/** The nearest enclosing component, declared the same way `declaredValueName` binds it. */
 function ownerOf(inventory: Inventory, node: Node) {
   return unitOf(inventory, node)
     ?.ancestors.get(node)
-    ?.findLast(
-      (candidate) =>
-        candidate.type === "VariableDeclarator" &&
-        candidate.id.type === "Identifier" &&
-        /^[A-Z]/u.test(candidate.id.name),
+    ?.findLast((candidate) =>
+      /^[A-Z]/u.test(declaredValueName(candidate) ?? ""),
     );
 }
 type CreateInventoryOptions = {
@@ -241,12 +239,16 @@ function valueOf(
   return unit.values
     .get(identifier.name)
     ?.filter((value) => {
-      const scope = [...(unit.ancestors.get(value) ?? []), value].findLast(
-        (ancestor) =>
-          ancestor.type === "FunctionDeclaration" ||
-          ancestor.type === "FunctionExpression" ||
-          ancestor.type === "ArrowFunctionExpression",
-      );
+      // A declaration binds its name in the enclosing function, never inside
+      // itself: `function Tray() {}` is visible to its whole module.
+      const scope = unit.ancestors
+        .get(value)
+        ?.findLast(
+          (ancestor) =>
+            ancestor.type === "FunctionDeclaration" ||
+            ancestor.type === "FunctionExpression" ||
+            ancestor.type === "ArrowFunctionExpression",
+        );
       return (
         !scope ||
         (scope.start <= identifier.start && scope.end >= identifier.end)
