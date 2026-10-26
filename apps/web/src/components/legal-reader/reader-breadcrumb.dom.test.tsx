@@ -37,8 +37,15 @@ const AnalysisProviders = ({ children }: { children: ReactNode }) => (
 );
 
 afterEach(() => {
-  cleanup();
+  // Work React scheduled on a fake clock never runs once real timers return,
+  // and every later render in the file would wait behind it: drain it first.
+  if (jest.isFakeTimers()) {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+  }
   jest.useRealTimers();
+  cleanup();
 });
 
 const path = (
