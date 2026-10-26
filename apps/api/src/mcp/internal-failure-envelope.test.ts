@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { BoeAPIError, BoeRequestError } from "@stll/boe";
+
+import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
@@ -288,7 +291,7 @@ describe("MCP tool DB failures return a structured internal_error envelope", () 
 // record as telemetry.
 describe("internalFailureResult preserves expected handler errors", () => {
   const EXPECTED_BUSINESS_CASES: {
-    status: HandlerErrorStatusCode;
+    status: Exclude<HandlerErrorStatusCode, 500 | 502 | 503>;
     code: McpErrorCode;
   }[] = [
     { status: 400, code: "validation_error" },
@@ -400,6 +403,46 @@ describe("internalFailureResult preserves expected handler errors", () => {
       },
     ]);
     expect(JSON.stringify(logs.records)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+  });
+  test("BOE outages reach the transient grading owner and caller failures stay actionable", () => {
+    for (const cause of [
+      new BoeAPIError({ message: DB_INTERNAL_LEAK_TOKEN, httpStatus: 502 }),
+      new BoeRequestError("https://example.test", DB_INTERNAL_LEAK_TOKEN),
+    ]) {
+      const result = internalFailureResult(
+        mapBoeError(cause),
+        "mcp.result.failure",
+      );
+      expect(JSON.parse(envelopeText(result)).error).toMatchObject({
+        code: "upstream_unavailable",
+        retryable: true,
+      });
+      expect(envelopeText(result)).not.toContain(DB_INTERNAL_LEAK_TOKEN);
+    }
+    const rejected = internalFailureResult(
+      mapBoeError(
+        new BoeAPIError({ message: "Invalid filter", httpStatus: 422 }),
+      ),
+      "mcp.result.failure",
+    );
+    expect(JSON.parse(envelopeText(rejected)).error).toMatchObject({
+      code: "validation_error",
+      message: expect.stringContaining("Check the identifier and filters"),
+    });
+    expect(capturedExceptions()).toEqual([]);
+    flushFailureObservations();
+    expect(
+      logs.records.filter(({ message }) => message === "failure.observed"),
+    ).toMatchObject([
+      {
+        attributes: {
+          "failure.grade": "transient",
+          "failure.reason": "upstream_unavailable",
+          occurrences: 2,
+        },
+      },
+    ]);
+    expect(logs.at("ERROR")).toEqual([]);
   });
 });
 
