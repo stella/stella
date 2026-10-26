@@ -12,6 +12,9 @@ type MissingTimeEntryActivityGroup = Exclude<
 >;
 true satisfies MissingTimeEntryActivityGroup extends never ? true : never;
 
+/** ISO 4217 code for an entry whose financial value has not been configured. */
+export const UNPRICED_TIME_ENTRY_CURRENCY = "XXX";
+
 export const TIME_ENTRY_STATUSES = [
   "draft",
   "approved",
@@ -43,6 +46,24 @@ export const EXPENSE_CATEGORIES = [
   "courier",
   "other",
 ] as const;
+
+/** Languages in which Stella can render an invoice document. */
+export const INVOICE_LANGUAGES = [
+  "ar",
+  "cs",
+  "de",
+  "en",
+  "es",
+  "et",
+  "fr",
+  "hu",
+  "lt",
+  "lv",
+  "pl",
+  "pt-BR",
+  "sk",
+] as const;
+export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 

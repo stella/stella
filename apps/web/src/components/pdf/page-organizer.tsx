@@ -68,7 +68,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@/lib/drag-and-drop/element-registration";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { fileOptions, filesKeys } from "@/lib/files/queries";
@@ -266,7 +266,11 @@ const loadAddedSources = async ({
 
   const bytes = await file.arrayBuffer();
   const sourceId = createUuid();
-  const result = await loadPDF({ fileId: sourceId, buffer: bytes });
+  const result = await loadPDF({
+    fileId: sourceId,
+    buffer: bytes,
+    pageSource: "portfolio",
+  });
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -325,7 +329,7 @@ const authorizePDFOrganizerExport = async ({
     .files({ workspaceId })
     .url({ fieldId })
     .get({ query: { purpose: "download" } });
-  unwrapEden(response);
+  unwrapApiResponse(response);
 };
 
 type PageThumbnailProps = {
@@ -829,7 +833,13 @@ const LoadedPDFPageOrganizer = ({
     if (error instanceof DOMException && error.name === "AbortError") {
       return;
     }
-    analytics.captureError(error);
+    analytics.captureError(error, {
+      fingerprintKey: "LoadedPDFPageOrganizer.runOperation:failure",
+      scope: {
+        type: "handler",
+        handlerId: "LoadedPDFPageOrganizer.runOperation:failure",
+      },
+    });
     notifyUserError(error, tErrors("actionFailed"));
   };
 
@@ -967,10 +977,10 @@ const LoadedPDFPageOrganizer = ({
     const result = await Result.tryPromise({
       try: async () => {
         if ((await saveVersion()) !== "saved") {
-          return null;
+          return Result.ok(null);
         }
         onClose();
-        const entity = await queryClient.fetchQuery({
+        const entity = await queryClient.query({
           ...entityOptions(workspaceId, entityId),
           staleTime: 0,
         });
@@ -979,15 +989,17 @@ const LoadedPDFPageOrganizer = ({
           target,
         });
         if (saved === null) {
-          throw new ClientOperationError({
-            action: "sign-saved-pdf-version",
-            message: tPageEditor("signSavedVersionMissing"),
-          });
+          return Result.err(
+            new ClientOperationError({
+              action: "sign-saved-pdf-version",
+              message: tPageEditor("signSavedVersionMissing"),
+            }),
+          );
         }
-        return saved;
+        return Result.ok(saved);
       },
       catch: (cause) => cause,
-    });
+    }).then(Result.flatten);
     if (Result.isError(result)) {
       reportOperationError(result.error);
       return null;
@@ -1026,6 +1038,13 @@ const LoadedPDFPageOrganizer = ({
           action: "clean-scan-page",
           message: `${failure.reason}: ${failure.message}`,
         }),
+        {
+          fingerprintKey: "LoadedPDFPageOrganizer.cleanScan:failure",
+          scope: {
+            type: "handler",
+            handlerId: "LoadedPDFPageOrganizer.cleanScan:failure",
+          },
+        },
       );
       dispatch({ type: "cleanScanPageFailed", runId, failure });
     };
@@ -1064,6 +1083,14 @@ const LoadedPDFPageOrganizer = ({
                   action: "clean-scan-page",
                   message: `Unknown unrecognized reason: ${review.reason}`,
                 }),
+                {
+                  fingerprintKey:
+                    "LoadedPDFPageOrganizer.cleanScan:unrecognized",
+                  scope: {
+                    type: "handler",
+                    handlerId: "LoadedPDFPageOrganizer.cleanScan:unrecognized",
+                  },
+                },
               );
             }
             dispatch({
@@ -1558,7 +1585,7 @@ export const PDFPageOrganizer = ({
   );
   const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
   const { data: sourceDocumentResult } = usePDFDocument({
-    key: { fileId: fieldId },
+    key: { fileId: fieldId, pageSource: "portfolio" },
     context: { buffer: originalFile.buffer },
   });
   const sourceDocument = resolveOrganizerSourceDocument({

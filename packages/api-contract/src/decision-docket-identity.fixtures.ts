@@ -267,6 +267,45 @@ export const DECISION_DOCKET_IDENTITY_FIXTURES = {
       leads: ["", "case ", "Case ", "Rechtssache ", "affaire ", "věc "],
     },
   },
+  GBR: {
+    filed: (n) => `[2099] UKSC ${String(n)}`,
+    readerSpellings: (n) => [
+      `[2099] uksc ${String(n)}`,
+      ` [2099] UKSC ${String(n)} `,
+    ],
+    sheet: {
+      type: "unsupported",
+      reason:
+        "A neutral citation's number identifies the decision; it has no sheet suffix.",
+    },
+    generated: {
+      dockets: withWritten(
+        fc
+          .tuple(
+            year,
+            fc.constantFrom(
+              "UKSC",
+              "UKPC",
+              "UKHL",
+              "EWCA Civ",
+              "EWCA Crim",
+              "EWHC",
+              "UKUT",
+              "UKFTT",
+              "EAT",
+              "EWFC",
+              "EWCOP",
+            ),
+            ordinal(99_999),
+          )
+          .map(
+            ([filingYear, court, number]) =>
+              `[${filingYear}] ${court} ${number}`,
+          ),
+      ),
+      leads: [""],
+    },
+  },
   HUN: {
     filed: (n) => `Kfv.II.${String(n)}.500/2099/8`,
     readerSpellings: (n) => [

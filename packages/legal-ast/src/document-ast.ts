@@ -1,3 +1,4 @@
+// parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
@@ -17,6 +18,12 @@ import * as v from "valibot";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
 import {
+  DECISION_DOCUMENT_KIND,
+  DOCUMENT_ISSUER_TYPES,
+  GUIDANCE_KINDS,
+} from "./document-kind.js";
+import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
+import {
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
@@ -31,7 +38,10 @@ export type {
   InlineCitationPin,
   InlineCitationPinPart,
   InlineCitationTarget,
+  InlineDecisionCitation,
   InlineItalic,
+  InlineLegislationCitation,
+  InlineLegislationTarget,
   InlineLineBreak,
   InlineLink,
   InlinePageAnchor,
@@ -338,7 +348,16 @@ export type DocumentAstSource = {
   printUrl: string;
 };
 
-export type DocumentAstMetadata = {
+/**
+ * A decision's metadata.
+ *
+ * `type` is optional because every decision AST stored before guidance
+ * metadata existed omits it, and no decision parser writes it: absence means
+ * a decision. Writing it would change every stored decision's bytes and
+ * replay the corpus for a field that only names the default.
+ */
+export type DecisionMetadata = {
+  type?: typeof DECISION_DOCUMENT_KIND | undefined;
   caseNumber: string | null;
   ecli: string | null;
   court: string | null;
@@ -348,12 +367,35 @@ export type DocumentAstMetadata = {
   statutes: string[];
 };
 
-export type DocumentAst = {
+/** The metadata of guidance: a text an issuer publishes that decides no case. */
+export type GuidanceMetadata = {
+  type: "guidance";
+  kind: GuidanceKind;
+  title: string;
+  /** The issuer's own designation ("Guidelines 3/2025"), when it states one. */
+  reference: string | null;
+  /** ISO date the issuer adopted or published the text, when it states one. */
+  issuedOn: string | null;
+  issuer: DocumentIssuer;
+};
+
+export type DocumentAstMetadata = DecisionMetadata | GuidanceMetadata;
+
+/**
+ * A document read by any legal reader. A producer that only ever writes one
+ * kind of metadata (every decision parser) narrows `TMetadata`, so its own
+ * callers read decision fields without re-checking a union they cannot hold.
+ */
+export type DocumentAst<
+  TMetadata extends DocumentAstMetadata = DocumentAstMetadata,
+> = {
   version: 1;
   source: DocumentAstSource;
-  metadata: DocumentAstMetadata;
+  metadata: TMetadata;
   blocks: Block[];
 };
+
+export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
 
 /**
  * Flatten `inlines` into the character sequence a renderer walks: text
@@ -898,16 +940,39 @@ const documentAstSourceSchema: v.GenericSchema<DocumentAstSource> = v.object({
   printUrl: v.string(),
 });
 
-const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> =
-  v.object({
-    caseNumber: v.nullable(v.string()),
-    ecli: v.nullable(v.string()),
-    court: v.nullable(v.string()),
-    decisionDate: v.nullable(v.string()),
-    decisionType: v.nullable(v.string()),
-    keywords: v.array(v.string()),
-    statutes: v.array(v.string()),
-  });
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const decisionMetadataSchema: v.GenericSchema<DecisionMetadata> = v.object({
+  type: v.optional(v.literal(DECISION_DOCUMENT_KIND)),
+  caseNumber: v.nullable(v.string()),
+  ecli: v.nullable(v.string()),
+  court: v.nullable(v.string()),
+  decisionDate: v.nullable(v.string()),
+  decisionType: v.nullable(v.string()),
+  keywords: v.array(v.string()),
+  statutes: v.array(v.string()),
+});
+
+const guidanceMetadataSchema: v.GenericSchema<GuidanceMetadata> = v.object({
+  type: v.literal("guidance"),
+  kind: v.picklist(GUIDANCE_KINDS),
+  title: v.pipe(v.string(), v.nonEmpty()),
+  reference: v.nullable(v.pipe(v.string(), v.nonEmpty())),
+  issuedOn: v.nullable(v.pipe(v.string(), v.regex(ISO_DATE))),
+  issuer: v.object({
+    type: v.picklist(DOCUMENT_ISSUER_TYPES),
+    name: v.pipe(v.string(), v.nonEmpty()),
+    jurisdiction: v.pipe(v.string(), v.nonEmpty()),
+  }),
+});
+
+/**
+ * Guidance first: its `type` is required, so a guidance object can never be
+ * read as a decision whose `type` is merely absent.
+ */
+const documentAstMetadataSchema: v.GenericSchema<DocumentAstMetadata> = v.union(
+  [guidanceMetadataSchema, decisionMetadataSchema],
+);
 
 const footnoteOf = (block: Block): ParagraphNote | null =>
   (block.type === "paragraph" || block.type === "table") &&

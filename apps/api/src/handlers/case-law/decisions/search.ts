@@ -9,8 +9,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { status } from "elysia";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
@@ -73,6 +72,7 @@ import {
   reportCaseLawFunctionWordsExcluded,
   reportCaseLawSearchCompleted,
 } from "@/api/handlers/case-law/decisions/search-telemetry";
+import { status } from "@/api/http/status";
 import { arrayOrEmpty } from "@/api/lib/array";
 // oxlint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
@@ -350,7 +350,7 @@ const facetBuckets = (
     count: Number(row["count"]),
   }));
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
+type SearchDecisionsBody = v.InferOutput<typeof searchDecisionsBodySchema> & {
   /** Internal MCP excerpt policy; HTTP callers retain their chosen length. */
   sentenceAlignedExcerpt?: boolean;
   /** Internal MCP reading policy; HTTP rows retain the compact preview. */
@@ -3454,6 +3454,7 @@ export const listCaseLawProvisionDecisions = async ({
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       pageReach: SEARCH_PAGE_REACH.REACHED,
       queryUsed: "",
+      relaxedHitCount: 0,
       warnings: [],
     },
     decisionHeadnoteMaxChars(body.headnotePresentation),

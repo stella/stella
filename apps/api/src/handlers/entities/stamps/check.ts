@@ -1,6 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { DocumentReferenceMatch } from "@stll/api-contract";
 
@@ -8,18 +7,19 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { fileSchema } from "@/api/lib/custom-schema";
 import { extractStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { lookupByVerificationCode } from "@/api/lib/entity-versions/document-reference-lookup";
-import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
-const checkStampBodySchema = t.Object({
-  file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+const checkStampBodySchema = v.object({
+  file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.document }),
 });
 
 type CheckStampHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  body: Static<typeof checkStampBodySchema>;
+  body: v.InferOutput<typeof checkStampBodySchema>;
 };
 
 type CheckStampResult = { match: DocumentReferenceMatch | null };

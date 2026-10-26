@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
-import ts from "typescript6";
+import * as ts from "tsrs/unstable/ast";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
@@ -20,6 +20,8 @@ import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
+import { parseSource } from "../packages/scripts/src/syntax-tree";
+import { createProgram } from "../packages/scripts/src/typescript-program";
 import { CHECK_POOL_JOBS } from "./ci-check-pool-registry";
 import {
   computeChangedFileScope,
@@ -55,79 +57,85 @@ const generator = (id: string) => {
   return found ?? panic(`Missing generator ${id}`);
 };
 
-test("Generator output kinds remain literal discriminators after export widening", () => {
+test("Generator output kinds remain literal discriminators after export widening", async () => {
   const file = nodePath.resolve(import.meta.dirname, "generator-type-probe.ts");
-  const declaration = ts.createSourceFile(
-    file,
+  const declaration = parseSource(
+    "generated-files.ts",
     readFileSync(
       nodePath.resolve(import.meta.dirname, "generated-files.ts"),
       "utf-8",
     ),
-    ts.ScriptTarget.Latest,
-    true,
   );
-  const definitions = declaration.statements
+  const definitions = declaration.program.body
     .filter(
       (statement) =>
-        ts.isTypeAliasDeclaration(statement) &&
-        ["Generator", "GeneratorCheck"].includes(statement.name.text),
+        (statement.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(statement.id.name)) ||
+        (statement.type === "ExportNamedDeclaration" &&
+          statement.declaration?.type === "TSTypeAliasDeclaration" &&
+          ["Generator", "GeneratorCheck"].includes(
+            statement.declaration.id.name,
+          )),
     )
-    .map((statement) => statement.getText(declaration))
+    .map((statement) =>
+      declaration.sourceText.slice(statement.start, statement.end),
+    )
     .join("\n");
-  const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
-  const host = ts.createCompilerHost(options);
-  const sourceFile = host.getSourceFile;
-  host.getSourceFile = (
-    name,
-    languageVersion,
-    onError,
-    shouldCreateNewSourceFile,
-  ) =>
-    name === file
-      ? ts.createSourceFile(name, definitions, ts.ScriptTarget.Latest, true)
-      : sourceFile(name, languageVersion, onError, shouldCreateNewSourceFile);
-  const program = ts.createProgram([file], options, host);
-  const probe = program.getSourceFile(file);
-  if (probe === undefined) {
-    throw new Error("Missing generator type probe");
-  }
-  const generatorType = probe.statements.find(
-    (statement) =>
-      ts.isTypeAliasDeclaration(statement) &&
-      statement.name.text === "Generator",
-  );
-  if (
-    generatorType === undefined ||
-    !ts.isTypeAliasDeclaration(generatorType)
-  ) {
-    throw new Error("Missing Generator declaration");
-  }
-  const checker = program.getTypeChecker();
-  const generatorUnion = checker.getTypeAtLocation(generatorType);
-  if (!generatorUnion.isUnion()) {
-    throw new Error("Generator must be a discriminated union");
-  }
-  const kinds = new Set<string>();
-  for (const branch of generatorUnion.types) {
-    const discriminator = checker.getPropertyOfType(branch, "outputKind");
-    if (discriminator === undefined) {
-      throw new Error("Generator branch has no outputKind");
-    }
-    const kind = checker.getTypeOfSymbolAtLocation(
-      discriminator,
-      generatorType,
+  const opened = await createProgram({
+    rootNames: [file],
+    virtualFiles: new Map([[file, definitions]]),
+    compilerOptions: {
+      strict: true,
+      noEmit: true,
+      skipLibCheck: true,
+      types: [],
+    },
+  });
+  try {
+    const probe =
+      (await opened.program.getSourceFile(file)) ??
+      panic("Missing generator type probe");
+    const generatorType = probe.statements.find(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        statement.name.text === "Generator",
     );
-    // A union-valued property recreates TS1360 even if another field forms a union.
-    if (!kind.isStringLiteral()) {
-      throw new Error(
-        "Every Generator branch must retain a literal outputKind",
-      );
+    if (
+      generatorType === undefined ||
+      !ts.isTypeAliasDeclaration(generatorType)
+    ) {
+      panic("Missing Generator declaration");
     }
-    kinds.add(kind.value);
+    const { checker } = opened;
+    const generatorUnion = await checker.getTypeAtLocation(generatorType);
+    if (!generatorUnion.isUnionType()) {
+      panic("Generator must be a discriminated union");
+    }
+    const kinds = new Set<string>();
+    for (const branch of await generatorUnion.getTypes()) {
+      const discriminator = await checker.getPropertyOfType(
+        branch,
+        "outputKind",
+      );
+      if (discriminator === undefined) {
+        panic("Generator branch has no outputKind");
+      }
+      const kind = await checker.getTypeOfSymbolAtLocation(
+        discriminator,
+        generatorType,
+      );
+      // A union-valued property recreates TS1360 even if another field forms a union.
+      if (!kind.isStringLiteralType()) {
+        panic("Every Generator branch must retain a literal outputKind");
+      }
+      kinds.add(kind.value);
+    }
+    expect(kinds).toEqual(
+      new Set(GENERATORS.map(({ outputKind }) => outputKind)),
+    );
+  } finally {
+    await opened.close();
   }
-  expect(kinds).toEqual(
-    new Set(GENERATORS.map(({ outputKind }) => outputKind)),
-  );
 });
 
 test("generation owners have unique identifiers", () => {
@@ -578,7 +586,26 @@ test("the route generator guard rejects missing script and direct pin", async ()
   }
 });
 
+test("visual sandbox regeneration follows its shared error metadata owner", () => {
+  for (const file of [
+    "packages/errors/src/fingerprint-fields.ts",
+    "packages/errors/src/exception-cause-chain.ts",
+    "apps/api/src/handlers/visual-sandbox/prepare.ts",
+    "apps/api/src/handlers/visual-sandbox/sanitize.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("visual-sandbox-bundle");
+  }
+});
+
 test("autofix selects only owners of changed inputs and preserves dependencies", () => {
+  expect(
+    generatorsForFiles([
+      "packages/api-contract/src/document-version-upload.ts",
+    ]).map(({ id }) => id),
+  ).toContain("cli-registry");
   const requiredIds = [
     "capability-catalog",
     "capability-runtime",
@@ -590,7 +617,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["module-ownership", "route-tree"]);
+  ).toEqual(["tailwind-class-cache", "module-ownership", "route-tree"]);
   // api-typecheck-projects declares the derived CLI and capability runtimes,
   // which a clean checkout lacks, so they are planned with it.
   expect(
@@ -717,6 +744,19 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     .decode(Bun.spawnSync(["git", "ls-files", "-z"], { stdout: "pipe" }).stdout)
     .split("\0")
     .filter(Boolean);
+  // Local skill sources must affect the generation input contract, including a skill
+  // added after the generator's other inputs were last reviewed.
+  const instructions = generator("ai-instructions");
+  const localSkills = tracked.filter((file) =>
+    file.startsWith(".ai/local-skills/"),
+  );
+  expect(localSkills.length).toBeGreaterThan(0);
+  for (const file of localSkills) {
+    expect(
+      instructions.inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      `ai-instructions: ${file}`,
+    ).toBe(true);
+  }
   // Pooled checks are steps of their job, so resolve names through them.
   const workflow: unknown = Bun.YAML.parse(ci);
   const steps = new Set([
@@ -948,6 +988,15 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
   }
 });
 
+test.each([
+  "apps/api/src/mcp/web-handoff-link-contract.ts",
+  "apps/api/src/mcp/write-result-omission.ts",
+])("app contracts follow their advertised output owner %s", (file) => {
+  expect(generatorsForFiles([file]).map(({ id }) => id)).toContain(
+    "mcp-app-contracts",
+  );
+});
+
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ciGeneratedStepRun(
     "CLI sharded registry and derived runtime guard",
@@ -1026,7 +1075,10 @@ test("route tree has one derived owner and a cache producer for every consumer",
   const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
   expect(ignored.exitCode).toBe(0);
   const producer = config.tasks["@stll/web#generate:route-tree"];
-  expect(producer?.outputs).toEqual(["src/routeTree.gen.ts"]);
+  expect(producer?.outputs).toEqual([
+    "src/routeTree.gen.ts",
+    "src/route-templates.gen.ts",
+  ]);
   expect(
     generationInputs("generate:route-tree")
       .map((input) =>

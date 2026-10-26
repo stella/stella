@@ -62,9 +62,9 @@ checks:
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
     # Every declared deployment flag has a reader and every flag read is
     # declared; no flag is read off the raw process environment; across the
-    # real route tree a capability tagged with a flag is mounted behind a
-    # gate on that flag, and every route file is classified. Existing gaps
-    # sit in apps/api/deployment-feature-baseline.json, which may only
+    # served route table a capability tagged with a flag is mounted behind a
+    # gate on that flag, and every route is classified. Existing gaps sit in
+    # apps/api/deployment-feature-routes-baseline.json, which may only
     # shrink against the measured base. The --self-test run first proves
     # each detector fires on mutated copies of the real tree.
     run: |
@@ -90,6 +90,20 @@ checks:
     run: |
       bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
       bun scripts/check-gh-retry.ts
+
+  # Every file tracked at HEAD stays within 1 MiB so generated output cannot
+  # be committed; larger files sit in scripts/tracked-file-size-baseline.json
+  # with a reason and a byte ceiling, and stale entries fail.
+  - name: Tracked file sizes
+    id: static_check_125
+    env:
+      CI_CHECK_KIND: STATIC
+      CI_CHECK_INPUTS: tracked-tree+generated-inputs
+      STELLA_VERIFY: check
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_125 != 'true') }}
+    run: |
+      bun test scripts/check-tracked-file-sizes.test.ts
+      bun scripts/check-tracked-file-sizes.ts
 
   # Network fetches retry through scripts/retry.sh and carry a step
   # timeout; the allowlist may only shrink against the measured base.

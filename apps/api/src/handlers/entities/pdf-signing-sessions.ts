@@ -7,13 +7,13 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { PdfSigningSessionView } from "@/api/lib/files/pdf-signing/sessions";
 import { resolvePdfSigningSessionStatus } from "@/api/lib/files/pdf-signing/sessions";
 
 const paramsSchema = workspaceParams({
-  sessionId: tSafeId("pdfSigningSession"),
+  sessionId: resourceIdSchema("pdfSigningSession"),
 });
 
 type ReadSessionOptions = {

@@ -388,6 +388,7 @@
         "reading": "Modo de leitura"
       },
       "notLocated": "{count, plural, one {# alegação não foi localizada no original} other {# alegações não foram localizadas no original}}",
+      "pdfTextFailed": "Não foi possível ler o texto do PDF, por isso as alegações não estão marcadas nas páginas.",
       "selectClaim": "Selecione uma alegação para inspecionar o registro.",
       "showQueue": "Mostrar fila",
       "stats": {
@@ -506,6 +507,24 @@
     "addEntry": "Adicionar entrada",
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
+    "approval": {
+      "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "empty": "Nada aguarda aprovação neste caso.",
+      "failed": "A alteração não foi salva. Tente novamente.",
+      "myTime": "Meu tempo",
+      "refusals": {
+        "invalidEntry": "Adicione uma descrição e confira a data do trabalho; depois aprove o registro.",
+        "notApprover": "Somente o aprovador designado ou um administrador pode aprovar este registro.",
+        "notFound": "Este registro não existe mais. Atualize a lista.",
+        "runningTimer": "Pare o cronômetro em andamento antes de aprovar este registro.",
+        "unpriced": "Este registro não tem taxa. Defina uma taxa para este caso e depois aprove o registro.",
+        "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
+      },
+      "returnComment": "Motivo da devolução",
+      "selectEntry": "Selecionar registro",
+      "timeEntries": "Registros de tempo",
+      "title": "Aprovações"
+    },
     "approve": "Aprovar",
     "approveSelected": "Aprovar selecionados",
     "batchActions": "Ações em lote",
@@ -593,6 +612,7 @@
       "openInvoice": "Abrir fatura",
       "otherCurrency": "{count, plural, one {# item está registrado} other {# itens estão registrados}} em outra moeda que não {currency} e ficam para uma fatura separada.",
       "outsideScope": "Fora do âmbito do IVA, 0 %",
+      "pendingApprovals": "{count, plural, one {# item aguarda} other {# itens aguardam}} aprovação. Revisar aprovações.",
       "rate": "Valor/hora",
       "readyDescription": "Ao emitir, a fatura recebe o próximo número da sua série e fica bloqueada. Um rascunho ainda pode ser editado.",
       "readyTitle": "Pronta para emitir",
@@ -644,6 +664,7 @@
         "eso9": "Planilha de importação ESO9 (XLSX)",
         "exporting": "Preparando exportação…",
         "isdoc": "Fatura eletrônica ISDOC (ABRA Gen e outros)",
+        "ksefFa3": "Fatura eletrônica KSeF FA(3) (XML)",
         "spreadsheets": "Planilhas",
         "xlsx": "Faturas (XLSX)",
         "xlsxLines": "Itens de fatura (XLSX)"
@@ -757,6 +778,7 @@
     "sellerProfiles": {
       "add": "Adicionar perfil de vendedor",
       "archiveConfirm": "Arquivar este perfil de vendedor? Ele não estará mais disponível para novas faturas.",
+      "barRegistration": "Inscrição na Ordem dos Advogados",
       "bic": "Código BIC / SWIFT",
       "default": "Vendedor padrão",
       "defaultCurrency": "Moeda padrão",
@@ -768,11 +790,10 @@
       "invalidCurrency": "Insira um código de moeda de três letras.",
       "invalidIban": "Insira um IBAN válido.",
       "legalName": "Nome legal",
+      "registerEntry": "Registro empresarial",
       "registrationId": "Número de registro",
       "setDefault": "Definir como padrão",
       "title": "Perfis de vendedor",
-      "vatId": "Número de IVA",
-      "vatPayer": "Contribuinte de IVA",
       "vatPayerHelp": "As faturas deste vendedor cobram IVA. Desative para uma pessoa registrada que tem número de IVA, mas não é contribuinte.",
       "vatPayerRequiresVatId": "Informe o número de IVA para emitir faturas como contribuinte de IVA."
     },
@@ -807,6 +828,8 @@
     "total": "Total",
     "vatRates": {
       "add": "Adicionar alíquota de IVA",
+      "addCzechia": "Adicionar alíquotas da Tchéquia",
+      "addSlovakia": "Adicionar alíquotas da Eslováquia",
       "archiveConfirm": "Arquivar esta alíquota de IVA? Ela não estará mais disponível para novos documentos.",
       "code": "Código da alíquota",
       "current": "Alíquota vigente",
@@ -821,6 +844,7 @@
       "overlap": "Os períodos de validade do mesmo código de alíquota não podem se sobrepor.",
       "past": "Alíquota anterior",
       "periodHelp": "A data inicial está incluída; a data final está excluída. Deixe a data final em branco para um período aberto.",
+      "presetResult": "Adicionadas: {added}; ignoradas: {skipped}.",
       "rate": "Percentual de IVA",
       "title": "Alíquotas de IVA",
       "validFrom": "Válida desde",
@@ -1027,7 +1051,10 @@
       "pageOfCount": "Página {page} de {pageCount}",
       "pageOfEstimatedCount": "Página {page} de ~{pageCount}",
       "pageOfEstimatedCountLabel": "Página {page} de cerca de {pageCount}",
+      "pageWithEstimatedMatchCounts": "Página {page} · cerca de {exactCount, plural, one {# correspondência exata} many {# correspondências exatas} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
       "pageWithEstimatedResultCount": "Página {page} · cerca de {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
+      "pageWithMatchCounts": "Página {page} · {exactCount, plural, one {# correspondência exata} other {# correspondências exatas}} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
+      "pageWithPartialMatchCount": "Página {page} · {relaxedCount, plural, one {# correspondência parcial} other {# correspondências parciais}} nesta página",
       "pageWithResultCount": "Página {page} · {count, plural, one {# resultado} many {# resultados} other {# resultados}}",
       "perPage": "Por página",
       "refineForMore": "Refine a pesquisa para ver mais resultados"
@@ -1478,7 +1505,7 @@
       "label": "IA simulada"
     },
     "modelSelector": {
-      "allModels": "Todos os modelos ({count, number})",
+      "allModels": "Todos os modelos",
       "autoDescription": "Escolhe automaticamente o modelo e o nível de raciocínio.",
       "autoLabel": "Automático",
       "belowFrontier": "Abaixo dos melhores equilíbrios",
@@ -2048,7 +2075,6 @@
       "orLetUsKnowAt": "ou deixe-nos saber em",
       "viewDocumentation": "Ver documentação"
     },
-    "enterKey": "↵",
     "error": "Erro",
     "expenses": "Despesas",
     "export": {
@@ -2121,6 +2147,7 @@
       "ZH-HANT": "Chinês (tradicional)"
     },
     "lastUpdated": "Última atualização",
+    "layoutResetAfterProblem": "O layout foi redefinido após um problema.",
     "legalDatabase": "Base de dados jurídica",
     "loadMore": "Carregar mais",
     "loading": "Carregando",
@@ -2219,6 +2246,7 @@
     "suggested": "Sugestão",
     "summarizeChanges": "Resumir alterações",
     "target": "Destino",
+    "taxId": "Identificação fiscal",
     "timeBilling": "Tempo e faturamento",
     "today": "Hoje",
     "translate": "Traduzir",
@@ -2242,6 +2270,8 @@
     "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
     "value": "Valor",
+    "vatId": "Número de IVA",
+    "vatPayer": "Contribuinte de IVA",
     "verified": "Verificado",
     "verify": "Verificar",
     "version": "Versão",
@@ -2432,7 +2462,9 @@
       "prefix": "Prefixo",
       "registrationNumber": "Número de registro",
       "suffix": "Sufixo",
-      "taxId": "CPF/CNPJ",
+      "vatPayer": "Situação perante o IVA",
+      "vatPayerNo": "Não contribuinte de IVA",
+      "vatPayerUnknown": "Desconhecido",
       "year": "Ano"
     },
     "filterOrganizations": "Organizações",
@@ -2472,7 +2504,6 @@
         "primary_phone": "Telefone principal",
         "state": "Estado ou região",
         "suffix": "Sufixo",
-        "tax_id": "Identificação fiscal",
         "type": "Tipo de contato"
       },
       "fileInvalid": "Escolha um único arquivo CSV, TSV ou TXT.",
@@ -3817,6 +3848,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Um cliente",
+      "availabilityClientBadgeHelp": "Disponível apenas nos casos de um cliente.",
+      "availabilityClientHelp": "Só pode ser usada nos casos deste cliente. Isso não poderá ser alterado depois.",
+      "availabilityFixedHelp": "Definido quando a habilidade foi criada. Não pode ser alterado.",
+      "availabilityLabel": "Disponível em",
+      "availabilityMatter": "Um caso",
+      "availabilityMatterBadgeHelp": "Disponível apenas em um caso.",
+      "availabilityMatterHelp": "Só pode ser usada neste caso. Isso não poderá ser alterado depois.",
+      "availabilityOrganization": "Toda a organização",
+      "availabilityTeamNeedsMatter": "Para compartilhar uma habilidade com a equipe, escolha o caso a que ela se destina. Isso não poderá ser alterado depois.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Crie um playbook de revisão de contratos posição por posição, com base nos seus contratos já assinados, em uma breve entrevista e nos padrões usuais de mercado.",
@@ -4747,7 +4788,7 @@
     "modelError": "O modelo não conseguiu concluir esta resposta.",
     "networkError": "A conexão foi interrompida. Tente novamente.",
     "regenerate": "Gerar resposta novamente",
-    "selectionError": "Selecione texto dentro de um único parágrafo (até 2.000 caracteres).",
+    "selectionError": "Selecione um trecho da própria decisão.",
     "send": "Enviar pergunta de acompanhamento",
     "share": "Compartilhar com a equipe",
     "timeoutError": "O tempo limite para a resposta foi excedido. Tente novamente.",
@@ -4800,6 +4841,8 @@
     "recentDocuments": "Documentos recentes",
     "recentSearches": "Pesquisas recentes",
     "recentlyOpenedFiles": "Arquivos abertos recentemente",
+    "registryCandidateNameMismatch": "O nome oficial é “{officialName}” e não corresponde",
+    "registryCandidateNoOfficialRecord": "O registro oficial não contém uma empresa com este número",
     "registryChoose": "Escolher um registro empresarial",
     "registryCredentialAskAdmin": "Peça a um administrador da organização para configurar o acesso a este registro.",
     "registryCredentialSaved": "Acesso ao registro salvo",
@@ -4810,6 +4853,7 @@
       "enrichmentUnavailable": "Os dados do registro comercial estão temporariamente indisponíveis"
     },
     "registryKrsHint": "O KRS busca pelo número de registro, não pelo nome da empresa. Digite um número KRS de 10 dígitos, incluindo os zeros iniciais (por exemplo, 0000006865).",
+    "registryNameSearchNotFound": "Nenhuma empresa verificada corresponde a esse nome. Os seguintes candidatos foram descartados:",
     "registryVatHint": "O VIES verifica números de IVA, não nomes de empresas. Insira o número de IVA com o prefixo do país (por exemplo, CZ27082440); o formato depende do país.",
     "renameSearchTitle": "Renomear pesquisa salva",
     "requestCountry": "Solicitar um novo país",
@@ -5334,7 +5378,7 @@
     "importDescription": "Os estilos são extraídos para um novo DOCX sem conteúdo.",
     "importTitle": "Importar conjunto de estilos",
     "loadFailed": "Não foi possível carregar os conjuntos de estilos",
-    "newDocument": "Novo documento",
+    "newDocument": "Novo documento DOCX",
     "pickerDescription": "Escolha o sistema de formatação do novo arquivo.",
     "renameTitle": "Renomear conjunto de estilos",
     "replace": "Substituir origem",
@@ -5618,7 +5662,7 @@
     "moveToMatter": "Salvar no caso",
     "moveToMatterAnyway": "Salvar mesmo assim",
     "myDefaultLookupFormat": "Meu padrão",
-    "newFromTemplate": "Novo documento a partir de modelo",
+    "newFromTemplate": "Novo documento DOCX a partir de modelo",
     "newFromTemplateFillHint": "Preencha os campos; o documento será criado neste caso.",
     "newTemplate": "Novo modelo",
     "noTemplates": "Ainda não há modelos",
@@ -5989,6 +6033,7 @@
         "action": "Editar no desktop",
         "authRequiredDescription": "Atualize stella e faça login novamente antes de usar a edição na área de trabalho.",
         "authRequiredTitle": "Sua sessão expirou",
+        "editInApplication": "Editar no <bdi>{application}</bdi>",
         "editLocallyPrompt": "Edite este arquivo localmente e sincronize as alterações com o stella.",
         "forceRelease": "Forçar liberação",
         "notOpenedDescription": "O stella desktop não confirmou que o <bdi>{application}</bdi> abriu. Abra o stella desktop e tente novamente.",
@@ -6012,13 +6057,15 @@
         "alreadyInstalled": "Já está instalado? Conectar",
         "connect": "Conectar o stella desktop",
         "connected": "O stella desktop está conectado",
+        "download": "Baixar o stella desktop",
         "editNone": "Baixe o stella desktop para editar este arquivo",
         "editOutdated": "Atualize o stella desktop para editar",
         "editReason": "A edição no computador abre o arquivo em um app do seu computador pelo stella desktop.",
         "signCurrent": "Assinar com o stella desktop",
         "signNone": "Baixe o stella desktop para assinar este PDF",
         "signOutdated": "Atualize o stella desktop para assinar",
-        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop."
+        "signReason": "A assinatura usa o certificado do seu computador, por isso acontece no stella desktop.",
+        "update": "Atualizar o stella desktop"
       },
       "downloadAs": "Baixar como…",
       "downloadAsZip": "Baixe como ZIP",
@@ -6031,8 +6078,10 @@
       "itemLimitReached": "Este assunto atingiu o limite de itens.",
       "maxEntitiesReached": "Número máximo de itens atingido",
       "ocrAlreadyProcessed": "O reconhecimento de texto já foi concluído",
+      "ocrBatchHelp": "Os documentos na fila são processados no próximo lote de OCR.",
       "ocrQueueFailed": "Não foi possível colocar o reconhecimento de texto na fila",
-      "ocrQueued": "Reconhecimento de texto adicionado ao próximo lote de OCR",
+      "ocrQueued": "Reconhecimento de texto adicionado à fila",
+      "ocrQueuedForBatch": "Reconhecimento de texto adicionado ao próximo lote de OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Já há uma assinatura em andamento no stella desktop",
         "cancelledBaseVersionDescription": "O documento mudou durante a assinatura. Abra a versão mais recente e assine novamente.",
@@ -6089,6 +6138,7 @@
         "waitingDescription": "Escolha um certificado de assinatura no stella desktop para assinar este PDF.",
         "waitingTitle": "Aguardando o stella desktop"
       },
+      "queueForOcr": "Colocar na fila de OCR",
       "rateLimited": "Limite de taxa atingido; retomando em {seconds, number}s",
       "referencedUpload": {
         "choiceLabel": "O que fazer com {fileName}",
@@ -6100,7 +6150,6 @@
       "removeMetadata": "Remover metadados do documento",
       "renamedToAvoidConflicts": "{count, plural, one {# arquivo renomeado para evitar conflitos} many {# arquivos renomeados para evitar conflitos} other {# arquivos renomeados para evitar conflitos}}",
       "retryFailed": "Tentar novamente {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}}",
-      "runOcr": "Colocar OCR na fila",
       "scrubFailed": "Não foi possível remover os metadados deste arquivo, portanto nada foi baixado",
       "uploadedPartially": "{failed, plural, one {# arquivo falhou} many {# arquivos falharam} other {# arquivos falharam}} de {total, number}",
       "uploadedSuccessfully": "Arquivos enviados com sucesso",
@@ -6388,6 +6437,7 @@
       "addParty": "Adicionar parte",
       "changeClient": "Alterar cliente",
       "client": "Cliente",
+      "movedToClient": "Caso <bdi>{matterName}</bdi> movido para <bdi>{clientName}</bdi>",
       "noClient": "Nenhum cliente atribuído",
       "noClientOptional": "Sem cliente (opcional)",
       "noParties": "Nenhuma parte adicionada a este caso.",
@@ -6406,7 +6456,9 @@
       "personalLabel": "Pessoal",
       "promoteCta": "Promover para cliente",
       "promoteDescription": "Associe um cliente para compartilhar este caso com a equipe. Esta ação é unidirecional; casos promovidos não podem voltar a ser pessoais.",
+      "promoteToClientConfirm": "O caso <bdi>{matterName}</bdi> será associado a <bdi>{clientName}</bdi> e compartilhado com a equipe. Ele não poderá voltar a ser pessoal.",
       "promotedSuccess": "Caso promovido",
+      "recentClients": "Clientes recentes",
       "removeClient": "Remover cliente",
       "removeParty": "Remover parte",
       "removePartyConfirm": "Tem certeza de que deseja remover esta parte do caso?",
@@ -6651,6 +6703,12 @@
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
       "parties": "Partes"
+    },
+    "switcher": {
+      "searchPlaceholder": "Encontrar um caso…",
+      "trigger": "Trocar de caso",
+      "viewAll": "Ver todos os casos",
+      "viewAllForClient": "Ver todos os casos do cliente {clientName}"
     },
     "table": {
       "clearFlags": "Limpar sinalizadores",

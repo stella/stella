@@ -8,19 +8,21 @@
  * instances that never set the token expose nothing.
  */
 
-import Elysia, { status } from "elysia";
-
 import { env } from "@/api/env";
+import { routes } from "@/api/http/route";
+import { status } from "@/api/http/status";
+import { defineEndpoint } from "@/api/lib/endpoints";
 
-export const wellKnownRoute = new Elysia().get(
-  "/.well-known/openai-apps-challenge",
-  () => {
-    const token = env.OPENAI_APPS_CHALLENGE_TOKEN;
-    if (!token) {
-      return status(404);
-    }
-    return new Response(token, {
-      headers: { "content-type": "text/plain; charset=utf-8" },
-    });
-  },
-);
+const openAiAppsChallenge = defineEndpoint.public({}, () => {
+  const token = env.OPENAI_APPS_CHALLENGE_TOKEN;
+  if (!token) {
+    return status(404);
+  }
+  return new Response(token, {
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+});
+
+export const wellKnownRoute = routes({
+  "/.well-known/openai-apps-challenge": { GET: openAiAppsChallenge },
+});

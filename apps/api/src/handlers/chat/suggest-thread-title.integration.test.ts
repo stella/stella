@@ -5,6 +5,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -129,6 +130,7 @@ const createContext = ({
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},
     request: new Request("http://localhost/v1/chat/threads/title/suggest"),
+    route: "/v1/chat/threads/:threadId/title/suggest" satisfies ApiRoutePath,
     safeDb,
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },

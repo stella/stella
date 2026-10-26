@@ -43,7 +43,9 @@ type RasterizeScanPageOptions = {
 const rasterizeScanPage = async ({
   proxy,
   rotation,
-}: RasterizeScanPageOptions): Promise<RasterizedScanPage> => {
+}: RasterizeScanPageOptions): Promise<
+  Result<RasterizedScanPage, ClientOperationError>
+> => {
   const scale = CLEAN_SCAN_DPI / POINTS_PER_INCH;
   const viewport = proxy.getViewport({ rotation: 0, scale });
   const width = Math.max(1, Math.round(viewport.width));
@@ -55,12 +57,14 @@ const rasterizeScanPage = async ({
     await proxy.render({ canvas, viewport }).promise;
     const context = canvas.getContext("2d");
     if (!context) {
-      throw new ClientOperationError({
-        action: "clean-scan-render",
-        message: "The page could not be drawn for cleaning",
-      });
+      return Result.err(
+        new ClientOperationError({
+          action: "clean-scan-render",
+          message: "The page could not be drawn for cleaning",
+        }),
+      );
     }
-    return {
+    return Result.ok({
       pixels: context.getImageData(0, 0, width, height).data,
       width,
       height,
@@ -70,7 +74,7 @@ const rasterizeScanPage = async ({
       },
       dpi: CLEAN_SCAN_DPI,
       rotation,
-    };
+    });
   } finally {
     // Release the backing store at once; a long run would otherwise hold
     // one full-resolution canvas per page until collection.
@@ -103,16 +107,18 @@ export const runCleanScan = async (
   { engine, options, pages, signal, onFailed, onReviewed }: RunCleanScanOptions,
   index = 0,
 ): Promise<void> => {
+  const isAborted = () => signal.aborted;
   const page = pages.at(index);
-  if (page === undefined || signal.aborted) {
+  if (page === undefined || isAborted()) {
     return;
   }
   const raster = await Result.tryPromise({
-    try: async () => await rasterizeScanPage(page),
+    try: async () =>
+      (await rasterizeScanPage(page)).mapError((error) => error.message),
     catch: (cause) =>
       cause instanceof Error ? cause.message : "The page could not be drawn",
-  });
-  if (signal.aborted) {
+  }).then(Result.flatten);
+  if (isAborted()) {
     return;
   }
   if (Result.isError(raster)) {
@@ -128,7 +134,7 @@ export const runCleanScan = async (
       page: raster.value,
       options,
     });
-    if (signal.aborted) {
+    if (isAborted()) {
       return;
     }
     if (Result.isError(reviewed)) {

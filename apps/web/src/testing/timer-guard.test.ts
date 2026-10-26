@@ -25,11 +25,7 @@ test("the runtime reports a timer live only until it fires or any path ends it",
   const fired = setTimeout(() => {}, 1);
   await Bun.sleep(10);
   expect(isLiveTimer(fired)).toBe(false);
-  for (const end of [
-    (timer: ReturnType<typeof setTimeout>) => timer.close(),
-    (timer: ReturnType<typeof setTimeout>) => timer[Symbol.dispose](),
-    (timer: ReturnType<typeof setTimeout>) => clearInterval(timer),
-  ]) {
+  const checkEnd = (end: (timer: ReturnType<typeof setTimeout>) => void) => {
     const timeout = setTimeout(() => {}, 10_000);
     const interval = setInterval(() => {}, 10_000);
     end(timeout);
@@ -38,6 +34,13 @@ test("the runtime reports a timer live only until it fires or any path ends it",
       false,
       false,
     ]);
+  };
+  for (const end of [
+    (timer: ReturnType<typeof setTimeout>) => timer.close(),
+    (timer: ReturnType<typeof setTimeout>) => timer[Symbol.dispose](),
+    (timer: ReturnType<typeof setTimeout>) => clearInterval(timer),
+  ]) {
+    checkEnd(end);
   }
   expect(leaksAtTestEnd()).toEqual([]);
 });
@@ -57,10 +60,12 @@ test("a timeout still pending when its test ends is cancelled and reported with 
 
 test("an interval left running is stopped and reported", async () => {
   let ticks = 0;
-  setInterval(() => {
+  const interval = setInterval(() => {
     ticks += 1;
   }, 1);
   const leaks = leaksAtTestEnd();
+  expect(isLiveTimer(interval)).toBe(false);
+  clearInterval(interval);
   const stopped = ticks;
   await Bun.sleep(10);
   expect(leaks).toHaveLength(1);

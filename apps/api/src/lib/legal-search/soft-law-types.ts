@@ -1,6 +1,8 @@
 import { panic, TaggedError } from "better-result";
 import type { Result } from "better-result";
 
+import type { GuidanceKind } from "@stll/legal-ast/document-kind";
+
 import type {
   SourceFieldInventory,
   SourceSliceWalk,
@@ -15,18 +17,6 @@ import {
   type SoftLawFetchError,
 } from "./soft-law-access-types";
 
-export const SOFT_LAW_KINDS = [
-  "methodology",
-  "recommendation",
-  "opinion",
-  "faq",
-  "guideline",
-  "position",
-  "statement",
-  "inspection_report",
-  "annual_report",
-  "other",
-] as const;
 export const SOFT_LAW_LISTING_STATES = ["listed", "no_longer_listed"] as const;
 export const SOFT_LAW_LOCATOR_STATES = ["current", "historical"] as const;
 export const SOFT_LAW_BATCH_LIMIT = 100;
@@ -414,14 +404,14 @@ export type SoftLawRelation = {
 };
 export type SoftLawMetadata = {
   title: string;
-  kind: (typeof SOFT_LAW_KINDS)[number];
+  kind: GuidanceKind;
   /** Publisher's original type label; absent only in historical CZ records. */
   sourceKind?: string;
   /** Stable publisher record id, distinct from a human citation or mutable locator. */
   sourceDocumentId?: string;
   statedReference: SoftLawStated<string>;
   issuedOn: SoftLawStated<string>;
-  /** Historical CZ rows and retry receipts predate these publisher fields. EU adapters must provide all three. */
+  /** Historical CZ rows and retry receipts predate these publisher fields. Authorities requiring identified expressions supply all three. */
   expression?: SoftLawExpression;
   stage?: SoftLawStage;
   relations?: readonly SoftLawRelation[];
@@ -429,6 +419,11 @@ export type SoftLawMetadata = {
     state: (typeof SOFT_LAW_VALIDITY_STATES)[number];
     basis: (typeof SOFT_LAW_VALIDITY_BASES)[number];
   };
+};
+export type SoftLawRawProvenance = {
+  url: string;
+  retrievedAt: string;
+  sha256: string;
 };
 export type SoftLawEntry = {
   type: "document";
@@ -440,6 +435,8 @@ export type SoftLawEntry = {
     role: string;
     contentBase64: string;
     contentType: string;
+    /** Older persisted envelopes predate per-response provenance. */
+    provenance?: SoftLawRawProvenance;
   }[];
   metadata: SoftLawMetadata;
   sourceDates: Readonly<Record<string, string>>;
@@ -501,6 +498,8 @@ export type SoftLawDocumentInput = {
     role: string;
     bytes: Uint8Array;
     contentType: string;
+    /** Older persisted envelopes predate per-response provenance. */
+    provenance?: SoftLawRawProvenance;
     /** Historical CZ envelopes predate this distinction. */
     purpose?: "document" | "discovery";
   }[];
@@ -538,6 +537,8 @@ export type SoftLawRawObject = Omit<
 > & {
   key: string;
 };
+export type SoftLawAdapterConfiguration =
+  { type: "default" } | { type: "admission-file"; path: string };
 export type SoftLawSourceAdapter = {
   key: string;
   authority: SoftLawAuthority;

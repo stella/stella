@@ -16,6 +16,8 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { RequiredMigrationIndex } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
 import {
@@ -100,11 +102,13 @@ const lockTaking = ({
 /** An index declared for the online phase, with its own build statement. */
 export type OnlineIndexDeclaration = RequiredMigrationIndex & {
   /**
-   * The declared build, read only by `createIndexConcurrently`. Without it,
-   * the build renders from `definitionBody`, PostgreSQL's own definition.
+   * The declared build, read only by `createIndexConcurrently`. An index
+   * without one belongs to a schema migration rather than the online phase.
    */
   createSql?: string;
 };
+
+type OnlineBuildDeclaration = OnlineIndexDeclaration & { createSql: string };
 
 type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
 
@@ -112,27 +116,18 @@ type IndexTarget = Pick<RequiredMigrationIndex, "name" | "tableName">;
  * Whether the online phase may build the index. One without a declared build
  * belongs to a schema migration, so its absence is a broken deploy.
  */
-export const declaresOnlineBuild = ({
-  createSql,
-}: OnlineIndexDeclaration): boolean => createSql !== undefined;
+export const declaresOnlineBuild = (
+  index: OnlineIndexDeclaration,
+): index is OnlineBuildDeclaration => index.createSql !== undefined;
 
 const createSqlTarget =
   /^CREATE (?:UNIQUE )?INDEX CONCURRENTLY "?([A-Za-z_][A-Za-z0-9_]*)"? ON public\."?([A-Za-z_][A-Za-z0-9_]*)"? /u;
 
 export const createIndexConcurrently = ({
   createSql,
-  definitionBody,
-  isUnique,
   name,
   tableName,
-}: OnlineIndexDeclaration): LockTakingStatement => {
-  if (createSql === undefined) {
-    return lockTaking({
-      tableName,
-      text: `CREATE ${isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(name)} ${definitionBody}`,
-      lockQueue: "beside_writers",
-    });
-  }
+}: OnlineBuildDeclaration): LockTakingStatement => {
   // The gate watches the declared table, so the build must be on it.
   const match = createSqlTarget.exec(createSql);
   const builtName = match?.at(1);
@@ -144,7 +139,7 @@ export const createIndexConcurrently = ({
   }
   return lockTaking({
     tableName,
-    text: createSql,
+    text: spliced(createSql),
     lockQueue: "beside_writers",
   });
 };
@@ -392,7 +387,11 @@ class OnlineLockRetryDeferred extends TaggedError("OnlineLockRetryDeferred")<{
   attempts: number;
   lockTimeoutMs: number;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type GatedTableSessionOptions = {
   connection: Pick<OnlineMigrationConnection, "execute" | "query">;

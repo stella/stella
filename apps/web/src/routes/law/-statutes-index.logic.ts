@@ -79,7 +79,13 @@ export const loadPublicStatutesIndex = async ({
       queryClient,
       statuteFacetsOptions(country.toUpperCase()),
       (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "loadPublicStatutesIndex:failure",
+          scope: {
+            type: "handler",
+            handlerId: "loadPublicStatutesIndex:failure",
+          },
+        });
       },
     ),
     "statutes.facets-prefetch",

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+
 import type {
   PdfSignTarget,
   usePdfSignFlow,
@@ -47,6 +49,9 @@ const savedVersion = {
 const readyFlow = (events: string[], pending: Promise<void>[]) =>
   ({
     label: SIGN_LABEL,
+    actionLabel: SIGN_LABEL,
+    status: { type: "ready" },
+    setUp: () => undefined,
     isConnecting: false,
     isSigning: false,
     start: () => {
@@ -93,7 +98,7 @@ const mount = ({ isDirty, saved }: MountOptions) => {
             role: "member",
             ai: false,
             deepl: false,
-            ocr: false,
+            ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
             desktop: "current",
             settings: undefined,
           })}

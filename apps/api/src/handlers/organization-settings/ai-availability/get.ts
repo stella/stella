@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
+
 import { updateAIConfigConfig } from "@/api/handlers/organization-settings/update-ai-config";
 import {
   ORG_AI_CONFIG_STATUS,
@@ -107,7 +109,7 @@ const readAIAvailability = createSafeRootHandler(
       // Always false outside local development and tests: deployed runtimes
       // refuse USE_MOCK_AI at boot.
       mockAnswers: mockAnswersForOrganization(orgAIConfig),
-    });
+    } satisfies OrganizationAIAvailability);
   },
 );
 

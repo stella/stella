@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ENTITY_KINDS } from "@stll/api-contract";
 
@@ -7,7 +7,10 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { tFind } from "@/api/lib/entities/find-schema";
 import {
   buildKanbanGroupCondition,
@@ -24,42 +27,41 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
-const readKanbanGroupBodySchema = t.Object({
-  filters: t.Optional(
-    t.Array(tConditionNode, { maxItems: LIMITS.viewFiltersCount }),
+const readKanbanGroupBodySchema = v.object({
+  filters: v.optional(
+    v.pipe(v.array(tConditionNode), v.maxLength(LIMITS.viewFiltersCount)),
   ),
-  sorts: t.Optional(
-    t.Array(tViewSortSchema, { maxItems: LIMITS.viewSortsCount }),
+  sorts: v.optional(
+    v.pipe(v.array(tViewSortSchema), v.maxLength(LIMITS.viewSortsCount)),
   ),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.entitiesWindowSizeMax,
-    }),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(LIMITS.entitiesWindowSizeMax),
+    ),
   ),
-  cursor: t.Optional(
-    tPaginationCursor({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
+  cursor: v.optional(
+    paginationCursorSchema({ maxChars: ENTITIES_WINDOW_CURSOR_MAX_LENGTH }),
   ),
-  find: t.Optional(tFind),
-  fieldMode: t.Optional(t.Union([t.Literal("full"), t.Literal("visible")])),
-  fieldIds: t.Optional(
-    t.Array(tSafeId("property"), {
-      maxItems: LIMITS.propertiesCount,
-    }),
+  find: v.optional(tFind),
+  fieldMode: v.optional(v.picklist(["full", "visible"])),
+  fieldIds: v.optional(
+    v.pipe(
+      v.array(resourceIdSchema("property")),
+      v.maxLength(LIMITS.propertiesCount),
+    ),
   ),
-  // Document-table grouping passes ["folder", "task"] to match the flat window
-  // query; the kanban board omits it so status columns keep their tasks.
-  excludedKinds: t.Optional(
-    t.Array(t.UnionEnum([...ENTITY_KINDS]), {
-      maxItems: ENTITY_KINDS.length,
-    }),
+  excludedKinds: v.optional(
+    v.pipe(
+      v.array(v.picklist([...ENTITY_KINDS])),
+      v.maxLength(ENTITY_KINDS.length),
+    ),
   ),
   groupByPropertyId: tGroupByPropertyId,
-  groupValue: t.Nullable(t.String({ maxLength: 1000 })),
-  // The property's current option values. When sent (grouped table), the
-  // uncategorized bucket folds in cells whose value is no longer an option;
-  // omitted (kanban board) keeps "no non-empty value".
-  optionValues: t.Optional(t.Array(t.String({ maxLength: 1000 }))),
+  groupValue: v.nullable(v.pipe(v.string(), v.maxLength(1000))),
+  optionValues: v.optional(v.array(v.pipe(v.string(), v.maxLength(1000)))),
 });
 
 const config = {
@@ -93,6 +95,7 @@ const readKanbanGroup = createSafeHandler(
     );
     const result = yield* Result.await(
       queryEntities({
+        textMode: "preview",
         safeDb,
         scope: { type: "matter", workspaceId },
         currentUserId: currentUser.id,
@@ -102,7 +105,7 @@ const readKanbanGroup = createSafeHandler(
         find: body.find,
         cursor: cursorResult.value,
         limit: limit + 1,
-        fieldMode: body.fieldMode ?? "full",
+        fieldMode: body.fieldMode ?? "visible",
         fieldIds: arrayOrEmpty(body.fieldIds),
         excludedKinds: arrayOrEmpty(body.excludedKinds),
         extraConditions: [conditionResult.value],

@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { loadSampleCaseAndOpen } from "@/features/avt/sample-case.logic";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { entityCreateLocalInvalidationKeys } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
@@ -33,7 +33,7 @@ export const useLoadSampleCase = ({
     mutationFn: async () =>
       await loadSampleCaseAndOpen({
         load: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await listsApi["sample-case"].post({
               // Used only when the matter has no file property yet.
               filePropertyName: t("common.documents"),

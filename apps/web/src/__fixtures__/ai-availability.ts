@@ -1,6 +1,6 @@
-import type { OrganizationAIAvailability } from "@/lib/organization/ai-config-queries";
+import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
 
-// Complete availability responses typed against the client's query data, so a
+// Complete availability responses share the contract checked by the API, so a
 // field added to the endpoint fails every test fixture at compile time instead
 // of reaching the gate as `undefined`.
 

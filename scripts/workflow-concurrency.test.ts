@@ -724,4 +724,15 @@ test("CI metadata events cannot cancel the code run for the same head", async ()
       }),
     ).toBe("true");
   }
+  for (const event of [
+    { ...codeRun.event, action: "auto_merge_enabled" },
+    { ...codeRun.event, action: "labeled", label: { name: "merge-armed" } },
+    { ...codeRun.event, action: "unlabeled", label: { name: "merge-armed" } },
+  ]) {
+    const armed = { ...codeRun, event };
+    expect(await groupFor(file, armed)).toBe("CI Checks-pr-12-head-one-meta");
+    expect(await concurrencyValueFor(file, "cancel-in-progress", armed)).toBe(
+      "false",
+    );
+  }
 });

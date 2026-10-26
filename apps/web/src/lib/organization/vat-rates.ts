@@ -1,8 +1,11 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { VatRatePresetCountry } from "@stll/api-contract";
+
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -10,7 +13,7 @@ export const vatRatesKeys = {
   all: (organizationId: string) => ["vat-rates", organizationId] as const,
 };
 const listVatRates = async (cursor: string | undefined, signal: AbortSignal) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api["vat-rates"].get({
       query: { ...(cursor === undefined ? {} : { cursor }) },
       fetch: { signal },
@@ -28,17 +31,34 @@ export type VatRateInput = Parameters<(typeof api)["vat-rates"]["post"]>[0];
 export type VatRateCommand =
   | { type: "create"; values: VatRateInput }
   | { type: "update"; id: string; values: VatRateInput }
-  | { type: "archive"; id: string };
+  | { type: "archive"; id: string }
+  | { type: "applyPreset"; country: VatRatePresetCountry };
 export const sendVatRateCommand = async (command: VatRateCommand) => {
   if (command.type === "create") {
-    return unwrapEden(await api["vat-rates"].post(command.values));
+    return invokeCapability("vat-rates.create", async (request) =>
+      unwrapApiResponse(await api["vat-rates"].post(command.values, request)),
+    );
+  }
+  if (command.type === "applyPreset") {
+    return invokeCapability("vat-rates.presets.create", async (request) =>
+      unwrapApiResponse(
+        await api["vat-rates"]["apply-preset"].post(
+          { country: command.country },
+          request,
+        ),
+      ),
+    );
   }
   const rate = api["vat-rates"]({ vatRateId: toSafeId<"vatRate">(command.id) });
   switch (command.type) {
     case "update":
-      return unwrapEden(await rate.patch(command.values));
+      return invokeCapability("vat-rates.update", async (request) =>
+        unwrapApiResponse(await rate.patch(command.values, request)),
+      );
     case "archive":
-      return unwrapEden(await rate.archive.post());
+      return invokeCapability("vat-rates.archive", async (request) =>
+        unwrapApiResponse(await rate.archive.post(undefined, request)),
+      );
     default:
       command satisfies never;
       return panic("Unexpected VAT rate command");

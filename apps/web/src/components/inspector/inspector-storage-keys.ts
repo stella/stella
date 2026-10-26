@@ -1,5 +1,10 @@
 import * as v from "valibot";
 
+import {
+  INSPECTOR_STORAGE,
+  inspectorStorageBaseKey,
+} from "@stll/api-contract/browser-storage";
+
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import {
   definePersistedState,
@@ -13,9 +18,13 @@ export type InspectorStorageScope = {
 };
 
 const scopedKey = (
-  prefix: string,
+  entry: Parameters<typeof inspectorStorageBaseKey>[0],
   { userId, organizationId }: InspectorStorageScope,
-) => userStorageKey(`${prefix}:${organizationId}:`, { kind: "user", userId });
+) =>
+  userStorageKey(inspectorStorageBaseKey(entry, organizationId), {
+    kind: "user",
+    userId,
+  });
 
 const inspectorStateSchema = v.nullable(
   v.object({
@@ -29,9 +38,9 @@ const inspectorStateSchema = v.nullable(
 
 export const inspectorStateEntry = definePersistedState({
   key: (scope: InspectorStorageScope) =>
-    scopedKey("stella:inspector-state:v1", scope),
+    scopedKey(INSPECTOR_STORAGE.state, scope),
   area: "local",
-  version: 1,
+  version: INSPECTOR_STORAGE.state.version,
   schema: inspectorStateSchema,
   legacy: { encoding: "json", schema: inspectorStateSchema },
   maxBytes: 512_000,
@@ -42,9 +51,9 @@ export const inspectorStateEntry = definePersistedState({
 
 export const inspectorMinimizedEntry = definePersistedState({
   key: (scope: InspectorStorageScope) =>
-    scopedKey("stella:inspector-minimized:v1", scope),
+    scopedKey(INSPECTOR_STORAGE.minimized, scope),
   area: "local",
-  version: 1,
+  version: INSPECTOR_STORAGE.minimized.version,
   schema: v.boolean(),
   legacy: {
     encoding: "text",
@@ -61,9 +70,9 @@ export const inspectorMinimizedEntry = definePersistedState({
 
 export const inspectorRestorePendingEntry = definePersistedState({
   key: (scope: InspectorStorageScope) =>
-    scopedKey("stella:inspector-restore-pending:v1", scope),
+    scopedKey(INSPECTOR_STORAGE.restorePending, scope),
   area: "session",
-  version: 1,
+  version: INSPECTOR_STORAGE.restorePending.version,
   schema: v.string(),
   legacy: { encoding: "text", schema: v.pipe(v.string(), v.uuid()) },
   maxBytes: 256,

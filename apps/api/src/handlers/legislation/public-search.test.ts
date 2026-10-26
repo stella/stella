@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pg-proxy";
-import Elysia from "elysia";
 
 import { PUBLIC_COUNTRY_UNAVAILABLE_STATUS } from "@stll/api-contract/public-country-capability";
 import {
@@ -13,6 +12,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
 import type { readLegislationCandidateRows } from "@/api/handlers/legislation/search";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { isSafePublicHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -25,6 +26,8 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const result = {
   items: [],
@@ -342,19 +345,21 @@ test("a failed second-round index read keeps both index intervals", async () => 
 const testSearchRoute = (search: typeof searchLegislationHandler) => {
   const definition = createPublicStatuteSearch(search);
   expect(isSafePublicHandler(definition.handler)).toBe(true);
-  return new Elysia().get("/law/statutes/search", definition.handler, {
-    query: definition.config.query,
-    response: definition.config.response,
-  });
+  return serveForTest(
+    createHttpApp({
+      routes: routes({ "/law/statutes/search": { GET: definition } }),
+      middleware: [errorBoundary],
+    }),
+  );
 };
 
 test("signed-out statute search normalizes country and forwards filters through the public read boundary", async () => {
   const calls: Parameters<typeof searchLegislationHandler>[] = [];
-  const app = testSearchRoute(async (...args) => {
+  await using app = testSearchRoute(async (...args) => {
     calls.push(args);
     return result;
   });
-  const response = await app.handle(
+  const response = await app.fetch(
     new Request(
       "http://localhost/law/statutes/search?query=n%C3%A1hrada&country=CZ&documentType=act&status=current&language=cs&dateFrom=2024-01-01&dateTo=2025-01-01&asOf=2027-01-01&limit=20",
     ),
@@ -379,12 +384,12 @@ test("signed-out statute search normalizes country and forwards filters through 
 
 test("public page limits are bounded before the shared operation runs", async () => {
   const calls: Parameters<typeof searchLegislationHandler>[] = [];
-  const app = testSearchRoute(async (...args) => {
+  await using app = testSearchRoute(async (...args) => {
     calls.push(args);
     return result;
   });
   for (const limit of [0, 21, 100]) {
-    const response = await app.handle(
+    const response = await app.fetch(
       new Request(
         `http://localhost/law/statutes/search?query=text&country=CZE&limit=${String(limit)}`,
       ),
@@ -392,7 +397,7 @@ test("public page limits are bounded before the shared operation runs", async ()
     expect(response.status).toBe(422);
   }
   expect(calls).toHaveLength(0);
-  const response = await app.handle(
+  const response = await app.fetch(
     new Request("http://localhost/law/statutes/search?query=text&country=CZE"),
   );
   expect(response.status).toBe(200);
@@ -401,21 +406,21 @@ test("public page limits are bounded before the shared operation runs", async ()
   });
 });
 
-test.each(["Freedonia", "SVK"])(
+test.each(["Freedonia", "AUT"])(
   "unadmitted public country %s never reaches retrieval",
   async (country) => {
     const calls: Parameters<typeof searchLegislationHandler>[] = [];
-    const app = testSearchRoute(async (...args) => {
+    await using app = testSearchRoute(async (...args) => {
       calls.push(args);
       return result;
     });
-    const response = await app.handle(
+    const response = await app.fetch(
       new Request(
         `http://localhost/law/statutes/search?query=text&country=${country}`,
       ),
     );
     expect(response.status).toBe(
-      country === "SVK" ? PUBLIC_COUNTRY_UNAVAILABLE_STATUS : 400,
+      country === "AUT" ? PUBLIC_COUNTRY_UNAVAILABLE_STATUS : 400,
     );
     expect(calls).toHaveLength(0);
   },
@@ -439,11 +444,11 @@ test("public pagination preserves the corpus phase cursor in both directions", a
   const decoded = decodeCorpusSearchCursor(cursor);
   expect(decoded?.phase?.type).toBe("relaxed");
   const calls: Parameters<typeof searchLegislationHandler>[] = [];
-  const app = testSearchRoute(async (...args) => {
+  await using app = testSearchRoute(async (...args) => {
     calls.push(args);
     return { ...result, nextCursor: cursor };
   });
-  const response = await app.handle(
+  const response = await app.fetch(
     new Request(
       `http://localhost/law/statutes/search?query=text&country=CZE&cursor=${encodeURIComponent(cursor)}`,
     ),

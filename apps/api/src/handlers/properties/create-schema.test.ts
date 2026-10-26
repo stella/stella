@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -54,9 +54,9 @@ describe("property creation schema", () => {
       ),
     };
 
-    expect(Value.Check(createPropertyBodySchema, body)).toBe(true);
+    expect(v.is(createPropertyBodySchema, body)).toBe(true);
     expect(
-      Value.Check(createPropertyBodySchema, {
+      v.is(createPropertyBodySchema, {
         ...body,
         dependencies: [...body.dependencies, dependency],
       }),

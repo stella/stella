@@ -1,3 +1,11 @@
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 /**
  * Saving a completed review as a playbook.
  *
@@ -7,15 +15,6 @@
  * the saved playbook keeps the run's position ids, which is what keeps a
  * decision taken in the run attached to the position afterwards.
  */
-
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import {
@@ -27,6 +26,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import createPlaybookFromRun from "@/api/handlers/playbooks/from-run/create";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
@@ -151,7 +151,7 @@ const orgContext = () => ({
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/playbooks/from-run"),
-  route: "/playbooks/from-run",
+  route: "/v1/playbooks/from-run" satisfies ApiRoutePath,
   safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },

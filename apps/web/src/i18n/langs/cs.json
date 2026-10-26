@@ -388,6 +388,7 @@
         "reading": "Text ke čtení"
       },
       "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
+      "pdfTextFailed": "Text PDF se nepodařilo přečíst, proto tvrzení nejsou na stránkách vyznačena.",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
@@ -506,6 +507,24 @@
     "addEntry": "Přidat záznam",
     "amount": "Částka",
     "amountMustBePositive": "Částka musí být vyšší než nula",
+    "approval": {
+      "approveSelected": "Schválit {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamů}}",
+      "empty": "Ve spisu nic nečeká na schválení.",
+      "failed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+      "myTime": "Můj čas",
+      "refusals": {
+        "invalidEntry": "Doplňte popis a zkontrolujte datum práce, pak záznam schvalte.",
+        "notApprover": "Záznam může schválit jen jeho přiřazený schvalovatel nebo správce.",
+        "notFound": "Tento záznam už neexistuje. Obnovte seznam.",
+        "runningTimer": "Před schválením záznamu zastavte běžící časovač.",
+        "unpriced": "Záznam nemá sazbu. Nastavte pro tento spis sazbu a pak záznam schvalte.",
+        "wrongStatus": "Tento záznam už není koncept. Obnovte seznam."
+      },
+      "returnComment": "Důvod vrácení",
+      "selectEntry": "Vybrat záznam",
+      "timeEntries": "Časové záznamy",
+      "title": "Schvalování"
+    },
     "approve": "Schválit",
     "approveSelected": "Schválit vybrané",
     "batchActions": "Hromadné akce",
@@ -593,6 +612,7 @@
       "openInvoice": "Otevřít fakturu",
       "otherCurrency": "{count, plural, one {# položka je vedena} few {# položky jsou vedeny} many {# položky je vedeno} other {# položek je vedeno}} v jiné měně než {currency} a {count, plural, one {zůstává} few {zůstávají} many {zůstává} other {zůstává}} k vyfakturování zvlášť.",
       "outsideScope": "Není předmětem daně v tuzemsku, 0 %",
+      "pendingApprovals": "{count, plural, one {Na schválení čeká # položka} few {Na schválení čekají # položky} many {Na schválení čeká # položky} other {Na schválení čeká # položek}}. Zkontrolovat schválení.",
       "rate": "Sazba",
       "readyDescription": "Vystavením se faktuře přidělí další číslo z vaší číselné řady a faktura se uzamkne. Koncept lze dál upravovat.",
       "readyTitle": "Připraveno k vystavení",
@@ -644,6 +664,7 @@
         "eso9": "Importní tabulka ESO9 (XLSX)",
         "exporting": "Připravuji export…",
         "isdoc": "E-faktura ISDOC (ABRA Gen a další)",
+        "ksefFa3": "E-faktura KSeF FA(3) (XML)",
         "spreadsheets": "Tabulky",
         "xlsx": "Faktury (XLSX)",
         "xlsxLines": "Položky faktur (XLSX)"
@@ -757,6 +778,7 @@
     "sellerProfiles": {
       "add": "Přidat profil dodavatele",
       "archiveConfirm": "Archivovat tento profil dodavatele? Nebude již dostupný pro nové faktury.",
+      "barRegistration": "Registrace v advokátní komoře",
       "bic": "Kód BIC / SWIFT",
       "default": "Výchozí dodavatel",
       "defaultCurrency": "Výchozí měna",
@@ -768,11 +790,10 @@
       "invalidCurrency": "Zadejte třípísmenný kód měny.",
       "invalidIban": "Zadejte platný IBAN.",
       "legalName": "Oficiální název",
+      "registerEntry": "Zápis v rejstříku",
       "registrationId": "Registrační číslo",
       "setDefault": "Nastavit jako výchozí",
       "title": "Profily dodavatelů",
-      "vatId": "DIČ",
-      "vatPayer": "Plátce DPH",
       "vatPayerHelp": "Faktury tohoto dodavatele účtují DPH. Vypněte u identifikované osoby, která má DIČ, ale není plátcem DPH.",
       "vatPayerRequiresVatId": "Pro vystavování faktur jako plátce DPH zadejte DIČ."
     },
@@ -807,6 +828,8 @@
     "total": "Celkem",
     "vatRates": {
       "add": "Přidat sazbu DPH",
+      "addCzechia": "Přidat sazby pro Česko",
+      "addSlovakia": "Přidat sazby pro Slovensko",
       "archiveConfirm": "Archivovat tuto sazbu DPH? Nebude již dostupná pro nové doklady.",
       "code": "Kód sazby",
       "current": "Aktuální sazba",
@@ -821,6 +844,7 @@
       "overlap": "Období platnosti pro stejný kód sazby se nesmějí překrývat.",
       "past": "Dřívější sazba",
       "periodHelp": "Počáteční datum je zahrnuto; koncové datum není zahrnuto. Pro období bez konce ponechte koncové datum prázdné.",
+      "presetResult": "Přidáno: {added}; přeskočeno: {skipped}.",
       "rate": "Procentní sazba DPH",
       "title": "Sazby DPH",
       "validFrom": "Platí od",
@@ -1027,7 +1051,10 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z přibližně {pageCount}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · přibližně {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithEstimatedResultCount": "Stránka {page} · přibližně {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# přesná shoda} few {# přesné shody} other {# přesných shod}} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# částečná shoda} few {# částečné shody} other {# částečných shod}} na této stránce",
       "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
       "perPage": "Na stránku",
       "refineForMore": "Upřesněte hledání, abyste viděli další výsledky"
@@ -1478,7 +1505,7 @@
       "label": "Simulovaná AI"
     },
     "modelSelector": {
-      "allModels": "Všechny modely ({count, number})",
+      "allModels": "Všechny modely",
       "autoDescription": "Automaticky vybere model a úroveň uvažování.",
       "autoLabel": "Automaticky",
       "belowFrontier": "Pod nejlepšími kompromisy",
@@ -2048,7 +2075,6 @@
       "orLetUsKnowAt": "nebo nám napište na",
       "viewDocumentation": "Zobrazit dokumentaci"
     },
-    "enterKey": "↵",
     "error": "Chyba",
     "expenses": "Výdaje",
     "export": {
@@ -2121,6 +2147,7 @@
       "ZH-HANT": "čínština (tradiční)"
     },
     "lastUpdated": "Naposledy aktualizováno",
+    "layoutResetAfterProblem": "Po problému bylo obnoveno výchozí rozložení.",
     "legalDatabase": "Právní databáze",
     "loadMore": "Načíst další",
     "loading": "Načítám",
@@ -2219,6 +2246,7 @@
     "suggested": "Návrh",
     "summarizeChanges": "Shrnout změny",
     "target": "Cíl",
+    "taxId": "DIČ",
     "timeBilling": "Čas a fakturace",
     "today": "Dnes",
     "translate": "Přeložit",
@@ -2242,6 +2270,8 @@
     "urlIdentifierPlaceholder": "moje-organizace",
     "user": "Uživatel",
     "value": "Hodnota",
+    "vatId": "DIČ",
+    "vatPayer": "Plátce DPH",
     "verified": "Ověřeno",
     "verify": "Ověřit",
     "version": "Verze",
@@ -2432,7 +2462,9 @@
       "prefix": "Titul před",
       "registrationNumber": "IČO",
       "suffix": "Titul za",
-      "taxId": "DIČ",
+      "vatPayer": "Stav plátce DPH",
+      "vatPayerNo": "Není plátce DPH",
+      "vatPayerUnknown": "Neznámý",
       "year": "Rok"
     },
     "filterOrganizations": "Organizace",
@@ -2472,7 +2504,6 @@
         "primary_phone": "Hlavní telefon",
         "state": "Stát nebo oblast",
         "suffix": "Titul za jménem",
-        "tax_id": "Daňové identifikační číslo",
         "type": "Typ kontaktu"
       },
       "fileInvalid": "Vyberte jeden soubor CSV, TSV nebo TXT.",
@@ -3817,6 +3848,16 @@
   },
   "knowledge": {
     "agentSkills": {
+      "availabilityClient": "Jeden klient",
+      "availabilityClientBadgeHelp": "Dostupná jen ve spisech jednoho klienta.",
+      "availabilityClientHelp": "Použitelná jen ve spisech tohoto klienta. Později to nelze změnit.",
+      "availabilityFixedHelp": "Nastaveno při vytvoření dovednosti. Nelze to změnit.",
+      "availabilityLabel": "Dostupné v",
+      "availabilityMatter": "Jeden spis",
+      "availabilityMatterBadgeHelp": "Dostupná jen v jednom spisu.",
+      "availabilityMatterHelp": "Použitelná jen v tomto spisu. Později to nelze změnit.",
+      "availabilityOrganization": "Celá organizace",
+      "availabilityTeamNeedsMatter": "Chcete-li dovednost sdílet s týmem, vyberte spis, pro který je určena. Později to nelze změnit.",
       "builtIn": {
         "playbookBuilder": {
           "description": "Vytvořte playbook pro kontrolu smluv pozici po pozici na základě vašich dříve podepsaných smluv, krátkého rozhovoru a běžných tržních standardů.",
@@ -4747,7 +4788,7 @@
     "modelError": "Model nedokázal tuto odpověď dokončit.",
     "networkError": "Spojení bylo přerušeno. Zkuste to znovu.",
     "regenerate": "Vygenerovat odpověď znovu",
-    "selectionError": "Vyberte text v rámci jednoho odstavce (nejvýše 2 000 znaků).",
+    "selectionError": "Vyberte text ze samotného rozhodnutí.",
     "send": "Odeslat doplňující otázku",
     "share": "Sdílet s týmem",
     "timeoutError": "Vypršel časový limit pro odpověď. Zkuste to znovu.",
@@ -4800,6 +4841,8 @@
     "recentDocuments": "Nedávné dokumenty",
     "recentSearches": "Nedávná hledání",
     "recentlyOpenedFiles": "Nedávno otevřené soubory",
+    "registryCandidateNameMismatch": "Oficiální název „{officialName}“ se neshoduje",
+    "registryCandidateNoOfficialRecord": "Oficiální rejstřík pro toto číslo neobsahuje žádný záznam",
     "registryChoose": "Vyberte obchodní rejstřík",
     "registryCredentialAskAdmin": "Požádejte správce organizace o nastavení přístupu k tomuto rejstříku.",
     "registryCredentialSaved": "Přístup k rejstříku uložen",
@@ -4810,6 +4853,7 @@
       "enrichmentUnavailable": "Podrobnosti z obchodního rejstříku jsou dočasně nedostupné"
     },
     "registryKrsHint": "KRS vyhledává podle registračního čísla, ne podle názvu společnosti. Zadejte desetimístné číslo KRS včetně úvodních nul (např. 0000006865).",
+    "registryNameSearchNotFound": "Tomuto názvu neodpovídá žádná ověřená společnost. Následující kandidáti byli odmítnuti:",
     "registryVatHint": "VIES ověřuje DIČ, ne názvy společností. Zadejte DIČ včetně kódu země (např. CZ27082440); formát závisí na zemi.",
     "renameSearchTitle": "Přejmenovat uložené hledání",
     "requestCountry": "Požádat o přidání nové země",
@@ -5334,7 +5378,7 @@
     "importDescription": "Styly se extrahují do nového DOCX bez obsahu.",
     "importTitle": "Importovat sadu stylů",
     "loadFailed": "Sady stylů se nepodařilo načíst",
-    "newDocument": "Nový dokument",
+    "newDocument": "Nový dokument DOCX",
     "pickerDescription": "Zvolte systém formátování nového souboru.",
     "renameTitle": "Přejmenovat sadu stylů",
     "replace": "Nahradit zdroj",
@@ -5618,7 +5662,7 @@
     "moveToMatter": "Uložit do spisu",
     "moveToMatterAnyway": "Přesto uložit",
     "myDefaultLookupFormat": "Moje výchozí",
-    "newFromTemplate": "Nový dokument ze vzoru",
+    "newFromTemplate": "Nový dokument DOCX ze vzoru",
     "newFromTemplateFillHint": "Vyplňte pole; dokument se vytvoří v tomto spisu.",
     "newTemplate": "Nový vzor",
     "noTemplates": "Zatím žádné vzory",
@@ -5989,6 +6033,7 @@
         "action": "Upravit v desktopu",
         "authRequiredDescription": "Před použitím desktopových úprav obnovte stella a znovu se přihlaste.",
         "authRequiredTitle": "Relace vypršela",
+        "editInApplication": "Upravit v aplikaci <bdi>{application}</bdi>",
         "editLocallyPrompt": "Upravte tento soubor lokálně a synchronizujte změny se stellou.",
         "forceRelease": "Vynutit uvolnění",
         "notOpenedDescription": "stella desktop nepotvrdil otevření aplikace <bdi>{application}</bdi>. Spusťte stella desktop a zkuste to znovu.",
@@ -6012,13 +6057,15 @@
         "alreadyInstalled": "Už nainstalováno? Připojit",
         "connect": "Připojit stella desktop",
         "connected": "stella desktop je připojený",
+        "download": "Stáhnout stella desktop",
         "editNone": "Stáhněte stella desktop a upravte tento soubor",
         "editOutdated": "Aktualizujte stella desktop a upravujte",
         "editReason": "Úpravy na počítači otevírají soubor v aplikaci ve vašem počítači přes stella desktop.",
         "signCurrent": "Podepsat ve stella desktop",
         "signNone": "Stáhněte stella desktop a podepište toto PDF",
         "signOutdated": "Aktualizujte stella desktop a podepisujte",
-        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop."
+        "signReason": "Podpis používá certifikát ve vašem počítači, proto probíhá ve stella desktop.",
+        "update": "Aktualizovat stella desktop"
       },
       "downloadAs": "Stáhnout jako…",
       "downloadAsZip": "Stáhnout .zip soubor",
@@ -6031,8 +6078,10 @@
       "itemLimitReached": "Tento spis dosáhl limitu položek.",
       "maxEntitiesReached": "Dosažen maximální počet položek",
       "ocrAlreadyProcessed": "Rozpoznávání textu již bylo dokončeno",
+      "ocrBatchHelp": "Dokumenty ve frontě se zpracují v příští dávce OCR.",
       "ocrQueueFailed": "Rozpoznávání textu se nepodařilo zařadit do fronty",
-      "ocrQueued": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
+      "ocrQueued": "Rozpoznávání textu bylo zařazeno do fronty",
+      "ocrQueuedForBatch": "Rozpoznávání textu bylo zařazeno do příští dávky OCR",
       "pdfSigning": {
         "alreadySigningTitle": "Podepisování ve stella desktop už probíhá",
         "cancelledBaseVersionDescription": "Dokument se během podepisování změnil. Otevřete nejnovější verzi a podepište ho znovu.",
@@ -6089,6 +6138,7 @@
         "waitingDescription": "Vyberte ve stella desktop podpisový certifikát a podepište toto PDF.",
         "waitingTitle": "Čeká se na stella desktop"
       },
+      "queueForOcr": "Zařadit do fronty OCR",
       "rateLimited": "Omezení rychlosti; pokračování za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Co udělat se souborem {fileName}",
@@ -6100,7 +6150,6 @@
       "removeMetadata": "Odebrat metadata dokumentu",
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům}}",
       "retryFailed": "Opakovat {count, plural, one {# soubor} few {# soubory} other {# souborů}}",
-      "runOcr": "Zařadit OCR do fronty",
       "scrubFailed": "Metadata tohoto souboru se nepodařilo odstranit, proto se nic nestáhlo",
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo}} z {total, number}",
       "uploadedSuccessfully": "Soubory úspěšně nahrány",
@@ -6388,6 +6437,7 @@
       "addParty": "Přidat stranu",
       "changeClient": "Změnit klienta",
       "client": "Klient",
+      "movedToClient": "Spis <bdi>{matterName}</bdi> přesunut ke klientovi <bdi>{clientName}</bdi>",
       "noClient": "Žádný klient nepřiřazen",
       "noClientOptional": "Bez klienta (volitelné)",
       "noParties": "K tomuto spisu nejsou přidány žádné strany.",
@@ -6406,7 +6456,9 @@
       "personalLabel": "Osobní",
       "promoteCta": "Povýšit na klientský spis",
       "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná — spis nelze vrátit na osobní.",
+      "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude přidělen klientovi <bdi>{clientName}</bdi> a sdílen s týmem. Na osobní ho už nepůjde vrátit.",
       "promotedSuccess": "Spis povýšen",
+      "recentClients": "Nedávní klienti",
       "removeClient": "Odebrat klienta",
       "removeParty": "Odebrat stranu",
       "removePartyConfirm": "Opravdu chcete odebrat tuto stranu ze spisu?",
@@ -6651,6 +6703,12 @@
     "referenceTaken": "Toto referenční číslo je již použito",
     "sections": {
       "parties": "Strany"
+    },
+    "switcher": {
+      "searchPlaceholder": "Najít spis…",
+      "trigger": "Přepnout spis",
+      "viewAll": "Zobrazit všechny spisy",
+      "viewAllForClient": "Zobrazit všechny spisy klienta {clientName}"
     },
     "table": {
       "clearFlags": "Odstranit označení",

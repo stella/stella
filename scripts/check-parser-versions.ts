@@ -791,24 +791,99 @@ export const checkParserVersions = ({
 type GitResult =
   { type: "ok"; output: Uint8Array } | { type: "failed"; detail: string };
 
-const git = (args: string[], input?: string): GitResult => {
-  const result = Bun.spawnSync(["git", ...args], {
-    cwd: path.resolve(import.meta.dir, ".."),
-    stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return result.exitCode === 0
-    ? { type: "ok", output: result.stdout }
-    : { type: "failed", detail: result.stderr.toString().trim() };
+const gitIn =
+  (repository: string) =>
+  (args: string[], input?: string): GitResult => {
+    const result = Bun.spawnSync(["git", ...args], {
+      cwd: repository,
+      stdin: input === undefined ? "ignore" : new TextEncoder().encode(input),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return result.exitCode === 0
+      ? { type: "ok", output: result.stdout }
+      : { type: "failed", detail: result.stderr.toString().trim() };
+  };
+
+const REPOSITORY_ROOT = path.resolve(import.meta.dir, "..");
+const git = gitIn(REPOSITORY_ROOT);
+
+/**
+ * CI checks out a blobless clone (`filter: blob:none`), which holds only the
+ * blobs its checkout wrote; `cat-file --batch` would fetch every other one in
+ * a round trip of its own, so a large diff spent minutes on base versions.
+ * One fetch of every missing blob replaces those round trips.
+ */
+const fetchMissingObjects = (
+  objects: readonly string[],
+  runGit: typeof git,
+): GitResult => {
+  const check = runGit(
+    ["--no-lazy-fetch", "cat-file", "--batch-check=%(objectname)"],
+    `${objects.join("\n")}\n`,
+  );
+  if (check.type === "failed") {
+    return check;
+  }
+  const missing = new TextDecoder()
+    .decode(check.output)
+    .split("\n")
+    .flatMap((line) => {
+      const [object, state] = line.split(" ");
+      return state === "missing" && object !== undefined ? [object] : [];
+    });
+  if (missing.length === 0) {
+    return check;
+  }
+  const promisors = runGit([
+    "config",
+    "--get-regexp",
+    String.raw`^remote\..+\.promisor$`,
+  ]);
+  const remote =
+    promisors.type === "ok"
+      ? /^remote\.(.+)\.promisor true$/mu
+          .exec(new TextDecoder().decode(promisors.output))
+          ?.at(1)
+      : undefined;
+  if (remote === undefined) {
+    return {
+      type: "failed",
+      detail: `${String(missing.length)} source objects are missing and no promisor remote can supply them`,
+    };
+  }
+  // Match Git's lazy fetch: object IDs may be blobs, so commit negotiation
+  // must not interpret them as revision tips.
+  return runGit(
+    [
+      "-c",
+      "fetch.negotiationAlgorithm=noop",
+      "fetch",
+      "--no-tags",
+      "--no-write-fetch-head",
+      "--recurse-submodules=no",
+      "--filter=blob:none",
+      "--stdin",
+      remote,
+    ],
+    `${missing.join("\n")}\n`,
+  );
 };
 
 type ReadGitTreeResult =
   { type: "ok"; files: SourceTree } | { type: "failed"; detail: string };
 
+type ReadGitTreeOptions = {
+  repository?: string;
+};
+
 // Read immutable git objects in one batch, without checking out either tree.
-export const readGitTree = (ref: string): ReadGitTreeResult => {
-  const listing = git([
+export const readGitTree = (
+  ref: string,
+  { repository = REPOSITORY_ROOT }: ReadGitTreeOptions = {},
+): ReadGitTreeResult => {
+  const runGit = gitIn(repository);
+  const listing = runGit([
     "ls-tree",
     "-r",
     "-z",
@@ -836,10 +911,15 @@ export const readGitTree = (ref: string): ReadGitTreeResult => {
       sources.push({ file, object });
     }
   }
-  const objects = git(
-    ["cat-file", "--batch"],
-    `${sources.map(({ object }) => object).join("\n")}\n`,
-  );
+  if (sources.length === 0) {
+    return { type: "ok", files };
+  }
+  const wanted = sources.map(({ object }) => object);
+  const fetched = fetchMissingObjects(wanted, runGit);
+  if (fetched.type === "failed") {
+    return fetched;
+  }
+  const objects = runGit(["cat-file", "--batch"], `${wanted.join("\n")}\n`);
   if (objects.type === "failed") {
     return objects;
   }

@@ -38,6 +38,12 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "PDF page text worker",
+    pattern: "dist/client/assets/pdf-page-text-worker-????????.js",
+    sourceEntry: "src/workers/pdf-page-text-worker.ts",
+  },
+  {
+    expectedCount: 1,
     label: "PDF page editor worker",
     pattern: "dist/client/assets/pdf-page-editor-worker-????????.js",
     sourceEntry: "src/workers/pdf-page-editor-worker.ts",
@@ -107,7 +113,7 @@ const RUNTIME_ASSET_CONTRACTS = [
   {
     expectedCount: 1,
     // @stll/scan-engine starts its own module worker with
-    // `new URL("scan-engine.worker.js", import.meta.url)` the first time the
+    // `new URL("scan-engine.worker.ts", import.meta.url)` the first time the
     // page editor cleans a scan.
     label: "scan cleanup engine worker",
     pattern: "dist/client/assets/scan-engine.worker-????????.js",
