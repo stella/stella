@@ -65,6 +65,8 @@ import { getCachedAnonymization } from "@/lib/pdf/anonymization-cache";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 type InspectorPanelProps = {
   /**
@@ -166,11 +168,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     [workspace, navigate, workspaceId],
   );
 
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
-  const peekPdfViewId = viewMatch?.params.viewId ?? "all";
+  const currentView = useCurrentWorkspaceView();
 
   // Detect when the inspector is mounted on the full-folio PDF
   // route so the metadata persona can drive the route's
@@ -580,7 +578,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             mountedPdfIds={mountedPdfIds}
             documentReviewPaneFieldId={documentReviewPaneFieldId}
             pdfRouteJustification={pdfRouteJustification}
-            peekPdfViewId={peekPdfViewId}
+            peekPdfViewId={
+              resolveWorkspaceViewParams(tab.workspaceId, currentView).viewId
+            }
             ribbonLabelContextMenuOpenAt={ribbonContextMenu.openAt}
             scaleOffsets={scaleOffsets}
             setDocxCompatibilityByTab={setDocxCompatibilityByTab}
