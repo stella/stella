@@ -700,6 +700,12 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
+    migration: "20261025130000_reader_answer_continuation_spans",
+    form: "add-column",
+    reason:
+      "The NOT NULL jsonb column uses a constant '[]'::jsonb default on PostgreSQL's fast-default catalog path without scanning or rewriting answer rows, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
     migration: "20261022120000_case_law_batch_slots",
     form: "add-column",
     reason:

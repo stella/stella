@@ -41,6 +41,7 @@ import {
 } from "@/api/lib/files/read-file";
 import { LIMITS } from "@/api/lib/limits";
 import { buildDocumentUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { brandPersistedUserFileId } from "@/api/lib/safe-id-boundaries";
 import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
@@ -819,7 +820,13 @@ export const createDocumentCompareGenerator = (
       if (Result.isError(recorded)) {
         // The caller already holds the link; withdrawing it over a failed
         // audit write would lose the redline as well as the record.
-        captureError(recorded.error, { documentId, workspaceId });
+        captureError(
+          recorded.error,
+          handlerErrorContext("documents.recordDownloadAudit.recorded_error", {
+            documentId,
+            workspaceId,
+          }),
+        );
       }
     };
 
@@ -844,11 +851,17 @@ export const createDocumentCompareGenerator = (
         userId: user.id,
       });
       if (Result.isError(delivered)) {
-        captureError(delivered.error.cause, {
-          documentId,
-          stage: "document-compare.deliver",
-          step: delivered.error.step,
-        });
+        captureError(
+          delivered.error.cause,
+          handlerErrorContext(
+            "documents.deliverRedline.delivered_error_cause",
+            {
+              documentId,
+              stage: "document-compare.deliver",
+              step: delivered.error.step,
+            },
+          ),
+        );
       }
       await recordDownloadAudit({ changeCount: compared.changes.length, pair });
       return delivered;

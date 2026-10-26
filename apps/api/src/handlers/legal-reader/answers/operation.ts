@@ -8,9 +8,10 @@ import {
 } from "@stll/api-contract/reader-answers";
 import type {
   CreateReaderAnswer,
-  ReaderAnswerAnchor,
   ReaderAnswerFollowUp,
   ReaderAnswerRegenerate,
+  ReaderAnswerSpan,
+  ReaderAnswerSpans,
 } from "@stll/api-contract/reader-answers";
 
 import type { Transaction } from "@/api/db/root";
@@ -20,6 +21,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import type { ReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
@@ -66,15 +68,33 @@ export type PrepareReaderAnswerOptions = AnnotationAuthorScope & {
   readDecision?: typeof readReaderAnswerDecision;
 };
 
-const anchorOf = (answer: typeof legalReaderAnswers.$inferSelect) =>
-  ({
-    paragraphId: answer.paragraphId,
-    quote: answer.quote,
-    startOffset: answer.startOffset,
-    endOffset: answer.endOffset,
-  }) satisfies ReaderAnswerAnchor;
-
 type AnswerAnchorRow = typeof legalReaderAnswers.$inferSelect;
+type AnswerAnchorColumns = Pick<
+  AnswerAnchorRow,
+  "paragraphId" | "quote" | "startOffset" | "endOffset" | "continuationSpans"
+>;
+/** The row stores the first span flat and the rest as JSON. */
+const anchorColumnsOf = (answer: AnswerAnchorColumns) => ({
+  paragraphId: answer.paragraphId,
+  quote: answer.quote,
+  startOffset: answer.startOffset,
+  endOffset: answer.endOffset,
+  continuationSpans: answer.continuationSpans,
+});
+const anchorColumnsFor = ([first, ...rest]: ReaderAnswerSpans) =>
+  ({
+    paragraphId: first.paragraphId,
+    quote: first.quote,
+    startOffset: first.startOffset,
+    endOffset: first.endOffset,
+    continuationSpans: rest,
+  }) satisfies ReturnType<typeof anchorColumnsOf>;
+export const readerAnswerSpansOf = (
+  answer: AnswerAnchorColumns,
+): ReaderAnswerSpans => {
+  const { continuationSpans, ...first } = anchorColumnsOf(answer);
+  return [first, ...continuationSpans];
+};
 const UNPROJECTED_ANCHOR_COLUMNS = [
   // Thread identity is returned separately in the stream's started event.
   "id",
@@ -94,16 +114,52 @@ const UNPROJECTED_ANCHOR_COLUMNS = [
 
 type MissingAnchorColumn = UnprojectedColumns<
   AnswerAnchorRow,
-  ReturnType<typeof anchorOf>,
+  ReturnType<typeof anchorColumnsOf>,
   (typeof UNPROJECTED_ANCHOR_COLUMNS)[number]
 >;
 type UnexpectedAnchorColumn = UnbackedProjectionKeys<
   AnswerAnchorRow,
-  ReturnType<typeof anchorOf>,
+  ReturnType<typeof anchorColumnsOf>,
   (typeof UNPROJECTED_ANCHOR_COLUMNS)[number]
 >;
 true satisfies MissingAnchorColumn extends never ? true : never;
 true satisfies UnexpectedAnchorColumn extends never ? true : never;
+
+/**
+ * The spans as a selection when each matches its paragraph's text and the
+ * paragraphs follow the decision's reading order without repeats; otherwise
+ * undefined. The decision's own text bounds the selection, so no length cap.
+ */
+const selectionIn = (
+  paragraphs: ReaderAnswerDecision["paragraphs"],
+  spans: readonly ReaderAnswerSpan[],
+): ReaderAnswerSpans | undefined => {
+  const [first, ...rest] = spans;
+  if (first === undefined) {
+    return undefined;
+  }
+  const indexById = new Map(
+    paragraphs.map(({ paragraphId }, index) => [paragraphId, index] as const),
+  );
+  let previous = -1;
+  for (const span of spans) {
+    const index = indexById.get(span.paragraphId);
+    const text = index === undefined ? undefined : paragraphs[index]?.text;
+    if (
+      index === undefined ||
+      text === undefined ||
+      index <= previous ||
+      span.startOffset < 0 ||
+      span.endOffset > text.length ||
+      span.endOffset <= span.startOffset ||
+      text.slice(span.startOffset, span.endOffset) !== span.quote
+    ) {
+      return undefined;
+    }
+    previous = index;
+  }
+  return [first, ...rest];
+};
 
 type RegenerateLastReaderAnswerOptions = {
   tx: Transaction;
@@ -236,22 +292,12 @@ const readReaderAnswerContext = async ({
         }),
       );
     }
-    const anchor =
+    const spans =
       command.type === "create"
-        ? command.body.anchor
-        : existing && anchorOf(existing);
-    const paragraph = decision.paragraphs.find(
-      ({ paragraphId }) => paragraphId === anchor?.paragraphId,
-    );
-    if (
-      anchor === undefined ||
-      paragraph === undefined ||
-      anchor.startOffset < 0 ||
-      anchor.endOffset > paragraph.text.length ||
-      anchor.endOffset <= anchor.startOffset ||
-      paragraph.text.slice(anchor.startOffset, anchor.endOffset) !==
-        anchor.quote
-    ) {
+        ? command.body.anchor.spans
+        : existing && readerAnswerSpansOf(existing);
+    const anchor = spans && selectionIn(decision.paragraphs, spans);
+    if (anchor === undefined) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -315,7 +361,7 @@ export const prepareReaderAnswer = async (
             decisionId,
             kind: command.body.kind,
             visibility: "private",
-            ...anchor,
+            ...anchorColumnsFor(anchor),
           })
           .returning()
       ).at(0);

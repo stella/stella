@@ -1,3 +1,7 @@
+import * as v from "valibot";
+
+import { analysisTreeSchema } from "@stll/legal-ast/analysis";
+
 /**
  * Why the decision analysis read answers `error` without a failed run behind
  * it: the server will not make an analysis of this decision at all.
@@ -38,3 +42,12 @@ export const CASE_LAW_ANALYSIS_KEY_SOURCES = [
 
 export type CaseLawAnalysisKeySource =
   (typeof CASE_LAW_ANALYSIS_KEY_SOURCES)[number];
+
+export const caseLawAnalysisProgressSchema = v.object({
+  status: v.literal("generating"),
+  partialTree: v.optional(analysisTreeSchema, []),
+});
+
+export type CaseLawAnalysisProgressResponse = v.InferInput<
+  typeof caseLawAnalysisProgressSchema
+>;
