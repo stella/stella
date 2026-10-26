@@ -19,7 +19,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
   MEDIUM_DATE_FORMAT,
@@ -127,7 +127,7 @@ const MatterPreviewActivity = ({ workspaceId }: { workspaceId: string }) => {
   const { data, isError, isFetching, refetch } = useQuery({
     queryKey: [...workspacesKeys.byId(workspaceId), "search-preview"],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api
           .workspaces({ workspaceId })
           ["search-preview"].get({ fetch: { signal } }),

@@ -94,6 +94,10 @@
     "./provision-version-grammar": {
       "types": "./src/provision-version-grammar.ts",
       "import": "./src/provision-version-grammar.ts"
+    },
+    "./us-code-citations": {
+      "types": "./src/us-code-citations.ts",
+      "import": "./src/us-code-citations.ts"
     }
   },
   "scripts": {
@@ -105,8 +109,10 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-atlas"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/api-contract": "workspace:*",
     "@stll/concurrency": "workspace:*",
+    "@stll/errors": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/text-normalize": "workspace:*",

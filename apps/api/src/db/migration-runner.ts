@@ -5,6 +5,8 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
@@ -326,7 +328,11 @@ export class MigrationLockWaitError extends TaggedError(
   attempts: number;
   lockTimeoutMs: number;
   cause: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type LockWaitRetry = LockRetryConfig & LockRetryRuntime;
 

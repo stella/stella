@@ -7,7 +7,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { BusinessRegistrySlug } from "@/api/lib/business-registries/dispatch";
 import { readPresent } from "@/api/lib/errors/read-outcome";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { ExternalGatewayDependencies } from "@/api/mcp/gateway/external-tools";
 import {
   getGatewayMcpToolDefinition,
@@ -17,6 +16,7 @@ import {
 import { DOCUMENTS_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 
@@ -26,9 +26,9 @@ import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-en
 // loaders never run and no DB is touched.
 const contextWith = (
   enabledRegistrySlugs: readonly BusinessRegistrySlug[] | undefined,
-  memberRole: McpRequestContext["memberRole"] = "owner",
-): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+  memberRole: AuthorizedMcpRequestContext["memberRole"] = "owner",
+): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     ...(enabledRegistrySlugs === undefined
       ? {}
       : {
@@ -78,6 +78,7 @@ const definitionWithSchema = (
   inputSchema: McpToolDefinition["inputSchema"],
 ): McpToolDefinition => ({
   access: "read",
+  permissions: { type: "open-read", reason: "reads only fixture data" },
   readClass: "tenant",
   annotations: {
     title: "Test tool",
@@ -125,7 +126,7 @@ const externalGatewayDependencies = {
 
 const contextWithExternalServer = (
   grantedScopes: readonly string[],
-): McpRequestContext => {
+): AuthorizedMcpRequestContext => {
   const builder = {
     from: () => builder,
     innerJoin: () => builder,
@@ -142,11 +143,11 @@ const contextWithExternalServer = (
       },
     ],
   };
-  const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+  const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
     Result.ok(
       await callback(asTestRaw<Transaction>({ select: () => builder })),
     );
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<AuthorizedMcpRequestContext>({
     ...contextWith(undefined),
     grantedScopes: [...grantedScopes],
     safeDb,
@@ -245,11 +246,11 @@ describe("skill gateway mode boundary", () => {
           },
         ],
       };
-      const safeDb: McpRequestContext["safeDb"] = async (callback) =>
+      const safeDb: AuthorizedMcpRequestContext["safeDb"] = async (callback) =>
         Result.ok(
           await callback(asTestRaw<Transaction>({ select: () => builder })),
         );
-      const context = asTestRaw<McpRequestContext>({
+      const context = asTestRaw<AuthorizedMcpRequestContext>({
         ...contextWith(undefined),
         userId: "user_test",
         grantedScopes: ["stella:skills"],
@@ -308,7 +309,7 @@ describe("listGatewayMcpToolDefinitions business-registry narrowing", () => {
 
   test("loads the reachable registries only for a projection that offers the registry tool", async () => {
     let loads = 0;
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<AuthorizedMcpRequestContext>({
       ...contextWith(undefined),
       loadEnabledRegistrySlugs: async () => {
         loads += 1;

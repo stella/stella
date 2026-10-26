@@ -14,7 +14,7 @@ export const useMatterNumberingEnabled = () => {
     }),
   );
   const settingsView = useQueryView(settingsQuery);
-  useQueryViewError(settingsView);
+  useQueryViewError(settingsView, "useMatterNumberingEnabled:query");
   return (
     settingsView.type === "items" && settingsView.items.matterNumberingEnabled
   );

@@ -22,7 +22,7 @@ import { McpAuthorizationReview } from "@/components/mcp-authorization-review";
 import { SecretInput } from "@/components/secret-input";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { knowledgeKeys } from "@/lib/knowledge/queries";
@@ -101,7 +101,7 @@ export const AddMcpServerSheet = ({
       const response = await api.mcp
         .connectors({ slug: connector.slug })
         .connect.post({});
-      return { connector, data: unwrapEden(response) };
+      return { connector, data: unwrapApiResponse(response) };
     },
     onSuccess: ({ connector, data }) => {
       if (data.type === "bearer") {
@@ -133,7 +133,7 @@ export const AddMcpServerSheet = ({
   const addServerMutation = useMutation({
     mutationFn: async (params: AddServerParams) => {
       const response = await api.mcp.connectors.post(params);
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: (data, { url }) => {
       switch (data.type) {
@@ -162,7 +162,7 @@ export const AddMcpServerSheet = ({
         connectorSlug: payload.connectorSlug,
         token: payload.token,
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       stellaToast.add({

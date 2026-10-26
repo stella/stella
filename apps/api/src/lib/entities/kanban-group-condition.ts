@@ -1,24 +1,24 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { isEntityKind, TASK_STATUSES } from "@stll/api-contract";
 
 import { entities, fields } from "@/api/db/schema";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
 
-// Elysia schema for the grouping discriminator, shared by every endpoint that
+// Valibot schema for the grouping discriminator, shared by every endpoint that
 // scopes a query to one group (kanban-group, mark-column-flag) so they accept
 // the exact same set of grouping properties.
-export const tGroupByPropertyId = t.Union([
-  t.Literal(STATUS_GROUP_ID),
-  t.Literal(KIND_GROUP_ID),
-  tSafeId("property"),
+export const tGroupByPropertyId = v.union([
+  v.literal(STATUS_GROUP_ID),
+  v.literal(KIND_GROUP_ID),
+  resourceIdSchema("property"),
 ]);
 
 const TASK_STATUS_SQL_VALUES = TASK_STATUSES.map((status) => sql`${status}`);

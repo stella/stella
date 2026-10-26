@@ -24,7 +24,11 @@ const answerFixture = (): ReaderAnswer => ({
   mine: true,
   kind: "explain",
   visibility: "private",
-  anchor: { paragraphId: "p1", quote: "quote", startOffset: 0, endOffset: 5 },
+  anchor: {
+    spans: [
+      { paragraphId: "p1", quote: "quote", startOffset: 0, endOffset: 5 },
+    ],
+  },
   createdAt: now,
   updatedAt: now,
   messages: [

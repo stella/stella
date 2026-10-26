@@ -3,7 +3,7 @@ import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { roles } from "@stll/permissions";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -54,7 +54,6 @@ import {
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
-import type { McpRequestContext } from "@/api/mcp/context";
 import {
   hasEffectiveAuthority,
   mcpMemberAuthority,
@@ -92,6 +91,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type BillingToolName =
   | "list_time_entries"
@@ -380,7 +380,7 @@ const resolveTimeEntryWorkspace = async ({
   context,
   timeEntryId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   timeEntryId: SafeId<"timeEntry">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -403,7 +403,7 @@ const resolveInvoiceWorkspace = async ({
   context,
   invoiceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
 }): Promise<SafeId<"workspace"> | null> => {
   if (context.accessibleWorkspaceIds.length === 0) {
@@ -429,7 +429,7 @@ const loadUserNames = async ({
   context,
   userIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   userIds: readonly string[];
 }): Promise<Map<string, string>> => {
   if (userIds.length === 0) {
@@ -483,7 +483,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_from: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "List only entries worked on or after this ISO date (YYYY-MM-DD)",
@@ -492,7 +492,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
       ),
       date_to: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "List only entries worked on or before this ISO date (YYYY-MM-DD)",
@@ -794,7 +794,7 @@ const saveTimeEntryArgsSchema = nullAsAbsent(
       ),
       date_worked: v.optional(
         v.pipe(
-          vApiDate,
+          apiDateSchema,
           v.maxLength(10),
           v.description(
             "Date the work was done (ISO YYYY-MM-DD); required when creating",
@@ -1014,7 +1014,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveTimeEntryTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
@@ -1089,7 +1092,10 @@ const handleSaveTimeEntryTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveTimeEntryTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_TIME_ENTRY_PROJECTION, {
@@ -1151,7 +1157,10 @@ const handleDeleteTimeEntryTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTimeEntryTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETE_TIME_ENTRY_PROJECTION, {
@@ -1171,7 +1180,7 @@ const resolveRateArgsSchema = nullAsAbsent(
       v.description("User ID to resolve the rate for"),
     ),
     date: v.pipe(
-      vApiDate,
+      apiDateSchema,
       v.maxLength(10),
       v.description("Date to resolve the rate on (ISO YYYY-MM-DD)"),
     ),
@@ -1207,7 +1216,10 @@ const handleResolveRateTool: McpToolHandler<
       ),
   );
   if (Result.isError(validated)) {
-    return internalFailureResult(validated.error);
+    return internalFailureResult(
+      validated.error,
+      "mcp.handleResolveRateTool.validated_error",
+    );
   }
   if (!validated.value) {
     return errorResult("user_id is not a member of this organization");
@@ -1224,7 +1236,10 @@ const handleResolveRateTool: McpToolHandler<
     return Result.ok(rate);
   });
   if (Result.isError(resolved)) {
-    return internalFailureResult(resolved.error);
+    return internalFailureResult(
+      resolved.error,
+      "mcp.handleResolveRateTool.resolved_error",
+    );
   }
 
   // Passthrough: only a rate amount (minor units) and currency code, no
@@ -1286,7 +1301,7 @@ const readInvoiceDetail = async ({
   invoiceId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   invoiceId: SafeId<"invoice">;
   workspaceId: SafeId<"workspace">;
 }) =>
@@ -1330,7 +1345,10 @@ const handleListInvoicesTool: TypedMcpToolHandler<
     }
     const totals = readInvoiceTotals(invoiceRow);
     if (totals.isErr()) {
-      return internalFailureResult(totals.error);
+      return internalFailureResult(
+        totals.error,
+        "mcp.handleListInvoicesTool.totals_error",
+      );
     }
 
     const invoice = {
@@ -1509,7 +1527,10 @@ const handleGetUsageTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(entitlement)) {
-    return internalFailureResult(entitlement.error);
+    return internalFailureResult(
+      entitlement.error,
+      "mcp.handleGetUsageTool.entitlement_error",
+    );
   }
 
   // Passthrough: plan/seat/period/remaining-units are organization billing
@@ -1548,6 +1569,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { timeEntry: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1648,6 +1670,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
+    permissions: { type: "all", permissions: { rate: ["read"] } },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
@@ -1680,6 +1703,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    permissions: { type: "all", permissions: { workspace: ["read"] } },
     readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
@@ -1710,6 +1734,10 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
+    permissions: {
+      type: "all",
+      permissions: { organizationSettings: ["update"] },
+    },
     readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",

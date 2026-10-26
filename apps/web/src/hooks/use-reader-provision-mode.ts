@@ -78,12 +78,24 @@ export const useReaderProvisionMode = (
       return undefined;
     }
     if (readError !== null) {
-      analytics.captureError(readError);
+      analytics.captureError(readError, {
+        fingerprintKey: "useReaderProvisionMode:readError",
+        scope: {
+          type: "handler",
+          handlerId: "useReaderProvisionMode:readError",
+        },
+      });
     }
     const refresh = () => {
       const read = readMode(storage, key);
       if (Result.isError(read)) {
-        analytics.captureError(read.error);
+        analytics.captureError(read.error, {
+          fingerprintKey: "useReaderProvisionMode.refresh:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useReaderProvisionMode.refresh:failure",
+          },
+        });
         return;
       }
       keepReadingPosition({ scroller: scrollContainerRef.current }, () => {
@@ -140,7 +152,13 @@ export const useReaderProvisionMode = (
           }),
       });
       if (Result.isError(written)) {
-        analytics.captureError(written.error);
+        analytics.captureError(written.error, {
+          fingerprintKey: "useReaderProvisionMode.toggle:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useReaderProvisionMode.toggle:failure",
+          },
+        });
         return;
       }
       window.dispatchEvent(new Event(MODE_CHANGED_EVENT));

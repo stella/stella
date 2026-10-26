@@ -19,7 +19,11 @@ if (!process.env["TURBO_HASH"]) {
         : "typecheck",
       "--filter=@stll/api",
     ],
-    { cwd: path.resolve(import.meta.dir, "../../.."), stdio: "inherit" },
+    {
+      maxBuffer: 2 ** 30,
+      cwd: path.resolve(import.meta.dir, "../../.."),
+      stdio: "inherit",
+    },
   );
   process.exit(childExitStatus(result));
 }

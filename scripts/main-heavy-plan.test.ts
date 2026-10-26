@@ -17,6 +17,7 @@ import {
   UNKNOWN,
 } from "./github-expression";
 import {
+  heavyProofJobScopes,
   mainHeavyJobs,
   MERGE_GROUP_EXCEPTIONS,
   prDepthJobs,
@@ -144,10 +145,20 @@ const context = (
     "marketing-release": {
       outputs: { required: plan["marketing_screenshots_required"] ?? "false" },
     },
+    suites: {
+      outputs: {
+        heavy_proof:
+          plan["heavy_proof"] ??
+          String(plan["run_required"] !== "false" && event !== "pull_request"),
+      },
+    },
+    // Unarmed pull requests and merge groups without armed proof.
     "completed-depth": {
       outputs: {
+        armed: plan["armed"] ?? "false",
+        armed_proof: plan["armed_proof"] ?? "",
         run_required: plan["run_required"] ?? "true",
-        pr_heavy_suites: "run",
+        pr_heavy_suites: plan["pr_heavy_suites"] ?? "run",
       },
     },
   };
@@ -648,7 +659,13 @@ test("heavy event policies exclude pull requests and preserve existing full cert
         plan["docker_checks_pr_required"] = required;
         // Queue policies intentionally remove PR execution. Existing non-PR
         // certification stays unchanged except for the added queue route smoke.
-        for (const [job, body] of Object.entries(original.jobs)) {
+        // The current workflow is also compared as its own baseline: that is
+        // what this test sees once a pull request lands, so an expectation
+        // that only holds while a change is unmerged fails before the merge.
+        for (const [job, body] of [
+          ...Object.entries(original.jobs),
+          ...Object.entries(workflow.jobs),
+        ]) {
           const current = workflow.jobs[job]?.if;
           if (current?.includes("inputs.heavy_only") !== true) {
             continue;
@@ -661,7 +678,7 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           const queueJob = Object.entries(eventPolicies.jobs).some(
             ([key, policy]) =>
               key === `ci.yml/${job}` &&
-              (policy === "queue" || policy === "main"),
+              (policy === "queue" || policy === "main" || policy === "armed"),
           );
           if (event === "pull_request" && queueJob) {
             expected = false;
@@ -691,6 +708,21 @@ test("heavy event policies exclude pull requests and preserve existing full cert
           // Selected production e2e specs run on pull requests when planned.
           if (event === "pull_request" && job === "e2e-production-shard") {
             expected = required === "true";
+          }
+          // Pull request quick checks run in the heavy-suite gate, so the gate
+          // runs on every ready pull request and nowhere else. State this
+          // without the baseline: once the gate change is on main, the
+          // baseline quick checks no longer run on pull requests.
+          if (job === "pr-heavy-gate") {
+            expected =
+              event === "pull_request" &&
+              selected(
+                "github.event.pull_request.draft != true && github.event.action != 'enqueued'",
+                context(event, false, plan),
+              );
+          }
+          if (job === "ci-quick-checks" && event === "pull_request") {
+            expected = false;
           }
           expect(
             selected(current, context(event, false, plan)),
@@ -1222,5 +1254,23 @@ test("heavy classification uses passing evidence from any matching-tree run", as
       ).toBe(hasQueuePass);
       expect(warnings).toEqual([]);
     }
+  }
+});
+
+test("armed proof cannot replace independent folded suite coverage", () => {
+  const folded = v.parse(
+    v.record(v.string(), v.unknown()),
+    JSON.parse(outcomeEnv["FOLDED_SUITES"] ?? ""),
+  );
+  for (const name of Object.keys(folded)) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs[name];
+    if (!job?.if) {
+      panic(`Missing folded job: ${name}`);
+    }
+    job.if = `needs.ci-plan.outputs.heavy_proof == 'true' && (${job.if})`;
+    expect(() => heavyProofJobScopes(mutated)).toThrow(
+      `Folded suites require queued coverage: ${name}`,
+    );
   }
 });

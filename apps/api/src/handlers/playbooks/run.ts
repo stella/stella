@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { PLAYBOOK_RUN_PROJECTIONS } from "@stll/api-contract";
 
@@ -7,7 +7,7 @@ import { playbookRunRealtimeUpdates } from "@/api/handlers/realtime-resource-set
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
@@ -28,15 +28,17 @@ import {
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { PLAYBOOK_RUN_PROJECTION } from "@/api/lib/workflow/playbook-run-projection";
 
-const runPlaybookBodySchema = t.Object({
-  projection: t.UnionEnum(PLAYBOOK_RUN_PROJECTIONS, {
-    description:
+const runPlaybookBodySchema = v.object({
+  projection: v.pipe(
+    v.picklist(PLAYBOOK_RUN_PROJECTIONS),
+    v.description(
       'Where the run shows up. "columns" materializes the playbook\'s ' +
-      "extraction and verdict columns onto the matter's table, which costs " +
-      'two columns per graded position. "none" materializes no columns; the ' +
-      "same review runs per document and its findings are read through the " +
-      "review surface.",
-  }),
+        "extraction and verdict columns onto the matter's table, which costs " +
+        'two columns per graded position. "none" materializes no columns; the ' +
+        "same review runs per document and its findings are read through the " +
+        "review surface.",
+    ),
+  ),
 });
 
 const config = {
@@ -54,7 +56,7 @@ const config = {
   access: "write",
   mcp: { type: "tool", name: "run_playbook" },
   params: workspaceParams({
-    playbookId: tSafeId("playbookDefinition", {
+    playbookId: resourceIdSchema("playbookDefinition", {
       description: "Playbook id to run",
     }),
   }),

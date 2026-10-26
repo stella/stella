@@ -1,11 +1,11 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { renderTemplatePreview } from "@/api/lib/docx/render-template-preview";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -13,8 +13,8 @@ import {
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
 
-const previewTemplateParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const previewTemplateParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
 type PreviewTemplateProps = {

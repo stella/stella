@@ -76,7 +76,7 @@ export const CitationHeader = ({
   const now = useNow();
   const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
   const summaryView = useQueryView(summaryQuery);
-  useQueryViewError(summaryView);
+  useQueryViewError(summaryView, "CitationHeader:query");
   const summary = summaryView.type === "items" ? summaryView.items : undefined;
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the strip waits for hydration to stay identical.

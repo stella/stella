@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
-import Elysia from "elysia";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
@@ -13,9 +12,12 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createLegalResolveRoute } from "@/api/handlers/legal-resolve/routes";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import {
   getTestDb,
@@ -139,49 +141,52 @@ test.each(
     testState.setConfig("FEATURE_ORG_ACCESS_STATE", enabled);
     try {
       const context = new InMemoryRateLimitContext();
-      const app = new Elysia().use(
-        createLegalResolveRoute({
-          authenticate: async () =>
-            Result.ok(
-              principalType === "service"
-                ? {
-                    type: "service" as const,
-                    clientId: "fixture-client",
-                    organizationId,
-                    scopes: ["stella:law_read"],
-                    requestsPerMinute: 10,
-                    dailyBudget: 100,
-                  }
-                : {
-                    organizationId,
-                    userId: "fixture-user",
-                    scopes: ["stella:law_read"],
-                  },
-            ),
-          publicLawEnabled: () => true,
-          resolveSessionContext: async () => ({}),
-          recordAudit: async () => undefined,
-          decisionRateLimit: {
-            context,
-            duration: 60_000,
-            generator: () => "decision",
-            max: 10,
-          },
-          lawRateLimit: {
-            context,
-            duration: 60_000,
-            generator: () => "law",
-            max: 10,
-          },
-          resolveDecision: async () => decision,
-          resolveLaw: async () => provision,
+      await using app = serveForTest(
+        createHttpApp({
+          routes: createLegalResolveRoute({
+            authenticate: async () =>
+              Result.ok(
+                principalType === "service"
+                  ? {
+                      type: "service" as const,
+                      clientId: "fixture-client",
+                      organizationId,
+                      scopes: ["stella:law_read"],
+                      requestsPerMinute: 10,
+                      dailyBudget: 100,
+                    }
+                  : {
+                      organizationId,
+                      userId: "fixture-user",
+                      scopes: ["stella:law_read"],
+                    },
+              ),
+            publicLawEnabled: () => true,
+            resolveSessionContext: async () => ({}),
+            recordAudit: async () => undefined,
+            decisionRateLimit: {
+              context,
+              duration: 60_000,
+              generator: () => "decision",
+              max: 10,
+            },
+            lawRateLimit: {
+              context,
+              duration: 60_000,
+              generator: () => "law",
+              max: 10,
+            },
+            resolveDecision: async () => decision,
+            resolveLaw: async () => provision,
+          }),
+          middleware: [errorBoundary],
         }),
       );
       for (const [url, expected] of [
         ["/case/CZE/decisions/resolve?identifier=fixture", decision],
         ["/law/CZE/citations/resolve?citation=fixture", provision],
       ] as const) {
-        const response = await app.handle(
+        const response = await app.fetch(
           new Request(`http://localhost${url}`, {
             headers: { authorization: "Bearer fixture" },
           }),

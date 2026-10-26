@@ -33,7 +33,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -242,7 +242,7 @@ export const useImportReview = ({
         taxIdScheme: scheme,
         rows: candidates.map(toWireCandidate),
       });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     });
 
   const revalidate = async () => {
@@ -257,7 +257,13 @@ export const useImportReview = ({
       return;
     }
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useImportReview.revalidate:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useImportReview.revalidate:failure",
+        },
+      });
       setValidation({
         status: "failed",
         message: userErrorFromThrown(
@@ -307,7 +313,13 @@ export const useImportReview = ({
     const result = await requestValidation(candidates, scheme);
     setIsSeeding(false);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "useImportReview.seedValidated:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useImportReview.seedValidated:failure",
+        },
+      });
       notifyUserError(result.error, t("contacts.importStudio.validateFailed"));
       return false;
     }
@@ -373,12 +385,15 @@ export const useImportReview = ({
         importRequestId: request.id,
         ...payload,
       });
-      return { data: unwrapEden(response), request };
+      return { data: unwrapApiResponse(response), request };
     });
     setIsImporting(false);
 
     if (Result.isError(outcome)) {
-      getAnalytics().captureError(outcome.error);
+      getAnalytics().captureError(outcome.error, {
+        fingerprintKey: "useImportReview.commit:failure",
+        scope: { type: "handler", handlerId: "useImportReview.commit:failure" },
+      });
       notifyUserError(outcome.error, t("contacts.importStudio.importFailed"));
       return;
     }

@@ -1,10 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { mount, routes } from "@/api/http/route";
+import type { Middleware, RouteTable } from "@/api/http/route";
+import { defineEndpoint } from "@/api/lib/endpoints";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
@@ -14,8 +18,9 @@ import {
   getPublicCorpusClassPolicy,
   PUBLIC_CORPUS_ROUTE_POLICY,
 } from "@/api/public-corpus-policy";
+import { serveForTest } from "@/api/tests/helpers/test-server";
+import type { TestServer } from "@/api/tests/helpers/test-server";
 
-import type { RequestIpServer } from "./contracts";
 import {
   createPublicCorpusAddressRateLimitOptions,
   createPublicCorpusGlobalRateLimitOptions,
@@ -35,10 +40,16 @@ const request = (path: string, method = "GET") =>
     method,
   });
 
+/**
+ * The socket peer a counter key reads for a test request. Every request is
+ * sent from the same local socket, so the fixture states the peer it stands
+ * for; only the test bindings' key generators read it.
+ */
+const TEST_PEER_HEADER = "x-test-socket-peer";
+
 const createBindings = () => {
   const contexts = new Map<string, InMemoryRateLimitContext>();
   const increments = new Map<string, number>();
-  const peers = new WeakMap<Request, RequestIpServer>();
   const optionsByScope = new Map<
     string,
     Parameters<typeof createRedisRateLimit>[0]
@@ -66,17 +77,23 @@ const createBindings = () => {
         decrement: (key) => context.decrement(key),
         kill: () => context.kill(),
       },
-      generator: async (incoming, server) =>
-        await generator(incoming, peers.get(incoming) ?? server),
+      generator: async (incoming, server) => {
+        const peer = incoming.headers.get(TEST_PEER_HEADER);
+        return await generator(
+          incoming,
+          peer === null ? server : { requestIP: () => ({ address: peer }) },
+        );
+      },
     };
   };
   return {
     binding,
     optionsByScope,
     increments,
-    send: async ({ app, incoming, address }: PeerRequestOptions) => {
-      peers.set(incoming, { requestIP: () => ({ address }) });
-      return await app.handle(incoming);
+    send: async ({ server, incoming, address }: PeerRequestOptions) => {
+      const headers = new Headers(incoming.headers);
+      headers.set(TEST_PEER_HEADER, address);
+      return await server.fetch(new Request(incoming, { headers }));
     },
     kill: () => {
       for (const context of contexts.values()) {
@@ -87,27 +104,44 @@ const createBindings = () => {
 };
 
 type PeerRequestOptions = {
-  app: { handle: (incoming: Request) => Promise<Response> };
+  server: Pick<TestServer, "fetch">;
   incoming: Request;
   address: string;
 };
 
-const createApp = (binding: typeof createRedisRateLimit) => {
-  const composition = createPublicCorpusRateLimitComposition({
-    createRedisBinding: binding,
-  });
-  return new Elysia().group(STELLA_API_VERSION_PREFIX, (app) =>
-    app
-      .use(composition)
-      .get("/law/statutes/search", () => "search")
-      .post("/case/decisions/search", () => "search")
-      .get("/law/statutes/facets", () => "aggregate")
-      .get("/case/decisions/facets", () => "aggregate")
-      .get("/law/sitemap/shards", () => "sitemap")
-      .get("/case/sitemap/shards", () => "sitemap")
-      .get("/law/statutes", () => "browse"),
+const answering = (body: string) => defineEndpoint.public({}, () => body);
+
+/**
+ * Serve `table` under the API version prefix behind the given stages, as the
+ * route table mounts the public corpus routes, on a real `Bun.serve`.
+ */
+const serveVersioned = (
+  table: RouteTable,
+  middleware: readonly Middleware[],
+): TestServer =>
+  serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: mount([routes(table)], {
+        prefix: STELLA_API_VERSION_PREFIX,
+        middleware,
+      }),
+    }),
   );
-};
+
+const createApp = (binding: typeof createRedisRateLimit): TestServer =>
+  serveVersioned(
+    {
+      "/law/statutes/search": { GET: answering("search") },
+      "/case/decisions/search": { POST: answering("search") },
+      "/law/statutes/facets": { GET: answering("aggregate") },
+      "/case/decisions/facets": { GET: answering("aggregate") },
+      "/law/sitemap/shards": { GET: answering("sitemap") },
+      "/case/sitemap/shards": { GET: answering("sitemap") },
+      "/law/statutes": { GET: answering("browse") },
+    },
+    createPublicCorpusRateLimitComposition({ createRedisBinding: binding }),
+  );
 
 type AdmissionCountOptions = {
   lines: string[];
@@ -138,7 +172,7 @@ describe("public corpus fleet request budgets", () => {
   ] as const) {
     test(`statute and case-law searches from one address share one budget: refuses ${refused.method} ${refused.path}`, async () => {
       const bindings = createBindings();
-      const app = createApp(bindings.binding);
+      await using server = createApp(bindings.binding);
       const { max } = getPublicCorpusClassPolicy().classes.search.address;
       const alternating = [
         { path: "/law/statutes/search", method: "GET" },
@@ -155,7 +189,7 @@ describe("public corpus fleet request budgets", () => {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(route.path, route.method),
                 address: "192.0.2.1",
               })
@@ -163,7 +197,7 @@ describe("public corpus fleet request budgets", () => {
           ).toBe(200);
         }
         const limited = await bindings.send({
-          app,
+          server,
           incoming: request(refused.path, refused.method),
           address: "192.0.2.1",
         });
@@ -178,7 +212,7 @@ describe("public corpus fleet request budgets", () => {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(route.path, route.method),
                 address: "192.0.2.2",
               })
@@ -198,14 +232,14 @@ describe("public corpus fleet request budgets", () => {
     try {
       env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
       env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 120;
-      const app = createApp(bindings.binding);
+      await using server = createApp(bindings.binding);
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
         { path: "/law/statutes/facets", limit: 60 },
         { path: "/law/sitemap/shards", limit: 10 },
       ]) {
         const response = await bindings.send({
-          app,
+          server,
           incoming: request(path),
           address: "192.0.2.1",
         });
@@ -251,19 +285,21 @@ describe("public corpus fleet request budgets", () => {
         createRedisBinding: bindings.binding,
         concurrency: { waitMsOf: () => 0 },
       });
-      const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (group) =>
-        group
-          .use(composition)
-          .get("/law/statutes/search", work)
-          .post("/case/decisions/search", work)
-          .get("/law/statutes/facets", work)
-          .get("/law/sitemap/shards", work),
+      const working = defineEndpoint.public({}, work);
+      await using server = serveVersioned(
+        {
+          "/law/statutes/search": { GET: working },
+          "/case/decisions/search": { POST: working },
+          "/law/statutes/facets": { GET: working },
+          "/law/sitemap/shards": { GET: working },
+        },
+        composition,
       );
       const running = Array.from(
         { length: capacity },
         async (_, index) =>
           await bindings.send({
-            app,
+            server,
             incoming: request(path, method),
             address: `192.0.2.${index + 1}`,
           }),
@@ -285,7 +321,7 @@ describe("public corpus fleet request budgets", () => {
           index += 1
         ) {
           const response = await bindings.send({
-            app,
+            server,
             incoming: request(path, method),
             address: `198.51.100.${index + 1}`,
           });
@@ -300,7 +336,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path, method),
               address: "203.0.113.1",
             })
@@ -335,12 +371,12 @@ describe("public corpus fleet request budgets", () => {
       const bindings = createBindings();
       try {
         env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 7;
-        const app = createApp(bindings.binding);
+        await using server = createApp(bindings.binding);
         for (let index = 0; index < 3; index += 1) {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(path, method),
                 address: "192.0.2.1",
               })
@@ -350,7 +386,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path, method),
               address: "192.0.2.1",
             })
@@ -364,7 +400,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path, method),
               address: "192.0.2.2",
             })
@@ -393,8 +429,8 @@ describe("public corpus fleet request budgets", () => {
       env.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX = 3;
       env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 3;
       env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 3;
-      const app = createApp(bindings.binding);
-      for (const routes of [
+      await using server = createApp(bindings.binding);
+      for (const classRoutes of [
         [
           { path: "/law/statutes/search", method: "GET" },
           { path: "/case/decisions/search", method: "POST" },
@@ -409,12 +445,12 @@ describe("public corpus fleet request budgets", () => {
         ],
       ]) {
         for (let index = 0; index < 4; index += 1) {
-          const route = routes.at(index % routes.length);
+          const route = classRoutes.at(index % classRoutes.length);
           if (!route) {
             panic("Missing test route");
           }
           const response = await bindings.send({
-            app,
+            server,
             incoming: request(route.path, route.method),
             address: `192.0.2.${index + 1}`,
           });
@@ -429,7 +465,7 @@ describe("public corpus fleet request budgets", () => {
       expect(
         (
           await bindings.send({
-            app,
+            server,
             incoming: request("/law/statutes"),
             address: "192.0.2.1",
           })
@@ -525,7 +561,7 @@ describe("public corpus fleet request budgets", () => {
     const previousAggregate = env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX;
     env.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX = 100;
     env.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX = 100;
-    const app = createApp(bindings.binding);
+    await using server = createApp(bindings.binding);
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
       lines.push(line);
@@ -539,7 +575,7 @@ describe("public corpus fleet request budgets", () => {
           expect(
             (
               await bindings.send({
-                app,
+                server,
                 incoming: request(path),
                 address: "192.0.2.1",
               })
@@ -552,7 +588,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path),
               address: "192.0.2.1",
             })
@@ -564,7 +600,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request(path),
               address: "192.0.2.2",
             })
@@ -576,7 +612,7 @@ describe("public corpus fleet request budgets", () => {
         expect(
           (
             await bindings.send({
-              app,
+              server,
               incoming: request("/law/statutes"),
               address: "192.0.2.1",
             })
@@ -643,13 +679,11 @@ describe("public corpus fleet request budgets", () => {
           (await context.increment(captured.scope, options.duration)).count,
         ).toBeGreaterThan(options.max);
         expect(lines).toEqual([]);
-        const app = new Elysia()
-          .use(rateLimit({ ...options, context }))
-          .post(
-            `${STELLA_API_VERSION_PREFIX}/case/decisions/search`,
-            () => "search",
-          );
-        const response = await app.handle(
+        await using server = serveVersioned(
+          { "/case/decisions/search": { POST: answering("search") } },
+          [rateLimit({ ...options, context })],
+        );
+        const response = await server.fetch(
           request("/case/decisions/search", "POST"),
         );
         expect(response.status).toBe(429);

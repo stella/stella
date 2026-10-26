@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { isRecord } from "@/api/lib/type-guards";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 
 import {
   ledgerGitEnv,
@@ -40,9 +40,9 @@ const measuredApiScenarios = [
   decisionSummaryScalingScenario,
   ...claimCommentScalingScenarios,
 ];
-const measuredApiReads = api.routes
-  .filter(({ handler }) =>
-    measuredApiScenarios.some((scenario) => scenario.handler === handler),
+const measuredApiReads = apiApp.routes
+  .filter(({ definition }) =>
+    measuredApiScenarios.some((scenario) => scenario.definition === definition),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
 
@@ -93,14 +93,15 @@ test("previously measured scenarios retain their handler or tool identity", asyn
         );
       }
       const owner = ownerModule[entry.handlerOwner.exportName];
-      if (!isRecord(owner) || !("handler" in owner)) {
+      if (!isRecord(owner)) {
         panic(
-          `Scaling owner has no handler: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
+          `Scaling owner is not an endpoint definition: ${entry.handlerOwner.file}#${entry.handlerOwner.exportName}`,
         );
       }
-      expect(owner["handler"]).toBe(
-        measuredApiScenarios.find(({ name }) => name === entry.name)?.handler,
+      const measured = measuredApiScenarios.find(
+        ({ name }) => name === entry.name,
       );
+      expect(measured?.definition === owner).toBe(true);
     }
     expect(
       scenarioMembershipViolations({
@@ -113,17 +114,19 @@ test("previously measured scenarios retain their handler or tool identity", asyn
 
 test("every scaling scenario exercises a mounted API handler", () => {
   for (const scenario of measuredApiScenarios) {
-    expect(api.routes.some(({ handler }) => handler === scenario.handler)).toBe(
-      true,
-    );
+    expect(
+      apiApp.routes.some(
+        ({ definition }) => definition === scenario.definition,
+      ),
+    ).toBe(true);
   }
 });
 
 test("removing any mounted read scenario makes its coverage fail", () => {
-  const surface = apiScalingSurface(api.routes);
+  const surface = apiScalingSurface(apiApp.routes);
   for (const scenario of measuredApiScenarios) {
-    const mounted = api.routes.filter(
-      ({ handler }) => handler === scenario.handler,
+    const mounted = apiApp.routes.filter(
+      ({ definition }) => definition === scenario.definition,
     );
     expect(mounted.length, scenario.name).toBeGreaterThan(0);
     for (const { method, path: routePath } of mounted) {
@@ -156,18 +159,27 @@ test("every MCP scenario names a registered tool", () => {
   }
 });
 
-for (const { kind, surface, ledger, measured } of [
+// The HTTP core lists a route without the trailing slash Elysia gave a
+// prefix's index route; a base ledger may still spell it with one.
+const withoutTrailingSlash = (entries: string[]) =>
+  entries.map((entry) =>
+    entry.endsWith("/") && !entry.endsWith(" /") ? entry.slice(0, -1) : entry,
+  );
+
+for (const { kind, surface, ledger, measured, normalizeBaseEntries } of [
   {
     kind: "api",
-    surface: apiScalingSurface(api.routes),
+    surface: apiScalingSurface(apiApp.routes),
     ledger: apiLedger,
     measured: measuredApiReads,
+    normalizeBaseEntries: withoutTrailingSlash,
   },
   {
     kind: "mcp",
     surface: mcpScalingSurface(DEFAULT_MCP_TOOL_DEFINITIONS),
     ledger: mcpLedger,
     measured: mcpScalingScenarios.map(({ name }) => name),
+    normalizeBaseEntries: undefined,
   },
 ]) {
   describe(`${kind} scaling census`, () => {
@@ -202,7 +214,7 @@ for (const { kind, surface, ledger, measured } of [
           // A write route this change mounts may enter with its reason.
           normalizeBaseEntries: (base) =>
             withNewWriteRoutes({
-              base,
+              base: normalizeBaseEntries?.(base) ?? base,
               current: parseScalingLedger(
                 JSON.stringify(ledger),
                 `${kind}-scaling`,

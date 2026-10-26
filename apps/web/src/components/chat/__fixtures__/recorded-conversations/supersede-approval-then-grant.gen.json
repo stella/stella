@@ -22,12 +22,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Delete the NDA"
               }
             ],
@@ -383,36 +383,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Delete the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Delete the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -596,12 +596,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000005",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:13.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Delete the older copy instead"
               }
             ],
@@ -957,36 +957,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000005",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Delete the older copy instead"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:14.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000005",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Delete the older copy instead"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:15.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -1234,20 +1234,11 @@
           "request": {
             "threadId": "00000000-0000-7000-8000-000000000002",
             "runId": "run-recorded-3",
-            "parentRunId": "run-recorded-2",
-            "resume": [
-              {
-                "interruptId": "approval_call-2",
-                "payload": {
-                  "approved": true
-                },
-                "status": "resolved"
-              }
-            ],
             "state": {},
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000006",
+                "role": "assistant",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:30.000Z",
@@ -1263,7 +1254,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
                 "toolCalls": [
                   {
                     "id": "call-2",
@@ -1276,8 +1266,8 @@
                 ]
               },
               {
-                "role": "tool",
                 "id": "tool-call-2",
+                "role": "tool",
                 "toolCallId": "call-2",
                 "content": "{\"approved\":true,\"pendingExecution\":true,\"message\":\"User approved this action\"}",
                 "metadata": {
@@ -1639,6 +1629,9 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-3",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000006",
                 "metadata": {
@@ -1656,17 +1649,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-2\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1688,23 +1670,34 @@
                     }
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:32.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-3",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-2",
               "resume": [
                 {
                   "interruptId": "approval_call-2",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-3",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000006",
                 "metadata": {
@@ -1722,17 +1715,6 @@
                     "durationMs": 0
                   }
                 },
-                "role": "assistant",
-                "toolCalls": [
-                  {
-                    "id": "call-2",
-                    "type": "function",
-                    "function": {
-                      "name": "mcp__external__delete",
-                      "arguments": "{\"name\":\"call-2\"}"
-                    }
-                  }
-                ],
                 "parts": [
                   {
                     "type": "tool-call",
@@ -1754,22 +1736,40 @@
                     }
                   }
                 ],
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                      "name": "mcp__external__delete",
+                      "arguments": "{\"name\":\"call-2\"}"
+                    }
+                  }
+                ],
                 "createdAt": "2026-01-01T00:00:34.000Z"
               },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-3",
-              "threadId": "00000000-0000-7000-8000-000000000002",
               "parentRunId": "run-recorded-2",
               "resume": [
                 {
                   "interruptId": "approval_call-2",
+                  "status": "resolved",
                   "payload": {
                     "approved": true
-                  },
-                  "status": "resolved"
+                  }
                 }
               ]
-            }
+            },
+            "parentRunId": "run-recorded-2",
+            "resume": [
+              {
+                "interruptId": "approval_call-2",
+                "status": "resolved",
+                "payload": {
+                  "approved": true
+                }
+              }
+            ]
           },
           "ended": "complete",
           "response": {

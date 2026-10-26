@@ -31,7 +31,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
@@ -55,7 +55,14 @@ export const Route = createFileRoute("/_protected/admin/audit-logs")({
         key: { limit: AUDIT_LOG_PAGE_LIMIT },
       }),
       (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "admin.audit-logs.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate: "/_protected/admin/audit-logs",
+          },
+        });
       },
     );
   },
@@ -148,7 +155,7 @@ function AuditLogsPage() {
           query: cleanParams,
         });
 
-        return unwrapEden(response);
+        return unwrapApiResponse(response);
       },
       catch: (error) => error,
     });
@@ -176,7 +183,13 @@ function AuditLogsPage() {
   const handleExportClick = () => {
     detached(
       handleExport().catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "AuditLogsPage.handleExportClick:failure",
+          scope: {
+            type: "handler",
+            handlerId: "AuditLogsPage.handleExportClick:failure",
+          },
+        });
         notifyUserError(
           error,
           t("settings.organization.auditLogsExportFailed"),
