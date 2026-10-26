@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Strany"
     },
+    "switcher": {
+      "searchPlaceholder": "Nájsť spis…",
+      "trigger": "Prepnúť spis",
+      "viewAll": "Zobraziť všetky spisy",
+      "viewAllForClient": "Zobraziť všetky spisy klienta {clientName}"
+    },
     "table": {
       "clearFlags": "Vymazať označenia",
       "collapseRow": "Zbaliť riadok",

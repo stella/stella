@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Partes"
     },
+    "switcher": {
+      "searchPlaceholder": "Buscar un asunto…",
+      "trigger": "Cambiar de asunto",
+      "viewAll": "Ver todos los asuntos",
+      "viewAllForClient": "Ver todos los asuntos del cliente {clientName}"
+    },
     "table": {
       "clearFlags": "Borrar marcas",
       "collapseRow": "Contraer fila",

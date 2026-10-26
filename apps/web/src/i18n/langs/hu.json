@@ -6644,6 +6644,12 @@
     "sections": {
       "parties": "Felek"
     },
+    "switcher": {
+      "searchPlaceholder": "Ügy keresése…",
+      "trigger": "Ügy váltása",
+      "viewAll": "Összes ügy megjelenítése",
+      "viewAllForClient": "{clientName} ügyfél összes ügyének megjelenítése"
+    },
     "table": {
       "clearFlags": "Jelölések törlése",
       "collapseRow": "Sor összecsukása",
