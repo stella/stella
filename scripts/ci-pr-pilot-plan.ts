@@ -13,6 +13,7 @@ export const PILOT_FAST_ROOTS = [
   "code-quality-api-cancel",
   "code-quality-web-rest",
   "code-quality-web-rest-cancel",
+  "autofix-dispatch",
   "query-perf",
   // Dependency checks gate on dependency changes; PRs run them.
   "dependency-audit",

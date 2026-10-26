@@ -137,6 +137,7 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "code-quality-api-cancel": { class: "advisory" },
   "code-quality-web-rest": { class: "correctness" },
   "code-quality-web-rest-cancel": { class: "advisory" },
+  "autofix-dispatch": { class: "advisory" },
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },

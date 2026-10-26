@@ -176,6 +176,7 @@
     "codeql.yml/scope": "release-pr",
     "ci.yml/code-quality-web-rest": "pr-fast",
     "ci.yml/code-quality-web-rest-cancel": "pr-fast",
+    "ci.yml/autofix-dispatch": "pr-fast",
     "main-pr-depth.yml/validate": "main",
     "main-pr-depth.yml/suites": "main",
     "main-pr-depth.yml/status": "main",

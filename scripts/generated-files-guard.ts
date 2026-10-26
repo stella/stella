@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { appendFileSync } from "node:fs";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import {
@@ -365,6 +366,14 @@ export const runGeneratorChecks = async (
   });
 };
 
+/** Whether failed generated checks include a family the autofix may write. */
+export const hasAutofixableGeneratorFailures = (
+  failedGeneratorIds: readonly string[],
+): boolean => {
+  const failed = new Set(failedGeneratorIds);
+  return GENERATORS.some(({ id, autofix }) => autofix && failed.has(id));
+};
+
 export const DELEGATED_CHECKS_ENV = "GENERATED_CHECKS_IN_OTHER_JOBS";
 export const UNCHANGED_CHECKS_ENV = "GENERATED_CHECKS_UNCHANGED";
 
@@ -432,6 +441,10 @@ const guardB = async () => {
     }
     return checkGenerator(generator);
   });
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output && hasAutofixableGeneratorFailures(failures.map(({ id }) => id))) {
+    appendFileSync(output, "fixable=true\n");
+  }
   if (failures.length > 0) {
     panic(
       `Generator checks failed:\n${failures.map(({ id, failure }) => `${id}: ${failure}`).join("\n")}`,

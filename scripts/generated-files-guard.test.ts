@@ -14,6 +14,7 @@ import { type Generator, GENERATORS } from "./generated-files";
 import {
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
+  hasAutofixableGeneratorFailures,
   runGeneratorChecks,
   UNCHANGED_CHECKS_ENV,
   unchangedGeneratorIds,
@@ -35,6 +36,23 @@ const checkedGenerator = (id: string) => {
   }
   return entry;
 };
+
+test("only failures from autofix-owned generator families request autofix", () => {
+  const autofixable = GENERATORS.find(
+    ({ autofix, check }) => autofix && check !== null,
+  );
+  const protectedFamily = GENERATORS.find(
+    ({ autofix, check }) => !autofix && check !== null,
+  );
+  if (autofixable === undefined || protectedFamily === undefined) {
+    panic("Generator fixtures need both autofix-owned and protected checks");
+  }
+  expect(hasAutofixableGeneratorFailures([autofixable.id])).toBe(true);
+  expect(hasAutofixableGeneratorFailures([protectedFamily.id])).toBe(false);
+  expect(
+    hasAutofixableGeneratorFailures([autofixable.id, protectedFamily.id]),
+  ).toBe(true);
+});
 
 class FixtureStartFailure extends TaggedError("FixtureStartFailure")<{
   message: string;

@@ -5,7 +5,10 @@ defaults:
     shell: bash
 
 # Each job scopes itself. Dependency updates and ordinary same-repository
-# PRs share the Tauri alignment fixer and existing App push.
+# PRs share the Tauri alignment fixer and existing App push. Ordinary PRs
+# reach the changed-file autofix only through CI: its `autofix-dispatch` job
+# dispatches this workflow with generator `changed-files` when a check found
+# drift the autofix repairs (scripts/autofix-drift-checks.ts).
 on:
   workflow_dispatch:
     inputs:
@@ -14,18 +17,25 @@ on:
         required: true
         type: number
       generator:
-        description: Owning generator ID
+        description: Owning generator ID, or changed-files for the CI-requested autofix
         required: true
         type: string
+      head:
+        description: Pull request head SHA that CI checked (changed-files only)
+        required: false
+        type: string
+        default: ""
   # Workflow files are never fixed (the App cannot push them), but every one
   # feeds the job classification digests, so no path is filtered out. A test
   # derives this from the generators and the Tauri alignment.
   pull_request:
     types: [opened, synchronize, reopened]
 
+# A newer push supersedes a pending changed-file autofix for the same pull
+# request; regeneration dispatches stay isolated.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && inputs.generator == 'changed-files' && format('pr-{0}', inputs.pr) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.generator == 'changed-files') }}
 
 permissions:
   contents: read
@@ -33,7 +43,7 @@ permissions:
 jobs:
   regenerate-requested-files:
     name: Regenerate requested files
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.generator != 'changed-files'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -302,13 +312,15 @@ jobs:
 
   regenerate-scope:
     name: Scope autofixes
-    # Same-repository pull requests only: the generators run the pull
-    # request's own code, and the result lands on that pull request's branch,
-    # which its author can already push to. Dependabot uses the dependency
-    # job above; fork pull requests keep the CI drift guards alone.
+    # CI dispatches this on the pull request branch once a check found drift
+    # the autofix repairs. Same-repository pull requests only: the generators
+    # run the pull request's own code, and the result lands on that pull
+    # request's branch, which its author can already push to. Dependabot uses
+    # the dependency job above; fork pull requests keep the CI drift guards
+    # alone.
     if: >-
-      github.event.pull_request.head.repo.full_name == github.repository
-      && github.event.pull_request.user.login != 'dependabot[bot]'
+      github.event_name == 'workflow_dispatch'
+      && inputs.generator == 'changed-files'
       && github.actor != 'dependabot[bot]'
       && github.actor != 'autofix-ci[bot]'
     runs-on: ubuntu-24.04
@@ -320,6 +332,8 @@ jobs:
       pull-requests: read
     outputs:
       ready: ${{ steps.planner.outputs.ready }}
+      head: ${{ steps.target.outputs.head }}
+      base: ${{ steps.target.outputs.base }}
       run: ${{ steps.scope.outputs.run }}
       ids: ${{ steps.scope.outputs.ids }}
       allowed: ${{ steps.scope.outputs.allowed }}
@@ -346,22 +360,64 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
+      # The run must be on the open pull request's branch at exactly the head
+      # CI checked. A newer push has its own CI run, which requests its own
+      # autofix, so a moved head ends this run without fixing.
+      - name: Verify autofix request
+        id: target
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
+          REQUESTED_HEAD: ${{ inputs.head }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_REF: ${{ github.ref }}
+          RUN_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid pull request number."; exit 1; }
+          [[ "$REQUESTED_HEAD" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid pull request head."; exit 1; }
+          bash "$GH_RETRY_SCRIPT" api "repos/$REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/autofix-pr.json"
+          jq -e --arg repository "$REPOSITORY" --arg ref "$RUN_REF" '
+            .state == "open"
+            and .head.repo.full_name == $repository
+            and .user.login != "dependabot[bot]"
+            and ("refs/heads/" + .head.ref) == $ref
+          ' "$RUNNER_TEMP/autofix-pr.json" > /dev/null || {
+            echo "::error::Autofix runs only on the branch of an open same-repository pull request."
+            exit 1
+          }
+          head=$(jq -r '.head.sha' "$RUNNER_TEMP/autofix-pr.json")
+          if [[ "$head" != "$REQUESTED_HEAD" || "$RUN_SHA" != "$REQUESTED_HEAD" ]]; then
+            echo "::notice::Pull request moved past $REQUESTED_HEAD; its own CI run requests autofix."
+            exit 0
+          fi
+          base=$(jq -r '.base.sha' "$RUNNER_TEMP/autofix-pr.json")
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid pull request base."; exit 1; }
+          {
+            echo "head=$head"
+            echo "base=$base"
+          } >> "$GITHUB_OUTPUT"
+
       # Fetch paths before checking out pull request code. Only the planner
       # files are needed in this job; generators run in the later job.
       - name: Fetch changed paths
+        if: steps.target.outputs.head != ''
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ inputs.pr }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           bash "$GH_RETRY_SCRIPT" api --paginate "repos/$REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-paths"
 
       - name: Checkout pull request head
+        if: steps.target.outputs.head != ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ steps.target.outputs.head }}
           # Recent history without file contents: enough to find the settled
           # commit and list what changed since.
           fetch-depth: 21
@@ -374,6 +430,7 @@ jobs:
 
       # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
+        if: steps.target.outputs.head != ''
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
@@ -381,6 +438,7 @@ jobs:
 
       - name: Check planner availability
         id: planner
+        if: steps.target.outputs.head != ''
         run: |
           set -euo pipefail
           for path in scripts/autofix-plan.ts scripts/autofix-protected-paths.ts scripts/baseline-paths.ts scripts/generated-files.ts packages/scripts/src/generated-files.ts; do
@@ -403,7 +461,8 @@ jobs:
       # request.
       - name: Find settled autofix commit
         id: settled
-        if: steps.planner.outputs.ready == 'true' && github.event.action == 'synchronize'
+        if: steps.planner.outputs.ready == 'true'
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -450,20 +509,23 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
+      # Full history for the base and settled diffs; file contents of older
+      # commits are fetched only when a step reads them.
       - name: Checkout pull request head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ needs.regenerate-scope.outputs.head }}
           submodules: true
 
       # Changed paths bound what autofix may rewrite; the fixers act on the
       # subset the push changed since the settled commit.
       - name: Record changed paths
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ needs.regenerate-scope.outputs.base }}
+          HEAD_SHA: ${{ needs.regenerate-scope.outputs.head }}
           # A push that changed a fixer input refixes every changed path.
           SINCE_SHA: ${{ needs.regenerate-scope.outputs.refix != 'true' && needs.regenerate-scope.outputs.since || '' }}
         run: |
@@ -481,18 +543,19 @@ jobs:
           fi
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
+      # The install below restores CI's complete package store.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
+          no-cache: true
 
       - name: Align Tauri counterparts
         id: tauri
         env:
           STELLA_LOCAL_AUTOFIX: "true"
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ needs.regenerate-scope.outputs.base }}
+          HEAD_SHA: ${{ needs.regenerate-scope.outputs.head }}
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             scripts/bun-lock-text.ts scripts/check-tauri-package-alignment.ts \
@@ -509,9 +572,15 @@ jobs:
             echo "::notice::Alignment fixer sources changed; CI enforces alignment without automatic edits."
           fi
 
+      # Type-aware lint fixes and the generators read the whole workspace
+      # graph, so the fixers need the complete install. CI's jobs already
+      # publish that store under its frozen-input key; restoring it beats
+      # re-downloading the global package cache.
       - name: Install dependencies
         timeout-minutes: 5
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN; pull request installs get none.
           NPM_TOKEN: ""
@@ -650,7 +719,7 @@ jobs:
         if: needs.regenerate-scope.outputs.prune != 'false'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ needs.regenerate-scope.outputs.base }}
         run: |
           if [[ -f scripts/autofix-baseline-prune.ts ]]; then
             bun scripts/autofix-baseline-prune.ts prune
@@ -658,8 +727,8 @@ jobs:
 
       - name: Restrict autofix changes
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ needs.regenerate-scope.outputs.head }}
+          BASE_SHA: ${{ needs.regenerate-scope.outputs.base }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
         run: |

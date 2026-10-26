@@ -1730,6 +1730,14 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECK_POOL_CONCURRENCY",
   // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
   "CI_CHECK_POOL_PARTITION",
+  // Workflow-local autofix receipts and the requested pull request head.
+  "DIRECT_FIXABLE",
+  "FIXABLE",
+  "PARTITION",
+  "RECEIPTS_DIR",
+  "REQUESTED_HEAD",
+  "RUN_REF",
+  "RUN_SHA",
   // Test-only: the commit ci-checks-partition.test.ts compares the head with.
   "CI_CHECKS_PARTITION_BASE",
   // Generator families another job of the same CI run checks on this commit.

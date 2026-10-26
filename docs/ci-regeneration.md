@@ -9,6 +9,10 @@ gh workflow run autofix.yml --repo stella/stella --ref <branch> \
   -f pr=<number> -f generator=<generator-id>
 ```
 
+The generator ID `changed-files` is reserved for CI: its `autofix-dispatch` job
+requests the changed-file autofix this way when a check found drift the
+autofix repairs (`scripts/autofix-drift-checks.ts`).
+
 The registry in `scripts/pr-regeneration.ts` declares each command, required
 services and allowed output paths. Supported IDs:
 

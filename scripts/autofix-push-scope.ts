@@ -17,7 +17,9 @@
 //   baseline writer scans, or a prunable baseline itself.
 //
 // Without a settled commit the push scope is the whole pull request, which is
-// the behaviour this file narrows. A push that changes what the formatter or
+// the behaviour this file narrows. CI requests autofix only for a push whose
+// checks found drift (scripts/autofix-drift-checks.ts), so a commit CI found
+// clean has no autofix result: it is not settled and only widens the scope. A push that changes what the formatter or
 // linter reads (their config, rule plugins, type configs, dependencies or the
 // fixer scripts), for example through a base-branch merge, refixes every pull
 // request file: unchanged files can now format or lint differently.

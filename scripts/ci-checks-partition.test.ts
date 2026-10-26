@@ -516,6 +516,14 @@ const stepIds: Record<string, string> = {
   "Install dependencies": "install",
   "Standalone lockfile guard": "standalone_lockfiles",
   "Lockfile release-age guard": "lockfile_ages",
+  // Drift guards expose their outcome to the job's `fixable` output; see
+  // scripts/autofix-drift-checks.ts.
+  "Tauri package alignment": "tauri_alignment",
+  "CLI sharded registry and derived runtime guard": "cli_registry_guard",
+  "MCP app derived outputs guard": "mcp_app_outputs_guard",
+  "Visual sandbox document tests": "visual_sandbox_guard",
+  "Capability catalog drift guard": "capability_catalog_guard",
+  "Route tree drift guard": "route_tree_guard",
 };
 const withoutStepId = (step: Step): Step => {
   if (stepIds[step.name] === undefined || step["id"] !== stepIds[step.name]) {
@@ -1064,6 +1072,24 @@ const expectScope = ({
       delete migrated["env"];
     } else {
       migrated["env"] = environment;
+    }
+  }
+  // A leg's drift signal for the autofix request is an output of its own
+  // (scripts/autofix-drift-checks.ts); scripts/autofix-drift-checks.test.ts
+  // owns its value, so compare the remaining scope.
+  for (const side of [migrated, originalScope]) {
+    const outputs = side["outputs"];
+    if (outputs === undefined) {
+      continue;
+    }
+    const { fixable: _fixable, ...rest } = v.parse(
+      v.record(v.string(), v.unknown()),
+      outputs,
+    );
+    if (Object.keys(rest).length === 0) {
+      delete side["outputs"];
+    } else {
+      side["outputs"] = rest;
     }
   }
   expect(migrated).toEqual(originalScope);

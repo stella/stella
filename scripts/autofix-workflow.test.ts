@@ -296,13 +296,10 @@ describe("changed-file autofix boundary", () => {
   test("autofixes only same-repository pull requests through the app", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
 
-    expect(job).toContain(
-      "github.event.pull_request.head.repo.full_name == github.repository",
-    );
-    expect(job).toContain(
-      "github.event.pull_request.user.login != 'dependabot[bot]'",
-    );
-    expect(job).toContain(`ref: \${{ github.event.pull_request.head.sha }}`);
+    // CI dispatches the request; the scope job re-reads the pull request.
+    expect(job).toContain(".head.repo.full_name == $repository");
+    expect(job).toContain('.user.login != "dependabot[bot]"');
+    expect(job).toContain(`ref: \${{ needs.regenerate-scope.outputs.head }}`);
     expect(job).toContain("persist-credentials: false");
     expect(job).toContain('NPM_TOKEN: ""');
     expect(job).not.toContain("secrets.");
@@ -678,7 +675,7 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(0, derivedJob)).toContain("checks: read");
     expect(job.slice(0, settledStep)).toContain("fetch-depth: 21");
     expect(job.slice(settledStep, planStep)).toContain(
-      "github.event.action == 'synchronize'",
+      "if: steps.planner.outputs.ready == 'true'",
     );
     expect(job.slice(settledStep, planStep)).toContain(
       "scripts/autofix-push-scope.ts settled",

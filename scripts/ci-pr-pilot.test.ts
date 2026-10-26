@@ -301,6 +301,7 @@ test("off and unset preserve today's job plan across every event and depth", asy
         "ci-quick-checks",
         "code-quality-api-cancel",
         "code-quality-web-rest-cancel",
+        "autofix-dispatch",
         "pr-heavy-gate",
       ]),
     ].toSorted(),
@@ -550,6 +551,7 @@ test("pilot pushes execute only the fast allowlist and its generated-input prere
     if (
       allowed.includes(name) &&
       !name.endsWith("-cancel") &&
+      name !== "autofix-dispatch" &&
       evaluate(
         original.jobs[name]?.if ?? "true",
         conditionContext("normal-v1", "pull_request", "fast"),

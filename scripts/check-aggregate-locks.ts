@@ -1,5 +1,11 @@
 import { panic } from "better-result";
-import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -155,6 +161,16 @@ export const checkAggregateLocks = () => {
     rekeys: readAggregateLockRekeys(),
   });
 };
+
+/** Only stale committed rows can be safely pruned by changed-file autofix. */
+export const hasPrunableAggregateLockBaselineDrift = (
+  problems: readonly string[],
+) =>
+  problems.length > 0 &&
+  problems.every((problem) =>
+    problem.startsWith("Stale aggregate lock baseline row:"),
+  );
+
 if (import.meta.main) {
   if (Bun.argv.includes("--generate")) {
     const files = git(["ls-files"])
@@ -198,6 +214,10 @@ if (import.meta.main) {
     );
   } else {
     const problems = checkAggregateLocks();
+    const output = process.env["GITHUB_OUTPUT"];
+    if (output && hasPrunableAggregateLockBaselineDrift(problems)) {
+      appendFileSync(output, "fixable=true\n");
+    }
     if (problems.length) {
       panic(problems.join("\n"));
     }

@@ -7,6 +7,7 @@ import {
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
 import {
   aggregateLockSourceIncluded,
+  hasPrunableAggregateLockBaselineDrift,
   parseAggregateLockBaseline,
   parseAggregateLockGitBatch,
 } from "./check-aggregate-locks.ts";
@@ -30,6 +31,39 @@ test("requires a reason for each baseline occurrence", () => {
   expect(() =>
     parseAggregateLockBaseline('[{"file":"x","fingerprint":"y","count":1}]'),
   ).toThrow("Invalid key");
+});
+
+test("only stale baseline rows are eligible for automatic pruning", () => {
+  const staleBaseline = [
+    {
+      file: "apps/api/src/old.ts",
+      fingerprint: "abc",
+      count: 1,
+      reason: "Removed legacy acquisition",
+    },
+  ];
+  const staleProblems = aggregateLockBaselineProblems({
+    actual: [],
+    baseline: staleBaseline,
+  });
+  expect(staleProblems).toEqual([
+    "Stale aggregate lock baseline row: apps/api/src/old.ts:abc",
+  ]);
+  expect(hasPrunableAggregateLockBaselineDrift(staleProblems)).toBe(true);
+  for (const problems of [
+    [],
+    ["Unowned aggregate lock: apps/api/src/new.ts:def"],
+    [
+      "Stale aggregate lock baseline row: apps/api/src/old.ts:abc",
+      "Unowned aggregate lock: apps/api/src/new.ts:def",
+    ],
+    [
+      "Invalid aggregate lock baseline row: apps/api/src/old.ts:abc",
+      "Stale aggregate lock baseline row: apps/api/src/old.ts:abc",
+    ],
+  ]) {
+    expect(hasPrunableAggregateLockBaselineDrift(problems)).toBe(false);
+  }
 });
 
 test("reads batch source bodies by bytes and preserves missing paths", () => {

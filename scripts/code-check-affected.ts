@@ -25,6 +25,7 @@ import {
   type CodeCheckLeg,
   ownsCodeCheckPath,
 } from "../packages/scripts/src/code-quality-partition";
+import { fixableCodeCheckTasks } from "./autofix-drift-checks";
 import { RUST_TEST_DISCOVERY_INPUTS } from "./check-rust-test-determinism";
 import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
@@ -691,6 +692,21 @@ const escapeAnnotationData = (value: string): string =>
 const escapeAnnotationProperty = (value: string): string =>
   escapeAnnotationData(value).replaceAll(":", "%3A").replaceAll(",", "%2C");
 
+/**
+ * Write `fixable=true` to the step outputs when a failed task can be drift
+ * the changed-file autofix repairs (scripts/autofix-drift-checks.ts). Only
+ * `true` is written: a delegated full check shares the output file, and its
+ * answer must stand.
+ */
+export const recordFixableFailure = (
+  summary: CheckFailureSummary,
+  output = process.env["GITHUB_OUTPUT"],
+) => {
+  if (output && fixableCodeCheckTasks(summary.tasks.map(({ task }) => task))) {
+    appendFileSync(output, "fixable=true\n");
+  }
+};
+
 type FormatCheckFailureOptions = {
   summary: CheckFailureSummary;
   annotations: boolean;
@@ -777,9 +793,11 @@ export const executeCheckCommands = async ({
       );
       continue;
     }
+    const summary = summarizeCheckFailure(failure);
+    recordFixableFailure(summary);
     write(
       formatCheckFailure({
-        summary: summarizeCheckFailure(failure),
+        summary,
         annotations: process.env["GITHUB_ACTIONS"] === "true",
       }),
     );
@@ -1589,9 +1607,11 @@ export const failureExitCode = (code: number | null | undefined) =>
 if (import.meta.main) {
   const result = await main();
   if (result.isErr()) {
+    const summary = summarizeCheckFailure(result.error);
+    recordFixableFailure(summary);
     process.stdout.write(
       formatCheckFailure({
-        summary: summarizeCheckFailure(result.error),
+        summary,
         annotations: process.env["GITHUB_ACTIONS"] === "true",
       }),
     );
