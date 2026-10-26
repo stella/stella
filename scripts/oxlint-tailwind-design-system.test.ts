@@ -137,7 +137,7 @@ const workspaceThemeFixture = async (
   await mkdir(path.join(workspace, "src"), { recursive: true });
   await mkdir(path.dirname(workspaceLink), { recursive: true });
   await symlink(workspace, workspaceLink, "dir");
-  const writeManifest = (version: string) =>
+  const writeManifest = async (version: string) =>
     writeFile(
       path.join(workspace, "package.json"),
       JSON.stringify({ name: "@fixture/theme", version, ...manifest }),
