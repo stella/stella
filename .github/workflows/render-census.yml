@@ -1,0 +1,194 @@
+name: Record render census
+
+on:
+  workflow_dispatch:
+    inputs:
+      flows:
+        description: All flows or comma-separated matter,document-editor,tabular-review,chat,search
+        type: string
+        default: all
+      mode:
+        description: Record measurements; budget comparison is not implemented
+        type: choice
+        default: census
+        options: [census, budget]
+  workflow_call:
+    inputs:
+      flows:
+        type: string
+        default: all
+      mode:
+        type: string
+        default: census
+
+defaults:
+  run:
+    shell: bash
+
+permissions: {}
+
+concurrency:
+  group: render-census-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  render-census:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      NODE_ENV: development
+      STELLA_LOCAL_DEV: "1"
+      USE_MOCK_AI: "true"
+      STELLA_COLLAB_SERVICE_TOKEN: local-collab-service-token-at-least-32-chars
+      E2E_WEB_URL: http://localhost:3000
+      E2E_API_URL: http://localhost:3001
+      E2E_EXPECT_DEV_ROUTES: "true"
+      CENSUS_FLOWS: ${{ inputs.flows }}
+    steps:
+      - name: Validate requested measurement
+        timeout-minutes: 1
+        env:
+          CENSUS_MODE: ${{ inputs.mode }}
+        run: |
+          if [[ "$CENSUS_MODE" != census ]]; then
+            echo "::error::Unsupported render measurement mode '$CENSUS_MODE'; only census is implemented. Budget comparison requires committed budgets and is not available yet."
+            exit 1
+          fi
+          if [[ "$CENSUS_FLOWS" == all ]]; then
+            exit 0
+          fi
+          if [[ -z "$CENSUS_FLOWS" || "$CENSUS_FLOWS" == ,* || "$CENSUS_FLOWS" == *, || "$CENSUS_FLOWS" == *,,* ]]; then
+            echo "::error::flows must be all or a comma-separated list of supported flow names"
+            exit 1
+          fi
+          if [[ ! "$CENSUS_FLOWS" =~ ^[a-z]+(-[a-z]+)*(,[a-z]+(-[a-z]+)*)*$ ]]; then
+            echo "::error::flows must contain comma-separated flow names"
+            exit 1
+          fi
+
+      - name: Checkout tested revision
+        timeout-minutes: 2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate selected flows against registered files
+        timeout-minutes: 1
+        run: |
+          if [[ "$CENSUS_FLOWS" == all ]]; then
+            exit 0
+          fi
+          IFS=, read -ra selected_flows <<< "$CENSUS_FLOWS"
+          for flow in "${selected_flows[@]}"; do
+            if [[ ! -f "apps/web/e2e/agent/render-census/$flow.flow.ts" ]]; then
+              echo "::error::Unsupported render census flow '$flow'"
+              exit 1
+            fi
+          done
+
+      - name: Setup Bun
+        timeout-minutes: 2
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 3
+        env:
+          NPM_TOKEN: ""
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Prepare fixture environment
+        timeout-minutes: 1
+        run: |
+          cp apps/api/.env.example apps/api/.env
+          cp apps/web/.env.example apps/web/.env
+          mkdir -p .stella-dev
+
+      - name: Prepare generated sources
+        timeout-minutes: 3
+        env:
+          STELLA_VERIFY: prepare
+        run: bun scripts/ci-generated-sources.ts prepare
+
+      - name: Start dev-runtime infrastructure and mock API
+        timeout-minutes: 6
+        uses: ./.github/actions/setup-e2e-stack
+
+      - name: Apply the local dev seed
+        timeout-minutes: 5
+        working-directory: apps/api
+        run: bun --env-file=.env.example run db:seed-local
+
+      - name: Start web and collaboration dev runtimes
+        timeout-minutes: 1
+        run: |
+          STELLA_API_URL=http://localhost:3001 \
+          STELLA_COLLAB_MODE=single-process \
+          STELLA_COLLAB_PORT=3002 \
+            nohup bun apps/collab/src/index.ts > /tmp/collab.log 2>&1 &
+          echo $! > /tmp/collab.pid
+          cd apps/web
+          VITE_FEATURE_FOLIO_COLLAB=true \
+          VITE_COLLAB_URL=ws://localhost:3002 \
+            nohup bun --bun vite --port 3000 > /tmp/web.log 2>&1 &
+          echo $! > /tmp/web.pid
+
+      - name: Wait for dev runtimes
+        timeout-minutes: 2
+        run: |
+          for endpoint in http://localhost:3000 http://localhost:3002/readyz; do
+            bash scripts/retry.sh curl --fail --silent --show-error --retry 45 --retry-connrefused \
+              --retry-all-errors --retry-delay 1 --retry-max-time 60 --max-time 2 \
+              "$endpoint" > /dev/null
+          done
+
+      - name: Prepare pinned Playwright browser image
+        timeout-minutes: 2
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
+
+      - name: Verify render counting and React Refresh
+        timeout-minutes: 3
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
+            env STELLA_RENDER_CENSUS_HMR=1 \
+            bun --filter @stll/web test:e2e -- render-probe.spec.ts --workers=1 --project=chromium
+
+      - name: Record render census
+        timeout-minutes: 10
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
+            env STELLA_AGENT_CAPTURE_LOG=.stella-dev/captures.jsonl \
+            bun apps/web/e2e/agent/drive.ts census --flows "$CENSUS_FLOWS"
+
+      - name: Write census job summary
+        if: always()
+        timeout-minutes: 1
+        run: |
+          shopt -s nullglob
+          reports=(.stella-dev/evidence/*/census.md)
+          if (( ${#reports[@]} == 0 )); then
+            echo "Render census produced no measurements. Review the failed setup, input validation, or flow step above." >> "$GITHUB_STEP_SUMMARY"
+          else
+            for report in "${reports[@]}"; do
+              cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+
+      - name: Upload census evidence
+        if: always()
+        timeout-minutes: 2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: render-census-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            .stella-dev/evidence/
+            apps/web/e2e/test-results/
+            /tmp/api.log
+            /tmp/web.log
+            /tmp/collab.log
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
