@@ -95,6 +95,7 @@ test("package and probe execution precede conditional write credential minting",
     ),
   ).toEqual({
     "permission-contents": "write",
+    "permission-issues": "write",
     "permission-pull-requests": "write",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");

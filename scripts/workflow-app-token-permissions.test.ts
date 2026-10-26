@@ -22,6 +22,7 @@ const INSTALLATION_GRANTS: Readonly<
   // stella-provenance-updater
   "secrets.PROVENANCE_APP_ID": {
     contents: "write",
+    issues: "write",
     "pull-requests": "write",
   },
   // stella-release-deployer

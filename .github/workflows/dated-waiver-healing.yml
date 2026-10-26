@@ -84,6 +84,7 @@ jobs:
             ${{ vars.DATED_WAIVER_FIX_REPOSITORY }}
           permission-contents: write
           permission-pull-requests: write
+          permission-issues: write
 
       - name: Publish healing results
         timeout-minutes: 15
