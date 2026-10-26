@@ -159,6 +159,7 @@ describe("global rule inputs", () => {
     const fixture = `checks:
   - name: Unclassified fixture
     if: \${{ true }}
+    timeout-minutes: 1
     run: bun scripts/global-rule-inputs.test.ts
 `;
     expect(getUnclassifiedScriptPaths(getRunCommands(() => fixture))).toContain(
