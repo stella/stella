@@ -653,9 +653,14 @@ const readSubdivisionPath = (
   }
 };
 
+type ActRefusal = Extract<
+  ProvisionCitationResolution,
+  { status: "no_act" | "ambiguous_act" }
+>;
+
 type ActResolution =
   | { kind: "work"; work: WorkIdentifier; unit: SectionUnit | undefined }
-  | { kind: "refused"; resolution: ProvisionCitationResolution };
+  | { kind: "refused"; resolution: ActRefusal };
 
 /**
  * The act the rest of the citation names: a gazette number outright, else
@@ -820,4 +825,85 @@ export const resolveProvisionCitation = ({
     anchor: renderAnchor(profile, resolved),
     citation: renderCitation(profile, resolved, resolved.workIdentifier),
   };
+};
+
+type ActCitationResolution =
+  | { status: "resolved"; work: WorkIdentifier; workIdentifier: string }
+  /** `actName` is the words that name the act, any provision set aside. */
+  | { status: "no_act"; actName: string }
+  | Extract<ProvisionCitationResolution, { status: "ambiguous_act" }>;
+
+/** Brackets and separators around an act name once its provision is cut. */
+const NAME_EDGES = /^[\s[(,;:]+|[\s\]),;:]+$/gu;
+
+const actNameOf = (text: string) => normalize(text).replaceAll(NAME_EDGES, "");
+
+/**
+ * The act a citation names, read as `resolveProvisionCitation` reads it: by
+ * gazette number, alias or title for the citing date. A provision printed
+ * with it (`§ 2 odst. 4 písm. b) zákona …`) is set aside, so a citation
+ * names its act with or without one.
+ */
+export const resolveActCitation = ({
+  text,
+  profile,
+  citedOn,
+}: ResolveOptions): ActCitationResolution => {
+  const resolver = compiledFor(profile);
+  const normalized = normalize(text);
+  const section = resolver.section.exec(normalized);
+  const before =
+    section === null ? normalized : normalized.slice(0, section.index);
+  const after =
+    section === null
+      ? ""
+      : normalized.slice(
+          readSubdivisionPath(
+            normalized,
+            section.index + section[0].length,
+            resolver,
+          ).end,
+        );
+  const act = resolveAct(`${before} ${after}`, resolver, profile, citedOn);
+  if (act.kind === "work") {
+    return {
+      status: "resolved",
+      work: act.work,
+      workIdentifier: formatWorkIdentifier(act.work),
+    };
+  }
+  switch (act.resolution.status) {
+    case "no_act": {
+      // An act's name follows the provision it is cited for (`§ 2 zákona
+      // o …`); what precedes it is a lead-in (`Z § 2 …`, `ustanovení § 2`).
+      const named = actNameOf(after);
+      return {
+        status: "no_act",
+        actName: named === "" ? actNameOf(before) : named,
+      };
+    }
+    case "ambiguous_act":
+      return act.resolution;
+    default:
+      act.resolution satisfies never;
+      return panic("Unknown act resolution");
+  }
+};
+
+/**
+ * The name with its head in the nominative (`zákona o obětech trestných
+ * činů` → `zákon o obětech trestných činů`), the form a stored title states;
+ * null when the name is not a head of the profile followed by more words.
+ */
+export const nominativeTitle = (
+  name: string,
+  profile: JurisdictionProfile,
+): string | null => {
+  const [head = "", ...words] = normalize(name).split(" ");
+  const lowered = head.toLowerCase();
+  const spec = profile.titleHeads.find(({ forms }) => forms.includes(lowered));
+  if (spec === undefined || words.length === 0) {
+    return null;
+  }
+  return [spec.nominative, ...words].join(" ");
 };

@@ -7,6 +7,8 @@ import {
 } from "./provision-citation-profile";
 import {
   anchorProvisionCitation,
+  nominativeTitle,
+  resolveActCitation,
   resolveProvisionCitation,
 } from "./provision-citation-resolve";
 import { SK_PROFILE } from "./sk-provision-citation-profile";
@@ -452,5 +454,153 @@ describe("anchorProvisionCitation", () => {
         workIdentifier,
       }),
     ).toBeNull();
+  });
+});
+
+/** III. ÚS 2900/26 (6 October 2026), each citation as the decision prints it. */
+const CONSTITUTIONAL_COURT_ACT_CITATIONS = [
+  {
+    printed: "(§ 42 odst. 1 zákona o Ústavním soudu)",
+    anchor: "par_42-odst_1",
+  },
+  {
+    printed: "(které stanoví § 34 zákona o Ústavním soudu)",
+    anchor: "par_34",
+  },
+  { printed: "(§ 30 odst. 1 zákona o Ústavním soudu", anchor: "par_30-odst_1" },
+  {
+    printed: "[§ 43 odst. 1 písm. a) zákona o Ústavním soudu]",
+    anchor: "par_43-odst_1-pism_a",
+  },
+  {
+    printed:
+      "za přiměřeného použití § 43 odst. 1 písm. a) zákona o Ústavním soudu",
+    anchor: "par_43-odst_1-pism_a",
+  },
+] as const;
+
+const DECISION_DATE = "2026-10-06";
+
+describe("a Constitutional Court decision's own citations", () => {
+  test.each(CONSTITUTIONAL_COURT_ACT_CITATIONS)(
+    "$printed",
+    ({ printed, anchor }) => {
+      expect(resolved(printed, DECISION_DATE)).toMatchObject({
+        workIdentifier: "182/1993 Sb.",
+        anchor,
+      });
+      expect(
+        resolveActCitation({
+          text: printed,
+          profile: CZ_PROFILE,
+          citedOn: DECISION_DATE,
+        }),
+      ).toEqual({
+        status: "resolved",
+        work: { number: 182, year: 1993, collection: "Sb." },
+        workIdentifier: "182/1993 Sb.",
+      });
+    },
+  );
+});
+
+describe("resolveActCitation", () => {
+  const readAct = (text: string, citedOn = TODAY) =>
+    resolveActCitation({ text, profile: CZ_PROFILE, citedOn });
+
+  test("names an act with or without the provision printed before it", () => {
+    for (const text of [
+      "zákona o Ústavním soudu",
+      "§ 43 odst. 1 písm. a) zákona o Ústavním soudu",
+      "[§ 43 odst. 1 písm. a) zákona o Ústavním soudu]",
+      "zákona č. 182/1993 Sb.",
+    ]) {
+      expect(readAct(text)).toMatchObject({
+        status: "resolved",
+        workIdentifier: "182/1993 Sb.",
+      });
+    }
+    expect(readAct("čl. 36 odst. 1 Listiny")).toMatchObject({
+      workIdentifier: "2/1993 Sb.",
+    });
+    expect(readAct("Ústavy")).toMatchObject({ workIdentifier: "1/1993 Sb." });
+  });
+
+  test("reads a recodified title for the citing date", () => {
+    expect(readAct("občanského zákoníku", "2010-06-30")).toMatchObject({
+      workIdentifier: "40/1964 Sb.",
+    });
+    expect(readAct("občanského zákoníku")).toMatchObject({
+      workIdentifier: "89/2012 Sb.",
+    });
+  });
+
+  test("hands back the act name, provision and brackets set aside, when the profile lists no such act", () => {
+    // Zákon č. 45/2013 Sb., o obětech trestných činů: named by the short
+    // title its own official title states in parentheses.
+    expect(
+      readAct("Z § 2 odst. 4 písm. b) zákona o obětech trestných činů"),
+    ).toEqual({ status: "no_act", actName: "zákona o obětech trestných činů" });
+    expect(
+      readAct("[§ 2 odst. 4 písm. b) zákona o obětech trestných činů]"),
+    ).toEqual({ status: "no_act", actName: "zákona o obětech trestných činů" });
+  });
+
+  test("two named acts are refused, never guessed", () => {
+    expect(readAct("zákoníku práce a zákona o Ústavním soudu").status).toBe(
+      "ambiguous_act",
+    );
+  });
+});
+
+describe("nominativeTitle", () => {
+  test.each([
+    ["zákona o obětech trestných činů", "zákon o obětech trestných činů"],
+    ["zákonem o obětech trestných činů", "zákon o obětech trestných činů"],
+    ["zák. o obětech trestných činů", "zákon o obětech trestných činů"],
+    ["Zákona o obětech trestných činů", "zákon o obětech trestných činů"],
+    ["zákon o obětech trestných činů", "zákon o obětech trestných činů"],
+    ["zákoníku práce", "zákoník práce"],
+  ])("%s reads as %s", (name, nominative) => {
+    expect(nominativeTitle(name, CZ_PROFILE)).toBe(nominative);
+  });
+
+  test("a name that opens with no title head, or is the head alone, has none", () => {
+    expect(nominativeTitle("Listiny základních práv", CZ_PROFILE)).toBeNull();
+    expect(nominativeTitle("zákona", CZ_PROFILE)).toBeNull();
+    expect(nominativeTitle("unknown", CZ_PROFILE)).toBeNull();
+  });
+
+  test("Slovak heads decline in Slovak", () => {
+    expect(nominativeTitle("zákonom o obetiach", SK_PROFILE)).toBe(
+      "zákon o obetiach",
+    );
+    expect(nominativeTitle("zákonem o obetiach", SK_PROFILE)).toBeNull();
+  });
+});
+
+describe("title heads", () => {
+  test("every short title the profile spells `zákon o …` spells every head form", () => {
+    // Listing the forms by hand is how one goes missing: `zákonu o
+    // zaměstnanosti` once read as text.
+    const [head] = CZ_PROFILE.titleHeads;
+    expect(head.nominative).toBe("zákon");
+    const titles: readonly ActTitleSpec[] = CZ_PROFILE.titles;
+    const subjects = titles.flatMap(({ spellings }) =>
+      spellings.flatMap((spelling) =>
+        spelling.startsWith("zákon o ")
+          ? [spelling.slice("zákon ".length)]
+          : [],
+      ),
+    );
+    expect(subjects).toContain("o Ústavním soudu");
+    for (const subject of subjects) {
+      const entry = titles.find(({ spellings }) =>
+        spellings.includes(`zákon ${subject}`),
+      );
+      for (const form of head.forms) {
+        expect(entry?.spellings).toContain(`${form} ${subject}`);
+      }
+    }
   });
 });

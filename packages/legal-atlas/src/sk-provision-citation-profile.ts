@@ -325,6 +325,17 @@ export const SK_PROFILE = {
     },
   ],
 
+  titleHeads: [
+    {
+      nominative: "zákon",
+      forms: ["zákon", "zákona", "zákonu", "zákonom", "zákone", "zák."],
+    },
+    {
+      nominative: "zákonník",
+      forms: ["zákonník", "zákonníka", "zákonníku", "zákonníkom"],
+    },
+  ],
+
   ordinalWords: {
     prvá: "1",
     prvej: "1",

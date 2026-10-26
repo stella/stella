@@ -19,6 +19,7 @@ import type {
   ActTitleSpec,
   CollectionSpec,
   JurisdictionProfile,
+  TitleHeadSpec,
   WorkIdentifier,
 } from "./provision-citation-profile";
 
@@ -174,19 +175,25 @@ const HUMAN_RIGHTS_CONVENTION = [
   `${noun} o ochraně lidských práv`,
 ]);
 
+/** `zákon` in every case a citing sentence puts it in, plus the `zák.` shorthand. */
+const ACT_HEAD = {
+  nominative: "zákon",
+  forms: ["zákon", "zákona", "zákonu", "zákonem", "zákoně", "zák."],
+} as const satisfies TitleHeadSpec;
+
+/** `zákoník práce`, `zákoníku práce`: the code a short title can open with. */
+const CODE_HEAD = {
+  nominative: "zákoník",
+  forms: ["zákoník", "zákoníku", "zákoníkem"],
+} as const satisfies TitleHeadSpec;
+
 /**
- * A short title `zákon o …` in every case a citing sentence puts it in, plus
- * the `zák. o …` shorthand. Listing the forms by hand is how one of them goes
- * missing and a citation reads as text.
+ * A short title `zákon o …` in every form `ACT_HEAD` declines it to. Listing
+ * the forms by hand is how one of them goes missing and a citation reads as
+ * text.
  */
-const actTitleForms = (subject: string): readonly string[] => [
-  `zákon ${subject}`,
-  `zákona ${subject}`,
-  `zákonu ${subject}`,
-  `zákonem ${subject}`,
-  `zákoně ${subject}`,
-  `zák. ${subject}`,
-];
+const actTitleForms = (subject: string): readonly string[] =>
+  ACT_HEAD.forms.map((head) => `${head} ${subject}`);
 
 export const CZ_PROFILE = {
   jurisdiction: "CZE",
@@ -752,22 +759,14 @@ export const CZ_PROFILE = {
       citedFrom: "1996-07-01",
     },
     ...succession({
-      spellings: [
-        "zákon o zaměstnanosti",
-        "zákona o zaměstnanosti",
-        "zákoně o zaměstnanosti",
-      ],
+      spellings: actTitleForms("o zaměstnanosti"),
       older: sb(1, 1991),
       olderFrom: "1991-02-01",
       newer: sb(435, 2004),
       on: "2004-10-01",
     }),
     ...succession({
-      spellings: [
-        "zákon o soudech a soudcích",
-        "zákona o soudech a soudcích",
-        "zákoně o soudech a soudcích",
-      ],
+      spellings: actTitleForms("o soudech a soudcích"),
       older: sb(335, 1991),
       olderFrom: "1991-09-01",
       newer: sb(6, 2002),
@@ -775,8 +774,7 @@ export const CZ_PROFILE = {
     }),
     ...succession({
       spellings: [
-        "zákon o obcích",
-        "zákona o obcích",
+        ...actTitleForms("o obcích"),
         "obecní zřízení",
         "obecního zřízení",
       ],
@@ -844,10 +842,7 @@ export const CZ_PROFILE = {
       unit: "article",
     },
     {
-      spellings: [
-        "zákon o soudních exekutorech a exekuční činnosti",
-        "zákona o soudních exekutorech a exekuční činnosti",
-      ],
+      spellings: actTitleForms("o soudních exekutorech a exekuční činnosti"),
       identifier: sb(120, 2001),
     },
     {
@@ -901,6 +896,8 @@ export const CZ_PROFILE = {
       on: "1996-07-01",
     }),
   ],
+
+  titleHeads: [ACT_HEAD, CODE_HEAD],
 
   ordinalWords: {
     první: "1",
