@@ -523,14 +523,17 @@ const handleCreateTool: TypedMcpToolHandler<
 
   // The id is the primary key, unique across organizations, so the
   // organization is part of it; visibility is hashed as stored, so an omitted
-  // one and "private" name the same mark.
+  // one and "private" name the same mark. It hashes the call as the agent
+  // made it, not where its passages were placed: a re-parse between a call
+  // and its retry moves the positions and their context, and the retry must
+  // still name the mark the first call made.
   const storedVisibility = visibility ?? "private";
   const shared = {
     requestId: createRequestIdFor({
       organizationId: context.organizationId,
       request: {
         mark,
-        spans: located.spans,
+        passages,
         target_id,
         target_type,
         visibility: storedVisibility,
@@ -552,6 +555,9 @@ const handleCreateTool: TypedMcpToolHandler<
       body,
       organizationId: context.organizationId,
       recordAuditEvent: context.recordAuditEvent,
+      // A retry may find the passages elsewhere after a re-parse; the words
+      // are the request, and the mark keeps its first placement.
+      replayIdentity: "words",
       safeDb: context.safeDb,
       userId: context.userId,
     }),

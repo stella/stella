@@ -1,4 +1,18 @@
+import { panic } from "better-result";
+
+import { readerTextQuoteKey } from "@stll/legal-ast/reader-text-quote";
+
 import type { CreateAnnotationRequest } from "@/api/lib/legal-search/reader-annotations/schema";
+
+/**
+ * What a replayed request must share with the stored mark besides its look.
+ * `spans`: the exact positions and context, from a reader client that
+ * measured them and resends them as they were. `words`: the quoted words
+ * only, from a request that named its passages by their words and had them
+ * placed server-side, where a re-parse between a call and its retry can move
+ * the positions; the mark keeps those of the first successful create.
+ */
+export type AnnotationReplayIdentity = "spans" | "words";
 
 type StoredAnnotation = {
   blockAnchorId: string;
@@ -48,9 +62,11 @@ const spanKey = ({
  */
 export const storedAnnotationMatchesRequest = ({
   body,
+  identity,
   rows,
 }: {
   body: CreateAnnotationRequest;
+  identity: AnnotationReplayIdentity;
   rows: readonly StoredAnnotation[];
 }): boolean => {
   if (rows.length !== body.spans.length) {
@@ -87,7 +103,18 @@ export const storedAnnotationMatchesRequest = ({
   ) {
     return false;
   }
-  const expectedSpans = body.spans.map(spanKey).toSorted();
-  const storedSpans = rows.map(spanKey).toSorted();
+  const keyOf = (span: (typeof body.spans)[number] | StoredAnnotation) => {
+    switch (identity) {
+      case "spans":
+        return spanKey(span);
+      case "words":
+        return readerTextQuoteKey(span.quote);
+      default:
+        identity satisfies never;
+        return panic(`Unhandled replay identity: ${String(identity)}`);
+    }
+  };
+  const expectedSpans = body.spans.map(keyOf).toSorted();
+  const storedSpans = rows.map(keyOf).toSorted();
   return expectedSpans.every((span, index) => span === storedSpans.at(index));
 };

@@ -95,6 +95,12 @@ const compact = (raw: string): CompactText => {
 
 const compactText = (raw: string): string => compact(raw).text;
 
+/**
+ * What identifies a quote's words, whatever whitespace they were spelled
+ * with: two quotes with the same key are the same words.
+ */
+export const readerTextQuoteKey = (quote: string): string => compactText(quote);
+
 type CompactSpan = { start: number; end: number };
 
 const compactOccurrences = (haystack: string, needle: string): number[] => {
@@ -186,21 +192,18 @@ export const readerTextQuoteMatchesAt = (
 };
 
 /**
- * Whether the stored context agrees with the text around an occurrence.
- * Only the overlap is compared, which is the whole stored context except at
- * the start or end of the document, where there is less text to compare.
+ * Whether the text around an occurrence holds the whole stored context. A
+ * re-segmented text keeps every word around a passage, across whatever block
+ * boundary now falls there, so the passage a mark was made on always has all
+ * of it; an occurrence with less text on a side, at the start or end of the
+ * document, is another passage. An empty stored context asks for nothing.
  */
 const contextAgrees = (
   stored: string,
   actual: string,
   side: "before" | "after",
-): boolean => {
-  const length = Math.min(stored.length, actual.length);
-  return side === "before"
-    ? stored.slice(stored.length - length) ===
-        actual.slice(actual.length - length)
-    : stored.slice(0, length) === actual.slice(0, length);
-};
+): boolean =>
+  side === "before" ? actual.endsWith(stored) : actual.startsWith(stored);
 
 type IndexedPiece = {
   anchorId: string;
@@ -211,14 +214,29 @@ type IndexedPiece = {
 
 type StoredQuote = { needle: string; prefix: string; suffix: string };
 
+/** The first compact unit at or after a raw offset, by binary search. */
+const compactIndexAtOrAfter = (rawIndex: number[], offset: number): number => {
+  let low = 0;
+  let high = rawIndex.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((rawIndex[middle] ?? Number.POSITIVE_INFINITY) < offset) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
+};
+
 /** The compact span a stored raw position covers, if it is the quote. */
 const storedSpanIn = (
   { rawIndex, text }: CompactText,
   { startOffset, endOffset }: ReaderTextQuoteSelector,
   needle: string,
 ): CompactSpan | null => {
-  const start = rawIndex.findIndex((index) => index >= startOffset);
-  if (start === -1) {
+  const start = compactIndexAtOrAfter(rawIndex, startOffset);
+  if (start === rawIndex.length) {
     return null;
   }
   const end = start + needle.length;
@@ -275,22 +293,33 @@ export type ReaderTextQuoteLocator = (
 export const createReaderTextQuoteLocator = (
   pieces: readonly ReaderTextPiece[],
 ): ReaderTextQuoteLocator => {
-  // Compacted on first use: a text nobody re-parsed reads only the blocks
-  // its marks name.
+  // Each block is compacted once, on first use, and read by both paths: a
+  // text nobody re-parsed reads only the blocks its marks name, however many
+  // marks a block holds.
+  const compacted = new Map<ReaderTextPiece, CompactText>();
+  const compactOf = (piece: ReaderTextPiece): CompactText => {
+    const existing = compacted.get(piece);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const text = compact(piece.text);
+    compacted.set(piece, text);
+    return text;
+  };
   let indexed: { pieces: IndexedPiece[]; stream: string } | null = null;
   const index = () => {
     if (indexed !== null) {
       return indexed;
     }
     let stream = "";
-    const indexedPieces = pieces.map(({ anchorId, text }) => {
-      const piece = {
-        anchorId,
-        compact: compact(text),
+    const indexedPieces = pieces.map((piece) => {
+      const indexedPiece = {
+        anchorId: piece.anchorId,
+        compact: compactOf(piece),
         streamStart: stream.length,
       };
-      stream += piece.compact.text;
-      return piece;
+      stream += indexedPiece.compact.text;
+      return indexedPiece;
     });
     indexed = { pieces: indexedPieces, stream };
     return indexed;
@@ -332,7 +361,7 @@ export const createReaderTextQuoteLocator = (
     if (raw === undefined) {
       return null;
     }
-    const piece = { anchorId: raw.anchorId, compact: compact(raw.text) };
+    const piece = { anchorId: raw.anchorId, compact: compactOf(raw) };
     const span = storedSpanIn(piece.compact, selector, quote.needle);
     if (
       span === null ||

@@ -218,6 +218,7 @@ const createWithoutContext = async (
       body,
       organizationId,
       recordAuditEvent: async () => await Promise.resolve(),
+      replayIdentity: "spans",
       safeDb: asTestRaw<SafeDb>(
         createMembershipSafeDb(testDb, {
           organizationId,
@@ -302,6 +303,42 @@ describe("reader marks across a re-parse of their decision", () => {
         quote: "przepisy ustawy.",
       },
     ]);
+  });
+
+  test("an agent's retry after a whitespace-only re-parse replays its mark", async () => {
+    const caller = await createCaller();
+    const call = (blocks: readonly Block[]) =>
+      handleMcpToolCall({
+        mode: "advanced",
+        toolName: "create_reader_annotation",
+        context: requestContext(caller, blocks),
+        args: {
+          target_type: "decision",
+          target_id: DECISION_ID,
+          mark: { kind: "highlight" },
+          passages: [{ anchor: "p-reasons-3", quote: "oddalona" }],
+        },
+      });
+    const first = asTestRaw<{ annotationId: string }>(
+      (await call(FIRST_PARSE)).structuredContent,
+    );
+    // The response was lost; meanwhile the text was re-parsed with other
+    // spacing, which moves the passage's offsets and its stored context.
+    const respaced = FIRST_PARSE.map((block) =>
+      block.anchorId === "p-reasons-3"
+        ? paragraph("p-reasons-3", "Skarga  została\noddalona.")
+        : block,
+    );
+    const retried = await call(respaced);
+
+    expect(retried.isError === true).toBe(false);
+    expect(
+      asTestRaw<{ annotationId: string }>(retried.structuredContent)
+        .annotationId,
+    ).toBe(first.annotationId);
+    expect((await listAfterReparse(caller, respaced)).annotations).toHaveLength(
+      1,
+    );
   });
 
   test("a mark saved without context is stored with none and placed like an older mark", async () => {

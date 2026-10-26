@@ -167,6 +167,89 @@ describe("reader marks across a re-parse", () => {
     ).toEqual({ status: "orphaned", reason: "quote_ambiguous" });
   });
 
+  test("never moves a mark onto the same words where its context is missing", () => {
+    // Made on "QUOTE" after "before"; the passage is gone and the document
+    // keeps the words only at its very start, with nothing before them.
+    const mark = markOn(
+      [{ anchorId: "p-1", text: "before QUOTE tail" }],
+      "p-1",
+      "QUOTE",
+    );
+
+    expect(
+      createReaderTextQuoteLocator([{ anchorId: "p-1", text: "QUOTE tail" }])(
+        mark,
+      ),
+    ).toEqual({ status: "orphaned", reason: "quote_not_found" });
+    expect(
+      createReaderTextQuoteLocator([
+        { anchorId: "p-1", text: "other words" },
+        { anchorId: "p-2", text: "QUOTE tail" },
+      ])(markOn([{ anchorId: "p-1", text: "QUOTE" }], "p-1", "QUOTE")),
+    ).toMatchObject({ status: "placed", blockAnchorId: "p-2" });
+  });
+
+  test("a split that leaves the twin at a block edge is not ambiguous", () => {
+    // Two occurrences; the reader marked the second. A split puts the first
+    // at the start of the document, where its prefix has nothing to match.
+    const original = [
+      {
+        anchorId: "p-1",
+        text: "art. 5 ustawy oraz dalej, a także art. 5 ustawy",
+      },
+    ];
+    const mark = markOn(original, "p-1", "art. 5 ustawy", 1);
+    const split = [
+      { anchorId: "p-1", text: "art. 5 ustawy oraz dalej," },
+      { anchorId: "p-2", text: "a także art. 5 ustawy" },
+    ];
+
+    expect(createReaderTextQuoteLocator(split)(mark)).toEqual({
+      status: "placed",
+      blockAnchorId: "p-2",
+      startOffset: 8,
+      endOffset: 21,
+    });
+  });
+
+  test("compacts each block once, however many marks it holds", () => {
+    // Work counted, not timed: every compaction reads the block's text once.
+    const words = Array.from(
+      { length: 2000 },
+      (_unused, index) => `słowo${String(index)}`,
+    );
+    const text = words.join(" ");
+    let reads = 0;
+    const block = {
+      anchorId: "p-1",
+      get text() {
+        reads += 1;
+        return text;
+      },
+    };
+    const marks = words
+      .filter((_word, index) => index % 20 === 0)
+      .map((word) => markOn([{ anchorId: "p-1", text }], "p-1", `${word} `));
+    const locate = createReaderTextQuoteLocator([block]);
+
+    for (const mark of marks) {
+      expect(locate(mark).status).toBe("placed");
+    }
+    expect(marks.length).toBe(100);
+    expect(reads).toBe(1);
+
+    // The other path, every mark searched for after a re-parse, shares it.
+    reads = 0;
+    const moved = createReaderTextQuoteLocator([
+      { anchorId: "p-0", text: "Nagłówek" },
+      block,
+    ]);
+    for (const mark of marks) {
+      expect(moved({ ...mark, blockAnchorId: "p-0" }).status).toBe("placed");
+    }
+    expect(reads).toBe(1);
+  });
+
   test("orphans a mark whose words the text no longer has", () => {
     expect(
       createReaderTextQuoteLocator([

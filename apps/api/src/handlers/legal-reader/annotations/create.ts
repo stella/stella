@@ -20,6 +20,8 @@ const createReaderAnnotation = createSafeRootHandler(
       body,
       organizationId: session.activeOrganizationId,
       recordAuditEvent,
+      // The reader measured the spans; a retry resends them unchanged.
+      replayIdentity: "spans",
       safeDb,
       userId: user.id,
     });
