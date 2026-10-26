@@ -66,6 +66,8 @@ const ANNOTATION_PROJECTION = {
   startOffset: legalReaderAnnotations.startOffset,
   endOffset: legalReaderAnnotations.endOffset,
   quote: legalReaderAnnotations.quote,
+  quotePrefix: legalReaderAnnotations.quotePrefix,
+  quoteSuffix: legalReaderAnnotations.quoteSuffix,
   body: legalReaderAnnotations.body,
   createdAt: legalReaderAnnotations.createdAt,
   updatedAt: legalReaderAnnotations.updatedAt,

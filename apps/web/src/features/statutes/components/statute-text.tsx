@@ -7,6 +7,7 @@ import { buildAnnotationAnchors } from "@stll/decision-reader/annotation-anchors
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
 import {
   BlockRenderer,
+  buildFulltextParagraphBlocks,
   FulltextFallback,
   READER_BLOCK_CHROME_REVEAL_CLASS,
 } from "@stll/decision-reader/document-ast-text";
@@ -68,6 +69,21 @@ const READER_STYLE = {
   fontSize: "var(--reader-body-size)",
   lineHeight: "var(--reader-body-line-height)",
 } as const;
+
+/**
+ * The blocks the statute reader draws marks in: the parsed provisions, or
+ * the plain text's paragraphs when the version has none. The marks are
+ * placed among these and drawn over these, so the two cannot disagree.
+ */
+export const statuteAnnotationBlocks = (
+  blocks: readonly Block[],
+  fulltext: string | null,
+): readonly Block[] => {
+  if (blocks.length > 0) {
+    return blocks;
+  }
+  return fulltext ? buildFulltextParagraphBlocks(fulltext) : [];
+};
 
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
@@ -144,7 +160,10 @@ export const StatuteText = ({
   }, [landingAnchorId]);
 
   if (blocks.length > 0) {
-    const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
+    const anchorsByPieceId = buildAnnotationAnchors(
+      annotationAnchors,
+      statuteAnnotationBlocks(blocks, fulltext),
+    );
     return (
       <article
         className="reader-statute text-card-foreground text-start"
@@ -206,7 +225,10 @@ export const StatuteText = ({
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorsByPieceId={buildAnnotationAnchors(annotationAnchors)}
+          anchorsByPieceId={buildAnnotationAnchors(
+            annotationAnchors,
+            statuteAnnotationBlocks(blocks, fulltext),
+          )}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />

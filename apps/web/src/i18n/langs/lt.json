@@ -4277,6 +4277,10 @@
         "undoShortcut": "Anuliuoti paryškinimo ar komentaro pakeitimą",
         "visibilityRestored": "Bendrinimas atkurtas"
       },
+      "orphaned": {
+        "description": "Šio dokumento tekstas buvo atnaujintas po jų sukūrimo, todėl pažymėtų ištraukų jame nepavyko vėl rasti. Jos tekste nerodomos.",
+        "summary": "{count, plural, one {# žymėjimas ar komentaras nebeatitinka teksto} few {# žymėjimai ar komentarai nebeatitinka teksto} many {# žymėjimo ar komentaro nebeatitinka teksto} other {# žymėjimų ir komentarų nebeatitinka teksto}}"
+      },
       "removeHighlight": "Pašalinti paryškinimą",
       "sharedBadge": "Bendrinama",
       "styleHighlight": "Paryškinimas",

@@ -22,7 +22,9 @@ import {
   READER_DOCUMENT_TARGET_TYPES,
 } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-annotations";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { createReaderTextQuoteLocator } from "@stll/legal-ast/reader-text-quote";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
@@ -210,6 +212,10 @@ type ListedMark = v.InferInput<
   typeof LIST_READER_ANNOTATIONS_PROJECTION
 >["annotations"][number];
 
+type ListedPassage = ListedMark["passages"][number];
+
+const NO_BLOCKS: readonly Block[] = [];
+
 type ListedMarks = { annotations: readonly ListedMark[] };
 
 /**
@@ -292,12 +298,51 @@ const handleListTool: TypedMcpToolHandler<
     );
   }
 
+  // A stored anchor names a position in the text the mark was made on; a
+  // re-parse since can have moved it onto other words. Each passage is
+  // placed by its quote in the text the agent reads now, or reported
+  // orphaned, never handed back at a position that names other words.
+  const blocks = await Result.tryPromise(async () =>
+    listed.value.items.length === 0 ? NO_BLOCKS : await target.readBlocks(),
+  );
+  if (Result.isError(blocks)) {
+    return internalFailureResult(
+      blocks.error,
+      "mcp.handleListTool.blocks_error",
+    );
+  }
+  const locate = createReaderTextQuoteLocator(
+    blocks.value.flatMap(readerAnchorPiecesOf),
+  );
+  const passageOf = (
+    row: (typeof listed.value.items)[number],
+  ): ListedPassage => {
+    const placement = locate(row);
+    switch (placement.status) {
+      case "placed":
+        return {
+          placement: "placed",
+          anchor: placement.blockAnchorId,
+          quote: row.quote,
+        };
+      case "orphaned":
+        return {
+          placement: "orphaned",
+          reason: placement.reason,
+          quote: row.quote,
+        };
+      default:
+        placement satisfies never;
+        return panic("Unhandled reader mark placement");
+    }
+  };
+
   // One entry per mark, as the reader shows it: the rows of a passage over
   // several paragraphs share a group and read as one.
   const marks = new Map<string, ListedMark>();
   for (const row of listed.value.items) {
     const key = row.groupId ?? row.id;
-    const passage = { anchor: row.blockAnchorId, quote: row.quote };
+    const passage = passageOf(row);
     const existing = marks.get(key);
     if (existing !== undefined) {
       existing.passages.push(passage);
@@ -686,8 +731,14 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     description:
       "List the highlights and comments on one case-law decision or one " +
       "statute version that the user can see: their own, and those " +
-      "colleagues shared. Each mark lists the passages it covers by block " +
-      "anchor and quote, oldest first.",
+      "colleagues shared, oldest first. Each mark lists the passages it " +
+      "covers with the quoted words. A placed passage names the block " +
+      "anchor where those words are in the document's current text. An " +
+      "orphaned passage has no place there: the text changed since the mark " +
+      "was made (or has no anchored blocks), and its words are gone " +
+      "(quote_not_found) or occur in several places nothing tells apart " +
+      "(quote_ambiguous). Report an orphaned passage by its quote, never at " +
+      "an anchor.",
     inputSchema: listArgsSchema,
     access: "read",
     permissions: { type: "all", permissions: { workspace: ["read"] } },

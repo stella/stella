@@ -9,6 +9,7 @@ import {
   READER_ANNOTATION_TARGET_TYPES,
   READER_ANNOTATION_VISIBILITIES,
 } from "@stll/api-contract/legal-reader-annotations";
+import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 
 import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
@@ -92,8 +93,9 @@ const verificationClaimHeld = (t: VerificationClaimColumns) =>
  * were placed on.
  *
  * The anchor is the block's stable anchor plus offsets into its rendered
- * text and the quoted text itself, so a re-parse that moves offsets can
- * still find the words.
+ * text, and the quoted text with a little context either side. A re-parse
+ * can renumber anchors and shift offsets, so the quote decides where a mark
+ * is drawn (`placeReaderMarks`); one whose words are gone is orphaned.
  *
  * A claim's comment is matter content: it names the matter, the run and the
  * claim, and every policy admits it only while the caller can open the
@@ -137,6 +139,17 @@ export const legalReaderAnnotations = p.pgTable(
     startOffset: p.integer("start_offset").notNull(),
     endOffset: p.integer("end_offset").notNull(),
     quote: p.varchar({ length: READER_ANNOTATION_QUOTE_MAX_LENGTH }).notNull(),
+    /** Text just before the quote in its block, to tell its occurrences
+     * apart; empty at the block start and on marks made before it was kept. */
+    quotePrefix: p
+      .varchar("quote_prefix", { length: READER_TEXT_QUOTE_CONTEXT_LENGTH })
+      .notNull()
+      .default(""),
+    /** Text just after the quote in its block; empty at the block end. */
+    quoteSuffix: p
+      .varchar("quote_suffix", { length: READER_TEXT_QUOTE_CONTEXT_LENGTH })
+      .notNull()
+      .default(""),
     body: p.varchar({ length: READER_ANNOTATION_BODY_MAX_LENGTH }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),

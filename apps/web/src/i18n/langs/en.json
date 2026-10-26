@@ -4277,6 +4277,10 @@
         "undoShortcut": "Undo highlight or comment change",
         "visibilityRestored": "Sharing restored"
       },
+      "orphaned": {
+        "description": "The text of this document was updated since these were made, and their passages could not be found in it again. They are not shown in the text.",
+        "summary": "{count, plural, one {# highlight or comment no longer matches the text} other {# highlights and comments no longer match the text}}"
+      },
       "removeHighlight": "Remove highlight",
       "sharedBadge": "Shared",
       "styleHighlight": "Highlight",

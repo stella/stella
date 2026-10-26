@@ -123,6 +123,10 @@
       "types": "./src/quote-locate.ts",
       "import": "./src/quote-locate.ts"
     },
+    "./reader-text-quote": {
+      "types": "./src/reader-text-quote.ts",
+      "import": "./src/reader-text-quote.ts"
+    },
     "./slovak-document-roles": {
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"

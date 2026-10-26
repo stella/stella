@@ -9,6 +9,7 @@ import {
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
 import type { ProvisionPlacementFailure } from "@stll/api-contract/provision-placement";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import {
   CZ_CAPTION_FORMS,
   detectDecisionCaption,
@@ -22,6 +23,7 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import {
   isApparatusRole,
+  parseDocumentAst,
   PUBLISHER_SUMMARY_ROLES,
 } from "@stll/legal-ast/document-ast";
 import type {
@@ -34,6 +36,7 @@ import {
   LINE_CONTINUATION_SEPARATOR,
   planBlockLineWrap,
 } from "@stll/legal-ast/line-wrap";
+import type { ReaderTextPiece } from "@stll/legal-ast/reader-text-quote";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
 
 import { buildFulltextParagraphBlocks } from "./document-ast-text";
@@ -417,6 +420,50 @@ export const decisionTopMatter = ({
   }
 
   return { abstract, legalSentence, liftedBlockIds };
+};
+
+/** The anchor a block of publisher field text is drawn and marked under. */
+export const supplementBlockAnchorId = (
+  pieceId: string,
+  start: number,
+): string => `${pieceId}:${String(start)}`;
+
+/**
+ * Every anchored run of text the decision reader draws marks in, in reading
+ * order: the headnote and abstract where they come from a publisher field,
+ * then the document's blocks, or its plain-text paragraphs when it has none.
+ * A stored mark is placed by its words among these, so a run the reader
+ * draws and this list misses is a mark reported as orphaned, never one drawn
+ * elsewhere.
+ */
+export const decisionReaderTextPieces = (
+  decision: Pick<
+    ReaderDecision,
+    "caseNumberType" | "documentAst" | "fulltext" | "textFields"
+  >,
+): ReaderTextPiece[] => {
+  const ast = parseDocumentAst(decision.documentAst);
+  const topMatter = decisionTopMatter({
+    blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
+    textFields: decision.textFields,
+  });
+  const supplements = [topMatter.legalSentence, topMatter.abstract].flatMap(
+    (source) =>
+      source?.type === "text"
+        ? editorialSupplementBlocks(source.text).map((block) => ({
+            anchorId: supplementBlockAnchorId(source.pieceId, block.start),
+            text: block.text,
+          }))
+        : [],
+  );
+  return [
+    ...supplements,
+    ...visibleDecisionBlocks(
+      ast,
+      decision.caseNumberType,
+      decision.fulltext,
+    ).flatMap(readerAnchorPiecesOf),
+  ];
 };
 
 /**

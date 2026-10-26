@@ -4277,6 +4277,10 @@
         "undoShortcut": "Vrátiť zmenu zvýraznenia alebo komentára",
         "visibilityRestored": "Zdieľanie obnovené"
       },
+      "orphaned": {
+        "description": "Text tohto dokumentu sa od ich vytvorenia zmenil a označené pasáže sa v ňom už nepodarilo nájsť. V texte sa preto nezobrazujú.",
+        "summary": "{count, plural, one {# zvýraznenie alebo komentár už nezodpovedá textu} few {# zvýraznenia alebo komentáre už nezodpovedajú textu} many {# zvýraznenia alebo komentára už nezodpovedá textu} other {# zvýraznení a komentárov už nezodpovedá textu}}"
+      },
       "removeHighlight": "Odstrániť zvýraznenie",
       "sharedBadge": "Zdieľané",
       "styleHighlight": "Zvýraznenie",

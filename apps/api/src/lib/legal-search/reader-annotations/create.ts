@@ -110,6 +110,8 @@ export const createReaderAnnotationHandler = async function* ({
         startOffset: span.startOffset,
         endOffset: span.endOffset,
         quote: span.quote,
+        quotePrefix: span.quotePrefix,
+        quoteSuffix: span.quoteSuffix,
       }));
       const firstValue = values.at(0);
       if (firstValue === undefined) {
@@ -156,6 +158,8 @@ export const createReaderAnnotationHandler = async function* ({
               id: legalReaderAnnotations.id,
               kind: legalReaderAnnotations.kind,
               quote: legalReaderAnnotations.quote,
+              quotePrefix: legalReaderAnnotations.quotePrefix,
+              quoteSuffix: legalReaderAnnotations.quoteSuffix,
               startOffset: legalReaderAnnotations.startOffset,
               style: legalReaderAnnotations.style,
               targetId: legalReaderAnnotations.targetId,

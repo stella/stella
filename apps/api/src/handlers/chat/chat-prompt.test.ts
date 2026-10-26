@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -85,47 +86,73 @@ const SKILL_METADATA = [
 ] as const;
 
 describe("reader marks in the prompt", () => {
+  const paragraph = (anchorId: string, text: string): Block => ({
+    anchorId,
+    id: `id-${anchorId}`,
+    inlines: [{ text, type: "text" }],
+    plainText: text,
+    type: "paragraph",
+  });
+
   const mark = (index: number, quoteChars: number, bodyChars: number) =>
     ({
       blockAnchorId: `p-${String(index)}`,
       body: "n".repeat(bodyChars),
       color: null,
+      endOffset: quoteChars,
       groupId: null,
       id: `annotation-${String(index)}`,
       kind: "comment",
       mine: true,
       quote: "q".repeat(quoteChars),
+      quotePrefix: "",
+      quoteSuffix: "",
+      startOffset: 0,
       style: null,
       visibility: "private",
     }) as const;
 
+  const marksText = (count: number, quoteChars: number) =>
+    Array.from({ length: count }).map((_unused, index) =>
+      paragraph(`p-${String(index)}`, "q".repeat(quoteChars)),
+    );
+
+  const highlight = {
+    body: null,
+    color: "red",
+    groupId: "group-1",
+    kind: "highlight",
+    mine: true,
+    style: "strikethrough",
+    visibility: "shared",
+  } as const;
+
   test("ties a mark to the anchors, style and audience of its rows", () => {
-    const formatted = formatAnnotationsForPrompt([
-      {
-        blockAnchorId: "p-3",
-        body: null,
-        color: "red",
-        groupId: "group-1",
-        id: "annotation-a",
-        kind: "highlight",
-        mine: true,
-        quote: "first half",
-        style: "strikethrough",
-        visibility: "shared",
-      },
-      {
-        blockAnchorId: "p-4",
-        body: null,
-        color: "red",
-        groupId: "group-1",
-        id: "annotation-b",
-        kind: "highlight",
-        mine: true,
-        quote: "second half",
-        style: "strikethrough",
-        visibility: "shared",
-      },
-    ]);
+    const formatted = formatAnnotationsForPrompt(
+      [
+        {
+          ...highlight,
+          blockAnchorId: "p-3",
+          endOffset: 10,
+          id: "annotation-a",
+          quote: "first half",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+        {
+          ...highlight,
+          blockAnchorId: "p-4",
+          endOffset: 11,
+          id: "annotation-b",
+          quote: "second half",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+      ],
+      [paragraph("p-3", "first half"), paragraph("p-4", "second half")],
+    );
 
     expect(formatted).toContain(
       "Highlight by the user, shared with the organization (red, strikethrough), at [p-3], [p-4] (mark id annotation-a)",
@@ -133,9 +160,51 @@ describe("reader marks in the prompt", () => {
     expect(formatted).toContain("first half second half");
   });
 
+  test("names the anchor a re-parse moved the words to, never the stored one", () => {
+    // Made when "przepisy ustawy." was its own paragraph p-2; the re-parse
+    // joined it to the paragraph before, so p-2 now names the next one.
+    const formatted = formatAnnotationsForPrompt(
+      [
+        {
+          ...highlight,
+          blockAnchorId: "p-2",
+          endOffset: 16,
+          groupId: null,
+          id: "annotation-moved",
+          quote: "przepisy ustawy.",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+        {
+          ...highlight,
+          blockAnchorId: "p-3",
+          endOffset: 4,
+          groupId: null,
+          id: "annotation-gone",
+          quote: "Sąd zważył",
+          quotePrefix: "",
+          quoteSuffix: "",
+          startOffset: 0,
+        },
+      ],
+      [
+        paragraph("p-1", "Sąd rozważył przepisy ustawy."),
+        paragraph("p-2", "Skarga została oddalona."),
+      ],
+    );
+
+    expect(formatted).toContain("at [p-1] (mark id annotation-moved)");
+    expect(formatted).toContain(
+      "with no place in the anchored document text above (mark id annotation-gone)",
+    );
+    expect(formatted).not.toContain("[p-2]");
+  });
+
   test("lists every mark when the whole set fits", () => {
     const formatted = formatAnnotationsForPrompt(
       Array.from({ length: 3 }).map((_unused, index) => mark(index, 40, 40)),
+      marksText(3, 40),
     );
 
     expect(formatted).not.toContain("further marks are not listed here");
@@ -149,6 +218,7 @@ describe("reader marks in the prompt", () => {
       Array.from({ length: 200 }).map((_unused, index) =>
         mark(index, 1200, 2000),
       ),
+      marksText(200, 1200),
     );
 
     const notice = formatted.split("\n").at(-1) ?? "";

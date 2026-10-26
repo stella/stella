@@ -4277,6 +4277,10 @@
         "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
         "visibilityRestored": "Przywrócono udostępnianie"
       },
+      "orphaned": {
+        "description": "Tekst tego dokumentu zmienił się od ich utworzenia i nie udało się ponownie odnaleźć w nim oznaczonych fragmentów. Nie są one wyświetlane w tekście.",
+        "summary": "{count, plural, one {# zaznaczenie lub komentarz nie pasuje już do tekstu} few {# zaznaczenia lub komentarze nie pasują już do tekstu} many {# zaznaczeń lub komentarzy nie pasuje już do tekstu} other {# zaznaczenia lub komentarza nie pasuje już do tekstu}}"
+      },
       "removeHighlight": "Usuń wyróżnienie",
       "sharedBadge": "Udostępnione",
       "styleHighlight": "Wyróżnienie",

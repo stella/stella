@@ -414,6 +414,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
                   startOffset: 0,
                   endOffset: 5,
                   quote: "Claim",
+                  quotePrefix: "",
+                  quoteSuffix: "",
                   body: comment.body,
                   createdAt: createdAt.toISOString(),
                   updatedAt: updatedAt.toISOString(),

@@ -2,13 +2,32 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   annotationSegments,
+  annotationTextAnchors,
   buildAnnotationAnchors,
 } from "./annotation-anchors";
 import type { AnnotationAnchorSource } from "./annotation-anchors";
+
+/** Every piece's text in these properties: long enough for any mark. */
+const PIECE_TEXT = Array.from(
+  { length: READER_ANNOTATION_QUOTE_MAX_LENGTH },
+  (_unused, index) => String.fromCodePoint(0x61 + (index % 26)),
+).join("");
+
+const ANCHOR_IDS = ["p-1", "p-2", "p-3", "cl_7", "priloha-1"] as const;
+
+/** One paragraph per anchor, rendered under the anchor as its own id. */
+const PIECE_BLOCKS: Block[] = ANCHOR_IDS.map((anchorId) => ({
+  anchorId,
+  id: anchorId,
+  inlines: [{ text: PIECE_TEXT, type: "text" }],
+  plainText: PIECE_TEXT,
+  type: "paragraph",
+}));
 
 /**
  * Both readers lay their marks over the text through this one module, so the
@@ -18,24 +37,29 @@ import type { AnnotationAnchorSource } from "./annotation-anchors";
  * drawn over the wrong words, and two marks over the same words print those
  * words twice — neither of which a rendering test would notice.
  */
-const annotationArbitrary = fc.record({
-  blockAnchorId: fc.constantFrom("p-1", "p-2", "p-3", "cl_7", "priloha-1"),
-  color: fc.constantFrom("yellow", "red", null),
-  endOffset: fc.integer({ min: 1, max: READER_ANNOTATION_QUOTE_MAX_LENGTH }),
-  id: fc.uuid(),
-  kind: fc.constantFrom("highlight" as const, "comment" as const),
-  startOffset: fc.integer({
-    min: 0,
-    max: READER_ANNOTATION_QUOTE_MAX_LENGTH - 1,
-  }),
-  style: fc.constantFrom(
-    "highlight" as const,
-    "underline" as const,
-    "squiggly" as const,
-    "strikethrough" as const,
-    null,
-  ),
-});
+const annotationArbitrary = fc
+  .record({
+    blockAnchorId: fc.constantFrom(...ANCHOR_IDS),
+    color: fc.constantFrom("yellow", "red", null),
+    endOffset: fc.integer({ min: 1, max: READER_ANNOTATION_QUOTE_MAX_LENGTH }),
+    id: fc.uuid(),
+    kind: fc.constantFrom("highlight" as const, "comment" as const),
+    startOffset: fc.integer({
+      min: 0,
+      max: READER_ANNOTATION_QUOTE_MAX_LENGTH - 1,
+    }),
+    style: fc.constantFrom(
+      "highlight" as const,
+      "underline" as const,
+      "squiggly" as const,
+      "strikethrough" as const,
+      null,
+    ),
+  })
+  .map((annotation) => ({
+    ...annotation,
+    quote: PIECE_TEXT.slice(annotation.startOffset, annotation.endOffset),
+  }));
 
 const marksArbitrary = fc.uniqueArray(annotationArbitrary, {
   selector: (annotation) => annotation.id,
@@ -111,7 +135,10 @@ describe("annotation anchors", () => {
             annotation.blockAnchorId,
           ]),
         );
-        const anchorsByPieceId = buildAnnotationAnchors(annotations);
+        const anchorsByPieceId = buildAnnotationAnchors(
+          annotations,
+          PIECE_BLOCKS,
+        );
 
         for (const [pieceId, anchors] of Object.entries(anchorsByPieceId)) {
           for (const anchor of anchors) {
@@ -191,6 +218,7 @@ describe("annotation anchors", () => {
       endOffset: 20,
       id: "019b0121-9dd7-7000-8000-0000000000a1",
       kind: "highlight",
+      quote: "x".repeat(20),
       startOffset: 0,
       style: "highlight",
     } as const satisfies AnnotationAnchorSource;
@@ -222,6 +250,7 @@ describe("annotation anchors", () => {
       endOffset: 9,
       id: "019b0121-9dd7-7000-8000-0000000000b1",
       kind: "highlight",
+      quote: "x".repeat(9),
       startOffset: 0,
       style: "highlight",
     } as const satisfies AnnotationAnchorSource;
@@ -238,6 +267,7 @@ describe("annotation anchors", () => {
       endOffset: 4,
       id: "019b0121-9dd7-7000-8000-0000000000c1",
       kind: "highlight",
+      quote: "21 %",
       startOffset: 0,
       style: "highlight",
     } as const satisfies AnnotationAnchorSource;
@@ -267,5 +297,39 @@ describe("annotation anchors", () => {
     expect(Object.keys(buildAnnotationAnchors([inCell], blocks))).toEqual([
       "table:b-3:0:1",
     ]);
+  });
+
+  test("never draws a mark whose words are not at its offsets", () => {
+    assertProperty(
+      "never draws a mark whose words are not at its offsets",
+      fc.property(
+        marksArbitrary,
+        fc.string({ minLength: 1, maxLength: 8 }),
+        (annotations: AnnotationAnchorSource[], replacement) => {
+          // The same marks over a text whose words changed under them, as a
+          // re-parse leaves a stored position: only a mark whose quote is
+          // still there may be drawn.
+          const text = `${replacement}${PIECE_TEXT}`.slice(
+            0,
+            PIECE_TEXT.length,
+          );
+          const drawn = new Set(
+            annotationTextAnchors(annotations, text).map(
+              (anchor) => anchor.key.split(":").at(1) ?? "",
+            ),
+          );
+          for (const annotation of annotations) {
+            if (!drawn.has(annotation.id)) {
+              continue;
+            }
+            expect(
+              text
+                .slice(annotation.startOffset, annotation.endOffset)
+                .replaceAll(/\s/gu, ""),
+            ).toBe(annotation.quote.replaceAll(/\s/gu, ""));
+          }
+        },
+      ),
+    );
   });
 });

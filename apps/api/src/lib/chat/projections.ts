@@ -34,6 +34,7 @@ import {
   ENTITY_CHECK_UNAVAILABLE_REASONS,
 } from "@stll/business-registries/entity-checks";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { READER_TEXT_QUOTE_ORPHAN_REASONS } from "@stll/legal-ast/reader-text-quote";
 
 import { TIME_ENTRY_VISIBILITY } from "@/api/lib/billing-constants";
 import {
@@ -2529,6 +2530,24 @@ const readerAnnotationPassageProjection = v.strictObject({
   quote: v.string(),
 });
 
+/**
+ * A listed mark's passage in the document's current text: placed at the
+ * anchor where its quote now is, or orphaned when the text no longer has its
+ * words in one place it can be told by.
+ */
+const listedReaderAnnotationPassageProjection = v.variant("placement", [
+  v.strictObject({
+    placement: v.literal("placed"),
+    anchor: v.string(),
+    quote: v.string(),
+  }),
+  v.strictObject({
+    placement: v.literal("orphaned"),
+    reason: v.picklist(READER_TEXT_QUOTE_ORPHAN_REASONS),
+    quote: v.string(),
+  }),
+]);
+
 /** list_reader_annotations: one entry per mark, its passages grouped. */
 export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
   annotations: v.array(
@@ -2542,7 +2561,7 @@ export const LIST_READER_ANNOTATIONS_PROJECTION = v.strictObject({
       mine: v.boolean(),
       authorName: v.string(),
       createdAt: v.string(),
-      passages: v.array(readerAnnotationPassageProjection),
+      passages: v.array(listedReaderAnnotationPassageProjection),
     }),
   ),
   nextCursor: v.nullable(v.string()),

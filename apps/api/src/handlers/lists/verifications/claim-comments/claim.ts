@@ -82,10 +82,15 @@ export const claimQuote = (text: string): string => {
   return quote;
 };
 
-/** The one span a comment on this claim covers. */
+/**
+ * The one span a comment on this claim covers. A claim's comment is found
+ * by its claim, not by its words in a document, so it keeps no context.
+ */
 export const claimCommentSpan = (claim: CommentedClaim) => ({
   blockAnchorId: anchorBlockId(claim.anchor),
   endOffset: claim.anchor.end,
   quote: claimQuote(claim.text),
+  quotePrefix: "",
+  quoteSuffix: "",
   startOffset: claim.anchor.start,
 });

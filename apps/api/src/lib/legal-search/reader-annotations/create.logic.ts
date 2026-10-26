@@ -8,6 +8,8 @@ type StoredAnnotation = {
   groupId: string | null;
   kind: string;
   quote: string;
+  quotePrefix: string;
+  quoteSuffix: string;
   startOffset: number;
   style: string | null;
   targetId: string;
@@ -19,13 +21,25 @@ const spanKey = ({
   blockAnchorId,
   endOffset,
   quote,
+  quotePrefix,
+  quoteSuffix,
   startOffset,
 }: {
   blockAnchorId: string;
   endOffset: number;
   quote: string;
+  quotePrefix: string;
+  quoteSuffix: string;
   startOffset: number;
-}): string => JSON.stringify([blockAnchorId, startOffset, endOffset, quote]);
+}): string =>
+  JSON.stringify([
+    blockAnchorId,
+    startOffset,
+    endOffset,
+    quote,
+    quotePrefix,
+    quoteSuffix,
+  ]);
 
 /**
  * An idempotency key is a receipt for one exact request, never an alias that

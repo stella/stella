@@ -324,6 +324,8 @@ export const inverseOfRemove = (
     blockAnchorId: row.blockAnchorId,
     endOffset: row.endOffset,
     quote: row.quote,
+    quotePrefix: row.quotePrefix,
+    quoteSuffix: row.quoteSuffix,
     startOffset: row.startOffset,
   }));
   const rowIds = ordered.map((row) => row.id);

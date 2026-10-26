@@ -27,6 +27,7 @@ test("overlapping answered selections keep the original highlight and activate e
     endOffset: text.length,
     id: "original-highlight",
     kind: "highlight",
+    quote: text,
     startOffset: 0,
     style: "highlight",
   } as const satisfies AnnotationAnchorSource;
@@ -43,7 +44,7 @@ test("overlapping answered selections keep the original highlight and activate e
     id: "answer-two",
   };
   const activations: string[] = [];
-  const anchors = annotationTextAnchors([normal, answer, second]);
+  const anchors = annotationTextAnchors([normal, answer, second], text);
   try {
     await act(async () => {
       root.render(
@@ -100,17 +101,20 @@ test("overlapping answered selections keep the original highlight and activate e
       expect(activations.at(-1)).toBe(id);
     }
     expect(activations).toEqual(["answer-one", "answer-two"]);
-    const commentAnchors = annotationTextAnchors([
-      {
-        ...normal,
-        id: "original-comment",
-        kind: "comment",
-        color: null,
-        style: null,
-      },
-      answer,
-      second,
-    ]);
+    const commentAnchors = annotationTextAnchors(
+      [
+        {
+          ...normal,
+          id: "original-comment",
+          kind: "comment",
+          color: null,
+          style: null,
+        },
+        answer,
+        second,
+      ],
+      text,
+    );
     await act(async () => {
       root.render(
         <>

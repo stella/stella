@@ -4277,6 +4277,10 @@
         "undoShortcut": "Võta esiletõstu või kommentaari muudatus tagasi",
         "visibilityRestored": "Jagamine taastatud"
       },
+      "orphaned": {
+        "description": "Selle dokumendi teksti on pärast nende loomist uuendatud ja märgitud lõike ei õnnestunud selles uuesti leida. Neid tekstis ei kuvata.",
+        "summary": "{count, plural, one {# esiletõst või kommentaar ei vasta enam tekstile} other {# esiletõstu ja kommentaari ei vasta enam tekstile}}"
+      },
       "removeHighlight": "Eemalda esiletõst",
       "sharedBadge": "Jagatud",
       "styleHighlight": "Esiletõst",

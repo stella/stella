@@ -22,6 +22,8 @@ type PrivateAnnotationExportRow = Pick<
   | "startOffset"
   | "endOffset"
   | "quote"
+  | "quotePrefix"
+  | "quoteSuffix"
   | "body"
   | "createdAt"
   | "updatedAt"
@@ -55,6 +57,8 @@ export const projectPrivateAnnotationForAccountExport = (
     startOffset: row.startOffset,
     endOffset: row.endOffset,
     quote: row.quote,
+    quotePrefix: row.quotePrefix,
+    quoteSuffix: row.quoteSuffix,
     body: row.body,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

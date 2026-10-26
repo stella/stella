@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { visibleDecisionBlocks } from "@stll/decision-reader/decision-text.logic";
+import {
+  decisionReaderTextPieces,
+  visibleDecisionBlocks,
+} from "@stll/decision-reader/decision-text.logic";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -25,6 +28,7 @@ import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header"
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import {
   LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
@@ -154,6 +158,7 @@ export const CaseDecisionInspectorView = ({
     marks: "all",
     scrollContainerRef: contentRef,
     target: annotationTarget,
+    text: decision === undefined ? null : decisionReaderTextPieces(decision),
   });
   // The pane has no margin column, so a note takes its place in the text:
   // under the paragraph it belongs to, where the margin would have put it
@@ -217,6 +222,11 @@ export const CaseDecisionInspectorView = ({
       <GuestAnnotationPrompt
         className="shrink-0"
         count={annotations.guestCount}
+      />
+      <OrphanedAnnotationsNotice
+        className="shrink-0"
+        onRemove={annotations.removeOrphaned}
+        orphaned={annotations.orphaned}
       />
       {/* The composer floats over the text, bound to this decision, the way
           it floats over a PDF bound to that file. */}

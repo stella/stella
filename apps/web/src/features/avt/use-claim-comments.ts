@@ -100,6 +100,10 @@ export const useClaimComments = ({
           blockAnchorId: claimAnchorId(claim.anchor),
           endOffset: claim.anchor.end,
           quote: claim.text,
+          // The API stores a claim's comment without context: it is found
+          // by its claim, not by its words.
+          quotePrefix: "",
+          quoteSuffix: "",
           startOffset: claim.anchor.start,
         },
       ],

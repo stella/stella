@@ -2,7 +2,10 @@ import { useState } from "react";
 import type { RefObject } from "react";
 
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
+import type { ReaderTextPiece } from "@stll/legal-ast/reader-text-quote";
 
+import { placeReaderAnnotations } from "@/components/legal-reader/annotations/reader-annotation-placement.logic";
+import type { OrphanedReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotation-placement.logic";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
@@ -22,6 +25,11 @@ type DecisionAnnotationSurfaceOptions = {
   marks: ReaderMarksFilter;
   scrollContainerRef: RefObject<HTMLElement | null>;
   target: ReaderAnnotationTarget;
+  /**
+   * The decision's anchored text as the reader draws it, which places the
+   * stored marks; null until the decision has loaded.
+   */
+  text: readonly ReaderTextPiece[] | null;
 };
 
 export type DecisionAnnotationSurface = {
@@ -38,6 +46,10 @@ export type DecisionAnnotationSurface = {
   mode: "authenticated" | "guest";
   /** The comments on the text and the one being written, in reading order. */
   notes: (CommentMarginItem | ComposerMarginItem)[];
+  /** Marks whose words the current text has in no single place. */
+  orphaned: OrphanedReaderAnnotation[];
+  /** Removes one of the reader's own orphaned marks. */
+  removeOrphaned: (id: string) => void;
   setActiveAnnotationId: (id: string | null) => void;
   /** The reader chose to comment on these paragraphs. */
   startComposing: (spans: SelectionAnchor[]) => void;
@@ -53,12 +65,18 @@ export const useDecisionAnnotationSurface = ({
   marks,
   scrollContainerRef,
   target,
+  text,
 }: DecisionAnnotationSurfaceOptions): DecisionAnnotationSurface => {
   const annotations = useReaderAnnotations(target);
   // The comment being written: its paragraphs, so the note sits with the
   // first and the saved comment covers them all.
   const [composing, setComposing] = useState<SelectionAnchor[] | null>(null);
-  const visibleRows = annotationsForMarksFilter(annotations.annotations, marks);
+  // Every mark is drawn where its words are in this text, which a re-parse
+  // since it was made may have moved, or listed apart when they are not.
+  const { orphaned, placed: visibleRows } = placeReaderAnnotations(
+    annotationsForMarksFilter(annotations.annotations, marks),
+    text,
+  );
   const { activeAnnotation, activeSpans, clearActive, setActiveAnnotationId } =
     useActiveReaderAnnotation({
       annotations: visibleRows,
@@ -70,6 +88,7 @@ export const useDecisionAnnotationSurface = ({
     endOffset: item.endOffset,
     id: item.id,
     kind: item.kind,
+    quote: item.quote,
     startOffset: item.startOffset,
     style: item.style,
   }));
@@ -142,6 +161,13 @@ export const useDecisionAnnotationSurface = ({
     mode: annotations.mode,
     // The composer is never filtered away: the reader is mid-sentence in it.
     notes: [...commentNotes, ...composerNotes],
+    orphaned,
+    removeOrphaned: (id) => {
+      detached(
+        annotations.controller.remove(id),
+        "legal-reader.annotation-remove",
+      );
+    },
     setActiveAnnotationId,
     startComposing: setComposing,
   };

@@ -4277,6 +4277,10 @@
         "undoShortcut": "Deshacer cambio de resaltado o comentario",
         "visibilityRestored": "Uso compartido restablecido"
       },
+      "orphaned": {
+        "description": "El texto de este documento se actualizó después de que se crearan y no se han podido volver a encontrar los pasajes marcados. No se muestran en el texto.",
+        "summary": "{count, plural, one {# resaltado o comentario ya no coincide con el texto} other {# resaltados y comentarios ya no coinciden con el texto}}"
+      },
       "removeHighlight": "Quitar resaltado",
       "sharedBadge": "Compartido",
       "styleHighlight": "Resaltado",

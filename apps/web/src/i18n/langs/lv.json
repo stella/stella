@@ -4277,6 +4277,10 @@
         "undoShortcut": "Atsaukt izcēluma vai komentāra izmaiņu",
         "visibilityRestored": "Kopīgošana atjaunota"
       },
+      "orphaned": {
+        "description": "Šī dokumenta teksts kopš to izveides ir atjaunināts, un atzīmētos fragmentus tajā vairs neizdevās atrast. Tie tekstā netiek rādīti.",
+        "summary": "{count, plural, zero {# izcēlumi un komentāri vairs neatbilst tekstam} one {# izcēlums vai komentārs vairs neatbilst tekstam} other {# izcēlumi un komentāri vairs neatbilst tekstam}}"
+      },
       "removeHighlight": "Noņemt izcēlumu",
       "sharedBadge": "Kopīgots",
       "styleHighlight": "Izcēlums",
