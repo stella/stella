@@ -237,7 +237,7 @@ export const SearchableFacetGroup = ({
     enabled: isSearching && searchParams.enabled,
   });
   const searchDataView = queryView(searchDataQuery);
-  useQueryViewError(searchDataView);
+  useQueryViewError(searchDataView, "SearchableFacetGroup:query");
   const searchData =
     searchDataView.type === "items" ? searchDataView.items : undefined;
   const resolveLabel = (bucket: FacetBucket): string =>

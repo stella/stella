@@ -246,10 +246,17 @@ describe("every adapter accounts for the fields its source states", () => {
         ...(decision.decisionType === undefined
           ? []
           : [{ field: "decisionType", value: decision.decisionType }]),
-        ...(decision.judges ?? []).map(({ nameAsPrinted }, index) => ({
-          field: `judges.${index}.nameAsPrinted`,
-          value: nameAsPrinted,
-        })),
+        ...(decision.judges ?? []).map((judge, index) =>
+          judge.nameAsPrinted === undefined
+            ? {
+                field: `judges.${index}.czechDeclinedName`,
+                value: judge.czechDeclinedName,
+              }
+            : {
+                field: `judges.${index}.nameAsPrinted`,
+                value: judge.nameAsPrinted,
+              },
+        ),
         ...(decision.fulltext === undefined
           ? []
           : [{ field: "fulltext", value: decision.fulltext }]),

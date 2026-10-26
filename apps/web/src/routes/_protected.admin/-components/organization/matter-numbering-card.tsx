@@ -20,7 +20,7 @@ import {
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -98,7 +98,7 @@ const MatterNumberingCardBody = ({
       debouncedPadding,
     ],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].preview.post(
           {
             matterNumberPattern: debouncedPattern,
@@ -114,8 +114,12 @@ const MatterNumberingCardBody = ({
   const preview = previewData?.preview ?? null;
 
   const numberingToggle = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.numberingToggle.useSettingsMutation",
+    },
     mutationFn: async (enabled: boolean) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].post({
           matterNumberingEnabled: enabled,
         }),
@@ -126,8 +130,12 @@ const MatterNumberingCardBody = ({
   });
 
   const updateMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "MatterNumberingCardBody.updateMutation.useSettingsMutation",
+    },
     mutationFn: async () =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].post({
           matterNumberPattern: pattern,
           matterNumberPadding: padding,

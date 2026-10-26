@@ -97,23 +97,23 @@ export const SkillBodyWorkspace = ({
 
   const detail = useQuery(skillDetailOptions(organizationId, user.id, skillId));
   const detailView = queryView(detail);
-  useQueryViewError(detailView);
+  useQueryViewError(detailView, "SkillBodyWorkspace:query");
   const role = useQuery(roleOptions);
   const roleView = queryView(role);
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "SkillBodyWorkspace:query-2");
   const organization = useQuery(organizationOptions(organizationId));
   const organizationView = queryView(organization);
-  useQueryViewError(organizationView);
+  useQueryViewError(organizationView, "SkillBodyWorkspace:query-3");
   const revisions = useQuery(
     skillRevisionsOptions(organizationId, user.id, skillId),
   );
   const revisionsView = queryView(revisions);
-  useQueryViewError(revisionsView);
+  useQueryViewError(revisionsView, "SkillBodyWorkspace:query-4");
   const proposals = useQuery(
     skillProposalsOptions(organizationId, user.id, skillId),
   );
   const proposalsView = queryView(proposals);
-  useQueryViewError(proposalsView);
+  useQueryViewError(proposalsView, "SkillBodyWorkspace:query-5");
 
   const compareRevisionId =
     mode.type === "live" ? mode.compareRevisionId : null;
@@ -131,7 +131,7 @@ export const SkillBodyWorkspace = ({
     enabled: commenting,
   });
   const commentsView = queryView(comments);
-  useQueryViewError(commentsView);
+  useQueryViewError(commentsView, "SkillBodyWorkspace:query-6");
 
   const actions = useSkillHistoryActions({
     organizationId,

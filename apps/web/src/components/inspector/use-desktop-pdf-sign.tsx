@@ -219,7 +219,13 @@ export const useDesktopPdfSign = ({
       async () => await createPdfSigningHandoff({ ...target, stamp }),
     );
     if (Result.isError(started)) {
-      getAnalytics().captureError(started.error.cause);
+      getAnalytics().captureError(started.error.cause, {
+        fingerprintKey: "useDesktopPdfSign.signWithToast:cause",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopPdfSign.signWithToast:cause",
+        },
+      });
       notifyUserError(
         started.error,
         t("workspaces.files.pdfSigning.startFailedTitle"),
@@ -285,7 +291,13 @@ export const useDesktopPdfSign = ({
     );
 
     if (Result.isError(watched)) {
-      getAnalytics().captureError(watched.error.cause);
+      getAnalytics().captureError(watched.error.cause, {
+        fingerprintKey: "useDesktopPdfSign.signWithToast:cause-2",
+        scope: {
+          type: "handler",
+          handlerId: "useDesktopPdfSign.signWithToast:cause-2",
+        },
+      });
       notifyUserError(
         watched.error,
         t("workspaces.files.pdfSigning.statusUnavailableTitle"),
@@ -403,7 +415,10 @@ export const useDesktopPdfSign = ({
     busy.current = false;
     setIsSigning(false);
     if (Result.isError(signed)) {
-      getAnalytics().captureError(signed.error.cause);
+      getAnalytics().captureError(signed.error.cause, {
+        fingerprintKey: "useDesktopPdfSign.sign:cause",
+        scope: { type: "handler", handlerId: "useDesktopPdfSign.sign:cause" },
+      });
       notifyUserError(signed.error, t("errors.actionFailed"), {
         ...NO_ACTION,
         toastId,

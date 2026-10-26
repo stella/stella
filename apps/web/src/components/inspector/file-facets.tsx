@@ -85,7 +85,7 @@ export const TabFacetBar = ({
   const t = useTranslations();
   const dataQuery = useQuery(entityVersionsOptions({ workspaceId, entityId }));
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "TabFacetBar:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const version = data?.versions.find((v) => v.file?.fieldId === fieldId);
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;

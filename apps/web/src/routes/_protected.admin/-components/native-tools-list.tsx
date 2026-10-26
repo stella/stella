@@ -23,7 +23,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { queryView } from "@/lib/query-view.logic";
@@ -79,8 +79,12 @@ const NativeToolRow = ({
   const t = useTranslations();
   const { activeOrganizationId } = useAuthenticatedUser();
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "NativeToolRow.update:failure",
+    },
     mutationFn: async (enabled: boolean) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.mcp["native-tools"]({ slug: tool.slug }).patch({ enabled }),
       ),
     invalidate: mcpConnectorsOptions(activeOrganizationId).queryKey,

@@ -122,7 +122,7 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
     ),
   );
   const hintQueryView = queryView(hintQuery);
-  useQueryViewError(hintQueryView);
+  useQueryViewError(hintQueryView, "useReferenceFacts:query");
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({

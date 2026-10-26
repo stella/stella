@@ -156,7 +156,7 @@ export const GroupedTableLayout = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const columnLayout = useViewColumnLayout({ workspaceId, view });
   const tableState = useViewTableState({ workspaceId, view, columnLayout });
-  const columns = useTableColumns({ properties, view });
+  const columns = useTableColumns({ properties, view, workspaceId });
   // Deferred alongside the group keys (each section defers its own), so the
   // marks describe the rows on screen, not a term still being fetched.
   const find = useDeferredValue(

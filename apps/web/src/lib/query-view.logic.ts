@@ -50,8 +50,10 @@ export const queryViewError = <TData, TError>(
   }
 };
 
+// The full result preserves inference for nested useQuery calls; the projection
+// also accepts minimal inputs without weakening status/data/error correlation.
 export const queryView = <TData, TError>(
-  query: QueryViewQuery<TData, TError>,
+  query: UseQueryResult<TData, TError> | QueryViewQuery<TData, TError>,
   {
     isEmpty = (items) => Array.isArray(items) && items.length === 0,
   }: QueryViewOptions<TData> = {},

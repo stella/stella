@@ -114,7 +114,7 @@ const useCatalogueTemplatePreview = (
   );
   const { isLoading } = dataQuery;
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useCatalogueTemplatePreview:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   if (isLoading) {
     return { status: "loading" };

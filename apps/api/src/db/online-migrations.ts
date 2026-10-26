@@ -18,8 +18,17 @@ import {
   REWRITTEN_MIGRATION_INDEXES,
 } from "../lib/db/migration-history";
 import { isRecord } from "../lib/type-guards";
+import {
+  AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
+  AGENT_SKILL_BINDING_CONSTRAINTS,
+} from "./agent-skill-binding-constraint-validation";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  CASE_LAW_PARSE_PENDING_INDEX,
+  CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+  CASE_LAW_PARSED_SOURCE_VALIDATION,
+} from "./case-law-parsed-source-hash-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -71,6 +80,10 @@ import type {
   OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
+import {
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
+} from "./organization-access-state-constraint-validation";
 import {
   READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   READER_ANNOTATION_CLAIM_CONSTRAINTS,
@@ -185,6 +198,25 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
   publishedCaseLawDecisionIndexDefinitionPredicateSql();
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
+  CASE_LAW_PARSE_PENDING_INDEX,
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skills_bound_workspace_idx" ON public."agent_skills" (bound_workspace_id) WHERE bound_workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.agent_skills USING btree (bound_workspace_id) WHERE (bound_workspace_id IS NOT NULL)",
+    isUnique: false,
+    name: "agent_skills_bound_workspace_idx",
+    tableName: "agent_skills",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skills_bound_client_idx" ON public."agent_skills" (bound_client_id) WHERE bound_client_id IS NOT NULL',
+    definitionBody:
+      "ON public.agent_skills USING btree (bound_client_id) WHERE (bound_client_id IS NOT NULL)",
+    isUnique: false,
+    name: "agent_skills_bound_client_idx",
+    tableName: "agent_skills",
+  },
   {
     createSql:
       'CREATE INDEX CONCURRENTLY "legislation_documents_work_version_lang_idx" ON public."legislation_documents" (source_id, eli, version_valid_from, language) WHERE version_valid_from IS NOT NULL',
@@ -665,6 +697,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "search_history_entries_owner_country_recent_idx" ON public."search_history_entries" USING btree ("organization_id", "user_id", "country", "last_used_at", "id")',
+    definitionBody:
+      "ON public.search_history_entries USING btree (organization_id, user_id, country, last_used_at, id)",
+    isUnique: false,
+    name: "search_history_entries_owner_country_recent_idx",
+    tableName: "search_history_entries",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 
@@ -792,11 +833,14 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CASE_LAW_PARSED_SOURCE_VALIDATION,
+  ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
   ...READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
@@ -817,11 +861,14 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
  */
 export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[] =
   [
+    CASE_LAW_PARSED_SOURCE_CONSTRAINT,
+    ...AGENT_SKILL_BINDING_CONSTRAINTS,
     ...CHAT_CONTENT_V3_CONSTRAINTS,
     ...DECISION_DATE_CEILING_CONSTRAINTS,
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CLAIM_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,

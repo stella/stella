@@ -39,7 +39,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { ContactPicker } from "@/components/contact-picker";
+import {
+  CONTACT_PICKER_SUGGESTIONS,
+  ContactPicker,
+} from "@/components/contact-picker";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -48,7 +51,7 @@ import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useCreateContact } from "@/lib/contacts/mutations";
 import { contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
@@ -351,6 +354,7 @@ const ChangeClientDialog = ({
               setIsOpen(false);
             }}
             placeholder={t("workspaces.parties.changeClient")}
+            suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
           />
         </DialogPanel>
       </DialogPopup>
@@ -508,6 +512,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
                     displayName: contact.displayName,
                   })
                 }
+                suggestions={CONTACT_PICKER_SUGGESTIONS.recentClients}
               />
             )}
           </div>
@@ -565,7 +570,10 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PartyRow:failure",
+        scope: { type: "handler", handlerId: "PartyRow:failure" },
+      });
     },
   });
 
@@ -671,10 +679,13 @@ const AddPartyDialog = ({
           contactId: toSafeId<"contact">(body.contactId),
         });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AddPartyDialog:failure",
+        scope: { type: "handler", handlerId: "AddPartyDialog:failure" },
+      });
     },
   });
   const [isOpen, setIsOpen] = useState(false);

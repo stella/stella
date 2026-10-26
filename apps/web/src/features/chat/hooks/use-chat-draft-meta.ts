@@ -25,7 +25,7 @@ export const useChatDraftMeta = ({
   const options = chatDraftMetaOptions({ activeOrganizationId, threadRef });
   const dataQuery = useQuery(options);
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useChatDraftMeta:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   return { draftMeta: data, draftMetaQueryKey: options.queryKey };

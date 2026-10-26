@@ -57,7 +57,7 @@ export const StatuteInspectorView = ({
 }: InspectorViewRenderProps<StatuteViewPayload>) => {
   const t = useTranslations();
   const { payload } = tab;
-  const textScale = useReaderTextScale();
+  const textScale = useReaderTextScale("statute");
   const {
     data: statute,
     isError,
@@ -68,7 +68,7 @@ export const StatuteInspectorView = ({
   // the work has more than one consolidation, and the count is what says so.
   const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
   const versionsView = queryView(versionsQuery);
-  useQueryViewError(versionsView);
+  useQueryViewError(versionsView, "StatuteInspectorView:query");
   const versions =
     versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);

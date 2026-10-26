@@ -55,7 +55,10 @@ export const useDocxAnonymizationHighlights = ({
     anonymizationTermsOptions(workspaceId),
   );
   const anonymizationTermsQueryView = queryView(anonymizationTermsQuery);
-  useQueryViewError(anonymizationTermsQueryView);
+  useQueryViewError(
+    anonymizationTermsQueryView,
+    "useDocxAnonymizationHighlights:query",
+  );
   const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!anonymizationTermsQuery.data) {
       return [];
@@ -99,7 +102,10 @@ export const useDocxAnonymizationHighlights = ({
     enabled: isAnonymizationActive,
   });
   const allowlistQueryView = queryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  useQueryViewError(
+    allowlistQueryView,
+    "useDocxAnonymizationHighlights:query-2",
+  );
   const policyReady =
     anonymizationTermsQuery.status === "success" &&
     allowlistQuery.status === "success";
@@ -189,7 +195,13 @@ export const useDocxAnonymizationHighlights = ({
       view.dispatch(view.state.tr.setMeta(key, payload));
     });
     if (Result.isError(dispatched)) {
-      getAnalytics().captureError(dispatched.error);
+      getAnalytics().captureError(dispatched.error, {
+        fingerprintKey: "useDocxAnonymizationHighlights:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDocxAnonymizationHighlights:failure",
+        },
+      });
       useInspectorAnonymizationStore
         .getState()
         .markAnonymizationPipelineFailed(fieldId);

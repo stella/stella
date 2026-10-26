@@ -84,7 +84,7 @@ export const InspectorRail = ({
     enabled: activeTab?.type === "view" && activeTab.viewType === "tool-detail",
   });
   const activeSkillCatalogueDataView = queryView(activeSkillCatalogueDataQuery);
-  useQueryViewError(activeSkillCatalogueDataView);
+  useQueryViewError(activeSkillCatalogueDataView, "InspectorRail:query");
   const activeSkillCatalogueData =
     activeSkillCatalogueDataView.type === "items"
       ? activeSkillCatalogueDataView.items
@@ -559,7 +559,7 @@ const VerticalTabCell = ({
       storedExternalIconHref === undefined,
   });
   const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView);
+  useQueryViewError(mcpConnectorsDataView, "VerticalTabCell:query");
   const mcpConnectorsData =
     mcpConnectorsDataView.type === "items"
       ? mcpConnectorsDataView.items

@@ -1,3 +1,4 @@
+import * as React from "react";
 /**
  * The verified PDF in the file viewer, read-only, with the run's claims
  * drawn as boxes over the words they were anchored on, in their verdict's
@@ -9,8 +10,6 @@
  * they stay one click away.
  */
 
-import * as React from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -21,6 +20,7 @@ import { cn } from "@stll/ui/utils";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { UnlocatedClaims } from "@/features/avt/original-claims";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
@@ -237,17 +237,21 @@ const PageTextFailed = ({
 }) => {
   const t = useTranslations();
   return (
-    <div
+    <RecoverableErrorStatus
       className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-2 text-xs"
-      role="alert"
-    >
-      <span className="min-w-0 flex-1">
-        {t("avt.verification.pdfTextFailed")}
-      </span>
-      <Button loading={retrying} onClick={onRetry} size="sm" variant="outline">
-        {t("common.retry")}
-      </Button>
-    </div>
+      message={t("avt.verification.pdfTextFailed")}
+      messageClassName="min-w-0 flex-1"
+      actions={
+        <Button
+          loading={retrying}
+          onClick={onRetry}
+          size="sm"
+          variant="outline"
+        >
+          {t("common.retry")}
+        </Button>
+      }
+    />
   );
 };
 

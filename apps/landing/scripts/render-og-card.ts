@@ -30,7 +30,7 @@ writeFileSync(pngPath, png);
 const svgPath = path.join(IMAGE_DIR, "og-card.svg");
 writeFileSync(
   svgPath,
-  `<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,${png.toString("base64")}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" /></svg>`,
+  `<svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" fill="none" xmlns="http://www.w3.org/2000/svg"><image href="data:image/png;base64,${png.toBase64()}" x="0" y="0" width="${WIDTH}" height="${HEIGHT}" /></svg>`,
 );
 
 console.log(`Rendered ${pngPath}`);

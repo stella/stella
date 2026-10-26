@@ -10,7 +10,7 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { ClauseBody } from "@/components/templates/clause-editor-types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -42,11 +42,11 @@ export const FillClausesSection = ({
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         ["clause-slots"].get({ fetch: { signal } });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "FillClausesSection:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   const slots = data ? data.slots : [];

@@ -1,18 +1,21 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
-import Elysia from "elysia";
 
 import { FEEDBACK_LIMITS } from "@stll/api-contract/feedback";
 import type { FeedbackSubmitResponse } from "@stll/api-contract/feedback";
 
 import {
   MAX_RAW_FEEDBACK_BODY_CHARS,
+  PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR,
   receivePublicFeedback,
 } from "@/api/handlers/feedback/intake";
 import { createFeedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
 import { FeedbackStoreError } from "@/api/handlers/feedback/submit";
 import type { submitFeedbackReport } from "@/api/handlers/feedback/submit";
+import { createHttpApp } from "@/api/http/app";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 
 const SUBMIT_RESPONSE: FeedbackSubmitResponse = {
   receipt: "FB-7K2M-9QXZ",
@@ -155,6 +158,34 @@ describe("public feedback intake", () => {
     expect(submitMock).toHaveBeenCalledTimes(6);
   });
 
+  test("caps delivery across rotating client addresses", async () => {
+    const deps = { guards: memoryGuards() };
+    for (
+      let index = 0;
+      index < PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR;
+      index += 1
+    ) {
+      const response = await receiveForTest({
+        rawBody: raw({ title: `distributed report ${index}` }),
+        clientIp: `198.51.100.${index}`,
+        deps,
+      });
+      expect(response.status).toBe(200);
+    }
+
+    const blocked = await receiveForTest({
+      rawBody: raw({ title: "distributed report over budget" }),
+      clientIp: "203.0.113.250",
+      deps,
+    });
+
+    expect(blocked.status).toBe(429);
+    expect(await readErrorCode(blocked)).toBe("rate_limited");
+    expect(submitMock).toHaveBeenCalledTimes(
+      PUBLIC_FEEDBACK_GLOBAL_RATE_LIMIT_PER_HOUR,
+    );
+  });
+
   test("answers 503 when the report could not be stored", async () => {
     const failing = mock<typeof submitFeedbackReport>(async () =>
       Result.err(new FeedbackStoreError({ message: "nope" })),
@@ -215,14 +246,20 @@ describe("public feedback intake", () => {
     expect(await readErrorCode(response)).toBe("validation_error");
   });
 
-  // End-to-end through Elysia routing + parse:"text", to prove the route wires
-  // to the handler and the strict contract survives the framework layer. The
-  // unknown-key rejection (422) is deterministic and proves the strict Valibot
-  // contract runs on the raw payload rather than on Elysia's normalized object.
+  // End-to-end through the served route table and its `bodyMode: "text"`, to
+  // prove the route wires to the handler and the strict contract survives the
+  // HTTP layer. The unknown-key rejection (422) is deterministic and proves the
+  // strict Valibot contract runs on the raw payload rather than on a parsed
+  // JSON object.
   test("route wiring: POST /public/feedback reaches the handler", async () => {
-    const app = new Elysia().use(feedbackPublicRoute);
+    await using app = serveForTest(
+      createHttpApp({
+        routes: feedbackPublicRoute,
+        middleware: [errorBoundary],
+      }),
+    );
 
-    const unknownKey = await app.handle(
+    const unknownKey = await app.fetch(
       new Request("http://api.test/public/feedback", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -231,6 +268,7 @@ describe("public feedback intake", () => {
     );
 
     expect(unknownKey.status).toBe(422);
+    expect(await readErrorCode(unknownKey)).toBe("validation_error");
   });
 
   test("the raw cap admits the worst-case report the schema accepts", () => {

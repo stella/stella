@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 /**
  * VersionsFacet — version history rendered inside the inspector
  * tab. Switching versions swaps the file shown in the SAME
@@ -9,8 +11,6 @@ import { useCallback, useRef, useState, useSyncExternalStore } from "react";
  * the selection). Document comparison opens as a subview here so
  * version operations stay owned by one inspector facet.
  */
-
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -66,7 +66,7 @@ export const VersionsFacet = ({
     }),
   );
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "VersionsFacet:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Accumulated list seeded from the query's newest page and extended
@@ -149,7 +149,10 @@ export const VersionsFacet = ({
       // it for telemetry and surface a toast. Keep the cursor but flag
       // the error so auto-loading pauses (the manual button retries)
       // instead of looping the request.
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "VersionsFacet:failure",
+        scope: { type: "handler", handlerId: "VersionsFacet:failure" },
+      });
       setLoadOlderError(true);
       notifyUserError(result.error, t("common.somethingWentWrong"));
       return;

@@ -34,7 +34,7 @@ export const useExpandedDecisionFilters = (
   const signedIn = authStatus.status === "authenticated";
   const roleQuery = useQuery({ ...roleOptions, enabled: signedIn });
   const roleView = queryView(roleQuery);
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "useExpandedDecisionFilters:query");
   const role = roleView.type === "items" ? roleView.items : undefined;
   const maySpendAI =
     roleQuery.status === "success" &&
@@ -50,7 +50,14 @@ export const useExpandedDecisionFilters = (
         ? authStatus.user.activeOrganizationId
         : "",
       country: typed.country,
-      onFailure: (failure) => analytics.captureError(failure),
+      onFailure: (failure) =>
+        analytics.captureError(failure, {
+          fingerprintKey: "useExpandedDecisionFilters.onFailure:failure",
+          scope: {
+            type: "handler",
+            handlerId: "useExpandedDecisionFilters.onFailure:failure",
+          },
+        }),
       query,
     }),
     enabled:
@@ -61,7 +68,7 @@ export const useExpandedDecisionFilters = (
       typed.strict === undefined,
   });
   const expansionView = queryView(expansionQuery);
-  useQueryViewError(expansionView);
+  useQueryViewError(expansionView, "useExpandedDecisionFilters:query-2");
   const expansion =
     expansionView.type === "items" ? expansionView.items : undefined;
   if (expansion === undefined || expansion.alternatives.length === 0) {

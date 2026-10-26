@@ -42,7 +42,7 @@ export const ListItemSources = ({
       enabled,
     }),
   );
-  useQueryViewError(view);
+  useQueryViewError(view, "ListItemSources:query");
   if (!enabled) {
     return null;
   }

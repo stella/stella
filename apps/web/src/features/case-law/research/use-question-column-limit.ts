@@ -27,7 +27,7 @@ export const useQuestionColumnsCountLimit = (enabled: boolean): boolean => {
     select: (columns) => columns.length,
   });
   const countView = queryView(countQuery);
-  useQueryViewError(countView);
+  useQueryViewError(countView, "useQuestionColumnsCountLimit:query");
   const count = countView.type === "items" ? countView.items : undefined;
 
   if (

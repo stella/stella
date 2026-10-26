@@ -463,7 +463,7 @@ const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
     enabled: false,
   });
   const entityView = queryView(entityQuery);
-  useQueryViewError(entityView);
+  useQueryViewError(entityView, "RecentFileTypeIcon:query");
   const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({

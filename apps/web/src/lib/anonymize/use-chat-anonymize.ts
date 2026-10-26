@@ -84,7 +84,7 @@ export const useChatAnonymizePreview = ({
     placeholderData: keepPreviousData,
   });
   const resultView = queryView(result);
-  useQueryViewError(resultView);
+  useQueryViewError(resultView, "useChatAnonymizePreview:query");
 
   if (!shouldRun) {
     return null;

@@ -9,7 +9,7 @@ import { useTranslations } from "use-intl";
 
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -34,7 +34,7 @@ export const featureEnrolmentsOptions = ({
   queryOptions({
     queryKey: ["feature-enrolments", userId, organizationId] as const,
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"]["feature-enrolments"].get({
           fetch: { signal },
         }),
@@ -56,7 +56,7 @@ export const useTimeBillingEnrolment = () => {
       const endpoint = api["organization-settings"]["feature-enrolments"]({
         featureId: TIME_BILLING_FEATURE_ID,
       });
-      return unwrapEden(
+      return unwrapApiResponse(
         enrolled ? await endpoint.put() : await endpoint.delete(),
       );
     },

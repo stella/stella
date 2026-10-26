@@ -69,7 +69,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -175,7 +175,7 @@ export const ChatHistoryPage = ({
     placeholderData: keepPreviousData,
   });
   const threadsView = queryView(threadsQuery);
-  useQueryViewError(threadsView);
+  useQueryViewError(threadsView, "ChatHistoryPage:query");
   const matterUnavailable =
     threadsView.type === "error" &&
     isMatterUnavailable({ error: threadsView.error, matter: search.matter });
@@ -188,7 +188,7 @@ export const ChatHistoryPage = ({
     }),
   );
   const mattersView = queryView(mattersQuery);
-  useQueryViewError(mattersView);
+  useQueryViewError(mattersView, "ChatHistoryPage:query-2");
   const matters = mattersView.type === "items" ? mattersView.items : undefined;
   // Base UI compares combobox props by identity; hand it one value object per
   // selection rather than a fresh copy on every render.
@@ -536,7 +536,7 @@ function DeleteChatDialog({ dialog, onOpenChange }: DeleteChatDialogProps) {
                 : {},
           },
         );
-      unwrapEden(response);
+      unwrapApiResponse(response);
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));

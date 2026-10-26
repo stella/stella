@@ -62,7 +62,7 @@ export const InviteMemberDialog = (props: InviteMemberDialogProps) => {
     staleTime: Number.POSITIVE_INFINITY,
   });
   const currentUserRoleView = queryView(currentUserRoleQuery);
-  useQueryViewError(currentUserRoleView);
+  useQueryViewError(currentUserRoleView, "InviteMemberDialog:query");
   const currentUserRole =
     currentUserRoleView.type === "items"
       ? currentUserRoleView.items

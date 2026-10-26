@@ -22,7 +22,6 @@ import {
   brandPersistedFileComparisonUploadId,
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveDocumentWriteTarget } from "@/api/mcp/document-entity-access";
 import {
   runFileComparison,
@@ -48,6 +47,7 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const TARGET_LIMIT_TEXT = String(DOCUMENT_COMPARE_TARGET_LIMIT);
@@ -306,18 +306,14 @@ export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
     readOnlyHint: false,
   },
   description:
-    "Create a tracked-changes DOCX redline. source versions compares an " +
-    `explicit stored base with up to ${TARGET_LIMIT_TEXT} targets; source ` +
-    "previous compares one stored version with its predecessor; source " +
-    "uploads compares two .docx files stella does not hold, staged by " +
+    "Create a tracked-changes DOCX redline. source 'versions' compares a stored " +
+    `base with up to ${TARGET_LIMIT_TEXT} targets; 'previous' uses its predecessor; ` +
+    "'uploads' compares two .docx files from " +
     "open_file_comparison, prepare_file_comparison_from_links or " +
-    "prepare_file_comparison. base_tracked_changes and target_tracked_changes " +
-    "handle tracked changes each side already carries: accept (the usual " +
-    "choice) compares its final text. output_mode preview " +
-    "compares without writing; download returns each redline as an expiring " +
-    "link, not a version; version saves each redline as a derived version and " +
-    "needs a stored source. Results are independent, so read every status. " +
-    "Show the user each redline's openUrl or download link.",
+    "prepare_file_comparison. *_tracked_changes controls existing changes; 'accept' " +
+    "compares final text. output_mode 'preview' does not write, 'download' returns an " +
+    "expiring link, and 'version' saves a derived version from a stored source. " +
+    "Show every openUrl or download link.",
   inputSchema: COMPARE_DOCUMENTS_INPUT_SCHEMA,
   access: "write",
   accountAccess: "sandbox",
@@ -346,7 +342,7 @@ const sharedDocxFileProperties = async ({
   versionIds,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   versionIds: readonly SafeId<"entityVersion">[];
   workspaceId: SafeId<"workspace">;
@@ -419,7 +415,7 @@ const resolveFilePropertyId = async ({
   versionIds,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityId: SafeId<"entity">;
   explicitFilePropertyId: string | undefined;
   versionIds: readonly SafeId<"entityVersion">[];
@@ -676,7 +672,7 @@ export const handleCompareDocumentsTool = async (
   {
     args,
     context,
-  }: { args: Record<string, unknown>; context: McpRequestContext },
+  }: { args: Record<string, unknown>; context: AuthorizedMcpRequestContext },
   dependencies: CompareDocumentsDependencies = DEFAULT_COMPARE_DOCUMENTS_DEPENDENCIES,
 ): Promise<TypedMcpToolResponse<CompareDocumentsOutput>> => {
   const parsed = v.safeParse(COMPARE_DOCUMENTS_INPUT_SCHEMA, args);
@@ -761,7 +757,10 @@ export const handleCompareDocumentsTool = async (
     }),
   );
   if (Result.isError(compared)) {
-    return internalFailureResult(compared.error);
+    return internalFailureResult(
+      compared.error,
+      "mcp.handleCompareDocumentsTool.compared_error",
+    );
   }
 
   return toolDataResult(toToolOutput(compared.value));

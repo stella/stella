@@ -152,7 +152,13 @@ export const PdfViewerControls = ({
       const data = await fetchPrintPdf({ workspaceId, fieldId });
       printPdfBuffer(data);
     } catch (error: unknown) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "PdfViewerControls.handlePrint:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PdfViewerControls.handlePrint:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsPrinting(false);

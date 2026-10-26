@@ -26,7 +26,7 @@ export const usePropertiesCountLimit = (workspaceId: string | null) => {
     select: (data) => data.length,
   });
   const propertiesCountView = queryView(propertiesCountQuery);
-  useQueryViewError(propertiesCountView);
+  useQueryViewError(propertiesCountView, "usePropertiesCountLimit:query");
   const propertiesCount =
     propertiesCountView.type === "items"
       ? propertiesCountView.items
@@ -49,7 +49,7 @@ export const useEntitiesCountLimit = (workspaceId: string) => {
     ...entitySummariesCountOptions(workspaceId),
   });
   const entitiesCountView = queryView(entitiesCountQuery);
-  useQueryViewError(entitiesCountView);
+  useQueryViewError(entitiesCountView, "useEntitiesCountLimit:query");
   const entitiesCount =
     entitiesCountView.type === "items" ? entitiesCountView.items : undefined;
 

@@ -20,10 +20,10 @@ export const useSkillEditAccess = (skillId: string): SkillEditAccess => {
     skillDetailOptions(user.activeOrganizationId, user.id, skillId),
   );
   const detailView = queryView(detail);
-  useQueryViewError(detailView);
+  useQueryViewError(detailView, "useSkillEditAccess:query");
   const role = useQuery(roleOptions);
   const roleView = queryView(role);
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "useSkillEditAccess:query-2");
 
   if (
     detailView.type !== "items" ||

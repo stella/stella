@@ -38,7 +38,7 @@ export const CaseDecisionDetailsInspectorView = ({
   const decisionId = toSafeId<"caseLawDecision">(tab.payload.decisionId);
   const decisionQuery = useQuery(decisionOptions(decisionId));
   const decisionView = queryView(decisionQuery);
-  useQueryViewError(decisionView);
+  useQueryViewError(decisionView, "CaseDecisionDetailsInspectorView:query");
   const { isPending } = decisionQuery;
   const decision =
     decisionView.type === "items" ? decisionView.items : undefined;

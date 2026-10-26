@@ -54,7 +54,7 @@ export const StatuteReaderBody = ({
       citationWork !== null && typeof statute.citationCaseCount === "number",
   });
   const citationCountsView = queryView(citationCounts);
-  useQueryViewError(citationCountsView);
+  useQueryViewError(citationCountsView, "StatuteReaderBody:query");
   const countsData =
     citationCountsView.type === "items" ? citationCountsView.items : undefined;
   const provisionCitationCounts = provisionCitationCountByBlockAnchor(

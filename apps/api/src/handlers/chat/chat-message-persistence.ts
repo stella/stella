@@ -50,7 +50,7 @@ import type {
   PersistableChatMessage,
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -66,6 +66,7 @@ import {
 } from "@/api/lib/chat/thread-names";
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -347,7 +348,13 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    props.indexThread(props.threadId).catch(captureError);
+    props
+      .indexThread(props.threadId)
+      .catch(
+        createErrorCapture(
+          handlerErrorContext("persistMessage.props_indexThread"),
+        ),
+      );
   }
   return result;
 };
@@ -669,11 +676,11 @@ const reportStoredTurnDefects = ({
       new ChatTurnUnsettledToolCallError({
         message: "A settled chat turn stored a tool call without its result",
       }),
-      {
+      handlerErrorContext("chat.storedTurn.unsettledToolCall", {
         outcome,
         tool_call_states: unsettled.map(({ state }) => state).join(","),
         unsettled_count: String(unsettled.length),
-      },
+      }),
     );
   }
   const dropped =
@@ -685,11 +692,11 @@ const reportStoredTurnDefects = ({
       new ChatTurnDroppedPartsError({
         message: "A continuation stored its message without earlier parts",
       }),
-      {
+      handlerErrorContext("chat.storedTurn.droppedParts", {
         dropped_tool_calls: String(dropped.droppedToolCallIds.length),
         outcome,
         part_count_drop: String(dropped.partCountDrop),
-      },
+      }),
     );
   }
 };
@@ -1213,7 +1220,15 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
+  persistenceProps
+    .indexThread(persistenceProps.threadId)
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "persistAcceptedMessageWithClaim.persistenceProps_indexThread",
+        ),
+      ),
+    );
   return Result.ok(result.value.value);
 };
 
@@ -1248,6 +1263,14 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
+  persistenceProps
+    .indexThread(persistenceProps.threadId)
+    .catch(
+      createErrorCapture(
+        handlerErrorContext(
+          "persistClaimedReplayMessage.persistenceProps_indexThread",
+        ),
+      ),
+    );
   return Result.ok(result.value.execution);
 };

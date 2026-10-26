@@ -21,7 +21,7 @@ import {
   defaultCaseLawCountryForLocale,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
-import { unwrapPublicLawEden } from "@/lib/public-law-api";
+import { unwrapPublicLawResponse } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -100,7 +100,7 @@ const readDecisionById = async (decisionId: string): Promise<Resolution> => {
     .get();
 
   return fromDecisionRead(
-    unwrapPublicLawEden(response, "resolvePublicCaseLawDecision"),
+    unwrapPublicLawResponse(response, "resolvePublicCaseLawDecision"),
   );
 };
 
@@ -125,7 +125,7 @@ const resolveByRef = async (rawRef: string): Promise<Resolution | null> => {
     limit: CASE_LAW_LINK_SEARCH_LIMIT,
   });
 
-  const data = unwrapPublicLawEden(
+  const data = unwrapPublicLawResponse(
     response,
     "searchPublicCaseLawDecisionLinks",
   );
@@ -159,7 +159,7 @@ const resolveByRoute = async ({
   });
 
   return fromDecisionRead(
-    unwrapPublicLawEden(response, "readPublicCaseLawDecisionBySlug"),
+    unwrapPublicLawResponse(response, "readPublicCaseLawDecisionBySlug"),
   );
 };
 

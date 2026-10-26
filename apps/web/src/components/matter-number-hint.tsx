@@ -29,7 +29,7 @@ export const MatterNumberHint = (props: MatterNumberHintProps) => {
     }),
   );
   const settingsView = queryView(settingsQuery);
-  useQueryViewError(settingsView);
+  useQueryViewError(settingsView, "MatterNumberHint:query");
   const settings =
     settingsView.type === "items" ? settingsView.items : undefined;
 

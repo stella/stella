@@ -16,7 +16,7 @@ export const useDecisionCitationAnchors = (
     decisionCitationsInfiniteOptions(decisionId, "outgoing"),
   );
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "useDecisionCitationAnchors:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const anchors: CitationAnchorSource[] = [];
 

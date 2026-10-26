@@ -1262,3 +1262,106 @@ test("target-owned journeys require their harness before setup and execution", (
   }
   expect(guardedJobs).toBe(4);
 });
+
+test("journey reports upload from the directory the journey run writes", () => {
+  const action = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/actions/user-journeys/action.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const outputs = isRecord(action) ? action["outputs"] : undefined;
+  const reportPaths = isRecord(outputs) ? outputs["report-paths"] : undefined;
+  expect(isRecord(reportPaths) ? reportPaths["value"] : undefined).toBe(
+    githubExpression("steps.source.outputs.report-paths"),
+  );
+  const runs = isRecord(action) ? action["runs"] : undefined;
+  const rawSteps = isRecord(runs) ? runs["steps"] : undefined;
+  const steps = (Array.isArray(rawSteps) ? rawSteps : []).filter(isRecord);
+  const run = steps.find((step) => step["name"] === "Run pinned journeys");
+  const runEnv = run?.["env"];
+  expect(isRecord(runEnv) ? runEnv["E2E_OUTPUT_DIR"] : undefined).toBe(
+    githubExpression("steps.source.outputs.output-dir"),
+  );
+  const config = readFileSync(
+    new URL("../apps/web/e2e/playwright.journeys.config.ts", import.meta.url),
+    "utf-8",
+  );
+  expect(config).toContain('process.env["E2E_OUTPUT_DIR"]');
+  expect(config).toContain("outputDir: OUTPUT_DIR,");
+  expect(config).toContain(`outputFolder: \`\${OUTPUT_DIR}-report\``);
+
+  // The paths exist before the source check can fail, so a failed run's
+  // upload step always has something to name.
+  const source = steps.find((step) => step["id"] === "source")?.["run"];
+  expect(typeof source).toBe("string");
+  const directory = mkdtempSync(path.join(tmpdir(), "journey-output-"));
+  try {
+    const outputFile = path.join(directory, "github-output");
+    writeFileSync(outputFile, "");
+    const result = Bun.spawnSync(["bash", "-c", String(source)], {
+      cwd: directory,
+      env: {
+        ...process.env,
+        EXPECTED_COMMIT: "not-a-commit",
+        GITHUB_OUTPUT: outputFile,
+        GITHUB_WORKSPACE: directory,
+        HEALTH_URL: "",
+        PROJECT: "local-stack",
+      },
+    });
+    expect(result.exitCode).toBe(1);
+    const written = readFileSync(outputFile, "utf-8");
+    const outputDir = path.join(
+      directory,
+      "apps/web/e2e/test-results/user-journeys-local-stack",
+    );
+    expect(written).toContain(`output-dir=${outputDir}\n`);
+    expect(written).toContain(
+      `report-paths<<REPORT_PATHS\n${outputDir}/\n${outputDir}-report/\nREPORT_PATHS\n`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+
+  let uploads = 0;
+  for (const file of ["user-journeys.yml", "deploy-staging.yml"]) {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL(`../.github/workflows/${file}`, import.meta.url),
+        "utf-8",
+      ),
+    );
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    for (const job of Object.values(isRecord(jobs) ? jobs : {})) {
+      const jobSteps = isRecord(job) ? job["steps"] : undefined;
+      const all = (Array.isArray(jobSteps) ? jobSteps : []).filter(isRecord);
+      const journeyIds = all
+        .filter((step) => step["uses"] === "./.github/actions/user-journeys")
+        .map((step) => String(step["id"]));
+      if (journeyIds.length === 0) {
+        continue;
+      }
+      const upload = all.find(
+        (step) =>
+          typeof step["uses"] === "string" &&
+          step["uses"].startsWith("actions/upload-artifact@") &&
+          journeyIds.some((id) =>
+            String(step["if"]).includes(`steps.${id}.outcome`),
+          ),
+      );
+      const uploadWith = upload?.["with"];
+      const uploadPath = isRecord(uploadWith) ? String(uploadWith["path"]) : "";
+      for (const id of journeyIds) {
+        expect(uploadPath, `${file}: ${id} report upload`).toContain(
+          githubExpression(`steps.${id}.outputs.report-paths`),
+        );
+      }
+      expect(uploadPath, `${file}: hand-written report path`).not.toContain(
+        "test-results",
+      );
+      uploads += 1;
+    }
+  }
+  expect(uploads).toBe(4);
+});

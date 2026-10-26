@@ -166,7 +166,10 @@ const MemberRow = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "MemberRow:failure",
+        scope: { type: "handler", handlerId: "MemberRow:failure" },
+      });
     },
   });
 

@@ -442,7 +442,7 @@ export const MatterTargetPicker = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const dataQuery = useQuery(workspacesOptions(activeOrganizationId));
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "MatterTargetPicker:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // The endpoint returns matters ordered by most recent activity; keep that

@@ -12,6 +12,7 @@ import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { MatterIcon } from "@stll/ui/matter-icon";
 
+import { MatterSwitcher } from "@/components/breadcrumbs/matter-switcher";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
@@ -382,6 +383,7 @@ export const WorkspaceBreadcrumb = ({
                     </span>
                   ) : null}
                 </Link>
+                {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
               </>
             );
           })()}
@@ -444,6 +446,7 @@ export const WorkspaceBreadcrumb = ({
           {displayName}
         </Link>
         {referenceSegment}
+        {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
         {referenceHint}
         {referenceConfirmationDialog}
       </BreadcrumbItem>

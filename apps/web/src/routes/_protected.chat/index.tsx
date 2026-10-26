@@ -103,7 +103,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -130,7 +130,14 @@ export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
     const activeOrganizationId = context.user.activeOrganizationId;
     const onPrefetchError = (error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "chat.index.loader.onPrefetchError:failure",
+        scope: {
+          type: "request",
+          method: "GET",
+          routeTemplate: "/_protected/chat/",
+        },
+      });
     };
 
     detached(
@@ -305,10 +312,13 @@ function ChatIndex() {
           ),
         })
         .patch({ webSearchEnabled: true }, { query: {} });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ChatIndex:failure",
+        scope: { type: "handler", handlerId: "ChatIndex:failure" },
+      });
     },
   });
   const seededDraftRef = useRef<string | null>(null);
@@ -413,7 +423,7 @@ function ChatIndex() {
     }),
   );
   const memberPreviewsView = queryView(memberPreviewsQuery);
-  useQueryViewError(memberPreviewsView);
+  useQueryViewError(memberPreviewsView, "ChatIndex:query");
   const memberPreviews =
     memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;
   const mattersHeading =

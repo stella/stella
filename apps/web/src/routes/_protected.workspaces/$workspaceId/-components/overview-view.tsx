@@ -71,7 +71,7 @@ import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { queryView } from "@/lib/query-view.logic";
@@ -255,7 +255,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([

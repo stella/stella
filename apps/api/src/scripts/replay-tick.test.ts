@@ -22,7 +22,7 @@ import {
   readReplayGate,
   replayTickMetricRecord,
   runReplayTickScript,
-} from "@/api/scripts/replay-tick";
+} from "@/api/scripts/replay-tick-command";
 
 const enabledEnvironment = {
   CASE_LAW_REPLAY_ENABLED: true,
@@ -71,7 +71,7 @@ describe("scheduled replay entrypoint", () => {
   });
 
   test("production cannot acquire fixture overrides before database or storage setup", async () => {
-    const entry = new URL("replay-tick.ts", import.meta.url).pathname;
+    const entry = new URL("replay-tick-command.ts", import.meta.url).pathname;
     const child = Bun.spawn({
       cmd: [
         process.execPath,

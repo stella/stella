@@ -20,11 +20,10 @@ import {
   ConsentAccountRows,
   ConsentDecisionBar,
 } from "@/components/oauth-consent/consent-controls";
+import { useOAuthAccountSwitch } from "@/components/oauth-consent/oauth-account";
 import { OAuthClientDetails } from "@/components/oauth-consent/oauth-client-details";
 import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
 import { useMountEffect } from "@/hooks/use-effect";
-import { signOutAndRelease } from "@/hooks/use-sign-out";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, submitOAuthConsent } from "@/lib/auth-client";
 import {
   refreshAuthQueries,
@@ -95,15 +94,15 @@ function ConsentPage() {
   // The session query follows an organization switch on this page; the route
   // context only knows the organization the page loaded with.
   const sessionView = queryView(useQuery(sessionOptions));
-  useQueryViewError(sessionView);
+  useQueryViewError(sessionView, "ConsentPage:query");
   const activeOrganizationId =
     (sessionView.type === "items"
       ? sessionView.items?.session.activeOrganizationId
       : null) ?? routeActiveOrganizationId;
   const userId = Route.useRouteContext({ select: (ctx) => ctx.userId });
   const email = Route.useRouteContext({ select: (ctx) => ctx.user?.email });
-  const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const switchAccount = useOAuthAccountSwitch();
   const [submission, setSubmission] = useState<ConsentSubmission>({
     status: "idle",
   });
@@ -112,7 +111,7 @@ function ConsentPage() {
   const organizationsView = queryView(
     useQuery(organizationListOptions(userId)),
   );
-  useQueryViewError(organizationsView);
+  useQueryViewError(organizationsView, "ConsentPage:query-2");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
   const roleView = queryView(
@@ -122,7 +121,7 @@ function ConsentPage() {
       staleTime: Number.POSITIVE_INFINITY,
     }),
   );
-  useQueryViewError(roleView);
+  useQueryViewError(roleView, "ConsentPage:query-3");
   const canManageOrganization =
     roleView.type === "items" &&
     roleView.refetchError === undefined &&
@@ -159,7 +158,7 @@ function ConsentPage() {
       select: (settings) => settings.practiceJurisdictions,
     }),
   );
-  useQueryViewError(jurisdictionsView);
+  useQueryViewError(jurisdictionsView, "ConsentPage:query-4");
   const showJurisdictionsNotice =
     canManageOrganization && jurisdictionsView.type === "empty";
 
@@ -205,27 +204,11 @@ function ConsentPage() {
 
   const handleAccountSwitch = async () => {
     setSubmission({ status: "pending" });
-    const outcome = await Result.tryPromise(
-      async () => await signOutAndRelease(),
-    );
+    const outcome = await switchAccount();
     if (outcome.isErr()) {
-      await queryClient.refetchQueries({ queryKey: sessionOptions.queryKey });
       setSubmission({ status: "error" });
       notifyUserError(outcome.error, t("consent.error"));
-      return;
     }
-    const result = outcome.value;
-    if (result.error) {
-      await queryClient.refetchQueries({ queryKey: sessionOptions.queryKey });
-      setSubmission({ status: "error" });
-      notifyUserError(toAuthClientError(result.error), t("consent.error"));
-      return;
-    }
-    analytics.reset();
-    const authUrl = bridgedQuery
-      ? `/auth#${getOauthHashFragment(bridgedQuery)}`
-      : `/auth?${new URLSearchParams({ redirectTo: window.location.pathname + window.location.search })}`;
-    window.location.assign(authUrl);
   };
 
   const handleConsent = async (accept: boolean) => {

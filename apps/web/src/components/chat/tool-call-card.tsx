@@ -444,7 +444,7 @@ const ToolCallCardComponent = ({
     enabled: mcpToolInfo !== null,
   });
   const catalogDataView = queryView(catalogDataQuery);
-  useQueryViewError(catalogDataView);
+  useQueryViewError(catalogDataView, "ToolCallCard:query");
   const catalogData =
     catalogDataView.type === "items" ? catalogDataView.items : undefined;
   const connectors = catalogData ? catalogData.connectors : [];

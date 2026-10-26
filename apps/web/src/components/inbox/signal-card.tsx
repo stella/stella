@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { SIGNAL_STATUS, SUGGESTION_KIND } from "@stll/api-contract/signals";
 import type { SignalSuggestion } from "@stll/api-contract/signals";
+import type { HandlerExceptionScope } from "@stll/errors";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { AlarmClockIcon, MessageSquareIcon, XIcon } from "@stll/ui/icons";
@@ -71,11 +72,24 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 
+const ERROR_CAPTURE = {
+  run: {
+    fingerprintKey: "SignalCard.run:failure",
+    scope: { type: "handler", handlerId: "SignalCard.run:failure" },
+  },
+} as const;
+
 type SignalCardProps = {
   signal: InboxSignal;
   organizationId: string;
   presentation?: "card" | "actions";
   onChanged?: () => Promise<void>;
+};
+
+type RunSignalOptions = {
+  scope: HandlerExceptionScope;
+  successMessage: string | null;
+  invalidateMyWork?: boolean;
 };
 
 export const SignalCard = ({
@@ -98,14 +112,13 @@ export const SignalCard = ({
 
   const run = async (
     operation: () => Promise<Result<unknown, unknown>>,
-    successMessage: string | null,
-    invalidateMyWork = false,
+    { scope, successMessage, invalidateMyWork = false }: RunSignalOptions,
   ) => {
     setBusy(true);
     const result = await operation();
     if (Result.isError(result)) {
       setBusy(false);
-      analytics.captureError(result.error);
+      analytics.captureError(result.error, { ...ERROR_CAPTURE.run, scope });
       notifyUserError(result.error, t("common.unexpectedError"));
       return false;
     }
@@ -158,29 +171,48 @@ export const SignalCard = ({
           suggestionKind,
           ...(result ? { result } : {}),
         }),
-      t("inspector.review.decisions.accepted"),
-      true,
+      {
+        scope: { type: "handler", handlerId: `inbox.accept.${suggestionKind}` },
+        successMessage: t("inspector.review.decisions.accepted"),
+        invalidateMyWork: true,
+      },
     );
 
   const assign = async (assigneeUserId: string) =>
-    await run(async () => {
-      const assigned = await assignSignal({
-        ...mutationArgs,
-        assigneeUserId,
-      });
-      if (Result.isError(assigned)) {
-        return assigned;
-      }
-      return acceptSignal({
-        ...mutationArgs,
-        suggestionKind: SUGGESTION_KIND.ASSIGN,
-      });
-    }, t("inspector.review.decisions.accepted"));
+    await run(
+      async () => {
+        const assigned = await assignSignal({
+          ...mutationArgs,
+          assigneeUserId,
+        });
+        if (Result.isError(assigned)) {
+          return assigned;
+        }
+        return acceptSignal({
+          ...mutationArgs,
+          suggestionKind: SUGGESTION_KIND.ASSIGN,
+        });
+      },
+      {
+        scope: { type: "handler", handlerId: "inbox.assign" },
+        successMessage: t("inspector.review.decisions.accepted"),
+      },
+    );
 
   const dismiss = async (reason: string | null) =>
+    await run(async () => await dismissSignal({ ...mutationArgs, reason }), {
+      scope: { type: "handler", handlerId: "inbox.dismiss" },
+      successMessage: null,
+    });
+
+  const snooze = async (period: "tomorrow" | "next-week") =>
     await run(
-      async () => await dismissSignal({ ...mutationArgs, reason }),
-      null,
+      async () =>
+        await snoozeSignal({ ...mutationArgs, until: snoozeUntil(period) }),
+      {
+        scope: { type: "handler", handlerId: `inbox.snooze.${period}` },
+        successMessage: null,
+      },
     );
 
   const scoutKey = scoutLabelKey(signal.scoutKey);
@@ -254,36 +286,12 @@ export const SignalCard = ({
               <MenuGroup>
                 <MenuGroupLabel>{t("inbox.snooze")}</MenuGroupLabel>
                 <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("tomorrow"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+                  onClick={() => detached(snooze("tomorrow"), "inbox.snooze")}
                 >
                   {t("inbox.snoozeTomorrow")}
                 </MenuItem>
                 <MenuItem
-                  onClick={() => {
-                    detached(
-                      run(
-                        async () =>
-                          await snoozeSignal({
-                            ...mutationArgs,
-                            until: snoozeUntil("next-week"),
-                          }),
-                        null,
-                      ),
-                      "inbox.snooze",
-                    );
-                  }}
+                  onClick={() => detached(snooze("next-week"), "inbox.snooze")}
                 >
                   {t("inbox.snoozeNextWeek")}
                 </MenuItem>
@@ -411,7 +419,7 @@ const OriginChip = ({
     enabled: origin === "manual" && createdByUserId !== null,
   });
   const organizationView = queryView(organizationQuery);
-  useQueryViewError(organizationView);
+  useQueryViewError(organizationView, "OriginChip:query");
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
   const author =
@@ -447,7 +455,7 @@ const WorkspaceName = ({
     workspacesNavigationOptions({ organizationId, userId }),
   );
   const dataView = queryView(dataQuery);
-  useQueryViewError(dataView);
+  useQueryViewError(dataView, "WorkspaceName:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
@@ -568,7 +576,7 @@ const AssignMenu = ({
   const t = useTranslations();
   const organizationQuery = useQuery(organizationOptions(organizationId));
   const organizationView = queryView(organizationQuery);
-  useQueryViewError(organizationView);
+  useQueryViewError(organizationView, "AssignMenu:query");
   const organization =
     organizationView.type === "items" ? organizationView.items : undefined;
   const members = organization ? organization.members : [];

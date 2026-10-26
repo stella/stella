@@ -107,13 +107,13 @@ export const OnboardingWizard = () => {
   const queryClient = useQueryClient();
   const openGuideDrawer = useGuideDrawerStore((store) => store.open);
   const sessionView = queryView(useQuery(sessionOptions));
-  useQueryViewError(sessionView);
+  useQueryViewError(sessionView, "OnboardingWizard:query");
   const sessionData =
     sessionView.type === "items" ? sessionView.items : undefined;
   const nativeToolView = queryView(
     useQuery(nativeToolDeployAvailabilityOptions),
   );
-  useQueryViewError(nativeToolView);
+  useQueryViewError(nativeToolView, "OnboardingWizard:query-2");
   const nativeToolDeployAvailability =
     nativeToolView.type === "items" ? nativeToolView.items : undefined;
   const userEmail = sessionData?.user.email ?? "";
@@ -281,7 +281,10 @@ export const OnboardingWizard = () => {
         });
 
       if (createOrgError) {
-        analytics.captureError(toAuthClientError(createOrgError));
+        analytics.captureError(toAuthClientError(createOrgError), {
+          fingerprintKey: "OnboardingWizard:failure",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure" },
+        });
         notifyAuthClientError(createOrgError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
@@ -294,7 +297,10 @@ export const OnboardingWizard = () => {
       );
 
       if (setActiveError) {
-        analytics.captureError(toAuthClientError(setActiveError));
+        analytics.captureError(toAuthClientError(setActiveError), {
+          fingerprintKey: "OnboardingWizard:failure-2",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure-2" },
+        });
         notifyAuthClientError(setActiveError, t("errors.actionFailed"));
         setIsCreating(false);
         return;
@@ -321,7 +327,13 @@ export const OnboardingWizard = () => {
           });
 
           if (jurisdictionError) {
-            analytics.captureError(toAPIError(jurisdictionError));
+            analytics.captureError(toAPIError(jurisdictionError), {
+              fingerprintKey: "OnboardingWizard:failure-3",
+              scope: {
+                type: "handler",
+                handlerId: "OnboardingWizard:failure-3",
+              },
+            });
             stellaToast.add({
               title: t("onboarding.jurisdictionSaveFailed"),
               type: "warning",
@@ -390,7 +402,13 @@ export const OnboardingWizard = () => {
           });
 
           if (aiConfigError) {
-            analytics.captureError(toAPIError(aiConfigError));
+            analytics.captureError(toAPIError(aiConfigError), {
+              fingerprintKey: "OnboardingWizard:failure-4",
+              scope: {
+                type: "handler",
+                handlerId: "OnboardingWizard:failure-4",
+              },
+            });
             stellaToast.add({
               title: t("onboarding.aiConfigFailed"),
               type: "warning",
@@ -434,7 +452,10 @@ export const OnboardingWizard = () => {
           }
         }
       } catch (error) {
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "OnboardingWizard:failure-5",
+          scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
+        });
       }
 
       setIsCreating(false);

@@ -24,6 +24,7 @@ let db: TestDatabase;
 const orgIds: SafeId<"organization">[] = [];
 const userIds: SafeId<"user">[] = [];
 
+// timeout: Boot the shared PGlite engine and complete schema before assertions.
 beforeAll(
   async () => {
     db = await getTestDb();
