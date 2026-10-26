@@ -508,14 +508,20 @@
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
     "approval": {
+      "approveAll": "{count, plural, one {Patvirtinti # įrašą} few {Patvirtinti visus # įrašus} many {Patvirtinti visus # įrašo} other {Patvirtinti visus # įrašų}}",
       "approveSelected": "Patvirtinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
+      "billedTotal": "Apmokestinta {duration}",
       "empty": "Šioje byloje nieko nelaukia patvirtinimo.",
+      "emptyWeek": "Šią savaitę nieko nelaukia patvirtinimo. Pateiktas laikas rodomas čia.",
+      "everyone": "Visi",
       "failed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
       "myTime": "Mano laikas",
+      "pending": "{count, plural, one {# įrašas laukia patvirtinimo} few {# įrašai laukia patvirtinimo} many {# įrašo laukia patvirtinimo} other {# įrašų laukia patvirtinimo}}",
       "refusals": {
         "invalidEntry": "Pridėkite aprašymą ir patikrinkite darbo datą, tada patvirtinkite įrašą.",
         "notApprover": "Šį įrašą gali patvirtinti tik jam priskirtas tvirtintojas arba administratorius.",
         "notFound": "Šio įrašo nebėra. Atnaujinkite sąrašą.",
+        "notSubmitted": "Šis įrašas dar nepateiktas. Pirmiausia jį turi pateikti jo autorius.",
         "runningTimer": "Prieš tvirtindami įrašą sustabdykite veikiantį laikmatį.",
         "unpriced": "Šis įrašas neturi įkainio. Nustatykite šios bylos įkainį ir tada patvirtinkite įrašą.",
         "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
@@ -811,6 +817,7 @@
       "approved": "Patvirtintas",
       "billed": "Išrašyta sąskaita",
       "draft": "Juodraštis",
+      "submitted": "Pateikta",
       "written_off": "Nurašytas"
     },
     "stopTimer": "Stabdyti",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# pasiūlymas} few {# pasiūlymai} many {# pasiūlymo} other {# pasiūlymų}}",
       "previousWeek": "Ankstesnė savaitė",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Patikrinkite darbo datą, tada pateikite šį įrašą.",
+        "narrativeRequired": "Pridėkite aprašymą, tada pateikite šį įrašą.",
+        "runningTimer": "Sustabdykite veikiantį laikmatį, tada pateikite šį įrašą.",
+        "unpriced": "Šis įrašas neturi įkainio. Paprašykite įkainio bylai, tada jį pateikite."
+      },
+      "returned": "Grąžinta: {comment}",
+      "submitAndApprove": "Pateikti ir patvirtinti",
+      "submitResult": "Pateikta: {submitted} · patvirtinta: {approved} · taisytina: {refused}",
+      "submitWeek": "Pateikti savaitę",
       "title": "Mano savaitė",
       "totals": "Užregistruota: {logged} · apmokama: {billable}"
     }

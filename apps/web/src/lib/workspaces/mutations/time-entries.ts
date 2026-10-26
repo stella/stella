@@ -1,14 +1,38 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
+import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import {
   approveTimeEntries,
   returnTimeEntry,
   sendTimeEntryMutation,
 } from "@/lib/workspaces/time-entries-api";
+
+// A review decision changes the matters' time and what they can invoice, and
+// every approver's queue.
+const refreshReviewedTime = async (
+  queryClient: QueryClient,
+  workspaceIds: readonly string[],
+) => {
+  await Promise.all([
+    ...[...new Set(workspaceIds)].flatMap((workspaceId) => [
+      queryClient.invalidateQueries({
+        queryKey: timeEntriesKeys.all(workspaceId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: invoicesKeys.all(workspaceId),
+      }),
+    ]),
+    queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+  ]);
+};
 
 /**
  * Approves a selection in one call. The API answers per entry, so a refusal
@@ -22,18 +46,12 @@ export const useApproveTimeEntries = () => {
     mutationFn: async ({
       ids,
     }: {
-      workspaceId: string;
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
       ids: readonly string[];
     }) => await approveTimeEntries(ids),
-    onSuccess: async (_result, { workspaceId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: timeEntriesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        }),
-      ]);
+    onSuccess: async (_result, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -52,19 +70,16 @@ export const useReturnTimeEntry = () => {
       id,
       comment,
     }: {
-      workspaceId: string;
+      /** The matter the entry belongs to; null for internal work. */
+      workspaceId: string | null;
       id: string;
       comment: string;
     }) => await returnTimeEntry({ id, comment }),
     onSuccess: async (_result, { workspaceId }) => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: timeEntriesKeys.all(workspaceId),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: invoicesKeys.all(workspaceId),
-        }),
-      ]);
+      await refreshReviewedTime(
+        queryClient,
+        workspaceId === null ? [] : [workspaceId],
+      );
     },
     onError: (error) => {
       analytics.captureError(error, {

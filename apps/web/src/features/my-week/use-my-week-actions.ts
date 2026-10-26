@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import type { ManualTimeEntryValues } from "@/components/billing/manual-time-entry-form";
@@ -9,6 +9,8 @@ import type {
   MySuggestionMatter,
   MyTimeEntry,
 } from "@/features/my-week/my-week-day";
+import { api } from "@/lib/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   useDecideTimeSuggestion,
@@ -16,11 +18,19 @@ import {
 } from "@/lib/workspaces/mutations/time-entries";
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsKeys } from "@/lib/workspaces/queries/my-time-suggestions";
+import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 
 export type SuggestionTarget = {
   matter: MySuggestionMatter["matter"];
   date: string;
   suggestion: MySuggestion;
+};
+
+export type SubmitWeekRequest = {
+  startDate: string;
+  endDate: string;
+  /** Approve in the same step what the person is the approver of. */
+  approve: boolean;
 };
 
 type AcceptValues = Pick<
@@ -58,6 +68,17 @@ export const useMyWeekActions = ({
       }),
     ]);
   };
+
+  const submitWeek = useMutation({
+    mutationFn: async (request: SubmitWeekRequest) =>
+      unwrapApiResponse(await api["time-entries"].me.submissions.post(request)),
+    onSuccess: async () => {
+      await Promise.all([
+        refreshWeek(),
+        queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+      ]);
+    },
+  });
 
   const decide = async (
     { matter, date, suggestion }: SuggestionTarget,
@@ -126,6 +147,8 @@ export const useMyWeekActions = ({
   return {
     busyFingerprints,
     pending: decideSuggestion.isPending || updateEntry.isPending,
+    submitWeek: submitWeek.mutateAsync,
+    submitting: submitWeek.isPending,
     accept,
     dismiss,
     editEntry,

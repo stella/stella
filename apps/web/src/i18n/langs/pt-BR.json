@@ -508,14 +508,20 @@
     "amount": "Valor",
     "amountMustBePositive": "O valor deve ser maior que zero",
     "approval": {
+      "approveAll": "{count, plural, one {Aprovar # lançamento} other {Aprovar os # lançamentos}}",
       "approveSelected": "Aprovar {count, plural, one {# registro selecionado} other {# registros selecionados}}",
+      "billedTotal": "{duration} faturado",
       "empty": "Nada aguarda aprovação neste caso.",
+      "emptyWeek": "Nada aguarda aprovação nesta semana. O tempo enviado aparece aqui.",
+      "everyone": "Todos",
       "failed": "A alteração não foi salva. Tente novamente.",
       "myTime": "Meu tempo",
+      "pending": "{count, plural, one {# lançamento para aprovar} other {# lançamentos para aprovar}}",
       "refusals": {
         "invalidEntry": "Adicione uma descrição e confira a data do trabalho; depois aprove o registro.",
         "notApprover": "Somente o aprovador designado ou um administrador pode aprovar este registro.",
         "notFound": "Este registro não existe mais. Atualize a lista.",
+        "notSubmitted": "Este lançamento ainda não foi enviado. Quem o registrou precisa enviá-lo primeiro.",
         "runningTimer": "Pare o cronômetro em andamento antes de aprovar este registro.",
         "unpriced": "Este registro não tem taxa. Defina uma taxa para este caso e depois aprove o registro.",
         "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
@@ -811,6 +817,7 @@
       "approved": "Aprovado",
       "billed": "Faturado",
       "draft": "Rascunho",
+      "submitted": "Enviado",
       "written_off": "Anulado"
     },
     "stopTimer": "Parar",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# sugestão} other {# sugestões}}",
       "previousWeek": "Semana anterior",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Confira a data do trabalho e depois envie este lançamento.",
+        "narrativeRequired": "Adicione uma descrição e depois envie este lançamento.",
+        "runningTimer": "Pare o cronômetro em andamento e depois envie este lançamento.",
+        "unpriced": "Este lançamento não tem tarifa. Peça uma tarifa para o caso e depois envie-o."
+      },
+      "returned": "Devolvido: {comment}",
+      "submitAndApprove": "Enviar e aprovar",
+      "submitResult": "{submitted} enviados · {approved} aprovados · {refused} para corrigir",
+      "submitWeek": "Enviar semana",
       "title": "Minha semana",
       "totals": "{logged} lançados · {billable} faturáveis"
     }

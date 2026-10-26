@@ -508,14 +508,20 @@
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
     "approval": {
+      "approveAll": "{count, plural, one {Zatwierdź # wpis} few {Zatwierdź # wpisy} many {Zatwierdź wszystkie # wpisów} other {Zatwierdź wszystkie # wpisu}}",
       "approveSelected": "Zatwierdź {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
+      "billedTotal": "Rozliczono {duration}",
       "empty": "W tej sprawie nic nie czeka na zatwierdzenie.",
+      "emptyWeek": "W tym tygodniu nic nie czeka na zatwierdzenie. Przesłany czas pojawi się tutaj.",
+      "everyone": "Wszyscy",
       "failed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
       "myTime": "Mój czas",
+      "pending": "{count, plural, one {# wpis do zatwierdzenia} few {# wpisy do zatwierdzenia} many {# wpisów do zatwierdzenia} other {# wpisu do zatwierdzenia}}",
       "refusals": {
         "invalidEntry": "Dodaj opis i sprawdź datę pracy, a potem zatwierdź wpis.",
         "notApprover": "Ten wpis może zatwierdzić tylko przypisany zatwierdzający lub administrator.",
         "notFound": "Ten wpis już nie istnieje. Odśwież listę.",
+        "notSubmitted": "Ten wpis nie został jeszcze przesłany. Najpierw musi go przesłać jego autor.",
         "runningTimer": "Zatrzymaj działający stoper przed zatwierdzeniem wpisu.",
         "unpriced": "Ten wpis nie ma stawki. Ustaw stawkę dla tej sprawy, a potem zatwierdź wpis.",
         "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
@@ -811,6 +817,7 @@
       "approved": "Zatwierdzony",
       "billed": "Zafakturowany",
       "draft": "Wersja robocza",
+      "submitted": "Przesłano",
       "written_off": "Odpisany"
     },
     "stopTimer": "Zatrzymaj",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# sugestia} few {# sugestie} many {# sugestii} other {# sugestii}}",
       "previousWeek": "Poprzedni tydzień",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Sprawdź datę pracy, a potem prześlij ten wpis.",
+        "narrativeRequired": "Dodaj opis, a potem prześlij ten wpis.",
+        "runningTimer": "Zatrzymaj działający licznik czasu, a potem prześlij ten wpis.",
+        "unpriced": "Ten wpis nie ma stawki. Poproś o stawkę dla sprawy, a potem go prześlij."
+      },
+      "returned": "Zwrócono: {comment}",
+      "submitAndApprove": "Prześlij i zatwierdź",
+      "submitResult": "Przesłano: {submitted} · zatwierdzono: {approved} · do poprawy: {refused}",
+      "submitWeek": "Prześlij tydzień",
       "title": "Mój tydzień",
       "totals": "Zarejestrowano: {logged} · rozliczalne: {billable}"
     }

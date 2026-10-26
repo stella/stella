@@ -508,14 +508,20 @@
     "amount": "Betrag",
     "amountMustBePositive": "Der Betrag muss größer als null sein",
     "approval": {
+      "approveAll": "{count, plural, one {# Eintrag freigeben} other {Alle # Einträge freigeben}}",
       "approveSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} freigeben",
+      "billedTotal": "{duration} abgerechnet",
       "empty": "In dieser Akte wartet nichts auf Freigabe.",
+      "emptyWeek": "Diese Woche wartet nichts auf Freigabe. Eingereichte Zeit erscheint hier.",
+      "everyone": "Alle",
       "failed": "Die Änderung wurde nicht gespeichert. Versuchen Sie es erneut.",
       "myTime": "Meine Zeit",
+      "pending": "{count, plural, one {# Eintrag zur Freigabe} other {# Einträge zur Freigabe}}",
       "refusals": {
         "invalidEntry": "Ergänzen Sie eine Beschreibung, prüfen Sie das Arbeitsdatum und geben Sie den Eintrag dann frei.",
         "notApprover": "Nur die zuständige freigebende Person oder ein Administrator kann diesen Eintrag freigeben.",
         "notFound": "Dieser Eintrag existiert nicht mehr. Aktualisieren Sie die Liste.",
+        "notSubmitted": "Dieser Eintrag wurde noch nicht eingereicht. Zuerst reicht ihn die erfassende Person ein.",
         "runningTimer": "Stoppen Sie den laufenden Timer, bevor Sie den Eintrag freigeben.",
         "unpriced": "Für diesen Eintrag ist kein Tarif hinterlegt. Legen Sie einen Tarif für diese Akte fest und geben Sie den Eintrag dann frei.",
         "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
@@ -811,6 +817,7 @@
       "approved": "Genehmigt",
       "billed": "Abgerechnet",
       "draft": "Entwurf",
+      "submitted": "Eingereicht",
       "written_off": "Abgeschrieben"
     },
     "stopTimer": "Stoppen",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# Vorschlag} other {# Vorschläge}}",
       "previousWeek": "Vorherige Woche",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Prüfen Sie das Arbeitsdatum und reichen Sie den Eintrag dann ein.",
+        "narrativeRequired": "Ergänzen Sie eine Beschreibung und reichen Sie den Eintrag dann ein.",
+        "runningTimer": "Stoppen Sie den laufenden Timer und reichen Sie den Eintrag dann ein.",
+        "unpriced": "Dieser Eintrag hat keinen Satz. Lassen Sie für die Akte einen Satz festlegen und reichen Sie ihn dann ein."
+      },
+      "returned": "Zurückgegeben: {comment}",
+      "submitAndApprove": "Einreichen und freigeben",
+      "submitResult": "{submitted} eingereicht · {approved} freigegeben · {refused} zu korrigieren",
+      "submitWeek": "Woche einreichen",
       "title": "Meine Woche",
       "totals": "{logged} erfasst · {billable} abrechenbar"
     }

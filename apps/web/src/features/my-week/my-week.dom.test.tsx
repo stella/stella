@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { Temporal } from "@stll/time";
 
@@ -70,6 +71,7 @@ const draftEntry = (overrides: Partial<MyTimeEntry> = {}): MyTimeEntry =>
     status: "draft",
     source: "manual",
     timerStartedAt: null,
+    returnComment: null,
     ...overrides,
   }) satisfies MyTimeEntry;
 
@@ -119,8 +121,14 @@ type ApiCall = {
 const serveWeek = ({
   entries,
   suggestions,
+  refusals = {},
+  pendingCount = 0,
 }: {
   entries: MyTimeEntry[];
+  /** Drafts the fake API refuses to submit, with the reason it gives. */
+  refusals?: Record<string, TimeSubmitRefusal>;
+  /** Submitted entries waiting for the signed-in approver. */
+  pendingCount?: number;
   suggestions: {
     matter: typeof LEASE_MATTER;
     date: string;
@@ -243,6 +251,31 @@ const serveWeek = ({
     });
   };
 
+  // Every draft in the range moves unless the fixture refuses it.
+  const submit = (body: Record<string, unknown>) => {
+    const start = String(body["startDate"]);
+    const end = String(body["endDate"]);
+    const results = entries
+      .map((entry, index) => ({ entry, index }))
+      .filter(
+        ({ entry }) =>
+          entry.status === "draft" && inRange(entry.dateWorked, start, end),
+      )
+      .map(({ entry, index }) => {
+        const reason = refusals[entry.id];
+        if (reason !== undefined) {
+          return { id: entry.id, status: "refused" as const, reason };
+        }
+        const status =
+          body["approve"] === true
+            ? ("approved" as const)
+            : ("submitted" as const);
+        entries[index] = { ...entry, status };
+        return { id: entry.id, status };
+      });
+    return json({ results });
+  };
+
   const update = (body: Record<string, unknown>) => {
     const index = entries.findIndex((entry) => entry.id === body["id"]);
     const current = entries[index];
@@ -298,6 +331,15 @@ const serveWeek = ({
         /^\/time-entries\/[^/]+\/?$/u.test(path)
       ) {
         return update(body as Record<string, unknown>);
+      }
+      if (
+        request.method === "POST" &&
+        path === "/time-entries/me/submissions"
+      ) {
+        return submit(body as Record<string, unknown>);
+      }
+      if (request.method === "GET" && path === "/time-entries/approval-queue") {
+        return json({ items: [], nextCursor: null, limit: 1, pendingCount });
       }
       return new Response(JSON.stringify({ code: "not_found" }), {
         status: 404,
@@ -512,5 +554,88 @@ describe("my week", () => {
         name: `${messages.common.edit}: Approved call`,
       }) === null,
     ).toBe(true);
+  });
+  test("submitting the week moves its drafts, keeps refused ones editable with the reason, and locks submitted ones", async () => {
+    const calls = serveWeek({
+      entries: [
+        draftEntry(),
+        draftEntry({ id: "entry-2", narrative: "Unpriced call" }),
+      ],
+      suggestions: [],
+      refusals: { "entry-2": "unpriced" },
+      pendingCount: 3,
+    });
+    mount();
+
+    const editReady = `${messages.common.edit}: Review lease schedule`;
+    expect(await screen.findByRole("button", { name: editReady })).toBeTruthy();
+    // An approver sees what waits for them, and can approve their own week.
+    expect(await screen.findByText("3 entries to approve")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.timesheets.week.submitWeek,
+        }),
+      );
+    });
+
+    const submission = calls.find(
+      ({ method, path }) =>
+        method === "POST" && path === "/time-entries/me/submissions",
+    );
+    expect(submission?.body).toEqual({
+      startDate: WEEK.start,
+      endDate: WEEK.end,
+      approve: false,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: editReady }) === null).toBe(
+        true,
+      );
+    });
+    expect(screen.getByText(/Submitted/u)).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      messages.timesheets.week.refusals.unpriced,
+    );
+    expect(
+      screen.getByRole("button", {
+        name: `${messages.common.edit}: Unpriced call`,
+      }),
+    ).toBeTruthy();
+  });
+
+  test("an approver of their own time submits and approves in one step", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    mount();
+
+    const submitAndApprove = await screen.findByRole("button", {
+      name: messages.timesheets.week.submitAndApprove,
+    });
+    await act(async () => {
+      fireEvent.click(submitAndApprove);
+    });
+    await waitFor(() => {
+      expect(
+        calls.find(({ path }) => path === "/time-entries/me/submissions")?.body,
+      ).toMatchObject({ approve: true });
+    });
+    expect(await screen.findByText(/Approved/u)).toBeTruthy();
+  });
+
+  test("a returned draft shows the approver's reason", async () => {
+    serveWeek({
+      entries: [draftEntry({ returnComment: "Split the call from drafting" })],
+      suggestions: [],
+    });
+    mount();
+
+    expect(
+      await screen.findByText(
+        messages.timesheets.week.returned.replace(
+          "{comment}",
+          () => "Split the call from drafting",
+        ),
+      ),
+    ).toBeTruthy();
   });
 });

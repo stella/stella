@@ -508,14 +508,20 @@
     "amount": "Amount",
     "amountMustBePositive": "Amount must be greater than zero",
     "approval": {
+      "approveAll": "{count, plural, one {Approve # entry} other {Approve all # entries}}",
       "approveSelected": "Approve {count, plural, one {# selected entry} other {# selected entries}}",
+      "billedTotal": "{duration} billed",
       "empty": "Nothing on this matter is waiting for approval.",
+      "emptyWeek": "Nothing is waiting for approval this week. Submitted time shows up here.",
+      "everyone": "Everyone",
       "failed": "The change was not saved. Try again.",
       "myTime": "My time",
+      "pending": "{count, plural, one {# entry to approve} other {# entries to approve}}",
       "refusals": {
         "invalidEntry": "Add a description and check the work date, then approve the entry.",
         "notApprover": "Only the entry's assigned approver or an administrator can approve it.",
         "notFound": "This entry no longer exists. Refresh the list.",
+        "notSubmitted": "This entry has not been submitted yet. Its timekeeper submits it first.",
         "runningTimer": "Stop the running timer before approving this entry.",
         "unpriced": "This entry has no rate. Set a rate for this matter, then approve it.",
         "wrongStatus": "This entry is no longer a draft. Refresh the list."
@@ -811,6 +817,7 @@
       "approved": "Approved",
       "billed": "Billed",
       "draft": "Draft",
+      "submitted": "Submitted",
       "written_off": "Written off"
     },
     "stopTimer": "Stop",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# suggestion} other {# suggestions}}",
       "previousWeek": "Previous week",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Check the work date, then submit this entry.",
+        "narrativeRequired": "Add a description, then submit this entry.",
+        "runningTimer": "Stop the running timer, then submit this entry.",
+        "unpriced": "This entry has no rate. Ask for a rate on the matter, then submit it."
+      },
+      "returned": "Returned: {comment}",
+      "submitAndApprove": "Submit and approve",
+      "submitResult": "{submitted} submitted · {approved} approved · {refused} to fix",
+      "submitWeek": "Submit week",
       "title": "My week",
       "totals": "{logged} logged · {billable} billable"
     }

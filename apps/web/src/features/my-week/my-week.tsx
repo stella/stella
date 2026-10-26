@@ -7,6 +7,7 @@ import {
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPanel, DialogPopup, DialogTitle } from "@stll/ui/dialog";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -23,6 +24,11 @@ import {
   weekOf,
   weekTotals,
 } from "@/features/my-week/my-week.logic";
+import { PendingApprovalsLink } from "@/features/my-week/pending-approvals-link";
+import {
+  SUBMIT_REFUSAL_KEYS,
+  SubmitWeekActions,
+} from "@/features/my-week/submit-week";
 import {
   type SuggestionTarget,
   useMyWeekActions,
@@ -116,6 +122,7 @@ export const MyWeek = ({
   onSelectDate,
   onToday,
 }: MyWeekProps) => {
+  const t = useTranslations();
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
   const queries = myWeekQueries({ organizationId, userId, timezoneId, date });
@@ -124,9 +131,13 @@ export const MyWeek = ({
   const { data: suggestionRange } = useSuspenseQuery(queries.suggestions);
   const canDecide = usePermissions({ timeEntry: ["create"] });
   const canEdit = usePermissions({ timeEntry: ["update"] });
+  const canApprove = usePermissions({ timeEntry: ["approve"] });
   const actions = useMyWeekActions({ organizationId, timezoneId });
   const submitGuard = useSingleFlight();
   const [dialog, setDialog] = useState<WeekDialog>({ type: "closed" });
+  const [refusals, setRefusals] = useState<
+    ReadonlyMap<string, TimeSubmitRefusal>
+  >(() => new Map());
 
   const pages = entriesQuery.data.pages;
   // Every page carries the totals for the whole week; the first is enough.
@@ -138,6 +149,13 @@ export const MyWeek = ({
   const suggestionDay = suggestionRange.days.find((day) => day.date === date);
   const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
   const matterId = dialogMatterId(dialog);
+  // Every draft of the week, across all its loaded pages, can be submitted.
+  const weekDrafts = pages
+    .flatMap((page) => page.items)
+    .filter((entry) => entry.status === "draft").length;
+  const refusalNotes = new Map(
+    [...refusals].map(([id, reason]) => [id, t(SUBMIT_REFUSAL_KEYS[reason])]),
+  );
 
   const submitDialog = async (values: ManualTimeEntryValues) => {
     await submitGuard.run(async () => {
@@ -157,6 +175,24 @@ export const MyWeek = ({
   return (
     <div className="flex h-full flex-col">
       <MyWeekHeader
+        actions={
+          <>
+            {canApprove && (
+              <PendingApprovalsLink
+                organizationId={organizationId}
+                userId={userId}
+              />
+            )}
+            <SubmitWeekActions
+              canApproveOwn={canApprove}
+              draftCount={weekDrafts}
+              onRefusals={setRefusals}
+              submit={actions.submitWeek}
+              submitting={actions.submitting}
+              week={week}
+            />
+          </>
+        }
         onNextWeek={() => onSelectDate(shiftWeeks(date, 1))}
         onPreviousWeek={() => onSelectDate(shiftWeeks(date, -1))}
         onToday={onToday}
@@ -175,6 +211,7 @@ export const MyWeek = ({
           busyFingerprints={actions.busyFingerprints}
           canDecide={canDecide}
           canEdit={canEdit}
+          notes={refusalNotes}
           date={date}
           entries={entries}
           loggedMinutes={totals.byDay.get(date) ?? 0}

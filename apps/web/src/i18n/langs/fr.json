@@ -508,14 +508,20 @@
     "amount": "Montant",
     "amountMustBePositive": "Le montant doit être supérieur à zéro",
     "approval": {
+      "approveAll": "{count, plural, one {Approuver # entrée} other {Approuver les # entrées}}",
       "approveSelected": "Approuver {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
+      "billedTotal": "{duration} facturé",
       "empty": "Rien n’attend d’approbation dans ce dossier.",
+      "emptyWeek": "Rien n’attend d’approbation cette semaine. Le temps soumis apparaît ici.",
+      "everyone": "Tout le monde",
       "failed": "La modification n’a pas été enregistrée. Réessayez.",
       "myTime": "Mon temps",
+      "pending": "{count, plural, one {# entrée à approuver} other {# entrées à approuver}}",
       "refusals": {
         "invalidEntry": "Ajoutez une description et vérifiez la date de travail, puis approuvez la saisie.",
         "notApprover": "Seul l’approbateur désigné ou un administrateur peut approuver cette saisie.",
         "notFound": "Cette saisie n’existe plus. Actualisez la liste.",
+        "notSubmitted": "Cette entrée n’a pas encore été soumise. Son auteur doit d’abord la soumettre.",
         "runningTimer": "Arrêtez le chronomètre en cours avant d’approuver cette saisie.",
         "unpriced": "Cette saisie n’a pas de tarif. Définissez un tarif pour ce dossier, puis approuvez-la.",
         "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
@@ -811,6 +817,7 @@
       "approved": "Approuvé",
       "billed": "Facturé",
       "draft": "Brouillon",
+      "submitted": "Soumis",
       "written_off": "Passé en pertes"
     },
     "stopTimer": "Arrêter",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# suggestion en attente} other {# suggestions en attente}}",
       "previousWeek": "Semaine précédente",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Vérifiez la date de travail, puis soumettez cette entrée.",
+        "narrativeRequired": "Ajoutez une description, puis soumettez cette entrée.",
+        "runningTimer": "Arrêtez le minuteur en cours, puis soumettez cette entrée.",
+        "unpriced": "Cette entrée n’a pas de taux. Demandez un taux pour le dossier, puis soumettez-la."
+      },
+      "returned": "Renvoyé : {comment}",
+      "submitAndApprove": "Soumettre et approuver",
+      "submitResult": "{submitted} soumis · {approved} approuvés · {refused} à corriger",
+      "submitWeek": "Soumettre la semaine",
       "title": "Ma semaine",
       "totals": "{logged} saisi · {billable} facturable"
     }

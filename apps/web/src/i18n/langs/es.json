@@ -508,14 +508,20 @@
     "amount": "Importe",
     "amountMustBePositive": "El importe debe ser mayor que cero",
     "approval": {
+      "approveAll": "{count, plural, one {Aprobar # registro} other {Aprobar los # registros}}",
       "approveSelected": "Aprobar {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
+      "billedTotal": "{duration} facturado",
       "empty": "No hay nada pendiente de aprobación en este asunto.",
+      "emptyWeek": "No hay nada pendiente de aprobación esta semana. El tiempo enviado aparece aquí.",
+      "everyone": "Todos",
       "failed": "No se pudo guardar el cambio. Inténtelo de nuevo.",
       "myTime": "Mi tiempo",
+      "pending": "{count, plural, one {# registro por aprobar} other {# registros por aprobar}}",
       "refusals": {
         "invalidEntry": "Añada una descripción y revise la fecha de trabajo; después apruebe el registro.",
         "notApprover": "Solo el aprobador asignado o un administrador puede aprobar este registro.",
         "notFound": "Este registro ya no existe. Actualice la lista.",
+        "notSubmitted": "Este registro aún no se ha enviado. Primero debe enviarlo quien lo registró.",
         "runningTimer": "Detenga el temporizador en curso antes de aprobar este registro.",
         "unpriced": "Este registro no tiene tarifa. Configure una tarifa para este asunto y después apruébelo.",
         "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
@@ -811,6 +817,7 @@
       "approved": "Aprobado",
       "billed": "Facturado",
       "draft": "Borrador",
+      "submitted": "Enviado",
       "written_off": "Dado de baja"
     },
     "stopTimer": "Detener",
@@ -5873,6 +5880,16 @@
       "pendingCount": "{count, plural, one {# sugerencia} other {# sugerencias}}",
       "previousWeek": "Semana anterior",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Revisa la fecha de trabajo y luego envía este registro.",
+        "narrativeRequired": "Añade una descripción y luego envía este registro.",
+        "runningTimer": "Detén el temporizador en curso y luego envía este registro.",
+        "unpriced": "Este registro no tiene tarifa. Pide una tarifa para el asunto y luego envíalo."
+      },
+      "returned": "Devuelto: {comment}",
+      "submitAndApprove": "Enviar y aprobar",
+      "submitResult": "{submitted} enviados · {approved} aprobados · {refused} por corregir",
+      "submitWeek": "Enviar semana",
       "title": "Mi semana",
       "totals": "{logged} registrados · {billable} facturables"
     }
