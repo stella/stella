@@ -1,13 +1,18 @@
 import { panic, TaggedError } from "better-result";
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { generateBunToolchain } from "./generate-bun-toolchain";
-import { type Generator, GENERATORS } from "./generated-files";
+import {
+  type Generator,
+  GENERATORS,
+  matchesGeneratedGlob,
+} from "./generated-files";
 import {
   affectedGeneratorIds,
+  changedSince,
   DELEGATED_CHECKS_ENV,
   delegatedGeneratorIds,
   generatorInputCensus,
@@ -62,12 +67,54 @@ test("a glob that matches nothing leaves every family unaffected", () => {
   expect(affectedGeneratorIds(fixture, ["docs/other.md"])).toEqual(new Set());
 });
 
+test("a renamed input reports both the removed and destination paths", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generator-rename-"));
+  const runGit = (args: string[]) =>
+    Bun.spawnSync(["git", ...args], { cwd: root, stderr: "pipe" });
+  try {
+    expect(runGit(["init", "-q"]).exitCode).toBe(0);
+    expect(runGit(["config", "user.email", "test@example.com"]).exitCode).toBe(
+      0,
+    );
+    expect(runGit(["config", "user.name", "Test"]).exitCode).toBe(0);
+    await mkdir(path.join(root, "scripts"));
+    await writeFile(path.join(root, "scripts/generate-bun-toolchain.ts"), "x");
+    expect(runGit(["add", "."]).exitCode).toBe(0);
+    expect(runGit(["commit", "-qm", "fixture"]).exitCode).toBe(0);
+    const base = runGit(["rev-parse", "HEAD"]).stdout.toString().trim();
+    await mkdir(path.join(root, "docs"));
+    await rename(
+      path.join(root, "scripts/generate-bun-toolchain.ts"),
+      path.join(root, "docs/unrelated.md"),
+    );
+    expect(runGit(["add", "-A"]).exitCode).toBe(0);
+    expect(runGit(["commit", "-qm", "move input"]).exitCode).toBe(0);
+
+    const changed = changedSince(base, root);
+    expect(changed).toContain("scripts/generate-bun-toolchain.ts");
+    expect(changed).toContain("docs/unrelated.md");
+    expect(affectedGeneratorIds(GENERATORS, changed)).toContain(
+      "bun-toolchain",
+    );
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("formatter configuration changes select formatter-backed families", () => {
+  const affected = affectedGeneratorIds(GENERATORS, ["bunfig.toml"]);
+  for (const id of ["failure-tags", "status-tables", "account-export-tables"]) {
+    expect(affected.has(id), id).toBe(true);
+  }
+});
+
 test("the census rejects a removed Tailwind closure module", () => {
   const tailwind = generator("tailwind-class-cache");
   const mutated = {
     ...tailwind,
     inputs: tailwind.inputs.filter(
-      (input) => input !== "scripts/generate-tailwind-classes.ts",
+      (input) =>
+        !matchesGeneratedGlob(input, "scripts/generate-tailwind-classes.ts"),
     ),
   };
   expect(generatorInputCensus([mutated])).toContain(

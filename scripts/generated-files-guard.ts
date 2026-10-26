@@ -296,6 +296,15 @@ const commandModules = (command: readonly string[], base = "."): string[] => {
   return [...new Set(modules)];
 };
 
+const IMPLICIT_MODULE_INPUTS: Readonly<
+  Record<string, readonly string[] | undefined>
+> = {
+  "packages/scripts/src/generated-artifact-format.ts": [
+    "bunfig.toml",
+    ".prettierrc.yml",
+  ],
+};
+
 /** Static proof that every local module capable of influencing a family is declared. */
 export const generatorInputCensus = (
   generators: readonly Generator[],
@@ -314,9 +323,23 @@ export const generatorInputCensus = (
       starts.flatMap((start) => [...graph.closure(start)]),
     );
     const inputs = effectiveGeneratorInputs(generator);
+    const prerequisiteOutputs = generators
+      .filter(({ id }) => generator.after.includes(id))
+      .flatMap(({ outputs }) => outputs);
+    const coveredInputs = [...inputs, ...prerequisiteOutputs];
     for (const file of closure) {
-      if (!inputs.some((glob) => matchesGeneratedGlob(glob, file))) {
+      if (!coveredInputs.some((glob) => matchesGeneratedGlob(glob, file))) {
         failures.push(`${generator.id}: undeclared import ${file}`);
+      }
+    }
+    for (const file of closure) {
+      const implicitInputs = IMPLICIT_MODULE_INPUTS[file] ?? [];
+      for (const implicitInput of implicitInputs) {
+        if (!inputs.some((glob) => matchesGeneratedGlob(glob, implicitInput))) {
+          failures.push(
+            `${generator.id}: undeclared implicit input ${implicitInput} from ${file}`,
+          );
+        }
       }
     }
     // Readers and scanners are safe only when their own source, and therefore
@@ -388,8 +411,16 @@ const comparisonBase = (): string | undefined => {
   return result.exitCode === 0 ? decode(result.stdout).trim() : undefined;
 };
 
-const changedSince = (base: string) =>
-  splitPaths(git(["diff", "--name-only", "-z", `${base}...HEAD`]));
+export const changedSince = (base: string, root = ROOT.pathname) => {
+  const result = Bun.spawnSync(
+    ["git", "diff", "--no-renames", "--name-only", "-z", `${base}...HEAD`],
+    { cwd: root, stdout: "pipe", stderr: "pipe" },
+  );
+  if (result.exitCode !== 0) {
+    panic(`git diff failed: ${decode(result.stderr)}`);
+  }
+  return splitPaths(result.stdout);
+};
 
 export const undeclaredInputFailure = (
   generator: Generator,

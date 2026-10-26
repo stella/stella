@@ -300,7 +300,11 @@ export const analyzeModule = (file: string, source: string) => {
   };
 };
 
-export const buildImportGraph = (root: string, starts: readonly string[]) => {
+export const buildImportGraph = (
+  repositoryRoot: string,
+  starts: readonly string[],
+) => {
+  const root = realpathSync(path.resolve(repositoryRoot));
   const packages = workspaceExports(root);
   const edges = new Map<string, string[]>();
   const readers = new Set<string>();
