@@ -13,11 +13,17 @@ export { stripDiacritics, stripDiacriticsForSlug } from "./diacritics.js";
 export { escapeRegExp } from "./escape-regexp.js";
 export { arabicNormalize } from "./normalize.js";
 export {
+  createSearchQueryMatcher,
+  filterBySearchQuery,
   findSearchMatchRanges,
   foldSearchMatchText,
   foldSearchMatchTextWithOffsets,
 } from "./search-match.js";
-export type { FoldedSearchText, SearchMatchRange } from "./search-match.js";
+export type {
+  FoldedSearchText,
+  SearchMatchRange,
+  SearchQueryMatcher,
+} from "./search-match.js";
 export {
   collapseSpacedLetters,
   spacedLetterRunRegex,

@@ -61,8 +61,18 @@ generated with.
 
 ## Substring matching with highlight offsets
 
-`foldSearchMatchText` is the client-side match key for interactive
-filtering: NFKD, the `unaccent()`-parity ASCII folds, mark strip, Arabic
+`createSearchQueryMatcher(query)` is the client-side answer to "does this
+text match what the user typed": it trims and folds the query once and returns
+a predicate over candidate texts (a blank query matches everything, a missing
+candidate nothing). `filterBySearchQuery({ items, query, fields })` applies it
+to a list, keeping the items any field of which matches. Use these for every
+picker, list filter and typeahead, so a query typed without accents (`dvorak`,
+`strasse`, `lodz`) finds the same items everywhere and in every UI locale. An
+`Intl.Collator` with `sensitivity: "base"` is not an alternative: it compares
+equal-length windows (`strasse` misses `Straße`), its verdict depends on the
+runtime locale, and it keeps Arabic tashkeel significant.
+
+`foldSearchMatchText` is the match key both sides are folded with: NFKD, the `unaccent()`-parity ASCII folds, mark strip, Arabic
 folds, lowercase — `capek` matches `Čapek` and `wroclaw` matches
 `Wrocław`, both ways. `findSearchMatchRanges` finds a folded query in
 folded content and returns ranges into the **original** string, so
@@ -80,9 +90,9 @@ import {
 ```
 
 `containsSearchMatchKey(content, query)` checks a literal substring in keys
-already prepared by the caller. It does not trim or fold either input, so a
-picker can retain locale-specific casing or accent-sensitive matching. Empty
-queries match every key. For accent-insensitive highlight ranges into original
+already prepared by the caller, such as fixed tokens in a message or keys a
+caller folded itself. It does not trim or fold either input; a user-typed query
+goes through `createSearchQueryMatcher` instead. Empty queries match every key. For accent-insensitive highlight ranges into original
 text, use `findSearchMatchRanges` from `@stll/text-normalize` instead.
 
 `findSearchMatchKeyRanges(content, query, { start?, end?, maxMatches? })`
