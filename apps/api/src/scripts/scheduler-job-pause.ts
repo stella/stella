@@ -221,6 +221,22 @@ const findRows = async (
       : sql`SELECT ${rowSelection} FROM scheduler_jobs WHERE id = ${jobId}`,
   );
 
+// Mirrors the scheduler_job_pause_bound trigger: renewing a live pause keeps
+// its start, any other pause starts now, and a resume clears it.
+const resultingPausedSince = (
+  current: SchedulerJobPauseRow,
+  pausedUntil: Date | null,
+  at: Date,
+): Date | null => {
+  if (pausedUntil === null) {
+    return null;
+  }
+  if (current.pausedUntil !== null && current.pausedUntil > at) {
+    return current.pausedSince;
+  }
+  return at;
+};
+
 type RunSchedulerJobPauseOptions = {
   db: Pick<MaintenanceDb, "execute">;
   now?: () => Date;
@@ -253,15 +269,17 @@ export const runSchedulerJobPause = async (
       });
     }
     write(formatSchedulerJobPauseRow("CURRENT", current));
+    const at = now();
     const pausedUntil =
       command.action === "pause"
-        ? new Date(now().getTime() + command.durationMinutes * 60_000)
+        ? new Date(at.getTime() + command.durationMinutes * 60_000)
         : null;
     write(
       formatSchedulerJobPauseRow("RESULT", {
         ...current,
         pauseReason: command.reason,
         pausedBy: command.actor,
+        pausedSince: resultingPausedSince(current, pausedUntil, at),
         pausedUntil,
       }),
     );

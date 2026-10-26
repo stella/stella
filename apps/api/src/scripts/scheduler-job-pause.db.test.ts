@@ -73,6 +73,14 @@ describe.skipIf(!runPostgresTests)(
           expect(lines.some((line) => line === "DRY_RUN apply=false")).toBe(
             true,
           );
+          expect(
+            lines.some(
+              (line) =>
+                line.startsWith("RESULT ") &&
+                line.includes("paused_since=2026-10-26T12:00:00.000Z") &&
+                line.includes("paused_until=2026-10-26T13:00:00.000Z"),
+            ),
+          ).toBe(true);
 
           await runSchedulerJobPause(command("pause", true), { db, write });
           const [paused] = await db
@@ -90,6 +98,23 @@ describe.skipIf(!runPostgresTests)(
               runnerId: "scheduler-job-pause-test",
             }),
           ).toBeNull();
+
+          const renewalPreview: string[] = [];
+          await runSchedulerJobPause(command("pause", false, "2h"), {
+            db,
+            write: (line) => {
+              renewalPreview.push(line);
+            },
+          });
+          expect(
+            renewalPreview.some(
+              (line) =>
+                line.startsWith("RESULT ") &&
+                line.includes(
+                  `paused_since=${paused?.pausedSince?.toISOString() ?? "missing"}`,
+                ),
+            ),
+          ).toBe(true);
 
           await runSchedulerJobPause(command("pause", true, "2h"), {
             db,
