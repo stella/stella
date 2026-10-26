@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read PDFs: the PDF reader now resolves legacy Adobe glyph names (zdot), which changes letters it left unread.",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
@@ -165,11 +165,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_SN]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Re-read Supreme Court PDFs: running headers, indented blocks, hanging lists and superscripts change paragraph text and inlines.",
+        "Re-read Supreme Court PDFs: running headers, indented blocks, hanging lists, superscripts and legacy Adobe glyph names (zdot) change paragraph text and inlines.",
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
@@ -305,11 +305,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read PDFs: the PDF reader now resolves legacy Adobe glyph names (zdot), which changes letters it left unread.",
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
@@ -329,11 +329,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.CZ_UOHS]: {
-    version: 3,
+    version: 4,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "Re-read PDFs: the PDF reader now resolves legacy Adobe glyph names (zdot), which changes letters it left unread.",
     },
   },
 } as const satisfies ParserVersionScopes<

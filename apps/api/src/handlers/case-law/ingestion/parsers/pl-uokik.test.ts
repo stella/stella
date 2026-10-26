@@ -1,21 +1,26 @@
 /**
  * The UOKiK decision reader against decision PDFs the register served.
  *
- * The oracle is each file's own text layer: every word the PDF prints has to
- * reach the parsed document, measured by the same retention check the
- * pipeline logs, but against the extracted lines rather than against the
- * markup this reader builds from them.
+ * The oracle is each file's own text layer, read straight off the PDF: every
+ * word it prints, less the letterhead lines named one by one, has to reach the
+ * parsed document, measured by the same retention check the pipeline logs.
+ * Each rule that drops a line is also pinned on a PDF built for it, with the
+ * line it must not drop beside the one it must.
  */
 
+import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
+import {
+  extractPlPdfLetterheadContent,
+  PL_PDF_PARAGRAPH_START,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import {
   parsePlUokikDocument,
   PL_UOKIK_RULING_UNREAD,
-  plUokikDocumentContent,
   plUokikDocumentLines,
   readPlUokikRulingHeader,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
@@ -78,19 +83,49 @@ const inputOf = (pdfs: Uint8Array[]): ParsePlUokikDocumentInput => ({
 });
 
 /**
- * The text every line of the files prints, one paragraph per line, with a
- * word the typesetter broke across two lines ("Konku-" / "rencji") read
- * whole, as a reader reads it.
+ * The lines the reader drops on purpose, named one by one: the Gdańsk
+ * delegation's footer, page numbers, and the numbers that open footnotes or
+ * stand raised over a line (kept as a note's label and as superscripts).
+ * Anything else the text layer prints has to reach the document.
  */
-const printedLines = async (pdfs: Uint8Array[]): Promise<string[]> =>
-  Object.values(await plUokikDocumentContent(pdfs))
-    .flat()
-    .flatMap((line) =>
-      line.type === "text" ? [line.runs.map(({ text }) => text).join("")] : [],
-    )
+const DROPPED_ON_PURPOSE: readonly RegExp[] = [
+  /^[\d\s]+$/u,
+  /^Strona \d+ z \d+$/u,
+  /^Urząd Ochrony Konkurencji i Konsumentów(?: tel\..*)?$/u,
+  /^tel\.(?:\s?\+?\d|58)/u,
+  /^Delegatura (?:Urzędu )?w Gdańsku/u,
+  /^gdansk@uokik\.gov\.pl/u,
+  /^ul\. Podwale Przedmiejskie 30/u,
+  /^80-824 Gdańsk, ul\. Podwale Przedmiejskie 30/u,
+];
+
+/**
+ * The text every line of the files prints, read straight off the PDF's text
+ * layer rather than through the reader under test, one paragraph per line,
+ * less the lines `DROPPED_ON_PURPOSE` names. A word the typesetter broke
+ * across two lines ("Konku-" / "rencji") is read whole, as a reader reads it.
+ */
+const printedLines = async (pdfs: Uint8Array[]): Promise<string[]> => {
+  const lines: string[] = [];
+  for (const bytes of pdfs) {
+    const pdf = await PDF.load(bytes);
+    for (const page of pdf.getPages()) {
+      for (const { text } of page.extractText().lines) {
+        const line = text.replace(/\s+/gu, " ").trim();
+        if (
+          line.length > 0 &&
+          !DROPPED_ON_PURPOSE.some((pattern) => pattern.test(line))
+        ) {
+          lines.push(line);
+        }
+      }
+    }
+  }
+  return lines
     .join("\n")
     .replaceAll(/(\p{L})-\n(\p{Ll})/gu, "$1$2")
     .split("\n");
+};
 
 const hasBold = (inlines: readonly Inline[]): boolean =>
   inlines.some(
@@ -371,6 +406,155 @@ describe("a UOKiK decision read as the office sets its pages", () => {
         plainText.startsWith("Po dokonanym zakupie kontrolnym"),
       ),
     ).toBe(true);
+  });
+});
+
+// ── Each rule that drops a line, on a PDF built for it ───
+
+type Drawn = { text: string; x: number; y: number; size: number };
+
+const BODY_LINES = [
+  "Body text sets the ordinary font size of the decision for the reader.",
+  "Further running text keeps the body type the most common one here.",
+  "And one more line of running text in the ordinary body type follows.",
+];
+
+/** A letter-size PDF of the given pages, each a body of running text plus `extra`. */
+const builtPdf = async (pages: readonly (readonly Drawn[])[]) => {
+  const pdf = PDF.create();
+  for (const extra of pages) {
+    const page = pdf.addPage({ size: "letter" });
+    for (const [index, text] of BODY_LINES.entries()) {
+      page.drawText(text, { x: 72, y: 600 - index * 16, size: 12 });
+    }
+    for (const { text, x, y, size } of extra) {
+      page.drawText(text, { x, y, size });
+    }
+  }
+  return await pdf.save();
+};
+
+const readBuilt = async (pages: readonly (readonly Drawn[])[]) => {
+  const { body, notes } = await extractPlPdfLetterheadContent(
+    await builtPdf(pages),
+    PL_PDF_PARAGRAPH_START.INDENT_OR_OUTDENT,
+  );
+  const textOf = (lines: readonly PlSnLine[]) =>
+    lines.flatMap((line) =>
+      line.type === "text" ? [line.runs.map(({ text }) => text).join("")] : [],
+    );
+  return {
+    body: textOf(body),
+    // Each note's lines joined, the opening line holding only its number.
+    notes: [
+      ...Map.groupBy(
+        notes.flatMap((line) =>
+          line.type === "text" && line.footnote !== undefined
+            ? [{ label: line.footnote.label, line }]
+            : [],
+        ),
+        ({ label }) => label,
+      ),
+    ].map(([label, lines]) => ({
+      label,
+      text: textOf(lines.map(({ line }) => line))
+        .join(" ")
+        .trim(),
+    })),
+    superscripts: body.flatMap((line) =>
+      line.type === "text"
+        ? line.runs.flatMap(({ superscript, text }) =>
+            superscript === true ? [text] : [],
+          )
+        : [],
+    ),
+  };
+};
+
+describe("the lines the letterhead reading drops", () => {
+  test("a footer in small type at the same place on every page goes", async () => {
+    const footer = (page: number): Drawn => ({
+      text: `Office of Competition, 30 Example Street, page ${String(page)}`,
+      x: 150,
+      y: 40,
+      size: 7,
+    });
+    const { body } = await readBuilt([[footer(1)], [footer(2)], [footer(3)]]);
+    expect(body.some((line) => line.includes("Office of Competition"))).toBe(
+      false,
+    );
+  });
+
+  test("body text recurring at the same place stays, whatever its numbers", async () => {
+    // Two sentences differing only in a number, at the same height on two of
+    // four pages: digits left out, they would read as one repeated line.
+    const { body } = await readBuilt([
+      [{ text: "Na podstawie art. 24 ustawy", x: 72, y: 740, size: 12 }],
+      [{ text: "Na podstawie art. 25 ustawy", x: 72, y: 740, size: 12 }],
+      [],
+      [],
+    ]);
+    expect(body).toContain("Na podstawie art. 24 ustawy");
+    expect(body).toContain("Na podstawie art. 25 ustawy");
+  });
+
+  test("a page's own number at its foot goes", async () => {
+    const { body } = await readBuilt([
+      [{ text: "1", x: 300, y: 40, size: 12 }],
+      [{ text: "Strona 2 z 2", x: 430, y: 40, size: 12 }],
+    ]);
+    expect(body).not.toContain("1");
+    expect(body).not.toContain("Strona 2 z 2");
+  });
+
+  test("a number at the left margin that equals the page's stays", async () => {
+    const { body } = await readBuilt([[{ text: "1", x: 72, y: 60, size: 12 }]]);
+    expect(body).toContain("1");
+  });
+
+  test("a footnote's number at the foot is the note's label, not a page number", async () => {
+    const { notes, superscripts } = await readBuilt([
+      [
+        { text: "A claim needing a source", x: 72, y: 700, size: 12 },
+        { text: "1", x: 215, y: 705, size: 7 },
+        { text: "1", x: 72, y: 105, size: 7 },
+        { text: "Source for the claim.", x: 76, y: 100, size: 9 },
+      ],
+    ]);
+    expect(notes).toEqual([{ label: "1", text: "Source for the claim." }]);
+    expect(superscripts).toEqual(["1"]);
+  });
+
+  test("a reference raised inside its line is read as one", async () => {
+    // The text layer keeps the raised number on the claim's own line.
+    const { notes, superscripts } = await readBuilt([
+      [
+        { text: "Tekst", x: 72, y: 700, size: 12 },
+        { text: "1", x: 102, y: 703, size: 7 },
+        { text: " continues on the same line.", x: 106, y: 700, size: 12 },
+        { text: "1", x: 72, y: 105, size: 7 },
+        { text: "The note the claim refers to.", x: 76, y: 100, size: 9 },
+      ],
+    ]);
+    expect(superscripts).toEqual(["1"]);
+    expect(notes).toEqual([
+      { label: "1", text: "The note the claim refers to." },
+    ]);
+  });
+
+  test("an exponent over a unit makes no table row a footnote", async () => {
+    const { body, notes } = await readBuilt([
+      [
+        { text: "A flat of 20 m", x: 72, y: 700, size: 12 },
+        { text: "2", x: 150, y: 705, size: 7 },
+        { text: "1", x: 72, y: 125, size: 7 },
+        { text: "First row of a small table.", x: 80, y: 120, size: 9 },
+        { text: "2", x: 72, y: 110, size: 7 },
+        { text: "Second row of a small table.", x: 80, y: 105, size: 9 },
+      ],
+    ]);
+    expect(notes).toEqual([]);
+    expect(body.some((line) => line.includes("Second row"))).toBe(true);
   });
 });
 
