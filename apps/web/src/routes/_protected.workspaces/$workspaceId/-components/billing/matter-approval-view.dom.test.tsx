@@ -139,7 +139,7 @@ const listPage = (
   const matching = items.filter((item) => item.status === status);
   const end = start + server.pageSize;
   const nextCursor =
-    end < matching.length ? `${list}.${status}.${String(end)}` : null;
+    end < matching.length ? `${list}.${status ?? "any"}.${String(end)}` : null;
   if (nextCursor !== null) {
     server.cursors.set(nextCursor, end);
   }
