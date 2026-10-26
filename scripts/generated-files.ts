@@ -848,6 +848,7 @@ const GENERATOR_DECLARATIONS = [
       "bun.lock",
     ],
     checkInputs: [
+      "packages/scripts/src/syntax-tree.ts",
       "bunfig.toml",
       ".prettierrc.yml",
       ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
@@ -940,7 +941,10 @@ const GENERATOR_DECLARATIONS = [
       "scripts/ci-install.ts",
       "scripts/docker-source-closure.ts",
     ],
-    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["api-image-install-tooling"]],
+    checkInputs: [
+      "packages/scripts/src/syntax-tree.ts",
+      ...TRANSITIVE_GENERATOR_INPUTS["api-image-install-tooling"],
+    ],
     write: [
       "bun",
       "scripts/docker-source-closure.ts",
@@ -1163,7 +1167,10 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
     ],
-    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["cli-registry"]],
+    checkInputs: [
+      "apps/api/src/lib/write-contract/write-contract.ts",
+      ...TRANSITIVE_GENERATOR_INPUTS["cli-registry"],
+    ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
