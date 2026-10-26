@@ -351,7 +351,7 @@ type InvoiceScope = {
 };
 
 /** A credit line on a matter its original invoice does not bill. */
-export const creditOutsideOriginalMattersRefusal = () =>
+const creditOutsideOriginalMattersRefusal = () =>
   new HandlerError({
     status: 422,
     message: "A credit note can only credit matters its original invoice bills",
