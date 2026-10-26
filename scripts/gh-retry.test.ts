@@ -247,11 +247,10 @@ test("429 and secondary 403 honor Retry-After while ordinary 403 fails once", as
   expect(result.sleeps).toEqual([]);
 });
 
-test("404, absent or successful HTTP status on errors and exhausted delay budget do not retry", async () => {
+test("404, absent HTTP status, and exhausted delay budget do not retry", async () => {
   for (const response of [
     { exit: 1, http: 404 },
     { exit: 1 },
-    { exit: 1, http: 200 },
     { exit: 1, http: 429, after: 61 },
   ]) {
     const result = await scenario({ responses: [response, success] });
@@ -259,6 +258,49 @@ test("404, absent or successful HTTP status on errors and exhausted delay budget
     expect(result.calls).toHaveLength(1);
     expect(result.sleeps).toEqual([]);
   }
+});
+
+test("a paginated GET retries when its second successful page cannot be decoded", async () => {
+  const result = await scenario({
+    args: [
+      "api",
+      "repos/example/project/actions/workflows/ci.yml/runs",
+      "--paginate",
+      "--slurp",
+    ],
+    responses: [
+      {
+        exit: 1,
+        http: 200,
+        error:
+          "* Request to https://api.github.com/page/2\n< HTTP/2.0 200\nerror decoding JSON: unexpected EOF",
+      },
+      success,
+    ],
+  });
+  expect(result.exit).toBe(0);
+  expect(result.calls).toHaveLength(2);
+  expect(result.sleeps).toHaveLength(1);
+  expect(result.stderr).toContain("HTTP 200, attempt 1/4");
+});
+
+test("a POST that fails after HTTP 200 stays single-shot", async () => {
+  const result = await scenario({
+    args: ["api", "repos/example/project", "--method", "POST"],
+    responses: [{ exit: 1, http: 200 }, success],
+  });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(1);
+  expect(result.sleeps).toEqual([]);
+  expect(result.stderr).toContain("operation is not safe to retry");
+});
+
+test("a successful HTTP status with persistent command failure exhausts four attempts", async () => {
+  const result = await scenario({ responses: [{ exit: 1, http: 200 }] });
+  expect(result.exit).toBe(1);
+  expect(result.calls).toHaveLength(4);
+  expect(result.sleeps).toHaveLength(3);
+  expect(result.stderr).toContain("HTTP 200, attempt 4/4");
 });
 
 test("HTTP writes and GraphQL mutations stay single-shot", async () => {
