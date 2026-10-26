@@ -27,7 +27,10 @@ import {
   czNsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import type { CzNsListingRow } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  requireReconciliation,
+  throughLedgerJson,
+} from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import {
   citationKeyOf,
   decisionIdentifiersFromMetadata,
@@ -1137,7 +1140,7 @@ describe("cz-ns buildDecision", () => {
     expect(decision.isListingOnly).toBe(true);
     expect<string>(decision.caseNumber).toBe(DOCKET.FIRST);
     expect(decision.caseNumberIsPlaceholder).toBeUndefined();
-    expect<unknown>(decision.identifiers).toEqual([
+    expect(throughLedgerJson(decision.identifiers)).toEqual([
       { type: "case-number", value: DOCKET.SECOND },
     ]);
     expect(decision.metadata).toMatchObject({

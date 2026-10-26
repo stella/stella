@@ -1,0 +1,6 @@
+{
+  "metric": "direct-root-connection-imports",
+  "file": "apps/api/src/lib/usage/organization-access-state-owner.ts",
+  "delta": 1,
+  "reason": "Organization creation records the new organization's access state from the authentication hook, before any organization scope exists. The insert is idempotent and keyed by that organization's id; no handle is exported."
+}

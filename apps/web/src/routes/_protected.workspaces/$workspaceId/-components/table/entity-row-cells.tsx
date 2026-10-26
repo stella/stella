@@ -88,15 +88,27 @@ const shouldIgnoreRowExpansionClick = (target: EventTarget) => {
   );
 };
 
-const getContextPropertyId = (target: EventTarget): PropertyId | null => {
-  if (!(target instanceof HTMLElement)) {
-    return null;
+/** What right-clicking a cell opens: the row's or the cell's menu, or none. */
+type CellContextMenuTarget =
+  { type: "menu"; propertyId: PropertyId | null } | { type: "native" };
+
+const getCellContextMenuTarget = (
+  column: TableColumn,
+): CellContextMenuTarget => {
+  const contextMenu =
+    column.columnDef.meta?.contextMenu ??
+    panic(`Entity column ${column.id} declares no context menu`);
+  switch (contextMenu) {
+    case "native":
+      return { type: "native" };
+    case "row":
+      return { type: "menu", propertyId: null };
+    case "cell":
+      return { type: "menu", propertyId: toSafeId<"property">(column.id) };
+    default:
+      contextMenu satisfies never;
+      return panic(`Unhandled context menu: ${String(contextMenu)}`);
   }
-
-  const propertyId = target.closest<HTMLElement>("[data-table-property-id]")
-    ?.dataset["tablePropertyId"];
-
-  return propertyId ? toSafeId<"property">(propertyId) : null;
 };
 
 type ActiveCellFlashInput = {
@@ -268,11 +280,14 @@ export const DraggableRow = ({
     return selectedRows.map((selectedRow) => selectedRow.original);
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const openContextMenu = (
+    e: React.MouseEvent,
+    propertyId: PropertyId | null,
+  ) => {
     e.preventDefault();
     e.stopPropagation();
     setBulkEntities(getBulkSelectedEntities());
-    setContextPropertyId(getContextPropertyId(e.target));
+    setContextPropertyId(propertyId);
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
     });
@@ -280,6 +295,18 @@ export const DraggableRow = ({
     // right-click doesn't immediately count as an outside-click and
     // dismiss the menu that the contextmenu just opened.
     requestAnimationFrame(() => setContextOpen(true));
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => openContextMenu(e, null);
+
+  const handleCellContextMenu = (e: React.MouseEvent, column: TableColumn) => {
+    const target = getCellContextMenuTarget(column);
+    if (target.type === "native") {
+      // Keep the browser's menu, and keep the row from opening its own.
+      e.stopPropagation();
+      return;
+    }
+    openContextMenu(e, target.propertyId);
   };
 
   const handleRowClick = (e: React.MouseEvent) => {
@@ -471,6 +498,7 @@ export const DraggableRow = ({
           contentMode={contentMode}
           hasExpandedCell={isFocusedExpansionRow}
           onCellClick={handleCellClick}
+          onCellContextMenu={handleCellContextMenu}
           selectCellWithActions={selectCellWithActions}
           selected={selected}
           visibleCells={visibleCells}
@@ -615,6 +643,7 @@ type DataRowCellsProps = {
     columnId: string,
     canExpandCell: boolean,
   ) => void;
+  onCellContextMenu: (event: React.MouseEvent, column: TableColumn) => void;
   selectCellWithActions: React.ReactNode;
   selected: boolean;
   visibleCells: TableCell[];
@@ -625,6 +654,7 @@ const DataRowCells = ({
   contentMode,
   hasExpandedCell,
   onCellClick,
+  onCellContextMenu,
   selectCellWithActions,
   selected,
   visibleCells,
@@ -633,7 +663,6 @@ const DataRowCells = ({
     const isSelectCell = cell.column.id === selectColId;
     const isAddPropertyCell = cell.column.id === addPropertyColId;
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
-    const canFlagCell = canExpandCell && !cell.column.id.startsWith("_");
     const isExpandedCell = expandedCellId === cell.column.id;
 
     return (
@@ -658,9 +687,11 @@ const DataRowCells = ({
         )}
         data-expanded-cell={isExpandedCell || undefined}
         data-state={selected ? "selected" : undefined}
-        data-table-property-id={canFlagCell ? cell.column.id : undefined}
         key={cell.id}
         onClick={(event) => onCellClick(event, cell.column.id, canExpandCell)}
+        onContextMenu={containedEventHandler((event) =>
+          onCellContextMenu(event, cell.column),
+        )}
         style={{
           gridColumn: cellIndex + 1,
           ...getGridPinningStyles(cell.column),

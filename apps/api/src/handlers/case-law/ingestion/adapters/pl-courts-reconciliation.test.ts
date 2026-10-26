@@ -868,7 +868,7 @@ describe("pl-courts quarantined items", () => {
     );
   });
 
-  test("the record listed with its id names its quarantine row as a repair alias", async () => {
+  test("a recovered id cannot adopt a docket-less judgment from the same panel", async () => {
     mockFetchWithBodies([
       { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },
     ]);
@@ -883,11 +883,34 @@ describe("pl-courts quarantined items", () => {
       throw new Error(`the keyed item built ${built.type}`);
     }
     expect(built.decision.sourceDocumentId).toBe(String(COMMON_COURT_ITEM.id));
-    // It now states a docket it did not: the docket-less form still names it.
-    expect(built.decision.sourceDocumentIdRepairAliases).toContain(
+    // A day, court and bench also describe other judgments.
+    expect(built.decision.sourceDocumentIdRepairAliases).not.toContain(
       quarantineIdOf(UNKEYED_SEARCH_ITEM),
     );
   });
+});
+
+test("a recovered id retains its docket-specific quarantine repair alias", async () => {
+  mockFetchWithBodies([
+    { pattern: DETAIL_PATTERN, body: "Not found", status: 404 },
+  ]);
+  const degraded = {
+    ...UNKEYED_SEARCH_ITEM,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+  };
+  const built = await reconciliation.buildDecision({
+    ...degraded,
+    id: COMMON_COURT_ITEM.id,
+  });
+  if (built.type !== "built") {
+    panic("Expected the recovered docket to build");
+  }
+  expect(built.decision.sourceDocumentIdRepairAliases).toContain(
+    quarantineIdOf(degraded),
+  );
+  expect(built.decision.sourceDocumentIdRepairAliases).not.toContain(
+    quarantineIdOf(UNKEYED_SEARCH_ITEM),
+  );
 });
 
 describe("pl-courts crawl detail reads", () => {

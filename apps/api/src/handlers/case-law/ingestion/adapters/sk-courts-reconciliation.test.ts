@@ -562,9 +562,46 @@ describe("sk-courts buildDecision", () => {
     if (built.type !== "built" || degraded?.type !== "document") {
       throw new TypeError("Expected a built decision and a quarantine id");
     }
-    expect(built.decision.sourceDocumentIdRepairAliases).toEqual([
+    expect(built.decision.sourceDocumentIdRepairAliases).toContain(
       degraded.sourceDocumentId,
-    ]);
+    );
+  });
+
+  test("recovered fields repair every bounded degraded listing combination", async () => {
+    mockJustice({ detail: { body: JSON.stringify(GALANTA_DETAIL) } });
+    const built = await reconciliation.buildDecision(GALANTA_ITEM);
+    if (built.type !== "built") {
+      panic("Expected the recovered court decision to build");
+    }
+    for (const spisovaZnacka of [GALANTA_ITEM.spisovaZnacka, null]) {
+      for (const identifikacneCislo of [
+        GALANTA_ITEM.identifikacneCislo,
+        null,
+      ]) {
+        for (const nazov of [GALANTA_ITEM.sud.nazov, null]) {
+          for (const registreGuid of [GALANTA_ITEM.sud.registreGuid, null]) {
+            const degraded = skCourtsListingIdentity({
+              ...GALANTA_ITEM,
+              guid: null,
+              povaha: "not a list",
+              spisovaZnacka,
+              identifikacneCislo,
+              sud: { nazov, registreGuid },
+            });
+            if (spisovaZnacka === null && identifikacneCislo === null) {
+              expect(degraded).toBeNull();
+              continue;
+            }
+            if (degraded?.type !== "document") {
+              panic("Expected a quarantined degraded listing");
+            }
+            expect(built.decision.sourceDocumentIdRepairAliases).toContain(
+              degraded.sourceDocumentId,
+            );
+          }
+        }
+      }
+    }
   });
 
   test("a quarantined payload is built listing-only, with nothing asked of the publisher", async () => {

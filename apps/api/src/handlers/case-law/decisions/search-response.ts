@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
@@ -18,7 +18,9 @@ import {
 import { CASE_SEARCH_TEXT_BYTES as bytes } from "./search-response-limits";
 import type { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
-type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
+type SearchResponse = v.InferOutput<
+  typeof searchDecisionsSuccessResponseSchema
+>;
 type SearchHit = SearchResponse["hits"][number];
 // The headnote's keywords branch is the readonly contract type; the
 // standalone field reads the same shape mutably, so accept the wider one.

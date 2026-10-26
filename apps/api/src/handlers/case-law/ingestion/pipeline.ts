@@ -80,6 +80,8 @@ import {
   countQuarantineCollisions,
   quarantinePeerCollisions,
 } from "@/api/lib/legal-search/quarantine-identity";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -232,14 +234,7 @@ const PAGE_SLOT = {
 
 type PageSlot = (typeof PAGE_SLOT)[keyof typeof PAGE_SLOT];
 
-/**
- * Run the ingestion pipeline for a configured source.
- *
- * Fetches pages from the source adapter, processes each
- * decision (segment, extract citations, dedup), and stores
- * results in the database.
- */
-export const runIngestionPipeline = async ({
+const runScopedIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
@@ -333,7 +328,10 @@ export const runIngestionPipeline = async ({
           }
           const pageResult = fetched.value;
           if (Result.isError(pageResult)) {
-            return { error: pageResult.error, type: "fetch-error" } as const;
+            return {
+              error: pageResult.error,
+              type: "fetch-error",
+            } as const;
           }
           return {
             observationOrder: await allocateSourceObservationOrder({
@@ -601,10 +599,13 @@ export const runIngestionPipeline = async ({
           ...pgErrorFields(error),
           "error.detail": wrappedErrorDetail(error),
         });
-        captureError(error, {
-          adapterKey: adapter.key,
-          step: "runIngestionPipeline.processSupplement",
-        });
+        captureError(
+          error,
+          handlerErrorContext("ingestion.placePageSupplements", {
+            adapterKey: adapter.key,
+            step: "runIngestionPipeline.processSupplement",
+          }),
+        );
         if (error instanceof TimeoutError) {
           await flushIngestionFailures(failures);
           return databaseTimeoutHaltReason(error);
@@ -906,3 +907,18 @@ export const runIngestionPipeline = async ({
     ...(stopKind === undefined ? {} : { stopKind }),
   };
 };
+
+/**
+ * Run the ingestion pipeline for a configured source.
+ *
+ * Fetches pages from the source adapter, processes each
+ * decision (segment, extract citations, dedup), and stores
+ * results in the database.
+ */
+export const runIngestionPipeline = async (
+  input: PipelineInput,
+): Promise<IngestionPipelineResult> =>
+  await withExceptionScope(
+    { type: "ingestion", adapterKey: input.source.adapterKey },
+    async () => await runScopedIngestionPipeline(input),
+  );

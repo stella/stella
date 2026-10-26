@@ -12,7 +12,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import type { AnswerEditProposal } from "./answer-edit-api";
@@ -41,7 +41,13 @@ export const AnswerFormatProposal = ({
           catch: (error) => error,
         });
         if (Result.isError(refreshed)) {
-          getAnalytics().captureError(refreshed.error);
+          getAnalytics().captureError(refreshed.error, {
+            fingerprintKey: "AnswerFormatProposal.refresh:failure",
+            scope: {
+              type: "handler",
+              handlerId: "AnswerFormatProposal.refresh:failure",
+            },
+          });
           setRefreshError(true);
           return;
         }
@@ -103,7 +109,7 @@ export const AnswerFormatProposal = ({
       revision: anchor.baseRevision,
     }),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.chat
           .threads({ threadId })
           .messages({ messageId: anchor.messageId })
@@ -113,7 +119,7 @@ export const AnswerFormatProposal = ({
     retry: false,
   });
   const view = useQueryView(query);
-  useQueryViewError(view);
+  useQueryViewError(view, "AnswerFormatProposal:snapshot");
   if (refreshError) {
     return (
       <div

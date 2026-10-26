@@ -104,6 +104,15 @@ describe("quarantineIdentity", () => {
     }
   });
 
+  test("legacy national-court listings stay quarantined for reconciliation", () => {
+    expect(
+      isQuarantineListingIdentity({
+        type: "document",
+        sourceDocumentId: "ncourt-listed:record-fingerprint",
+      }),
+    ).toBe(true);
+  });
+
   test("a publisher identity is not a quarantine identity", () => {
     for (const identity of [
       { type: "document", sourceDocumentId: "nalus-record:7201" },

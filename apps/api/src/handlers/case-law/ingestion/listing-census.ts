@@ -39,6 +39,8 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
+
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
@@ -80,7 +82,7 @@ const censusRangeFields = {
   fromSlice: slice,
   toSlice: slice,
   /** The instant the total is stated as of: the census's end. */
-  asOf: v.pipe(v.string(), v.isoTimestamp()),
+  asOf: apiDateTimeSchema,
   slicesCounted: nonNegativeInteger,
 };
 

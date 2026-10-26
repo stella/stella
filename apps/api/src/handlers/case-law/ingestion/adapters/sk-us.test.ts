@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -441,7 +442,7 @@ const mockFetch = ({
           () =>
             new Response(
               JSON.stringify({
-                content: Buffer.from(DOCUMENT_XHTML).toString("base64"),
+                content: Buffer.from(DOCUMENT_XHTML).toBase64(),
               }),
               { headers: JSON_HEADERS },
             ),
@@ -1619,6 +1620,26 @@ describe("sk-us buildDecision", () => {
     expect(built.decision.sourceDocumentIdRepairAliases).toEqual([
       quarantineIdOf(withoutId),
     ]);
+  });
+
+  test("a document id recovered with its ECLI keeps the quarantine repair identity", async () => {
+    mockFetch({ search: [] });
+    const { documentId: _documentId, ...withoutId } = PLENARY_OPINION;
+    const built = await reconciliation.buildDecision(PLENARY_OPINION);
+    if (built.type !== "built") {
+      panic("Expected the recovered document to build");
+    }
+    const { mkECLI: _mkECLI, ...withoutEcli } = withoutId;
+    for (const observation of [
+      withoutEcli,
+      { ...withoutId, mkECLI: null },
+      { ...withoutId, mkECLI: "" },
+      withoutId,
+    ]) {
+      expect(built.decision.sourceDocumentIdRepairAliases).toContain(
+        quarantineIdOf(observation),
+      );
+    }
   });
 
   test("a payload with a document id and no docket is built under the id", async () => {

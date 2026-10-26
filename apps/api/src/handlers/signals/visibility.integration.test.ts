@@ -22,6 +22,7 @@ import { SIGNAL_EVENT_TYPE, signalEvents, signals } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import getSignal from "@/api/handlers/signals/get";
 import listSignals from "@/api/handlers/signals/list";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -162,7 +163,7 @@ const runListAs = async ({
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       query,
-      route: "/test/signals",
+      route: "/v1/signals" satisfies ApiRoutePath,
     }),
   );
   return result;
@@ -271,7 +272,7 @@ describe("signal visibility", () => {
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           request: new Request("https://example.test/signals/get"),
-          route: "/test/signals/get",
+          route: "/v1/signals/:signalId" satisfies ApiRoutePath,
           recordAuditEvent: async () => undefined,
           createAuditRecorder: () => async () => undefined,
         }),

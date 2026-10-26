@@ -2,7 +2,6 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import { getPublicCorpusLimits } from "@/api/lib/limits";
-import type { PublicRouteId } from "@/api/public-corpus-route-ids";
 
 export const getPublicCorpusClassPolicy = () => getPublicCorpusLimits(env);
 
@@ -43,34 +42,34 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "POST /case/decisions/search": "search",
   "GET /case/sitemap/shards": "sitemap",
   "GET /case/sitemap/decisions/shard": "sitemap",
-} as const satisfies Record<PublicRouteId, PublicCorpusClass>;
+} as const satisfies Record<string, PublicCorpusClass>;
 
-// Resolve literals first, just as the router does, so `facets` cannot inherit
-// the browse policy of `:decisionId`. Patterns are built once, never per request.
-const routePolicies = Object.entries(PUBLIC_CORPUS_ROUTE_POLICY)
-  .map(([route, routeClass]) => {
-    const separator = route.indexOf(" ");
-    const method = route.slice(0, separator);
-    const path = route.slice(separator + 1);
-    return {
-      route,
-      class: routeClass,
-      method,
-      dynamic: path.includes(":"),
-      pattern: new RegExp(
-        `^${STELLA_API_VERSION_PREFIX}${path.replace(/:[^/]+/gu, "[^/]+")}/?$`,
-        "u",
-      ),
-    };
-  })
-  .toSorted((left, right) => Number(left.dynamic) - Number(right.dynamic));
+const ROUTE_POLICY: ReadonlyMap<string, PublicCorpusClass> = new Map(
+  Object.entries(PUBLIC_CORPUS_ROUTE_POLICY),
+);
 
-export const resolvePublicCorpusPolicy = (
-  request: Pick<Request, "method" | "url">,
-) => {
-  const method = request.method === "HEAD" ? "GET" : request.method;
-  const { pathname } = new URL(request.url);
-  return routePolicies.find(
-    (policy) => policy.method === method && policy.pattern.test(pathname),
+/** A mounted route as the policy table names it: its method and full path pattern. */
+type MountedRoute = { readonly method: string; readonly path: string };
+
+/**
+ * The public corpus class of a mounted route, or `undefined` for every other
+ * route. The table names routes the way the router matched them (method and
+ * pattern, without the version prefix), so a literal segment such as `facets`
+ * can never fall into the class of `:decisionId`; a HEAD request is served by
+ * its GET route. The census in `public-corpus-policy.test.ts` ties the table
+ * to the mounted public corpus routes in both directions.
+ */
+export const publicCorpusClassOf = (
+  route: MountedRoute | undefined,
+): PublicCorpusClass | undefined => {
+  if (
+    route === undefined ||
+    !route.path.startsWith(STELLA_API_VERSION_PREFIX)
+  ) {
+    return undefined;
+  }
+  const method = route.method === "HEAD" ? "GET" : route.method;
+  return ROUTE_POLICY.get(
+    `${method} ${route.path.slice(STELLA_API_VERSION_PREFIX.length)}`,
   );
 };

@@ -1,9 +1,11 @@
 import { Result, TaggedError } from "better-result";
 import { Job, Queue, UnrecoverableError, Worker } from "bullmq";
-import type { JobProgress, QueueOptions } from "bullmq";
+import type { JobProgress, QueueOptions, WorkerListener } from "bullmq";
 
 import type { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   createBullMqConnection,
   type RedisClientOverrides,
@@ -68,6 +70,30 @@ export class BullMqWorker<
 > extends Worker<DataType, ResultType, NameType> {
   protected override get Job() {
     return QueueFailureJob;
+  }
+
+  override async processJob(
+    job: Job<DataType, ResultType, NameType>,
+    token: string,
+    fetchNextCallback?: () => boolean,
+  ) {
+    // The queue and job kind are stable definitions; delivery IDs are correlation only.
+    return await withExceptionScope(
+      { type: "job", jobId: this.name, task: job.name },
+      async () => await super.processJob(job, token, fetchNextCallback),
+    );
+  }
+
+  override emit<
+    TEvent extends keyof WorkerListener<DataType, ResultType, NameType>,
+  >(
+    event: TEvent,
+    ...args: Parameters<WorkerListener<DataType, ResultType, NameType>[TEvent]>
+  ): boolean {
+    return withExceptionScope(
+      { type: "job", jobId: this.name, task: this.name },
+      () => super.emit(event, ...args),
+    );
   }
 }
 
@@ -184,15 +210,27 @@ export const createBullMqWorkerHost = <
   return {
     close: async () => {
       await Promise.all(
-        running.map(async ({ queues, close }) => {
-          const closed = await Result.tryPromise({
-            try: async () => await close(),
-            catch: (cause) => cause,
-          });
-          if (Result.isError(closed)) {
-            captureError(closed.error, { host, queues: queues.join(",") });
-          }
-        }),
+        running.map(
+          async ({ queues, close }) =>
+            await withExceptionScope(
+              { type: "job", jobId: queues.join(","), task: "queue.close" },
+              async () => {
+                const closed = await Result.tryPromise({
+                  try: async () => await close(),
+                  catch: (cause) => cause,
+                });
+                if (Result.isError(closed)) {
+                  captureError(
+                    closed.error,
+                    handlerErrorContext(
+                      "lib.createBullMqWorkerHost.closed_error",
+                      { host, queues: queues.join(",") },
+                    ),
+                  );
+                }
+              },
+            ),
+        ),
       );
     },
   };

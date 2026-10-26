@@ -1,6 +1,6 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 
-import type { WebApiRoutes } from "@/lib/eden-client";
+import type { WebApiRoutes } from "@/lib/api";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 
 export type ReportExportRequest =

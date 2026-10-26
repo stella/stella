@@ -112,24 +112,25 @@ export const managedProviderUnavailable = (
     "model_unavailable",
   );
 
-export const fetchManagedOpenRouterCompletion = async (request: Request) => {
+export const fetchManagedOpenRouterCompletion = async (completion: Request) => {
   const euEndpoint = `${MANAGED_EU_ORIGIN}/api/v1/chat/completions`;
   const usEndpoint = `${MANAGED_US_ORIGIN}/api/v1/chat/completions`;
   const publicEndpoint = `${MANAGED_PUBLIC_ORIGIN}/api/v1/chat/completions`;
-  const regionalEndpoint = request.url === euEndpoint ? euEndpoint : usEndpoint;
+  const regionalEndpoint =
+    completion.url === euEndpoint ? euEndpoint : usEndpoint;
   const endpoint =
-    request.url === publicEndpoint ? publicEndpoint : regionalEndpoint;
-  if (endpoint !== request.url) {
+    completion.url === publicEndpoint ? publicEndpoint : regionalEndpoint;
+  if (endpoint !== completion.url) {
     return Result.err(managedProviderUnavailable("openrouter"));
   }
   // Manual mode exposes redirects without forwarding the request body.
   const fetched = await Result.tryPromise({
     try: async () =>
       await fetchWithTimeout(endpoint, {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-        signal: request.signal,
+        method: completion.method,
+        headers: completion.headers,
+        body: completion.body,
+        signal: completion.signal,
         timeoutMs: MANAGED_PROVIDER_REQUEST_TIMEOUT_MS,
         redirect: "manual",
       }),

@@ -3,6 +3,7 @@ import {
   type FetchLike,
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
@@ -78,12 +79,14 @@ import {
 import type { ToolScope } from "@/api/mcp/tool-types";
 import { createTestDemoActionBudget } from "@/api/tests/helpers/demo-action-budget";
 import { readTestJson } from "@/api/tests/helpers/test-tool-set";
+import { compileClientWireSchema } from "@/api/tests/helpers/wire-json-schema";
 
 const actionSizePolicyMock = mock((): ReturnType<typeof getActionSizePolicy> =>
   Result.ok(undefined),
 );
 const authenticateMcpRequestMock = mock();
 const captureErrorMock = mock();
+const observeTransportFailureMock = mock();
 const resolveMcpSessionContextMock = mock();
 const getMcpToolDefinitionMock = mock();
 const getMcpToolRequiredScopesHintMock = mock(
@@ -103,8 +106,11 @@ const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
   authenticateMcpRequest: authenticateMcpRequestMock,
-  captureError: (error, context) => {
+  captureError: (error, { context }) => {
     captureErrorMock(error, context);
+  },
+  observeTransportFailure: (error, context) => {
+    observeTransportFailureMock(error, context);
   },
   getMcpToolDefinition: getMcpToolDefinitionMock,
   getMcpToolRequiredScopesHint: getMcpToolRequiredScopesHintMock,
@@ -228,6 +234,7 @@ describe("handleMcpHttpRequest", () => {
     actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
+    observeTransportFailureMock.mockReset();
     getMcpToolDefinitionMock.mockReset();
     getMcpToolRequiredScopesHintMock.mockReset();
     getMcpToolRequiredScopesHintMock.mockImplementation(
@@ -817,6 +824,7 @@ describe("handleMcpHttpRequest", () => {
     for (const [refusal, resolveContext] of Object.entries(refusals)) {
       for (const protocol of ["legacy", "modern"] as const) {
         captureErrorMock.mockClear();
+        observeTransportFailureMock.mockClear();
         resolveMcpSessionContextMock.mockImplementation(resolveContext);
         const response = await handleMcpHttpRequest(
           protocol === "modern"
@@ -835,12 +843,14 @@ describe("handleMcpHttpRequest", () => {
           status: response.status,
           retryAfter: response.headers.get("Retry-After"),
           captured: captureErrorMock.mock.calls.length,
+          observed: observeTransportFailureMock.mock.calls.length,
         }).toEqual({
           refusal,
           protocol,
           status: 403,
           retryAfter: null,
           captured: 0,
+          observed: 0,
         });
         expect(response.headers.get("WWW-Authenticate")).not.toContain(
           "error=",
@@ -889,6 +899,7 @@ describe("handleMcpHttpRequest", () => {
     for (const [tag, refusal] of Object.entries(refusals)) {
       for (const protocol of ["legacy", "modern"] as const) {
         captureErrorMock.mockClear();
+        observeTransportFailureMock.mockClear();
         resolveMcpSessionContextMock.mockRejectedValue(refusal.error());
         const response = await handleMcpHttpRequest(
           protocol === "modern"
@@ -906,12 +917,14 @@ describe("handleMcpHttpRequest", () => {
           protocol,
           status: response.status,
           captured: captureErrorMock.mock.calls.length,
+          observed: observeTransportFailureMock.mock.calls.length,
           body: await readTestJson<McpJsonRpcFailure>(response),
         }).toEqual({
           tag,
           protocol,
           status: refusal.status,
           captured: 0,
+          observed: 0,
           body: {
             error: { code: -32_001, message: refusal.message },
             id: 3,
@@ -947,11 +960,11 @@ describe("handleMcpHttpRequest", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
     expect(response.headers.get("Retry-After")).toBe("2");
-    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+    expect(observeTransportFailureMock).toHaveBeenCalledWith(error, {
       mode: "default",
-      phase: "transport",
-      source: "mcp",
+      request: expect.any(Request),
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("captures modern handler failures and preserves the retryable transport contract", async () => {
@@ -977,11 +990,11 @@ describe("handleMcpHttpRequest", () => {
       id: 1,
       jsonrpc: "2.0",
     });
-    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+    expect(observeTransportFailureMock).toHaveBeenCalledWith(error, {
       mode: "default",
-      phase: "transport",
-      source: "mcp",
+      request: expect.any(Request),
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("a server fault answers with the request's JSON-RPC id on both transports", async () => {
@@ -1334,11 +1347,11 @@ describe("handleMcpHttpRequest", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("WWW-Authenticate")).toBeNull();
-    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+    expect(observeTransportFailureMock).toHaveBeenCalledWith(error, {
       mode: "default",
-      phase: "transport",
-      source: "mcp",
+      request: expect.any(Request),
     });
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("keeps the authenticated notification stream open until the client cancels", async () => {
@@ -2164,6 +2177,7 @@ describe("MCP transport conformance", () => {
     actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
     authenticateMcpRequestMock.mockReset();
     captureErrorMock.mockReset();
+    observeTransportFailureMock.mockReset();
     listMcpToolsMock.mockReset();
     listMcpToolsMock.mockImplementation(async () => []);
     resolveMcpSessionContextMock.mockReset();
@@ -2700,6 +2714,68 @@ describe("MCP transport conformance", () => {
           { type: "text", text: expect.stringContaining("Action applied.") },
         ]);
       }
+    }
+  });
+
+  test("an omitted mutation result still validates against the tool's advertised outputSchema", async () => {
+    const definition = listStaticMcpToolDefinitions("default").find(
+      (tool) =>
+        !tool.annotations.readOnlyHint &&
+        toMcpTools([tool])[0]?.outputSchema !== undefined,
+    );
+    const outputSchema =
+      definition === undefined
+        ? undefined
+        : toMcpTools([definition])[0]?.outputSchema;
+    if (definition === undefined || outputSchema === undefined) {
+      panic("Missing mutation tool with an output contract");
+    }
+    authenticateMcpRequestMock.mockResolvedValue(
+      Result.ok({
+        organizationId: "org_1",
+        scopes: [definition.scope, ...(definition.additionalScopes ?? [])],
+        userId: "user_1",
+      }),
+    );
+    resolveMcpSessionContextMock.mockResolvedValue({ memberRole: "owner" });
+    actionSizePolicyMock.mockReturnValue(
+      Result.ok({ pageSize: 10, requestBytes: 2000, responseBytes: 512 }),
+    );
+    getMcpToolDefinitionMock.mockResolvedValue(definition);
+    handleMcpToolCallMock.mockResolvedValue({
+      content: [{ type: "text", text: "é".repeat(400) }],
+    });
+    const validate = compileClientWireSchema(
+      new AjvJsonSchemaValidator(),
+      outputSchema,
+    );
+
+    for (const protocol of ["legacy", "modern"] as const) {
+      const params = { name: definition.name, arguments: {} };
+      const response = await handleMcpHttpRequest(
+        protocol === "modern"
+          ? createModernMcpRequest({ id: 1, method: "tools/call", params })
+          : createMcpRequest({
+              id: 1,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params,
+            }),
+      );
+      const envelope =
+        await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+      // The fixture reaches the omission path: the result is not an error, so
+      // a client validates `structuredContent` against the advertised schema.
+      expect(envelope.result.isError).toBe(false);
+      expect(envelope.result.structuredContent).toMatchObject({
+        applied: true,
+        resultOmitted: true,
+      });
+      expect({
+        protocol,
+        valid: validate(envelope.result.structuredContent).valid,
+      }).toEqual({ protocol, valid: true });
     }
   });
 

@@ -15,7 +15,7 @@ import { useWorkflowServiceTierPrompt } from "@/components/workspaces/workflow-s
 import { useWorkflowStartConfirmationPrompt } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { toSafeId } from "@/lib/safe-id";
@@ -42,7 +42,7 @@ export const useStartWorkflow = (workspaceId: string) => {
   });
   const aiAvailabilityQuery = useQuery(aiAvailabilityQueryOptions);
   const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
-  useQueryViewError(aiAvailabilityView);
+  useQueryViewError(aiAvailabilityView, "useStartWorkflow:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&
     aiAvailabilityView.refetchError === undefined
@@ -85,7 +85,10 @@ export const useStartWorkflow = (workspaceId: string) => {
 
       return await performWorkflowStart({
         captureError: (error) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "useStartWorkflow:failure",
+            scope: { type: "handler", handlerId: "useStartWorkflow:failure" },
+          });
         },
         notifyFailure: notifyStartFailed,
         // Invalidate workflow status so UI shows "running"
@@ -95,7 +98,7 @@ export const useStartWorkflow = (workspaceId: string) => {
           });
         },
         request: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await api
               .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
               .workflow.start.post({
@@ -124,7 +127,10 @@ export const useStartWorkflow = (workspaceId: string) => {
     } catch (error) {
       // The prompts and the target-count estimate run before the request; a
       // failure here means nothing was started either.
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useStartWorkflow:failure-2",
+        scope: { type: "handler", handlerId: "useStartWorkflow:failure-2" },
+      });
       notifyStartFailed(error);
       return WORKFLOW_START_FAILED;
     }

@@ -45,6 +45,7 @@ import type {
   CzRegionalApiItem,
   CzRegionalBuildResult,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-regional";
+import { throughLedgerJson } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
   isReadRefusal,
@@ -645,7 +646,7 @@ describe("a court's record with no usable identity is quarantined", () => {
     // The docket is usable here, so it labels the row as itself.
     expect<string | undefined>(decision?.caseNumber).toBe("18 C 130/2024");
     expect(decision?.caseNumberIsPlaceholder).toBeUndefined();
-    expect<unknown>(decision?.metadata["listedOnlyReason"]).toBe(
+    expect(throughLedgerJson(decision?.metadata["listedOnlyReason"])).toBe(
       "court-not-stated",
     );
 
@@ -797,7 +798,7 @@ describe("a row an earlier parser stored keeps its key", () => {
       const page = (
         await czRegionalAdapter.fetchPage("2025-06-11:0", {})
       ).unwrap();
-      expect<unknown>(page.decisions).toEqual([decision]);
+      expect(throughLedgerJson(page.decisions)).toEqual([decision]);
       // No listing identity can name an empty case number, and a key the
       // stored row never matches would hunt it forever: the ledger counts
       // it as a record it cannot key.

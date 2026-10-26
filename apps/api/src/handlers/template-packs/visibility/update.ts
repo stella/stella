@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { organizationSettings } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -9,9 +9,9 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withDescription } from "@/api/lib/custom-schema";
 
-const updateTemplatePackVisibilityBodySchema = t.Object({
+const updateTemplatePackVisibilityBodySchema = v.object({
   hidden: withDescription(
-    t.Boolean(),
+    v.boolean(),
     "true hides the bundled pack catalogue from the organization's template library; installed templates stay",
   ),
 });

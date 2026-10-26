@@ -8,7 +8,7 @@ import {
   RESOURCE_TYPE,
   resourceRef,
 } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -823,14 +823,14 @@ const searchCaseLawArgsSchema = nullAsAbsent(
     source_id: v.optional(uuidInputSchema("Filter by source ID")),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description("Filter decisions from this ISO date (YYYY-MM-DD)"),
       ),
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description("Filter decisions up to this ISO date (YYYY-MM-DD)"),
       ),
@@ -1141,7 +1141,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
+      "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1197,17 +1197,13 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     description:
       "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
-      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
-      "textVersion as text_version; versionChanged flags changed text. " +
+      "entries give page/pageCount and textSource 'ast'/'fulltext'. Pass textVersion back as " +
+      "text_version; versionChanged flags changed text. " +
       `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
-      "`query` returns matches and neighbours with position, publisher label, " +
-      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
-      "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(citedBy reference counts, polarity, top citers: exact " +
-      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
-      "cites with held decisionIds). " +
-      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
-      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`query` returns matches, neighbours and deep links. Page 1 adds " +
+      "reader/publisher URL, metadata, textFields and citation summaries (top " +
+      `citers may be bounded by ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges). ` +
+      "Use read_case_law_citations for all citations. One id adds an outline. " +
       "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
@@ -1556,10 +1552,16 @@ const readMatterOverview = async ({
   }
 
   if (overview.isErr()) {
-    return internalFailureResult(overview.error);
+    return internalFailureResult(
+      overview.error,
+      "mcp.readMatterOverview.overview_error",
+    );
   }
   if (contacts.isErr()) {
-    return internalFailureResult(contacts.error);
+    return internalFailureResult(
+      contacts.error,
+      "mcp.readMatterOverview.contacts_error",
+    );
   }
 
   const matter = {
@@ -2514,7 +2516,10 @@ const caseLawSearchResult = ({
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
-          keywords: hit.keywords,
+          keywords:
+            hit.keywords === null
+              ? null
+              : { ...hit.keywords, items: [...hit.keywords.items] },
           headnote:
             hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
         }
@@ -3952,10 +3957,15 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
       ? coverage.countries
       : coverage.countries.filter((entry) => entry.country === country);
   if (country !== undefined && countries.length === 0) {
-    return notFoundResult(
-      "Case-law country not found",
-      `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`,
-    );
+    const coverageHint = `Pass one of the coverage country codes: ${coverage.countries.map((entry) => entry.country).join(", ")}, or omit country for all jurisdictions.`;
+    // The input advertises every public country, including those not yet
+    // open. One the corpus holds nothing for answers with its admission state,
+    // as search_case_law does, rather than as a miss the model cannot explain.
+    const unavailable = publicCountryUnavailable(country, SEARCH_ADMISSION);
+    if (unavailable !== null) {
+      return toolDataResult({ ...unavailable, hint: coverageHint });
+    }
+    return notFoundResult("Case-law country not found", coverageHint);
   }
   return toolDataResult({
     asOf: coverage.generatedAt,

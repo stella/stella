@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -21,11 +21,10 @@ import {
 
 import { getLookupPreviewOutcome } from "../lookup-preview-cache";
 
-const lookupPreviewBodySchema = t.Object({
-  registry: t.UnionEnum(LOOKUP_REGISTRIES),
-  number: t.String({ maxLength: 64 }),
-  /** The field's format template; null/empty = deterministic "name, seat". */
-  format: t.Nullable(t.String({ maxLength: 2000 })),
+const lookupPreviewBodySchema = v.object({
+  registry: v.picklist(LOOKUP_REGISTRIES),
+  number: v.pipe(v.string(), v.maxLength(64)),
+  format: v.nullable(v.pipe(v.string(), v.maxLength(2000))),
 });
 
 const config = {

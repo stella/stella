@@ -1,5 +1,5 @@
-import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { createDocumentTranslationRunBodySchema } from "@/api/handlers/document-translations/schemas";
 import { DOCUMENT_TRANSLATION_COMMENT_POLICIES } from "@/api/lib/document-translation/contract";
@@ -18,7 +18,7 @@ const common = {
 describe("document translation run request boundary", () => {
   test("accepts DeepL provider auto-detection without a prepared version", () => {
     expect(
-      Value.Check(createDocumentTranslationRunBodySchema, {
+      v.is(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "deepl",
       }),
@@ -27,14 +27,14 @@ describe("document translation run request boundary", () => {
 
   test("accepts target-only AI translation with a prepared version", () => {
     expect(
-      Value.Check(createDocumentTranslationRunBodySchema, {
+      v.is(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "ai",
         entityVersionId: ENTITY_VERSION_ID,
       }),
     ).toBeTrue();
     expect(
-      Value.Check(createDocumentTranslationRunBodySchema, {
+      v.is(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "ai",
       }),
@@ -43,7 +43,7 @@ describe("document translation run request boundary", () => {
 
   test("does not accept a client-supplied source language", () => {
     expect(
-      Value.Check(createDocumentTranslationRunBodySchema, {
+      v.is(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "ai",
         sourceLang: "EN-GB",
@@ -51,7 +51,7 @@ describe("document translation run request boundary", () => {
       }),
     ).toBeFalse();
     expect(
-      Value.Check(createDocumentTranslationRunBodySchema, {
+      v.is(createDocumentTranslationRunBodySchema, {
         ...common,
         engine: "deepl",
         sourceLang: "EN",
@@ -65,19 +65,17 @@ describe("document translation run request boundary", () => {
       engine: "ai",
       entityVersionId: ENTITY_VERSION_ID,
     } as const;
-    expect(Value.Check(createDocumentTranslationRunBodySchema, request)).toBe(
-      true,
-    );
+    expect(v.is(createDocumentTranslationRunBodySchema, request)).toBe(true);
     for (const commentPolicy of DOCUMENT_TRANSLATION_COMMENT_POLICIES) {
       expect(
-        Value.Check(createDocumentTranslationRunBodySchema, {
+        v.is(createDocumentTranslationRunBodySchema, {
           ...request,
           commentPolicy,
         }),
       ).toBe(true);
     }
     expect(
-      Value.Check(createDocumentTranslationRunBodySchema, {
+      v.is(createDocumentTranslationRunBodySchema, {
         ...request,
         commentPolicy: "unknown",
       }),

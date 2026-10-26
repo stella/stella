@@ -1241,6 +1241,49 @@ describe("czUsAdapter.fetchPage", () => {
     expect(readAgainByReconciliation(decision)).toBe(false);
   });
 
+  test("joins the printed lines of a typewriter-era legal sentence", async () => {
+    // The court's own cell: one `<br/>` per printed line of the typescript.
+    const page = new TextDecoder().decode(
+      Bun.gunzipSync(
+        await Bun.file(
+          new URL(
+            "__fixtures__/cz-us-abstract-i-us-549-2000.html.gz",
+            import.meta.url,
+          ),
+        ).bytes(),
+      ),
+    );
+    const cell =
+      /<table[^>]*class="legalSentenceContent"[^>]*>\s*<tr>\s*<td[^>]*>(?<cell>[\s\S]*?)<\/td>/u.exec(
+        page,
+      )?.groups?.["cell"];
+    expect(cell).toContain("zásadám<br/>spravedlivého");
+    installSearchMock({
+      rows: [
+        {
+          id: "5002",
+          sz: "1-549-2000",
+          caseNumber: "I.ÚS 549/2000",
+          date: "18. 4. 2001",
+        },
+      ],
+      legalSentence: cell ?? "",
+    });
+
+    const decision = unwrap(
+      await czUsAdapter.fetchPage(historicalCursor(2001), {}),
+    ).decisions.at(0);
+    const legalSentence = decision?.textFields.legalSentence;
+    const text =
+      legalSentence?.type === TEXT_FIELD_TYPE.PRESENT ? legalSentence.text : "";
+
+    expect(text).toStartWith(
+      "Ústavní soud již opakovaně judikoval, že zásadám spravedlivého procesu odpovídá nejen možnost účastníka řízení vyjádřit se k provedeným důkazům, nýbrž i navrhnout důkazy vlastní;",
+    );
+    expect(text).not.toContain("\n");
+    expect(text).not.toMatch(/ {2}/u);
+  });
+
   test("moves the source hash when publisher text changes", async () => {
     const row = {
       id: "fixture-text-hash",

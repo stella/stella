@@ -6,7 +6,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -78,7 +78,7 @@ export const useUploadVersion = () => {
 
       return await Result.tryPromise({
         try: async () =>
-          unwrapEden(
+          unwrapApiResponse(
             await api
               .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
               ["upload-version"].post({
@@ -97,7 +97,10 @@ export const useUploadVersion = () => {
         ) {
           return;
         }
-        analytics.captureError(result.error);
+        analytics.captureError(result.error, {
+          fingerprintKey: "useUploadVersion:failure",
+          scope: { type: "handler", handlerId: "useUploadVersion:failure" },
+        });
         notifyUserError(
           result.error,
           t("workspaces.files.versionUploadFailed"),

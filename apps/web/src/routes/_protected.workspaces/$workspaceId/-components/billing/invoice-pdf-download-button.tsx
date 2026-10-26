@@ -8,7 +8,7 @@ import { DownloadIcon } from "@stll/ui/icons";
 import { useLocale as useFormattingLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/lib/utils";
@@ -44,12 +44,12 @@ export const InvoicePdfDownloadButton = ({
             fetch: { signal: AbortSignal.timeout(PDF_DOWNLOAD_TIMEOUT_MS) },
           },
         );
-      const { downloadUrl, fileName } = unwrapEden(response);
+      const { downloadUrl, fileName } = unwrapApiResponse(response);
       const file = await fetchWithTimeout(downloadUrl, {
         timeoutMs: PDF_DOWNLOAD_TIMEOUT_MS,
       });
       if (!file.ok) {
-        unwrapEden({
+        unwrapApiResponse({
           data: null,
           error: { status: file.status, value: "Invoice PDF download failed" },
         });
@@ -58,7 +58,13 @@ export const InvoicePdfDownloadButton = ({
       downloadFile(blob, fileName);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "InvoicePdfDownloadButton:failure",
+        scope: {
+          type: "handler",
+          handlerId: "InvoicePdfDownloadButton:failure",
+        },
+      });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });

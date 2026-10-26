@@ -61,7 +61,13 @@ export const ClauseImportDialog = ({
         return;
       })
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ClauseImportDialog.handleFileChange:failure",
+          scope: {
+            type: "handler",
+            handlerId: "ClauseImportDialog.handleFileChange:failure",
+          },
+        });
         setPreviewCount(null);
       });
   };

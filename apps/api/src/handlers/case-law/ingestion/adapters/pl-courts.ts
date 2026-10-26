@@ -3,10 +3,13 @@
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: Judgment-date walk windows now also reject nonexistent calendar dates; parsed decisions are unchanged.
+// parser-output-unchanged: [pl-courts] Strict calendar dates apply only to crawl-window parameters; stored decision parsing and replay are unchanged.
+// parser-output-unchanged: [pl-ncourt] The shared adapter module changes only PL courts crawl-window validation, not decision construction or replay.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { compareCodeUnit } from "@stll/collation";
@@ -270,8 +273,6 @@ export const plCourtsModifiedSince = (
  * restarts the crawl: names are stable input, never derived from the date the
  * policy is read on.
  */
-// parser-output-unchanged: [pl-courts] Strict calendar dates apply only to crawl-window parameters; stored decision parsing and replay are unchanged.
-// parser-output-unchanged: [pl-ncourt] The shared adapter module changes only PL courts crawl-window validation, not decision construction or replay.
 export const PL_COURTS_WALK_KINDS = {
   /**
    * A window of the dump bounded by judgment date. Either bound may be
@@ -283,8 +284,8 @@ export const PL_COURTS_WALK_KINDS = {
    */
   [PL_COURTS_WALK_KIND.JUDGMENT_DATE]: defineWalkKind({
     params: {
-      from: v.optional(vApiDate),
-      to: v.optional(vApiDate),
+      from: v.optional(apiDateSchema),
+      to: v.optional(apiDateSchema),
     },
     /**
      * A window that ends before it starts holds no date, so the publisher
@@ -1416,22 +1417,14 @@ const plCourtsItemIdentity = (item: SaosItem): PlCourtsItemIdentity => {
   };
 };
 
-/**
- * The quarantine identities a keyed observation of a record names, so the
- * row its id-less listing was stored under is taken over once the id comes
- * back. Both with and without its docket: a record quarantined for having no
- * docket may state one by the time it states its id.
- */
+/** A docket distinguishes a repair alias; a day, court and bench do not. */
 const plCourtsRepairAliases = (item: SaosItem): string[] => {
   const docket = primaryCaseNumber({ preferred: item });
-  return [
-    ...new Set(
-      [
-        plCourtsQuarantineId(item, docket),
-        plCourtsQuarantineId(item, undefined),
-      ].filter((alias) => alias !== undefined),
-    ),
-  ];
+  if (docket === undefined) {
+    return [];
+  }
+  const alias = plCourtsQuarantineId(item, docket);
+  return alias === undefined ? [] : [alias];
 };
 
 /**

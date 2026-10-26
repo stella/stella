@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia/error";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { documentProcessingRuns, extractedContent } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -118,7 +118,7 @@ describe("OCR text export", () => {
         workspaceId,
       });
       // No stored PDF in the fake store: the export answers from metadata alone.
-      expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
+      expect(response).toBeInstanceOf(HttpStatusResponse);
       expect(decryptions).toBe(0);
     } finally {
       fake.stop();
@@ -143,8 +143,8 @@ describe("OCR text export", () => {
       workspaceId,
     });
 
-    expect(response).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (response instanceof ElysiaCustomStatusResponse) {
+    expect(response).toBeInstanceOf(HttpStatusResponse);
+    if (response instanceof HttpStatusResponse) {
       expect(response.code).toBe(404);
     }
     expect(audited).toBe(false);
@@ -225,8 +225,8 @@ describe("OCR text export matter access", () => {
       memberId: ids.userA2,
       workspaceIds: [ids.wsA2],
     });
-    expect(unreadable).toBeInstanceOf(ElysiaCustomStatusResponse);
-    if (unreadable instanceof ElysiaCustomStatusResponse) {
+    expect(unreadable).toBeInstanceOf(HttpStatusResponse);
+    if (unreadable instanceof HttpStatusResponse) {
       expect(unreadable.code).toBe(404);
       expect(JSON.stringify(unreadable.response)).not.toContain(
         "extracted text a1",

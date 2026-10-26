@@ -39,7 +39,15 @@ export const Route = createFileRoute("/_protected/admin/vat-rates")({
     await prefetchNonCriticalInfiniteQuery(
       context.queryClient,
       vatRatesOptions(context.user.activeOrganizationId),
-      (error) => getAnalytics().captureError(error),
+      (error) =>
+        getAnalytics().captureError(error, {
+          fingerprintKey: "admin.vat-rates.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate: "/_protected/admin/vat-rates",
+          },
+        }),
     );
   },
   component: VatRateSettingsPage,

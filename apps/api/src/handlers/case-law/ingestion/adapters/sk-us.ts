@@ -947,19 +947,18 @@ const statedSkUsString = (value: unknown): string | undefined =>
  * under, read type-checked, since nothing upstream validates a field of a
  * search row.
  *
- * Why these fields: the corpus, the docket, the registry number, the ECLI,
+ * Why these fields: the corpus, the docket, the registry number,
  * the decision date, the decision form, the document type and the dissenting
  * judge are DMS metadata the court states for the record each time it is
- * listed, and none of them is minted with or served only beside the DMS id:
- * the ECLI is the court's own designation of the decision. Together they
+ * listed, independently of its DMS id. Together they
  * tell apart the several documents one docket publishes on one day: the
  * decision, its corrections and each separate opinion. Excluded: the DMS id
- * itself, the result `index` (listing position), the title (the document
+ * itself, ECLI (which may recover with the id), the result `index`
+ * (listing position), the title (the document
  * type again, as rendered) and the publication and legal-force dates, which
  * describe what happens to the decision after it is listed and so may be
- * filled in between two listings of it. A record stating none of the docket,
- * registry number or ECLI has no field that names it, so it has no
- * fingerprint.
+ * filled in between two listings of it. A record without a docket or
+ * registry number has no field that names it, so it has no fingerprint.
  *
  * The field order is part of the digest stored rows carry.
  */
@@ -968,12 +967,7 @@ const skUsQuarantineIdentity = (
 ): QuarantineIdentity | null => {
   const docket = statedSkUsString(doc["mkRSAPNumberOfFile"]);
   const registryNumber = statedSkUsString(doc["mkRVPNumberOfFile"]);
-  const ecli = statedSkUsString(doc["mkECLI"]);
-  if (
-    docket === undefined &&
-    registryNumber === undefined &&
-    ecli === undefined
-  ) {
+  if (docket === undefined && registryNumber === undefined) {
     return null;
   }
   return quarantineIdentity({
@@ -982,7 +976,6 @@ const skUsQuarantineIdentity = (
       docType: statedSkUsString(doc["docType"]),
       mkRSAPNumberOfFile: docket,
       mkRVPNumberOfFile: registryNumber,
-      mkECLI: ecli,
       mkDateOfDecision: statedSkUsString(doc["mkDateOfDecision"]),
       mkFormOfDecision: statedSkUsString(doc["mkFormOfDecision"]),
       mkDocumentType: statedSkUsString(doc["mkDocumentType"]),

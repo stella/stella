@@ -1,20 +1,19 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTreeParentGuardError,
@@ -23,15 +22,16 @@ import {
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import { isRecord } from "@/api/lib/type-guards";
 
-const moveEntityBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  parentId: t.Nullable(tSafeId("entity")),
+const moveEntityBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  parentId: v.nullable(resourceIdSchema("entity")),
 });
 
-type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
+type MoveEntityBodySchema = v.InferOutput<typeof moveEntityBodySchema>;
 
 export const DESCENDANT_MOVE_MESSAGE =
   "Cannot move a folder into one of its descendants";
@@ -255,7 +255,11 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(captureError);
+  syncSearchActivity(workspaceId).catch(
+    createErrorCapture(
+      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
+    ),
+  );
 
   return Result.ok({});
 };

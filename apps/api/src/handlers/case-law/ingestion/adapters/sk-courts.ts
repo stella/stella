@@ -1202,10 +1202,35 @@ export const assembleSkCourtsDecision = (
  */
 const skCourtsRepairAliases = (
   record: Extract<SkCourtsRecordIdentity, { type: "keyed" }>,
-): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> =>
-  record.quarantine === null || record.identity.type !== "document"
+): Pick<IngestionResult, "sourceDocumentIdRepairAliases"> => {
+  if (record.identity.type !== "document") {
+    return {};
+  }
+  // At most sixteen forms; each must still name a docket or case file.
+  const item = record.item;
+  const forms = [item.spisovaZnacka, undefined].flatMap((spisovaZnacka) =>
+    [item.identifikacneCislo, undefined].flatMap((identifikacneCislo) =>
+      [item.sud?.nazov, undefined].flatMap((nazov) =>
+        [item.sud?.registreGuid, undefined].map((registreGuid) => ({
+          ...item,
+          spisovaZnacka,
+          identifikacneCislo,
+          sud: { nazov, registreGuid },
+        })),
+      ),
+    ),
+  );
+  const aliases = new Set<string>();
+  for (const form of forms) {
+    const quarantine = skCourtsQuarantineIdentity(form);
+    if (quarantine !== null) {
+      aliases.add(quarantine.sourceDocumentId);
+    }
+  }
+  return aliases.size === 0
     ? {}
-    : { sourceDocumentIdRepairAliases: [record.quarantine.sourceDocumentId] };
+    : { sourceDocumentIdRepairAliases: [...aliases] };
+};
 
 /** {@link assembleSkCourtsDecision} for an item keyed on a publisher identity. */
 const assembleKeyedSkCourtsDecision = (

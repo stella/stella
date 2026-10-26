@@ -8,7 +8,7 @@
 // explosion in a widely-instantiated generic lands as "typecheck got slow"
 // weeks later, with no diff to point at. Lint and tests see none of it.
 //
-// This runs the native tsc (tsgo, via packages/scripts/src/tsc-native.ts)
+// This runs the native tsc (tsrs, via packages/scripts/src/tsc-native.ts)
 // with --extendedDiagnostics and --singleThreaded per project. CI compares the
 // deterministic size counters with the merge base; nightly checks the committed
 // cumulative budget. Native tsc uses independent checker-local caches in
@@ -192,7 +192,7 @@ const parseCounters = (diagnostics: string, project: string): ParseResult => {
       ok: false,
       error:
         `Could not find Types/Instantiations in --extendedDiagnostics output\n` +
-        `for ${project}. Did the tsgo output format change? Output was:\n\n${diagnostics}`,
+        `for ${project}. Did the compiler output format change? Output was:\n\n${diagnostics}`,
     };
   }
   return { ok: true, counters: { types, instantiations } };
@@ -496,7 +496,7 @@ const runReport = (): number => {
   const hasBaseline = baselineExists();
   const baseline = hasBaseline ? readBaseline() : null;
 
-  console.log("\ntypecheck cost (tsgo --extendedDiagnostics)\n");
+  console.log("\ntypecheck cost (tsrs --extendedDiagnostics)\n");
   for (const m of result.measured) {
     console.log(`  ${m.id}  (${m.context})`);
     for (const field of GATED_FIELDS) {

@@ -76,8 +76,11 @@ type QuarantineIdentityOptions = {
 export const quarantinePrefix = (namespace: QuarantineNamespace): string =>
   `${namespace}-quarantine:`;
 
-const QUARANTINE_PREFIXES =
-  Object.values(QUARANTINE_NAMESPACE).map(quarantinePrefix);
+// Existing national-court rows predate the shared quarantine namespace.
+const QUARANTINE_PREFIXES = [
+  ...Object.values(QUARANTINE_NAMESPACE).map(quarantinePrefix),
+  "ncourt-listed:",
+];
 
 /**
  * Whitespace is the one rendering difference normalised away: publishers
