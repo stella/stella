@@ -168,3 +168,59 @@ export const stripInlinePrefix = (
 
   return trimInlineWhitespace(result, "start");
 };
+
+// parser-output-unchanged: adds stripInlineSuffix and mapInlineText; the existing helpers are unchanged.
+/**
+ * Cut `charCount` characters off the end of an inline list, descending
+ * through emphasis wrappers to reach them, and drop the whitespace the cut
+ * exposed. The mirror of {@link stripInlinePrefix}: a marker printed at the
+ * end of a line (a page number after the last word) leaves the same tree it
+ * would have had without it.
+ */
+export const stripInlineSuffix = (
+  inlines: readonly Inline[],
+  charCount: number,
+): Inline[] => {
+  const result = [...inlines];
+  let remaining = charCount;
+  for (let index = result.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const node = result[index];
+    if (node === undefined) {
+      continue;
+    }
+    const length = plainTextOf([node]).length;
+    if (length === 0) {
+      // Zero characters on the text axis (a page anchor); kept where it is.
+      continue;
+    }
+    if (length <= remaining) {
+      remaining -= length;
+      result.splice(index, 1);
+      continue;
+    }
+    if (node.type === "text") {
+      result[index] = { ...node, text: node.text.slice(0, -remaining) };
+    } else if (hasInlineChildren(node)) {
+      result[index] = {
+        ...node,
+        children: stripInlineSuffix(node.children, remaining),
+      };
+    }
+    remaining = 0;
+  }
+  return trimInlineWhitespace(result, "end");
+};
+
+/** The same inline tree with every text node's text passed through `map`. */
+export const mapInlineText = (
+  inlines: readonly Inline[],
+  map: (text: string) => string,
+): Inline[] =>
+  inlines.map((node): Inline => {
+    if (node.type === "text") {
+      return { ...node, text: map(node.text) };
+    }
+    return hasInlineChildren(node)
+      ? { ...node, children: mapInlineText(node.children, map) }
+      : node;
+  });
