@@ -16,6 +16,10 @@ import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
+import {
+  appSidebarSurfaceProps,
+  UNTINTED_APP_SIDEBAR_SURFACE,
+} from "@/components/app-sidebar-surface";
 import { resolveFeedbackChannel } from "@/components/feedback-dialog.logic";
 import { FeedbackSidebarItem } from "@/components/feedback-sidebar-item";
 import { PublicInspectorRail } from "@/components/public-inspector-rail";
@@ -151,7 +155,7 @@ export const PublicWorkspaceShell = ({
                   />
                 }
               >
-                <AppSidebar />
+                <AppSidebar surface={UNTINTED_APP_SIDEBAR_SURFACE} />
               </Suspense>
             ) : (
               <PublicSidebar
@@ -261,11 +265,11 @@ const PublicSidebar = ({
 
   return (
     <Sidebar
+      {...appSidebarSurfaceProps(UNTINTED_APP_SIDEBAR_SURFACE)}
       aria-label={t("navigation.toggleSidebar")}
-      className="border-sidebar-border"
       collapsible="icon"
     >
-      <SidebarHeader className="border-sidebar-border h-12 border-b p-0">
+      <SidebarHeader className="h-12 border-b p-0">
         <div
           className={cn(
             isCollapsed
