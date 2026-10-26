@@ -819,9 +819,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: [".tailwind-cache/**"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
       // Each Tailwind entry point in oxlint.config.ts: its stylesheets, linted
       // sources and package versions (chat and workspace-ui use the web
       // stylesheet).
@@ -850,6 +847,11 @@ const GENERATOR_DECLARATIONS = [
       "package.json",
       "bun.lock",
     ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["tailwind-class-cache"],
+    ],
     write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
     check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
     autofix: true,
@@ -860,15 +862,17 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["apps/api/src/lib/observability/failure-tags.gen.ts"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["failure-tags"],
       "apps/api/src/**/*.ts",
       "apps/api/src/**/*.tsx",
       "packages/*/src/**/*.ts",
       "packages/*/src/**/*.tsx",
       "scripts/failure-tags.ts",
       "scripts/generate-failure-tags.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["failure-tags"],
     ],
     write: ["bun", "scripts/generate-failure-tags.ts", "--write"],
     check: ["bun", "scripts/generate-failure-tags.ts"],
@@ -880,7 +884,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["scripts/migration-lock-baseline.ts"],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["migration-lock-baseline"],
       "scripts/check-migration-locks.ts",
       "scripts/check-migration-safety.ts",
       "scripts/migration-lock-census.ts",
@@ -888,6 +891,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/db/online-ddl.ts",
       "apps/api/drizzle/**/*.sql",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["migration-lock-baseline"]],
     write: ["bun", "scripts/check-migration-locks.ts", "--write-baseline"],
     check: ["bun", "scripts/check-migration-locks.ts"],
     autofix: false,
@@ -898,15 +902,17 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: [".agents/cloud-setup.sh"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["cloud-setup"],
       "stll-toolchain.json",
       ".node-version",
       "package.json",
       "bun.lock",
       "scripts/generate-cloud-setup.ts",
       "scripts/generated-artifacts.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["cloud-setup"],
     ],
     write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
     check: ["bun", "scripts/generate-cloud-setup.ts"],
@@ -927,7 +933,6 @@ const GENERATOR_DECLARATIONS = [
     // The closure has relative imports only, so it changes only through
     // these files; the check fails when the closure outgrows this list.
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["api-image-install-tooling"],
       "apps/api/Dockerfile",
       "packages/scripts/src/child-exit-status.ts",
       "packages/sha256/src/bun.ts",
@@ -935,6 +940,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/ci-install.ts",
       "scripts/docker-source-closure.ts",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["api-image-install-tooling"]],
     write: [
       "bun",
       "scripts/docker-source-closure.ts",
@@ -953,13 +959,15 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["scripts/bun-toolchain.gen.json"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["bun-toolchain"],
       "package.json",
       "scripts/generate-bun-toolchain.ts",
       "scripts/generated-artifacts.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["bun-toolchain"],
     ],
     write: ["bun", "scripts/generate-bun-toolchain.ts", "--write"],
     check: ["bun", "scripts/generate-bun-toolchain.ts"],
@@ -992,13 +1000,15 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["apps/api/src/lib/db/status-tables.gen.ts"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["status-tables"],
       "apps/api/src/db/schema/**",
       "apps/api/src/db/auth-schema.ts",
       "apps/api/src/db/agent-auth-schema.ts",
       "apps/api/scripts/generate-status-tables.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["status-tables"],
     ],
     write: ["bun", "apps/api/scripts/generate-status-tables.ts", "--write"],
     check: ["bun", "apps/api/scripts/generate-status-tables.ts"],
@@ -1010,14 +1020,16 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["apps/api/src/lib/account-export/user-owned-tables.gen.ts"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["account-export-tables"],
       "apps/api/src/db/schema/**",
       "apps/api/src/db/auth-schema.ts",
       "apps/api/src/db/agent-auth-schema.ts",
       "apps/api/src/lib/account-export/schema-census.ts",
       "apps/api/scripts/generate-account-export-tables.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["account-export-tables"],
     ],
     write: [
       "bun",
@@ -1033,14 +1045,16 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["apps/api/src/db/schema-index/*.md"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["schema-index"],
       "apps/api/src/db/schema/**",
       "apps/api/src/db/auth-schema.ts",
       "apps/api/src/db/agent-auth-schema.ts",
       "apps/api/src/db/registration-budget-schema.ts",
       "apps/api/scripts/generate-schema-index.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["schema-index"],
     ],
     write: ["bun", "apps/api/scripts/generate-schema-index.ts", "--write"],
     check: ["bun", "apps/api/scripts/generate-schema-index.ts"],
@@ -1052,12 +1066,14 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["apps/api/drizzle/*_flow_run_transitions/migration.sql"],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["transition-triggers"],
       "apps/api/src/lib/db/flow-run-transition-spec.ts",
       "apps/api/src/lib/db/transition-sql.ts",
       "apps/api/scripts/generate-transition-triggers.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["transition-triggers"],
     ],
     write: [
       "bun",
@@ -1073,7 +1089,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["packages/cli/capabilities/**", "docs/capability-coverage.md"],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["capability-catalog"],
       "apps/api/src/**",
       "apps/api/src/handlers/**",
       "apps/api/src/mcp/**",
@@ -1084,6 +1099,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/**",
       "bunfig.toml",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["capability-catalog"]],
     write: ["bun", "apps/api/scripts/export-capability-catalog.ts"],
     check: null,
     checkedBy: "Capability catalog drift guard",
@@ -1097,7 +1113,8 @@ const GENERATOR_DECLARATIONS = [
       ...CI_GENERATED_OUTPUTS.capabilityRuntime,
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
     ],
-    inputs: [
+    inputs: CAPABILITY_RUNTIME_INPUTS,
+    checkInputs: [
       ...CAPABILITY_RUNTIME_INPUTS,
       ...TRANSITIVE_GENERATOR_INPUTS["capability-runtime"],
     ],
@@ -1123,7 +1140,6 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
     ],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["cli-registry"],
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
       "apps/api/scripts/export-mcp-tool-registry.ts",
@@ -1147,6 +1163,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["cli-registry"]],
     write: ["bun", "--cwd=packages/cli", "run", "codegen"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
@@ -1158,7 +1175,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "derived",
     outputs: CI_GENERATED_OUTPUTS.cliRuntime,
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["cli-runtime"],
       "packages/cli/package.json",
       "packages/cli/capabilities/**",
       "packages/cli/src/codegen.ts",
@@ -1173,11 +1189,14 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/route-types.ts",
       "packages/cli/src/generated/registry-snapshot.json",
       "packages/cli/src/generated/mcp-contract.ts",
-      "packages/scripts/src/prepare-cli-runtime.ts",
       "package.json",
       "bunfig.toml",
       "bun.lock",
       "patches/**",
+    ],
+    checkInputs: [
+      ...TRANSITIVE_GENERATOR_INPUTS["cli-runtime"],
+      "packages/scripts/src/prepare-cli-runtime.ts",
     ],
     write: ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
     check: null,
@@ -1190,7 +1209,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "derived",
     outputs: [...MCP_APP_GENERATED_OUTPUTS.contracts],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-contracts"],
       "apps/api/scripts/generate-mcp-app-contracts.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
@@ -1222,6 +1240,8 @@ const GENERATOR_DECLARATIONS = [
       "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-files.ts",
       "scripts/prepare-mcp-apps.ts",
+
+      ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-contracts"],
     ],
     write: ["bun", "--cwd=apps/api", "run", "generate:mcp-app-contracts"],
     prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
@@ -1269,7 +1289,6 @@ const GENERATOR_DECLARATIONS = [
       ...MCP_APP_GENERATED_OUTPUTS.bundles,
     ],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-bundles"],
       "packages/mcp-apps/src/**",
       "packages/mcp-apps/scripts/build-mcp-apps.ts",
       "packages/mcp-apps/scripts/lib/mcp-app-html-guard.ts",
@@ -1299,6 +1318,8 @@ const GENERATOR_DECLARATIONS = [
       "scripts/check-mcp-generated-tracking.ts",
       "scripts/generated-files.ts",
       "scripts/prepare-mcp-apps.ts",
+
+      ...TRANSITIVE_GENERATOR_INPUTS["mcp-app-bundles"],
     ],
     write: ["bun", "packages/mcp-apps/scripts/build-mcp-apps.ts"],
     prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
@@ -1340,7 +1361,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt"],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["visual-sandbox-bundle"],
       "apps/api/src/handlers/visual-sandbox/**",
       "apps/api/scripts/build-visual-sandbox.ts",
       "apps/api/scripts/visual-sandbox-build-options.ts",
@@ -1348,6 +1368,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/errors/**",
       "bun.lock",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["visual-sandbox-bundle"]],
     write: ["bun", "--cwd=apps/api", "run", "build:visual-sandbox"],
     check: null,
     checkedBy: "Visual sandbox document tests",
@@ -1377,8 +1398,6 @@ const GENERATOR_DECLARATIONS = [
     outputKind: "committed",
     outputs: ["docs/module-ownership.md", "docs/module-ownership/*.md"],
     inputs: [
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["module-ownership"],
       "scripts/ownership.ts",
       "scripts/ownership/*.ts",
       "scripts/ownership-loader.ts",
@@ -1387,6 +1406,10 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "apps/**",
       "packages/**",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["module-ownership"],
     ],
     write: ["bun", "scripts/ownership.ts", "--write"],
     check: null,
@@ -1440,12 +1463,14 @@ const GENERATOR_DECLARATIONS = [
       },
     ],
     inputs: [
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["design-tokens"],
       "packages/ui/src/styles/theme.css",
       "scripts/design-tokens-doc.ts",
       "scripts/generated-artifacts.ts",
       "bunfig.toml",
+    ],
+    checkInputs: [
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["design-tokens"],
     ],
     write: ["bun", "scripts/design-tokens-doc.ts", "--write"],
     check: null,
@@ -1470,10 +1495,10 @@ const GENERATOR_DECLARATIONS = [
       },
     ],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["published-package-list"],
       "scripts/changeset-policy.json",
       "scripts/check-published-package-lists.ts",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["published-package-list"]],
     write: ["bun", "scripts/check-published-package-lists.ts", "--write"],
     check: null,
     checkedBy: "Published package lists match the release policy",
@@ -1642,13 +1667,13 @@ const GENERATOR_DECLARATIONS = [
       })),
     ],
     inputs: [
-      ".prettierrc.yml",
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
       "packages/text-normalize/src/**",
       "bunfig.toml",
     ],
+    checkInputs: [".prettierrc.yml"],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [
       "bun",
@@ -1690,7 +1715,6 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/build-env-contract.json",
     ],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["env-examples"],
       "scripts/env-tool.ts",
       "scripts/env-catalog.ts",
       "apps/api/src/env*.ts",
@@ -1703,6 +1727,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/rate-limit/budget-config-schema.ts",
       "packages/runtime-mode/src/index.ts",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["env-examples"]],
     write: ["bun", "run", "env:generate"],
     check: ["bun", "run", "env:check"],
     autofix: true,
@@ -1735,8 +1760,6 @@ const GENERATOR_DECLARATIONS = [
       },
     ],
     inputs: [
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS.selfhost,
       "scripts/selfhost-contract.ts",
       "scripts/selfhost-tool.ts",
       "scripts/generated-artifacts.ts",
@@ -1749,6 +1772,7 @@ const GENERATOR_DECLARATIONS = [
       ".github/workflows/release.yml",
       "scripts/create-release-manifest.sh",
     ],
+    checkInputs: [".prettierrc.yml", ...TRANSITIVE_GENERATOR_INPUTS.selfhost],
     write: ["bun", "run", "selfhost:generate"],
     check: ["bun", "run", "selfhost:check"],
     autofix: true,
@@ -1833,12 +1857,12 @@ const GENERATOR_DECLARATIONS = [
       "packages/skills/src/skills.gen.ts",
     ],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["skill-manifests"],
       "packages/skills/blueprints/**",
       "packages/skills/skills/**",
       "packages/skills/scripts/generate-manifests.ts",
       "packages/skills/src/format.ts",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["skill-manifests"]],
     write: ["bun", "--filter", "@stll/skills", "generate"],
     check: [
       "bun",
@@ -1857,12 +1881,14 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/src/us-abbreviated-courts.generated.ts",
     ],
     inputs: [
-      "bunfig.toml",
-      ".prettierrc.yml",
-      ...TRANSITIVE_GENERATOR_INPUTS["us-courts"],
       "packages/api-contract/data/us-courts/**",
       "scripts/generate-us-courts.ts",
       "packages/api-contract/src/us-court-vocabulary.ts",
+    ],
+    checkInputs: [
+      "bunfig.toml",
+      ".prettierrc.yml",
+      ...TRANSITIVE_GENERATOR_INPUTS["us-courts"],
     ],
     write: ["bun", "scripts/generate-us-courts.ts", "--write"],
     check: ["bun", "scripts/generate-us-courts.ts", "--check"],
@@ -1876,11 +1902,11 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/src/us-reporter-editions.generated.ts",
       "packages/api-contract/src/us-reporters.LICENSE",
     ],
-    inputs: [
+    inputs: ["scripts/generate-us-reporters.ts"],
+    checkInputs: [
       "bunfig.toml",
       ".prettierrc.yml",
       ...TRANSITIVE_GENERATOR_INPUTS["us-reporters"],
-      "scripts/generate-us-reporters.ts",
     ],
     write: ["bun", "scripts/generate-us-reporters.ts", "--write"],
     check: null,
@@ -1896,10 +1922,8 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/legal-search/morphology/snowball/*.gen.ts",
       "apps/api/src/lib/legal-search/morphology/snowball/__fixtures__/*.conformance.txt",
     ],
-    inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS.snowball,
-      "scripts/generate-snowball-stemmers.ts",
-    ],
+    inputs: ["scripts/generate-snowball-stemmers.ts"],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS.snowball],
     write: ["bun", "run", "generate:snowball-stemmers", "--write"],
     check: null,
     unchecked:
@@ -1937,11 +1961,11 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/components/chat/__fixtures__/recorded-conversations/*.gen.json",
     ],
     inputs: [
-      ...TRANSITIVE_GENERATOR_INPUTS["chat-transcripts"],
       "apps/api/scripts/gen-chat-transcripts.ts",
       "apps/api/src/lib/chat/**",
       "apps/api/src/tests/**",
     ],
+    checkInputs: [...TRANSITIVE_GENERATOR_INPUTS["chat-transcripts"]],
     write: ["bun", "--cwd=apps/api", "run", "gen:chat-transcripts"],
     check: null,
     unchecked:

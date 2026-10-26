@@ -127,33 +127,24 @@ test("formatter configuration changes select formatter-backed families", () => {
   }
 });
 
-test("the census rejects a removed Tailwind closure module", () => {
+test("the census accepts closure files in either input declaration", () => {
   const tailwind = generator("tailwind-class-cache");
+  const closureFile = "scripts/generate-tailwind-classes.ts";
+  const withoutClosureFile = (inputs: readonly string[]) =>
+    inputs.filter((input) => !matchesGeneratedGlob(input, closureFile));
   const mutated = {
     ...tailwind,
-    inputs: tailwind.inputs.filter(
-      (input) =>
-        !matchesGeneratedGlob(input, "scripts/generate-tailwind-classes.ts"),
-    ),
+    inputs: withoutClosureFile(tailwind.inputs),
+    checkInputs: withoutClosureFile(tailwind.checkInputs ?? []),
   };
   expect(generatorInputCensus([mutated])).toContain(
-    "tailwind-class-cache: undeclared import scripts/generate-tailwind-classes.ts",
+    `tailwind-class-cache: undeclared import ${closureFile}`,
   );
-});
-
-test("the census rejects a write closure file declared only as a check input", () => {
-  const tailwind = generator("tailwind-class-cache");
-  const writeInput = "scripts/generate-tailwind-classes.ts";
-  const mutated = {
-    ...tailwind,
-    inputs: tailwind.inputs.filter(
-      (input) => !matchesGeneratedGlob(input, writeInput),
-    ),
-    checkInputs: [...(tailwind.checkInputs ?? []), writeInput],
-  };
-  expect(generatorInputCensus([mutated])).toContain(
-    `tailwind-class-cache: undeclared import ${writeInput}`,
-  );
+  expect(
+    generatorInputCensus([
+      { ...mutated, checkInputs: [closureFile, ...mutated.checkInputs] },
+    ]),
+  ).not.toContain(`tailwind-class-cache: undeclared import ${closureFile}`);
 });
 
 test("full runs reject diffs from families unchanged since HEAD~1", () => {

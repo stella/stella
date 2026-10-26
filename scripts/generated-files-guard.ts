@@ -312,42 +312,25 @@ export const generatorInputCensus = (
 ): string[] => {
   const failures: string[] = [];
   for (const generator of generators) {
-    const generationStarts = [...new Set(commandModules(generator.write))];
-    const checkStarts = [
+    const starts = [
       ...new Set([
+        ...commandModules(generator.write),
         ...commandModules(generator.prepare ?? []),
         ...commandModules(generator.check ?? generator.checkedWith ?? []),
       ]),
     ];
-    const starts = [...new Set([...generationStarts, ...checkStarts])];
     const graph = buildImportGraph(root, starts);
-    const generationClosure = new Set(
-      generationStarts.flatMap((start) => [...graph.closure(start)]),
+    const closure = new Set(
+      starts.flatMap((start) => [...graph.closure(start)]),
     );
-    const checkClosure = new Set(
-      checkStarts.flatMap((start) => [...graph.closure(start)]),
-    );
-    const closure = new Set([...generationClosure, ...checkClosure]);
     const inputs = effectiveGeneratorInputs(generator);
     const checkInputs = generator.checkInputs ?? [];
     const prerequisiteOutputs = generators
       .filter(({ id }) => generator.after.includes(id))
       .flatMap(({ outputs }) => outputs);
-    const generationCoveredInputs = [...inputs, ...prerequisiteOutputs];
-    const checkCoveredInputs = [...generationCoveredInputs, ...checkInputs];
-    for (const file of generationClosure) {
-      if (
-        !generationCoveredInputs.some((glob) =>
-          matchesGeneratedGlob(glob, file),
-        )
-      ) {
-        failures.push(`${generator.id}: undeclared import ${file}`);
-      }
-    }
-    for (const file of checkClosure) {
-      if (
-        !checkCoveredInputs.some((glob) => matchesGeneratedGlob(glob, file))
-      ) {
+    const coveredInputs = [...inputs, ...checkInputs, ...prerequisiteOutputs];
+    for (const file of closure) {
+      if (!coveredInputs.some((glob) => matchesGeneratedGlob(glob, file))) {
         failures.push(`${generator.id}: undeclared import ${file}`);
       }
     }
