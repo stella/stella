@@ -1,3 +1,4 @@
+import { distance } from "@stll/fuzzy-search";
 import { stripUnicodeMarks } from "@stll/text-normalize";
 
 import type { EntityType } from "./entry";
@@ -266,58 +267,131 @@ export const nameTokens = (
 // BANKING CORPORATION (KKBC)", "AL-HARAMAYN FOUNDATION (KENYA)") or join
 // several names with " ; ", while another list or a party writes the same name
 // without them. Every name, listed or queried, is therefore read whole, per
-// joined name, and without its bracketed parts. A bracketed part that is
-// itself a name is also read on its own, as a weak alias: an acronym of the
-// rest, text marked as an alias, or the name in another script. Places, notes
-// and spelling variants in brackets never stand alone.
+// joined name, and without its bracketed parts. A bracketed part that is a
+// name in its own right also stands alone, as a weak alias: text marked as an
+// alias ("a.k.a.", "formerly", "original script:") or the name in another
+// script. Acronyms, places, notes and spelling variants never stand alone, so
+// two names sharing only a bracketed acronym or place never match on it.
 const OPENERS = new Set(["(", "[", "（", "［"]);
 const CLOSERS = new Set([")", "]", "）", "］"]);
 const ALIAS_MARKER =
   /^(?:previously\s+listed\s+as|previously\s+known\s+as|formerly\s+known\s+as|also\s+known\s+as|known\s+as|original\s+script|former\s+name|formerly|previously|a\.?\s*k\.?\s*a|f\.?\s*k\.?\s*a|n\.?\s*k\.?\s*a)(?:[\s.:,-]+|$)/iu;
-const ACRONYM_SHAPE = /^[\p{L}\s.&/'’-]+$/u;
-const MAX_ACRONYM_LETTERS = 10;
-const LATIN = /\p{Script=Latin}/u;
+// Single letters joined by dots ("K.K.B.C.", "s.r.o."), read as one word.
+const DOTTED_ACRONYM =
+  /(?<![\p{L}\p{N}])\p{L}(?:\.\p{L})+\.?(?![\p{L}\p{N}])/gu;
 const NAME_CHARACTER = /[\p{L}\p{N}]/u;
+const LETTER = /\p{L}/u;
+const SCRIPTS = [
+  ["latin", /\p{Script=Latin}/u],
+  ["cyrillic", /\p{Script=Cyrillic}/u],
+  ["greek", /\p{Script=Greek}/u],
+  ["arabic", /\p{Script=Arabic}/u],
+  ["hebrew", /\p{Script=Hebrew}/u],
+  ["han", /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u],
+  ["hangul", /\p{Script=Hangul}/u],
+] as const;
+type Script = (typeof SCRIPTS)[number][0] | "other";
+// Scripts `toLatin` spells in Latin letters, so names in them can be compared.
+const SPELLED_IN_LATIN = new Set<Script>(["latin", "cyrillic"]);
+// How close a Latin and a Cyrillic name must spell to be one name.
+const TRANSLITERATION_SIMILARITY = 0.75;
 
 const tidy = (text: string): string => text.replaceAll(/\s+/gu, " ").trim();
+
+const undotted = (text: string): string =>
+  text.replaceAll(DOTTED_ACRONYM, (acronym) => acronym.replaceAll(".", ""));
+
+/** The script most of a text's letters are written in. */
+const dominantScript = (text: string): Script | undefined => {
+  const counts = new Map<Script, number>();
+  for (const char of text) {
+    if (LETTER.test(char)) {
+      const script =
+        SCRIPTS.find(([, pattern]) => pattern.test(char))?.[0] ?? "other";
+      counts.set(script, (counts.get(script) ?? 0) + 1);
+    }
+  }
+  let dominant: Script | undefined;
+  let most = 0;
+  for (const [script, count] of counts) {
+    if (count > most) {
+      dominant = script;
+      most = count;
+    }
+  }
+  return dominant;
+};
+
+const spelling = (text: string): string =>
+  nameTokens(text, "organisation")
+    .map((token) => token.folded)
+    .join("");
+
+/**
+ * Whether a bracketed part is the rest of the name written in another script.
+ * A part in a script without a Latin spelling ("ガスプロム", "金铁三") is the
+ * name in its own script. A Latin or Cyrillic part beside a name in the other
+ * of the two must spell like it, so "Внешторгбанк (Moscow)" keeps its place
+ * out; beside a name in any other script it cannot be checked and stays out.
+ */
+const isOtherScriptName = (part: string, base: string): boolean => {
+  const inside = dominantScript(part);
+  const outside = dominantScript(base);
+  if (inside === undefined || outside === undefined || inside === outside) {
+    return false;
+  }
+  if (!SPELLED_IN_LATIN.has(inside)) {
+    return true;
+  }
+  if (!SPELLED_IN_LATIN.has(outside)) {
+    return false;
+  }
+  const left = spelling(part);
+  const right = spelling(base);
+  const longer = Math.max(Array.from(left).length, Array.from(right).length);
+  return (
+    longer > 0 &&
+    1 - distance(left, right, "damerau-levenshtein") / longer >=
+      TRANSLITERATION_SIMILARITY
+  );
+};
 
 type NameSegment = { text: string; base: string; qualifiers: string[] };
 
 /**
  * Splits a name at top-level semicolons and lifts its top-level bracketed
- * parts out. Nested brackets stay inside their part; an unclosed bracket runs
- * to the end of the name and a stray closing one separates words.
+ * parts out, each with its own nested brackets intact. An unclosed bracket
+ * runs to the end of the name; a stray closing one separates words.
  */
-const nameSegments = (name: string): NameSegment[] => {
+const nameSegments = (name: string, separators = ";"): NameSegment[] => {
   const segments: NameSegment[] = [];
   let segment: NameSegment = { text: "", base: "", qualifiers: [] };
   let group = "";
   let depth = 0;
   for (const char of name) {
-    if (depth === 0 && char === ";") {
+    if (depth === 0 && separators.includes(char)) {
       segments.push(segment);
       segment = { text: "", base: "", qualifiers: [] };
       continue;
     }
     segment.text += char;
     if (OPENERS.has(char)) {
-      depth += 1;
-      if (depth === 1) {
-        segment.base += " ";
+      if (depth > 0) {
+        group += char;
       } else {
-        group += " ";
-      }
-    } else if (CLOSERS.has(char)) {
-      if (depth === 0) {
         segment.base += " ";
-      } else if (depth === 1) {
-        depth = 0;
+      }
+      depth += 1;
+    } else if (CLOSERS.has(char) && depth > 0) {
+      depth -= 1;
+      if (depth > 0) {
+        group += char;
+      } else {
         segment.qualifiers.push(group);
         group = "";
-      } else {
-        depth -= 1;
-        group += " ";
       }
+    } else if (CLOSERS.has(char)) {
+      segment.base += " ";
     } else if (depth > 0) {
       group += char;
     } else {
@@ -331,79 +405,20 @@ const nameSegments = (name: string): NameSegment[] => {
   return segments;
 };
 
-/**
- * Whether `letters` abbreviate `words`: each letter, in order, either starts
- * one of the following words or continues the word the previous letter came
- * from ("SAPICO" for "SAhand Aluminum Parts Industrial COmpany"), drawing on
- * at least two words.
- */
-const abbreviates = (letters: string, words: readonly string[]): boolean => {
-  const failed = new Set<string>();
-  const visit = (at: number, from: number, used: number): boolean => {
-    if (at === letters.length) {
-      return used >= 2;
-    }
-    const state = `${at}:${from}:${Math.min(used, 2)}`;
-    if (failed.has(state)) {
-      return false;
-    }
-    for (let word = from; word < words.length; word += 1) {
-      const text = words[word] ?? "";
-      if (text[0] !== letters[at]) {
-        continue;
-      }
-      let spelled = 1;
-      for (
-        let index = 1;
-        index < text.length && at + spelled < letters.length;
-        index += 1
-      ) {
-        if (text[index] === letters[at + spelled]) {
-          spelled += 1;
-        }
-      }
-      for (let take = spelled; take >= 1; take -= 1) {
-        if (visit(at + take, word + 1, used + 1)) {
-          return true;
-        }
-      }
-    }
-    failed.add(state);
-    return false;
-  };
-  return visit(0, 0, 0);
-};
-
-const isAcronymOf = (candidate: string, base: string): boolean => {
-  if (!ACRONYM_SHAPE.test(candidate)) {
-    return false;
-  }
-  const letters = toLatin(candidate).replaceAll(/[^\p{L}]/gu, "");
-  if (letters.length < 2 || letters.length > MAX_ACRONYM_LETTERS) {
-    return false;
-  }
-  const words = toLatin(base)
-    .split(/[^\p{L}\p{N}]+/u)
-    .filter((word) => word !== "");
-  return abbreviates(letters, words);
-};
-
 /** The names a bracketed part stands for on its own, if any. */
 const qualifierNames = (qualifier: string, base: string): string[] => {
-  const marked = ALIAS_MARKER.exec(tidy(qualifier));
+  const text = tidy(qualifier);
+  const marked = ALIAS_MARKER.exec(text);
   if (marked !== null) {
-    return tidy(qualifier).slice(marked[0].length).split(";").map(tidy);
-  }
-  return qualifier
-    .split(/[;,]/u)
-    .map(tidy)
-    .filter(
-      (candidate) =>
-        isAcronymOf(candidate, base) ||
-        (NAME_CHARACTER.test(candidate) &&
-          NAME_CHARACTER.test(base) &&
-          LATIN.test(candidate) !== LATIN.test(base)),
+    // A marked alias is a name of its own, read with and without its own
+    // bracketed parts.
+    return nameVariants(text.slice(marked[0].length)).map(
+      (variant) => variant.text,
     );
+  }
+  return nameSegments(text, ";,")
+    .map((candidate) => tidy(candidate.base))
+    .filter((candidate) => isOtherScriptName(candidate, base));
 };
 
 /**
@@ -415,15 +430,17 @@ export type NameVariant = { text: string; qualifier: boolean };
 /**
  * Every spelling a listed or queried name stands for: the name itself, each
  * semicolon-joined name, each without its bracketed parts, then the bracketed
- * parts that are names in their own right. The one owner of bracket handling,
- * applied identically to list aliases and queries.
+ * parts that are names in their own right; each also with dotted acronyms
+ * written as one word. The one owner of bracket handling, applied identically
+ * to list aliases and queries.
  */
 export const nameVariants = (name: string): NameVariant[] => {
   const variants = new Map<string, boolean>();
   const add = (text: string, qualifier: boolean) => {
-    const tidied = tidy(text);
-    if (NAME_CHARACTER.test(tidied) && !variants.has(tidied)) {
-      variants.set(tidied, qualifier);
+    for (const spelled of [tidy(text), tidy(undotted(text))]) {
+      if (NAME_CHARACTER.test(spelled) && !variants.has(spelled)) {
+        variants.set(spelled, qualifier);
+      }
     }
   };
   add(name, false);

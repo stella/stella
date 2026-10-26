@@ -386,16 +386,26 @@ export function* nameIndexSteps(
     const byKey = new Map<string, { alias: IndexedAlias; id: number }>();
     const entryTokens = new Set<number>();
     // Every variant of a listed name indexes under the listed name itself, so
-    // a match on "KKBC" or on the name without "(KKBC)" shows what was listed.
+    // a match on the name without its brackets shows what was listed. Only
+    // the listed name's own reading, which comes first, counts towards token
+    // frequencies: a derived variant never changes another entry's weights.
     const variants = entry.names.flatMap(({ name, quality }) =>
-      nameReadings(name, entry.entityType).map(({ reading, qualifier }) => ({
-        name,
-        reading,
-        quality: qualifier ? ("weak" as const) : quality,
-      })),
+      nameReadings(name, entry.entityType).map(
+        ({ reading, qualifier }, position) => ({
+          name,
+          reading,
+          quality: qualifier ? ("weak" as const) : quality,
+          listed: position === 0,
+        }),
+      ),
     );
-    for (const { name, reading, quality } of variants) {
+    for (const { name, reading, quality, listed } of variants) {
       const { tokens, adjacent } = reading;
+      if (listed) {
+        for (const token of tokens) {
+          entryTokens.add(intern(folded, token.folded));
+        }
+      }
       const key = readingKey(reading);
       const existing = byKey.get(key);
       if (tokens.length === 0 || existing?.alias.quality === "strong") {
@@ -435,9 +445,6 @@ export function* nameIndexSteps(
         patternKey: `${entry.entityType}|${key}`,
       };
       byKey.set(key, { alias, id: aliases.length });
-      for (const id of alias.folded) {
-        entryTokens.add(id);
-      }
       aliases.push(alias);
     }
     for (const id of entryTokens) {

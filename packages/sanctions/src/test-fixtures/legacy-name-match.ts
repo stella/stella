@@ -155,6 +155,8 @@ export type NameIndex = {
   raw: Vocabulary;
   /** Inverse document frequency per folded id; join-only strings get the maximum. */
   weights: readonly number[];
+  /** Per folded id, whether a listed name (not only a derived variant) has it. */
+  listedWords: readonly boolean[];
   maxWeight: number;
 };
 
@@ -269,15 +271,24 @@ export function* nameIndexSteps(
   for (const [entryIndex, entry] of entries.entries()) {
     const byKey = new Map<string, IndexedAlias>();
     const entryTokens = new Set<number>();
+    // Only each listed name's own reading counts towards token frequencies.
     const variants = entry.names.flatMap(({ name, quality }) =>
-      nameReadings(name, entry.entityType).map(({ reading, qualifier }) => ({
-        name,
-        reading,
-        quality: qualifier ? ("weak" as const) : quality,
-      })),
+      nameReadings(name, entry.entityType).map(
+        ({ reading, qualifier }, position) => ({
+          name,
+          reading,
+          quality: qualifier ? ("weak" as const) : quality,
+          listed: position === 0,
+        }),
+      ),
     );
-    for (const { name, reading, quality } of variants) {
+    for (const { name, reading, quality, listed } of variants) {
       const { tokens, adjacent } = reading;
+      if (listed) {
+        for (const token of tokens) {
+          entryTokens.add(intern(folded, token.folded));
+        }
+      }
       const key = readingKey(reading);
       const existing = byKey.get(key);
       if (tokens.length === 0 || existing?.quality === "strong") {
@@ -337,9 +348,6 @@ export function* nameIndexSteps(
           aliases.length,
         );
       }
-      for (const id of alias.folded) {
-        entryTokens.add(id);
-      }
       aliases.push(alias);
     }
     for (const id of entryTokens) {
@@ -359,6 +367,7 @@ export function* nameIndexSteps(
         ? maxWeight
         : Math.log(entries.length / count) + 1;
     }),
+    listedWords: folded.strings.map((_, id) => entryCounts.has(id)),
     maxWeight,
   };
 }
@@ -635,7 +644,7 @@ const prepareQuery = ({
     let weight = index.maxWeight;
     let best = -1;
     for (const [id, similarity] of single?.folded ?? []) {
-      if (similarity > best && (index.folded.postings[id]?.length ?? 0) > 0) {
+      if (similarity > best && index.listedWords[id] === true) {
         best = similarity;
         weight = index.weights[id] ?? weight;
       }
@@ -1217,10 +1226,7 @@ export const bruteForceNameMatches = (
     let weight = index.maxWeight;
     let best = -1;
     for (const [id, similarity] of singles.get(position)?.folded ?? []) {
-      if (
-        similarity > best &&
-        (index.folded.postings.at(id)?.length ?? 0) > 0
-      ) {
+      if (similarity > best && index.listedWords.at(id) === true) {
         best = similarity;
         weight = index.weights.at(id) ?? panic("Missing oracle weight");
       }

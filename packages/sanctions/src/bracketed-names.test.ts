@@ -10,7 +10,7 @@ import type {
 } from "./entry";
 import { parseEuList } from "./eu";
 import sample from "./evaluation/sample.json";
-import { nameVariants } from "./normalise";
+import { hasExcessQueryTokens, nameVariants } from "./normalise";
 import { parseOfacList } from "./ofac";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "./screening";
 import type { ScreeningQuery } from "./screening";
@@ -100,17 +100,67 @@ const mirrorEntry = (
   names: [{ name, quality: "strong" }],
 });
 
+const synthetic = (
+  sourceId: string,
+  entityType: EntityType,
+  name: string,
+): SanctionsEntry => ({
+  source: "eu",
+  issuer: "EU",
+  sourceId,
+  referenceNumber: null,
+  entityType,
+  names: [{ name, quality: "strong" }],
+  birthDates: [],
+  nationalities: [],
+  identifiers: [],
+  addresses: [],
+  programme: null,
+  legalBasis: null,
+  listedOn: null,
+  sourceUrl: "https://example.test/entry",
+});
+const syntheticList = (entries: SanctionsEntry[]): ParsedList => ({
+  version: mirrorVersion("eu"),
+  entries,
+});
+
+/** Best score of one entry for a query, or 0 when it is not reported. */
+const scoreOf = (
+  index: ReturnType<typeof buildScreeningIndex>,
+  query: ScreeningQuery,
+  entryKey: string,
+  cutoff = DEFAULT_CUTOFF,
+) =>
+  screen(index, query, { cutoff, limit: 10_000 })
+    .unwrap()
+    .possibleMatches.find(({ entry }) => key(entry) === entryKey)?.score ?? 0;
+
+// The same names as read before bracket handling existed: brackets,
+// semicolons and dots are plain separators, so no variant is derived.
+const neutralise = (name: string) =>
+  name.replaceAll(/[()[\]（）［］;.]/gu, " ");
+const neutralised = (lists: readonly ParsedList[]): ParsedList[] =>
+  lists.map((list) => ({
+    ...list,
+    entries: list.entries.map((entry) => ({
+      ...entry,
+      names: entry.names.map((alias) => ({
+        ...alias,
+        name: neutralise(alias.name),
+      })),
+    })),
+  }));
+
 describe("bracketed name variants", () => {
-  test("lift an acronym out as its own name and keep the name without it", () => {
+  test("keep the name without its bracketed acronym, never the acronym alone", () => {
     expect(nameVariants("KOREA KWANGSON BANKING CORPORATION (KKBC)")).toEqual([
       { text: "KOREA KWANGSON BANKING CORPORATION (KKBC)", qualifier: false },
       { text: "KOREA KWANGSON BANKING CORPORATION", qualifier: false },
-      { text: "KKBC", qualifier: true },
     ]);
     expect(nameVariants("UGANDA COMMERCIAL IMPEX (UCI) LTD")).toEqual([
       { text: "UGANDA COMMERCIAL IMPEX (UCI) LTD", qualifier: false },
       { text: "UGANDA COMMERCIAL IMPEX LTD", qualifier: false },
-      { text: "UCI", qualifier: true },
     ]);
   });
 
@@ -128,12 +178,10 @@ describe("bracketed name variants", () => {
       { text: "GREAT LAKES BUSINESS COMPANY (GLBC)", qualifier: false },
       { text: "COMPAGNIE AERIENNE DES GRANDS LACS", qualifier: false },
       { text: "GREAT LAKES BUSINESS COMPANY", qualifier: false },
-      { text: "CAGL", qualifier: true },
-      { text: "GLBC", qualifier: true },
     ]);
   });
 
-  test("lift marked aliases and other-script names, never places or notes", () => {
+  test("lift marked aliases and names in another script, never places or notes", () => {
     expect(nameVariants("Abubakar (original script: Абубакар)")).toEqual([
       { text: "Abubakar (original script: Абубакар)", qualifier: false },
       { text: "Abubakar", qualifier: false },
@@ -141,6 +189,7 @@ describe("bracketed name variants", () => {
     ]);
     expect(nameVariants("North Harbor Company (a.k.a. Harbor North)")).toEqual([
       { text: "North Harbor Company (a.k.a. Harbor North)", qualifier: false },
+      { text: "North Harbor Company (aka Harbor North)", qualifier: false },
       { text: "North Harbor Company", qualifier: false },
       { text: "Harbor North", qualifier: true },
     ]);
@@ -149,7 +198,21 @@ describe("bracketed name variants", () => {
       { text: "Jin Tiesan", qualifier: false },
       { text: "金铁三", qualifier: true },
     ]);
+    // The dominant script decides, not whether Latin letters are present.
+    expect(nameVariants("Газпром (ガスプロム)")).toEqual([
+      { text: "Газпром (ガスプロム)", qualifier: false },
+      { text: "Газпром", qualifier: false },
+      { text: "ガスプロム", qualifier: true },
+    ]);
+    // A Latin name beside a Cyrillic one counts only as its transliteration.
+    expect(nameVariants("Совкомфлот (Sovcomflot)")).toEqual([
+      { text: "Совкомфлот (Sovcomflot)", qualifier: false },
+      { text: "Совкомфлот", qualifier: false },
+      { text: "Sovcomflot", qualifier: true },
+    ]);
     for (const [name, base] of [
+      ["Внешторгбанк (Moscow)", "Внешторгбанк"],
+      ["中国银行 (Beijing)", "中国银行"],
       ["AL-HARAMAYN FOUNDATION (KENYA)", "AL-HARAMAYN FOUNDATION"],
       ["LEADER (HONG KONG) INTERNATIONAL", "LEADER INTERNATIONAL"],
       ["Lom-ali Butayev (Butaev)", "Lom-ali Butayev"],
@@ -167,9 +230,38 @@ describe("bracketed name variants", () => {
     }
   });
 
+  test("read nested brackets as a tree, inside marked aliases too", () => {
+    expect(nameVariants("Acme (formerly Beta (UK))")).toEqual([
+      { text: "Acme (formerly Beta (UK))", qualifier: false },
+      { text: "Acme", qualifier: false },
+      { text: "Beta (UK)", qualifier: true },
+      { text: "Beta", qualifier: true },
+    ]);
+  });
+
+  test("read a dotted acronym as one word", () => {
+    expect(
+      nameVariants("KOREA KWANGSON BANKING CORPORATION (K.K.B.C.)"),
+    ).toEqual([
+      {
+        text: "KOREA KWANGSON BANKING CORPORATION (K.K.B.C.)",
+        qualifier: false,
+      },
+      { text: "KOREA KWANGSON BANKING CORPORATION (KKBC)", qualifier: false },
+      { text: "KOREA KWANGSON BANKING CORPORATION", qualifier: false },
+    ]);
+    expect(nameVariants("K.K.B.C.")).toEqual([
+      { text: "K.K.B.C.", qualifier: false },
+      { text: "KKBC", qualifier: false },
+    ]);
+  });
+
   test("leave a name without brackets as it is, and survive unbalanced ones", () => {
     expect(nameVariants("Vladimir Putin")).toEqual([
       { text: "Vladimir Putin", qualifier: false },
+    ]);
+    expect(nameVariants("Vladimir V. Putin")).toEqual([
+      { text: "Vladimir V. Putin", qualifier: false },
     ]);
     expect(nameVariants("Sber Bank (Belarus")).toEqual([
       { text: "Sber Bank (Belarus", qualifier: false },
@@ -179,6 +271,197 @@ describe("bracketed name variants", () => {
       { text: "(KKBC)", qualifier: false },
     ]);
   });
+});
+
+describe("screening reviewed edge cases", () => {
+  test("derived variants leave the token weights of other entries alone", () => {
+    // A derived variant may hold a token the listed name itself does not
+    // (a trailing "SA" is stripped as a legal form, the alias "SA" is not).
+    for (const organisation of [
+      "Shipping Agency (SA)",
+      "Shipping Agency (a.k.a. SA)",
+    ]) {
+      const entries = [
+        synthetic("person", "person", "Sa Mohammed Ali"),
+        synthetic("organisation", "organisation", organisation),
+      ];
+      const query = { name: "Sa Mohammed", entityType: "person" } as const;
+      const after = scoreOf(
+        buildScreeningIndex([syntheticList(entries)]),
+        query,
+        "eu:person",
+      );
+      const before = scoreOf(
+        buildScreeningIndex(neutralised([syntheticList(entries)])),
+        query,
+        "eu:person",
+      );
+      expect({ organisation, reported: before >= DEFAULT_CUTOFF }).toEqual({
+        organisation,
+        reported: true,
+      });
+      expect({ organisation, same: Math.abs(after - before) < 1e-12 }).toEqual({
+        organisation,
+        same: true,
+      });
+    }
+  });
+
+  test("a name in another script beside the listed one is found on its own", () => {
+    const index = buildScreeningIndex([
+      syntheticList([
+        synthetic("gazprom", "organisation", "Газпром (ガスプロム)"),
+        synthetic("vtb", "organisation", "Внешторгбанк (Moscow)"),
+      ]),
+    ]);
+    expect(
+      scoreOf(
+        index,
+        { name: "ガスプロム", entityType: "organisation" },
+        "eu:gazprom",
+      ),
+    ).toBeGreaterThanOrEqual(DEFAULT_CUTOFF);
+    expect(
+      scoreOf(
+        index,
+        { name: "Moscow", entityType: "organisation" },
+        "eu:vtb",
+        0,
+      ),
+    ).toBeLessThan(DEFAULT_CUTOFF);
+  });
+
+  test("a former name with its own qualifier is found without it", () => {
+    const index = buildScreeningIndex([
+      syntheticList([
+        synthetic("acme", "organisation", "Acme (formerly Beta (UK))"),
+      ]),
+    ]);
+    for (const name of ["Beta", "Beta (UK)", "Acme"]) {
+      expect({
+        name,
+        found:
+          scoreOf(index, { name, entityType: "organisation" }, "eu:acme") >=
+          DEFAULT_CUTOFF,
+      }).toEqual({ name, found: true });
+    }
+  });
+
+  test("dotted and undotted acronyms match each other both ways", () => {
+    const index = buildScreeningIndex([
+      syntheticList([
+        {
+          ...synthetic(
+            "dotted",
+            "organisation",
+            "KOREA KWANGSON BANKING CORPORATION (K.K.B.C.)",
+          ),
+          names: [
+            {
+              name: "KOREA KWANGSON BANKING CORPORATION (K.K.B.C.)",
+              quality: "strong",
+            },
+            { name: "K.K.B.C.", quality: "strong" },
+          ],
+        },
+        synthetic("plain", "organisation", "KKBC"),
+      ]),
+    ]);
+    for (const [name, entryKey] of [
+      ["KKBC", "eu:dotted"],
+      ["K.K.B.C.", "eu:plain"],
+      ["KOREA KWANGSON BANKING CORPORATION (KKBC)", "eu:dotted"],
+    ] as const) {
+      expect({
+        name,
+        entryKey,
+        score: scoreOf(index, { name, entityType: "organisation" }, entryKey),
+      }).toEqual({ name, entryKey, score: 1 });
+    }
+  });
+
+  test("a shared bracketed acronym alone never reaches the cutoff", () => {
+    const index = buildScreeningIndex([
+      ...fixtureLists,
+      syntheticList([
+        synthetic("us", "organisation", "Unrelated Services (US)"),
+      ]),
+    ]);
+    for (const [name, entryKey] of [
+      ["Universal Credit Insurance (UCI)", "un:6908031"],
+      ["UCI", "un:6908031"],
+      ["United Shipping Company (US)", "eu:us"],
+      ["US", "eu:us"],
+    ] as const) {
+      expect({
+        name,
+        found:
+          scoreOf(index, { name, entityType: "organisation" }, entryKey, 0) >=
+          DEFAULT_CUTOFF,
+      }).toEqual({ name, found: false });
+    }
+  });
+
+  test("no fixture query scores lower than before bracket handling", () => {
+    // Every listed name, and each with its first or last word dropped, read
+    // against the fixtures as they are and with brackets as plain separators.
+    const lists = [
+      ...fixtureLists,
+      syntheticList([
+        synthetic("person", "person", "Sa Mohammed Ali"),
+        synthetic("organisation", "organisation", "Shipping Agency (SA)"),
+        synthetic("aka", "organisation", "Shipping Agency (a.k.a. SA)"),
+      ]),
+    ];
+    const after = buildScreeningIndex(lists);
+    const before = buildScreeningIndex(neutralised(lists));
+    const options = { cutoff: 0.5, limit: 10_000 };
+    let compared = 0;
+    for (const entry of lists.flatMap((list) => list.entries)) {
+      for (const { name } of entry.names) {
+        const words = name.split(/\s+/u).filter((word) => word !== "");
+        for (const query of new Set([
+          name,
+          words.slice(1).join(" "),
+          words.slice(0, -1).join(" "),
+        ])) {
+          if (
+            !/[\p{L}\p{N}]/u.test(neutralise(query)) ||
+            hasExcessQueryTokens(query, entry.entityType)
+          ) {
+            continue;
+          }
+          const scores = new Map(
+            screen(
+              after,
+              { name: query, entityType: entry.entityType },
+              options,
+            )
+              .unwrap()
+              .possibleMatches.map((match) => [key(match.entry), match.score]),
+          );
+          const was = screen(
+            before,
+            { name: neutralise(query), entityType: entry.entityType },
+            options,
+          ).unwrap().possibleMatches;
+          for (const match of was) {
+            compared += 1;
+            const id = key(match.entry);
+            const score = scores.get(id) ?? 0;
+            if (score < match.score - 1e-9) {
+              expect({ query, id, score }).toEqual({
+                query,
+                id,
+                score: match.score,
+              });
+            }
+          }
+        }
+      }
+    }
+    expect(compared).toBeGreaterThan(100);
+  }, 120_000); // timeout: screens every fixture name three ways against two editions
 });
 
 describe("listed names with bracketed parts", () => {
