@@ -1330,7 +1330,6 @@
         "better-result": "catalog:",
         "oxc-parser": "catalog:",
         "oxc-transform-react": "catalog:",
-        "typescript6": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
