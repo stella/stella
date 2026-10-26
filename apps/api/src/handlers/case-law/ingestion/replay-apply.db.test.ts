@@ -714,9 +714,10 @@ test("a re-parse its parsing budget refuses keeps the stored text and records th
     document: { type: "read", html },
   }).decision;
   expect(refused.fulltext ?? "").toBe("");
-  expect(refused.metadata["documentStatus"]).toBe(
-    PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
-  );
+  expect(
+    refused.metadata["documentStatus"] ===
+      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  ).toBe(true);
   const envelope = refused.sourceRaw;
   if (envelope === undefined) {
     panic("Expected the procurement ruling to carry its envelope");

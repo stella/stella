@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch, useNavigate } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
@@ -91,7 +92,11 @@ import {
 } from "@/components/workspaces/entity-utils";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
 import { useRetryCell } from "@/components/workspaces/hooks/use-retry-cell";
-import { requestManualOcr } from "@/components/workspaces/request-manual-ocr";
+import { WithOcrBatchHelp } from "@/components/workspaces/ocr-batch-help";
+import {
+  manualOcrSuccessKey,
+  requestManualOcr,
+} from "@/components/workspaces/request-manual-ocr";
 import {
   canRunManualOcr,
   getDesktopEditLockState,
@@ -99,20 +104,29 @@ import {
   getOcrExportFileName,
   getOcrExportFormats,
   getOcrSources,
+  getRowMenuSections,
   hasOcrExport,
   type OcrExportFormat,
   type OcrSource,
   planFolderFromSelection,
   requestDesktopEditTakeover,
-  type RowActionContext,
+  resolveRowMenuSubject,
+  ROW_MENU_ACTION_CONTEXT,
+  type RowMenuSection,
+  type RowMenuSubject,
 } from "@/components/workspaces/row-actions.logic";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
 import {
   DesktopRequiredDialog,
+  DesktopSetupMenuItem,
   useDesktopActionGate,
 } from "@/features/desktop/desktop-action-gate";
+import type {
+  DesktopActionStatus,
+  DesktopSetupStep,
+} from "@/features/desktop/desktop-action-gate.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -127,6 +141,7 @@ import {
 } from "@/lib/desktop-bridge";
 import {
   canOpenDesktopEdit,
+  canReleaseDesktopEditLock,
   DESKTOP_EDIT_FILE_TYPE_DETAILS,
   getDesktopEditFileType,
 } from "@/lib/desktop-edit-formats";
@@ -137,6 +152,7 @@ import { isUnauthorizedError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
+import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -321,26 +337,45 @@ const OcrExportMenuItems = ({
 };
 
 type ExportableOcrSourcesOptions = {
-  isBulk: boolean;
-  isCellContext: boolean;
   ocrSource: OcrSource | undefined;
   ocrSources: readonly OcrSource[];
+  subject: RowMenuSubject;
 };
 
 const getExportableOcrSources = ({
-  isBulk,
-  isCellContext,
   ocrSource,
   ocrSources,
+  subject,
 }: ExportableOcrSourcesOptions): readonly OcrSource[] => {
-  if (isBulk) {
-    return [];
+  switch (subject) {
+    case "bulk":
+      return [];
+    case "row":
+      return ocrSources.filter(hasOcrExport);
+    case "row-file-cell":
+    case "file-cell":
+    case "value-cell":
+      return ocrSource && hasOcrExport(ocrSource) ? [ocrSource] : [];
+    default:
+      subject satisfies never;
+      return panic(`Unhandled row menu subject: ${String(subject)}`);
   }
-  if (isCellContext) {
-    return ocrSource && hasOcrExport(ocrSource) ? [ocrSource] : [];
-  }
-  return ocrSources.filter(hasOcrExport);
 };
+
+type RowMenuSections = ReadonlySet<RowMenuSection>;
+
+/** `value` where the menu's subject offers `section`; nothing elsewhere. */
+const offer = <T,>(
+  sections: RowMenuSections,
+  section: RowMenuSection,
+  value: T,
+): T | undefined => (sections.has(section) ? value : undefined);
+
+const offerWhen = (
+  sections: RowMenuSections,
+  section: RowMenuSection,
+  condition: boolean,
+): boolean => sections.has(section) && condition;
 
 export const RowActions = ({
   duplicatePresentation = "menu-only",
@@ -390,8 +425,14 @@ export const RowActions = ({
   const isFolder = entity.kind === "folder";
   const isBulk = selectedEntities !== undefined && selectedEntities.length > 1;
   const bulkTargets = isBulk ? selectedEntities : [entity];
-  const isCellContext =
-    !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
+  const menuSubject = resolveRowMenuSubject({
+    cellPropertyId: cellMetadataTarget?.propertyId ?? null,
+    fields: entity.fields,
+    isBulk,
+    rowFilePropertyId: file?.propertyId ?? null,
+  });
+  const sections = getRowMenuSections(menuSubject);
+  const rowActionContext = ROW_MENU_ACTION_CONTEXT[menuSubject];
   const translationTarget = getTranslationTarget({
     cellMetadataTarget,
     entity,
@@ -421,18 +462,14 @@ export const RowActions = ({
     }
   };
   const ocrSources = getOcrSources(entity.fields);
-  let rowActionContext: RowActionContext = "row";
-  if (isBulk) {
-    rowActionContext = "bulk";
-  } else if (isCellContext) {
-    rowActionContext = "cell";
-  }
   const canRunOcr = canRunManualOcr({
     context: rowActionContext,
     entity,
     ocrSource,
   });
-  const rowOcrSources = isCellContext
+  // A cell runs OCR on its own file; only the row offers every file.
+  const isCellOcr = menuSubject !== "row";
+  const rowOcrSources = isCellOcr
     ? []
     : ocrSources.filter((source) =>
         canRunManualOcr({
@@ -512,10 +549,9 @@ export const RowActions = ({
   const hasPdfConversion =
     file !== null && file.pdfFileId !== null && file.mimeType !== PDF_MIME_TYPE;
   const exportableOcrSources = getExportableOcrSources({
-    isBulk,
-    isCellContext,
     ocrSource,
     ocrSources,
+    subject: menuSubject,
   });
   // A bulk selection keeps the originals: it spans files whose versions do not
   // share one answer, so no rendition is offered for all of them.
@@ -1014,7 +1050,7 @@ export const RowActions = ({
 
     setIsOcrPending(true);
     try {
-      const { outcome } = await requestManualOcr({
+      const response = await requestManualOcr({
         entityId: entity.entityId,
         fieldId: source.fieldId,
         workspaceId,
@@ -1023,11 +1059,7 @@ export const RowActions = ({
         queryKey: entitiesKeys.all(workspaceId),
       });
       stellaToast.add({
-        title: t(
-          outcome === "already_processed"
-            ? "workspaces.files.ocrAlreadyProcessed"
-            : "workspaces.files.ocrQueued",
-        ),
+        title: t(manualOcrSuccessKey(response)),
         type: "success",
       });
     } catch (error) {
@@ -1066,14 +1098,30 @@ export const RowActions = ({
     ? `.${versionAcceptExtension}`
     : "*/*";
 
+  // Each action is offered only where the menu's subject has it: a gated-out
+  // handler is undefined, so the item hides.
+  const openAction = offer(sections, "open", openVersionHistory);
+  const editPagesAction = offer(sections, "edit-pages", openPDFPageEditor);
+  const chatAction = offer(sections, "chat", handleChatAbout);
+  const offeredTranslationTarget =
+    offer(sections, "translate", translationTarget) ?? null;
+  const hasFeatureActions = [
+    openAction,
+    editPagesAction,
+    chatAction,
+    offeredTranslationTarget,
+  ].some((action) => action !== undefined && action !== null);
+
   return (
     <Menu onOpenChange={onOpenChange} open={open}>
       <RowDuplicatePrimaryAction
-        isCellContext={isCellContext}
         label={t("common.duplicate")}
         onDuplicate={handleDuplicate}
         pending={isDuplicating}
-        presentation={duplicatePresentation}
+        presentation={
+          offer(sections, "file-operations", duplicatePresentation) ??
+          "menu-only"
+        }
       />
       <Tooltip
         content={t("common.actions")}
@@ -1094,63 +1142,116 @@ export const RowActions = ({
         <EllipsisVerticalIcon />
       </Tooltip>
       <MenuPopup anchor={anchor ?? undefined}>
-        {isBulk && !isCellContext && (
+        {offer(
+          sections,
+          "new-folder-from-selection",
           <CreateFolderFromSelectionMenuItem
             getAncestorIds={getAncestorIds}
             onFolderCreated={onSubfolderCreated}
             targets={bulkTargets}
             workspaceId={workspaceId}
-          />
+          />,
         )}
         {/* --- View / Edit --- */}
         <RowOpenMenuActions
-          canUploadVersion={canUploadVersion}
+          canUploadVersion={offerWhen(
+            sections,
+            "upload-version",
+            canUploadVersion,
+          )}
           isBulk={isBulk}
-          isCellContext={isCellContext}
-          onOpen={resolvedOnOpen}
-          onRename={onRename}
+          onOpen={offer(sections, "preview", resolvedOnOpen)}
+          onRename={offer(sections, "rename", onRename)}
           onUploadVersion={handleUploadVersionSelect}
           uploadVersionPending={uploadVersion.isPending}
         />
         <RowOcrMenuActions
-          canRunOcr={canRunOcr}
+          canRunOcr={offerWhen(sections, "run-ocr", canRunOcr)}
           isPending={isOcrPending}
           onRun={handleRunOcr}
           rowSources={rowOcrSources}
           selectedSource={ocrSource}
         />
-        <RowCellMenuActions
-          canRetry={canRetryCell}
-          entityId={entity.entityId}
-          isBulk={isBulk}
-          metadataTarget={cellMetadataTarget}
-          onRetry={handleRetryCell}
-          retryDisabled={retryDisabled}
-          workspaceId={workspaceId}
-        />
-        <RowFolderDesktopMenuActions
-          canOpenInDesktop={canOpenInDesktop}
-          canReleaseDesktopLock={
-            !entity.readOnly &&
-            hasDesktopEditFileType &&
-            desktopEditLockState !== "unlocked"
-          }
+        <RowFolderMenuActions
           entity={entity}
           isBulk={isBulk}
-          isCellContext={isCellContext}
           isFolder={isFolder}
-          onOpenInDesktop={() => {
-            desktopEditGate.run(() => {
-              detached(handleOpenInDesktop(), "row-actions.open-in-desktop");
-            });
-          }}
-          openInDesktopLabel={desktopEditGate.label}
-          onReleaseDesktopLock={handleReleaseLock}
-          onSubfolderCreated={onSubfolderCreated}
+          onSubfolderCreated={offer(
+            sections,
+            "new-subfolder",
+            onSubfolderCreated,
+          )}
           workspaceId={workspaceId}
         />
+        {offer(
+          sections,
+          "cell-review",
+          <RowCellMenuActions
+            canRetry={canRetryCell}
+            entityId={entity.entityId}
+            isBulk={isBulk}
+            metadataTarget={cellMetadataTarget}
+            onRetry={handleRetryCell}
+            retryDisabled={retryDisabled}
+            workspaceId={workspaceId}
+          />,
+        )}
+        <RowDesktopMenuActions
+          edit={
+            offerWhen(sections, "desktop-edit", canOpenInDesktop) &&
+            desktopEditFileType !== null
+              ? {
+                  capability: "desktop",
+                  label: t.rich(
+                    "workspaces.files.desktopEdit.editInApplication",
+                    {
+                      application:
+                        DESKTOP_EDIT_FILE_TYPE_DETAILS[desktopEditFileType]
+                          .application,
+                      bdi: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+                    },
+                  ),
+                  onSelect: () => {
+                    desktopEditGate.run(() => {
+                      detached(
+                        handleOpenInDesktop(),
+                        "row-actions.open-in-desktop",
+                      );
+                    });
+                  },
+                  onSetUp: desktopEditGate.setUp,
+                  status: desktopEditGate.status,
+                }
+              : null
+          }
+          onReleaseLock={
+            offerWhen(
+              sections,
+              "desktop-edit",
+              canReleaseDesktopEditLock({
+                context: rowActionContext,
+                fileType: desktopEditFileType,
+                lockState: desktopEditLockState,
+                readOnly: entity.readOnly,
+              }),
+            )
+              ? handleReleaseLock
+              : null
+          }
+          sign={
+            offerWhen(sections, "sign", pdfSignTarget !== null)
+              ? {
+                  capability: "desktop",
+                  label: pdfSignFlow.actionLabel,
+                  onSelect: pdfSignFlow.start,
+                  onSetUp: pdfSignFlow.setUp,
+                  status: pdfSignFlow.status,
+                }
+              : null
+          }
+        />
 
-        <MenuSeparator />
+        {hasFeatureActions && <MenuSeparator />}
 
         {/* --- Features --- */}
         <RowFeatureMenuActions
@@ -1159,33 +1260,37 @@ export const RowActions = ({
           file={file}
           isBulk={isBulk}
           isFolder={isFolder}
-          onChatAbout={handleChatAbout}
-          onOpenVersionHistory={openVersionHistory}
-          onEditPages={openPDFPageEditor}
-          onSign={pdfSignTarget === null ? undefined : pdfSignFlow.start}
-          signLabel={pdfSignFlow.label}
+          onChatAbout={chatAction}
+          onOpenVersionHistory={openAction}
+          onEditPages={editPagesAction}
           onTranslate={openTranslationDialog}
-          translationTarget={translationTarget}
+          translationTarget={offeredTranslationTarget}
         />
-        <RowCellOcrExportMenuActions
-          isCellContext={isCellContext}
-          onExport={handleOcrExport}
-          sources={exportableOcrSources}
-        />
-        <RowFileOperationsMenu
-          downloadRenditions={downloadRenditions}
-          exportableOcrSources={exportableOcrSources}
-          hasAnyFile={hasAnyFile}
-          hasAnyFolder={hasAnyFolder}
-          isCellContext={isCellContext}
-          onCopyToMatter={openCopyToMatterDialog}
-          onDelete={requestDelete}
-          onDownload={handleDownload}
-          onDuplicate={handleDuplicate}
-          duplicatePending={isDuplicating}
-          onOcrExport={handleOcrExport}
-          onZipDownload={handleZipDownload}
-        />
+        {offer(
+          sections,
+          "cell-ocr-export",
+          <RowCellOcrExportMenuActions
+            onExport={handleOcrExport}
+            sources={exportableOcrSources}
+          />,
+        )}
+        {offer(
+          sections,
+          "file-operations",
+          <RowFileOperationsMenu
+            downloadRenditions={downloadRenditions}
+            exportableOcrSources={exportableOcrSources}
+            hasAnyFile={hasAnyFile}
+            hasAnyFolder={hasAnyFolder}
+            onCopyToMatter={openCopyToMatterDialog}
+            onDelete={requestDelete}
+            onDownload={handleDownload}
+            onDuplicate={handleDuplicate}
+            duplicatePending={isDuplicating}
+            onOcrExport={handleOcrExport}
+            onZipDownload={handleZipDownload}
+          />,
+        )}
       </MenuPopup>
       <CopyToMatterDialog
         entities={copyToMatterEntities}
@@ -1228,7 +1333,6 @@ export const RowActions = ({
 };
 
 type RowDuplicatePrimaryActionProps = {
-  isCellContext: boolean;
   label: string;
   onDuplicate: () => Promise<void>;
   pending: boolean;
@@ -1236,13 +1340,12 @@ type RowDuplicatePrimaryActionProps = {
 };
 
 const RowDuplicatePrimaryAction = ({
-  isCellContext,
   label,
   onDuplicate,
   pending,
   presentation,
 }: RowDuplicatePrimaryActionProps) => {
-  if (presentation !== "primary" || isCellContext) {
+  if (presentation !== "primary") {
     return null;
   }
 
@@ -1267,7 +1370,6 @@ const RowDuplicatePrimaryAction = ({
 const RowOpenMenuActions = ({
   canUploadVersion,
   isBulk,
-  isCellContext,
   onOpen,
   onRename,
   onUploadVersion,
@@ -1275,7 +1377,6 @@ const RowOpenMenuActions = ({
 }: {
   canUploadVersion: boolean;
   isBulk: boolean;
-  isCellContext: boolean;
   onOpen: (() => void) | undefined;
   onRename: (() => void) | undefined;
   onUploadVersion: () => void;
@@ -1296,7 +1397,7 @@ const RowOpenMenuActions = ({
           {t("common.rename")}
         </MenuItem>
       )}
-      {!isCellContext && canUploadVersion && (
+      {canUploadVersion && (
         <MenuItem disabled={uploadVersionPending} onClick={onUploadVersion}>
           <UploadIcon />
           {t("fileDetail.uploadNewVersion")}
@@ -1323,31 +1424,36 @@ export const RowOcrMenuActions = ({
   return (
     <>
       {canRunOcr && (
-        <CapabilityAction action={{ capability: "ocr" }}>
-          {(capabilityProps) => (
-            <MenuItem
-              disabled={isPending}
-              onClick={() =>
-                detached(onRun(selectedSource), "row-actions.run-ocr")
-              }
-              {...capabilityProps}
-            >
-              <ScanTextIcon />
-              {t("workspaces.files.runOcr")}
-            </MenuItem>
-          )}
-        </CapabilityAction>
+        <WithOcrBatchHelp>
+          <CapabilityAction action={{ capability: "ocr" }}>
+            {(capabilityProps) => (
+              <MenuItem
+                className="min-w-0 flex-1"
+                disabled={isPending}
+                onClick={() =>
+                  detached(onRun(selectedSource), "row-actions.run-ocr")
+                }
+                {...capabilityProps}
+              >
+                <ScanTextIcon />
+                {t("workspaces.files.queueForOcr")}
+              </MenuItem>
+            )}
+          </CapabilityAction>
+        </WithOcrBatchHelp>
       )}
       {rowSources.length > 0 && (
         <MenuSub>
-          <CapabilityAction action={{ capability: "ocr" }}>
-            {(capabilityProps) => (
-              <MenuSubTrigger {...capabilityProps}>
-                <ScanTextIcon />
-                {t("workspaces.files.runOcr")}
-              </MenuSubTrigger>
-            )}
-          </CapabilityAction>
+          <WithOcrBatchHelp>
+            <CapabilityAction action={{ capability: "ocr" }}>
+              {(capabilityProps) => (
+                <MenuSubTrigger className="min-w-0 flex-1" {...capabilityProps}>
+                  <ScanTextIcon />
+                  {t("workspaces.files.queueForOcr")}
+                </MenuSubTrigger>
+              )}
+            </CapabilityAction>
+          </WithOcrBatchHelp>
           <MenuSubPopup>
             {rowSources.map((source) => (
               <CapabilityAction
@@ -1426,59 +1532,91 @@ const RowCellMenuActions = ({
   );
 };
 
-const RowFolderDesktopMenuActions = ({
-  canOpenInDesktop,
-  canReleaseDesktopLock,
+const RowFolderMenuActions = ({
   entity,
   isBulk,
-  isCellContext,
   isFolder,
-  onOpenInDesktop,
-  openInDesktopLabel,
-  onReleaseDesktopLock,
   onSubfolderCreated,
   workspaceId,
 }: {
-  canOpenInDesktop: boolean;
-  canReleaseDesktopLock: boolean;
   entity: WorkspaceEntity;
   isBulk: boolean;
-  isCellContext: boolean;
   isFolder: boolean;
-  onOpenInDesktop: () => void;
-  openInDesktopLabel: string;
-  onReleaseDesktopLock: () => Promise<void>;
   onSubfolderCreated: RowActionsProps["onSubfolderCreated"];
   workspaceId: string;
 }) => {
+  if (isBulk || !isFolder || onSubfolderCreated === undefined) {
+    return null;
+  }
+  return (
+    <CreateSubfolderMenuItem
+      entity={entity}
+      onSubfolderCreated={onSubfolderCreated}
+      workspaceId={workspaceId}
+    />
+  );
+};
+
+/** A file action stella desktop runs, with the desktop status it depends on. */
+type RowDesktopAction = {
+  capability: Capability;
+  label: ReactNode;
+  onSelect: () => void;
+  onSetUp: (step: DesktopSetupStep) => void;
+  status: DesktopActionStatus;
+};
+
+/**
+ * The menu's desktop group: the desktop status first, so it reads as what the
+ * actions below need, then actions named by what they do. Editing applies to
+ * Office files and signing to PDFs, so at most one of them is offered.
+ */
+const RowDesktopMenuActions = ({
+  edit,
+  onReleaseLock,
+  sign,
+}: {
+  edit: RowDesktopAction | null;
+  onReleaseLock: (() => Promise<void>) | null;
+  sign: RowDesktopAction | null;
+}) => {
   const t = useTranslations();
-  if (isCellContext) {
+  const statusSource = edit ?? sign;
+  if (statusSource === null && onReleaseLock === null) {
     return null;
   }
   return (
     <>
-      {!isBulk && isFolder && onSubfolderCreated !== undefined && (
-        <CreateSubfolderMenuItem
-          entity={entity}
-          onSubfolderCreated={onSubfolderCreated}
-          workspaceId={workspaceId}
+      <MenuSeparator />
+      {statusSource !== null && (
+        <DesktopSetupMenuItem
+          onSetUp={statusSource.onSetUp}
+          status={statusSource.status}
         />
       )}
-      {canOpenInDesktop && (
-        <CapabilityAction action={{ capability: "desktop" }}>
+      {edit !== null && (
+        <CapabilityAction action={{ capability: edit.capability }}>
           {(capabilityProps) => (
-            <MenuItem onClick={onOpenInDesktop} {...capabilityProps}>
+            <MenuItem onClick={edit.onSelect} {...capabilityProps}>
               <LaptopIcon />
-              {openInDesktopLabel}
+              {edit.label}
             </MenuItem>
           )}
         </CapabilityAction>
       )}
-      {canReleaseDesktopLock && (
+      {sign !== null && (
+        <CapabilityAction action={{ capability: sign.capability }}>
+          {(capabilityProps) => (
+            <MenuItem onClick={sign.onSelect} {...capabilityProps}>
+              <SignatureIcon />
+              {sign.label}
+            </MenuItem>
+          )}
+        </CapabilityAction>
+      )}
+      {onReleaseLock !== null && (
         <MenuItem
-          onClick={() =>
-            detached(onReleaseDesktopLock(), "row-actions.release-lock")
-          }
+          onClick={() => detached(onReleaseLock(), "row-actions.release-lock")}
         >
           <LockOpenIcon />
           {t("workspaces.files.desktopEdit.releaseLock")}
@@ -1497,9 +1635,7 @@ export const RowFeatureMenuActions = ({
   onChatAbout,
   onEditPages,
   onOpenVersionHistory,
-  onSign,
   onTranslate,
-  signLabel,
   translationTarget,
 }: {
   canCreateEntity: boolean;
@@ -1507,12 +1643,10 @@ export const RowFeatureMenuActions = ({
   file: ReturnType<typeof getFirstFile>;
   isBulk: boolean;
   isFolder: boolean;
-  onChatAbout: () => void;
+  onChatAbout: (() => void) | undefined;
   onEditPages: (() => void) | undefined;
   onOpenVersionHistory: (() => void) | undefined;
-  onSign: (() => void) | undefined;
   onTranslate: () => void;
-  signLabel: string;
   translationTarget: TranslationTarget | null;
 }) => {
   const t = useTranslations();
@@ -1537,24 +1671,16 @@ export const RowFeatureMenuActions = ({
           {t("workspaces.pdf.pageEditor.editPages")}
         </MenuItem>
       )}
-      {onSign !== undefined && (
-        <CapabilityAction action={{ capability: "desktop" }}>
+      {onChatAbout !== undefined && (
+        <CapabilityAction action={{ capability: "ai" }}>
           {(capabilityProps) => (
-            <MenuItem onClick={onSign} {...capabilityProps}>
-              <SignatureIcon />
-              {signLabel}
+            <MenuItem onClick={onChatAbout} {...capabilityProps}>
+              <MessageSquareIcon />
+              {t("chat.chatAbout")}
             </MenuItem>
           )}
         </CapabilityAction>
       )}
-      <CapabilityAction action={{ capability: "ai" }}>
-        {(capabilityProps) => (
-          <MenuItem onClick={onChatAbout} {...capabilityProps}>
-            <MessageSquareIcon />
-            {t("chat.chatAbout")}
-          </MenuItem>
-        )}
-      </CapabilityAction>
       {translationTarget !== null && (
         <CapabilityAction
           action={{
@@ -1619,16 +1745,14 @@ const RowTranslationDialog = ({
 };
 
 const RowCellOcrExportMenuActions = ({
-  isCellContext,
   onExport,
   sources,
 }: {
-  isCellContext: boolean;
   onExport: (source: OcrSource, format: OcrExportFormat) => Promise<void>;
   sources: readonly OcrSource[];
 }) => {
   const t = useTranslations();
-  if (!isCellContext || sources.length !== 1) {
+  if (sources.length !== 1) {
     return null;
   }
   return (
@@ -1655,7 +1779,6 @@ type RowFileOperationsMenuProps = {
   exportableOcrSources: readonly OcrSource[];
   hasAnyFile: boolean;
   hasAnyFolder: boolean;
-  isCellContext: boolean;
   onCopyToMatter: () => void;
   onDelete: () => void;
   onDownload: (variant: DownloadVariant) => Promise<void>;
@@ -1670,7 +1793,6 @@ const RowFileOperationsMenu = ({
   exportableOcrSources,
   hasAnyFile,
   hasAnyFolder,
-  isCellContext,
   onCopyToMatter,
   onDelete,
   onDownload,
@@ -1679,9 +1801,6 @@ const RowFileOperationsMenu = ({
   onZipDownload,
 }: RowFileOperationsMenuProps) => {
   const t = useTranslations();
-  if (isCellContext) {
-    return null;
-  }
   const hasDownloadAsMenu =
     downloadRenditions.length > 0 || exportableOcrSources.length > 0;
   const renderOcrExport = (source: OcrSource) => (
