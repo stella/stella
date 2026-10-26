@@ -254,7 +254,7 @@ test("the cache check names each stylesheet whose snapshot is missing", async ()
 test("every Tailwind entry point is linted by the Tailwind rules", () => {
   // A mapping no rule reads names a snapshot lint never loads, so the
   // generator never writes it and the cache check would demand it.
-  const linted = (oxlintConfig.overrides ?? []).flatMap(({ files, rules }) =>
+  const linted = oxlintConfig.overrides.flatMap(({ files, rules }) =>
     Object.keys(rules ?? {}).some((rule) => rule.startsWith("tailwindcss/"))
       ? files
       : [],
