@@ -253,7 +253,7 @@ const MONTH_YEAR_START_RE = /^(?:0?[1-9]|1[0-2])\.\s?\d{4}\b/u;
  * the month opens the next line like a numbered point would, but a point is
  * not introduced by "dňa" and followed by a year.
  */
-const splitsDate = (previous: string, next: string): boolean =>
+export const splitsDate = (previous: string, next: string): boolean =>
   DAY_END_RE.test(previous) && MONTH_YEAR_START_RE.test(next);
 
 const startsStructurally = (line: string): boolean =>

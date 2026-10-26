@@ -417,4 +417,50 @@ describe("paragraphs across the PDF's line wraps", () => {
       },
     ]);
   });
+
+  test("a point out of sequence opening in lowercase stays a point", () => {
+    const first =
+      "1. žalovaný je povinný zaplatiť žalobcovi trovy konania vo výške 100 eur";
+    const third =
+      "3. žalobcovi sa priznáva právo na náhradu trov odvolacieho konania";
+    const texts = blocksOf([
+      ...PROSE,
+      bold("rozhodol:"),
+      plain(first),
+      plain(third),
+    ]).map((block) => block.plainText);
+    expect(texts.slice(-2)).toEqual([first, third]);
+  });
+
+  test("signatures after a closing formula stay apart in any section", () => {
+    const signatures = [
+      "V Bratislave dňa 30. septembra 2026",
+      "JUDr. Jana Novotná, predsedníčka senátu",
+      "JUDr. Adam Vzorový, člen senátu",
+    ];
+    const texts = blocksOf([
+      ...Array.from({ length: 8 }, () =>
+        plain("Súd vo veci vykonal dokazovanie a zistil"),
+      ),
+      bold("Odôvodnenie:"),
+      ...signatures.map(plain),
+    ]).map((block) => block.plainText);
+    expect(texts.slice(-3)).toEqual(signatures);
+  });
+
+  test("a January date split after its day stays in its point", () => {
+    const texts = blocksOf([
+      ...PROSE,
+      bold("Odôvodnenie:"),
+      plain(
+        "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22.",
+      ),
+      plain(
+        "2. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+      ),
+    ]).map((block) => block.plainText);
+    expect(texts.at(-1)).toBe(
+      "1. Na základe poverenia na vykonanie exekúcie, ktoré súd vydal dňa 22. 2. 2003, začal súdny exekútor exekúciu na vymoženie pohľadávky oprávneného.",
+    );
+  });
 });

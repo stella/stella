@@ -43,6 +43,7 @@ import {
   classifyLineWrap,
   LINE_JOIN,
   lineJoinOf,
+  splitsDate,
 } from "@stll/legal-ast/line-wrap";
 import {
   isSkDecisionTitle,
@@ -449,50 +450,29 @@ const sentenceContinuations = (lines: readonly PdfLine[]): boolean[] => {
   );
 };
 
-/** An Arabic numbered point opening a line: "2. ", "10. ". */
-const NUMBERED_POINT_RE = /^(\d{1,3})\.\s/u;
-
-/**
- * Where a line opening with an academic title may still be running text.
- * From the instruction on, such a line is the signature.
- */
-const TITLE_MAY_CONTINUE_SENTENCE = {
-  preamble: true,
-  holding: true,
-  reasoning: true,
-  instruction: false,
-  closing: false,
-} as const satisfies Record<Section, boolean>;
-
 /**
  * Whether a structural-looking line the line-wrap reader continues opens
  * nothing after all. Only two openings can be a wrapped sentence's next
- * word: a number (a date's month, `dňa 22.` / `10. 2003`) and an academic
- * title (`exekútora` / `JUDr. A. B.`). The number goes on only when it
- * cannot be the next point: neither the one after the last point nor a
- * list starting again at 1. The title goes on only in running text.
+ * word: the month and year of a date split after its day (`dňa 22.` /
+ * `10. 2003`, as the shared date rule confirms it; a number merely out of
+ * sequence is still a point), and an academic title (`exekútora` /
+ * `JUDr. A. B.`), unless the paragraph above is the closing formula or a
+ * signature, after which a title opens the next signature.
  */
 const continuesPastStart = (
+  previous: string,
   line: PdfLine,
-  section: Section,
-  lastPoint: number,
-): boolean => {
-  const point = NUMBERED_POINT_RE.exec(line.text)?.[1];
-  if (point !== undefined) {
-    const number = Number(point);
-    return number !== 1 && number !== lastPoint + 1;
-  }
-  return (
-    SK_JUDGE_TITLE_RE.test(line.text) && TITLE_MAY_CONTINUE_SENTENCE[section]
-  );
-};
+  afterSignatures: boolean,
+): boolean =>
+  splitsDate(previous, line.text) ||
+  (!afterSignatures && SK_JUDGE_TITLE_RE.test(line.text));
 
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
   const continuations = sentenceContinuations(lines);
   let section: Section = "preamble";
-  /** The number of the last numbered point opened, 0 before any. */
-  let lastPoint = 0;
+  /** Whether the paragraph being built is the closing formula or a signature. */
+  let inSignatures = false;
 
   for (const [index, line] of lines.entries()) {
     if (line.bold && isSkHoldingMarker(line.text)) {
@@ -525,7 +505,7 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       isStructuralStart(line, section) &&
       !(
         continuations[index] === true &&
-        continuesPastStart(line, section, lastPoint)
+        continuesPastStart(lines[index - 1]?.text ?? "", line, inSignatures)
       );
 
     // SK ÚS PDFs sometimes bold a short continuation
@@ -549,10 +529,9 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
         ...line,
         segments: [...line.segments],
       });
-      const point = NUMBERED_POINT_RE.exec(line.text)?.[1];
-      if (point !== undefined) {
-        lastPoint = Number(point);
-      }
+      inSignatures =
+        SK_CLOSING_RE.test(line.text) ||
+        (inSignatures && SK_JUDGE_TITLE_RE.test(line.text));
     } else {
       // Continuation: append text and segments.
       // Keep latest pageIndex for page boundary detection.
