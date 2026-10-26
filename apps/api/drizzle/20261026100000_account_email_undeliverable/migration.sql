@@ -26,20 +26,3 @@ ALTER TABLE "user"
       ("email_undeliverable_address" IS NULL AND "email_undeliverable_reason" IS NULL AND "email_undeliverable_at" IS NULL)
       OR ("email_undeliverable_address" IS NOT NULL AND "email_undeliverable_at" IS NOT NULL AND "email_undeliverable_reason" IS NOT NULL AND "email_undeliverable_reason" IN ('hard_bounce', 'complaint', 'suppressed'))
     ) NOT VALID;
---> statement-breakpoint
-
--- Commit the additions and release their ACCESS EXCLUSIVE lock before
--- validating. VALIDATE takes SHARE UPDATE EXCLUSIVE, which readers and writers
--- do not wait on. A failure after this point replays the file: every step
--- above is guarded, and validating a validated constraint changes nothing.
--- squawk-ignore transaction-nesting
-COMMIT;
---> statement-breakpoint
--- squawk-ignore transaction-nesting, ban-uncommitted-transaction
-BEGIN;
---> statement-breakpoint
-SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
-
--- squawk-ignore constraint-missing-not-valid -- added NOT VALID above; every existing row has all three columns null
-ALTER TABLE "user" VALIDATE CONSTRAINT "user_email_undeliverable_check";
