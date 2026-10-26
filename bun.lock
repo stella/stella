@@ -1400,6 +1400,7 @@
       "name": "@stll/start-runtime",
       "version": "0.2.1",
       "dependencies": {
+        "@tanstack/react-start": "^1.169.3",
         "better-result": "catalog:",
       },
       "devDependencies": {

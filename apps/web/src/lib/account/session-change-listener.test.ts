@@ -6,8 +6,7 @@ import {
   PROFESSIONAL_USE_TERMS_VERSION,
 } from "@stll/api-contract/professional-use";
 import { sleep } from "@stll/concurrency/sleep";
-
-import { requestTest as test } from "@/testing/request-test";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 // The session the server reports; changed by "another tab".
 let signedIn: string | null = "user-a";

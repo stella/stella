@@ -2,9 +2,9 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, expect } from "bun:test";
 
 import type { CorrespondenceDropsPage } from "@stll/api-contract/correspondence";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { toSafeId } from "@/lib/safe-id";
-import { requestTest as test } from "@/testing/request-test";
 
 import { correspondenceKeys } from "./correspondence";
 import { correspondenceDropsOptions } from "./correspondence-drops";

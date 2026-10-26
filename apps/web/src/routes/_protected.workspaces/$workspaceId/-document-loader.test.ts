@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeAll, expect, mock } from "bun:test";
 
-import { requestTest as test } from "@/testing/request-test";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 beforeAll(() => {
   process.env["VITE_API_URL"] ??= "https://api.example.test";

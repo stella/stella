@@ -26,6 +26,7 @@ import {
 } from "@/components/route-components";
 import { RouteProviderScopeBoundary } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { ClientDocumentPresentationBoot } from "@/i18n/client-document-presentation-boot";
 import { loadDocumentPresentation } from "@/i18n/document-presentation";
 import {
   getLangDir,
@@ -185,6 +186,9 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
+  const queryClient = Route.useRouteContext({
+    select: (context) => context.queryClient,
+  });
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
@@ -231,6 +235,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
           <script src="/prepaint-init.js" />
         </head>
         <body>
+          <ClientDocumentPresentationBoot queryClient={queryClient} />
           <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
             <RouteProviderScopeBoundary>
               <PresentationPrefsProvider initialPrefs={prefs}>

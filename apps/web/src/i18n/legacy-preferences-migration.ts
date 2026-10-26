@@ -528,12 +528,15 @@ export const migrateLegacyPresentationPreferences = async ({
   let locale = profileLocale;
   if (legacyLocale !== undefined && localePriority === "legacy-if-default") {
     if (profileLocale === null) {
-      patch.visitorLocale = legacyChoice(
+      const visitorLocale = legacyChoice(
         prefs.visitorLocale,
         defaultPresentationPrefs.visitorLocale,
         legacyLocale,
       );
-      locale = patch.visitorLocale ?? prefs.visitorLocale;
+      if (visitorLocale !== undefined) {
+        patch.visitorLocale = visitorLocale;
+      }
+      locale = visitorLocale ?? prefs.visitorLocale;
     } else if (profileLocale === defaultPresentationPrefs.visitorLocale) {
       const written = await writeProfileLocale(legacyLocale);
       if (written.isErr()) {

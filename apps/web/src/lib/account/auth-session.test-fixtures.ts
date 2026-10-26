@@ -1,5 +1,7 @@
 import type { DataTag } from "@tanstack/react-query";
 
+import type { UiLocale } from "@stll/locales";
+
 import type { sessionOptions } from "@/lib/auth-query-options";
 
 type SessionData =
@@ -30,3 +32,20 @@ export const MEMBER_SESSION = {
     updatedAt: SIGNED_AT,
   },
 } satisfies SessionData;
+
+type MemberSessionOptions = {
+  userId: string;
+  locale: UiLocale;
+  sessionId?: string;
+};
+
+/** Keep each test session inside the actual auth query response contract. */
+export const memberSessionFor = ({
+  userId,
+  locale,
+  sessionId = MEMBER_SESSION.session.id,
+}: MemberSessionOptions) =>
+  ({
+    session: { ...MEMBER_SESSION.session, id: sessionId, userId },
+    user: { ...MEMBER_SESSION.user, id: userId, locale },
+  }) satisfies SessionData;

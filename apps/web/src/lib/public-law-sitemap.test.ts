@@ -1134,7 +1134,7 @@ describe("public law sitemap", () => {
     expect(searchSource).toContain("usePublicLawPreviewEnabled");
   });
 
-  test("client runtime restores document presentation before hydration", async () => {
+  test("router restores the visitor snapshot before root-route account boot", async () => {
     const [entry, runtime, source] = await Promise.all([
       readSource("apps/web/src/client.tsx"),
       readSource("apps/web/src/client-runtime.tsx"),
@@ -1147,9 +1147,18 @@ describe("public law sitemap", () => {
     expect(source).toContain("hydrate: restoreHydratedDocumentPresentation");
     expect(source).not.toContain("localeUserId");
     expect(source).not.toContain("loadAuthContext");
-    expect(runtime).toContain("await hydrationCommit.promise");
-    expect(runtime).toContain("await loadClientDocumentPresentation(");
-    expect(runtime).toContain('detached(hydrate(), "client.hydration")');
+    const root = await readSource("apps/web/src/routes/__root.tsx");
+    const boot = await readSource(
+      "apps/web/src/i18n/client-document-presentation-boot.tsx",
+    );
+    expect(runtime).not.toContain("HydrationCommitSignal");
+    expect(root).toContain(
+      "<ClientDocumentPresentationBoot queryClient={queryClient} />",
+    );
+    expect(boot).toContain("loadClientDocumentPresentation(queryClient)");
+    expect(runtime).toContain(
+      'detached(Promise.resolve().then(hydrate), "client.hydration")',
+    );
     expect(runtime).not.toContain("initializeI18n");
     expect(runtime).toContain("reportErrorOnce");
   });

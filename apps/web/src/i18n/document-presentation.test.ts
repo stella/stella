@@ -5,6 +5,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 
 import type { UiLocale } from "@stll/locales";
+import { runInRequest } from "@stll/start-runtime/test-request";
 import { getFirstWeekday } from "@stll/ui/week";
 
 import {
@@ -19,7 +20,6 @@ import {
   parseVisitorPresentationPrefs,
   serializePresentationPrefs,
 } from "@/lib/account/presentation-prefs/preferences";
-import { runInRequest } from "@/testing/request-test";
 
 import { withRequestI18n } from "./request-i18n.server";
 

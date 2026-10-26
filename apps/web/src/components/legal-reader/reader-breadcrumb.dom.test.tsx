@@ -2,9 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterEach, expect, jest, mock, spyOn, test } from "bun:test";
 
+import type { ReaderTextScale } from "@stll/decision-reader/reader-text-scale.logic";
 import type { HeadingBlock, HeadingLevel } from "@stll/legal-ast/document-ast";
 
 GlobalRegistrator.register();
+const { useState } = await import("react");
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -12,6 +14,8 @@ const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
 const { useReaderTextScale } =
   await import("@stll/decision-reader/use-reader-text-scale");
+const { READER_TEXT_SCALE_DEFAULT } =
+  await import("@stll/decision-reader/reader-text-scale.logic");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { useAnalysisReaderBreadcrumb } =
   await import("@/features/case-law/components/case-viewer/analysis/reader-breadcrumb");
@@ -88,7 +92,13 @@ test("scrolling keeps the breadcrumb in a pinned row outside the viewport", asyn
   document.body.append(viewport);
   const reset = mock();
   const Controls = () => {
-    const textScale = useReaderTextScale();
+    const [scale, setScale] = useState<ReaderTextScale>(
+      READER_TEXT_SCALE_DEFAULT,
+    );
+    const textScale = useReaderTextScale({
+      initialScale: scale,
+      onScaleChange: setScale,
+    });
     return (
       <LegalReaderControls
         blocks={[

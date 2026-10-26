@@ -6,6 +6,7 @@ import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { runInRequest } from "@stll/start-runtime/test-request";
 import { parseTimeZoneId } from "@stll/time";
 
 import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
@@ -27,12 +28,14 @@ import {
   publicFixtureReadySelector,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
+import { withRequestI18n } from "@/i18n/request-i18n.server";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import type { api } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
@@ -1358,7 +1361,15 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
       const requestsBeforeSsr = fixture.requests.length;
       try {
         Object.assign(import.meta.env, { SSR: true });
-        await router.load();
+        await runInRequest(
+          async () =>
+            await withRequestI18n(async () =>
+              await withTestServerIsomorphicHalf(async () =>
+                await router.load(),
+              ),
+            ),
+          new Request(new URL(path, window.location.origin)),
+        );
         expect(router.state.location.pathname).toBe(
           new URL(path, window.location.origin).pathname,
         );

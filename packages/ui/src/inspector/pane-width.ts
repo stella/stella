@@ -111,7 +111,12 @@ export const resolveInspectorPaneMaxWidth = ({
  * the bound it stopped at rather than as the pixel the pointer reached.
  */
 export const clampInspectorPaneWidth = (width: number): number =>
-  Math.min(Math.max(width, INSPECTOR_PANE_MIN_WIDTH), INSPECTOR_PANE_MAX_WIDTH);
+  Number.isFinite(width)
+    ? Math.min(
+        Math.max(width, INSPECTOR_PANE_MIN_WIDTH),
+        INSPECTOR_PANE_MAX_WIDTH,
+      )
+    : INSPECTOR_PANE_DEFAULT_WIDTH;
 
 /** Width the pane renders at, given the width the user asked for. */
 export const resolveInspectorPaneWidth = ({

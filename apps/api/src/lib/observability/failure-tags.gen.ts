@@ -329,7 +329,6 @@ export const FAILURE_TAGS = [
   "RawSourceWriteWindowClosedError",
   "ReaderAnswerCorpusError",
   "ReaderProvisionSpanMismatchError",
-  "ReaderTextScaleStorageError",
   "ReconciliationPayloadSerializationError",
   "RedirectChainError",
   "RedisClientClosedError",

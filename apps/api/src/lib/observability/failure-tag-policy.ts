@@ -339,7 +339,6 @@ export const TAGGED_FAILURE_REASON = {
   RawSourceWriteWindowClosedError: "tagged_failure",
   ReaderAnswerCorpusError: "tagged_failure",
   ReaderProvisionSpanMismatchError: "tagged_failure",
-  ReaderTextScaleStorageError: "tagged_failure",
   ReconciliationPayloadSerializationError: "tagged_failure",
   RedirectChainError: "tagged_failure",
   RedisClientClosedError: "tagged_failure",

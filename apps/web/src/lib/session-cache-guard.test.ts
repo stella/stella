@@ -4,8 +4,9 @@ import { afterAll, describe, expect } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
-import { requestTest as test } from "@/testing/request-test";
+import { requestTest as test } from "@stll/start-runtime/test-request";
+
+import { memberSessionFor } from "@/lib/account/auth-session.test-fixtures";
 
 // The network these reads go to: the signed-in member (or nobody) answers.
 let signedIn: string | null = "member-a";
@@ -109,10 +110,10 @@ const SESSION_ONLY = [JSON.stringify(["session"])];
 test("document actions require the successfully cached member to match the just-read identity", () => {
   const queryClient = new QueryClient();
   expect(isCurrentDocumentSession(queryClient, "member-a")).toBe(true);
-  queryClient.setQueryData(sessionOptions.queryKey, {
-    session: { ...MEMBER_SESSION.session, userId: "member-a" },
-    user: { ...MEMBER_SESSION.user, id: "member-a" },
-  });
+  queryClient.setQueryData(
+    sessionOptions.queryKey,
+    memberSessionFor({ userId: "member-a", locale: "en" }),
+  );
   expect(isCurrentDocumentSession(queryClient, "member-a")).toBe(true);
   expect(isCurrentDocumentSession(queryClient, "member-b")).toBe(false);
   expect(isCurrentDocumentSession(queryClient, null)).toBe(false);

@@ -235,9 +235,6 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
-  // Bun must receive the original test failure after TanStack's request
-  // handler has converted errors inside the HTTP callback to responses.
-  "apps/web/src/testing/request-test.ts",
   // TanStack Start's SSR callback consumes Response/rejection, not Result.
   // This server entry translates renderer errors into framework failures.
   "apps/web/src/server.ts",
@@ -336,11 +333,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
-  // The test kit reports a hung wait or a refused connection to the test
-  // runner, and stands in for the platform's throwing socket API.
-  "packages/test-kit/src/network.ts",
-  "packages/test-kit/src/request.ts",
-  "packages/test-kit/src/wait.ts",
+  // The TanStack Start request boundary turns callback throws into responses;
+  // test assertions rethrow their original value for Bun to report.
+  "packages/start-runtime/src/test-request.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.

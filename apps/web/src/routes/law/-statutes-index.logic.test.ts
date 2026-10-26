@@ -2,6 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
+import { runInRequest } from "@stll/start-runtime/test-request";
+
 import { statutesInfiniteOptions } from "@/features/statutes/queries/statutes";
 import { statutesIndexSearchSchema } from "@/features/statutes/statute-index-search.logic";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
@@ -9,7 +11,6 @@ import {
   createStatuteListFilters,
   loadPublicStatutesIndex,
 } from "@/routes/law/-statutes-index.logic";
-import { runInRequest } from "@/testing/request-test";
 
 test.each([
   { eli: "/eli/cz/sb/2012/89", country: "CZE" },

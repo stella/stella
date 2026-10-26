@@ -134,10 +134,14 @@ export const useInspectorPaneWidth = ({
   initialWidth,
   onWidthChange,
 }: UseInspectorPaneWidthOptions): UseInspectorPaneWidthResult => {
+  const normalizedInitialWidth =
+    initialWidth === undefined
+      ? undefined
+      : clampInspectorPaneWidth(initialWidth);
   const [desiredWidth, setDesiredWidth] = useState(
-    initialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH,
+    normalizedInitialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH,
   );
-  const [hostWidth, setHostWidth] = useState(initialWidth);
+  const [hostWidth, setHostWidth] = useState(normalizedInitialWidth);
   const [dragStatus, setDragStatus] = useState<"idle" | "dragging">("idle");
   // Pointer move and release can share a React batch; retain the latest width
   // synchronously while state makes the drag status available during render.
@@ -145,9 +149,9 @@ export const useInspectorPaneWidth = ({
     { status: "idle" } | { status: "dragging"; width: number }
   >({ status: "idle" });
 
-  if (hostWidth !== initialWidth && dragStatus === "idle") {
-    setHostWidth(initialWidth);
-    setDesiredWidth(initialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH);
+  if (hostWidth !== normalizedInitialWidth && dragStatus === "idle") {
+    setHostWidth(normalizedInitialWidth);
+    setDesiredWidth(normalizedInitialWidth ?? INSPECTOR_PANE_DEFAULT_WIDTH);
   }
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {

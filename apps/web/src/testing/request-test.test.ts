@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { runInRequest } from "@stll/start-runtime/test-request";
 import { withTestTmpDir } from "@stll/test-kit";
-
-import { runInRequest } from "@/testing/request-test";
 
 test("a request assertion rejects with its original message", async () => {
   const error = await rejectionOf(
@@ -57,7 +56,7 @@ test("successful request scenarios settle after asynchronous work", async () => 
 test("requestTest fails the registered test when its scenario assertion fails", async () => {
   await withTestTmpDir(async (directory) => {
     const fixture = directory.join("scenario.test.ts");
-    const helper = new URL("request-test.ts", import.meta.url).href;
+    const helper = import.meta.resolve("@stll/start-runtime/test-request");
     await Bun.write(
       fixture,
       `import { expect } from "bun:test";

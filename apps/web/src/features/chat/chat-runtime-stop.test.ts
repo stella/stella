@@ -6,6 +6,7 @@ import {
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
 import { sleep as ownerSleep } from "@stll/concurrency/sleep";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { isChatTurnGenerating } from "@/components/chat/chat-user-actions";
 import {
@@ -16,7 +17,6 @@ import {
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
-import { requestTest as test } from "@/testing/request-test";
 
 // The composer's Stop against a server that owns the turn: the stop reaches
 // the server before the page closes its request, the page reloads the thread

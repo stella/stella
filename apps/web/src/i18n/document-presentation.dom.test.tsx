@@ -2,7 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, expect, test } from "bun:test";
 
-import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
+import { memberSessionFor } from "@/lib/account/auth-session.test-fixtures";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -50,10 +50,10 @@ test("account changes replace the catalogue before navigation completes without 
       { id: "second", locale: "de", navigation: "Rechtsdatenbank" },
       { id: "first", locale: "cs", navigation: "Právní databáze" },
     ] as const) {
-      queryClient.setQueryData(sessionOptions.queryKey, {
-        user: { ...MEMBER_SESSION.user, id: user.id, locale: user.locale },
-        session: { ...MEMBER_SESSION.session, userId: user.id },
-      });
+      queryClient.setQueryData(
+        sessionOptions.queryKey,
+        memberSessionFor({ userId: user.id, locale: user.locale }),
+      );
       await loadClientDocumentPresentation(queryClient);
       expect(useI18nStore.getState().loadedLang).toBe(user.locale);
       expect(useI18nStore.getState().messages.common.legalDatabase).toBe(
@@ -75,10 +75,10 @@ test("navigation by the same account retains a freshly selected catalogue despit
     createTestPrefsSync(),
   );
   const queryClient = new QueryClient();
-  queryClient.setQueryData(sessionOptions.queryKey, {
-    user: { ...MEMBER_SESSION.user, id: "same", locale: "en" },
-    session: { ...MEMBER_SESSION.session, userId: "same" },
-  });
+  queryClient.setQueryData(
+    sessionOptions.queryKey,
+    memberSessionFor({ userId: "same", locale: "en" }),
+  );
   try {
     await loadClientDocumentPresentation(queryClient);
     await useI18nStore.getState().loadMessages("cs");
@@ -122,14 +122,14 @@ test("document migration updates an already mounted preference provider", async 
   initializeBrowserPresentationPrefs(defaultPresentationPrefs, sync);
   seedLegacyBrowserStorage(key, "dark");
   const queryClient = new QueryClient();
-  queryClient.setQueryData(sessionOptions.queryKey, {
-    user: { ...MEMBER_SESSION.user, id: "mounted-member", locale: "de" },
-    session: {
-      ...MEMBER_SESSION.session,
-      id: "mounted-session",
+  queryClient.setQueryData(
+    sessionOptions.queryKey,
+    memberSessionFor({
       userId: "mounted-member",
-    },
-  });
+      locale: "de",
+      sessionId: "mounted-session",
+    }),
+  );
   const view = render(
     <PresentationPrefsProvider initialPrefs={defaultPresentationPrefs}>
       <MountedPrefs />

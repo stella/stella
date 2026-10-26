@@ -23,6 +23,7 @@ import {
 } from "@stll/api-contract/action-admission";
 import { sleep } from "@stll/concurrency/sleep";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -60,7 +61,6 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError, chatRefusal } from "@/lib/errors/api";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import { workspaceActivityOptions } from "@/lib/workspaces/queries";
-import { requestTest as test } from "@/testing/request-test";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,

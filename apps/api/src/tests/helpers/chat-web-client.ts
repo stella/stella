@@ -5,14 +5,13 @@ import { panic } from "better-result";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { sleep } from "@stll/concurrency/sleep";
 import { withTimeout } from "@stll/concurrency/with-timeout";
+import { runInRequest } from "@stll/start-runtime/test-request";
 
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { API_TEST_TIMEOUT_MS } from "@/api/tests/test-timeouts";
-
-import { runInRequest } from "../../../../web/src/testing/request-test.ts";
 
 // The browser side of a chat thread is the web app's own code, loaded from
 // `apps/web`: `createChatRuntime` (TanStack's `ChatClient` over its SSE

@@ -27,7 +27,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/runtime.ts",
-    "./local-module-loader": "./src/local-module-loader.ts"
+    "./local-module-loader": "./src/local-module-loader.ts",
+    "./test-request": "./src/test-request.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -43,6 +44,7 @@
     "prepack": "bun run build"
   },
   "dependencies": {
+    "@tanstack/react-start": "^1.169.3",
     "better-result": "catalog:"
   },
   "devDependencies": {

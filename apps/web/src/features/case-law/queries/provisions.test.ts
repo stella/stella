@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import {
   allowsLegacyProvisionFallback,
@@ -16,7 +17,6 @@ import {
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { APIError } from "@/lib/errors/api";
-import { requestTest as test } from "@/testing/request-test";
 
 const LISTINA_ELI = "https://www.e-sbirka.cz/eli/cz/sb/1993/2";
 const previousFetch = globalThis.fetch;
