@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -25,7 +26,7 @@ const createContext = ({
     memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     request: new Request("https://api.example.test/v1/workspaces/ws_test123"),
-    route: "/v1/workspaces/:workspaceId",
+    route: "/v1/workspaces/:workspaceId" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },

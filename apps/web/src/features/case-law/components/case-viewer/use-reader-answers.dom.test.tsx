@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
+import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
 import { READER_ANSWER_DEADLINE_MS } from "@stll/api-contract/reader-answers";
 import type {
   ReaderAnswer,
@@ -695,7 +696,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               role: "member",
               ai: true,
               deepl: false,
-              ocr: false,
+              ocr: DOCUMENT_OCR_AVAILABILITY.unconfigured,
               desktop: "none",
               settings: undefined,
             })}
