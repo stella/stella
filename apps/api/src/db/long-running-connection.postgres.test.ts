@@ -41,7 +41,8 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
             });
           });
           expect(counter.count).toBe(6);
-          expect(counter.transactions).toBe(4);
+          // Only BEGIN/COMMIT count; the nested savepoint controls do not.
+          expect(counter.transactions).toBe(2);
           const fragment = connection.unsafe("21::int");
           const values = connection`SELECT ${fragment} AS value`.values();
           expect(counter.count).toBe(6);
@@ -62,7 +63,7 @@ describe.skipIf(!enabled)("dedicated SQL counting with PostgreSQL", () => {
         },
       );
       expect(counter.count).toBe(9);
-      expect(counter.transactions).toBe(4);
+      expect(counter.transactions).toBe(2);
     });
   });
 

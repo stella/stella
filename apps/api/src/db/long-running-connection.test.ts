@@ -6,6 +6,8 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   currentQueryCounter,
   instrumentDedicatedSqlCounts,
+  RepeatedQueryFingerprintError,
+  runWithMeasuredQueryCounter,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
 import { createStatementCeilingMonitor } from "@/api/lib/db/statement-ceiling";
@@ -374,6 +376,33 @@ test("the dedicated owner counts reserved setup, raw work, nested transactions a
       "SELECT pg_cancel_backend($1)",
     ]);
   });
+});
+
+test("lazy queries keep distinct construction origins when started through the same executor", async () => {
+  const statements: string[] = [];
+  const client = instrumentDedicatedSqlCounts(recordingSqlClient(statements));
+  const first = client.unsafe("SELECT 1");
+  const second = client.unsafe("SELECT 1");
+  await runWithMeasuredQueryCounter(async (counter) => {
+    await first;
+    await second;
+    await first;
+    expect(counter.count).toBe(2);
+    expect(counter.fingerprints.size).toBe(2);
+  });
+});
+
+test("lazy queries from one construction callsite still expose repeated work", async () => {
+  const client = instrumentDedicatedSqlCounts(recordingSqlClient([]));
+  expect(
+    await rejectionOf(
+      runWithMeasuredQueryCounter(async () => {
+        for (const item of [1, 2]) {
+          await client.unsafe(`SELECT ${String(item)}`);
+        }
+      }),
+    ),
+  ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
 });
 
 test("dedicated savepoint controls do not add statements or transaction round trips", async () => {

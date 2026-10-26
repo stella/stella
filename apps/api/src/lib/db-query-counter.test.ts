@@ -1,5 +1,8 @@
+import { panic } from "better-result";
 import type { BunRequest } from "bun";
 import { afterAll, describe, expect, test } from "bun:test";
+import { QueryPromise } from "drizzle-orm/query-promise";
+import { Script } from "node:vm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -13,6 +16,7 @@ import {
   currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
   DB_TRANSACTION_COUNT_HEADER,
+  instrumentQueryOrigins,
   queryCountLogger,
   RepeatedQueryFingerprintError,
   runCountedTransaction,
@@ -34,6 +38,31 @@ const logQueriesInterleaved = async (queries: number): Promise<void> => {
     queryCountLogger.logQuery("SELECT 1", []);
   }
 };
+
+const dependencyQueries = async (body: string) => {
+  const invoke: unknown = new Script(
+    `(record) => new Promise((resolve) => queueMicrotask(() => {
+      const deep = (remaining) => remaining === 0
+        ? record("SELECT id FROM session WHERE token = $1", [])
+        : deep(remaining - 1);
+      ${body}
+      resolve();
+    }))`,
+    {
+      filename: `${process.cwd()}/node_modules/query-counter-driver/adapter.js`,
+    },
+  ).runInThisContext();
+  if (typeof invoke !== "function") {
+    panic("SQL dependency fixture must be callable");
+  }
+  await Reflect.apply(invoke, undefined, [queryCountLogger.logQuery]);
+};
+
+class LoggedQuery extends QueryPromise<void> {
+  execute = async (): Promise<void> => {
+    queryCountLogger.logQuery("SELECT id FROM session WHERE token = $1", []);
+  };
+}
 
 describe("db query counter logger", () => {
   test("distinct callsites may issue the same SQL without a repeated fingerprint", async () => {
@@ -125,6 +154,48 @@ describe("db query counter logger", () => {
       expect(counter.count).toBe(1);
       expect(counter.transactions).toBe(2);
     });
+  });
+
+  test("pooled lazy queries retain their constructors across sequential awaits", async () => {
+    const database = instrumentQueryOrigins({
+      select: () => new LoggedQuery(),
+    });
+    await runWithMeasuredQueryCounter(async (counter) => {
+      await database.select();
+      await database.select();
+      expect(counter.count).toBe(2);
+      expect(counter.fingerprints.size).toBe(2);
+    });
+    expect(
+      await rejectionOf(
+        runWithMeasuredQueryCounter(async () => {
+          for (let index = 0; index < 2; index += 1) {
+            await database.select();
+          }
+        }),
+      ),
+    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
+  });
+
+  test("dependency-only stacks keep distinct deep call chains separate", async () => {
+    await runWithMeasuredQueryCounter(async (counter) => {
+      await dependencyQueries("deep(20);\n deep(20);");
+      expect(counter.count).toBe(2);
+      expect(counter.fingerprints.size).toBe(2);
+      expect(
+        [...counter.fingerprints.keys()].some((key) => key.includes("unknown")),
+      ).toBe(false);
+    });
+  });
+
+  test("a repeated dependency-only call chain still fails its SQL budget", async () => {
+    expect(
+      await rejectionOf(
+        runWithMeasuredQueryCounter(async () => {
+          await dependencyQueries("for (const item of [1, 2]) { deep(20); }");
+        }),
+      ),
+    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
   });
 
   test("unmeasured counters retain no diagnostic fingerprints", () => {

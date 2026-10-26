@@ -16,6 +16,7 @@ import type { Logger } from "drizzle-orm";
 // jobs, boot-time queries), so wiring it in costs nothing beyond an ALS lookup
 // on those paths. Deployed environments wire no logger at all.
 import { AsyncLocalStorage } from "node:async_hooks";
+import { getCallSites } from "node:util";
 
 /** Response header carrying the per-request query count outside production. */
 export const DB_QUERY_COUNT_HEADER = "x-db-queries";
@@ -33,6 +34,7 @@ export type QueryCounter = {
 };
 
 const queryCounterStore = new AsyncLocalStorage<QueryCounter>();
+const queryOriginStore = new AsyncLocalStorage<string | undefined>();
 
 /**
  * Run `fn` inside a fresh counter store. Every query logged through
@@ -185,16 +187,32 @@ const normalizeSql = (query: string): string =>
     .trim()
     .toLowerCase();
 
-const queryCallsite = (): string => {
-  const frame = new Error("SQL query fingerprint callsite capture").stack
-    ?.split("\n")
-    .find(
-      (line) =>
-        line.includes(" at ") &&
-        !line.includes("db-query-counter.ts") &&
-        !line.includes("/node_modules/"),
-    );
-  return frame?.trim().replaceAll(`${process.cwd()}/`, "") ?? "unknown";
+const CALLSITE_FRAME_LIMIT = 64;
+
+const queryCallsite = (): string | undefined => {
+  // Driver stacks can exhaust Error.stack's default depth before reaching the
+  // caller. Retain dependency chains when an async boundary removes app frames.
+  const frames = [];
+  for (const frame of getCallSites(CALLSITE_FRAME_LIMIT)) {
+    if (frame.scriptName.endsWith("/db-query-counter.ts")) {
+      if (frames.length > 0) {
+        break;
+      }
+      continue;
+    }
+    if (frame.lineNumber > 0 && !frame.scriptName.startsWith("node:")) {
+      frames.push(frame);
+    }
+  }
+  if (frames.length === 0) {
+    return undefined;
+  }
+  return frames
+    .map(
+      ({ functionName, scriptName, lineNumber, columnNumber }) =>
+        `at ${functionName} (${scriptName.replaceAll(`${process.cwd()}/`, "")}:${String(lineNumber)}:${String(columnNumber)})`,
+    )
+    .join(" <- ");
 };
 
 const isSessionConfigurationQuery = (query: string): boolean =>
@@ -217,12 +235,84 @@ const sqlControlType = (
 };
 
 /**
+ * Preserve construction and enclosing auth entry sites across lazy Drizzle
+ * execution. Counters still belong to the scope active when SQL starts.
+ */
+export const instrumentQueryOrigins = <TTarget extends object>(
+  owner: TTarget,
+): TTarget => {
+  const wrap = <TValue extends object>(
+    value: TValue,
+    origin?: string,
+  ): TValue =>
+    new Proxy(value, {
+      get(target, property) {
+        const member: unknown = Reflect.get(target, property, target);
+        if (typeof member !== "function") {
+          return member !== null &&
+            typeof member === "object" &&
+            (property === "query" ||
+              property === "api" ||
+              "findMany" in member ||
+              "findFirst" in member)
+            ? wrap(member, origin)
+            : member;
+        }
+        return (...args: unknown[]) => {
+          const source =
+            origin ??
+            ([queryOriginStore.getStore(), queryCallsite()]
+              .filter((part) => part !== undefined)
+              .join(" -> ") ||
+              undefined);
+          const parameters =
+            property === "transaction"
+              ? args.map((argument) =>
+                  typeof argument === "function"
+                    ? (transaction: object) => {
+                        const result: unknown = Reflect.apply(
+                          argument,
+                          undefined,
+                          [wrap(transaction)],
+                        );
+                        return result;
+                      }
+                    : argument,
+                )
+              : args;
+          const result: unknown = queryOriginStore.run(source, () => {
+            const returned: unknown = Reflect.apply(member, target, parameters);
+            return returned;
+          });
+          if (
+            result === null ||
+            typeof result !== "object" ||
+            result instanceof Promise
+          ) {
+            return result;
+          }
+          return wrap(result, source);
+        };
+      },
+    });
+  return wrap(owner);
+};
+
+/**
  * Drizzle-compatible logger that increments the active store's count per query.
  * When no store is active it does nothing, preserving behavior for background
  * jobs and boot-time queries. Wire this into `drizzle({ logger })` outside
  * production only.
  */
-const recordSqlQuery = (query: string, phase: "work" | "cleanup"): void => {
+type RecordSqlQueryOptions = {
+  phase: "work" | "cleanup";
+  origin?: string | undefined;
+};
+
+const recordSqlQuery = (
+  query: string,
+  { phase, origin }: RecordSqlQueryOptions,
+): void => {
   let counter = queryCounterStore.getStore();
   if (!counter) {
     return;
@@ -241,7 +331,7 @@ const recordSqlQuery = (query: string, phase: "work" | "cleanup"): void => {
       !sessionConfiguration &&
       (counter.detectRepeatedQueries || counter.diagnostics)
     ) {
-      fingerprint ??= `${queryCallsite()} :: ${normalizeSql(query)}`;
+      fingerprint ??= `${origin ?? queryOriginStore.getStore() ?? queryCallsite() ?? panic("SQL query diagnostics require a source callsite")} :: ${normalizeSql(query)}`;
       counter.fingerprints.set(
         fingerprint,
         (counter.fingerprints.get(fingerprint) ?? 0) + 1,
@@ -256,7 +346,7 @@ const recordSqlQuery = (query: string, phase: "work" | "cleanup"): void => {
 };
 
 export const queryCountLogger: Logger = {
-  logQuery: (query) => recordSqlQuery(query, "work"),
+  logQuery: (query) => recordSqlQuery(query, { phase: "work" }),
 };
 
 type NativeQueryState = { phase: "created" | "started" };
@@ -307,6 +397,9 @@ const instrumentNativeQuery = (
   if (countedQueries.has(query)) {
     return query;
   }
+  // Native Query.then starts after the originating stack is gone. Capture
+  // the source now, but charge the active store only when the query starts.
+  const origin = queryCallsite();
   const state: NativeQueryState = { phase: "created" };
   for (const method of QUERY_START_METHODS) {
     const original: unknown = Reflect.get(query, method, query);
@@ -328,7 +421,7 @@ const instrumentNativeQuery = (
                 : phase;
               recordTransactionRoundTrip(controlPhase);
             } else if (controlType === undefined) {
-              recordSqlQuery(statement, phase);
+              recordSqlQuery(statement, { phase, origin });
             }
           }
           state.phase = "started";
