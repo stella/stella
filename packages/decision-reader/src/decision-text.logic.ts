@@ -520,6 +520,10 @@ export type WrappedParagraphRuns = {
  * back into paragraphs. Planned over the blocks in document order, so a
  * block the top matter lifts out still breaks the runs around it; for a
  * document that is not fixed-width wrapped there are none.
+ *
+ * A fallback for rows stored before their parser rebuilt paragraphs at
+ * ingestion, deleted with the planner once the corpus is re-parsed (see
+ * `@stll/legal-ast/line-wrap`).
  */
 export const wrappedParagraphRuns = (
   blocks: readonly Block[],
