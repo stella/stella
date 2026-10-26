@@ -1142,8 +1142,8 @@ export const getWorkspaceStatus = ({
 
 /**
  * Resolve an accessible workspace that is also writable. Mirrors the HTTP
- * `validateWorkspaceAccess` macro, which rejects any workspace whose status is
- * not "active": archived matters stay readable but are read-only through MCP
+ * core's `authorizeWorkspace`, which by default rejects any workspace whose
+ * status is not "active": archived matters stay readable but are read-only through MCP
  * write tools. Returns the branded id when active, or an error result naming
  * the reason (not accessible vs archived). Callers that need to allow an
  * unarchive (`save_matter` with status:"active") should use
