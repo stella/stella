@@ -5,6 +5,7 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@stll/api-contract";
+import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
 import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
 import { timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
@@ -64,9 +65,7 @@ const usePendingRows = () => {
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const track = async (ids: readonly string[], request: Promise<void>) => {
     setPending((current) => new Set([...current, ...ids]));
-    try {
-      await request;
-    } finally {
+    const settle = () =>
       setPending((current) => {
         const next = new Set(current);
         for (const id of ids) {
@@ -74,7 +73,10 @@ const usePendingRows = () => {
         }
         return next;
       });
-    }
+    await request.then(settle, (error: unknown) => {
+      settle();
+      throw error;
+    });
   };
   return { has: (id: string) => pending.has(id), track };
 };
@@ -224,11 +226,21 @@ const TimeApprovals = ({
       return next;
     });
   };
-  const approveEntries = (ids: readonly string[]) =>
-    detached(
-      pending.track(ids, requestApproval(ids)),
-      "matter-approval.approve-time",
-    );
+  // The API takes a bounded batch; a larger selection goes out in batches,
+  // each settling its own entries.
+  const approveEntries = (ids: readonly string[]) => {
+    for (
+      let start = 0;
+      start < ids.length;
+      start += TIME_ENTRIES_APPROVAL_BATCH_MAX
+    ) {
+      const batch = ids.slice(start, start + TIME_ENTRIES_APPROVAL_BATCH_MAX);
+      detached(
+        pending.track(batch, requestApproval(batch)),
+        "matter-approval.approve-time",
+      );
+    }
+  };
   const returnToDraft = (id: string) =>
     detached(
       pending.track(

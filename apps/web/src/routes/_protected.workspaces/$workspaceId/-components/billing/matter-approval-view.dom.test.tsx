@@ -6,6 +6,7 @@ import type { QueryClient as Client } from "@tanstack/react-query";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
 import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
 import type { TimeEntry } from "@stll/api-contract/time-entry-types";
 import { cents } from "@stll/money";
@@ -92,8 +93,18 @@ type Server = {
   holdWrites: boolean;
   /** One release per held request, in arrival order. */
   held: (() => void)[];
+  /** Items per list page; past it, a page answers with a cursor. */
+  pageSize: number;
+  /** Cursors the lists handed out, each with the offset it resumes at. */
+  cursors: Map<string, number>;
+  listRequests: ListRequest[];
   prefillReads: number;
   listReads: number;
+};
+type ListRequest = {
+  list: "time-entries" | "expenses";
+  status: string | null;
+  cursor: string | null;
 };
 const server: Server = {
   entries: new Map(),
@@ -105,8 +116,38 @@ const server: Server = {
   expenseCalls: [],
   holdWrites: false,
   held: [],
+  pageSize: 100,
+  cursors: new Map(),
+  listRequests: [],
   prefillReads: 0,
   listReads: 0,
+};
+
+/** One page of a status-filtered list, resuming at the cursor it was sent. */
+const listPage = (
+  list: ListRequest["list"],
+  items: readonly { status: string }[],
+  url: URL,
+) => {
+  const status = url.searchParams.get("status");
+  const cursor = url.searchParams.get("cursor");
+  server.listRequests.push({ list, status, cursor });
+  const start = cursor === null ? 0 : server.cursors.get(cursor);
+  if (start === undefined) {
+    return Response.json({ message: "Invalid cursor" }, { status: 400 });
+  }
+  const matching = items.filter((item) => item.status === status);
+  const end = start + server.pageSize;
+  const nextCursor =
+    end < matching.length ? `${list}.${status}.${String(end)}` : null;
+  if (nextCursor !== null) {
+    server.cursors.set(nextCursor, end);
+  }
+  return Response.json({
+    items: matching.slice(start, end),
+    limit: server.pageSize,
+    nextCursor,
+  });
 };
 
 const holdIfAsked = async () => {
@@ -154,6 +195,17 @@ globalThis.fetch = Object.assign(
         await request.json(),
       );
       server.approveCalls.push(ids);
+      if (ids.length > TIME_ENTRIES_APPROVAL_BATCH_MAX) {
+        return Response.json(
+          {
+            type: "validation",
+            on: "body",
+            property: "/ids",
+            message: `Invalid length: Expected <=${String(TIME_ENTRIES_APPROVAL_BATCH_MAX)}`,
+          },
+          { status: 422 },
+        );
+      }
       const results = ids.map((id) => {
         const reason = server.refusals.get(id);
         if (reason) {
@@ -224,27 +276,13 @@ globalThis.fetch = Object.assign(
       url.pathname.endsWith(`/time-entries/${WORKSPACE}`)
     ) {
       server.listReads += 1;
-      const status = url.searchParams.get("status");
-      return Response.json({
-        items: [...server.entries.values()].filter(
-          (item) => item.status === status,
-        ),
-        limit: 100,
-        nextCursor: null,
-      });
+      return listPage("time-entries", [...server.entries.values()], url);
     }
     if (
       request.method === "GET" &&
       url.pathname.endsWith(`/expenses/${WORKSPACE}`)
     ) {
-      const status = url.searchParams.get("status");
-      return Response.json({
-        items: [...server.expenses.values()].filter(
-          (item) => item.status === status,
-        ),
-        limit: 100,
-        nextCursor: null,
-      });
+      return listPage("expenses", [...server.expenses.values()], url);
     }
     throw new Error(`Unexpected request: ${request.method} ${request.url}`);
   },
@@ -276,6 +314,9 @@ const resetServer = (entries: TimeEntry[], expenses: Expense[] = []) => {
   server.expenseCalls = [];
   server.holdWrites = false;
   server.held = [];
+  server.pageSize = 100;
+  server.cursors = new Map();
+  server.listRequests = [];
   server.prefillReads = 0;
   server.listReads = 0;
 };
@@ -767,6 +808,132 @@ describe("expense approval", () => {
         .within(rowOf("Timekeeper One: Expense expense-open"))
         .queryByRole("alert"),
     ).toBeNull();
+  });
+});
+
+/**
+ * Clicks every entry checkbox from inside one React click handler. React
+ * flushes a render after each top-level change of a controlled input, so
+ * hundreds of separate clicks re-render every row hundreds of times; clicks
+ * nested in one handler still go through each real checkbox and its
+ * `onCheckedChange`, and render once when the handler returns.
+ */
+const CLICK_EVERY_ENTRY_CHECKBOX = "Click every entry checkbox";
+const ClickEveryEntryCheckbox = () => (
+  <button
+    aria-label={CLICK_EVERY_ENTRY_CHECKBOX}
+    onClick={() => {
+      for (const checkbox of document.querySelectorAll<HTMLElement>(
+        `[aria-label="${messages.billing.approval.selectEntry}"]`,
+      )) {
+        checkbox.click();
+      }
+    }}
+    type="button"
+  />
+);
+
+describe("approving a large selection", () => {
+  test("goes out in bounded batches that together name every entry once", async () => {
+    const count = TIME_ENTRIES_APPROVAL_BATCH_MAX + 1;
+    const ids = Array.from(
+      { length: count },
+      (_, index) => `entry-${String(index).padStart(3, "0")}`,
+    );
+    const lastId = ids.at(-1) ?? "";
+    resetServer(ids.map((id) => entry(id)));
+    await mount("owner", () => (
+      <>
+        <ClickEveryEntryCheckbox />
+        {approvalPage()}
+      </>
+    ));
+    await testing.screen.findByText(`Narrative ${lastId}`);
+    server.refusals.set(lastId, "unpriced");
+
+    // Role queries recompute every element's accessible name and visibility,
+    // which is slow on hundreds of rows; labels and text find the same nodes.
+    expect(
+      testing.screen.getAllByLabelText(messages.billing.approval.selectEntry),
+    ).toHaveLength(count);
+    await testing.act(async () => {
+      testing.fireEvent.click(
+        testing.screen.getByLabelText(CLICK_EVERY_ENTRY_CHECKBOX),
+      );
+    });
+    await testing.act(async () => {
+      testing.fireEvent.click(
+        testing.screen.getByText(`Approve ${String(count)} selected entries`),
+      );
+    });
+
+    await testing.waitFor(() => expect(server.approveCalls).toHaveLength(2));
+    expect(server.approveCalls.map((batch) => batch.length)).toEqual([
+      TIME_ENTRIES_APPROVAL_BATCH_MAX,
+      1,
+    ]);
+    const sent = server.approveCalls.flat();
+    expect(new Set(sent).size).toBe(sent.length);
+    expect(sent.toSorted()).toEqual(ids);
+    expect(server.approveCalls[1]).toEqual([lastId]);
+
+    // Only the refused entry of the second batch carries a message.
+    const alert = await testing.screen.findByText(
+      messages.billing.approval.refusals.unpriced,
+    );
+    expect(alert.getAttribute("role")).toBe("alert");
+    expect(rowOf(`Narrative ${lastId}`).contains(alert)).toBe(true);
+    await testing.waitFor(() =>
+      expect(
+        testing.screen.getByText(`Timekeeper One: Narrative ${ids[0] ?? ""}`),
+      ).toBeTruthy(),
+    );
+    expect(document.querySelectorAll('[role="alert"]')).toHaveLength(1);
+  });
+});
+
+describe("lists longer than one page", () => {
+  const cursorsSent = (list: ListRequest["list"]) =>
+    server.listRequests
+      .filter((request) => request.list === list && request.status === "draft")
+      .map((request) => request.cursor);
+
+  test("a draft entry on the second page of time can be approved", async () => {
+    resetServer([entry("entry-first"), entry("entry-second")]);
+    server.pageSize = 1;
+    await mount("owner", approvalPage);
+
+    await testing.waitFor(() =>
+      expect(
+        testing
+          .within(rowOf("Narrative entry-second"))
+          .getByRole("button", { name: messages.billing.approve }),
+      ).toBeTruthy(),
+    );
+    expect(testing.screen.getByText("Narrative entry-first")).toBeTruthy();
+    const [issued] = server.cursors.keys();
+    expect(issued).toBeDefined();
+    expect(cursorsSent("time-entries")).toEqual([null, issued]);
+  });
+
+  test("a draft expense on the second page can be approved", async () => {
+    resetServer([], [expense("expense-first"), expense("expense-second")]);
+    server.pageSize = 1;
+    await mount("owner", approvalPage);
+
+    await testing.waitFor(() =>
+      expect(
+        testing
+          .within(rowOf("Timekeeper One: Expense expense-second"))
+          .getByRole("button", { name: messages.billing.approve }),
+      ).toBeTruthy(),
+    );
+    expect(
+      testing.screen.getByText("Timekeeper One: Expense expense-first"),
+    ).toBeTruthy();
+    const [issued] = server.cursors.keys();
+    expect(issued).toBeDefined();
+    expect(cursorsSent("expenses")).toEqual([null, issued]);
   });
 });
 
