@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { OxlintConfig } from "oxlint";
 import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
@@ -518,26 +519,28 @@ test("the generation config sees every Tailwind rule the repository lint enables
   // oxlint.tailwind.config.ts copies the Tailwind rules of oxlint.config.ts
   // and its overrides; a preset naming one would escape it.
   expect(JSON.stringify(oxlintConfig.extends)).not.toContain('"tailwindcss/');
-  const scopes = (config: typeof oxlintConfig) =>
+  const repository: OxlintConfig = oxlintConfig;
+  const generation: OxlintConfig = tailwindConfig;
+  const scopes = (config: OxlintConfig) =>
     [
-      ...Object.entries(config.rules ?? {}).map(([rule, value]) => [
-        "*",
+      ...Object.entries(config.rules ?? {}).map(([rule, value]) => ({
+        scope: "*",
         rule,
-        JSON.stringify(value),
-      ]),
+        value,
+      })),
       ...(config.overrides ?? []).flatMap(({ files, excludeFiles, rules }) =>
-        Object.entries(rules ?? {}).map(([rule, value]) => [
-          JSON.stringify([files, excludeFiles ?? []]),
+        Object.entries(rules ?? {}).map(([rule, value]) => ({
+          scope: JSON.stringify([files, excludeFiles ?? []]),
           rule,
-          JSON.stringify(value),
-        ]),
+          value,
+        })),
       ),
-    ].filter(([, rule]) => rule?.startsWith("tailwindcss/"));
-  expect(scopes(tailwindConfig).length).toBeGreaterThan(0);
-  expect(scopes(tailwindConfig)).toEqual(scopes(oxlintConfig));
-  expect(tailwindConfig.jsPlugins).toEqual(["oxlint-tailwindcss"]);
-  expect(tailwindConfig.ignorePatterns).toEqual(oxlintConfig.ignorePatterns);
-  expect(tailwindConfig.settings).toEqual({
-    tailwindcss: oxlintConfig.settings?.["tailwindcss"],
+    ].filter(({ rule }) => rule.startsWith("tailwindcss/"));
+  expect(scopes(generation).length).toBeGreaterThan(0);
+  expect(scopes(generation)).toEqual(scopes(repository));
+  expect(generation.jsPlugins).toEqual(["oxlint-tailwindcss"]);
+  expect(generation.ignorePatterns).toEqual(repository.ignorePatterns);
+  expect(generation.settings).toEqual({
+    tailwindcss: repository.settings?.["tailwindcss"],
   });
 });

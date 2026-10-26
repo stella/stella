@@ -1,10 +1,10 @@
-import { defineConfig } from "oxlint";
+import { defineConfig, type DummyRuleMap, type OxlintConfig } from "oxlint";
 
-import repository from "./oxlint.config.ts";
+import oxlintConfig from "./oxlint.config.ts";
 
-type Rules = NonNullable<(typeof repository)["rules"]>;
+const repository: OxlintConfig = oxlintConfig;
 
-const tailwindRules = (rules: Rules | undefined): Rules =>
+const tailwindRules = (rules: DummyRuleMap | undefined): DummyRuleMap =>
   Object.fromEntries(
     Object.entries(rules ?? {}).filter(([rule]) =>
       rule.startsWith("tailwindcss/"),
@@ -19,9 +19,9 @@ const tailwindRules = (rules: Rules | undefined): Rules =>
 export default defineConfig({
   categories: { correctness: "off" },
   plugins: [],
-  ignorePatterns: repository.ignorePatterns,
+  ignorePatterns: repository.ignorePatterns ?? [],
   jsPlugins: ["oxlint-tailwindcss"],
-  settings: { tailwindcss: repository.settings?.["tailwindcss"] },
+  settings: { tailwindcss: repository.settings?.tailwindcss },
   rules: tailwindRules(repository.rules),
   overrides: (repository.overrides ?? []).flatMap(
     ({ files, excludeFiles, rules }) => {
