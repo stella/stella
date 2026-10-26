@@ -144,6 +144,7 @@ jobs:
       playwright_image: ${{ steps.images.outputs.playwright }}
       postgres: ${{ steps.images.outputs.postgres }}
       redis: ${{ steps.images.outputs.redis }}
+      rustfs: ${{ steps.images.outputs.rustfs }}
       valkey: ${{ steps.images.outputs.valkey }}
       quickwit: ${{ steps.images.outputs.quickwit }}
       # Pull requests run lightweight guards, lint and type checks.
@@ -243,6 +244,7 @@ jobs:
       docs_checks_required: ${{ steps.changed-files.outputs.docs_checks_required }}
       docs_changed_files: ${{ steps.changed-files.outputs.docs_changed_files }}
       postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      dev_seed_required: ${{ steps.changed-files.outputs.dev_seed_required }}
       query_perf_required: ${{ steps.query-perf-scope.outputs.query_perf_required }}
       corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
       valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
@@ -1588,50 +1590,182 @@ jobs:
 
       - *merge_group_cancel
 
-  # Pull request heavy suites start only after the quick checks pass, so a push
-  # superseded in its first minutes never schedules them. `needs` cannot vary
-  # by event and a merge group must not wait on ci-quick-checks, so this job
-  # polls that sibling instead; outside pull requests it skips and the suites
-  # start straight after the plan. The repository checks and the desktop Rust
-  # lint wait on it too, but run ungated when the plan schedules no gate (a
-  # push that only merges the base still runs its PR-depth checks), so
-  # scripts/ci-pr-jobs.ts does not count them as heavy suites. It runs on every
-  # code run, armed or not; an armed delta still needs it for the queue-only
-  # suites.
+  # Pull request quick checks run in the heavy-suite gate so the suites wait
+  # without occupying a second runner. This carrier also runs on armed deltas:
+  # completed normal evidence cannot certify current waiver expiry.
+  # Other events execute the same steps in their standalone quick-check job.
   pr-heavy-gate:
     needs: ci-plan
-    if: inputs.heavy_only != true && inputs.pr_depth_only != true && needs.ci-plan.outputs.pr_heavy_gate_required == 'true'
+    if: ${{ !cancelled() && inputs.heavy_only != true && inputs.pr_depth_only != true && github.event_name == 'pull_request' && github.event.pull_request.draft != true && github.event.action != 'enqueued' }}
     runs-on: ubuntu-24.04
-    # ci-quick-checks' own 15-minute budget plus its wait for a runner.
-    timeout-minutes: 40
+    timeout-minutes: 15
     permissions:
-      actions: read
+      contents: read
     steps:
-      - name: Wait for the quick checks
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+      &quick-checks-steps # parser-version-guard reads Git history, so the checkout is full.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          retries: 3
-          script: |
-            const QUICK_CHECKS = "ci-quick-checks";
-            for (;;) {
-              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
-                ...context.repo, run_id: context.runId, filter: "latest", per_page: 100,
-              });
-              const quick = jobs.find((job) => job.name === QUICK_CHECKS);
-              if (quick?.status === "completed") {
-                if (quick.conclusion !== "success") {
-                  core.setFailed(`${QUICK_CHECKS} concluded ${quick.conclusion}; the heavy suites do not start.`);
-                }
-                return;
-              }
-              await new Promise((resolve) => setTimeout(resolve, 20_000));
-            }
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
+          submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
 
-  # The agent sandbox must be exercised before the standalone protected
-  # canary can exist on the default branch. This job is safe for draft PRs: it
-  # receives no secrets and runs on an ephemeral
-  # hosted runner. Same-repository branches run immediately; forks wait for
-  # the repository's Actions approval gate.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      # Parser versions must advance whenever an adapter's parser inputs
+      # change. The guard needs no dependency installation.
+      - name: "parser-version-guard: Check parser version guard"
+        if: >-
+          !cancelled()
+          && inputs.pr_depth_only != true
+          && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+        continue-on-error: false
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
+          HEAD_SHA: ${{ github.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+        run: |
+          bun test scripts/check-parser-versions.test.ts
+          bun scripts/check-parser-versions.ts
+
+      # The Markdown checks and the dated waiver guard share this install.
+      - name: Install dependencies
+        id: install
+        if: ${{ !cancelled() }}
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/ci-quick-checks.log"
+        env:
+          NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: ${{ !cancelled() && steps.install.outcome == 'failure' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bun-install-${{ github.job }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # Workflow job classifications fail more red pull requests than any
+      # other check and take seconds, so they run here, before the heavy
+      # suites wait on this job, under ci-checks-policy's own conditions.
+      - name: Checkout workflow classification tooling
+        if: >-
+          !cancelled() && steps.install.outcome == 'success'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .workflow-tooling
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows
+            .github/actions
+            .github/ci-job-classification-decisions
+            .github/ci-job-classification-sources.json
+            scripts/check-ci-job-classification.ts
+            scripts/ci-job-classification
+            packages/collation/src/collation.ts
+            packages/sha256/src/node.ts
+            packages/sha256/src/types.ts
+
+      - name: Check workflow job classifications
+        id: job-classification
+        if: >-
+          !cancelled() && steps.install.outcome == 'success'
+          && needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.run_required != 'false'
+          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
+          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+        # Remove the tooling checkout so later source checks see only the
+        # candidate tree. A digest that only needs a mechanical refresh is
+        # rewritten by the autofix generator; this check (the script's
+        # default mode) stays fail-closed. It runs git, so it cannot load the
+        # offline network preload that `--check` commands must use.
+        run: |
+          trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT
+          cd .workflow-tooling
+          bun scripts/check-ci-job-classification.ts
+
+      - name: "ci-checks-docs: Check changed Markdown consumers"
+        if: >-
+          !cancelled()
+          && steps.install.outcome == 'success'
+          && inputs.pr_depth_only != true
+          && needs.ci-plan.outputs.run_required != 'false'
+          && needs.ci-plan.outputs.trusted == 'true'
+          && needs.ci-plan.outputs.docs_checks_required == 'true'
+        continue-on-error: false
+        run: bun scripts/ci-package-scope.ts --run-markdown-checks
+        env:
+          CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
+
+      # The job condition is this part's condition, so it always runs here.
+      - name: "dated-waiver-expiry: List tracked files for dated waiver guard"
+        if: ${{ !cancelled() }}
+        run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
+
+      # An expired waiver fails a run only when its change touches the file
+      # declaring it; the scheduled healing run checks every waiver on the
+      # default branch and alerts its owner. A pull request or merge group
+      # changes everything since its target, and a push everything since the
+      # commit it moved from (every tracked file when that commit is not in
+      # the checkout). Scheduled and dispatched runs on main change nothing
+      # themselves: each commit there passed a merge group that checked its
+      # change, so a date boundary never turns main red on its own.
+      - name: "dated-waiver-expiry: List files the change touches"
+        if: ${{ !cancelled() }}
+        env:
+          TARGET_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          changed="$RUNNER_TEMP/dated-waiver-changed-files"
+          case "$GITHUB_EVENT_NAME" in
+            pull_request | merge_group)
+              target="origin/${TARGET_REF#refs/heads/}"
+              base=$(git merge-base "$target" HEAD)
+              git diff --name-only -z "$base" HEAD > "$changed"
+              ;;
+            push)
+              if git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+                git diff --name-only -z "$PUSH_BEFORE" HEAD > "$changed"
+              else
+                git ls-files -z > "$changed"
+              fi
+              ;;
+            *) : > "$changed" ;;
+          esac
+          echo "DATED_WAIVER_CHANGED_FILES=$changed" >> "$GITHUB_ENV"
+
+      - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
+        if: ${{ !cancelled() }}
+        continue-on-error: false
+        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"
+
+      - *merge_group_cancel
+
   docker-checks:
     name: Sandbox Docker and image dependency checks
     needs: ci-plan
@@ -3641,6 +3775,37 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # The dev seed's own cluster and object store, on the first shard only
+      # (an empty image starts no container). Migrations create cluster-wide
+      # roles, so a second database beside the suites' cannot be migrated.
+      dev_seed_postgres:
+        image: ${{ matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.postgres || '' }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      dev_seed_rustfs:
+        image: ${{ matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true' && needs.ci-plan.outputs.rustfs || '' }}
+        credentials: ${{ startsWith(needs.ci-plan.outputs.rustfs, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
+        env:
+          # The credentials apps/api/.env.example and docker-compose.yml share.
+          RUSTFS_ACCESS_KEY: stella-rustfs-dev
+          RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - *checkout_input_sha
@@ -3683,6 +3848,10 @@ jobs:
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
+      - name: Configure dev seed Postgres parity
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        run: bash scripts/configure-test-postgres.sh "${{ job.services.dev_seed_postgres.id }}" stella_owner
+
       - name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -3698,6 +3867,32 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
+
+      - name: Prepare the dev seed database
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          RUSTFS_ACCESS_KEY: stella-rustfs-dev
+          RUSTFS_SECRET_KEY: stella-rustfs-dev-secret
+        # The restricted owner and the bucket a local stack has, then the
+        # committed migrations; `db:push` would skip the policies they create.
+        run: |
+          curl --fail --silent --show-error --aws-sigv4 "aws:amz:us-east-1:s3" \
+            --user "$RUSTFS_ACCESS_KEY:$RUSTFS_SECRET_KEY" \
+            --request PUT http://127.0.0.1:9000/stella
+          (cd apps/api && bun run src/db/migrate.ts)
+
+      - name: Apply the local dev seed
+        if: matrix.shard == 1 && needs.ci-plan.outputs.dev_seed_required == 'true'
+        timeout-minutes: 5
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+          NODE_ENV: development
+          STELLA_LOCAL_DEV: "1"
+        # What `bun run agent:up` seeds, with the environment a new checkout
+        # copies, so a change that rejects one of its writes cannot reach main.
+        run: bun --env-file=.env.example run db:seed-local
 
       - name: Configure ephemeral Postgres fixture maintenance
         working-directory: apps/api
@@ -6806,176 +7001,13 @@ jobs:
   # queued tree.
   ci-quick-checks:
     needs: ci-plan
-    if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || (github.event.pull_request.draft != true && github.event.action != 'enqueued')) }}
+    if: ${{ !cancelled() && inputs.heavy_only != true && github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
       actions: write
-    steps:
-      # parser-version-guard reads Git history, so the checkout is full.
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          filter: blob:none
-          persist-credentials: false
-          ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
-          submodules: ${{ needs.ci-plan.outputs.docs_checks_required == 'true' }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version-file: package.json
-
-      # Parser versions must advance whenever an adapter's parser inputs
-      # change. The guard needs no dependency installation.
-      - name: "parser-version-guard: Check parser version guard"
-        if: >-
-          !cancelled()
-          && inputs.pr_depth_only != true
-          && needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1'
-          && needs.ci-plan.outputs.run_required != 'false'
-          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-        continue-on-error: false
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-          HEAD_SHA: ${{ github.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
-        run: |
-          bun test scripts/check-parser-versions.test.ts
-          bun scripts/check-parser-versions.ts
-
-      # The Markdown checks and the dated waiver guard share this install.
-      - name: Install dependencies
-        id: install
-        if: ${{ !cancelled() }}
-        uses: $/.github/actions/ci-install
-        with:
-          flags: '["--frozen-lockfile","--ignore-scripts"]'
-          log-file: "${{ runner.temp }}/bun-install/ci-quick-checks.log"
-        env:
-          NPM_TOKEN: ""
-
-      - name: Upload failed Bun install logs
-        if: ${{ !cancelled() && steps.install.outcome == 'failure' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bun-install-${{ github.job }}
-          path: ${{ runner.temp }}/bun-install/*.log
-          retention-days: 7
-          if-no-files-found: ignore
-
-      # Workflow job classifications fail more red pull requests than any
-      # other check and take seconds, so they run here, before the heavy
-      # suites wait on this job, under ci-checks-policy's own conditions.
-      - name: Checkout workflow classification tooling
-        if: >-
-          !cancelled() && steps.install.outcome == 'success'
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.run_required != 'false'
-          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.workflow_sha }}
-          path: .workflow-tooling
-          fetch-depth: 0
-          persist-credentials: false
-          sparse-checkout-cone-mode: false
-          sparse-checkout: |
-            .github/workflows
-            .github/actions
-            .github/ci-job-classification-decisions
-            .github/ci-job-classification-sources.json
-            scripts/check-ci-job-classification.ts
-            scripts/ci-job-classification
-            packages/collation/src/collation.ts
-            packages/sha256/src/node.ts
-            packages/sha256/src/types.ts
-
-      - name: Check workflow job classifications
-        id: job-classification
-        if: >-
-          !cancelled() && steps.install.outcome == 'success'
-          && needs.ci-plan.outputs.package_checks_required == 'true'
-          && needs.ci-plan.outputs.run_required != 'false'
-          && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-          && (github.event_name == 'merge_group' || needs.ci-plan.outputs.pr_depth_reused != 'true')
-        env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
-        # Remove the tooling checkout so later source checks see only the
-        # candidate tree. A digest that only needs a mechanical refresh is
-        # rewritten by the autofix generator; this check (the script's
-        # default mode) stays fail-closed. It runs git, so it cannot load the
-        # offline network preload that `--check` commands must use.
-        run: |
-          trap 'rm -rf "$GITHUB_WORKSPACE/.workflow-tooling"' EXIT
-          cd .workflow-tooling
-          bun scripts/check-ci-job-classification.ts
-
-      - name: "ci-checks-docs: Check changed Markdown consumers"
-        if: >-
-          !cancelled()
-          && steps.install.outcome == 'success'
-          && inputs.pr_depth_only != true
-          && needs.ci-plan.outputs.run_required != 'false'
-          && needs.ci-plan.outputs.trusted == 'true'
-          && needs.ci-plan.outputs.docs_checks_required == 'true'
-        continue-on-error: false
-        run: bun scripts/ci-package-scope.ts --run-markdown-checks
-        env:
-          CHANGED_MARKDOWN: ${{ needs.ci-plan.outputs.docs_changed_files }}
-
-      # The job condition is this part's condition, so it always runs here.
-      - name: "dated-waiver-expiry: List tracked files for dated waiver guard"
-        if: ${{ !cancelled() }}
-        run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
-
-      # An expired waiver fails a run only when its change touches the file
-      # declaring it; the scheduled healing run checks every waiver on the
-      # default branch and alerts its owner. A pull request or merge group
-      # changes everything since its target, and a push everything since the
-      # commit it moved from (every tracked file when that commit is not in
-      # the checkout). Scheduled and dispatched runs on main change nothing
-      # themselves: each commit there passed a merge group that checked its
-      # change, so a date boundary never turns main red on its own.
-      - name: "dated-waiver-expiry: List files the change touches"
-        if: ${{ !cancelled() }}
-        env:
-          TARGET_REF: ${{ github.event.pull_request.base.ref || github.event.merge_group.base_ref }}
-          PUSH_BEFORE: ${{ github.event.before }}
-        run: |
-          changed="$RUNNER_TEMP/dated-waiver-changed-files"
-          case "$GITHUB_EVENT_NAME" in
-            pull_request | merge_group)
-              target="origin/${TARGET_REF#refs/heads/}"
-              base=$(git merge-base "$target" HEAD)
-              git diff --name-only -z "$base" HEAD > "$changed"
-              ;;
-            push)
-              if git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
-                git diff --name-only -z "$PUSH_BEFORE" HEAD > "$changed"
-              else
-                git ls-files -z > "$changed"
-              fi
-              ;;
-            *) : > "$changed" ;;
-          esac
-          echo "DATED_WAIVER_CHANGED_FILES=$changed" >> "$GITHUB_ENV"
-
-      - name: "dated-waiver-expiry: Check dated waiver expiry on the current tree"
-        if: ${{ !cancelled() }}
-        continue-on-error: false
-        run: bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"
-
-      - *merge_group_cancel
+    steps: *quick-checks-steps
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
@@ -7148,7 +7180,7 @@ jobs:
             "ci-quick-checks": null,
             "generated-sources": "package_checks_required",
 
-            "pr-heavy-gate": "pr_heavy_gate_required",
+            "pr-heavy-gate": null,
             "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": "ci_browser_required",
@@ -7194,7 +7226,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"postgres-service-suites": "postgres_service_suites_required", "service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required", "web-build": "web_build_pr_required"}
           FAST_REQUIRED: >-
-            ["ci-quick-checks", "generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-audit", "dependency-review", "dependency-malware", "ci-tests", "e2e-landing", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf", "database-migrations-check", "database-migrations-apply-fresh"]
+            ["generated-sources", "pr-heavy-gate", "desktop-rust-lint", "ci-browser", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "code-quality-api", "code-quality-web-rest", "dependency-audit", "dependency-review", "dependency-malware", "ci-tests", "e2e-landing", "e2e-production-shard", "web-build", "scan-engine-wasm-drift", "query-perf", "database-migrations-check", "database-migrations-apply-fresh"]
         run: |
           # Every job in `needs`, so a job added there is evaluated without a
           # hand-kept list; the planner tests require every job to be in
@@ -7410,6 +7442,17 @@ jobs:
           if [[ "$COVERAGE_PROFILE" == pilot-fast-v1 ]]; then
             FAST_REQUIRED="$PILOT_FAST_JOBS"
           fi
+          # Select the current carrier after profile overrides: manual fast
+          # runs require the standalone job too. The inactive alias contributes
+          # neither a result nor reusable completion evidence.
+          if [[ "$EVENT" == pull_request ]]; then
+            quick_checks_job=pr-heavy-gate
+            NEEDS=$(jq -ce 'del(."ci-quick-checks")' <<< "$NEEDS") || exit 1
+          else
+            quick_checks_job=ci-quick-checks
+            NEEDS=$(jq -ce 'del(."pr-heavy-gate")' <<< "$NEEDS") || exit 1
+          fi
+          FAST_REQUIRED=$(jq -cn --argjson required "$FAST_REQUIRED" --arg active "$quick_checks_job" '$required - ["ci-quick-checks", "pr-heavy-gate"] + [$active] | unique') || exit 1
           # The Postgres opt-in runs the service suites on the pull request once
           # armed, with the other queue-only suites; an unarmed push skips them.
           if [[ "$EVENT" == pull_request && "${HEAVY_PROOF:-}" == true ]] && jq -e '.postgres_pr_required == "true"' <<< "$PLAN" >/dev/null; then
@@ -7721,8 +7764,10 @@ jobs:
                 fi
                 fast_scopes="$armed_scopes"
               fi
-              required_jobs=$(jq -c --slurpfile plans "$PLAN_FILE" --argjson scopes "$fast_scopes" --argjson required "$FAST_REQUIRED" '
-                [keys[] | . as $job | select($required | index($job))
+              # Armed proof reuses normal suites, never the current carrier's
+              # time-dependent checks. Keep its heavy-proof scope separate.
+              required_jobs=$(jq -c --slurpfile plans "$PLAN_FILE" --argjson scopes "$fast_scopes" --argjson required "$FAST_REQUIRED" --arg current "$quick_checks_job" '
+                [keys[] | . as $job | select($job == $current or ($required | index($job)))
                   | select($scopes[$job] == null or $plans[0][$scopes[$job]] == "true")]' <<< "$NEEDS") || exit 1
               report_required_runner_losses || exit 1
               if [[ "$EVENT" == "merge_group" ]]; then

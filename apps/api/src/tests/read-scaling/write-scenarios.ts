@@ -5,6 +5,7 @@ import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { vatRates } from "@/api/db/schema";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -123,7 +124,7 @@ export const writeScalingScenarios = [
               "https://example.test/v1/vat-rates/apply-preset",
               { method: "POST" },
             ),
-            route: "/v1/vat-rates/apply-preset",
+            route: "/v1/vat-rates/apply-preset" satisfies ApiRoutePath,
           }),
         );
         if (response instanceof HttpStatusResponse) {

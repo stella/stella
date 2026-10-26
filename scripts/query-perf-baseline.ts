@@ -14,6 +14,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const git = (args: string[], repositoryRoot = root) => {
   const result = spawnSync("git", args, {
+    maxBuffer: 2 ** 30,
     cwd: repositoryRoot,
     encoding: "utf-8",
   });

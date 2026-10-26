@@ -54,7 +54,14 @@ export const Route = createFileRoute("/_protected/settings/account/memory")({
                 }),
               );
             } catch (error: unknown) {
-              getAnalytics().captureError(error);
+              getAnalytics().captureError(error, {
+                fingerprintKey: "settings.account.memory.loader:failure",
+                scope: {
+                  type: "request",
+                  method: "GET",
+                  routeTemplate: "/_protected/settings/account/memory",
+                },
+              });
             }
           }),
         );

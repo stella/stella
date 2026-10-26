@@ -93,7 +93,13 @@ export const useDocxCheckpointAutosave = ({
   });
 
   const reportCheckpointSaveError = useLatestCallback((error: unknown) => {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "useDocxCheckpointAutosave:failure",
+      scope: {
+        type: "handler",
+        handlerId: "useDocxCheckpointAutosave:failure",
+      },
+    });
     setAutosaveStatus("pending");
   });
 

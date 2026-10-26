@@ -28,6 +28,7 @@ import {
   createChatAttachmentPart,
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -281,6 +282,7 @@ const forkContext = ({
     query: workspaceId ? { workspaceId } : {},
     recordAuditEvent: async () => await Promise.resolve(),
     request: new Request("http://localhost/v1/chat/threads/fork"),
+    route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
     safeDb: db,
     session: { activeOrganizationId: organizationId ?? ids.orgA },
     user: { id: userId ?? ids.userA1 },
@@ -288,6 +290,8 @@ const forkContext = ({
 
 const threadsContext = (): ThreadsCtx =>
   asTestRaw<ThreadsCtx>({
+    request: new Request("http://localhost/v1/chat/threads"),
+    route: "/v1/chat/threads" satisfies ApiRoutePath,
     memberRole: sessionMemberRole("owner"),
     query: { limit: 100 },
     safeDb,
@@ -770,6 +774,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
         promptCachingEnabled: false,
         query: {},
         request: new Request("http://localhost/v1/chat/threads/messages"),
+        route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -837,6 +842,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb: narrowed,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -862,6 +868,7 @@ test("a thread that was never forked reports no provenance", async () => {
       promptCachingEnabled: false,
       query: {},
       request: new Request("http://localhost/v1/chat/threads/messages"),
+      route: "/v1/chat/threads/:threadId/messages" satisfies ApiRoutePath,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },

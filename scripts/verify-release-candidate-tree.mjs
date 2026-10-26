@@ -9,7 +9,7 @@ const PACKAGE_JSON_PATTERN = /^packages\/[^/]+\/package\.json$/u;
 const CLI_PACKAGE_PATH = "packages/cli/package.json";
 const CLI_VERSION_PATH = "packages/cli/src/generated/cli-version.ts";
 const DATA_PATH_PATTERNS = [
-  /^\.changeset\/[^/]+\.md$/u,
+  /^\.changeset\/(?!README\.md$)[^/]+\.md$/u,
   /^docs\/changelog\/v[^/]+\.md$/u,
   /^packages\/[^/]+\/CHANGELOG\.md$/u,
 ];
@@ -18,6 +18,25 @@ const FIXED_DATA_PATHS = new Set([
   "apps/landing/public/media/products/recordings-manifest.json",
   "apps/landing/src/data/changelog-release-dates.json",
 ]);
+// Generated files our own bots rewrite on the release branch. A class's paths
+// pass only when every release-range commit touching the class is that bot's,
+// committed by GitHub on its behalf, and the candidate holds exactly the bytes
+// the bot's latest commit wrote. Their bytes have their own, larger bound.
+const GENERATED_CLASSES = [
+  {
+    name: "Tailwind class cache",
+    prefix: ".tailwind-cache/",
+    authorEmail: "114827586+autofix-ci[bot]@users.noreply.github.com",
+  },
+  {
+    name: "landing product media",
+    prefix: "apps/landing/public/media/products/",
+    authorEmail:
+      "281031312+stella-release-deployer[bot]@users.noreply.github.com",
+  },
+];
+const GENERATED_COMMITTER_EMAIL = "noreply@github.com";
+const MAX_GENERATED_DATA_BYTES = 32 * 1024 * 1024;
 
 /**
  * @param {string} message Refusal reason written to stderr.
@@ -30,8 +49,14 @@ const refuse = (message) => {
 
 const mainSha = process.argv[2] ?? "";
 const candidateSha = process.argv[3] ?? "";
+const repository = process.argv[4] ?? "";
 if (!SHA_PATTERN.test(mainSha) || !SHA_PATTERN.test(candidateSha)) {
   refuse("expected full lowercase main and candidate SHAs");
+}
+const REPOSITORY_PATTERN = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/u;
+const repositoryParts = REPOSITORY_PATTERN.exec(repository);
+if (repositoryParts === null) {
+  refuse("expected the owner/name repository as the third argument");
 }
 
 /**
@@ -82,6 +107,7 @@ const compareCodeUnit = (left, right) =>
 
 try {
   execFileSync("git", ["merge-base", "--is-ancestor", mainSha, candidateSha], {
+    maxBuffer: 2 ** 30,
     stdio: "ignore",
   });
 } catch {
@@ -104,9 +130,24 @@ if (!changedPaths.includes("VERSION")) {
 }
 
 const packagePaths = /** @type {string[]} */ ([]);
+const generatedPaths = new Map(
+  GENERATED_CLASSES.map((generatedClass) => [
+    generatedClass,
+    /** @type {string[]} */ ([]),
+  ]),
+);
 let changedDataBytes = 0;
+let generatedDataBytes = 0;
 for (const path of changedPaths) {
-  if (PACKAGE_JSON_PATTERN.test(path)) {
+  const generatedClass = FIXED_DATA_PATHS.has(path)
+    ? undefined
+    : GENERATED_CLASSES.find(({ prefix }) => path.startsWith(prefix));
+  if (generatedClass !== undefined) {
+    if (path.includes("\n")) {
+      refuse(`generated path has an unsupported name: ${JSON.stringify(path)}`);
+    }
+    generatedPaths.get(generatedClass)?.push(path);
+  } else if (PACKAGE_JSON_PATTERN.test(path)) {
     packagePaths.push(path);
   } else if (
     path !== "bun.lock" &&
@@ -124,14 +165,164 @@ for (const path of changedPaths) {
   if (!treeEntry.startsWith("100644 blob ")) {
     refuse(`candidate data path is not a regular non-executable file: ${path}`);
   }
-  changedDataBytes += Number(
-    git("cat-file", "-s", candidateSha.concat(":", path)),
-  );
+  const bytes = Number(git("cat-file", "-s", candidateSha.concat(":", path)));
+  if (generatedClass === undefined) {
+    changedDataBytes += bytes;
+  } else {
+    generatedDataBytes += bytes;
+  }
   if (
     !Number.isSafeInteger(changedDataBytes) ||
     changedDataBytes > MAX_CHANGED_DATA_BYTES
   ) {
     refuse("candidate release data exceeds the 2 MiB review bound");
+  }
+  if (
+    !Number.isSafeInteger(generatedDataBytes) ||
+    generatedDataBytes > MAX_GENERATED_DATA_BYTES
+  ) {
+    refuse("candidate generated files exceed the 32 MiB review bound");
+  }
+}
+
+/**
+ * Blob ids under a prefix at a commit, by path.
+ * @param {string} sha Commit whose tree is listed.
+ * @param {string} prefix Directory prefix, ending in a slash.
+ * @returns {Map<string, string>} Blob id per path.
+ */
+const blobsUnder = (sha, prefix) =>
+  new Map(
+    git("ls-tree", "-r", "-z", sha, "--", prefix)
+      .split("\0")
+      .filter(Boolean)
+      .map((entry) => {
+        const [meta = "", path = ""] = entry.split("\t");
+        return [path, meta.split(" ")[2] ?? ""];
+      }),
+  );
+
+/** Commits whose GitHub signature each generated class depends on. */
+const generatedCommits = new Map(/** @type {[string, string][]} */ ([]));
+
+for (const [generatedClass, paths] of generatedPaths) {
+  if (paths.length === 0) {
+    continue;
+  }
+  const { name, prefix, authorEmail } = generatedClass;
+  // Newest first; a path's first listing is the latest commit that wrote it.
+  const latestCommitByPath = new Map(/** @type {[string, string][]} */ ([]));
+  let commit = "";
+  for (const line of git(
+    "-c",
+    "core.quotePath=false",
+    "log",
+    "--no-merges",
+    "--no-renames",
+    "--name-only",
+    "--format=%x01%H%x02%ae%x02%ce",
+    mainSha.concat("..", candidateSha),
+    "--",
+    prefix,
+    // Fixed data under the prefix (the media manifest) is the release cut's
+    // own output and is validated as data above, whoever wrote it.
+    ...[...FIXED_DATA_PATHS]
+      .filter((path) => path.startsWith(prefix))
+      .map((path) => ":(exclude,literal)".concat(path)),
+  ).split("\n")) {
+    if (line.startsWith("\u0001")) {
+      const [sha = "", author = "", committer = ""] = line
+        .slice(1)
+        .split("\u0002");
+      if (author !== authorEmail || committer !== GENERATED_COMMITTER_EMAIL) {
+        refuse(
+          `${name} changed by a commit not made by its bot: ${sha} (${author})`,
+        );
+      }
+      generatedCommits.set(sha, name);
+      commit = sha;
+    } else if (line.length > 0 && !latestCommitByPath.has(line)) {
+      latestCommitByPath.set(line, commit);
+    }
+  }
+  const candidateBlobs = blobsUnder(candidateSha, prefix);
+  const commitBlobs = new Map(
+    /** @type {[string, Map<string, string>][]} */ ([]),
+  );
+  for (const path of paths) {
+    const latest =
+      latestCommitByPath.get(path) ??
+      refuse(`${name} path changed outside a bot commit: ${path}`);
+    const written =
+      commitBlobs.get(latest) ??
+      commitBlobs.set(latest, blobsUnder(latest, prefix)).get(latest);
+    if (written?.get(path) !== candidateBlobs.get(path)) {
+      refuse(`${name} path differs from its bot's commit: ${path}`);
+    }
+  }
+}
+
+// Author and committer strings are free text in Git. GitHub's own record must
+// show that it signed each bot commit as committer, on the bot's behalf.
+const GITHUB_SIGNER = "web-flow";
+const SIGNATURE_BATCH = 50;
+const generatedShas = [...generatedCommits.keys()];
+for (let start = 0; start < generatedShas.length; start += SIGNATURE_BATCH) {
+  const batch = generatedShas.slice(start, start + SIGNATURE_BATCH);
+  const fields = batch
+    .map(
+      (sha, index) =>
+        `c${index}: object(oid: "${sha}") { ... on Commit { oid signature { isValid state wasSignedByGitHub signer { login } } } }`,
+    )
+    .join(" ");
+  const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`;
+  const command = process.env.GH_RETRY_SCRIPT ? "bash" : "gh";
+  const args = [
+    ...(process.env.GH_RETRY_SCRIPT ? [process.env.GH_RETRY_SCRIPT] : []),
+    "api",
+    "graphql",
+    "-f",
+    "query=".concat(query),
+    "-F",
+    "owner=".concat(repositoryParts[1] ?? ""),
+    "-F",
+    "name=".concat(repositoryParts[2] ?? ""),
+  ];
+  let response = "";
+  try {
+    response = execFileSync(command, args, {
+      encoding: "utf-8",
+      maxBuffer: 16 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } catch {
+    refuse("could not read GitHub's signature record for generated files");
+  }
+  const parsed = parseJson(response, "GitHub signature response");
+  const objects =
+    isRecord(parsed) &&
+    isRecord(parsed.data) &&
+    isRecord(parsed.data.repository)
+      ? parsed.data.repository
+      : refuse("GitHub signature response has no repository");
+  for (const [index, sha] of batch.entries()) {
+    const object = objects[`c${index}`];
+    const signature = isRecord(object) ? object.signature : undefined;
+    const signer = isRecord(signature) ? signature.signer : undefined;
+    if (
+      !isRecord(object) ||
+      object.oid !== sha ||
+      !isRecord(signature) ||
+      signature.isValid !== true ||
+      signature.state !== "VALID" ||
+      signature.wasSignedByGitHub !== true ||
+      !isRecord(signer) ||
+      signer.login !== GITHUB_SIGNER
+    ) {
+      refuse(
+        `${generatedCommits.get(sha) ?? "generated file"} commit is not signed by GitHub for its bot: ${sha}`,
+      );
+    }
   }
 }
 
@@ -142,7 +333,16 @@ if (!VERSION_PATTERN.test(candidateVersion)) {
 
 for (const path of FIXED_DATA_PATHS) {
   if (path.endsWith(".json") && changedPaths.includes(path)) {
-    parseJson(show(candidateSha, path), path);
+    const value = parseJson(show(candidateSha, path), path);
+    if (
+      path === "apps/landing/src/data/changelog-release-dates.json" &&
+      (!isRecord(value) ||
+        Object.values(value).some(
+          (date) => date !== null && typeof date !== "string",
+        ))
+    ) {
+      refuse(`${path} must map release names to timestamps or null`);
+    }
   }
 }
 
