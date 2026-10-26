@@ -5,7 +5,10 @@ import {
   readDeliverabilityTransition,
 } from "@/api/lib/email/deliverability";
 import type { AccountEmailUndeliverableReason } from "@/api/lib/email/deliverability-contract";
-import type { NormalizedEmail } from "@/api/lib/email/normalized-email";
+import {
+  type NormalizedEmail,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import {
   logger,
   type LogRecord,
@@ -66,7 +69,7 @@ describe("deliverability transitions", () => {
       expect(transition.isOk() && transition.value).toEqual({
         type: "undeliverable",
         reason,
-        recipients: ["member@example.test"],
+        recipients: [normalizeEmail("member@example.test")],
         at: new Date(timestamp),
       });
     },
@@ -180,9 +183,9 @@ describe("deliverability event drain", () => {
     });
     expect(queue.remaining().map(({ id }) => id)).toEqual([poison]);
     expect(marked).toEqual([
-      ["member@example.test", "suppressed"],
-      ["nobody@example.test", "hard_bounce"],
-      ["retry@example.test", "hard_bounce"],
+      [normalizeEmail("member@example.test"), "suppressed"],
+      [normalizeEmail("nobody@example.test"), "hard_bounce"],
+      [normalizeEmail("retry@example.test"), "hard_bounce"],
     ]);
 
     // Logs carry delivery ids and reasons, never an address.
