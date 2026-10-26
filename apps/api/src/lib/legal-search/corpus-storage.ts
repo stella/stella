@@ -162,6 +162,20 @@ export const readPersistedCorpusAst = (
 };
 
 /**
+ * Report a stored AST no reader can read, under the step that met it, so the
+ * row is visible for repair. The one sink for every reader of stored ASTs.
+ */
+export const reportUnreadableStoredAst = (
+  error: StoredAstUnreadableError,
+  context: { step: string; decisionId?: string },
+): void => {
+  captureError(
+    error,
+    handlerErrorContext("legalsearch.storedAstUnreadable", context),
+  );
+};
+
+/**
  * The AST a read yields, for a reader whose answer to a stored AST no reader
  * can read is the same as to no AST: the document is served from its text,
  * or shown as unreadable. The unreadable value is reported under `step`, so
@@ -178,10 +192,7 @@ export const persistedAstOrAbsent = (
   if (read.type === "read") {
     return read.ast;
   }
-  captureError(
-    read.error,
-    handlerErrorContext("legalsearch.persistedAstOrAbsent", { step }),
-  );
+  reportUnreadableStoredAst(read.error, { step });
   return null;
 };
 
@@ -208,10 +219,7 @@ export const persistedAstOrTextFallback = (
   if (!isUsableFallbackText(fallbackText)) {
     throw read.error;
   }
-  captureError(
-    read.error,
-    handlerErrorContext("legalsearch.persistedAstOrTextFallback", { step }),
-  );
+  reportUnreadableStoredAst(read.error, { step });
   return null;
 };
 

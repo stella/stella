@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/mcp/stella-tools.ts",
+  "delta": 1,
+  "reason": "read_case_law_decision answers an entry whose read fails on the server as read_failed and keeps reading the rest of the batch. The failure no longer reaches the request's own error report, so the entry reports it here with the decision id and the step that failed."
+}

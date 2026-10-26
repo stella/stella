@@ -7,16 +7,15 @@ import {
 } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { StoredAstUnreadableError } from "@/api/lib/errors/tagged-errors";
 import {
   readCorpusPayloadOrFallback,
   readPersistedCorpusAst,
+  reportUnreadableStoredAst,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { PersistedCorpusAstRead } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type DecisionAstSource = "store" | "row";
 
@@ -109,13 +108,10 @@ export const readServedDecisionAst = async ({
 
   if (resolved === null || resolved.type === "unreadable") {
     if (resolved !== null) {
-      captureError(
-        resolved.error,
-        handlerErrorContext("decisions.readServedDecisionAst.unreadable", {
-          decisionId,
-          step: "readDecision.storedAstUnreadable",
-        }),
-      );
+      reportUnreadableStoredAst(resolved.error, {
+        decisionId,
+        step: "readDecision.storedAstUnreadable",
+      });
     }
     return {
       payload: null,

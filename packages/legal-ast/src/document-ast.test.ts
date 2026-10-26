@@ -974,7 +974,7 @@ describe("persisted block identities that repeat", () => {
   });
 
   test("blocks whose identities are already unique come back unchanged", () => {
-    const blocks = documentAst.blocks;
+    const blocks: readonly Block[] = documentAst.blocks;
     const unique = withUniqueBlockIdentities(blocks);
     expect(unique).toEqual([...blocks]);
     for (const [index, block] of unique.entries()) {
