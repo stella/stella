@@ -93,6 +93,11 @@ type CitedActRead =
   | { type: "unknown" }
   | { type: "unresolved"; actName: string };
 
+// A `number/year` reference. When the gazette grammar declines one, it named
+// a case-law reporter or the treaty collection (`89/2012 Sb. rozh.`,
+// `67/2013 Sb. m. s.`), which no title fallback may read as a statute.
+const NUMBERED_REFERENCE = /\d\s*\/\s*\d{4}/u;
+
 type ReadCitedActOptions = {
   citation: string;
   citedOn: string;
@@ -115,6 +120,9 @@ const readCitedAct = async ({
   );
   if (gazette !== undefined) {
     return { type: "work", eli: gazette.eli };
+  }
+  if (NUMBERED_REFERENCE.test(citation)) {
+    return { type: "unknown" };
   }
   const read = resolveActCitation({
     text: citation,

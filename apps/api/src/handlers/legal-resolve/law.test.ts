@@ -347,6 +347,24 @@ describe("written law citations", () => {
     expect(read.reported).toEqual([]);
   });
 
+  test.each([
+    "89/2012 Sb. rozh.",
+    "67/2013 Sb. m. s.",
+    "§ 2 zákona č. 12/2020 Sb. NSS",
+  ])(
+    "%s names a reporter or treaty, not a statute, and opens nothing",
+    async (citation) => {
+      const read = await readWrittenCitation({ citation });
+      expect(read.response).toEqual({
+        status: "not_found",
+        reason: "unknown_document",
+      });
+      expect(read.eli).toBeUndefined();
+      expect(read.namesRead).toEqual([]);
+      expect(read.reported).toEqual([]);
+    },
+  );
+
   test("text that is not shaped like an act name is not reported", async () => {
     const read = await readWrittenCitation({ citation: "unknown" });
     expect(read.response).toEqual({
