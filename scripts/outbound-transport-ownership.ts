@@ -1,15 +1,25 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
 import { canonicalModuleId } from "../.oxlint-plugins/module-id.ts";
+import {
+  type Expression,
+  type IdentifierName,
+  type ImportDeclaration,
+  type MemberExpression,
+  type ModuleExportName,
+  type Node,
+  type ParsedSource,
+  type PrivateIdentifier,
+  walk as walkSyntax,
+} from "../packages/scripts/src/syntax-tree.ts";
 import {
   OUTBOUND_PERMIT_GRANT_OWNERS,
   OUTBOUND_TRANSPORT_CENSUS,
   OUTBOUND_TRANSPORT_CLASSES,
   type OutboundTransportCensusEntry,
 } from "./outbound-transport-census.ts";
-import { parseSource } from "./parse-memo.ts";
+import { parseSyntax } from "./parse-memo.ts";
 
 const INDIRECT_TRANSPORT = "indirect:transport";
 const LOCAL_MODULE_LOADER_OWNER =
@@ -102,120 +112,154 @@ const PERMIT_MODULE = "apps/api/src/lib/auth/third-party-outbound-permit";
 const PERMIT_GRANT = "grantThirdPartyOutboundPermit";
 const CLASSES = new Set<string>(OUTBOUND_TRANSPORT_CLASSES);
 
-const unwrap = (expression: ts.Expression): ts.Expression => {
+// oxc wraps an optional chain (`a?.b`) as a whole, where the compiler API
+// reads the chain's outermost member or call directly.
+const unwrap = (node: Node): Node => {
   if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isTypeAssertionExpression(expression) ||
-    ts.isSatisfiesExpression(expression) ||
-    ts.isNonNullExpression(expression)
+    node.type === "ParenthesizedExpression" ||
+    node.type === "ChainExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSTypeAssertion" ||
+    node.type === "TSSatisfiesExpression" ||
+    node.type === "TSNonNullExpression"
   ) {
-    return unwrap(expression.expression);
+    return unwrap(node.expression);
   }
-  return expression;
+  return node;
 };
 
-const memberName = (
-  node: ts.PropertyAccessExpression | ts.ElementAccessExpression,
-): string | undefined => {
-  if (ts.isPropertyAccessExpression(node)) {
-    return node.name.text;
+// A string literal or a template without substitutions.
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal" && typeof node.value === "string") {
+    return node.value;
   }
-  const argument = unwrap(node.argumentExpression);
-  if (ts.isStringLiteralLike(argument)) {
-    return argument.text;
+  if (node.type === "TemplateLiteral" && node.expressions.length === 0) {
+    return node.quasis.at(0)?.value.cooked ?? undefined;
   }
   return undefined;
 };
 
-const bindingMemberName = (element: ts.BindingElement) => {
-  if (element.dotDotDotToken) {
+const exportName = (node: ModuleExportName) =>
+  node.type === "Identifier" ? node.name : node.value;
+
+const identifierText = (node: IdentifierName | PrivateIdentifier) =>
+  node.type === "PrivateIdentifier" ? `#${node.name}` : node.name;
+
+const memberName = (node: MemberExpression): string | undefined =>
+  node.computed
+    ? literalText(unwrap(node.property))
+    : identifierText(node.property);
+
+// The member a destructuring entry names: `{ fetch }`, `{ "fetch": f }` and
+// `{ ["fetch"]: f }` alike; a rest entry or a dynamic key names none.
+const destructuredMemberName = (element: Node) => {
+  if (element.type !== "Property") {
     return undefined;
   }
-  const name = element.propertyName ?? element.name;
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
-    return name.text;
+  const { key } = element;
+  if (element.computed) {
+    return literalText(unwrap(key));
   }
-  if (!ts.isComputedPropertyName(name)) {
-    return undefined;
+  if (key.type === "Identifier") {
+    return key.name;
   }
-  const value = unwrap(name.expression);
-  return ts.isStringLiteralLike(value) ? value.text : undefined;
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : undefined;
 };
 
-const assignmentMemberName = (element: ts.ObjectLiteralElementLike) => {
-  if (ts.isSpreadAssignment(element)) {
-    return undefined;
+const bindingNames = (pattern: Node): string[] => {
+  if (pattern.type === "Identifier") {
+    return [pattern.name];
   }
-  const name = element.name;
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) {
-    return name.text;
+  if (pattern.type === "AssignmentPattern") {
+    return bindingNames(pattern.left);
   }
-  if (!ts.isComputedPropertyName(name)) {
-    return undefined;
+  if (pattern.type === "RestElement") {
+    return bindingNames(pattern.argument);
   }
-  const value = unwrap(name.expression);
-  return ts.isStringLiteralLike(value) ? value.text : undefined;
+  if (pattern.type === "TSParameterProperty") {
+    return bindingNames(pattern.parameter);
+  }
+  if (pattern.type === "ObjectPattern") {
+    return pattern.properties.flatMap((element) =>
+      bindingNames(element.type === "Property" ? element.value : element),
+    );
+  }
+  if (pattern.type === "ArrayPattern") {
+    return pattern.elements.flatMap((element) =>
+      element === null ? [] : bindingNames(element),
+    );
+  }
+  return [];
 };
 
-const objectLiteralExpression = (
-  expression: ts.Expression,
-): ts.ObjectLiteralExpression | undefined => {
-  const value = unwrap(expression);
-  return ts.isObjectLiteralExpression(value) ? value : undefined;
-};
-
-const bindingNames = (name: ts.BindingName): string[] => {
-  if (ts.isIdentifier(name)) {
-    return [name.text];
-  }
-  return name.elements.flatMap((element) =>
-    ts.isBindingElement(element) ? bindingNames(element.name) : [],
-  );
-};
-
-const isScope = (node: ts.Node): boolean =>
-  ts.isSourceFile(node) ||
-  ts.isBlock(node) ||
-  ts.isFunctionLike(node) ||
-  ts.isCatchClause(node) ||
-  ts.isForStatement(node) ||
-  ts.isForOfStatement(node) ||
-  ts.isForInStatement(node);
-
-const scopeOf = (node: ts.Node): ts.Node => {
-  let scope = node.parent;
-  while (!isScope(scope)) {
-    scope = scope.parent;
-  }
-  return scope;
-};
-
-const dynamicLoadNames = (node: ts.CallExpression): string[] | null => {
-  let expression: ts.Node = node;
-  while (
-    ts.isAwaitExpression(expression.parent) ||
-    ts.isParenthesizedExpression(expression.parent)
-  ) {
-    expression = expression.parent;
-  }
-  const parent = expression.parent;
+// The parameters of a function or signature; undefined for any other node.
+const parametersOf = (node: Node): readonly Node[] | undefined => {
   if (
-    ts.isVariableDeclaration(parent) &&
-    ts.isObjectBindingPattern(parent.name)
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "TSDeclareFunction" ||
+    node.type === "TSEmptyBodyFunctionExpression" ||
+    node.type === "ArrowFunctionExpression" ||
+    node.type === "TSFunctionType" ||
+    node.type === "TSConstructorType" ||
+    node.type === "TSMethodSignature" ||
+    node.type === "TSCallSignatureDeclaration" ||
+    node.type === "TSConstructSignatureDeclaration"
   ) {
-    if (parent.name.elements.some((element) => element.dotDotDotToken)) {
+    return node.params;
+  }
+  return node.type === "TSIndexSignature" ? node.parameters : undefined;
+};
+
+const isScope = (node: Node): boolean =>
+  node.type === "Program" ||
+  node.type === "BlockStatement" ||
+  node.type === "StaticBlock" ||
+  parametersOf(node) !== undefined ||
+  node.type === "CatchClause" ||
+  node.type === "ForStatement" ||
+  node.type === "ForOfStatement" ||
+  node.type === "ForInStatement";
+
+const scopeOf = (scopes: BindingScopes, node: Node): Node => {
+  let scope = scopes.parents.get(node);
+  while (scope !== undefined && !isScope(scope)) {
+    scope = scopes.parents.get(scope);
+  }
+  return scope ?? node;
+};
+
+const dynamicLoadNames = (
+  scopes: BindingScopes,
+  node: Node,
+): string[] | null => {
+  let expression = node;
+  let parent = scopes.parents.get(expression);
+  while (
+    parent?.type === "AwaitExpression" ||
+    parent?.type === "ParenthesizedExpression" ||
+    parent?.type === "ChainExpression"
+  ) {
+    expression = parent;
+    parent = scopes.parents.get(expression);
+  }
+  if (
+    parent?.type === "VariableDeclarator" &&
+    parent.id.type === "ObjectPattern"
+  ) {
+    if (
+      parent.id.properties.some((element) => element.type === "RestElement")
+    ) {
       return null;
     }
-    const names = parent.name.elements.map(bindingMemberName);
+    const names = parent.id.properties.map(destructuredMemberName);
     return names.some((name) => name === undefined)
       ? null
       : names.filter((name) => name !== undefined);
   }
-  if (
-    ts.isPropertyAccessExpression(parent) ||
-    ts.isElementAccessExpression(parent)
-  ) {
+  if (parent?.type === "MemberExpression") {
     const name = memberName(parent);
     return name === undefined ? null : [name];
   }
@@ -223,7 +267,11 @@ const dynamicLoadNames = (node: ts.CallExpression): string[] | null => {
 };
 
 type OutboundTransportReferencesOptions = { file: string; text: string };
-type BindingScopes = Map<ts.Node, Map<string, ts.Expression | null>>;
+type BindingScopes = {
+  // oxc nodes carry no parent links.
+  readonly parents: ReadonlyMap<Node, Node>;
+  readonly bindings: Map<Node, Map<string, Expression | null>>;
+};
 type ModuleRegistration = (
   specifier: string,
   names: readonly string[] | null,
@@ -231,60 +279,74 @@ type ModuleRegistration = (
 
 type BindNameOptions = {
   scopes: BindingScopes;
-  node: ts.Node;
+  node: Node;
   name: string;
-  initializer?: ts.Expression | null;
+  initializer?: Expression | null;
+  own?: boolean;
 };
 
+// Binds `name` in the scope around `node`, or in `node` itself when it is the
+// scope (a function for its parameters, a catch clause for its binding).
 const bindName = ({
   scopes,
   node,
   name,
   initializer = null,
+  own = false,
 }: BindNameOptions): void => {
-  const scope = scopeOf(node);
-  const bindings = scopes.get(scope) ?? new Map<string, ts.Expression | null>();
+  const scope = own ? node : scopeOf(scopes, node);
+  const bindings =
+    scopes.bindings.get(scope) ?? new Map<string, Expression | null>();
   bindings.set(name, initializer);
-  scopes.set(scope, bindings);
+  scopes.bindings.set(scope, bindings);
 };
 
-const collectBindings = (source: ts.SourceFile): BindingScopes => {
-  const scopes: BindingScopes = new Map();
-  const collect = (node: ts.Node): void => {
-    if (ts.isVariableDeclaration(node)) {
-      const initializer = ts.isIdentifier(node.name)
-        ? (node.initializer ?? null)
-        : null;
-      for (const name of bindingNames(node.name)) {
+const collectBindings = (source: ParsedSource): BindingScopes => {
+  const parents = new Map<Node, Node>();
+  const scopes: BindingScopes = { parents, bindings: new Map() };
+  walkSyntax(source.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      parents.set(node, parent);
+    }
+    if (node.type === "VariableDeclarator") {
+      const initializer = node.id.type === "Identifier" ? node.init : null;
+      for (const name of bindingNames(node.id)) {
         bindName({ scopes, node, name, initializer });
       }
     }
-    if (ts.isParameter(node)) {
-      for (const name of bindingNames(node.name)) {
-        bindName({ scopes, node, name });
+    if (node.type === "CatchClause" && node.param !== null) {
+      for (const name of bindingNames(node.param)) {
+        bindName({ scopes, node, name, own: true });
+      }
+    }
+    for (const parameter of parametersOf(node) ?? []) {
+      for (const name of bindingNames(parameter)) {
+        bindName({ scopes, node, name, own: true });
       }
     }
     if (
-      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
-      node.name
+      (node.type === "FunctionDeclaration" ||
+        node.type === "TSDeclareFunction" ||
+        node.type === "ClassDeclaration") &&
+      node.id
     ) {
-      bindName({ scopes, node, name: node.name.text });
+      bindName({ scopes, node, name: node.id.name });
     }
-    if (ts.isImportClause(node) && node.name) {
-      bindName({ scopes, node, name: node.name.text });
+    if (
+      node.type === "ImportDefaultSpecifier" ||
+      node.type === "ImportSpecifier" ||
+      node.type === "ImportNamespaceSpecifier"
+    ) {
+      bindName({ scopes, node, name: node.local.name });
     }
-    if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) {
-      bindName({ scopes, node, name: node.name.text });
-    }
-    ts.forEachChild(node, collect);
-  };
-  collect(source);
+  });
   return scopes;
 };
 
 type LookupBindingOptions = {
   scopes: BindingScopes;
-  node: ts.Node;
+  node: Node;
   name: string;
 };
 
@@ -292,23 +354,23 @@ const lookupBinding = ({
   scopes,
   node,
   name,
-}: LookupBindingOptions): ts.Expression | null | undefined => {
-  let scope = node;
-  while (true) {
-    const bindings = scopes.get(scope);
+}: LookupBindingOptions): Expression | null | undefined => {
+  for (
+    let scope: Node | undefined = node;
+    scope !== undefined;
+    scope = scopes.parents.get(scope)
+  ) {
+    const bindings = scopes.bindings.get(scope);
     if (bindings?.has(name)) {
       return bindings.get(name);
     }
-    if (ts.isSourceFile(scope)) {
-      return undefined;
-    }
-    scope = scope.parent;
   }
+  return undefined;
 };
 
 type ReflectedGlobalMemberOptions = {
   scopes: BindingScopes;
-  node: ts.Expression;
+  node: Node;
 };
 
 const reflectedGlobalMember = ({
@@ -316,24 +378,18 @@ const reflectedGlobalMember = ({
   node,
 }: ReflectedGlobalMemberOptions) => {
   const value = unwrap(node);
-  if (!ts.isCallExpression(value)) {
+  if (value.type !== "CallExpression") {
     return undefined;
   }
-  const callee = unwrap(value.expression);
-  if (
-    !(
-      ts.isPropertyAccessExpression(callee) ||
-      ts.isElementAccessExpression(callee)
-    ) ||
-    memberName(callee) !== "get"
-  ) {
+  const callee = unwrap(value.callee);
+  if (callee.type !== "MemberExpression" || memberName(callee) !== "get") {
     return undefined;
   }
-  const receiver = unwrap(callee.expression);
+  const receiver = unwrap(callee.object);
   if (
-    !ts.isIdentifier(receiver) ||
-    receiver.text !== "Reflect" ||
-    lookupBinding({ scopes, node: receiver, name: receiver.text }) !== undefined
+    receiver.type !== "Identifier" ||
+    receiver.name !== "Reflect" ||
+    lookupBinding({ scopes, node: receiver, name: receiver.name }) !== undefined
   ) {
     return undefined;
   }
@@ -345,20 +401,20 @@ const reflectedGlobalMember = ({
   const member = key && unwrap(key);
   return {
     target,
-    name: member && ts.isStringLiteralLike(member) ? member.text : undefined,
+    name: member && literalText(member),
   };
 };
 
 type GlobalObjectNameOptions = {
   scopes: BindingScopes;
-  node: ts.Expression;
-  seen?: Set<ts.Expression>;
+  node: Node;
+  seen?: Set<Node>;
 };
 
 const globalObjectName = ({
   scopes,
   node,
-  seen = new Set<ts.Expression>(),
+  seen = new Set<Node>(),
 }: GlobalObjectNameOptions): string | undefined => {
   const value = unwrap(node);
   if (seen.has(value)) {
@@ -377,20 +433,17 @@ const globalObjectName = ({
     }
     return GLOBAL_ROOTS.has(reflected.name) ? reflected.name : undefined;
   }
-  if (
-    ts.isPropertyAccessExpression(value) ||
-    ts.isElementAccessExpression(value)
-  ) {
-    const root = globalObjectName({ scopes, node: value.expression, seen });
+  if (value.type === "MemberExpression") {
+    const root = globalObjectName({ scopes, node: value.object, seen });
     const name = memberName(value);
     return root && name && GLOBAL_ROOTS.has(name) ? name : undefined;
   }
-  if (!ts.isIdentifier(value)) {
+  if (value.type !== "Identifier") {
     return undefined;
   }
-  const initializer = lookupBinding({ scopes, node: value, name: value.text });
+  const initializer = lookupBinding({ scopes, node: value, name: value.name });
   if (initializer === undefined) {
-    return GLOBAL_ROOTS.has(value.text) ? value.text : undefined;
+    return GLOBAL_ROOTS.has(value.name) ? value.name : undefined;
   }
   if (initializer === null) {
     return undefined;
@@ -400,40 +453,37 @@ const globalObjectName = ({
 
 type ObjectIdentityOptions = {
   scopes: BindingScopes;
-  node: ts.Expression;
-  seen?: Set<ts.Expression>;
+  node: Node;
+  seen?: Set<Node>;
 };
 
 const isReflectObject = ({
   scopes,
   node,
-  seen = new Set<ts.Expression>(),
+  seen = new Set<Node>(),
 }: ObjectIdentityOptions): boolean => {
   const value = unwrap(node);
   if (seen.has(value)) {
     return false;
   }
   seen.add(value);
-  if (ts.isIdentifier(value)) {
+  if (value.type === "Identifier") {
     const initializer = lookupBinding({
       scopes,
       node: value,
-      name: value.text,
+      name: value.name,
     });
     if (initializer === undefined) {
-      return value.text === "Reflect";
+      return value.name === "Reflect";
     }
     return (
       initializer !== null &&
       isReflectObject({ scopes, node: initializer, seen })
     );
   }
-  if (
-    ts.isPropertyAccessExpression(value) ||
-    ts.isElementAccessExpression(value)
-  ) {
+  if (value.type === "MemberExpression") {
     return (
-      globalObjectName({ scopes, node: value.expression }) !== undefined &&
+      globalObjectName({ scopes, node: value.object }) !== undefined &&
       memberName(value) === "Reflect"
     );
   }
@@ -541,45 +591,100 @@ const registerModule = ({
   }
 };
 
-const isInsideType = (node: ts.Node): boolean => {
-  let ancestor = node.parent;
-  while (!ts.isSourceFile(ancestor) && !ts.isStatement(ancestor)) {
-    if (ts.isTypeNode(ancestor)) {
+// The nodes the compiler API calls type nodes, including heritage clauses
+// (`implements X`) and instantiation expressions (`f<T>`).
+const TYPE_NODES: ReadonlySet<string> = new Set([
+  "TSAnyKeyword",
+  "TSBigIntKeyword",
+  "TSBooleanKeyword",
+  "TSIntrinsicKeyword",
+  "TSNeverKeyword",
+  "TSNullKeyword",
+  "TSNumberKeyword",
+  "TSObjectKeyword",
+  "TSStringKeyword",
+  "TSSymbolKeyword",
+  "TSUndefinedKeyword",
+  "TSUnknownKeyword",
+  "TSVoidKeyword",
+  "TSArrayType",
+  "TSConditionalType",
+  "TSConstructorType",
+  "TSFunctionType",
+  "TSImportType",
+  "TSIndexedAccessType",
+  "TSInferType",
+  "TSIntersectionType",
+  "TSLiteralType",
+  "TSMappedType",
+  "TSNamedTupleMember",
+  "TSOptionalType",
+  "TSRestType",
+  "TSTemplateLiteralType",
+  "TSThisType",
+  "TSTupleType",
+  "TSTypeLiteral",
+  "TSTypeOperator",
+  "TSTypePredicate",
+  "TSTypeQuery",
+  "TSTypeReference",
+  "TSUnionType",
+  "TSParenthesizedType",
+  "JSDocNullableType",
+  "JSDocNonNullableType",
+  "JSDocUnknownType",
+  "TSTypeAnnotation",
+  "TSTypeParameterInstantiation",
+  "TSInstantiationExpression",
+  "TSInterfaceHeritage",
+  "TSClassImplements",
+]);
+
+const isTypeNode = (node: Node): boolean => TYPE_NODES.has(node.type);
+
+const isInsideType = (scopes: BindingScopes, node: Node): boolean => {
+  for (
+    let ancestor = scopes.parents.get(node);
+    ancestor !== undefined &&
+    !ancestor.type.endsWith("Statement") &&
+    !ancestor.type.endsWith("Declaration");
+    ancestor = scopes.parents.get(ancestor)
+  ) {
+    if (isTypeNode(ancestor)) {
       return true;
     }
-    ancestor = ancestor.parent;
   }
   return false;
 };
 
+// Null for a side-effect, default or namespace import.
 const moduleNamesFromImport = (
-  clause: ts.ImportClause | undefined,
+  node: ImportDeclaration,
+  sourceText: string,
 ): readonly string[] | null => {
-  const named = clause?.namedBindings;
-  if (clause?.name || !named || !ts.isNamedImports(named)) {
+  // `import "x"` has no clause, where `import {} from "x"` names nothing.
+  const clauseless =
+    node.specifiers.length === 0 &&
+    sourceText.slice(node.start, node.source.start).trim() === "import";
+  if (
+    clauseless ||
+    node.specifiers.some((specifier) => specifier.type !== "ImportSpecifier")
+  ) {
     return null;
   }
-  return named.elements
-    .filter((element) => !element.isTypeOnly)
-    .map((element) => (element.propertyName ?? element.name).text);
-};
-
-const moduleNamesFromExport = (
-  clause: ts.NamedExportBindings | undefined,
-): readonly string[] | null => {
-  if (!clause || !ts.isNamedExports(clause)) {
-    return null;
-  }
-  return clause.elements
-    .filter((element) => !element.isTypeOnly)
-    .map((element) => (element.propertyName ?? element.name).text);
+  return node.specifiers.flatMap((specifier) =>
+    specifier.type === "ImportSpecifier" && specifier.importKind !== "type"
+      ? [exportName(specifier.imported)]
+      : [],
+  );
 };
 
 type VisitModuleLoadOptions = {
-  node: ts.Node;
+  node: Node;
   scopes: BindingScopes;
   register: ModuleRegistration;
   file: string;
+  sourceText: string;
   capabilities: Set<string>;
 };
 
@@ -588,97 +693,118 @@ const visitModuleLoad = ({
   scopes,
   register,
   file,
+  sourceText,
   capabilities,
 }: VisitModuleLoadOptions): void => {
-  if (
-    ts.isImportDeclaration(node) &&
-    ts.isStringLiteralLike(node.moduleSpecifier)
-  ) {
-    const clause = node.importClause;
-    if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
+  if (node.type === "ImportDeclaration") {
+    if (node.importKind === "type") {
       return;
     }
-    const names = moduleNamesFromImport(clause);
-    if (names === null || names.length > 0 || clause?.name || !clause) {
-      register(node.moduleSpecifier.text, names);
-    }
-    return;
-  }
-  if (
-    ts.isExportDeclaration(node) &&
-    !node.isTypeOnly &&
-    node.moduleSpecifier &&
-    ts.isStringLiteralLike(node.moduleSpecifier)
-  ) {
-    const names = moduleNamesFromExport(node.exportClause);
+    const names = moduleNamesFromImport(node, sourceText);
     if (names === null || names.length > 0) {
-      register(node.moduleSpecifier.text, names);
+      register(node.source.value, names);
+    }
+    return;
+  }
+  if (node.type === "ExportAllDeclaration" && node.exportKind !== "type") {
+    register(node.source.value, null);
+    return;
+  }
+  if (
+    node.type === "ExportNamedDeclaration" &&
+    node.exportKind !== "type" &&
+    node.source
+  ) {
+    const names = node.specifiers.flatMap((specifier) =>
+      specifier.exportKind === "type" ? [] : [exportName(specifier.local)],
+    );
+    if (names.length > 0) {
+      register(node.source.value, names);
     }
     return;
   }
   if (
-    ts.isImportEqualsDeclaration(node) &&
-    !node.isTypeOnly &&
-    ts.isExternalModuleReference(node.moduleReference)
+    node.type === "TSImportEqualsDeclaration" &&
+    node.importKind !== "type" &&
+    node.moduleReference.type === "TSExternalModuleReference"
   ) {
-    const specifier = unwrap(node.moduleReference.expression);
-    if (ts.isStringLiteralLike(specifier)) {
-      register(specifier.text, null);
+    const specifier = literalText(unwrap(node.moduleReference.expression));
+    if (specifier !== undefined) {
+      register(specifier, null);
     }
     return;
   }
-  if (!ts.isCallExpression(node)) {
+  let specifier: Node | undefined;
+  if (node.type === "ImportExpression") {
+    specifier = node.source;
+  } else if (node.type === "CallExpression") {
+    const callee = unwrap(node.callee);
+    if (
+      callee.type !== "Identifier" ||
+      callee.name !== "require" ||
+      lookupBinding({ scopes, node: callee, name: callee.name }) !== undefined
+    ) {
+      return;
+    }
+    specifier = node.arguments.at(0);
+  } else {
     return;
   }
-  const callee = unwrap(node.expression);
-  if (
-    callee.kind !== ts.SyntaxKind.ImportKeyword &&
-    !(
-      ts.isIdentifier(callee) &&
-      callee.text === "require" &&
-      lookupBinding({ scopes, node: callee, name: callee.text }) === undefined
-    )
-  ) {
+  const value = specifier && literalText(unwrap(specifier));
+  if (value !== undefined) {
+    register(value, dynamicLoadNames(scopes, node));
     return;
   }
-  const specifier = node.arguments.at(0);
-  const value = specifier && unwrap(specifier);
-  if (value && ts.isStringLiteralLike(value)) {
-    register(value.text, dynamicLoadNames(node));
-    return;
-  }
-  if (
-    callee.kind === ts.SyntaxKind.ImportKeyword &&
-    file === LOCAL_MODULE_LOADER_OWNER
-  ) {
+  if (node.type === "ImportExpression" && file === LOCAL_MODULE_LOADER_OWNER) {
     capabilities.add("local:module-import");
     return;
   }
   capabilities.add(INDIRECT_TRANSPORT);
 };
 
-const isGlobalNamePosition = (node: ts.Identifier): boolean => {
-  const parent = node.parent;
+// Whether `node` names a member, a declared property or an import/export
+// binding rather than reading a value.
+const isGlobalNamePosition = (scopes: BindingScopes, node: Node): boolean => {
+  const parent = scopes.parents.get(node);
+  if (parent === undefined) {
+    return false;
+  }
+  if (parent.type === "MemberExpression") {
+    return !parent.computed && parent.property === node;
+  }
+  // Object literal entries and methods, and the member a destructuring
+  // entry names (`{ fetch: local }`); a shorthand entry reads its binding.
+  if (parent.type === "Property") {
+    return (
+      parent.key === node &&
+      !parent.computed &&
+      !parent.shorthand &&
+      parent.kind === "init"
+    );
+  }
   if (
-    (ts.isPropertyAccessExpression(parent) ||
-      ts.isPropertyAssignment(parent) ||
-      ts.isMethodDeclaration(parent) ||
-      ts.isPropertyDeclaration(parent) ||
-      ts.isMethodSignature(parent) ||
-      ts.isPropertySignature(parent) ||
-      ts.isJsxAttribute(parent)) &&
-    parent.name === node
+    parent.type === "MethodDefinition" ||
+    parent.type === "TSAbstractMethodDefinition"
   ) {
-    return true;
+    return parent.key === node && !parent.computed && parent.kind === "method";
   }
-  if (ts.isBindingElement(parent) && parent.propertyName === node) {
-    return true;
+  if (
+    parent.type === "PropertyDefinition" ||
+    parent.type === "TSAbstractPropertyDefinition" ||
+    parent.type === "AccessorProperty" ||
+    parent.type === "TSAbstractAccessorProperty" ||
+    parent.type === "TSPropertySignature"
+  ) {
+    return parent.key === node && !parent.computed;
   }
-  return ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent);
+  if (parent.type === "TSMethodSignature") {
+    return parent.key === node && !parent.computed && parent.kind === "method";
+  }
+  return parent.type === "ImportSpecifier" || parent.type === "ExportSpecifier";
 };
 
 type VisitGlobalReferenceOptions = {
-  node: ts.Node;
+  node: Node;
   scopes: BindingScopes;
   capabilities: Set<string>;
 };
@@ -686,42 +812,39 @@ type VisitGlobalReferenceOptions = {
 type DestructuredMember = { member: string | undefined; isRest: boolean };
 type GlobalDestructuring = {
   members: DestructuredMember[];
-  value: ts.Expression;
+  value: Expression;
   isAssignment: boolean;
 };
 
-const globalDestructuring = (
-  node: ts.Node,
-): GlobalDestructuring | undefined => {
+const destructuredMembers = (
+  pattern: Extract<Node, { type: "ObjectPattern" }>,
+): DestructuredMember[] =>
+  pattern.properties.map((element) => ({
+    member: destructuredMemberName(element),
+    isRest: element.type === "RestElement",
+  }));
+
+const globalDestructuring = (node: Node): GlobalDestructuring | undefined => {
   if (
-    ts.isVariableDeclaration(node) &&
-    ts.isObjectBindingPattern(node.name) &&
-    node.initializer
+    node.type === "VariableDeclarator" &&
+    node.id.type === "ObjectPattern" &&
+    node.init
   ) {
     return {
-      members: node.name.elements.map((element) => ({
-        member: bindingMemberName(element),
-        isRest: element.dotDotDotToken !== undefined,
-      })),
-      value: node.initializer,
+      members: destructuredMembers(node.id),
+      value: node.init,
       isAssignment: false,
     };
   }
   if (
-    !ts.isBinaryExpression(node) ||
-    node.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+    node.type !== "AssignmentExpression" ||
+    node.operator !== "=" ||
+    node.left.type !== "ObjectPattern"
   ) {
     return undefined;
   }
-  const pattern = objectLiteralExpression(node.left);
-  if (!pattern) {
-    return undefined;
-  }
   return {
-    members: pattern.properties.map((element) => ({
-      member: assignmentMemberName(element),
-      isRest: ts.isSpreadAssignment(element),
-    })),
+    members: destructuredMembers(node.left),
     value: node.right,
     isAssignment: true,
   };
@@ -759,11 +882,8 @@ const visitGlobalReference = ({
   scopes,
   capabilities,
 }: VisitGlobalReferenceOptions): void => {
-  if (
-    ts.isPropertyAccessExpression(node) ||
-    ts.isElementAccessExpression(node)
-  ) {
-    const object = globalObjectName({ scopes, node: node.expression });
+  if (node.type === "MemberExpression") {
+    const object = globalObjectName({ scopes, node: node.object });
     const name = memberName(node);
     if (object && name === undefined) {
       capabilities.add(INDIRECT_TRANSPORT);
@@ -775,12 +895,11 @@ const visitGlobalReference = ({
     });
   }
   visitGlobalDestructuring({ node, scopes, capabilities });
-  if (ts.isCallExpression(node)) {
-    const callee = unwrap(node.expression);
+  if (node.type === "CallExpression") {
+    const callee = unwrap(node.callee);
     if (
-      (ts.isPropertyAccessExpression(callee) ||
-        ts.isElementAccessExpression(callee)) &&
-      isReflectObject({ scopes, node: callee.expression })
+      callee.type === "MemberExpression" &&
+      isReflectObject({ scopes, node: callee.object })
     ) {
       const target = node.arguments.at(0);
       const object = target
@@ -789,40 +908,39 @@ const visitGlobalReference = ({
       if (object) {
         capabilities.add(INDIRECT_TRANSPORT);
         const key = node.arguments.at(1);
-        const value = key && unwrap(key);
         registerGlobal({
           capabilities,
           object,
-          name: value && ts.isStringLiteralLike(value) ? value.text : undefined,
+          name: key && literalText(unwrap(key)),
         });
       }
     }
   }
   if (
-    ts.isVariableDeclaration(node) &&
-    ts.isIdentifier(node.name) &&
-    node.initializer &&
-    (globalObjectName({ scopes, node: node.initializer }) !== undefined ||
-      isReflectObject({ scopes, node: node.initializer }))
+    node.type === "VariableDeclarator" &&
+    node.id.type === "Identifier" &&
+    node.init &&
+    (globalObjectName({ scopes, node: node.init }) !== undefined ||
+      isReflectObject({ scopes, node: node.init }))
   ) {
     capabilities.add(INDIRECT_TRANSPORT);
   }
   if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    node.type === "AssignmentExpression" &&
+    node.operator === "=" &&
     (globalObjectName({ scopes, node: node.right }) !== undefined ||
       isReflectObject({ scopes, node: node.right }))
   ) {
     capabilities.add(INDIRECT_TRANSPORT);
   }
   if (
-    ts.isIdentifier(node) &&
-    GLOBAL_TRANSPORT_NAMES.has(node.text) &&
-    !isInsideType(node) &&
-    lookupBinding({ scopes, node, name: node.text }) === undefined &&
-    !isGlobalNamePosition(node)
+    node.type === "Identifier" &&
+    GLOBAL_TRANSPORT_NAMES.has(node.name) &&
+    !isInsideType(scopes, node) &&
+    lookupBinding({ scopes, node, name: node.name }) === undefined &&
+    !isGlobalNamePosition(scopes, node)
   ) {
-    capabilities.add(`global:${node.text}`);
+    capabilities.add(`global:${node.name}`);
   }
 };
 
@@ -832,7 +950,7 @@ type VisitContext = {
   scopes: BindingScopes;
 };
 
-const visitSource = (source: ts.SourceFile, context: VisitContext): void => {
+const visitSource = (source: ParsedSource, context: VisitContext): void => {
   const register: ModuleRegistration = (specifier, names) => {
     registerModule({
       capabilities: context.capabilities,
@@ -841,15 +959,24 @@ const visitSource = (source: ts.SourceFile, context: VisitContext): void => {
       names,
     });
   };
-  const visit = (node: ts.Node): void => {
-    if (ts.isTypeNode(node)) {
-      return;
+  // A class's `extends` expression is a heritage clause, a type position.
+  const heritage = new Set<Node>();
+  walkSyntax(source.program, (node) => {
+    if (isTypeNode(node) || heritage.has(node)) {
+      return "skip-children";
+    }
+    if (
+      (node.type === "ClassDeclaration" || node.type === "ClassExpression") &&
+      node.superClass
+    ) {
+      heritage.add(node.superClass);
     }
     visitModuleLoad({
       node,
       scopes: context.scopes,
       register,
       file: context.file,
+      sourceText: source.sourceText,
       capabilities: context.capabilities,
     });
     visitGlobalReference({
@@ -857,9 +984,8 @@ const visitSource = (source: ts.SourceFile, context: VisitContext): void => {
       scopes: context.scopes,
       capabilities: context.capabilities,
     });
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+    return undefined;
+  });
 };
 
 /** Enumerate transport capability acquisition, including captured functions. */
@@ -867,7 +993,7 @@ export const outboundTransportReferences = ({
   file,
   text,
 }: OutboundTransportReferencesOptions): string[] => {
-  const source = parseSource({ fileName: file, text });
+  const source = parseSyntax({ fileName: file, text });
   const scopes = collectBindings(source);
   const capabilities = new Set<string>();
   visitSource(source, { capabilities, file, scopes });
