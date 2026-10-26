@@ -434,6 +434,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
   ]),
+  fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
+    "no-justified-reader-text/no-justified-reader-text",
+  ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
   ]),
@@ -963,13 +966,13 @@ const customCssClassNames = [
   "reader-body",
   "reader-case-law",
   "reader-chrome",
-  "reader-justify",
   "reader-note-back",
   "reader-note-label",
   "reader-note-ref",
   "reader-page-marker",
   "reader-page-tick",
   "reader-paper",
+  "reader-prose",
   "reader-scroll",
   "reader-signature",
   "reader-statute",
@@ -1910,6 +1913,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
+    "./.oxlint-plugins/no-justified-reader-text.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
@@ -3637,6 +3641,7 @@ const config = defineConfig({
       // says so with `reader-chrome`, quoted text outside the root with
       // `reader-body`.
       files: [
+        "packages/decision-reader/src/**/*.tsx",
         "apps/web/src/components/legal-reader/**/*.tsx",
         "apps/web/src/features/case-law/components/case-viewer/**/*.tsx",
         "apps/web/src/features/statutes/components/**/*.tsx",
@@ -3644,6 +3649,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-font-utility-in-reader/no-font-utility-in-reader": "error",
+      },
+    },
+    {
+      // Reader text is start-aligned by `reader-prose` in reader.css;
+      // justification stretches word spaces around long unbreakable tokens.
+      files: [
+        "packages/decision-reader/src/**/*.tsx",
+        "apps/web/src/components/legal-reader/**/*.tsx",
+        "apps/web/src/features/case-law/**/*.tsx",
+        "apps/web/src/features/statutes/**/*.tsx",
+        "apps/landing/src/components/react/previews/CaseLawReaderPreview.tsx",
+        ".oxlint-plugins/__fixtures__/no-justified-reader-text.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-justified-reader-text/no-justified-reader-text": "error",
       },
     },
     {
