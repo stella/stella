@@ -909,7 +909,16 @@ const liftSuperscripts = (
     return groups.map((group) => {
       const x = group.at(0)?.bbox.x ?? 0;
       return {
-        after: printed.filter(({ bbox }) => bbox.x + bbox.width / 2 < x).length,
+        // Counted in printed code points, as `withSuperscripts` places it: one
+        // extracted glyph may carry several (a ligature reads "fi").
+        after: printed
+          .filter(({ bbox }) => bbox.x + bbox.width / 2 < x)
+          .reduce(
+            (count, { char }) =>
+              count +
+              [...char].filter((character) => !/\s/u.test(character)).length,
+            0,
+          ),
         text: group.map(({ char }) => char).join(""),
       };
     });
