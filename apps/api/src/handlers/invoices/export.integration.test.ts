@@ -14,6 +14,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoices from "@/api/handlers/invoices/export";
 import { createInvoicesExport } from "@/api/handlers/invoices/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -172,7 +173,7 @@ const context = (
       method: "POST",
       headers: { "Accept-Language": "cs" },
     }),
-    route: "/test/invoices/export",
+    route: "/v1/invoices/:workspaceId/export" satisfies ApiRoutePath,
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
     scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
     session: { activeOrganizationId: organizationId },
