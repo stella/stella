@@ -173,11 +173,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
-        "Re-evaluate stored KIO documents with bounded HTML parsing and typed resource dispositions.",
+        "Re-read procurement documents: printed lines join into paragraphs, page numbers go, small-type indices are raised and list labels spaced.",
     },
   },
   [ADAPTER_KEYS.PL_TK]: {
