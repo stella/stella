@@ -22,6 +22,41 @@ type IdempotentMutationOptions<TData, TError, TVariables, TContext> = Omit<
   ) => Promise<TData>;
 };
 
+const callbacksForSubmission = <TData, TError, TVariables, TContext>(
+  callbacks: MutateOptions<TData, TError, TVariables, TContext> | undefined,
+) =>
+  ({
+    onSuccess: (data, submission, result, context) =>
+      callbacks?.onSuccess?.(
+        data,
+        submission[IDEMPOTENT_SUBMISSION],
+        result,
+        context,
+      ),
+    onError: (error, submission, result, context) =>
+      callbacks?.onError?.(
+        error,
+        submission[IDEMPOTENT_SUBMISSION],
+        result,
+        context,
+      ),
+    onSettled: (...args) => {
+      const [data, error, submission, result, context] = args;
+      return callbacks?.onSettled?.(
+        data,
+        error,
+        submission[IDEMPOTENT_SUBMISSION],
+        result,
+        context,
+      );
+    },
+  }) satisfies MutateOptions<
+    TData,
+    TError,
+    MutationSubmission<TVariables, TData>,
+    TContext
+  >;
+
 /** Capture the intent before TanStack starts a mutation, so every automatic retry keeps its key. */
 export const useIdempotentMutation = <
   TData,
@@ -65,40 +100,6 @@ export const useIdempotentMutation = <
       );
     },
   });
-  const callbacksForSubmission = (
-    callbacks: MutateOptions<TData, TError, TVariables, TContext> | undefined,
-  ) =>
-    ({
-      onSuccess: (data, submission, result, context) =>
-        callbacks?.onSuccess?.(
-          data,
-          submission[IDEMPOTENT_SUBMISSION],
-          result,
-          context,
-        ),
-      onError: (error, submission, result, context) =>
-        callbacks?.onError?.(
-          error,
-          submission[IDEMPOTENT_SUBMISSION],
-          result,
-          context,
-        ),
-      onSettled: (...args) => {
-        const [data, error, submission, result, context] = args;
-        return callbacks?.onSettled?.(
-          data,
-          error,
-          submission[IDEMPOTENT_SUBMISSION],
-          result,
-          context,
-        );
-      },
-    }) satisfies MutateOptions<
-      TData,
-      TError,
-      MutationSubmission<TVariables, TData>,
-      TContext
-    >;
   const captureSubmission = (variables: TVariables) => {
     const operation = idempotencyScope;
     const send = mutationFn;

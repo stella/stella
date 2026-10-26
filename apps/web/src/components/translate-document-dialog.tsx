@@ -390,7 +390,11 @@ export const TranslateDocumentDialog = (
                   output: "translated" as const,
                   engine: "deepl" as const,
                 },
-                send: (body, request) => client.post(body, request),
+                send: async (body, request) => {
+                  const reply = await client.post(body, request);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           case "translated:ai":
@@ -410,7 +414,11 @@ export const TranslateDocumentDialog = (
                   engine: "ai" as const,
                   entityVersionId,
                 },
-                send: (body, request) => client.post(body, request),
+                send: async (body, request) => {
+                  const reply = await client.post(body, request);
+                  unwrapApiResponse(reply);
+                  return reply;
+                },
               }),
             );
           }

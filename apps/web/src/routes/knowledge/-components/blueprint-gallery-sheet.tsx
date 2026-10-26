@@ -162,8 +162,11 @@ const BlueprintGallerySheetBody = ({
       const response = await submitIntent.run({
         operation: "skills.from-blueprint",
         body: { scope, blueprintId: id, ...bindingFields },
-        send: (body, request) =>
-          api.skills["from-blueprint"].post(body, request),
+        send: async (body, request) => {
+          const reply = await api.skills["from-blueprint"].post(body, request);
+          unwrapApiResponse(reply);
+          return reply;
+        },
       });
       return { id: unwrapApiResponse(response).id };
     },
