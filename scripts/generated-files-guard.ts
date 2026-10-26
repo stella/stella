@@ -14,6 +14,9 @@ import {
 } from "./generated-files";
 
 const ROOT = new URL("..", import.meta.url);
+
+// The census's computed reads are workspace package manifests, never Markdown.
+export const CI_MARKDOWN_READER_INPUTS = [] as const;
 const decode = (value: Uint8Array) => new TextDecoder().decode(value);
 const splitPaths = (value: Uint8Array) =>
   decode(value).split("\0").filter(Boolean);
