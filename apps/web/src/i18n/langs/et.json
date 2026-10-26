@@ -6326,7 +6326,6 @@
           "approvedBy": "Kinnitaja",
           "channel": "Kanal",
           "dateTime": "Kuupäev ja kellaaeg",
-          "eventId": "Sündmuse ID",
           "notAvailable": "Pole saadaval",
           "openTarget": "Ava üksus",
           "runId": "Käivituse ID",

@@ -30,6 +30,16 @@ import {
 } from "@stll/ui/combobox";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import {
+  Dialog,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/dialog";
+import {
   AiActionIcon,
   ChevronDownIcon,
   Clock3Icon,
@@ -61,16 +71,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import {
-  Sheet,
-  SheetClose,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetPanel,
-  SheetPopup,
-  SheetTitle,
-} from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -127,7 +127,7 @@ import {
 type ActivityPanelProps = { workspaceId: string };
 
 /** The matter whose activity is shown; file thumbnails are served per matter. */
-const ActivityWorkspaceContext = createContext<string | null>(null);
+export const ActivityWorkspaceContext = createContext<string | null>(null);
 
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
@@ -758,7 +758,7 @@ const ActivityTimeline = ({
       <div className="bg-background ring-foreground/5 overflow-hidden rounded-xl shadow-sm ring-1">
         {activityContent}
       </div>
-      <ActivityDetailsSheet
+      <ActivityDetailsDialog
         group={selectedGroup}
         onOpenChange={(open) => {
           if (!open) {
@@ -1369,7 +1369,7 @@ const ActivityList = ({
   );
 };
 
-const ActivityDetailsSheet = ({
+export const ActivityDetailsDialog = ({
   group,
   onOpenChange,
   workspaceId,
@@ -1442,13 +1442,6 @@ const ActivityDetailsSheet = ({
                               MEDIUM_DATE_SHORT_TIME_FORMAT,
                             )}
                           </time>
-                          <span aria-hidden="true"> · </span>
-                          {t(
-                            "workspaces.overview.activity.details.eventId",
-                          )}:{" "}
-                          <BidiText as="span" className="break-all">
-                            {batchItem.id}
-                          </BidiText>
                         </span>
                       </span>
                     </>
@@ -1514,24 +1507,20 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    {
-      label: t("workspaces.overview.activity.details.eventId"),
-      value: <BidiText as="span">{item.id}</BidiText>,
-    },
   ];
 
   return (
-    <Sheet onOpenChange={onOpenChange} open>
-      <SheetPopup side="inline-end" variant="inset">
-        <SheetHeader>
-          <SheetTitle>
+    <Dialog onOpenChange={onOpenChange} open>
+      <DialogPopup>
+        <DialogHeader>
+          <DialogTitle>
             {t("workspaces.overview.activity.details.title")}
-          </SheetTitle>
-          <SheetDescription className="text-foreground pe-8">
+          </DialogTitle>
+          <DialogDescription className="text-foreground pe-8">
             <ActivityTriplet group={group} size="default" />
-          </SheetDescription>
-        </SheetHeader>
-        <SheetPanel>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel>
           <DetailsGrid>
             {rows.map((row) => (
               <DetailsItem key={row.label} label={row.label}>
@@ -1539,22 +1528,22 @@ const ActivityDetailsSheet = ({
               </DetailsItem>
             ))}
           </DetailsGrid>
-        </SheetPanel>
-        <SheetFooter>
-          <SheetClose render={<Button variant="ghost" />}>
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
             {t("common.close")}
-          </SheetClose>
+          </DialogClose>
           {openTarget && (
-            <SheetClose
+            <DialogClose
               onClick={openTarget}
               render={<Button variant="default" />}
             >
               {t("workspaces.overview.activity.details.openTarget")}
-            </SheetClose>
+            </DialogClose>
           )}
-        </SheetFooter>
-      </SheetPopup>
-    </Sheet>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
   );
 };
 

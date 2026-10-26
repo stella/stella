@@ -6326,7 +6326,6 @@
           "approvedBy": "Zatwierdził(a)",
           "channel": "Kanał",
           "dateTime": "Data i godzina",
-          "eventId": "ID zdarzenia",
           "notAvailable": "Niedostępne",
           "openTarget": "Otwórz element",
           "runId": "ID uruchomienia",
