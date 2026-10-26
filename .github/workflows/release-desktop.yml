@@ -110,6 +110,7 @@ jobs:
           persist-credentials: false
 
       - name: Resolve release ref
+        timeout-minutes: 5
         id: ref
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

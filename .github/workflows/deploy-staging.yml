@@ -683,6 +683,7 @@ jobs:
       # skipped by `needs` instead of blocking on a commit that will never
       # be served.
       - name: Resolve RC manifest images
+        timeout-minutes: 5
         id: rc-images
         if: inputs.release_ref != ''
         env:
@@ -699,6 +700,8 @@ jobs:
           echo "web=$(jq -er '.webImage.digest' "$manifest")" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to staging
+        # Waits for the infra staging promote; the job's other steps keep the rest.
+        timeout-minutes: 350
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}

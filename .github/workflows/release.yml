@@ -700,6 +700,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Reuse an existing release receipt
+        timeout-minutes: 5
         id: existing
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1408,6 +1409,9 @@ jobs:
           persist-credentials: false
 
       - name: Promote to production
+        # Waits for the infra promote, online migrations included: only the
+        # verification steps after it need the rest of the job's window.
+        timeout-minutes: 350
         uses: ./.github/actions/promote-dispatch
         with:
           app-client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}

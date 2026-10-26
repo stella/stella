@@ -21,15 +21,14 @@ jq -e -n --slurpfile contract "$contract" --slurpfile staging "$work/staging.jso
 container="$(docker run -d -p 127.0.0.1::3002 "$image")"
 trap 'docker rm -f "$container" >/dev/null' EXIT
 port="$(docker port "$container" 3002/tcp | cut -d: -f2)"
-origin="http://127.0.0.1:$port"
 trap 'docker rm -f "$container" >/dev/null; rm -rf "$work"' EXIT
-curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 2 "$origin/" > "$work/index.html"
+curl --fail --silent --show-error --retry 12 --retry-connrefused --retry-delay 2 "http://127.0.0.1:$port/" > "$work/index.html"
 # Read the image's build inventory rather than assuming HTML links all lazy chunks.
 docker cp "$container:/app/apps/web/dist/.stella-client-assets" "$work/assets"
 awk '/\/[A-Za-z0-9_-]+-[A-Za-z0-9_-]+\.(js|css)$/ { print; count++; if (count == 3) exit }' "$work/assets" > "$work/probes"
 [[ "$(wc -l < "$work/probes" | tr -d ' ')" == 3 ]]
 while IFS= read -r asset; do
   docker cp "$container:/app/apps/web/dist/client/$asset" "$work/expected-asset"
-  curl --fail --silent --show-error "$origin/$asset" > "$work/served-asset"
+  curl --fail --silent --show-error "http://127.0.0.1:$port/$asset" > "$work/served-asset"
   cmp "$work/expected-asset" "$work/served-asset"
 done < "$work/probes"
