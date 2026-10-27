@@ -473,47 +473,60 @@ test("read-only branches reject worker fallback", async () => {
   );
 });
 
-test("a workspace stylesheet imported by package name is part of the snapshot key", async () => {
-  // A workspace package changes without a new version, so the key reads the
-  // stylesheet itself and what it imports; otherwise an edited shared theme
-  // keeps the old snapshot name and the cache check passes on stale data.
-  const workspace = await mkdtemp(
-    path.join(tmpdir(), "stella-tailwind-workspace-key-"),
-  );
-  try {
-    const ui = path.join(workspace, "packages/ui");
-    await Bun.write(
-      path.join(ui, "package.json"),
-      JSON.stringify({
-        name: "@fixture/ui",
-        exports: { "./theme.css": "./theme.css" },
-      }),
+test.each([
+  { name: "direct export", target: "./theme.css" },
+  { name: "style export", target: { style: "./theme.css" } },
+  {
+    name: "style and default exports",
+    target: { style: "./theme.css", default: "./unused.css" },
+  },
+])(
+  "a workspace stylesheet with $name is part of the snapshot key",
+  async ({ target }) => {
+    // A workspace package changes without a new version, so the key reads the
+    // stylesheet itself and what it imports; otherwise an edited shared theme
+    // keeps the old snapshot name and the cache check passes on stale data.
+    const workspace = await mkdtemp(
+      path.join(tmpdir(), "stella-tailwind-workspace-key-"),
     );
-    await Bun.write(
-      path.join(ui, "theme.css"),
-      '@import "./extra.css";\n@theme { --color-shared: red; }\n',
-    );
-    await Bun.write(path.join(ui, "extra.css"), "@utility one { top: 0; }\n");
-    await mkdir(path.join(workspace, "node_modules/@fixture"), {
-      recursive: true,
-    });
-    await symlink(ui, path.join(workspace, "node_modules/@fixture/ui"));
-    const entry = path.join(workspace, "app/app.css");
-    await Bun.write(entry, '@import "@fixture/ui/theme.css";\n');
-    const key = () => path.basename(cacheArtifactPaths(entry).json);
-    const original = key();
-    await Bun.write(
-      path.join(ui, "theme.css"),
-      '@import "./extra.css";\n@theme { --color-shared: blue; }\n',
-    );
-    const themeEdited = key();
-    await Bun.write(path.join(ui, "extra.css"), "@utility one { top: 1px; }\n");
-    const importEdited = key();
-    expect(new Set([original, themeEdited, importEdited]).size).toBe(3);
-  } finally {
-    await rm(workspace, { recursive: true, force: true });
-  }
-});
+    try {
+      const ui = path.join(workspace, "packages/ui");
+      await Bun.write(
+        path.join(ui, "package.json"),
+        JSON.stringify({
+          name: "@fixture/ui",
+          exports: { "./theme.css": target },
+        }),
+      );
+      await Bun.write(
+        path.join(ui, "theme.css"),
+        '@import "./extra.css";\n@theme { --color-shared: red; }\n',
+      );
+      await Bun.write(path.join(ui, "extra.css"), "@utility one { top: 0; }\n");
+      await mkdir(path.join(workspace, "node_modules/@fixture"), {
+        recursive: true,
+      });
+      await symlink(ui, path.join(workspace, "node_modules/@fixture/ui"));
+      const entry = path.join(workspace, "app/app.css");
+      await Bun.write(entry, '@import "@fixture/ui/theme.css";\n');
+      const key = () => path.basename(cacheArtifactPaths(entry).json);
+      const original = key();
+      await Bun.write(
+        path.join(ui, "theme.css"),
+        '@import "./extra.css";\n@theme { --color-shared: blue; }\n',
+      );
+      const themeEdited = key();
+      await Bun.write(
+        path.join(ui, "extra.css"),
+        "@utility one { top: 1px; }\n",
+      );
+      const importEdited = key();
+      expect(new Set([original, themeEdited, importEdited]).size).toBe(3);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  },
+);
 
 test("the generation config sees every Tailwind rule the repository lint enables", () => {
   // oxlint.tailwind.config.ts copies the Tailwind rules of oxlint.config.ts
