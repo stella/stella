@@ -27,7 +27,7 @@ import {
   publicFixtureReadySelector,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
-import type { api } from "@/lib/api";
+import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
@@ -35,7 +35,12 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
-  suite?: "leaf-shells" | "law-hosts" | "professional-use" | "route-search";
+  suite?:
+    | "leaf-shells"
+    | "law-hosts"
+    | "professional-use"
+    | "route-search"
+    | "chat-composer";
   /** The router's reading of a URL, which the route-search suite checks with. */
   parseSearch?: (searchStr: string) => Record<string, unknown>;
 };
@@ -347,7 +352,41 @@ const installFixtureNetwork = () => {
         >);
       }
       if (/^\/v1\/chat\/threads\/[0-9a-f-]{36}\/messages$/u.test(pathname)) {
+        if (new URL(url).searchParams.get("allowMissingThread") === "true") {
+          return Response.json({
+            activeSkill: null,
+            activeTurnId: null,
+            attachedFiles: { fileCount: 0, files: [] },
+            context: null,
+            contextMatterIds: [],
+            forkProvenance: { type: "none" },
+            lastActivityAt: null,
+            messages: [],
+            model: null,
+            olderCursor: null,
+            reasoningEffort: null,
+            threadExists: false,
+            threadRevision: null,
+            usedAnonymization: false,
+            webSearchAvailable: false,
+            webSearchEnabled: false,
+          } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]);
+        }
         return Response.json({ message: "Not found" }, { status: 404 });
+      }
+      if (pathname === "/v1/skills") {
+        return Response.json({
+          builtIn: [],
+          installed: [],
+          canManageTeam: false,
+          limit: 100,
+          nextCursor: null,
+        } satisfies WebApiRoutes["skills"]["get"]["response"][200]);
+      }
+      if (pathname === "/v1/chat/skill-availability") {
+        return Response.json({
+          unavailable: [],
+        } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
       }
       if (pathname === "/v1/chat/threads") {
         return Response.json({
@@ -1430,6 +1469,47 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
     },
   );
 };
+const declareChatComposerCases = (fixture: FixtureRuntime) => {
+  if (fixture.suite !== "chat-composer") {
+    return;
+  }
+  test("direct chat route mounts its editable composer through the actual member frame", async () => {
+    const { getByRole } = await import("@testing-library/dom");
+    fixture.state.audience = "member";
+    const { router, queryClient, caughtErrors } =
+      fixture.createFixtureRouter("/chat");
+    await fixture.initializeI18n();
+    try {
+      await fixture.act(async () => {
+        await router.load();
+        fixture.render(<fixture.RouterProvider router={router} />, {
+          container: document,
+          onCaughtError: (error) => {
+            caughtErrors.push(
+              error instanceof Error ? error : panic(String(error)),
+            );
+          },
+        });
+      });
+      await fixture.waitFor(() => {
+        const composer = getByRole(document.body, "textbox", {
+          name: /^Type your question/u,
+        });
+        expect(composer.getAttribute("contenteditable")).toBe("true");
+        expect(router.state.location.pathname).toBe("/chat");
+        expect(caughtErrors).toEqual([]);
+        expect(fixture.unexpectedRequests).toEqual([]);
+      });
+    } finally {
+      await fixture.act(async () => {
+        fixture.cleanup();
+        await queryClient.cancelQueries();
+        queryClient.clear();
+      });
+    }
+  });
+};
+
 /** Actual ancestors and public initial pages; leaf guards use recorded fixture data. */
 export const declareRouteShellProviderFixture = async (
   options: RouteShellProviderFixtureOptions,
@@ -1441,6 +1521,7 @@ export const declareRouteShellProviderFixture = async (
   declareLeafCases(fixture);
   await declareLawCases(fixture);
   declareProfessionalUseCases(fixture);
+  declareChatComposerCases(fixture);
   const {
     suite,
     selectedLeaves,
