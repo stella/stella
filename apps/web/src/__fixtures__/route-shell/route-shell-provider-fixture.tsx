@@ -461,6 +461,19 @@ const installFixtureNetwork = () => {
           Awaited<ReturnType<(typeof api)["search-history"]["get"]>>["data"]
         >);
       }
+      // The sidebar's Time link counts the entries waiting for approval.
+      if (pathname === "/v1/time-entries/approval-queue") {
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          limit: 1,
+          pendingCount: 0,
+        } satisfies NonNullable<
+          Awaited<
+            ReturnType<(typeof api)["time-entries"]["approval-queue"]["get"]>
+          >["data"]
+        >);
+      }
       if (pathname === "/health") {
         return Response.json({ status: "ok", version: "test" });
       }

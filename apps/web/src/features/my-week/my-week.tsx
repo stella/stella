@@ -109,9 +109,7 @@ const dialogDefaults = (dialog: WeekDialog): ManualTimeEntryValues => {
 
 /** A draft in a matter can move to another; reviewed or internal time stays. */
 const movableMatterOf = (entry: MyTimeEntry): MatterOption | null =>
-  entry.status === "draft" &&
-  entry.workspaceId !== null &&
-  entry.workspaceName !== null
+  entry.status === "draft" && entry.workspaceId !== null
     ? {
         id: entry.workspaceId,
         name: entry.workspaceName,
