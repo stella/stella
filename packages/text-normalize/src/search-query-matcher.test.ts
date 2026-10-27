@@ -159,7 +159,7 @@ describe("filterBySearchQuery", () => {
     ).toEqual(["Antonín Dvořák", "Élise Dupré"]);
   });
 
-  test.each(["", " ", "\t\n", "\u00a0\u2003"])(
+  test.each(["", " ", "\t\n", "\u00a0\u2003", "\u0301", "\u064e"])(
     "keeps items with empty or missing search fields for blank query %j",
     (query) => {
       const items = [1, 2, 3];
