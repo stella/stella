@@ -428,7 +428,7 @@ const installFixtureNetwork = () => {
         return Response.json({
           decisions: 0,
           updatedAt: null,
-          courts: [],
+          health: "unknown",
         } satisfies NonNullable<
           Awaited<ReturnType<typeof api.case.decisions.status.get>>["data"]
         >);

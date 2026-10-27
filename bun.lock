@@ -1235,6 +1235,7 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "oxc-parser": "catalog:",
       },
     },
     "packages/redis-config": {
@@ -1331,7 +1332,6 @@
         "better-result": "catalog:",
         "oxc-parser": "catalog:",
         "oxc-transform-react": "catalog:",
-        "typescript6": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",

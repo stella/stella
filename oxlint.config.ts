@@ -425,11 +425,17 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-raw-file-input.fixture.tsx", [
     "no-raw-file-input/no-raw-file-input",
   ]),
+  fixtureRuleOverride("no-person-select.fixture.tsx", [
+    "no-person-select/no-person-select",
+  ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
   fixtureRuleOverride("no-font-utility-in-reader.fixture.tsx", [
     "no-font-utility-in-reader/no-font-utility-in-reader",
+  ]),
+  fixtureRuleOverride("no-justified-reader-text.fixture.tsx", [
+    "no-justified-reader-text/no-justified-reader-text",
   ]),
   fixtureRuleOverride("dialog-footer-owns-actions.fixture.tsx", [
     "dialog-footer-owns-actions/dialog-footer-owns-actions",
@@ -778,6 +784,15 @@ const webUseIntlFormatterImport = {
     "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
 };
 
+// A citation's kind decides its chip: a paragraph of the open decision
+// previews from its loaded text, another decision from its metadata. The one
+// owner dispatches on that kind, so a surface never picks a chip itself.
+const webCitationChipImport = {
+  group: ["**/paragraph-reference", "**/decision-citation-chip"],
+  message:
+    "Render citations through '@/components/references/citation-chip', which picks the chip by citation kind.",
+};
+
 const apiSafeIdBrandingImport = {
   name: "@/api/lib/branded-types",
   importNames: ["toSafeId"],
@@ -960,13 +975,13 @@ const customCssClassNames = [
   "reader-body",
   "reader-case-law",
   "reader-chrome",
-  "reader-justify",
   "reader-note-back",
   "reader-note-label",
   "reader-note-ref",
   "reader-page-marker",
   "reader-page-tick",
   "reader-paper",
+  "reader-prose",
   "reader-scroll",
   "reader-signature",
   "reader-statute",
@@ -1745,6 +1760,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-hand-built-step-marker.ts",
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
+    "./.oxlint-plugins/no-person-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -1906,6 +1922,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-decorative-heading-accent.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-link.ts",
     "./.oxlint-plugins/no-font-utility-in-reader.ts",
+    "./.oxlint-plugins/no-justified-reader-text.ts",
     "./.oxlint-plugins/dialog-footer-owns-actions.ts",
     "./.oxlint-plugins/field-parts-inside-field.ts",
     "./.oxlint-plugins/require-safe-window-open.ts",
@@ -1925,12 +1942,16 @@ const config = defineConfig({
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
+    "./.oxlint-plugins/no-case-folded-search-match.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
     "./.oxlint-plugins/require-stable-editor-options.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
     "./.oxlint-plugins/no-raw-stored-json.ts",
     "./.oxlint-plugins/no-raw-browser-storage.ts",
+    "./.oxlint-plugins/no-raw-history-state.ts",
+    "./.oxlint-plugins/no-literal-view-id.ts",
+    "./.oxlint-plugins/no-route-identity-from-path.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -3336,6 +3357,42 @@ const config = defineConfig({
       },
     },
     {
+      // In-app back navigation reads the router's history, never the
+      // browser's state or length; the router setup is the one owner.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-history-state.fixture.ts",
+      ],
+      rules: {
+        "no-raw-history-state/no-raw-history-state": "error",
+      },
+    },
+    {
+      // The default `$viewId` slug lives in its owner; navigations keep the
+      // view on screen or name the owner's constant.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-literal-view-id.fixture.tsx",
+      ],
+      rules: {
+        "no-literal-view-id/no-literal-view-id": "error",
+      },
+    },
+    {
+      // The matter page on screen is read from the route matches; a path
+      // parser or regex restates the route tree and reads sibling pages as
+      // views or documents. Tests are out of scope: their fetch stubs route
+      // API requests by path, which names no page on screen.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-route-identity-from-path.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/**/*.test.ts", "apps/web/src/**/*.test.tsx"],
+      rules: {
+        "no-route-identity-from-path/no-route-identity-from-path": "error",
+      },
+    },
+    {
       // Persisted-storage reads: scoped to apps/web, the only surface that
       // reads localStorage/sessionStorage. The helper module itself is the
       // one place a raw JSON.parse on a persisted string is intentional.
@@ -3549,6 +3606,18 @@ const config = defineConfig({
       },
     },
     {
+      // A person is chosen through MemberCombobox, which searches members by
+      // name and email as people type. A Select over members cannot be
+      // searched, so a long list turns into scrolling.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-person-select.fixture.tsx",
+      ],
+      rules: {
+        "no-person-select/no-person-select": "error",
+      },
+    },
+    {
       // Words in running text are marked through `@stll/ui/text-mark`, so a
       // search hit, a reader's highlight and a verdict underline share one
       // shape and differ only in hue and line.
@@ -3597,6 +3666,7 @@ const config = defineConfig({
       // says so with `reader-chrome`, quoted text outside the root with
       // `reader-body`.
       files: [
+        "packages/decision-reader/src/**/*.tsx",
         "apps/web/src/components/legal-reader/**/*.tsx",
         "apps/web/src/features/case-law/components/case-viewer/**/*.tsx",
         "apps/web/src/features/statutes/components/**/*.tsx",
@@ -3604,6 +3674,22 @@ const config = defineConfig({
       ],
       rules: {
         "no-font-utility-in-reader/no-font-utility-in-reader": "error",
+      },
+    },
+    {
+      // Reader text is start-aligned by `reader-prose` in reader.css;
+      // justification stretches word spaces around long unbreakable tokens.
+      files: [
+        "packages/decision-reader/src/**/*.tsx",
+        "apps/web/src/components/legal-reader/**/*.tsx",
+        "apps/web/src/features/case-law/**/*.tsx",
+        "apps/web/src/features/statutes/**/*.tsx",
+        "apps/landing/src/components/react/previews/CaseLawReaderPreview.tsx",
+        ".oxlint-plugins/__fixtures__/no-justified-reader-text.fixture.tsx",
+      ],
+      excludeFiles: ["**/*.test.tsx"],
+      rules: {
+        "no-justified-reader-text/no-justified-reader-text": "error",
       },
     },
     {
@@ -4013,6 +4099,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4050,6 +4137,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4278,6 +4366,42 @@ const config = defineConfig({
                 message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The citation chip owner, and the tests that render the decision chip
+      // itself: the modules that import the chips it dispatches to. Every
+      // other apps/web import restriction still applies, so they are restated
+      // here.
+      files: [
+        "apps/web/src/components/references/citation-chip.tsx",
+        "apps/web/src/components/references/decision-citation-chip.dom.test.tsx",
+        "apps/web/src/components/legal-reader/annotations/selection-anchor-contract.dom.test.tsx",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4314,6 +4438,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4350,6 +4475,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4404,6 +4530,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4460,6 +4587,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -6223,6 +6351,30 @@ const config = defineConfig({
             allowedFiles: ["packages/collation/src/collation.ts"],
           },
         ],
+      },
+    },
+    {
+      // Client-side "does this text match what the user typed" goes through
+      // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize,
+      // which fold case, accents and ß/ł/ø alike in every UI locale; a
+      // lowercase-only compare misses "Dvořák" for "dvorak". The table find
+      // highlighter is exempt: it marks what the server's accent-sensitive
+      // ILIKE matched, and marking more would claim matches the server never
+      // made. Tests compute expected values independently of the owner, and
+      // the design system's browser fixtures render primitives bare.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-case-folded-search-match.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
+        "packages/ui/src/components/fixtures/**",
+      ],
+      rules: {
+        "no-case-folded-search-match/no-case-folded-search-match": "error",
       },
     },
     {

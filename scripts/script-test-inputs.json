@@ -187,7 +187,7 @@
       "apps/**",
       "turbo.json"
     ],
-    "scripts/ci-root-checks.test.ts": [".github/**", "apps/**", "turbo.json"],
+    "scripts/ci-root-checks.test.ts": ["**"],
     "scripts/ci-runner-loss.test.ts": [".github/**"],
     "scripts/ci-scoped-install.test.ts": ["**"],
     "scripts/ci-static-checks.test.ts": [".github/**"],
@@ -265,6 +265,10 @@
       ".github/**",
       "packages/property-testing/property-seeds.json",
       "scripts/write-manual-check-result.ts"
+    ],
+    "scripts/marketing-capture-wait.test.ts": [
+      ".github/actions/marketing-capture/action.yml",
+      ".github/workflows/ci.yml"
     ],
     "scripts/marketing-screenshots-publish.test.ts": [
       ".github/workflows/marketing-screenshots-capture.yml",
@@ -480,6 +484,7 @@
     "scripts/check-resolutions-only-change.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-swallowed-item-error-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/check-test-state-baseline.test.ts": "Uses only temporary fixtures and its static import closure.",
+    "scripts/ci-job-classification/snapshots.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/contract-domain-ledger.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/fix-tests-on-base.test.ts": "Uses only temporary fixtures and its static import closure.",
     "scripts/flake-gate-process.test.ts": "Uses only temporary fixtures and its static import closure.",

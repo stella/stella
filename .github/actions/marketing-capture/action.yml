@@ -112,16 +112,25 @@ runs:
             exit 0
           fi
           if (( attempt % 5 == 0 )); then
-            conclusion=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate \
+            # Either build job publishes the artifact: web-build, or
+            # heavy-web-build on heavy runs, which skip web-build. Stop early
+            # only once every one of them has ended without succeeding.
+            conclusions=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
-              --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
-              | head -n 1)
-            case "$conclusion" in
-              failure|cancelled|skipped|timed_out)
-                echo "::error::web-build ended with status '$conclusion' without publishing the $ARTIFACT_NAME artifact"
-                exit 1
-                ;;
-            esac
+              --jq '.jobs[] | select(.name == "web-build" or .name == "heavy-web-build") | .conclusion // "in_progress"')
+            producing=0
+            ended=()
+            while IFS= read -r conclusion; do
+              case "$conclusion" in
+                "") ;;
+                failure|cancelled|skipped|timed_out) ended+=("$conclusion") ;;
+                *) producing=1 ;;
+              esac
+            done <<< "$conclusions"
+            if (( producing == 0 && ${#ended[@]} > 0 )); then
+              echo "::error::Every web build job ended (${ended[*]}) without publishing the $ARTIFACT_NAME artifact"
+              exit 1
+            fi
           fi
           sleep 2
         done

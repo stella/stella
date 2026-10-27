@@ -150,8 +150,10 @@ export const ReaderBreadcrumb = ({
       >
         {label}
       </PopoverTrigger>
+      {/* Opens toward the inline end, over the text the bar belongs to, not
+          back over a notes column at the reader's inline start. */}
       <PopoverPopup
-        align="end"
+        align="start"
         aria-label={t("statutes.outline")}
         className="w-80 max-w-[calc(100vw-2rem)]"
         padding="sm"
