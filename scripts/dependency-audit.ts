@@ -509,7 +509,7 @@ type CheckLapsedAcceptancesOptions = {
   baseline: Baseline;
   today: string;
   enforceDateExpiry: boolean;
-  latestVersion?: (pkg: string) => Promise<string | undefined>;
+  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
 };
 const checkLapsedAcceptances = async ({
   advisories,

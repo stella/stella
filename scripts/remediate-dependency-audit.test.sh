@@ -62,6 +62,7 @@ echo root > package.json
 echo pinned > apps/web/package.json
 git add bun.lock scripts/dependency-audit-baseline.json package.json apps/web/package.json
 git commit -qm initial
+initial_sha="$(git rev-parse HEAD)"
 TEST_OPEN_PRS=1 bash "$subject"
 grep -q '^changed=false$' "$GITHUB_OUTPUT"
 [[ "$(grep -Ec '^bun .* --assess$' "$TEST_CALLS")" == 1 ]]
@@ -97,7 +98,7 @@ for scenario in TEST_FIX_AVAILABLE TEST_STALE TEST_PIN_REWRITE; do
   grep -q '^changed=true$' "$GITHUB_OUTPUT"
   [[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 3 ]]
   refute_call '^gh pr create '
-  [[ "$(git log --oneline | wc -l | tr -d ' ')" == 1 ]]
+  [[ "$(git rev-parse HEAD)" == "$initial_sha" ]]
 done
 [[ "$(cat apps/web/package.json)" == rewritten ]]
 [[ "$(cat bun.lock)" == updated ]]

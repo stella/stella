@@ -78,12 +78,31 @@ type ResolvedKeyOptions = {
   dependency: string;
   keys: ReadonlySet<string>;
 };
+// A nested key's package names, keeping each `@scope/name` together.
+const keyLocations = (key: string): string[] => {
+  const locations: string[] = [];
+  let scope: string | undefined;
+  for (const segment of key.split("/")) {
+    if (segment === "") {
+      continue;
+    }
+    if (scope !== undefined) {
+      locations.push(`${scope}/${segment}`);
+      scope = undefined;
+    } else if (segment.startsWith("@")) {
+      scope = segment;
+    } else {
+      locations.push(segment);
+    }
+  }
+  return locations;
+};
 const resolvedKey = ({
   parent,
   dependency,
   keys,
 }: ResolvedKeyOptions): string | undefined => {
-  const locations = parent.match(/(?:@[^/]+\/)?[^/]+/gu) ?? [];
+  const locations = keyLocations(parent);
   while (locations.length > 0) {
     const candidate = `${locations.join("/")}/${dependency}`;
     if (keys.has(candidate)) {
@@ -451,7 +470,7 @@ export const readPublishedVersions = async (
     return body;
   });
   if (result.isErr()) {
-    return invalidAssessment(`Cannot assess ${name}: ${String(result.error)}`);
+    return invalidAssessment(`Cannot assess ${name}: ${result.error.message}`);
   }
   return result.value;
 };
