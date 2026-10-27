@@ -17,6 +17,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { LEGISLATION_LIST_VALIDITIES } from "@stll/api-contract/legislation-status";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import type { StatuteQueryIntent } from "@stll/api-contract/statute-query-intent";
 import {
   createStatuteIndexPath,
@@ -51,6 +52,7 @@ import type { PublicLawFilterChip } from "@/components/public-law-table/public-l
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
+import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
 import { StatuteSearchResults } from "@/features/statutes/components/statute-search-results";
@@ -219,7 +221,7 @@ export const Route = createFileRoute("/law/$country/statutes/")({
         kind: "statutes",
         items: loaderData
           ? loaderData.statutes.map((statute) => ({
-              name: statute.title,
+              name: statuteDisplayLabel(statute).text,
               url: createPublicLawCanonicalUrl(
                 createStatutePath(
                   createStatuteRouteParams({
@@ -406,7 +408,7 @@ function PublicStatuteFullText({ query }: { query: string }) {
                     versionValidFrom: null,
                   })}
                 >
-                  {hit.title}
+                  <StatuteDisplayLabel statute={hit} />
                 </Link>
               );
             }}
