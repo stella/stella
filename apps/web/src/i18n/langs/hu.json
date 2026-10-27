@@ -912,9 +912,14 @@
       "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
       "dateUnavailable": "Dátum nem érhető el",
       "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
+      "goToMention": "Ugrás ide: {number}. említés",
+      "goToParagraph": "Ugrás ide: {paragraph}. pont",
       "lastNegative": "utolsó elutasító hivatkozás: {year}",
+      "mentionMark": "{number}. említés",
+      "mentionsInDecision": "{count, plural, one {Ebben a határozatban egy hivatkozás} other {Ebben a határozatban # hivatkozás}}",
       "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
       "none": "Még nincs rögzített hivatkozás.",
+      "notInStella": "Még nincs a stellában",
       "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
       "paragraphLabel": "{paragraph}. pont",
@@ -1044,8 +1049,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Emberi"
+      "human": "Emberi",
+      "toggleState": "{label}: {state, select, on {be} other {ki}}"
     },
+    "oldestDecisions": "Legrégebbi határozatok",
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
@@ -1107,8 +1114,7 @@
       "runEstimate": "{rows, plural, one {# határozat} other {# határozat}} × {columns, plural, one {# kérdés} other {# kérdés}} ezen az oldalon: {cells, plural, one {# válasz} other {# válasz}} készül.",
       "runTitle": "Ezen oldal megválaszolása",
       "savedQuestions": "Mentett kérdések",
-      "title": "Kutatási táblák",
-      "updated": "Utoljára szerkesztve: {date}"
+      "title": "Kutatási táblák"
     },
     "results": {
       "excerpt": {
@@ -1152,6 +1158,8 @@
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",
+      "oldest": "Legrégebbi",
+      "oldestUnavailable": "A keresés találatai relevancia szerint vagy a legújabbtól kezdve rendeződnek. A legrégebbi határozatok elöl való megjelenítéséhez törölje a keresést.",
       "relevance": "Legrelevánsabb"
     },
     "viewer": {
@@ -1167,6 +1175,7 @@
       "citedDecisionPassage": "Részlet a határozatból",
       "cites": "Hivatkozásai",
       "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ugrás a bekezdéshez} other {Ugrás a bekezdésekhez}}",
       "judgeRole": {
         "advocateGeneral": "Főtanácsnok",
         "dissenting": "Különvélemény",
@@ -2229,6 +2238,7 @@
     "selectARole": "Válasszon szerepkört",
     "selectAll": "Összes kijelölése",
     "selectDate": "Dátum kiválasztása…",
+    "selected": "Kijelölve",
     "sessions": "Munkamenetek",
     "settings": "Beállítások",
     "showAll": "Az összes megjelenítése",
@@ -4273,6 +4283,8 @@
       "commentPlaceholder": "Írjon megjegyzést…",
       "commentText": "Megjegyzés szövege",
       "commentedPassage": "Megjegyzéssel ellátott részlet",
+      "editComment": "Megjegyzés szerkesztése",
+      "editedAt": "Szerkesztve: {time}",
       "guestAuthor": "Ön",
       "guestLimitReached": "Ez a lap legfeljebb {count} kiemelést és jegyzetet tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
       "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
@@ -6298,6 +6310,7 @@
       "deleteAll": "Összes törlése",
       "deleteAllConfirm": "Törli az összes {count} elemet a(z) „{column}” oszlopban?",
       "hideColumn": "Oszlop elrejtése",
+      "moveFailed": "{failed, plural, one {{total} elem közül # nem helyezhető át.} other {{total} elem közül # nem helyezhető át.}}",
       "readOnlyGrouping": "Ez a csoportosítás csak olvasható",
       "selectPropertyHint": "Válasszon egy tulajdonságot a csoportosításhoz az eszköztáron",
       "uploadDocument": "Dokumentum feltöltése",
@@ -6357,7 +6370,6 @@
           "approvedBy": "Jóváhagyta",
           "channel": "Csatorna",
           "dateTime": "Dátum és idő",
-          "eventId": "Eseményazonosító",
           "notAvailable": "Nem érhető el",
           "openTarget": "Elem megnyitása",
           "runId": "Futásazonosító",
@@ -6540,6 +6552,11 @@
       },
       "passwordLabel": "Adja meg a PDF jelszavát",
       "previousPage": "Előző oldal",
+      "selection": {
+        "explainPassagePrompt": "Magyarázd el a(z) {citation} alábbi részletét:\n\n„{quote}”",
+        "pageLocator": "{page}. o.",
+        "pageRangeLocator": "{start}–{end}. o."
+      },
       "showOriginal": "Eredeti oldalak megjelenítése",
       "unlock": "Feloldás"
     },
@@ -6653,10 +6670,12 @@
       "selectOperator": "Operátor kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
       "singleSelect": "Egyszeres választás",
-      "sortAscending": "Növekvő rendezés",
       "sortAscendingDate": "Legrégebbi elöl",
-      "sortDescending": "Csökkenő rendezés",
+      "sortAscendingNumber": "Legkisebb elöl",
+      "sortAscendingText": "A → Zs",
       "sortDescendingDate": "Legújabb elöl",
+      "sortDescendingNumber": "Legnagyobb elöl",
+      "sortDescendingText": "Zs → A",
       "splitOptions": "{count, plural, one {Felosztás # lehetőségre} other {Felosztás # lehetőségre}}",
       "suggestWithAI": "Javaslat AI-val",
       "text": "Szöveg",

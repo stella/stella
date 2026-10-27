@@ -85,6 +85,7 @@ const analysisNote: MarginItem = {
 
 const ownComment: MarginItem = {
   author: { image: null, name: "Reader" },
+  createdAt: "2026-09-01T10:00:00.000Z",
   id: "comment-1",
   kind: "comment",
   mine: true,
@@ -92,6 +93,7 @@ const ownComment: MarginItem = {
   onToggleVisibility: () => undefined,
   startAnchorId: "p-1",
   text: "My own words.",
+  updatedAt: "2026-09-01T10:00:00.000Z",
   visibility: "private",
 };
 

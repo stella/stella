@@ -78,22 +78,24 @@ const rowsOfSame = (
       row.groupId === target.groupId);
 };
 
+/** The row as the server will store it, `updatedAt` included. */
 const applyChange = (
   row: ReaderAnnotation,
   change: UpdateAnnotationInput,
 ): ReaderAnnotation => {
+  const updatedAt = Temporal.Now.instant().toString();
   switch (change.change) {
     case "body": {
-      return row.body === null ? row : { ...row, body: change.body };
+      return row.body === null ? row : { ...row, body: change.body, updatedAt };
     }
     case "color": {
-      return { ...row, color: change.color };
+      return { ...row, color: change.color, updatedAt };
     }
     case "style": {
-      return { ...row, style: change.style };
+      return { ...row, style: change.style, updatedAt };
     }
     case "visibility": {
-      return { ...row, visibility: change.visibility };
+      return { ...row, visibility: change.visibility, updatedAt };
     }
     default: {
       change satisfies never;

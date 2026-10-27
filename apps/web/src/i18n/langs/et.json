@@ -912,9 +912,14 @@
       "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
       "dateUnavailable": "Kuupäev pole saadaval",
       "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
+      "goToMention": "Mine {number}. mainimise juurde",
+      "goToParagraph": "Mine punkti {paragraph} juurde",
       "lastNegative": "viimane negatiivne viide aastal {year}",
+      "mentionMark": "{number}. mainimine",
+      "mentionsInDecision": "{count, plural, one {Selles lahendis viidatud üks kord} other {Selles lahendis viidatud # korda}}",
       "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
       "none": "Viiteid pole veel salvestatud.",
+      "notInStella": "Veel pole stellas",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
       "paragraphLabel": "Punkt {paragraph}",
@@ -1044,8 +1049,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Inimeste"
+      "human": "Inimeste",
+      "toggleState": "{label}: {state, select, on {sees} other {väljas}}"
     },
+    "oldestDecisions": "Vanimad lahendid",
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
@@ -1107,8 +1114,7 @@
       "runEstimate": "{rows, plural, one {# lahend} other {# lahendit}} × {columns, plural, one {# küsimus} other {# küsimust}} sellel leheküljel: luuakse {cells, plural, one {# vastus} other {# vastust}}.",
       "runTitle": "Vasta sellel leheküljel",
       "savedQuestions": "Salvestatud küsimused",
-      "title": "Uurimistabelid",
-      "updated": "Viimati muudetud {date}"
+      "title": "Uurimistabelid"
     },
     "results": {
       "excerpt": {
@@ -1152,6 +1158,8 @@
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
+      "oldest": "Vanimad",
+      "oldestUnavailable": "Otsingu tulemused järjestatakse asjakohasuse järgi või uuemad enne. Vanimate lahendite esmalt nägemiseks tühjendage otsing.",
       "relevance": "Asjakohaseimad"
     },
     "viewer": {
@@ -1167,6 +1175,7 @@
       "citedDecisionPassage": "Lõik lahendis",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Mine lõigu juurde} other {Mine lõikude juurde}}",
       "judgeRole": {
         "advocateGeneral": "Kohtujurist",
         "dissenting": "Eriarvamus",
@@ -2229,6 +2238,7 @@
     "selectARole": "Valige roll",
     "selectAll": "Vali kõik",
     "selectDate": "Vali kuupäev…",
+    "selected": "Valitud",
     "sessions": "Seansid",
     "settings": "Seaded",
     "showAll": "Näita kõiki",
@@ -4273,6 +4283,8 @@
       "commentPlaceholder": "Kirjuta kommentaar…",
       "commentText": "Kommentaari tekst",
       "commentedPassage": "Kommenteeritud lõik",
+      "editComment": "Muuda kommentaari",
+      "editedAt": "Muudetud {time}",
       "guestAuthor": "Teie",
       "guestLimitReached": "See vahekaart mahutab kuni {count} esiletõstmist ja märkust. Rohkema salvestamiseks looge konto.",
       "guestMigrationComplete": "Esiletõstmised ja märkused salvestati.",
@@ -6298,6 +6310,7 @@
       "deleteAll": "Kustuta kõik",
       "deleteAllConfirm": "Kustutada kõik {count} elementi veerus „{column}\"?",
       "hideColumn": "Peida veerg",
+      "moveFailed": "{failed, plural, one {{total} üksusest # ei õnnestunud teisaldada.} other {{total} üksusest # ei õnnestunud teisaldada.}}",
       "readOnlyGrouping": "See rühmitus on ainult lugemiseks",
       "selectPropertyHint": "Valige tööriistaribal omadus, mille järgi rühmitada",
       "uploadDocument": "Laadi üles dokument",
@@ -6357,7 +6370,6 @@
           "approvedBy": "Kinnitaja",
           "channel": "Kanal",
           "dateTime": "Kuupäev ja kellaaeg",
-          "eventId": "Sündmuse ID",
           "notAvailable": "Pole saadaval",
           "openTarget": "Ava üksus",
           "runId": "Käivituse ID",
@@ -6540,6 +6552,11 @@
       },
       "passwordLabel": "Sisestage PDF-i parool",
       "previousPage": "Eelmine leht",
+      "selection": {
+        "explainPassagePrompt": "Selgita seda {citation} lõiku:\n\n„{quote}“",
+        "pageLocator": "lk {page}",
+        "pageRangeLocator": "lk {start}–{end}"
+      },
       "showOriginal": "Kuva originaalleheküljed",
       "unlock": "Ava lukk"
     },
@@ -6653,10 +6670,12 @@
       "selectOperator": "Valige operaator",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
       "singleSelect": "Ühekordne valik",
-      "sortAscending": "Sorteeri kasvavalt",
       "sortAscendingDate": "Vanemad enne",
-      "sortDescending": "Sorteeri kahanevalt",
+      "sortAscendingNumber": "Väiksemad enne",
+      "sortAscendingText": "A → Ü",
       "sortDescendingDate": "Uuemad enne",
+      "sortDescendingNumber": "Suuremad enne",
+      "sortDescendingText": "Ü → A",
       "splitOptions": "{count, plural, one {Jaga # valikuks} other {Jaga # valikuks}}",
       "suggestWithAI": "Soovita AI-ga",
       "text": "Tekst",

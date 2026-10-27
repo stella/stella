@@ -103,6 +103,7 @@ const renderVisitorColumn = () =>
             },
             {
               author: { image: null, name: "Visitor" },
+              createdAt: "2026-09-01T10:00:00.000Z",
               id: "comment-1",
               kind: "comment",
               mine: true,
@@ -110,6 +111,7 @@ const renderVisitorColumn = () =>
               onToggleVisibility: () => undefined,
               startAnchorId: "p-2",
               text: COMMENT_TEXT,
+              updatedAt: "2026-09-01T10:00:00.000Z",
               visibility: "private",
             },
             {

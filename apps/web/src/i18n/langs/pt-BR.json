@@ -912,9 +912,14 @@
       "citedSummary": "{count, plural, =0 {Não citada} one {Citada uma vez} other {Citada # vezes}}",
       "dateUnavailable": "Data indisponível",
       "decisionCount": "{count, plural, =0 {Nenhuma decisão} one {# decisão} other {# decisões}}",
+      "goToMention": "Ir para a menção {number}",
+      "goToParagraph": "Ir para o parágrafo {paragraph}",
       "lastNegative": "última citação negativa em {year}",
+      "mentionMark": "menção {number}",
+      "mentionsInDecision": "{count, plural, one {Citada uma vez nesta decisão} other {Citada # vezes nesta decisão}}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "none": "Nenhuma citação registrada ainda.",
+      "notInStella": "Ainda não está no stella",
       "openAtCitation": "Abrir na citação",
       "openDecision": "Abrir a decisão",
       "paragraphLabel": "Parágrafo {paragraph}",
@@ -1044,8 +1049,10 @@
     },
     "notesFilter": {
       "ai": "IA",
-      "human": "Humanas"
+      "human": "Humanas",
+      "toggleState": "{label}: {state, select, on {ligado} other {desligado}}"
     },
+    "oldestDecisions": "Decisões mais antigas",
     "pagination": {
       "goToPage": "Ir para a página {page}",
       "label": "Páginas de resultados",
@@ -1107,8 +1114,7 @@
       "runEstimate": "{rows, plural, one {# decisão} other {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas}}.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Perguntas salvas",
-      "title": "Tabelas de pesquisa",
-      "updated": "Última edição em {date}"
+      "title": "Tabelas de pesquisa"
     },
     "results": {
       "excerpt": {
@@ -1152,6 +1158,8 @@
     "showWholeHeadnote": "Mostrar a ementa completa",
     "sort": {
       "newest": "Mais recentes",
+      "oldest": "Mais antigas",
+      "oldestUnavailable": "Uma busca é ordenada por relevância ou das mais recentes para as mais antigas. Limpe a busca para ver primeiro as decisões mais antigas.",
       "relevance": "Mais relevantes"
     },
     "viewer": {
@@ -1167,6 +1175,7 @@
       "citedDecisionPassage": "Trecho da decisão",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ir para o parágrafo} other {Ir para os parágrafos}}",
       "judgeRole": {
         "advocateGeneral": "Advogado-geral",
         "dissenting": "Voto divergente",
@@ -2229,6 +2238,7 @@
     "selectARole": "Selecione uma função",
     "selectAll": "Selecionar tudo",
     "selectDate": "Selecionar data…",
+    "selected": "Selecionado",
     "sessions": "Sessões",
     "settings": "Configurações",
     "showAll": "Mostrar tudo",
@@ -4273,6 +4283,8 @@
       "commentPlaceholder": "Escreva um comentário…",
       "commentText": "Texto do comentário",
       "commentedPassage": "Passagem comentada",
+      "editComment": "Editar comentário",
+      "editedAt": "Editado {time}",
       "guestAuthor": "Você",
       "guestLimitReached": "Esta aba pode conter até {count} destaques e notas. Crie uma conta para salvar mais.",
       "guestMigrationComplete": "Destaques e notas salvos.",
@@ -6298,6 +6310,7 @@
       "deleteAll": "Excluir tudo",
       "deleteAllConfirm": "Excluir todos os itens {count} em \"{column}\"?",
       "hideColumn": "Ocultar coluna",
+      "moveFailed": "{failed, plural, one {Não foi possível mover # de {total} itens.} other {Não foi possível mover # de {total} itens.}}",
       "readOnlyGrouping": "Este agrupamento é somente leitura",
       "selectPropertyHint": "Selecione uma propriedade para agrupar na barra de ferramentas",
       "uploadDocument": "Carregar documento",
@@ -6357,7 +6370,6 @@
           "approvedBy": "Aprovado por",
           "channel": "Canal",
           "dateTime": "Data e hora",
-          "eventId": "ID do evento",
           "notAvailable": "Não disponível",
           "openTarget": "Abrir item",
           "runId": "ID da execução",
@@ -6540,6 +6552,11 @@
       },
       "passwordLabel": "Digite a senha do PDF",
       "previousPage": "Página anterior",
+      "selection": {
+        "explainPassagePrompt": "Explique esta passagem de {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "p. {start}-{end}"
+      },
       "showOriginal": "Mostrar páginas originais",
       "unlock": "Desbloquear"
     },
@@ -6653,10 +6670,12 @@
       "selectOperator": "Selecione o operador",
       "setPromptPlaceholder": "Defina um prompt para extrair as informações",
       "singleSelect": "Seleção única",
-      "sortAscending": "Classificar em ordem crescente",
       "sortAscendingDate": "Mais antigo primeiro",
-      "sortDescending": "Classificar em ordem decrescente",
+      "sortAscendingNumber": "Menor primeiro",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "O mais novo primeiro",
+      "sortDescendingNumber": "Maior primeiro",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Dividir em # opção} other {Dividir em # opções}}",
       "suggestWithAI": "Sugerir com IA",
       "text": "Texto",
