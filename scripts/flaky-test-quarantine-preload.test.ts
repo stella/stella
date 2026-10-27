@@ -199,7 +199,17 @@ const run = ({
   };
 };
 
-const runReceiverFixture = (preload: boolean, extraSource = "") => {
+type ReceiverFixtureOptions = {
+  preload: boolean;
+  extraSource?: string;
+  names?: readonly string[];
+};
+
+const runReceiverFixture = ({
+  preload,
+  extraSource = "",
+  names = ["quarantined pass"],
+}: ReceiverFixtureOptions) => {
   const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-receivers-"));
   roots.push(root);
   mkdirSync(path.join(root, "scripts"));
@@ -211,12 +221,10 @@ const runReceiverFixture = (preload: boolean, extraSource = "") => {
   writeFileSync(
     path.join(root, "scripts/flaky-test-quarantine.json"),
     serializeRegistry({
-      entries: [
-        {
-          ...entry("quarantined pass"),
-          id: `${RECEIVER_FIXTURE}::quarantined pass`,
-        },
-      ],
+      entries: names.map((name) => ({
+        ...entry(name),
+        id: `${RECEIVER_FIXTURE}::${name}`,
+      })),
     }),
   );
   const reports = path.join(root, "reports");
@@ -243,6 +251,14 @@ const runReceiverFixture = (preload: boolean, extraSource = "") => {
   return {
     exitCode: result.exitCode,
     output: `${result.stdout.toString()}${result.stderr.toString()}`,
+    records: (existsSync(reports) ? readdirSync(reports) : []).flatMap((file) =>
+      readFileSync(path.join(reports, file), "utf-8")
+        .split("\n")
+        .filter((line) => line !== "")
+        .map((line): QuarantineRecord =>
+          v.parse(quarantineRecordSchema, JSON.parse(line)),
+        ),
+    ),
   };
 };
 
@@ -266,8 +282,8 @@ const FAILING = [
 
 describe("flaky-test quarantine preload", () => {
   test("preserves Bun receiver semantics for native test and describe forms", () => {
-    const native = runReceiverFixture(false);
-    const preloaded = runReceiverFixture(true);
+    const native = runReceiverFixture({ preload: false });
+    const preloaded = runReceiverFixture({ preload: true });
 
     expect(native.exitCode).toBe(0);
     expect(preloaded.exitCode).toBe(0);
@@ -319,14 +335,75 @@ describe("flaky-test quarantine preload", () => {
       });`,
     },
   ])("preserves native outcomes through $form", ({ source }) => {
-    const native = runReceiverFixture(false, source);
-    const preloaded = runReceiverFixture(true, source);
+    const native = runReceiverFixture({ preload: false, extraSource: source });
+    const preloaded = runReceiverFixture({
+      preload: true,
+      extraSource: source,
+    });
     expect(native.exitCode).toBe(0);
     expect(native.output).toMatch(/\b[1-9]\d* pass\b/u);
     expect(preloaded.exitCode).toBe(0);
     expect(preloaded.output.match(/\b\d+ (?:pass|skip|fail)\b/gu)).toEqual(
       native.output.match(/\b\d+ (?:pass|skip|fail)\b/gu),
     );
+  });
+
+  test.each([
+    "test.if(true)",
+    "test.skipIf(false)",
+    "test.concurrent.if(true)",
+    "test.serial.if(true)",
+    "test.if(true).concurrent",
+    "test.skipIf(false).serial",
+  ])(
+    "records matching failures through %s without suppressing other IDs",
+    (form) => {
+      const extraSource = `${form}("chained failure", () => {
+      throw new Error("chained flake");
+    });`;
+      const id = `${RECEIVER_FIXTURE}::chained failure`;
+      const quarantined = runReceiverFixture({
+        preload: true,
+        extraSource,
+        names: ["quarantined pass", "chained failure"],
+      });
+      expect(quarantined.exitCode, quarantined.output).toBe(0);
+      expect(quarantined.records).toContainEqual({ type: "registered", id });
+      expect(quarantined.records).toContainEqual(
+        expect.objectContaining({
+          type: "failed",
+          id,
+          message: "chained flake",
+        }),
+      );
+
+      const unquarantined = runReceiverFixture({ preload: true, extraSource });
+      expect(unquarantined.exitCode).not.toBe(0);
+      expect(unquarantined.output).toContain("chained flake");
+      expect(
+        unquarantined.records.some(
+          (record) => "id" in record && record.id === id,
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test("keeps test.each outside quarantine after conditional modifiers", () => {
+    const result = runReceiverFixture({
+      preload: true,
+      extraSource: `test.concurrent.if(true).each([[1]])("table case %i", () => {
+        throw new Error("table failure");
+      });`,
+      names: ["quarantined pass", "table case 1"],
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.output).toContain("table failure");
+    expect(
+      result.records.some(
+        (record) =>
+          "id" in record && record.id === `${RECEIVER_FIXTURE}::table case 1`,
+      ),
+    ).toBe(false);
   });
 
   test("its static import graph uses only builtins and relative scripts files", () => {

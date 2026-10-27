@@ -9,9 +9,10 @@
 // after it and the rest of the Turbo run proceed. Every other test is
 // registered untouched.
 //
-// Reach: plain `test`/`it` calls and their `only`, `concurrent` and `serial`
-// forms, named by their `describe` path. Hooks, `expect.assertions` counts and
-// table forms (`test.each`) stay outside the wrapper; an entry that matches no
+// Reach: plain `test`/`it` calls and their `only`, `concurrent`, `serial`,
+// `if` and `skipIf` forms, named by their `describe` path. Hooks,
+// `expect.assertions` counts and table forms (`test.each`) stay outside the
+// wrapper; an entry that matches no
 // registration in a file that ran is reported as stale.
 
 import * as bunTest from "bun:test";
@@ -372,6 +373,13 @@ const install = (reportDir: string): void => {
       console.error(`(quarantined fail) ${id}: ${outcome.message}`);
     };
 
+  const REGISTERED_FORMS = new Set<PropertyKey>([
+    "only",
+    "concurrent",
+    "serial",
+    "if",
+    "skipIf",
+  ]);
   const register = <T extends NativeScopeFunction>(
     original: T,
     receiver: unknown,
@@ -379,7 +387,12 @@ const install = (reportDir: string): void => {
     new Proxy(original, {
       get: (target, key) => {
         const value: unknown = Reflect.get(target, key, target);
-        return isFunction(value) ? forward(value, target) : value;
+        if (!isFunction(value)) {
+          return value;
+        }
+        return REGISTERED_FORMS.has(key)
+          ? register(value, target)
+          : forward(value, target);
       },
       apply: (target, _self, args: unknown[]): unknown => {
         const [label, second, third, ...rest] = args;
@@ -389,7 +402,8 @@ const install = (reportDir: string): void => {
             ? undefined
             : testId({ file, name: [...describePath, label].join(" > ") });
         if (id === undefined || !quarantined.has(id)) {
-          return Reflect.apply(target, receiver, args);
+          const result: unknown = Reflect.apply(target, receiver, args);
+          return isFunction(result) ? register(result, target) : result;
         }
         const [fn, options] = isFunction(second)
           ? [second, third]
@@ -410,20 +424,7 @@ const install = (reportDir: string): void => {
       },
     });
 
-  const WRAPPED_FORMS = new Set<PropertyKey>(["only", "concurrent", "serial"]);
-  const test = new Proxy(bunTest.test, {
-    get: (target, key) => {
-      const value: unknown = Reflect.get(target, key, target);
-      if (!isFunction(value)) {
-        return value;
-      }
-      return WRAPPED_FORMS.has(key)
-        ? register(value, target)
-        : forward(value, target);
-    },
-    apply: (target, _self, args: unknown[]): unknown =>
-      Reflect.apply(register(target, target), target, args),
-  });
+  const test = register(bunTest.test, bunTest.test);
 
   void mock.module("bun:test", () => ({
     ...bunTest,
