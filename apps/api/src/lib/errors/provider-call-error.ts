@@ -114,7 +114,7 @@ export class ProviderCallError extends HandlerError {
     super({
       message: PROVIDER_CALL_ERROR_MESSAGE,
       status,
-      code: code ?? "internal_error",
+      code: code ?? PROVIDER_ERROR_CODE,
       ...(retryAfterMs === undefined ? {} : { retryable: true, retryAfterMs }),
       ...(facts === undefined
         ? {}
@@ -173,7 +173,7 @@ export class ModelRunError extends HandlerError {
     { model, finish }: ModelRunErrorOptions,
     message: string = MODEL_RUN_ERROR_MESSAGE,
   ) {
-    super({ message, status: 502, code: "internal_error" });
+    super({ message, status: 502, code: PROVIDER_ERROR_CODE });
     this.name = "ModelRunError";
     this.provider = model.provider;
     this.keySource = model.keySource;
