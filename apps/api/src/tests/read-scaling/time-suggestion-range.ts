@@ -137,7 +137,8 @@ export const suggestionRangeScalingScenario = {
               fixture.organizationId,
               fixture.userId,
             ),
-            getActiveWorkspaceIds: async () => Promise.resolve(fixture.matters),
+            getActiveWorkspaceIds: async () =>
+              await Promise.resolve(fixture.matters),
             session: { activeOrganizationId: fixture.organizationId },
             user: { id: fixture.userId },
             memberRole: sessionMemberRole("member"),
