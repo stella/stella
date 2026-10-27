@@ -1,4 +1,4 @@
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { NativeTabs } from "expo-router/native-tabs";
 import { useTranslations } from "use-intl";
 
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
@@ -7,8 +7,9 @@ import { useAppColors } from "@/theme";
 /**
  * The platform's own tab bar (iOS's, with its glass), each tab drawn with the
  * web navigation's glyph (apps/web workspace-primary-nav.ts) from lucide:
- * chat's bubble, tasks' list and the matters layers. More stands apart, as
- * iOS draws search, and holds case law, settings and what is still to come.
+ * chat's bubble, tasks' list and the matters layers. More is the bar's
+ * prominent tab, which iOS 27 draws apart on its own surface; it holds case
+ * law, settings and what is still to come.
  * `tab-icons.test.ts` holds them equal.
  */
 const TabLayout = () => {
@@ -19,6 +20,8 @@ const TabLayout = () => {
     <NativeTabs
       iconColor={{ default: colors.muted, selected: colors.text }}
       tintColor={colors.text}
+      // iOS 27 sets the prominent tab apart from the bar on its own surface.
+      unstable_nativeProps={{ ios: { prominentScreenKey: "more" } }}
     >
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Icon
@@ -53,9 +56,7 @@ const TabLayout = () => {
         />
         <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      {/* The search role is what iOS sets apart from the bar, in its own
-          circle; the tab keeps its own glyph and name. */}
-      <NativeTabs.Trigger name="more" role="search">
+      <NativeTabs.Trigger name="more">
         <NativeTabs.Trigger.Icon
           src={
             <NativeTabs.Trigger.VectorIcon
