@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# Aktion} other {# Aktionen}}",
       "activeVsLogged": "{active} aktiv · {logged} erfasst",
+      "alreadyCovered": "Bereits durch erfasste Zeit abgedeckt",
       "chatEvidence": "{count, plural, one {# Nachricht} other {# Nachrichten}} in „{title}“",
+      "engagedTime": "{duration} aktive Zeit",
       "keyboardHint": "Enter nimmt an, E bearbeitet vor dem Annehmen, Entf verwirft",
       "privacyNote": "Nur Sie sehen diese Vorschläge. Es wird nichts erfasst, bevor Sie einen Vorschlag annehmen.",
       "title": "Vorschläge aus Ihrer Aktivität",

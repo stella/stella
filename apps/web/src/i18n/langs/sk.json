@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# akcia} few {# akcie} other {# akcií}}",
       "activeVsLogged": "Aktivita {active} · Vykázané {logged}",
+      "alreadyCovered": "Už pokryté zaznamenaným časom",
       "chatEvidence": "{count, plural, one {# správa} few {# správy} other {# správ}} v konverzácii „{title}“",
+      "engagedTime": "{duration} skutočnej aktivity",
       "keyboardHint": "Enter prijme, E upraví pred prijatím, Delete zamietne",
       "privacyNote": "Vidíte ich len vy. Nič sa nezaznamená, kým návrh neprijmete.",
       "title": "Návrhy z vašej aktivity",
