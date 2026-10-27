@@ -3,14 +3,13 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type ContactReadErrorProps = {
   error: unknown;
   onRetry: () => void;
-  fallbackKey?: TranslationKey;
+  fallbackKey?: "errors.actionFailed" | "common.loadFailed";
   retryDisabled?: boolean;
 };
 
