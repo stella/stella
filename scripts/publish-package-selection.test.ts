@@ -152,7 +152,7 @@ describe("publish package selection", () => {
           "packages/workspace-ui/CHANGELOG.md",
         ],
       }),
-    ).toEqual(["ui", "workspace-ui"]);
+    ).toEqual(["ui", "money", "calculations", "conditions", "workspace-ui"]);
   });
 
   test("does not republish a historically tagged but unpublished package", () => {
@@ -227,14 +227,22 @@ describe("publish package selection", () => {
     );
   });
 
-  test("keeps workflow-run CLI releases explicit", () => {
+  test("includes the CLI workspace dependency closure for workflow runs", () => {
     expect(
       selectPublishPackages({
         eventName: "workflow_run",
         manualPackage: "all",
         changedPaths: [],
       }),
-    ).toEqual(["cli"]);
+    ).toEqual([
+      "country-codes",
+      "conditions",
+      "template-conditions",
+      "text-normalize",
+      "agent-input",
+      "stable-stringify",
+      "cli",
+    ]);
   });
 
   test("rejects a push with no changed library changelog", () => {

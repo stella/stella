@@ -352,7 +352,7 @@ jobs:
           # always one named non-CLI package, so resolve it from the workflow
           # input instead of asking the old source to run new tooling.
           if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            pkgs=(cli)
+            mapfile -t pkgs < <(bun scripts/publish-package-selection.ts "$EVENT_NAME" "$MANUAL_PACKAGE")
           elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PACKAGE" != "all" ]]; then
             pkgs=("$MANUAL_PACKAGE")
           else
@@ -442,10 +442,11 @@ jobs:
         run: |
           set -euo pipefail
           tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
+          mapfile -t dependency_tarballs < <(find "${GITHUB_WORKSPACE}/release-artifacts" -mindepth 2 -maxdepth 2 -name '*.tgz' ! -path '*/cli/*' -print | sort)
           smoke="$(mktemp -d)"
           cd "$smoke"
           npm init -y >/dev/null
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "$tarball"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "${dependency_tarballs[@]}" "$tarball"
           cli="node_modules/@stll/cli/dist/cli.js"
           node "$cli" --version
           node "$cli" --help
@@ -468,10 +469,11 @@ jobs:
         run: |
           set -euo pipefail
           tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
+          mapfile -t dependency_tarballs < <(find "${GITHUB_WORKSPACE}/release-artifacts" -mindepth 2 -maxdepth 2 -name '*.tgz' ! -path '*/cli/*' -print | sort)
           canary="$(mktemp -d)"
           cd "$canary"
           npm init -y >/dev/null
-          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "$tarball"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" npm install --ignore-scripts "${dependency_tarballs[@]}" "$tarball"
           node node_modules/@stll/cli/dist/cli.js compatibility check \
             --server https://api.stll.app
 

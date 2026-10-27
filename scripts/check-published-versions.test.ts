@@ -349,7 +349,7 @@ describe("published registry versions", () => {
       /import\s*\{[^}]*ALL_PACKAGE_ORDER[^}]*\}\s*from "\.\/publish-packages"/u,
     );
     expect(selection).toMatch(
-      /if \(manualPackage === "all"\)\s*\{\s*return ALL_PACKAGE_ORDER;\s*\}/u,
+      /if \(manualPackage === "all"\)\s*\{\s*return dependenciesFirst\(ALL_PACKAGE_ORDER\);\s*\}/u,
     );
     const workflow = await Bun.file(
       new URL("../.github/workflows/publish-npm.yml", import.meta.url),

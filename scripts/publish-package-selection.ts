@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 
-import { ALL_PACKAGE_ORDER, LIBRARY_PACKAGE_ORDER } from "./publish-packages";
+import {
+  ALL_PACKAGE_ORDER,
+  dependenciesFirst,
+  LIBRARY_PACKAGE_ORDER,
+} from "./publish-packages";
 
 type PublishEvent = "push" | "workflow_run" | "workflow_dispatch";
 
@@ -10,9 +14,7 @@ type PublishPackageSelectionOptions = {
   changedPaths: readonly string[];
 };
 
-const isKnownPackage = (
-  packageName: string,
-): packageName is (typeof ALL_PACKAGE_ORDER)[number] =>
+const isKnownPackage = (packageName: string): boolean =>
   ALL_PACKAGE_ORDER.some((knownPackage) => knownPackage === packageName);
 
 export const selectPublishPackages = ({
@@ -21,19 +23,19 @@ export const selectPublishPackages = ({
   changedPaths,
 }: PublishPackageSelectionOptions): readonly string[] => {
   if (eventName === "workflow_run") {
-    return ["cli"];
+    return dependenciesFirst(["cli"]);
   }
 
   if (eventName === "workflow_dispatch") {
     if (manualPackage === "all") {
-      return ALL_PACKAGE_ORDER;
+      return dependenciesFirst(ALL_PACKAGE_ORDER);
     }
 
     if (!isKnownPackage(manualPackage)) {
       panic(`Unknown package '${manualPackage}'.`);
     }
 
-    return [manualPackage];
+    return dependenciesFirst([manualPackage]);
   }
 
   const changed = new Set(changedPaths);
@@ -47,7 +49,7 @@ export const selectPublishPackages = ({
     );
   }
 
-  return selected;
+  return dependenciesFirst(selected);
 };
 
 const FULL_SHA = /^[0-9a-f]{40}$/u;
