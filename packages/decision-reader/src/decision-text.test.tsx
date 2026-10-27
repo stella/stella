@@ -17,7 +17,11 @@ import {
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
-import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
+import {
+  DecisionText,
+  prepareDecisionProvisionCards,
+  prepareDecisionTextPlacements,
+} from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
   DecisionReaderProvider,
@@ -26,6 +30,7 @@ import {
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import type {
   CitedProvisionTarget,
+  DecisionProvisionAnchor,
   ProvisionPreviewData,
   ReaderDecision,
 } from "./reader-types";
@@ -864,4 +869,66 @@ test("EU provisions link to EUR-Lex in every supported citation language without
     expect(markup).toContain('target="_blank"');
     expect(placements.provisionsByAnchorId.size).toBe(0);
   }
+});
+
+test("a margin card's ranges are the cited words of its paragraph", () => {
+  const sentence = "Podle § 90 a § 91 rozhodl soud.";
+  const provision = (section: number) =>
+    ({
+      id: `provision-${String(section)}`,
+      sentenceText: sentence,
+      spanStart: 0,
+      reference: {
+        section,
+        sectionSuffix: null,
+        subsection: null,
+        letter: null,
+        unit: "section",
+      },
+      target: {
+        document: {
+          country: "CZE",
+          id: "act",
+          eli: "eli/act",
+          slug: null,
+          versionValidFrom: null,
+        },
+        preview: null,
+        payload: {
+          documentId: "act",
+          eli: "eli/act",
+          jurisdiction: "CZE",
+          anchorId: `par_${String(section)}`,
+          provisionLabel: `§ ${String(section)}`,
+          statuteTitle: "Zákon",
+          versionValidFrom: null,
+          versionCount: 1,
+        },
+      },
+    }) satisfies DecisionProvisionAnchor;
+  const cards = prepareDecisionProvisionCards({
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cited",
+        anchorId: "p-9",
+        number: 9,
+        inlines: [{ type: "text", text: sentence }],
+        plainText: sentence,
+      },
+    ],
+    provisionAnchors: [provision(90), provision(91)],
+  });
+  expect(
+    cards.map(({ ranges, startAnchorId }) => [
+      startAnchorId,
+      ranges.map(({ citationId, end, start }) => [
+        citationId,
+        sentence.slice(start, end),
+      ]),
+    ]),
+  ).toEqual([
+    ["p-9", [["provision-90", "§ 90"]]],
+    ["p-9", [["provision-91", "§ 91"]]],
+  ]);
 });

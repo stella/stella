@@ -9,6 +9,7 @@ import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragr
 import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
+import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text";
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
@@ -30,6 +31,7 @@ import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
@@ -89,6 +91,10 @@ import {
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import {
+  MarginCitationFilterBar,
+  useMarginCitationFilter,
+} from "@/features/case-law/components/case-viewer/margin-citation-filter";
 import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference.logic";
 import { READER_ASIDE_RESIZE_SLOT } from "@/features/case-law/components/case-viewer/reader-aside-slots";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
@@ -364,6 +370,20 @@ const decisionAnalysisView = (
 
   return { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis };
 };
+
+/** The cited-provision cards as margin notes, when the margin shows them. */
+const provisionMarginItems = (
+  shown: boolean,
+  cards: readonly DecisionProvisionCard[],
+): ProvisionMarginItem[] =>
+  shown
+    ? cards.map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+        citations,
+        id: `provision:${id}`,
+        kind: "provision",
+        startAnchorId,
+      }))
+    : [];
 
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
@@ -692,6 +712,19 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     sessionId: landingSessionId,
   });
 
+  const marginBlocks = visibleDecisionBlocks(ast, decision.caseNumberType);
+  const showsMarginProvisions =
+    provisions.expandProvisions && answerPlacement === "gutter";
+  const marginCitations = useMarginCitationFilter({
+    blocks: marginBlocks,
+    cards: prepareDecisionProvisionCards({
+      blocks: marginBlocks,
+      provisionAnchors,
+    }),
+    landingKey: landingRoute,
+    landingParagraphId: resolvedLandingAnchorId,
+  });
+
   const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
     setLandingAnchorId(undefined);
     const container = mainRef.current;
@@ -838,17 +871,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...(provisions.expandProvisions && answerPlacement === "gutter"
-      ? prepareDecisionProvisionCards({
-          blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
-          provisionAnchors,
-        }).map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
-          citations,
-          id: `provision:${id}`,
-          kind: "provision",
-          startAnchorId,
-        }))
-      : []),
+    ...provisionMarginItems(
+      showsMarginProvisions,
+      marginCitations.visibleCards,
+    ),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
@@ -1067,6 +1093,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     are measured against the space the layers above them leave
                     free instead of against the whole column. */}
                   <div className="relative flex-1">
+                    {showsMarginProvisions && (
+                      <MarginCitationFilterBar
+                        count={marginCitations.visibleCards.length}
+                        filter={marginCitations.filter}
+                        onShowAll={marginCitations.showAll}
+                        paragraphNumber={marginCitations.paragraphNumber}
+                      />
+                    )}
                     {visibleMarginItems.length > 0 && (
                       <MarginNotes
                         items={visibleMarginItems}
@@ -1115,10 +1149,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   </div>
                 </aside>
 
+                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click in a paragraph focuses it for the margin; the keyboard path is the paragraph's permalink, whose Enter click bubbles here */}
                 <main
                   className={cn(
                     "reader-paper min-w-0 pb-8",
                     LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+                  )}
+                  onClick={containedEventHandler((event) =>
+                    marginCitations.focusParagraphAt(event.target),
                   )}
                   ref={attachContent}
                   data-slot="reader-document-column"
@@ -1199,6 +1237,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               ? t("readerAnswers.selectionError")
               : undefined
           }
+          onSelectedSpansChange={marginCitations.selectSpans}
           scrollContainerRef={mainRef}
           target={annotationTarget}
         />
