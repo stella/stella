@@ -66,7 +66,7 @@ checks:
       CI_CHECK_KIND: STATIC
       CI_CHECK_INPUTS: tracked-tree+generated-inputs
     id: static_check_014
-    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test release image CI gate')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
     # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
     run: bun test --timeout 50000 scripts/ci-plan.test.ts
 

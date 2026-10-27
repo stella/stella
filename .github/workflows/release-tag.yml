@@ -72,6 +72,7 @@ jobs:
           no-cache: true
 
       - name: Select the release commit
+        timeout-minutes: 5
         id: candidate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -79,8 +80,10 @@ jobs:
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Preserve the trusted release guard
+        timeout-minutes: 5
         run: |
           cp scripts/verify-release-tree-proof.sh "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          cp scripts/retry.sh "$RUNNER_TEMP/retry.sh"
           cp scripts/verify-release-candidate-tree.mjs "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           cp scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
           cp scripts/release-gate.sh "$RUNNER_TEMP/release-gate.sh"
@@ -91,6 +94,7 @@ jobs:
       # Every gate below runs even when an earlier one fails; each records
       # its outcome and the verdict step lists all failures in one run.
       - name: Require RC source identity and incident gates
+        timeout-minutes: 5
         id: evidence
         continue-on-error: true
         env:
@@ -228,6 +232,7 @@ jobs:
 
       - name: Move the final tag to the proven RC commit
         if: steps.proof.outputs.sha != ''
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           RELEASE_SHA: ${{ steps.proof.outputs.sha }}

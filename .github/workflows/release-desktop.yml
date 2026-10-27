@@ -163,7 +163,7 @@ jobs:
             exit 1
           fi
 
-          git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
+          bash "${GITHUB_WORKSPACE}/scripts/retry.sh" git fetch --no-tags origin "refs/tags/${REF}:refs/tags/${REF}"
           if [[ -n "$UPSTREAM_RUN_ID" ]]; then
             if ! bash "$RUNNER_TEMP/check-release-publication-source.sh" "$UPSTREAM_RUN_ID" "$REF" "$RELEASE_SHA"; then
               echo "::notice::No production promotion receipt for $REF; no desktop publication."

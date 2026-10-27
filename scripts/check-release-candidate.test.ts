@@ -120,6 +120,18 @@ test("staging and heavy run the trusted candidate checker before source executio
     );
     const steps = field(field(field(workflow, "jobs"), job), "steps");
     expect(Array.isArray(steps)).toBe(true);
+    // Only the workflow revision's own retry helper runs before the checker.
+    const [helperCheckout, helperStage]: unknown[] = Array.isArray(steps)
+      ? steps
+      : [];
+    expect(field(helperCheckout, "name")).toBe("Checkout network retry helper");
+    expect(field(field(helperCheckout, "with"), "ref")).toBe(
+      `\${{ github.workflow_sha }}`,
+    );
+    expect(field(field(helperCheckout, "with"), "sparse-checkout")).toBe(
+      "scripts/retry.sh",
+    );
+    expect(field(helperStage, "name")).toBe("Stage network retry helper");
     const step: unknown = Array.isArray(steps)
       ? steps.find(
           (value) => field(value, "name") === "Check release candidate",

@@ -263,11 +263,14 @@ test("the sole named waiver validates before checkout and derives its downstream
   const resolveSteps =
     workflow.jobs["resolve"]?.steps ?? panic("Missing resolver steps");
   const waiverIndex = resolveSteps.findIndex(({ id }) => id === "waiver");
-  const checkoutIndex = resolveSteps.findIndex(({ uses }) =>
-    uses?.startsWith("actions/checkout@"),
+  // The network retry helper checkout reads only the workflow's own revision.
+  const candidateCheckoutIndex = resolveSteps.findIndex(
+    (step) =>
+      step.uses?.startsWith("actions/checkout@") &&
+      step.with?.["ref"] !== `\${{ github.workflow_sha }}`,
   );
   expect(waiverIndex).toBeGreaterThanOrEqual(0);
-  expect(checkoutIndex).toBeGreaterThan(waiverIndex);
+  expect(candidateCheckoutIndex).toBeGreaterThan(waiverIndex);
   expect(workflow.jobs["resolve"]?.outputs?.["corpus_search_waived"]).toBe(
     `\${{ steps.waiver.outputs.corpus_search_waived }}`,
   );

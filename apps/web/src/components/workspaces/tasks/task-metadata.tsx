@@ -34,7 +34,7 @@ import {
   TASK_STATUSES,
   WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   useAddTaskAssignee,
@@ -221,7 +221,7 @@ const hasDeletedAccount = (deletedAt: string | null | undefined): boolean =>
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   return (
     <DatePickerPopoverBase
