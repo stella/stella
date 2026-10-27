@@ -1848,8 +1848,12 @@ const createReviewJourneyContext = (
     token?: string;
     refreshToken?: string;
     createdTaskId?: string;
-    toolLatencyFailure?: string;
-  } = { step: "sign-in", lastResponse: undefined };
+    toolLatencyFailure: string | undefined;
+  } = {
+    step: "sign-in",
+    lastResponse: undefined,
+    toolLatencyFailure: undefined,
+  };
 
   const reject: (assertion: string) => never = (assertion) => {
     throw new ReviewJourneyError({
