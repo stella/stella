@@ -1809,13 +1809,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "FIX_BRANCH",
   // Shell fixtures for the dependency-audit gate and remediation scripts.
   "TEST_AUDIT_STATUS",
-  "TEST_CONCURRENT_SHA",
+  "TEST_ASSESS_STATUS",
   "TEST_FIX_AVAILABLE",
   "TEST_OPEN_PRS",
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
-  "TEST_LS_REMOTE_FAILS_ONCE",
   "WXT_STELLA_ORIGINS",
 ]);
 

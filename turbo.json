@@ -1467,7 +1467,6 @@
         "$TURBO_ROOT$/apps/web/src/features/chat/hooks/use-chat-session-send-queue.logic.ts",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
-        "$TURBO_ROOT$/apps/web/public/stella-logo-512.png",
         "$TURBO_ROOT$/apps/desktop/src-tauri/Cargo.toml",
         "$TURBO_ROOT$/apps/desktop/src-tauri/src/http_client.rs",
         "$TURBO_ROOT$/packages/mcp-apps/src/**",
