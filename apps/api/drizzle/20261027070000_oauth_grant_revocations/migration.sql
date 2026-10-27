@@ -5,8 +5,9 @@ CREATE TABLE "oauth_grant_revocations" (
   "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "oauth_client_id" text NOT NULL,
+  "grant_id" text NOT NULL,
   "revoked_at" timestamp with time zone NOT NULL,
-  CONSTRAINT "oauth_grant_revocations_pk" PRIMARY KEY ("organization_id", "user_id", "oauth_client_id")
+  CONSTRAINT "oauth_grant_revocations_pk" PRIMARY KEY ("organization_id", "user_id", "oauth_client_id", "grant_id")
 );
 --> statement-breakpoint
 CREATE INDEX "oauth_grant_revocations_user_revoked_at_idx" ON "oauth_grant_revocations" ("user_id", "revoked_at");

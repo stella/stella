@@ -93,6 +93,9 @@ export const resolveAgentAuditExecution = async ({
             eq(oauthGrantRevocations.oauthClientId, credential.clientId),
             eq(oauthGrantRevocations.userId, userId),
             eq(oauthGrantRevocations.organizationId, organizationId),
+            credential.grantId === undefined
+              ? sql`${oauthGrantRevocations.revokedAt} >= to_timestamp(${credential.issuedAt})`
+              : eq(oauthGrantRevocations.grantId, credential.grantId),
           ),
         )
         .limit(1)
@@ -101,9 +104,8 @@ export const resolveAgentAuditExecution = async ({
       const isRevoked =
         match?.revokedAt !== null &&
         match?.revokedAt !== undefined &&
-        (credential.grantId === undefined || match.revokedGrantId === null
-          ? match.revokedAt.getTime() >= credential.issuedAt * 1000
-          : match.revokedGrantId === credential.grantId);
+        (credential.grantId === undefined ||
+          match.revokedGrantId === credential.grantId);
       if (isRevoked) {
         return Result.err(
           new McpAuthenticationError({

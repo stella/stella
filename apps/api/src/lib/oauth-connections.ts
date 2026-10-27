@@ -158,13 +158,13 @@ export const disconnectOAuthConnectionForUser = async ({
               grantId: consent.id,
               revokedAt,
             })
-            .onConflictDoUpdate({
+            .onConflictDoNothing({
               target: [
                 oauthGrantRevocations.organizationId,
                 oauthGrantRevocations.userId,
                 oauthGrantRevocations.oauthClientId,
+                oauthGrantRevocations.grantId,
               ],
-              set: { grantId: consent.id, revokedAt },
             });
           const recordAuditEvent = createAuditRecorder({
             organizationId: brandPersistedOrganizationId(consent.referenceId),

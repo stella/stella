@@ -374,6 +374,22 @@ describe("disconnecting a connected app", () => {
 
     const reconnectedGrant = await grantOAuthClient(owner, disconnectedClient);
     expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(true);
+
+    const reconnectedConnection = (await listConnections(owner)).find(
+      ({ clientId }) => clientId === disconnectedClient.clientId,
+    );
+    if (!reconnectedConnection) {
+      throw new Error("The reconnected grant is not listed");
+    }
+    expect((await disconnect(owner, reconnectedConnection.id)).status).toBe(
+      200,
+    );
+
+    expect(await opensMcpContext(disconnectedGrant.accessToken)).toBe(false);
+    expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(false);
+
+    const thirdGrant = await grantOAuthClient(owner, disconnectedClient);
+    expect(await opensMcpContext(thirdGrant.accessToken)).toBe(true);
   });
 
   test("ends that grant's tokens and consent and leaves the user's other connected apps working", async () => {

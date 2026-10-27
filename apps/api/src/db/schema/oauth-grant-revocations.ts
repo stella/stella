@@ -15,12 +15,17 @@ export const oauthGrantRevocations = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     oauthClientId: text("oauth_client_id").notNull(),
-    grantId: text("grant_id"),
+    grantId: text("grant_id").notNull(),
     revokedAt: timestamptz("revoked_at").notNull(),
   },
   (table) => [
     primaryKey({
-      columns: [table.organizationId, table.userId, table.oauthClientId],
+      columns: [
+        table.organizationId,
+        table.userId,
+        table.oauthClientId,
+        table.grantId,
+      ],
       name: "oauth_grant_revocations_pk",
     }),
     index("oauth_grant_revocations_user_revoked_at_idx").on(
