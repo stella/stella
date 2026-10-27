@@ -243,11 +243,10 @@ test("the retention migration changes only foreign keys and keeps every time ent
     .filter((key) => key.parent === "workspaces")
     .map((key) => key.name)
     .toSorted();
-  expect(
-    MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS.map(
-      ({ constraintName }) => constraintName,
-    ).toSorted(),
-  ).toEqual(retainedNames);
+  const swappedNames: string[] = MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS.map(
+    ({ constraintName }) => constraintName,
+  ).toSorted();
+  expect(swappedNames).toEqual(retainedNames);
   expect(
     (
       await database.query<{ validated: boolean }>(

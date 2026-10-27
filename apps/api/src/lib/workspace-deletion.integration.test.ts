@@ -909,8 +909,11 @@ describe("workspace deletion", () => {
 
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
-        expect(result.error).toBeInstanceOf(WorkspaceBillingHistoryError);
-        expect(result.error.message).toBe(
+        const { error } = result;
+        expect(error).toBeInstanceOf(WorkspaceBillingHistoryError);
+        expect(
+          error instanceof WorkspaceBillingHistoryError ? error.message : null,
+        ).toBe(
           "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
         );
       }
