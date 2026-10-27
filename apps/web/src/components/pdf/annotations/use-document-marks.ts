@@ -156,7 +156,10 @@ export const useDocumentMarks = ({
     create: async ({ spans, ...input }: CreateDocumentMarkInput) =>
       unwrapApiResponse(
         await submitIntent.run({
-          operation: "document-annotations.create",
+          operation: JSON.stringify([
+            "document-annotations.create",
+            { entityId, fieldId, workspaceId },
+          ]),
           body: {
             ...input,
             spans: spans.map(

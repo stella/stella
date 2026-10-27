@@ -595,6 +595,27 @@ const createMutationViolations = ({
       ts.isObjectLiteralExpression(call.parent)
     ) {
       protectedCall = ownedRun(call.parent.parent);
+      // The server fingerprints the path with the body, so one operation
+      // shared by every path would replay a key minted for another target.
+      const operation = call.parent.properties.find(
+        (entry): entry is ts.PropertyAssignment =>
+          ts.isPropertyAssignment(entry) &&
+          ts.isIdentifier(entry.name) &&
+          entry.name.text === "operation",
+      )?.initializer;
+      if (
+        protectedCall &&
+        route.includes("*") &&
+        operation !== undefined &&
+        ts.isStringLiteralLike(operation)
+      ) {
+        const position = tree.getLineAndCharacterOfPosition(
+          node.getStart(tree),
+        );
+        violations.push(
+          `${file}:${position.line + 1}: ${node.name.text}:${route.join("/")} needs an operation that names its path parameters`,
+        );
+      }
     }
     if (!protectedCall) {
       const position = tree.getLineAndCharacterOfPosition(node.getStart(tree));
@@ -907,7 +928,7 @@ test("create census resolves lexically scoped parameter-object aliases", () => {
       const alias = scope;
       api.tasks(alias).put(body, {});
       api.lists(scope).put(body);
-      submit.run({ body, operation: "task", send: api.tasks(alias).put });
+      submit.run({ body, operation: \`task:\${alias.workspaceId}\`, send: api.tasks(alias).put });
     }
     function nested() {
       const scope = { workspaceId: dynamicId, entityId: anotherId };
@@ -921,6 +942,25 @@ test("create census resolves lexically scoped parameter-object aliases", () => {
   });
   expect(result.createCalls).toBe(4);
   expect(result.violations).toHaveLength(3);
+});
+
+test("create census rejects one fixed operation shared by every path of a parameterized route", () => {
+  const source = `
+    import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+    const submit = useIdempotentSubmit();
+    submit.run({ body, operation: "marks.create", send: api.things({ id }).items.post });
+    submit.run({ body, operation: \`marks.create:\${id}\`, send: api.things({ id }).items.post });
+    submit.run({ body, operation: "things.create", send: api.things.put });
+  `;
+  const result = createMutationViolations({
+    file: "fixture.ts",
+    text: source,
+    creates: new Set(["post:things/*/items", "put:things"]),
+  });
+  expect(result.createCalls).toBe(3);
+  expect(result.violations).toEqual([
+    "fixture.ts:4: post:things/*/items needs an operation that names its path parameters",
+  ]);
 });
 
 test("create census projects mounted native routes into browser paths and replay policies", () => {
