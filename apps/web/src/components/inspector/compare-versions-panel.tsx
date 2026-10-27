@@ -32,6 +32,7 @@ import {
   type EntityVersion,
   entityVersionsKeys,
 } from "@/lib/workspaces/queries/entity-versions";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 import {
   COMPARE_CHANGE_KIND_LABEL_KEYS,
@@ -122,6 +123,7 @@ export const CompareVersionsPanel = ({
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const openFileForEntity = useInspectorTabsStore((s) => s.openFileForEntity);
   const outcomeOptions = compareOutcomeOptions({
@@ -207,10 +209,9 @@ export const CompareVersionsPanel = ({
     if (!onDocumentRoute) {
       return;
     }
-    const currentViewId = pathname.split("/")[3] ?? "all";
     await navigate({
       to: "/workspaces/$workspaceId/$viewId/document",
-      params: { workspaceId, viewId: currentViewId },
+      params: viewParams,
       replace: true,
       search: (previous) => ({
         ...previous,

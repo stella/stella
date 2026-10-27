@@ -57,7 +57,7 @@ const sendEntryPatterns = {
 };
 const sendEntryPoints = {
   "components/ai-suggestions/file-chat-overlay.tsx": {
-    controllerSubmit: 2,
+    controllerSubmit: 3,
     promptBar: 1,
   },
   "components/ai-suggestions/host.tsx": { composerWiring: 1 },

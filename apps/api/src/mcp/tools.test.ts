@@ -54,6 +54,7 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { slugify } from "@stll/text-normalize";
 
 import {
   entities,
@@ -89,6 +90,7 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { activeStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { readPresent } from "@/api/lib/errors/read-outcome";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
@@ -543,7 +545,7 @@ const createRelatedDecision = (
   ecli: null,
   language: "cs",
   languageAlternates: [],
-  slug: `ns-${caseNumber.toLowerCase().replaceAll(/[^\da-z]+/gu, "-")}`,
+  slug: `ns-${slugify(caseNumber, { charset: "ascii", fallback: "", maxLength: Number.MAX_SAFE_INTEGER, separator: "-" })}`,
   ...overrides,
 });
 
@@ -1891,11 +1893,17 @@ describe("OpenAI-compatible MCP tools", () => {
     test("allows a manual lookup outside the advertised home jurisdictions", async () => {
       const baseContext = createContext();
       const executeRegistryLookupMock = mock(
-        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => ({
-          type: "lookup" as const,
-          registry: handler.slug,
-          hit: null,
-        }),
+        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => {
+          expect(activeStatementCeiling()).toEqual({
+            kind: "mcp",
+            key: "lookup_business_registry",
+          });
+          return {
+            type: "lookup" as const,
+            registry: handler.slug,
+            hit: null,
+          };
+        },
       );
       const result = await handleMcpToolCall({
         args: { registry: "krs", query: "0000123456" },
@@ -6720,11 +6728,19 @@ describe("OpenAI-compatible MCP tools", () => {
                   },
                 ],
               },
+              // The decision numbers its paragraphs as structure, so the
+              // outline's numbered entries are those paragraphs; a line that
+              // only prints a figure (`43. Context`) is not one.
               outline: [
                 {
                   title: "II. Posouzení věci",
                   page: 1,
                   url: `${DECISION_APP_URL}#h-1`,
+                },
+                {
+                  title: "Majority",
+                  page: 1,
+                  url: `${DECISION_APP_URL}#par=23`,
                 },
                 {
                   title: "Odlišné stanovisko soudce X",
@@ -6735,11 +6751,6 @@ describe("OpenAI-compatible MCP tools", () => {
                   title: "[42] dissent match",
                   page: 1,
                   url: `${DECISION_APP_URL}#par=99`,
-                },
-                {
-                  title: "43. Context",
-                  page: 1,
-                  url: `${DECISION_APP_URL}#p-3`,
                 },
               ],
             },
@@ -6759,8 +6770,15 @@ describe("OpenAI-compatible MCP tools", () => {
         ),
       ).toBe(true);
       const whole = await readOne({ full: true });
+      // The AST's text, each court-numbered paragraph behind its number.
       expect(whole.decision).toMatchObject({
-        text: astText,
+        text: [
+          "II. Posouzení věci",
+          "¶ 23 Majority",
+          "Odlišné stanovisko soudce X",
+          "¶ 99 [42] dissent match",
+          "43. Context",
+        ].join("\n\n"),
         textSource: "ast",
       });
       for (const publishedParagraph of fulltext.split("\n")) {
@@ -7355,28 +7373,39 @@ describe("OpenAI-compatible MCP tools", () => {
             inlines: [],
             plainText: "I. Reasoning",
           },
+          // As parsers store them: the court's number is structure, and
+          // the paragraph's text no longer prints it.
           {
             type: "paragraph",
             id: "b-1",
             anchorId: "p-1",
             number: 48,
             inlines: [],
-            plainText: "48. Nájemce zaplatil nájemné včas.",
+            plainText: "Nájemce zaplatil nájemné včas.",
           },
           {
             type: "paragraph",
             id: "b-2",
             anchorId: "p-2",
             inlines: [],
-            plainText: "49. Mezitím.",
+            plainText: "Mezitím.",
           },
           {
             type: "paragraph",
             id: "b-3",
             anchorId: "p-3",
+            number: 49,
+            inlines: [],
+            plainText: "Nájemné bylo splatné.",
+          },
+          // A stored number that is not a court's paragraph number.
+          {
+            type: "paragraph",
+            id: "b-4",
+            anchorId: "p-4",
             number: 0,
             inlines: [],
-            plainText: "50. Nájemné bylo splatné.",
+            plainText: "Nájemce nezaplatil.",
           },
         ],
       },
@@ -7386,13 +7415,15 @@ describe("OpenAI-compatible MCP tools", () => {
       `${DECISION_APP_URL}#h-1`,
       `${DECISION_APP_URL}#par=48`,
       `${DECISION_APP_URL}#p-2`,
-      `${DECISION_APP_URL}#p-3`,
+      `${DECISION_APP_URL}#par=49`,
+      `${DECISION_APP_URL}#p-4`,
     ]);
+    // The outline's numbered entries are the court's paragraphs, linked by
+    // their numbers; an unnumbered paragraph is not an outline entry.
     expect(entry.decision?.outline?.map(({ url }) => url)).toEqual([
       `${DECISION_APP_URL}#h-1`,
       `${DECISION_APP_URL}#par=48`,
-      `${DECISION_APP_URL}#p-2`,
-      `${DECISION_APP_URL}#p-3`,
+      `${DECISION_APP_URL}#par=49`,
     ]);
   });
 

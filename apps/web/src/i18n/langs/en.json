@@ -927,9 +927,14 @@
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}",
       "dateUnavailable": "Date unavailable",
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}",
+      "goToMention": "Go to mention {number}",
+      "goToParagraph": "Go to paragraph {paragraph}",
       "lastNegative": "last negative treatment in {year}",
+      "mentionMark": "mention {number}",
+      "mentionsInDecision": "{count, plural, one {Cited once in this decision} other {Cited # times in this decision}}",
       "negativeCount": "{count, plural, one {# negative} other {# negative}}",
       "none": "No citations recorded yet.",
+      "notInStella": "Not in stella yet",
       "openAtCitation": "Open at the citation",
       "openDecision": "Open decision",
       "paragraphLabel": "Paragraph {paragraph}",
@@ -1059,8 +1064,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Human"
+      "human": "Human",
+      "toggleState": "{label}: {state, select, on {on} other {off}}"
     },
+    "oldestDecisions": "Oldest decisions",
     "pagination": {
       "goToPage": "Go to page {page}",
       "label": "Result pages",
@@ -1122,8 +1129,7 @@
       "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.",
       "runTitle": "Answer this page",
       "savedQuestions": "Saved questions",
-      "title": "Research tables",
-      "updated": "Last edited {date}"
+      "title": "Research tables"
     },
     "results": {
       "excerpt": {
@@ -1167,6 +1173,8 @@
     "showWholeHeadnote": "Show whole headnote",
     "sort": {
       "newest": "Newest",
+      "oldest": "Oldest",
+      "oldestUnavailable": "A search is ordered by relevance or newest first. Clear the search to list the oldest decisions first.",
       "relevance": "Most relevant"
     },
     "viewer": {
@@ -1182,6 +1190,7 @@
       "citedDecisionPassage": "Passage in the decision",
       "cites": "Cites",
       "dissentByline": "Dissenting: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Go to paragraph} other {Go to paragraphs}}",
       "judgeRole": {
         "advocateGeneral": "Advocate General",
         "dissenting": "Dissenting opinion",
@@ -2239,10 +2248,12 @@
     "scrollToTop": "Scroll to top",
     "search": "Search...",
     "searchIn": "Search in",
+    "searchMembers": "Search members…",
     "selectAMatter": "Select a matter",
     "selectARole": "Select a role",
     "selectAll": "Select all",
     "selectDate": "Select date…",
+    "selected": "Selected",
     "sessions": "Sessions",
     "settings": "Settings",
     "showAll": "Show all",
@@ -4287,6 +4298,8 @@
       "commentPlaceholder": "Write a comment…",
       "commentText": "Comment text",
       "commentedPassage": "Commented passage",
+      "editComment": "Edit comment",
+      "editedAt": "Edited {time}",
       "guestAuthor": "You",
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.",
       "guestMigrationComplete": "Highlights and notes saved.",
@@ -6244,8 +6257,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Set lead",
-        "noLead": "No lead",
-        "searchMembers": "Search members…"
+        "noLead": "No lead"
       },
       "to": "To"
     },
@@ -6307,6 +6319,7 @@
       "deleteAll": "Delete all",
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?",
       "hideColumn": "Hide column",
+      "moveFailed": "{failed, plural, one {# of {total} items could not be moved.} other {# of {total} items could not be moved.}}",
       "readOnlyGrouping": "This grouping is read-only",
       "selectPropertyHint": "Select a property to group by in the toolbar",
       "uploadDocument": "Upload document",
@@ -6325,10 +6338,10 @@
       "addMember": "Add to matter",
       "addMemberDescription": "Choose an existing team member to add to this matter",
       "alreadyMember": "User is already a member",
+      "alreadyOnMatter": "Already on this matter",
       "cannotRemoveLast": "Cannot remove the last member",
       "noMembersFound": "No members found",
-      "removeMemberConfirm": "Remove this member from the matter?",
-      "selectMember": "Select a member"
+      "removeMemberConfirm": "Remove this member from the matter?"
     },
     "newDocument": "New document",
     "newFolder": "New folder",
@@ -6366,7 +6379,6 @@
           "approvedBy": "Approved by",
           "channel": "Channel",
           "dateTime": "Date and time",
-          "eventId": "Event ID",
           "notAvailable": "Not available",
           "openTarget": "Open item",
           "runId": "Run ID",
@@ -6549,6 +6561,11 @@
       },
       "passwordLabel": "Enter the PDF password",
       "previousPage": "Previous page",
+      "selection": {
+        "explainPassagePrompt": "Explain this passage of {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "pp. {start}–{end}"
+      },
       "showOriginal": "Show original pages",
       "unlock": "Unlock"
     },
@@ -6662,10 +6679,12 @@
       "selectOperator": "Select operator",
       "setPromptPlaceholder": "Set a prompt to extract the information",
       "singleSelect": "Single Select",
-      "sortAscending": "Sort ascending",
       "sortAscendingDate": "Oldest first",
-      "sortDescending": "Sort descending",
+      "sortAscendingNumber": "Lowest first",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Newest first",
+      "sortDescendingNumber": "Highest first",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Suggest with AI",
       "text": "Text",

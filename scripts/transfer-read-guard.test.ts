@@ -242,13 +242,16 @@ test("lowercase constant bindings need budgets while shadowed page inputs do not
   ).toEqual(["constant-limit"]);
 });
 
-test("literal, named, arithmetic and computed constant limits need a contract", () => {
+test("literal, named, arithmetic, fallback and computed constant limits need a contract", () => {
   for (const limit of [
     "10_000",
     "EXPORT_CAP",
     "LIMITS.exportRowLimit",
     "LIMITS.exportRowLimit + 1",
     'LIMITS["exportRowLimit"]',
+    "PRIMARY_CAP ?? FALLBACK_CAP",
+    "PRIMARY_CAP || 10_000",
+    "HAS_CAP && LIMITS.exportRowLimit",
   ]) {
     expect(
       findTransferReads(
@@ -261,6 +264,12 @@ test("literal, named, arithmetic and computed constant limits need a contract", 
     findTransferReads(
       file,
       "const list = ({ limit }) => query.limit(limit + 1);",
+    ),
+  ).toEqual([]);
+  expect(
+    findTransferReads(
+      file,
+      "const list = ({ limit }) => query.limit(limit ?? EXPORT_CAP);",
     ),
   ).toEqual([]);
   expect(
@@ -596,4 +605,34 @@ test("production grouped lateral reads use the bounded owner without fixed-limit
   expect(
     findTransferReads(productionFile, rawSentinels).map(({ kind }) => kind),
   ).toEqual(["constant-limit", "constant-limit"]);
+});
+
+test("computed keys count only when they name a static timeout or response method", () => {
+  for (const [key, expected] of [
+    ["timeoutMs", ["numeric-timeout", "total-timeout-body"]],
+    ['["timeoutMs"]', ["numeric-timeout", "total-timeout-body"]],
+    ["[timeoutMs]", []],
+  ] as const) {
+    const source = `export const work = async () => {
+      const response = await fetch(url, { ${key}: 1000 });
+      return response?.json();
+    };`;
+    expect(findTransferReads(file, source).map(({ kind }) => kind)).toEqual([
+      ...expected,
+    ]);
+  }
+  for (const [member, expected] of [
+    ['["json"]', ["numeric-timeout", "total-timeout-body"]],
+    ["[json]", ["numeric-timeout"]],
+  ] as const) {
+    expect(
+      findTransferReads(
+        file,
+        `export const work = async () => {
+          const response = await fetch(url, { timeoutMs: 1000 });
+          return response${member}();
+        };`,
+      ).map(({ kind }) => kind),
+    ).toEqual([...expected]);
+  }
 });

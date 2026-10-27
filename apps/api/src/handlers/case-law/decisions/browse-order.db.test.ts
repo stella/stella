@@ -2,6 +2,11 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  type DecisionListSort,
+  DEFAULT_DECISION_LIST_SORT,
+} from "@stll/api-contract/search";
+
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
   courtWeightMapFromSeed,
@@ -98,6 +103,26 @@ const seeds: Seed[] = [
     language: "sk",
     languageGroupKey: null,
   },
+  // One judgment in two languages: the version stored first carries no date,
+  // the later translation does.
+  {
+    caseNumber: "5 C 1/2024",
+    court: "Okresný súd Košice I",
+    country: "SVK",
+    createdAt: day(60),
+    decisionDate: null,
+    language: "sk",
+    languageGroupKey: "SVK:OSKE1:5C1/2024",
+  },
+  {
+    caseNumber: "5 C 1/2024",
+    court: "Okresný súd Košice I",
+    country: "SVK",
+    createdAt: day(61),
+    decisionDate: "2024-05-02",
+    language: "en",
+    languageGroupKey: "SVK:OSKE1:5C1/2024",
+  },
 ];
 
 let client: PGlite;
@@ -144,12 +169,20 @@ afterAll(async () => {
   await client.close();
 });
 
-const walk = async (limit: number) => {
+const walk = async (
+  limit: number,
+  sort: DecisionListSort = DEFAULT_DECISION_LIST_SORT,
+) => {
   const items = [];
   let cursor: string | undefined;
   for (let page = 0; page < 20; page += 1) {
     const result = await listDecisionsHandler(
-      { country: "CZE", limit, ...(cursor === undefined ? {} : { cursor }) },
+      {
+        country: "CZE",
+        limit,
+        sort,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
       caseLawDb,
       // The registry as the seed migration writes it: this harness holds the
       // public reader alone, and the loader reads the root pool.
@@ -193,6 +226,68 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("oldest first walks the dated decisions in exactly the reverse of newest first, ties included, across pages", async () => {
+  const newest = await walk(50, "newest");
+  const oldest = await walk(1, "oldest");
+  const dates = oldest.map((item) => item.decisionDate ?? "");
+
+  // The fixture holds a tie the walk must cross a page boundary inside: the
+  // Czech decision and the CJEU judgment share 2024-03-05.
+  expect(dates.filter((date) => date === "2024-03-05")).toHaveLength(2);
+  expect(dates).toEqual(dates.toSorted());
+  expect(new Set(oldest.map((item) => item.id)).size).toBe(oldest.length);
+  // A decision the source never dated is not the oldest: the undated band
+  // newest first ends with is left out, and nothing else is.
+  expect(oldest.some((item) => item.decisionDate === null)).toBe(false);
+  expect(oldest.map((item) => item.id)).toEqual(
+    newest
+      .filter((item) => item.decisionDate !== null)
+      .map((item) => item.id)
+      .toReversed(),
+  );
+  // Paged by number, the walk is the same rows in the same order.
+  const byOffset = [];
+  for (let offset = 0; offset < oldest.length; offset += 4) {
+    const result = await listDecisionsHandler(
+      { country: "CZE", limit: 4, offset, sort: "oldest" },
+      caseLawDb,
+      async () => courtWeightMapFromSeed(),
+    );
+    if (!("items" in result)) {
+      throw new Error("list failed");
+    }
+    byOffset.push(...result.items);
+  }
+  expect(byOffset.map((item) => item.id)).toEqual(
+    oldest.map((item) => item.id),
+  );
+});
+
+test("a cursor resumes only the order that issued it", async () => {
+  const page = async (sort: DecisionListSort, cursor?: string) =>
+    await listDecisionsHandler(
+      {
+        country: "CZE",
+        limit: 2,
+        sort,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+      caseLawDb,
+      async () => courtWeightMapFromSeed(),
+    );
+  for (const [issuer, reader] of [
+    ["newest", "oldest"],
+    ["oldest", "newest"],
+  ] as const) {
+    const first = await page(issuer);
+    if (!("items" in first) || first.nextCursor === null) {
+      throw new Error("list failed");
+    }
+    expect("items" in (await page(issuer, first.nextCursor))).toBe(true);
+    expect("items" in (await page(reader, first.nextCursor))).toBe(false);
+  }
+});
 
 test(
   "the headnote is the legal sentence first, else the terms it was filed under",
@@ -258,6 +353,29 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("oldest first lists a dated version whose undated sibling it excludes", async () => {
+  const result = await listDecisionsHandler(
+    {
+      country: "SVK",
+      court: "Okresný súd Košice I",
+      limit: 10,
+      sort: "oldest",
+    },
+    caseLawDb,
+    async () => courtWeightMapFromSeed(),
+  );
+  if (!("items" in result)) {
+    throw new Error("list failed");
+  }
+  expect(
+    result.items.map(({ caseNumber, decisionDate, language }) => [
+      caseNumber,
+      decisionDate,
+      language,
+    ]),
+  ).toEqual([["5 C 1/2024", "2024-05-02", "en"]]);
+});
 
 test(
   "a tampered cursor is rejected, not silently restarted",
