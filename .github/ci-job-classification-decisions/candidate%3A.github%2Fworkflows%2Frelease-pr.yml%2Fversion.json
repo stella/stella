@@ -1,5 +1,5 @@
 {
-  "kind": "ordinary",
-  "qualifier": "Checks; no publication, tag creation, or deployment.",
-  "reviewedDigest": "39cc6e30520e1fe32c8153c198b3f7354f0a068a57cdd5838f337f1804a58da0"
+  "kind": "priority",
+  "qualifier": "Publishes the version packages pull request.",
+  "reviewedDigest": "d22a69a11b6fc08292cb2e696da58a0e5212122ff44339cae2027972f0b19582"
 }

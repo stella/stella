@@ -169,9 +169,9 @@ type DecisionWorkspaceBaseProps = {
 };
 
 /**
- * A reader without an account, or a member whose own workspace chunk has not
- * arrived yet. The layer is named and offered where it would be drawn instead
- * of being hidden, and the account is asked for on the run.
+ * A reader without an account, or a member whose AI gate (in the member chunk)
+ * has not arrived yet. The layer is named and offered where it would be drawn
+ * instead of being hidden, and the account is asked for on the run.
  *
  * Nothing is read here: the public decision payload deliberately carries no
  * persisted analysis (`case-law-public-route-invariants.test.ts`, "public
@@ -185,7 +185,7 @@ type DecisionWorkspaceBaseProps = {
 type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
   aiMode: typeof DECISION_AI_MODE.gated;
   /**
-   * Opens the account gate. Absent while a member's workspace loads: the
+   * Opens the account gate. Absent while a member's AI gate loads: the
    * column then names the layer without offering a run nobody owns yet.
    */
   onRequestAnalysis?: (() => void) | undefined;
@@ -897,8 +897,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   }[];
 
   return (
-    // A member's page shows the gated reader while the authenticated one
-    // loads, then replaces it; the mode names which reader is on screen.
+    // A member's reader is gated until its AI gate arrives, then enabled on
+    // the same mounted reader; the mode names which one it is now.
     <div
       className="flex h-full flex-col overflow-hidden"
       data-ai-mode={props.aiMode}

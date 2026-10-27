@@ -1139,13 +1139,15 @@ jobs:
             exit 0
           fi
 
-          previous_stable="$(
+          merged_tags="$(
             git tag --list 'v[0-9]*.[0-9]*.[0-9]*' \
               --merged "$RELEASE_REF" \
-              --sort=-v:refname \
-              | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-              | grep -v -x "$RELEASE_REF" \
-              | head -n 1
+              --sort=-v:refname
+          )"
+          previous_stable="$(
+            awk -v release_ref="$RELEASE_REF" \
+              '/^v[0-9]+\.[0-9]+\.[0-9]+$/ && $0 != release_ref { print; exit }' \
+              <<<"$merged_tags"
           )"
 
           if [[ -z "$previous_stable" ]]; then

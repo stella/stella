@@ -618,8 +618,9 @@ jobs:
         run: |
           echo "::add-mask::$BUCKET"
           echo "::add-mask::$DIST_ID"
-          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
-          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+          if [[ "$BUCKET" =~ [0-9]{12} ]]; then
+            echo "::add-mask::${BASH_REMATCH[0]}"
+          fi
 
       - name: Mirror latest.json to downloads CDN
         env:

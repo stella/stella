@@ -1,83 +1,68 @@
-import type { ComponentProps } from "react";
+import { useImperativeHandle } from "react";
+import type { Ref } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { openDecisionConversation } from "@/components/decision-chat-open.logic";
 import {
   AIAvailabilityProvider,
   useAIKeyGate,
 } from "@/components/require-ai-key";
-import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { decisionChatThreadOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
-import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { SafeId } from "@/lib/safe-id";
 
-type AuthenticatedCaseLawWorkspaceProps = {
-  decision: ComponentProps<typeof DecisionWorkspace>["decision"];
-  decisionId: SafeId<"caseLawDecision">;
-  initialAnchorId?: string | undefined;
-  landingSessionId?: string | undefined;
-  user: AuthenticatedUser;
+/** What a member's decision reader asks of this chunk before it runs AI. */
+export type DecisionReaderAIGate = {
+  ensureAIAvailable: () => Promise<boolean>;
 };
 
-export const AuthenticatedCaseLawWorkspace = ({
-  decision,
+type AuthenticatedDecisionToolsProps = {
+  decisionId: SafeId<"caseLawDecision">;
+  /** Receives the AI key gate once it is mounted, and null when it leaves. */
+  ref: Ref<DecisionReaderAIGate>;
+};
+
+/**
+ * What a member adds to a public decision page, in a chunk a visitor never
+ * loads. It mounts beside the reader, never around it: the reader is already
+ * on screen when the chunk arrives, and wrapping it in these providers then
+ * would replace it, scroll position, focus and all. The reader's chat overlay
+ * brings its own composer providers.
+ */
+export const AuthenticatedDecisionTools = ({
   decisionId,
-  initialAnchorId,
-  landingSessionId,
-  user,
-}: AuthenticatedCaseLawWorkspaceProps) => (
-  <AuthenticatedUserProvider user={user}>
+  ref,
+}: AuthenticatedDecisionToolsProps) => {
+  const user = useAuthenticatedUser();
+  return (
     <ChatMentionProviders>
       <AIAvailabilityProvider>
-        <ChatEditorProvider>
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <AuthenticatedDecisionWorkspace
-              decision={decision}
-              decisionId={decisionId}
-              initialAnchorId={initialAnchorId}
-              landingSessionId={landingSessionId}
-            />
-          </div>
-          {/* The law shell docks the inspector; the reader only seeds its tabs. */}
-          <AutoOpenDecisionChat
-            decisionId={decisionId}
-            key={decisionId}
-            user={user}
-          />
-        </ChatEditorProvider>
+        <DecisionAIGateHandle ref={ref} />
       </AIAvailabilityProvider>
+      {/* The law shell docks the inspector; the reader only seeds its tabs. */}
+      <AutoOpenDecisionChat
+        decisionId={decisionId}
+        key={decisionId}
+        user={user}
+      />
     </ChatMentionProviders>
-  </AuthenticatedUserProvider>
-);
-
-const AuthenticatedDecisionWorkspace = ({
-  decision,
-  decisionId,
-  initialAnchorId,
-  landingSessionId,
-}: Pick<
-  AuthenticatedCaseLawWorkspaceProps,
-  "decision" | "decisionId" | "initialAnchorId" | "landingSessionId"
->) => {
-  const { ensureAIAvailable } = useAIKeyGate();
-
-  return (
-    <DecisionWorkspace
-      aiMode="enabled"
-      decision={decision}
-      decisionId={decisionId}
-      ensureAIAvailable={ensureAIAvailable}
-      initialAnchorId={initialAnchorId}
-      landingSessionId={landingSessionId}
-    />
   );
+};
+
+/**
+ * Hands the page the gate this chunk mounts. The reader calls it only from
+ * the actions that run AI, so it is passed up as a handle rather than drawn.
+ */
+const DecisionAIGateHandle = ({ ref }: { ref: Ref<DecisionReaderAIGate> }) => {
+  const { ensureAIAvailable } = useAIKeyGate();
+  useImperativeHandle(ref, () => ({ ensureAIAvailable }), [ensureAIAvailable]);
+  return null;
 };
 
 /** Keys the opener when the server names no conversation. */

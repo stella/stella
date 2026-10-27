@@ -40,8 +40,13 @@ title_pattern='^(Staging release proof|Main heavy suites|Main PR-depth checks)( 
 named_rc="${BASH_REMATCH[3]}"
 sha="${BASH_REMATCH[4]}"
 
-rc="$(git tag --points-at "$sha" --list 'v*-rc.*' --sort=-v:refname |
-  grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$' | head -n 1 || true)"
+rc=""
+while IFS= read -r tag; do
+  if [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[1-9][0-9]*$ ]]; then
+    rc="$tag"
+    break
+  fi
+done < <(git tag --points-at "$sha" --list 'v*-rc.*' --sort=-v:refname)
 [[ -n "$rc" ]] || refuse untagged-commit "no release candidate tag targets $sha"
 [[ -z "$named_rc" || "$named_rc" == "$rc" ]] ||
   refuse candidate-mismatch "the run names $named_rc but $sha carries $rc"

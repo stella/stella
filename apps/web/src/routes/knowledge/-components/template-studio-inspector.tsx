@@ -358,6 +358,7 @@ const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
       )}
       size="xs"
       title={t("templates.checkTemplate")}
+      tooltip={t("templates.checkTemplate")}
       variant={hasErrors ? "destructive-ghost" : "ghost"}
     >
       {issueCount === 0 ? (
@@ -1043,6 +1044,7 @@ const StudioInsertRow = () => {
         className="flex-1 [&>button:first-child]:flex-1 [&>button:first-child]:justify-start"
         menuLabel={t("templates.studio.insert")}
         onPrimaryClick={primaryAction.onClick}
+        primaryContent="text"
         primaryLabel={primaryAction.label}
         size="sm"
         onOpenChange={(open, eventDetails) => {
