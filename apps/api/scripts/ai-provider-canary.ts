@@ -186,7 +186,7 @@ export const createPdfCanaryMessages = (): ModelMessage[] => [
         type: "document",
         source: {
           type: "data",
-          value: Buffer.from(createSyntheticPdf()).toString("base64"),
+          value: Buffer.from(createSyntheticPdf()).toBase64(),
           mimeType: PDF_MIME_TYPE,
         },
         metadata: { filename: PDF_CANARY_FILENAME },

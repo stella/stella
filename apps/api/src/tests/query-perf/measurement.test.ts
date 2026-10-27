@@ -1,31 +1,28 @@
 import { expect, test } from "bun:test";
 
-import { parseQueryPerfBaselineFile } from "./baseline";
+import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+
 import {
+  budgetProblem,
   budgetViolations,
   median,
   metricsFromPlan,
+  scaleViolations,
   shapeViolations,
+  sumMetrics,
 } from "./measurement";
 
-test("committed profile budgets accept their recording and reject buffer regressions independently of time", async () => {
-  const baseline = parseQueryPerfBaselineFile(
-    await Bun.file(new URL("baseline.json", import.meta.url)).json(),
-  );
-  for (const metrics of Object.values(baseline.entries)) {
-    expect(budgetViolations(metrics, metrics)).toEqual([]);
+test("an absolute budget accepts its own page count and rejects one page more", () => {
+  for (const { pages } of Object.values(READ_BUDGETS)) {
     expect(
-      budgetViolations(
-        {
-          sharedBlocks: Math.floor(metrics.sharedBlocks * 1.25) + 1,
-          executionTimeMs: metrics.executionTimeMs,
-        },
-        metrics,
-      ),
+      budgetViolations({ sharedBlocks: pages, executionTimeMs: 1 }, pages),
+    ).toEqual([]);
+    expect(
+      budgetViolations({ sharedBlocks: pages + 1, executionTimeMs: 1 }, pages),
     ).toEqual([
       {
         kind: "shared-buffer-budget",
-        message: `shared buffer budget exceeded: measured ${Math.floor(metrics.sharedBlocks * 1.25) + 1} > budget ${metrics.sharedBlocks * 1.25} (baseline ${metrics.sharedBlocks} × 1.25)`,
+        message: `shared buffer budget exceeded: measured ${pages + 1} > budget ${pages}`,
       },
     ]);
   }
@@ -70,58 +67,34 @@ test("shared buffers count the root once, including cache misses", () => {
 });
 
 test("buffer budgets reject extra work even when execution time improves", () => {
-  const baseline = { sharedBlocks: 356, executionTimeMs: 7.578 };
   expect(
-    budgetViolations({ sharedBlocks: 445, executionTimeMs: 1 }, baseline),
-  ).toEqual([]);
-  expect(
-    budgetViolations({ sharedBlocks: 450, executionTimeMs: 1 }, baseline),
-  ).toEqual([
-    {
-      kind: "shared-buffer-budget",
-      message:
-        "shared buffer budget exceeded: measured 450 > budget 445 (baseline 356 × 1.25)",
-    },
-  ]);
+    budgetViolations({ sharedBlocks: 1601, executionTimeMs: 0.1 }, 1600).map(
+      ({ kind }) => kind,
+    ),
+  ).toEqual(["shared-buffer-budget"]);
 });
 
-test("execution time noise above the former budget passes below the hang guard", () => {
-  const baseline = { sharedBlocks: 356, executionTimeMs: 7.578 };
-  for (const executionTimeMs of [15.2, 50, 500, 1000]) {
+test("execution time is only a hang guard", () => {
+  for (const executionTimeMs of [15.2, 500, 10_000]) {
     expect(
-      budgetViolations({ sharedBlocks: 356, executionTimeMs }, baseline),
+      budgetViolations({ sharedBlocks: 100, executionTimeMs }, 100),
     ).toEqual([]);
   }
-});
-
-test("execution time hang guard uses a floor and reports measured versus guard", () => {
   expect(
-    budgetViolations(
-      { sharedBlocks: 356, executionTimeMs: 1203.4 },
-      { sharedBlocks: 356, executionTimeMs: 7.578 },
-    ),
+    budgetViolations({ sharedBlocks: 100, executionTimeMs: 10_000.5 }, 100),
   ).toEqual([
     {
       kind: "execution-time-hang-guard",
-      message:
-        "execution time hang guard exceeded: median 1203.4 ms > guard 1000 ms (baseline 7.578 ms × 25, floor 1000 ms)",
+      message: "execution time hang guard exceeded: 10000.5 ms > 10000 ms",
     },
   ]);
 });
 
-test("execution time hang guard scales with slower recorded queries", () => {
-  const baseline = { sharedBlocks: 100, executionTimeMs: 80 };
-  expect(
-    budgetViolations({ sharedBlocks: 100, executionTimeMs: 2000 }, baseline),
-  ).toEqual([]);
-  expect(
-    budgetViolations({ sharedBlocks: 100, executionTimeMs: 2000.1 }, baseline),
-  ).toEqual([
-    {
-      kind: "execution-time-hang-guard",
-      message:
-        "execution time hang guard exceeded: median 2000.1 ms > guard 2000 ms (baseline 80 ms × 25, floor 1000 ms)",
-    },
+test("a run that reads the same pages at twice the corpus passes; one that grows does not", () => {
+  expect(scaleViolations({ size: 10_150, double: 10_190 })).toEqual([]);
+  expect(scaleViolations({ size: 20, double: 84 })).toEqual([]);
+  expect(scaleViolations({ size: 5000, double: 9800 })).toEqual([
+    "reads grow with the corpus: 5000 pages at one size, 9800 at twice the size (at most 5564)",
   ]);
 });
 
@@ -132,4 +105,28 @@ test("median supports odd and even samples and rejects malformed measurements", 
   expect(() => metricsFromPlan({ Plan: {}, "Execution Time": 1 })).toThrow(
     "lacks finite execution time",
   );
+});
+
+test("scheduled runs retain execution time and reject a slow statement within the page budget", () => {
+  const id = "scheduled.caseLaw.reportFreshness";
+  for (const statements of [
+    [{ sharedBlocks: 1, executionTimeMs: 10_001 }],
+    [
+      { sharedBlocks: 1, executionTimeMs: 5000 },
+      { sharedBlocks: 2, executionTimeMs: 5001 },
+    ],
+  ]) {
+    const metrics = sumMetrics(statements);
+    expect(metrics.sharedBlocks).toBeLessThan(READ_BUDGETS[id].pages);
+    expect(metrics.executionTimeMs).toBe(10_001);
+    expect(budgetProblem(id, metrics)).toContain(
+      "execution time hang guard exceeded",
+    );
+  }
+  expect(
+    budgetProblem(
+      id,
+      sumMetrics([{ sharedBlocks: 1, executionTimeMs: 10_000 }]),
+    ),
+  ).toBeUndefined();
 });

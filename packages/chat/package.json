@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -73,7 +73,8 @@
     "bun-types": "catalog:",
     "fast-check": "catalog:",
     "react": "catalog:react19",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",

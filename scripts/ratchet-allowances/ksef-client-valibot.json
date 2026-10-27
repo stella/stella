@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The KSeF client in @stll/invoicing validates every KSeF response at its boundary with valibot, the repository's runtime validator from the catalog, instead of type assertions on remote JSON."
+}

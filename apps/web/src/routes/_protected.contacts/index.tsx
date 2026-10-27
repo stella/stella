@@ -84,7 +84,7 @@ import { api } from "@/lib/api";
 import { useCreateContact, useDeleteContact } from "@/lib/contacts/mutations";
 import { contactsKeys, contactsOptions } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
@@ -190,7 +190,7 @@ function ContactsPage() {
       const response = await api.contacts.export.get({
         query: { format: "csv" },
       });
-      const exportData = unwrapEden(response);
+      const exportData = unwrapApiResponse(response);
       return exportData instanceof Response
         ? await exportData.blob()
         : new Blob([String(exportData)], { type: "text/csv;charset=utf-8" });
@@ -902,7 +902,7 @@ const CreateContactDialog = ({
   const schema = createContactSchema(t("common.required"));
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
   const mcpCatalogView = useQueryView(mcpCatalogQuery);
-  useQueryViewError(mcpCatalogView);
+  useQueryViewError(mcpCatalogView, "CreateContactDialog:query");
   const mcpCatalog =
     mcpCatalogView.type === "items" && mcpCatalogView.refetchError === undefined
       ? mcpCatalogView.items
@@ -994,7 +994,7 @@ const CreateContactDialog = ({
       const response = await api.contacts["business-registries"].get({
         query: { registry: "ares", q: ico },
       });
-      const data = unwrapEden(response);
+      const data = unwrapApiResponse(response);
 
       const hit = data.type === "lookup" ? data.hit : null;
 
@@ -1013,7 +1013,13 @@ const CreateContactDialog = ({
         type: "success",
       });
     } catch (error) {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "CreateContactDialog.handleAresLookup:failure",
+        scope: {
+          type: "handler",
+          handlerId: "CreateContactDialog.handleAresLookup:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     } finally {
       setIsAresLoading(false);

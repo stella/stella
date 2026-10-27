@@ -3,8 +3,10 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -50,7 +52,13 @@ import type {
   RegisteredOAuthClient,
 } from "@/api/tests/helpers/oauth-grant";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const routeServer = serveRoutesForTest(meRoute);
+afterAll(async () => {
+  await routeServer.stop();
+});
 
 // Disconnecting a connected app from the settings page, through the real
 // session-authenticated route, against grants minted by the real OAuth
@@ -60,12 +68,14 @@ setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
 
 beforeAll(async () => {
   testDb = await initAgentAuthTestDb();
+});
+
+beforeEach(() => {
   const jwksUrl = getAuthEndpointUrl("jwks");
-  fetchSpy.mockImplementation(
+  spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
       async (input: string | URL | Request, init?: RequestInit) => {
         const request =
@@ -83,10 +93,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  fetchSpy.mockRestore();
   await releaseAgentAuthTestDb();
 });
-afterEach(resetLogSinkForTesting);
+afterEach(() => {
+  mock.restore();
+  resetLogSinkForTesting();
+});
 
 const BASE = "http://localhost";
 
@@ -101,7 +113,7 @@ const connectionsSchema = v.looseObject({
 });
 
 const listConnections = async (browser: HumanBrowser) => {
-  const response = await meRoute.handle(
+  const response = await routeServer.fetch(
     new Request(`${BASE}/me/oauth-connections`, {
       headers: { cookie: browser.cookieHeader() },
     }),
@@ -111,7 +123,7 @@ const listConnections = async (browser: HumanBrowser) => {
 };
 
 const disconnect = async (browser: HumanBrowser, consentId: string) =>
-  await meRoute.handle(
+  await routeServer.fetch(
     new Request(`${BASE}/me/oauth-connections/${consentId}`, {
       method: "DELETE",
       headers: { cookie: browser.cookieHeader() },
@@ -360,6 +372,8 @@ describe("disconnecting a connected app", () => {
     expect(await opensMcpContext(delegatedToken)).toBe(true);
     expect(await opensMcpContext(agentRunToken.token)).toBe(true);
 
+    // real-time: token issue times have one-second resolution, so a grant made
+    // in the revocation's second would still read as revoked.
     await Bun.sleep(1100);
     const reconnectedGrant = await grantOAuthClient(owner, disconnectedClient);
     expect(await opensMcpContext(reconnectedGrant.accessToken)).toBe(true);

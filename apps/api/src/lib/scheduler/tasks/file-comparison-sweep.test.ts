@@ -44,9 +44,14 @@ import {
   releaseRlsFixture,
 } from "@/api/tests/security/rls-fixture";
 
-const sweepMock = mock(async () =>
-  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }),
-);
+beforeEach(() => {
+  sweepMock.mockReset();
+  sweepMock.mockImplementation(sweepDefault);
+});
+
+const sweepDefault = async () =>
+  Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 });
+const sweepMock = mock(sweepDefault);
 const {
   createSweepFileComparisonUploadsTask,
   SWEEP_FILE_COMPARISON_UPLOADS_TASK,
@@ -268,7 +273,7 @@ describe("comparison sweep replay and runner capture", () => {
       {
         stage,
         grade: "defect",
-        reason: "unclassified",
+        reason: "tagged_failure",
         cause: new TypeError("Sweep dependency failed"),
       },
       {
@@ -281,7 +286,7 @@ describe("comparison sweep replay and runner capture", () => {
       },
     ]),
   )(
-    "$stage: one $grade capture, retained rows and replay",
+    "$stage: a $grade failure, retained rows and replay",
     async ({ stage, cause, grade, reason }) => {
       let calls = 0;
       const rootSafeDb: SafeDb = async (run) => {
@@ -324,11 +329,20 @@ describe("comparison sweep replay and runner capture", () => {
           }),
       });
       expect(await runInRunner(task)).toBe("failed");
-      expect(analytics.exceptions()).toHaveLength(1);
-      expect(analytics.exceptions().at(0)?.properties).toMatchObject({
-        "error.class": "FileComparisonSweepError",
-        "failure.grade": grade,
-        "failure.reason": reason,
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
+      if (grade === "defect") {
+        expect(analytics.exceptions().at(0)?.properties).toMatchObject({
+          "error.class": "FileComparisonSweepError",
+          "failure.grade": grade,
+          "failure.reason": reason,
+        });
+      }
+      expect(
+        logs.records.find(({ message }) => message === "scheduler.job_failed")
+          ?.attributes,
+      ).toMatchObject({
+        "failure.shadow_grade": grade,
+        "failure.shadow_reason": reason,
       });
       expect(
         logs.records.filter(
@@ -373,7 +387,7 @@ describe("comparison sweep replay and runner capture", () => {
           deleteObject: async () => Result.ok(undefined),
         }),
       ).toEqual(Result.ok({ scanned: 0, sweptUploads: 0, failed: 0 }));
-      expect(analytics.exceptions()).toHaveLength(1);
+      expect(analytics.exceptions()).toHaveLength(grade === "defect" ? 1 : 0);
     },
   );
 

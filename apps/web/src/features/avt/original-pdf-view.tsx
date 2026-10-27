@@ -1,3 +1,4 @@
+import * as React from "react";
 /**
  * The verified PDF in the file viewer, read-only, with the run's claims
  * drawn as boxes over the words they were anchored on, in their verdict's
@@ -9,8 +10,6 @@
  * they stay one click away.
  */
 
-import * as React from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -21,6 +20,7 @@ import { cn } from "@stll/ui/utils";
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { UnlocatedClaims } from "@/features/avt/original-claims";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
@@ -43,6 +43,7 @@ import { detached } from "@/lib/detached";
 import { fileOptions } from "@/lib/files/queries";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 const ROOT_ATTRIBUTE = "data-avt-original-pdf";
 /** The selection visit last brought into view, kept on the pane's element. */
@@ -92,6 +93,7 @@ export const OriginalPdfView = ({
   // The PDF the server read: the upload itself, or the PDF rendition of a
   // non-DOCX upload. The viewer below loads the same file through the same
   // query.
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   const fileQuery = useQuery(
     fileOptions({ workspaceId, fieldId: run.fileFieldId, purpose: "display" }),
   );
@@ -196,7 +198,7 @@ export const OriginalPdfView = ({
             pdfPageOverlay={renderClaimMarks}
             pdfPageSource="document"
             scaleOffset={0}
-            viewId="all"
+            viewId={viewId}
             workspaceId={workspaceId}
           />
         </MeasuredPdfProvider>
@@ -237,17 +239,21 @@ const PageTextFailed = ({
 }) => {
   const t = useTranslations();
   return (
-    <div
+    <RecoverableErrorStatus
       className="text-muted-foreground flex shrink-0 flex-wrap items-center gap-2 border-t px-4 py-2 text-xs"
-      role="alert"
-    >
-      <span className="min-w-0 flex-1">
-        {t("avt.verification.pdfTextFailed")}
-      </span>
-      <Button loading={retrying} onClick={onRetry} size="sm" variant="outline">
-        {t("common.retry")}
-      </Button>
-    </div>
+      message={t("avt.verification.pdfTextFailed")}
+      messageClassName="min-w-0 flex-1"
+      actions={
+        <Button
+          loading={retrying}
+          onClick={onRetry}
+          size="sm"
+          variant="outline"
+        >
+          {t("common.retry")}
+        </Button>
+      }
+    />
   );
 };
 

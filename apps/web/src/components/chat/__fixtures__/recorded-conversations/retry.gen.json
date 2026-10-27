@@ -22,12 +22,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:01.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Draft the NDA"
               }
             ],
@@ -383,36 +383,36 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:02.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-1",
+              "sendMode": "rawOverride",
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:03.000Z"
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-1",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",
@@ -487,12 +487,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:09.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Draft the NDA"
               }
             ],
@@ -848,42 +848,42 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "turnIntent": "regenerate",
               "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Draft the NDA"
+                  }
+                ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:10.000Z",
                 "edited": false,
-                "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
-                "revision": 0,
-                "parts": [
-                  {
-                    "type": "text",
-                    "content": "Draft the NDA"
-                  }
-                ]
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+                "revision": 0
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-2",
+              "sendMode": "rawOverride",
               "turnIntent": "regenerate",
               "message": {
-                "createdAt": "2026-01-01T00:00:11.000Z",
-                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
-                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
-                ]
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-2",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+                ],
+                "role": "user",
+                "createdAt": "2026-01-01T00:00:11.000Z",
+                "edited": false,
+                "revision": 0
+              }
             }
           },
           "ended": "complete",
@@ -1065,12 +1065,12 @@
             "messages": [
               {
                 "id": "00000000-0000-7000-8000-000000000001",
+                "role": "user",
                 "metadata": {
                   "tanstack": {
                     "createdAt": "2026-01-01T00:00:21.000Z"
                   }
                 },
-                "role": "user",
                 "content": "Draft the NDA"
               }
             ],
@@ -1426,44 +1426,44 @@
             ],
             "context": [],
             "forwardedProps": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-3",
+              "sendMode": "rawOverride",
               "turnIntent": "regenerate",
               "message": {
+                "id": "00000000-0000-7000-8000-000000000001",
+                "parts": [
+                  {
+                    "type": "text",
+                    "content": "Draft the NDA"
+                  }
+                ],
+                "role": "user",
                 "createdAt": "2026-01-01T00:00:22.000Z",
                 "edited": false,
-                "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
                 "revision": 0,
-                "parts": [
-                  {
-                    "type": "text",
-                    "content": "Draft the NDA"
-                  }
-                ],
                 "content": ""
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-3",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             },
             "data": {
+              "threadId": "00000000-0000-7000-8000-000000000002",
+              "runId": "run-recorded-3",
+              "sendMode": "rawOverride",
               "turnIntent": "regenerate",
               "message": {
-                "createdAt": "2026-01-01T00:00:23.000Z",
-                "edited": false,
                 "id": "00000000-0000-7000-8000-000000000001",
-                "role": "user",
-                "revision": 0,
                 "parts": [
                   {
                     "type": "text",
                     "content": "Draft the NDA"
                   }
                 ],
+                "role": "user",
+                "createdAt": "2026-01-01T00:00:23.000Z",
+                "edited": false,
+                "revision": 0,
                 "content": ""
-              },
-              "sendMode": "rawOverride",
-              "runId": "run-recorded-3",
-              "threadId": "00000000-0000-7000-8000-000000000002"
+              }
             }
           },
           "ended": "complete",

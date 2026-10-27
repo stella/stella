@@ -1,12 +1,14 @@
 import { Result } from "better-result";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { arrayFromQuery } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 import type {
   UnbackedProjectionKeys,
@@ -57,6 +59,10 @@ const UNPROJECTED_USER_PROFILE_COLUMNS = [
   "createdAt",
   // Profile modification time is not displayed in avatar previews.
   "updatedAt",
+  // Mail provider refusals are account delivery state, not a display profile.
+  "emailUndeliverableAddress",
+  "emailUndeliverableReason",
+  "emailUndeliverableAt",
 ] as const satisfies readonly (keyof UserRow)[];
 
 const USER_PROFILE_PREVIEW_COLUMNS = {
@@ -103,12 +109,13 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   access: "read",
-  query: t.Object({
-    workspaceIds: t.Array(tSafeId("workspace"), {
-      minItems: 1,
-      maxItems: LIMITS.workspaceMemberPreviewBatchMax,
-      uniqueItems: true,
-    }),
+  query: v.object({
+    workspaceIds: v.pipe(
+      arrayFromQuery(resourceIdSchema("workspace")),
+      v.minLength(1),
+      v.maxLength(LIMITS.workspaceMemberPreviewBatchMax),
+      uniqueItems(),
+    ),
   }),
 } satisfies HandlerConfig;
 

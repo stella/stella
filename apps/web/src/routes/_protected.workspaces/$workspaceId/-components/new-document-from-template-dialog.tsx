@@ -24,6 +24,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 import { filterTemplatesByName } from "./new-document-from-template-dialog.logic";
 
@@ -218,6 +219,7 @@ const FillStep = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const fill = useTemplateFillSchema(template.id);
 
   if (fill.state === "loading") {
@@ -260,7 +262,7 @@ const FillStep = ({
               detached(
                 navigate({
                   to: "/workspaces/$workspaceId/$viewId/document",
-                  params: { workspaceId, viewId: "all" },
+                  params: viewParams,
                   search: { entity: entityId, field: created.fieldId },
                 }),
                 "new-document-from-template-dialog.navigate",
@@ -270,7 +272,7 @@ const FillStep = ({
               detached(
                 navigate({
                   to: "/workspaces/$workspaceId/$viewId",
-                  params: { workspaceId, viewId: "all" },
+                  params: viewParams,
                 }),
                 "new-document-from-template-dialog.navigate",
               );

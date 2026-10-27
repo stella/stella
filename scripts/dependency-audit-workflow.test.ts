@@ -1,12 +1,4 @@
 import { expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -22,9 +14,7 @@ const stepSchema = v.looseObject({
 });
 const workflowSchema = v.looseObject({
   on: v.looseObject({
-    pull_request: v.optional(
-      v.nullable(v.looseObject({ paths: v.array(v.string()) })),
-    ),
+    pull_request: v.optional(v.unknown()),
     push: v.optional(
       v.nullable(v.looseObject({ branches: v.array(v.string()) })),
     ),
@@ -43,12 +33,13 @@ const workflowSchema = v.looseObject({
     v.string(),
     v.looseObject({
       if: v.optional(v.string()),
+      needs: v.optional(v.union([v.string(), v.array(v.string())])),
       permissions: v.optional(v.record(v.string(), v.string())),
       outputs: v.optional(v.record(v.string(), v.string())),
       concurrency: v.optional(
         v.object({ group: v.string(), "cancel-in-progress": v.boolean() }),
       ),
-      steps: v.array(stepSchema),
+      steps: v.optional(v.array(stepSchema), []),
     }),
   ),
 });
@@ -60,6 +51,7 @@ const readWorkflow = async (name: string) =>
     ),
   );
 const auditWorkflow = await readWorkflow("dependency-audit.yml");
+const ciWorkflow = await readWorkflow("ci.yml");
 const releaseWorkflow = await readWorkflow("release-tag.yml");
 const catalogWorkflow = await readWorkflow("model-catalog-check.yml");
 
@@ -78,114 +70,20 @@ const step = (
   return found;
 };
 
-// Runs the real detection step in a scratch repository whose HEAD changes
-// only `changedPath` relative to its base commit.
-const detectsDependencyChange = (changedPath: string) => {
-  const repository = mkdtempSync(path.join(tmpdir(), "dependency-audit-"));
-  // Git hooks export GIT_DIR; a child git must use the scratch repository.
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+test("pull request and merge-group audits are plan-gated in CI", () => {
+  expect(auditWorkflow.on.pull_request).toBeUndefined();
+  const audit = ciWorkflow.jobs["dependency-audit"];
+  expect(audit?.if).toBe(
+    "!cancelled() && needs.ci-plan.result == 'success' && inputs.heavy_only != true && inputs.pr_depth_only != true && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && needs.ci-plan.outputs.run_required != 'false' && needs.ci-plan.outputs.dependency_changes_required == 'true'",
   );
-  const git = (...args: string[]) => {
-    const result = Bun.spawnSync(["git", ...args], { cwd: repository, env });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    return result.stdout.toString().trim();
-  };
-  try {
-    git("init", "-q");
-    for (const file of [
-      "bun.lock",
-      "package.json",
-      "apps/api/package.json",
-      "README.md",
-    ]) {
-      mkdirSync(path.dirname(path.join(repository, file)), { recursive: true });
-      writeFileSync(path.join(repository, file), "base\n");
-    }
-    git("add", ".");
-    git(
-      "-c",
-      "user.name=t",
-      "-c",
-      "user.email=t@example.test",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "base",
-    );
-    const base = git("rev-parse", "HEAD");
-    mkdirSync(path.dirname(path.join(repository, changedPath)), {
-      recursive: true,
-    });
-    writeFileSync(path.join(repository, changedPath), "changed\n");
-    git("add", ".");
-    git(
-      "-c",
-      "user.name=t",
-      "-c",
-      "user.email=t@example.test",
-      "-c",
-      "commit.gpgsign=false",
-      "commit",
-      "-qm",
-      "change",
-    );
-    const output = path.join(repository, "output");
-    const run =
-      step(auditWorkflow, "audit", "Detect lockfile changes").run ?? "";
-    const result = Bun.spawnSync(["bash", "-e", "-c", run], {
-      cwd: repository,
-      env: { ...env, BASE_SHA: base, GITHUB_OUTPUT: output },
-    });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    return readFileSync(output, "utf-8").trim();
-  } finally {
-    rmSync(repository, { recursive: true, force: true });
-  }
-};
-
-test("pull requests avoid network work when the lockfile is unchanged", () => {
-  expect(auditWorkflow.on.pull_request?.paths).toEqual([
-    "bun.lock",
-    "**/package.json",
-    "Cargo.lock",
-    "**/Cargo.lock",
-    "Cargo.toml",
-    "**/Cargo.toml",
-    ".github/workflows/dependency-audit.yml",
-    "scripts/dependency-audit.ts",
-    "scripts/check-trusted-dependencies.ts",
-    "scripts/retry.sh",
-  ]);
-  for (const changed of [
-    "bun.lock",
-    "package.json",
-    "apps/api/package.json",
-    "Cargo.lock",
-    "apps/desktop/Cargo.lock",
-    "Cargo.toml",
-    "apps/desktop/Cargo.toml",
-    ".github/workflows/dependency-audit.yml",
-    "scripts/dependency-audit.ts",
-    "scripts/check-trusted-dependencies.ts",
-    "scripts/retry.sh",
-  ]) {
-    expect(detectsDependencyChange(changed), changed).toBe("changed=true");
-  }
-  expect(detectsDependencyChange("README.md")).toBe("changed=false");
-  for (const name of ["Setup Bun", "Install dependencies"]) {
-    expect(step(auditWorkflow, "audit", name).if).toContain(
-      "steps.lockfile.outputs.changed == 'true'",
-    );
-  }
+  expect(audit?.permissions).toEqual({ contents: "read" });
   const pullRequestAudit = step(
-    auditWorkflow,
-    "audit",
+    ciWorkflow,
+    "dependency-audit",
     "Audit changed dependency resolutions",
   );
-  expect(pullRequestAudit.if).toBe(
-    "github.event_name == 'pull_request' && steps.lockfile.outputs.changed == 'true'",
+  expect(pullRequestAudit.env?.["BASE_SHA"]).toBe(
+    githubExpression("needs.ci-plan.outputs.target_base_sha"),
   );
   expect(pullRequestAudit.run).toBe(
     'bun scripts/dependency-audit.ts --check-diff "$BASE_SHA"',

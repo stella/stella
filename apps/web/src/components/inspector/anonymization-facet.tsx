@@ -42,6 +42,7 @@ import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { confirmAnonymizationDetectionCurrent } from "@/components/docx/docx-anonymization-detection";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import { AnonymizationMatchStatus } from "@/components/inspector/anonymization-match-status";
@@ -54,12 +55,12 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
@@ -201,13 +202,13 @@ export const AnonymizationFacet = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const termsQueryView = useQueryView(termsQuery);
-  useQueryViewError(termsQueryView);
+  useQueryViewError(termsQueryView, "AnonymizationFacet:query");
   const createMutation = useMutation({
     mutationFn: async (vars: {
       workspaceId: string;
@@ -238,7 +239,7 @@ export const AnonymizationFacet = ({
       // a try/catch that captures and toasts, so a handler here would report
       // the same failure twice. `deleteMutation` below is fire-and-forget and
       // keeps its handler for that reason.
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
   });
   const deleteMutation = useMutation({
@@ -255,7 +256,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure" },
+      });
     },
   });
 
@@ -387,7 +391,13 @@ export const AnonymizationFacet = ({
         type: "success",
       });
     } catch (error) {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet.addTerm:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.addTerm:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     }
   };
@@ -403,7 +413,7 @@ export const AnonymizationFacet = ({
     enabled: activeFieldId !== null,
   });
   const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  useQueryViewError(allowlistQueryView, "AnonymizationFacet:query-2");
   const allowlistEntries = allowlistQuery.data?.entries;
   const matchesReady =
     pipelineStatus === "ready" &&
@@ -427,10 +437,13 @@ export const AnonymizationFacet = ({
             ? { entityId: toSafeId<"entity">(vars.entityId) }
             : {}),
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-2",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-2" },
+      });
     },
   });
   const deleteAllowlistMutation = useMutation({
@@ -446,7 +459,10 @@ export const AnonymizationFacet = ({
       }
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "AnonymizationFacet:failure-3",
+        scope: { type: "handler", handlerId: "AnonymizationFacet:failure-3" },
+      });
     },
   });
   // Restrict the visible workspace vocabulary to entries whose
@@ -498,7 +514,13 @@ export const AnonymizationFacet = ({
     }).then((result) => (result.isErr() ? result : result.value));
     setDownloadStatus("idle");
     if (download.isErr()) {
-      analytics.captureError(download.error);
+      analytics.captureError(download.error, {
+        fingerprintKey: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        scope: {
+          type: "handler",
+          handlerId: "AnonymizationFacet.handleDownloadAnonymized:failure",
+        },
+      });
       notifyUserError(
         download.error,
         UnsupportedAnonymizedExportError.is(download.error)
@@ -769,6 +791,7 @@ export const AnonymizationFacet = ({
           <Combobox<LabelOption>
             autoHighlight
             disabled={createMutation.isPending}
+            filter={matchesComboboxItem}
             items={[...LABEL_OPTIONS]}
             itemToStringLabel={formatLabel}
             onValueChange={(next) => {

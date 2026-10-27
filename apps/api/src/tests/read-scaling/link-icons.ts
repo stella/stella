@@ -1,11 +1,12 @@
 import { panic } from "better-result";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { createLinkIconCache } from "@/api/handlers/chat/link-icons/cache";
 import getExactIcon, {
   createGetExactIconHandler,
 } from "@/api/handlers/chat/link-icons/get-exact";
 import { toExactIconUrl } from "@/api/handlers/chat/link-icons/origin";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createRedisClient } from "@/api/lib/redis-client";
@@ -15,7 +16,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const exactIconScalingScenario = {
   name: "exact link icon cache hit",
-  handler: getExactIcon.handler,
+  definition: getExactIcon,
   measure: async (size: number, createHandler = createGetExactIconHandler) => {
     const slot = `icon-scaling:${Bun.randomUUIDv7()}`;
     let redisRoundTrips = 0;
@@ -77,6 +78,7 @@ export const exactIconScalingScenario = {
         const response = await handler.handler(
           asTestRaw<Parameters<typeof handler.handler>[0]>({
             query: { url: first },
+            route: "/v1/chat/link-icons/exact" satisfies ApiRoutePath,
             user: { id: mintAuthProviderId<"user">() },
             memberRole: sessionMemberRole("owner"),
             request: new Request(
@@ -86,7 +88,7 @@ export const exactIconScalingScenario = {
           }),
         );
         if (
-          response instanceof ElysiaCustomStatusResponse ||
+          response instanceof HttpStatusResponse ||
           !(response instanceof Blob) ||
           response.type !== "image/png" ||
           response.size !== bytes.byteLength

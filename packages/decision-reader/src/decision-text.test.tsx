@@ -17,7 +17,11 @@ import {
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
-import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
+import {
+  DecisionText,
+  prepareDecisionProvisionCards,
+  prepareDecisionTextPlacements,
+} from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
   DecisionReaderProvider,
@@ -26,6 +30,7 @@ import {
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import type {
   CitedProvisionTarget,
+  DecisionProvisionAnchor,
   ProvisionPreviewData,
   ReaderDecision,
 } from "./reader-types";
@@ -180,6 +185,7 @@ test("a decision renders numbered anchored text and resolved marks without readi
       renderedCitations.push(citation.id);
       expect(citation.decision).toBe(props.decision);
       expect(citation.treatment).toBe(props.treatment);
+      expect(props.blockId).toBe("paragraph");
       return fakeReaderAdapters.renderDecisionLink({ citation, ...props });
     },
     loadProvisionPreview: async () => {
@@ -309,7 +315,7 @@ test("readers without a copy adapter expose no permalink control", () => {
 test("a supplied copy adapter preserves existing permalink markup", () => {
   // Serialized copy controls before the optional adapter: placement and browser href stay exact.
   const anchorClass =
-    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
   const previousControls = [
     `<a aria-label="Copy link" class="${anchorClass} ms-1" data-reader-chrome="" href="#h-1">¶</a>`,
     `<a aria-label="Copy link" class="${anchorClass} absolute end-full top-0 me-1" data-reader-chrome="" href="#p-7">¶</a>`,
@@ -863,4 +869,66 @@ test("EU provisions link to EUR-Lex in every supported citation language without
     expect(markup).toContain('target="_blank"');
     expect(placements.provisionsByAnchorId.size).toBe(0);
   }
+});
+
+test("a margin card's ranges are the cited words of its paragraph", () => {
+  const sentence = "Podle § 90 a § 91 rozhodl soud.";
+  const provision = (section: number) =>
+    ({
+      id: `provision-${String(section)}`,
+      sentenceText: sentence,
+      spanStart: 0,
+      reference: {
+        section,
+        sectionSuffix: null,
+        subsection: null,
+        letter: null,
+        unit: "section",
+      },
+      target: {
+        document: {
+          country: "CZE",
+          id: "act",
+          eli: "eli/act",
+          slug: null,
+          versionValidFrom: null,
+        },
+        preview: null,
+        payload: {
+          documentId: "act",
+          eli: "eli/act",
+          jurisdiction: "CZE",
+          anchorId: `par_${String(section)}`,
+          provisionLabel: `§ ${String(section)}`,
+          statuteTitle: "Zákon",
+          versionValidFrom: null,
+          versionCount: 1,
+        },
+      },
+    }) satisfies DecisionProvisionAnchor;
+  const cards = prepareDecisionProvisionCards({
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cited",
+        anchorId: "p-9",
+        number: 9,
+        inlines: [{ type: "text", text: sentence }],
+        plainText: sentence,
+      },
+    ],
+    provisionAnchors: [provision(90), provision(91)],
+  });
+  expect(
+    cards.map(({ ranges, startAnchorId }) => [
+      startAnchorId,
+      ranges.map(({ citationId, end, start }) => [
+        citationId,
+        sentence.slice(start, end),
+      ]),
+    ]),
+  ).toEqual([
+    ["p-9", [["provision-90", "§ 90"]]],
+    ["p-9", [["provision-91", "§ 91"]]],
+  ]);
 });

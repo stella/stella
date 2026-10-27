@@ -4,14 +4,16 @@
  * reader-annotation shape the case-law reader reads its comments in.
  */
 
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -36,11 +38,15 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({}),
-  query: t.Object({
-    runId: tSafeId("legalListVerificationRun"),
-    claimId: tSafeId("legalListClaim"),
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(tPaginationLimit(LIMITS.readerAnnotationsPageSizeMax)),
+  query: v.object({
+    runId: resourceIdSchema("legalListVerificationRun"),
+    claimId: resourceIdSchema("legalListClaim"),
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        paginationLimitSchema(LIMITS.readerAnnotationsPageSizeMax),
+      ),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 

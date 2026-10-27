@@ -17,7 +17,10 @@
     "build:analyze": "bun run generate:capability-runtime && bun build --target bun --define 'process.env.NODE_ENV=\"production\"' --outdir .cache/server-build --entry-naming=server.js --metafile-md=.cache/server-metafile.md src/server.ts",
     "test": "bun --cwd=../../packages/cli run codegen:runtime && bun run generate:capability-runtime && bun scripts/run-tests.ts",
     "action-cost:report": "bun src/scripts/action-cost-report.ts",
+    "oauth:partner-client": "bun run src/scripts/partner-oauth-client.ts",
+    "oauth:partner-client-secret": "bun run src/scripts/partner-oauth-client-secret.ts",
     "oauth:service-client": "bun run src/scripts/service-oauth-client.ts",
+    "scheduler:job-pause": "bun run src/scripts/scheduler-job-pause.ts",
     "test:e2e:browser": "playwright test --config e2e/playwright.config.ts",
     "test:postgres": "bun scripts/run-postgres-tests.ts",
     "test:valkey": "bun scripts/run-valkey-tests.ts",
@@ -99,7 +102,6 @@
     "@better-auth/cimd": "catalog:",
     "@better-auth/core": "catalog:",
     "@better-auth/oauth-provider": "catalog:",
-    "@elysia/cors": "^1.4.2",
     "@embedpdf/pdfium": "2.15.1",
     "@firecrawl/anydoc": "0.2.4",
     "@gdp-ts/core": "0.1.0",
@@ -116,7 +118,6 @@
     "@opentelemetry/sdk-logs": "0.223.0",
     "@react-email/render": "^2.1.0",
     "@silurus/ooxml": "catalog:",
-    "@sinclair/typebox": "^0.34.52",
     "@smithy/fetch-http-handler": "^5.8.0",
     "@stll/agent-engine": "workspace:*",
     "@stll/agent-input": "workspace:*",
@@ -197,7 +198,6 @@
     "disposable-email-domains-js": "catalog:",
     "domhandler": "^6.0.1",
     "drizzle-orm": "catalog:",
-    "elysia": "catalog:",
     "entities": "^8.1.0",
     "franc": "catalog:",
     "hyparquet": "^1.31.2",
@@ -259,7 +259,9 @@
     "fast-check": "catalog:",
     "openai": "6.49.0",
     "pdfjs-dist": "^6.4.299",
-    "saxes": "catalog:"
+    "saxes": "catalog:",
+    "tsrs": "catalog:",
+    "typescript6": "catalog:"
   },
   "ciGateTestRunners": {
     "test:corpus": {

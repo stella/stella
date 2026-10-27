@@ -21,6 +21,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { PublicLawBreadcrumbs } = await import("./public-law-shell");
 
@@ -92,11 +93,13 @@ const mount = async ({
       messages={locale === "ar" ? ar : en}
       timeZone="UTC"
     >
-      <TooltipProvider delay={0}>
-        <RouterContextProvider router={router}>
-          <PublicLawBreadcrumbs />
-        </RouterContextProvider>
-      </TooltipProvider>
+      <FormattingProvider locale={locale} timeZone="UTC">
+        <TooltipProvider delay={0}>
+          <RouterContextProvider router={router}>
+            <PublicLawBreadcrumbs />
+          </RouterContextProvider>
+        </TooltipProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 };
@@ -152,7 +155,9 @@ test("decision shell links court and decision year before the current docket and
   );
   expect(yearUrl.pathname).toBe("/law/cases");
   expect(yearUrl.searchParams.get("court")).toBe(decision.court);
-  expect(yearUrl.searchParams.get("year")).toBe("2026");
+  expect(yearUrl.searchParams.get("from")).toBe("2026-01-01");
+  expect(yearUrl.searchParams.get("to")).toBe("2026-12-31");
+  expect(yearUrl.searchParams.has("year")).toBe(false);
   expect(container.querySelector('[aria-current="page"]')?.textContent).toBe(
     decision.caseNumber,
   );

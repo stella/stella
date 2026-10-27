@@ -20,13 +20,13 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { namespaceSkillToolName } from "@/api/lib/mcp-upstream/namespace";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { SKILL_TOOL_OUTPUT } from "@/api/mcp/gateway/dynamic-tool-policy";
 import {
   externalToolDefinition,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
 import { handleMcpToolCall, listMcpTools } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -105,8 +105,8 @@ const createContext = ({
 }: {
   organizationId?: TestIds["orgA"];
   userId?: TestIds["userA1"];
-} = {}): McpRequestContext =>
-  asTestRaw<McpRequestContext>({
+} = {}): AuthorizedMcpRequestContext =>
+  asTestRaw<AuthorizedMcpRequestContext>({
     grantedScopes: [],
     memberRole: "owner",
     organizationId,
@@ -260,7 +260,7 @@ describe("built-in skill tools", () => {
   // A skill is offered only beside the tools it requires, so the caller holds
   // the scope of each built-in's required tools too.
   const builtInScopes = ["stella:skills", "stella:knowledge_write"];
-  const builtInContext = (): McpRequestContext => ({
+  const builtInContext = (): AuthorizedMcpRequestContext => ({
     ...createContext({ organizationId: ids.orgB, userId: ids.userB1 }),
     grantedScopes: builtInScopes,
   });

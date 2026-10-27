@@ -1,21 +1,26 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
   cp,
+  mkdir,
   mkdtemp,
   readdir,
   readFile,
   rm,
+  symlink,
   unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { cacheArtifactPaths } from "oxlint-tailwindcss";
 import * as v from "valibot";
 
+import oxlintConfig from "../oxlint.config.ts";
 import {
-  cacheProblems,
+  checkCache,
   mergeCache,
+  snapshotProblems,
   tailwindEntryPoints,
   tailwindFailureMessages,
 } from "./generate-tailwind-classes";
@@ -32,6 +37,173 @@ const report = v.object({
       severity: v.string(),
     }),
   ),
+});
+
+test("snapshot names track workspace CSS and published package versions", async () => {
+  const fixture = await mkdtemp(
+    path.join(repositoryRoot, ".tailwind-workspace-cache-test-"),
+  );
+  try {
+    const entry = path.join(fixture, "entry.css");
+    const workspace = path.join(fixture, "packages", "theme");
+    const workspaceLink = path.join(
+      fixture,
+      "node_modules",
+      "@fixture",
+      "theme",
+    );
+    const published = path.join(fixture, "node_modules", "published-theme");
+    await mkdir(path.join(workspace, "src"), { recursive: true });
+    await mkdir(path.dirname(workspaceLink), { recursive: true });
+    await mkdir(published, { recursive: true });
+    await writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        name: "@fixture/theme",
+        version: "1.0.0",
+        exports: {
+          "./styles.css": {
+            style: "./src/styles.css",
+            default: "./src/default.css",
+          },
+        },
+      }),
+    );
+    await writeFile(
+      path.join(workspace, "src", "styles.css"),
+      "@theme { --color-workspace: red; }\n",
+    );
+    await writeFile(
+      path.join(workspace, "src", "default.css"),
+      "@theme { --color-default: red; }\n",
+    );
+    await symlink(workspace, workspaceLink, "dir");
+    await writeFile(
+      path.join(published, "package.json"),
+      JSON.stringify({ name: "published-theme", version: "1.0.0" }),
+    );
+    await writeFile(
+      path.join(published, "styles.css"),
+      "@theme { --color-published: red; }\n",
+    );
+    await writeFile(
+      entry,
+      '@import "@fixture/theme/styles.css";\n@import "published-theme/styles.css";\n',
+    );
+
+    const snapshotName = () => path.basename(cacheArtifactPaths(entry).json);
+    const original = snapshotName();
+    await writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({
+        name: "@fixture/theme",
+        version: "2.0.0",
+        exports: {
+          "./styles.css": {
+            style: "./src/styles.css",
+            default: "./src/default.css",
+          },
+        },
+      }),
+    );
+    expect(snapshotName()).toBe(original);
+
+    await writeFile(
+      path.join(workspace, "src", "styles.css"),
+      "@theme { --color-workspace: blue; }\n",
+    );
+    const afterWorkspaceCssChange = snapshotName();
+    expect(afterWorkspaceCssChange).not.toBe(original);
+
+    await writeFile(
+      path.join(published, "package.json"),
+      JSON.stringify({ name: "published-theme", version: "2.0.0" }),
+    );
+    expect(snapshotName()).not.toBe(afterWorkspaceCssChange);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+const workspaceThemeFixture = async (
+  manifest: Readonly<Record<string, unknown>>,
+  importSpecifier: string,
+) => {
+  const fixture = await mkdtemp(
+    path.join(repositoryRoot, ".tailwind-workspace-cache-test-"),
+  );
+  const workspace = path.join(fixture, "packages", "theme");
+  const workspaceLink = path.join(fixture, "node_modules", "@fixture", "theme");
+  await mkdir(path.join(workspace, "src"), { recursive: true });
+  await mkdir(path.dirname(workspaceLink), { recursive: true });
+  await symlink(workspace, workspaceLink, "dir");
+  const writeManifest = async (version: string) =>
+    writeFile(
+      path.join(workspace, "package.json"),
+      JSON.stringify({ name: "@fixture/theme", version, ...manifest }),
+    );
+  await writeManifest("1.0.0");
+  const palette = path.join(workspace, "src", "palette.css");
+  await writeFile(palette, "@theme { --color-palette: red; }\n");
+  const entry = path.join(fixture, "entry.css");
+  await writeFile(entry, `@import "${importSpecifier}";\n`);
+  return {
+    fixture,
+    palette,
+    writeManifest,
+    snapshotName: () => path.basename(cacheArtifactPaths(entry).json),
+  };
+};
+
+test("snapshot names track workspace CSS reached through a wildcard export", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./styles/*": "./src/*.css" } },
+    "@fixture/theme/styles/palette",
+  );
+  try {
+    const original = theme.snapshotName();
+    await theme.writeManifest("2.0.0");
+    expect(theme.snapshotName()).toBe(original);
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
+test("overlapping wildcard exports resolve to the most specific pattern", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./*": "./generic/*", "./*.css": "./src/*.css" } },
+    "@fixture/theme/palette.css",
+  );
+  try {
+    await mkdir(path.join(theme.fixture, "packages", "theme", "generic"));
+    await writeFile(
+      path.join(theme.fixture, "packages", "theme", "generic", "palette.css"),
+      "@theme { --color-generic: red; }\n",
+    );
+    const original = theme.snapshotName();
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
+});
+
+test("an unresolvable workspace CSS import keys on the package's stylesheets", async () => {
+  const theme = await workspaceThemeFixture(
+    { exports: { "./other.css": "./src/other.css" } },
+    "@fixture/theme/palette.css",
+  );
+  try {
+    const original = theme.snapshotName();
+    await theme.writeManifest("2.0.0");
+    expect(theme.snapshotName()).toBe(original);
+    await writeFile(theme.palette, "@theme { --color-palette: blue; }\n");
+    expect(theme.snapshotName()).not.toBe(original);
+  } finally {
+    await rm(theme.fixture, { recursive: true, force: true });
+  }
 });
 
 const lintFixture = async ({
@@ -224,41 +396,45 @@ const shardA = `${"a".repeat(32)}.decl-00.json`;
 const shard = (answers: Record<string, unknown>) =>
   `${JSON.stringify(answers)}\n`;
 
-test("the cache check fails only on missing or changed answers", () => {
-  const generated = new Map([
-    [snapshotA, '{"v":1}\n'],
-    [shardA, shard({ "w-[1px]": { valid: true }, "w-[2px]": { valid: true } })],
-  ]);
+test("the cache check compares digests and never compiles", async () => {
+  // Every compile starts a lint child process; the check starts none.
+  const spawn = spyOn(Bun, "spawn");
+  const spawnSync = spyOn(Bun, "spawnSync");
+  try {
+    expect(await checkCache()).toEqual([]);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(spawnSync).not.toHaveBeenCalled();
+  } finally {
+    spawn.mockRestore();
+    spawnSync.mockRestore();
+  }
+});
+
+test("the cache check names each stylesheet whose snapshot is missing", async () => {
+  const committed = await readdir(generatedCache);
+  const shards = new Set(committed.filter((name) => name.includes(".decl-")));
+  const stylesheets = [
+    ...new Set(tailwindEntryPoints.map(({ stylesheet }) => stylesheet)),
+  ];
   expect(
-    cacheProblems(
-      new Map([
-        [snapshotA, '{"v":1}\n'],
-        [
-          shardA,
-          shard({
-            "w-[1px]": { valid: true },
-            "w-[2px]": { valid: true },
-            "w-[9px]": { valid: true },
-          }),
-        ],
-        [
-          `${"a".repeat(32)}.decl-ff.json`,
-          shard({ "h-[9px]": { valid: true } }),
-        ],
-        [`${"b".repeat(32)}.json`, '{"v":0}\n'],
-      ]),
-      generated,
-    ),
-  ).toEqual([]);
-  expect(
-    cacheProblems(
-      new Map([[shardA, shard({ "w-[1px]": { valid: false } })]]),
-      generated,
-    ),
-  ).toEqual([
-    `- ${shardA}: w-[1px] (answer changed), w-[2px] (missing)`,
-    `- ${snapshotA}: design-system snapshot missing`,
-  ]);
+    snapshotProblems(shards).map((problem) => problem.split(":")[0]),
+  ).toEqual(stylesheets.map((stylesheet) => `- ${stylesheet}`).toSorted());
+});
+
+test("every Tailwind entry point is linted by the Tailwind rules", () => {
+  // A mapping no rule reads names a snapshot lint never loads, so the
+  // generator never writes it and the cache check would demand it.
+  const linted = oxlintConfig.overrides.flatMap(({ files, rules }) =>
+    Object.keys(rules ?? {}).some((rule) => rule.startsWith("tailwindcss/"))
+      ? files
+      : [],
+  );
+  for (const { root } of tailwindEntryPoints) {
+    expect({
+      root,
+      linted: linted.some((glob) => glob.startsWith(`${root}/`)),
+    }).toEqual({ root, linted: true });
+  }
 });
 
 test("the cache write keeps unused answers and drops obsolete snapshots", () => {
