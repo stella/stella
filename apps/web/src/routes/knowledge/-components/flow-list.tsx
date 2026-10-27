@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { PlusIcon, RotateCcwIcon, WorkflowIcon } from "@stll/ui/icons";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
 import { FlowSwitch } from "@/components/flows/flow-switch";
@@ -14,6 +15,33 @@ import {
   type FlowExampleKey,
 } from "@/routes/knowledge/-components/flow-examples";
 import type { FlowListItem } from "@/routes/knowledge/-components/flow-types";
+
+const FLOW_LIST_CLASS = "flex min-h-0 flex-1 flex-col";
+const FLOW_TOOLBAR_CLASS =
+  "flex items-center justify-end gap-1 border-b px-4 py-2";
+const FLOW_ROW_CLASS = "flex items-center gap-3 px-4 py-3";
+const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
+
+export const FlowListSkeleton = () => (
+  <div aria-hidden="true" className={FLOW_LIST_CLASS}>
+    <div className={FLOW_TOOLBAR_CLASS}>
+      <Skeleton className="h-8 w-8 rounded-md" />
+      <Skeleton className="h-8 w-28 rounded-md" />
+    </div>
+    <ul className="flex-1 divide-y">
+      {FLOW_ROW_KEYS.map((key) => (
+        <li className={FLOW_ROW_CLASS} key={key}>
+          <Skeleton className="size-9 shrink-0 rounded-lg" />
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-5 w-48 max-w-full" />
+            <Skeleton className="mt-0.5 h-4 w-32 max-w-full" />
+          </div>
+          <Skeleton className="h-5 w-9 rounded-full" />
+        </li>
+      ))}
+    </ul>
+  </div>
+);
 
 type FlowListProps = {
   flows: FlowListItem[];
@@ -39,8 +67,8 @@ export const FlowList = ({
   const canUpdate = usePermissions({ flow: ["update"] });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-end gap-1 border-b px-4 py-2">
+    <div className={FLOW_LIST_CLASS}>
+      <div className={FLOW_TOOLBAR_CLASS}>
         <Button
           aria-label={t("common.refresh")}
           onClick={onRefresh}
@@ -185,7 +213,7 @@ const FlowRow = ({
   const t = useTranslations();
 
   return (
-    <li className="flex items-center gap-3 px-4 py-3">
+    <li className={FLOW_ROW_CLASS}>
       <button
         className="flex min-w-0 flex-1 items-center gap-3 text-start"
         onClick={onSelect}

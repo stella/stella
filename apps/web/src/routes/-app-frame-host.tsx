@@ -172,7 +172,16 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       return memberUser === undefined ? (
         <ProtectedPendingSkeleton />
       ) : (
-        <Suspense fallback={<ProtectedPendingSkeleton />}>
+        <Suspense
+          fallback={
+            <ProtectedPendingSkeleton
+              inspectorScope={{
+                userId: memberUser.id,
+                organizationId: memberUser.activeOrganizationId,
+              }}
+            />
+          }
+        >
           <MemberFrame
             key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
             user={memberUser}

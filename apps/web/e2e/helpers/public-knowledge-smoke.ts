@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { loadCatalogue } from "@stll/catalogue";
 
 import { getStagingReporterEnvironment } from "../staging/env";
+import { assertRouteLayoutShift, observeLayoutShift } from "./layout-shift";
 import { createNetworkCollector } from "./network";
 import {
   classifyPublicKnowledgeWebProbe,
@@ -171,6 +172,7 @@ export const declarePublicKnowledgeSmoke = ({
         const network = createNetworkCollector();
         const detach = network.trackPage(page);
         try {
+          await observeLayoutShift(page);
           const response = await page.goto(route.path, {
             waitUntil: "domcontentloaded",
           });
@@ -200,6 +202,7 @@ export const declarePublicKnowledgeSmoke = ({
               timeout: 5000,
             })
             .toBe(0);
+          await assertRouteLayoutShift(page, route.path);
           expect(forbidden, "member-only requests").toEqual([]);
           expect(unauthorized, "unauthorized responses").toEqual([]);
         } finally {

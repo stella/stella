@@ -40,8 +40,11 @@ const inspectorPaneWidthEntry = definePersistedState({
   restoredUi: true,
 });
 
+export const readPersistedInspectorPaneWidth = () =>
+  readPersistedState(inspectorPaneWidthEntry, {});
+
 const paneWidthPersistence = {
-  read: () => readPersistedState(inspectorPaneWidthEntry, {}),
+  read: readPersistedInspectorPaneWidth,
   write: (width: number) => {
     writePersistedState(inspectorPaneWidthEntry, {}, width).unwrapOr(undefined);
   },

@@ -676,6 +676,14 @@ const readPersistedInspectorState = (
   };
 };
 
+/** The same restore policy as the store, available before its tabs hydrate. */
+export const readPersistedInspectorPaneOpen = (
+  scope: InspectorBroadcastScope,
+) =>
+  !readPersistedMinimized(scope) &&
+  !readRestorePending(scope) &&
+  (readPersistedInspectorState(scope)?.tabs.length ?? 0) > 0;
+
 const writePersistedInspectorState = (
   scope: InspectorBroadcastScope,
   state: InspectorTabsStore,

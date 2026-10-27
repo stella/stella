@@ -58,9 +58,9 @@ import {
   languageDisplayName,
   TemplateRowView,
 } from "@/features/knowledge/views/templates/template-row-view";
-import type { TemplateDensity } from "@/features/knowledge/views/templates/template-row-view";
 import type {
   KnowledgeTemplate,
+  TemplateDensity,
   TemplatesSource,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { usePermissions } from "@/hooks/use-permissions";
