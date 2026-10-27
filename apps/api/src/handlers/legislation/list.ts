@@ -30,7 +30,7 @@ import {
   paginationCursorSchema,
   paginationLimitSchema,
 } from "@/api/lib/custom-schema";
-import { escapeLike } from "@/api/lib/escape-like";
+import { escapeLike, escapeLikeSql } from "@/api/lib/escape-like";
 import {
   ACT_NUMBER_PATTERN,
   actNumberCondition,
@@ -288,7 +288,7 @@ END)`;
  */
 const titleRank = (trimmedQuery: string): SQL<number> => sql<number>`(CASE
   WHEN ${legislationTitleFold(legislationTitleName(legislationDocuments.title))}
-    LIKE ${legislationTitleFold(escapeLike(trimmedQuery))} || '%'
+    LIKE ${escapeLikeSql(legislationTitleFold(trimmedQuery))} || '%'
   THEN 0
   ELSE 1
 END)`;
@@ -436,7 +436,7 @@ export const buildListStatutesQuery = (
 
   if (trimmedQuery !== null) {
     const titleOrEli = or(
-      sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${legislationTitleFold(escapeLike(trimmedQuery))} || '%'`,
+      sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${escapeLikeSql(legislationTitleFold(trimmedQuery))} || '%'`,
       ilike(legislationDocuments.eli, `%${escapeLike(trimmedQuery)}%`),
     );
     if (titleOrEli) {

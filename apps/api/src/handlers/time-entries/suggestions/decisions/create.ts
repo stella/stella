@@ -116,7 +116,10 @@ const acceptSuggestion = async function* ({
       return existing;
     }),
   );
-  if (existingDecision) {
+  // A repeated accept replays the stored acceptance. A dismissed suggestion is
+  // never reported as accepted: that accept falls through to the pending check
+  // below and is refused.
+  if (existingDecision?.status === "accepted") {
     return {
       fingerprint: body.fingerprint,
       status: existingDecision.status,
@@ -325,8 +328,9 @@ const createTimeSuggestionDecision = createSafeHandler(
       "Decide on a suggested time entry from time-entries.suggestions.list. " +
       "`decision.type: accept` records a time entry with the given minutes " +
       "and narrative (source `suggested`) and keeps the suggestion's " +
-      "evidence with the decision; it fails with 409 when the fingerprint " +
-      "is no longer pending for that day. `decision.type: dismiss` hides " +
+      "evidence with the decision; repeating an accept returns the stored " +
+      "acceptance, and it fails with 409 when the fingerprint is no longer " +
+      "pending for that day, including after a dismissal. `decision.type: dismiss` hides " +
       "the suggestion for good and is idempotent: repeating it returns the " +
       "decision already stored, including an earlier accept.",
     permissions: { timeEntry: ["create"] },

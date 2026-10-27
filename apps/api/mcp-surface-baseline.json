@@ -1,10 +1,10 @@
 {
   "instructions": {
-    "advanced": 1606,
-    "anonymized": 1005,
-    "default": 1529,
-    "documents": 888,
-    "law": 1282
+    "advanced": 1515,
+    "anonymized": 1016,
+    "default": 1438,
+    "documents": 963,
+    "law": 1295
   },
   "tools": {
     "add_matter_member": {

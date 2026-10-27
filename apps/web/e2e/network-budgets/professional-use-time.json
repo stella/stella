@@ -1,6 +1,6 @@
 {
   "route": "/time",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested. My week loads the person's pending suggestions across matters for the week in parallel with the week's entries; the entries read adds one grouped statement for per-day totals.",
   "budget": {
     "depth": 7,
     "requests": [
@@ -15,6 +15,7 @@
       "GET /v1/organization-settings/deployment-features",
       "GET /v1/signals/count",
       "GET /v1/time-entries/me",
+      "GET /v1/time-entries/me/suggestions",
       "GET /v1/time-timers",
       "GET /v1/workspaces/navigation"
     ],
@@ -31,7 +32,8 @@
       "GET /v1/time-entries/me": 1,
       "GET /v1/time-timers": 1,
       "GET /v1/workspaces/navigation": 1,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/time-entries/me/suggestions": 1
     },
     "dbQueries": {
       "GET /api/auth/get-session": 4,
@@ -43,10 +45,11 @@
       "GET /v1/organization-settings/ai-availability": 2,
       "GET /v1/organization-settings/deployment-features": 5,
       "GET /v1/signals/count": 4,
-      "GET /v1/time-entries/me": 8,
+      "GET /v1/time-entries/me": 9,
       "GET /v1/time-timers": 7,
       "GET /v1/workspaces/navigation": 7,
-      "GET /v1/me/professional-use": 1
+      "GET /v1/me/professional-use": 1,
+      "GET /v1/time-entries/me/suggestions": 20
     },
     "responseSizes": {
       "GET /api/auth/get-session": 1024,
@@ -60,7 +63,8 @@
       "GET /v1/time-entries/me": 1024,
       "GET /v1/time-timers": 1024,
       "GET /v1/workspaces/navigation": 1024,
-      "GET /v1/me/professional-use": 1024
+      "GET /v1/me/professional-use": 1024,
+      "GET /v1/time-entries/me/suggestions": 4096
     }
   }
 }

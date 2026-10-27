@@ -762,8 +762,12 @@ describe("list verification access grants across MCP tools", () => {
       expect(hidden.isError).not.toBe(true);
     }
     expect(projectedLayouts).toBeGreaterThan(0);
-    const enabledResources = listMcpResources("default", granted);
-    const hiddenResources = listMcpResources("default", denied);
+    const enabledResources = await listMcpResources("default", {
+      context: granted,
+    });
+    const hiddenResources = await listMcpResources("default", {
+      context: denied,
+    });
     expect(enabledResources.length).toBeGreaterThan(0);
     // The production feature declares capability endpoints; its shared static
     // references remain available and contain no dedicated capability names.

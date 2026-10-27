@@ -53,6 +53,15 @@ one); a plain mark strip leaves `ł` standing and under-matches the
 lexemes the index actually stored. Non-Latin scripts are out of contract
 and pass through with their marks stripped.
 
+`foldLikePostgresSearch` (`@stll/text-normalize/postgres-search-fold`) is PostgreSQL's `lower(unaccent(...))` itself,
+code point for code point and every script included, from the
+extension's full rule set (`POSTGRES_UNACCENT_RULES`). Use it where a
+client must agree with a server-side `unaccent` match exactly, such as a
+highlighter marking what the server found:
+`findPostgresSearchFoldRanges` returns those marks as ranges into the
+original text. It is narrower than the client search fold below: it keeps
+marks and letters the extension keeps.
+
 `stripDiacriticsForSlug` is the same strip but decomposes with NFKD, so
 compatibility characters (ligatures, full-width forms, superscripts) fold
 to their base before a `[a-z0-9]` slug filter runs. Slugs are persisted,

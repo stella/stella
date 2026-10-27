@@ -22,6 +22,36 @@
     "loadFailed": "Jūsu lietas neizdevās ielādēt.",
     "retry": "Mēģināt vēlreiz"
   },
+  "matter": {
+    "documents": "Dokumenti",
+    "tasks": "Uzdevumi",
+    "emptyTitle": "Šeit vēl nekā nav",
+    "emptyDescription": "Šeit būs redzami šīs lietas dokumenti un uzdevumi.",
+    "loadFailed": "Lietu neizdevās ielādēt.",
+    "loadMoreFailed": "Vairāk ierakstu neizdevās ielādēt.",
+    "loadMore": "Ielādēt vairāk",
+    "retry": "Mēģināt vēlreiz",
+    "untitled": "Bez nosaukuma",
+    "updated": "Atjaunināts {time}",
+    "kind": {
+      "folder": "Mape",
+      "document": "Dokuments",
+      "task": "Uzdevums"
+    },
+    "status": {
+      "open": "Atvērts",
+      "in_progress": "Procesā",
+      "in_review": "Pārskatīšanā",
+      "done": "Pabeigts",
+      "cancelled": "Atcelts"
+    }
+  },
+  "entity": {
+    "type": "Veids",
+    "reference": "Numurs",
+    "currentVersion": "Pašreizējā versija",
+    "loadFailed": "Šo ierakstu neizdevās ielādēt."
+  },
   "signIn": {
     "title": "Pieslēdzieties stella",
     "description": "Ievadiet sava stella servera adresi. Pieslēgšanos apstiprināsiet pārlūkprogrammā.",
