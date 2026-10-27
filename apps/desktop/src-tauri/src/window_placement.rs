@@ -190,6 +190,68 @@ pub fn target_work_area(app: &AppHandle) -> Option<WorkArea> {
   })
 }
 
+/// A whole screen (menu bar and taskbar included) in Tauri logical
+/// coordinates, with the scale its physical pixels use.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScreenFrame {
+  pub frame: WorkArea,
+  pub scale_factor: f64,
+}
+
+/// The screen holding a point given in physical pixels, such as a status
+/// icon's centre. Each screen is tried at its own scale, so a point on a
+/// screen of another density is still found.
+#[cfg(target_os = "macos")]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "this is the owner of screen selection; the ban keeps a second rule from appearing elsewhere"
+)]
+pub fn screen_at_physical(app: &AppHandle, x: f64, y: f64) -> Option<ScreenFrame> {
+  use objc2::MainThreadMarker;
+  use objc2_app_kit::NSScreen;
+
+  on_main_thread(app, None, move || {
+    let main_thread = MainThreadMarker::new()?;
+    let screens = NSScreen::screens(main_thread);
+    let primary_height = screens.iter().next()?.frame().size.height;
+    screens.iter().find_map(|screen| {
+      let scale_factor = screen.backingScaleFactor();
+      let frame = logical_work_area(primary_height, screen.frame());
+      let (point_x, point_y) = (x / scale_factor, y / scale_factor);
+      let contains = point_x >= frame.x
+        && point_x < frame.x + frame.width
+        && point_y >= frame.y
+        && point_y < frame.y + frame.height;
+      contains.then_some(ScreenFrame {
+        frame,
+        scale_factor,
+      })
+    })
+  })
+}
+
+/// The screen holding a point given in physical pixels.
+#[cfg(not(target_os = "macos"))]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "this is the owner of screen selection; the ban keeps a second rule from appearing elsewhere"
+)]
+pub fn screen_at_physical(app: &AppHandle, x: f64, y: f64) -> Option<ScreenFrame> {
+  let monitor = app.monitor_from_point(x, y).ok().flatten()?;
+  let scale_factor = monitor.scale_factor();
+  let position = monitor.position().to_logical::<f64>(scale_factor);
+  let size = monitor.size().to_logical::<f64>(scale_factor);
+  Some(ScreenFrame {
+    frame: WorkArea {
+      x: position.x,
+      y: position.y,
+      width: size.width,
+      height: size.height,
+    },
+    scale_factor,
+  })
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;

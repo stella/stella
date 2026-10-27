@@ -225,6 +225,36 @@ pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
   }
 }
 
+/// The status icon's frame in physical screen pixels, as the OS reports it;
+/// `None` when there is no icon or the OS cannot place it (an icon in
+/// Windows' hidden overflow area). The handle is read and dropped on the
+/// main thread, like every other tray handle.
+#[cfg(target_os = "macos")]
+pub fn status_icon_rect(app: &AppHandle) -> Option<tauri::Rect> {
+  let handle = app.clone();
+  crate::window_placement::on_main_thread(app, None, move || {
+    let main_thread = TrayMainThread::new()?;
+    status_icon_rect_on_main_thread(&handle, &main_thread)
+  })
+}
+
+/// The status icon's frame in physical screen pixels; see the macOS twin.
+#[cfg(not(target_os = "macos"))]
+pub fn status_icon_rect(app: &AppHandle) -> Option<tauri::Rect> {
+  status_icon_rect_on_main_thread(app, &TrayMainThread)
+}
+
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn status_icon_rect_on_main_thread(
+  app: &AppHandle,
+  _main_thread: &TrayMainThread,
+) -> Option<tauri::Rect> {
+  app.tray_by_id("main")?.rect().ok().flatten()
+}
+
 #[allow(
   clippy::disallowed_methods,
   reason = "the tray owner: the main-thread proof keeps every native handle local"
