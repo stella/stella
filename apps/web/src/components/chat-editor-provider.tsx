@@ -555,15 +555,19 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 /**
  * The chat editor manager for a composer that may mount where no route put
  * one above it, such as the overlay of a public law reader. Under an existing
- * provider it renders its children as they are, so the composer shares that
- * provider's registrations and drafts guard instead of starting a rival one.
+ * provider it passes that provider's manager through, so the composer shares
+ * its registrations and drafts guard instead of starting a rival one.
  */
-export const ChatEditorScope = ({ children }: React.PropsWithChildren) =>
-  use(ChatEditorManagerContext) === null ? (
+export const ChatEditorScope = ({ children }: React.PropsWithChildren) => {
+  const manager = use(ChatEditorManagerContext);
+  return manager === null ? (
     <ChatEditorProvider>{children}</ChatEditorProvider>
   ) : (
-    children
+    <ChatEditorManagerContext value={manager}>
+      {children}
+    </ChatEditorManagerContext>
   );
+};
 
 // Drafts live in memory for every thread, including threads whose composer is
 // not mounted, so the provider that owns their lifecycle reports them; a
