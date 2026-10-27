@@ -1166,9 +1166,9 @@ test("every owner-named input declaration enters the census even through a deleg
     for (const file of declared) {
       expect(census.has(file), file).toBe(true);
     }
-    expect(markdownChecks({ root, changed: ["docs/owned.md"] })).toEqual(
-      declared.map((file) => ["bun", file]),
-    );
+    expect(
+      markdownChecks({ root, changed: ["docs/owned.md"] }).toSorted(),
+    ).toEqual(declared.map((file) => ["bun", file]).toSorted());
   });
 });
 
