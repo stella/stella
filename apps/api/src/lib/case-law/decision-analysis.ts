@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -8,6 +8,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { readCachedDecisionAst } from "@/api/lib/case-law/decision-ast-cache";
 import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
+import {
+  type DecisionPayloadRead,
+  readDecisionVersionedPayload,
+} from "@/api/lib/case-law/decision-versioned-payload";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import {
@@ -65,33 +69,21 @@ type DecisionAnalysisAstVersion = {
   decisionId: SafeId<"caseLawDecision">;
   updatedAt: Date;
   contentHash: string | null;
+  astS3Key: string | null;
 };
 
-export type DecisionAnalysisAstColumnRead =
-  { kind: "found"; value: unknown } | { kind: "version-changed" };
+export type DecisionAnalysisAstColumnRead = DecisionPayloadRead<"documentAst">;
 
 /** Lazy fallback: metadata reads do not transfer an AST served by storage. */
 export const readDecisionAnalysisAstColumn = async (
   tx: CaseLawPublicReadTransaction,
-  { decisionId, updatedAt, contentHash }: DecisionAnalysisAstVersion,
-): Promise<DecisionAnalysisAstColumnRead> => {
-  const [row] = await tx
-    .select({ documentAst: publishedCaseLawDecisions.documentAst })
-    .from(publishedCaseLawDecisions)
-    .where(
-      and(
-        eq(publishedCaseLawDecisions.id, decisionId),
-        eq(publishedCaseLawDecisions.updatedAt, sql`${updatedAt}::timestamptz`),
-        contentHash === null
-          ? isNull(publishedCaseLawDecisions.contentHash)
-          : eq(publishedCaseLawDecisions.contentHash, contentHash),
-      ),
-    )
-    .limit(1);
-  return row === undefined
-    ? { kind: "version-changed" }
-    : { kind: "found", value: row.documentAst };
-};
+  { decisionId, ...version }: DecisionAnalysisAstVersion,
+): Promise<DecisionAnalysisAstColumnRead> =>
+  await readDecisionVersionedPayload(
+    tx,
+    { id: decisionId, ...version },
+    "documentAst",
+  );
 
 type DecisionAstPointers = {
   id: SafeId<"caseLawDecision">;

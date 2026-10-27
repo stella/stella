@@ -144,6 +144,7 @@ export const resolveAnalysisInput = defineWindowedRead(
                             decisionId,
                             updatedAt: decision.updatedAt,
                             contentHash: decision.contentHash,
+                            astS3Key: decision.astS3Key,
                           }),
                       )
                     : await caseLawPublicReadDb(
@@ -152,6 +153,7 @@ export const resolveAnalysisInput = defineWindowedRead(
                             decisionId,
                             updatedAt: decision.updatedAt,
                             contentHash: decision.contentHash,
+                            astS3Key: decision.astS3Key,
                           }),
                       );
                 if (result.kind === "version-changed") {

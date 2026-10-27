@@ -42,8 +42,12 @@ import type {
 } from "@/api/lib/case-law/citation-vocabulary";
 import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
-import { readCachedDecisionRowAst } from "@/api/lib/case-law/decision-row-ast-cache";
+import {
+  DECISION_ROW_AST_VERSION_CHANGED,
+  readCachedDecisionRowAst,
+} from "@/api/lib/case-law/decision-row-ast-cache";
 import { readDecisionSectionIndex } from "@/api/lib/case-law/decision-section-cache";
+import { readDecisionVersionedPayload } from "@/api/lib/case-law/decision-versioned-payload";
 import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -100,6 +104,7 @@ const PASSAGE_MAX_CHARS = LIMITS.caseLawCitationPassageChars;
 
 /** Documents whose AST is fetched at once while resolving one page. */
 const PASSAGE_AST_GROUP_SIZE = LIMITS.caseLawCitationPassageConcurrency;
+const PASSAGE_VERSION_ATTEMPTS = 3;
 
 /**
  * Which decisions a passage read may take text from, and where their AST
@@ -274,33 +279,86 @@ const readDecisionTextByDecision = async (
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
     const entries = await Promise.all(
       group.map(async (pointer) => {
-        const read = await Result.tryPromise(
-          async () =>
-            await readDecisionAnalysisAst(
-              { ...pointer, documentAst: null },
+        const read = await Result.tryPromise(async () => {
+          let current = pointer;
+          for (
+            let attempt = 1;
+            attempt <= PASSAGE_VERSION_ATTEMPTS;
+            attempt += 1
+          ) {
+            const version = current;
+            const versionState = { changed: false };
+            const ast = await readDecisionAnalysisAst(
+              { ...version, documentAst: null },
               readCorpusTombstones,
               async () =>
                 await readCachedDecisionRowAst({
                   key: JSON.stringify([
-                    pointer.id,
-                    pointer.updatedAt,
-                    pointer.contentHash,
-                    pointer.astS3Key,
+                    version.id,
+                    version.updatedAt,
+                    version.contentHash,
+                    version.astS3Key,
                   ]),
-                  read: async () =>
-                    await caseLawDb(async (tx) => {
-                      const [fallback] = await tx
-                        .select({
-                          documentAst: publishedCaseLawDecisions.documentAst,
-                        })
-                        .from(publishedCaseLawDecisions)
-                        .where(eq(publishedCaseLawDecisions.id, pointer.id))
-                        .limit(1);
-                      return fallback?.documentAst ?? null;
-                    }),
+                  onVersionChanged: () => {
+                    versionState.changed = true;
+                  },
+                  read: async () => {
+                    const result = await caseLawDb(
+                      async (tx) =>
+                        await readDecisionVersionedPayload(
+                          tx,
+                          version,
+                          "documentAst",
+                        ),
+                    );
+                    return result.kind === "version-changed"
+                      ? DECISION_ROW_AST_VERSION_CHANGED
+                      : result.value;
+                  },
                 }),
-            ),
-        );
+            );
+            if (versionState.changed) {
+              const [fresh] = await caseLawDb(
+                async (tx) => await readPassageSourcePointers(tx, [version.id]),
+              );
+              if (fresh === undefined) {
+                return null;
+              }
+              current = fresh;
+              continue;
+            }
+            if (ast === null) {
+              return null;
+            }
+            const sectionsRead = await caseLawDb(
+              async (tx) =>
+                await readDecisionVersionedPayload(tx, version, "sections"),
+            );
+            if (sectionsRead.kind === "version-changed") {
+              const [fresh] = await caseLawDb(
+                async (tx) => await readPassageSourcePointers(tx, [version.id]),
+              );
+              if (fresh === undefined) {
+                return null;
+              }
+              current = fresh;
+              continue;
+            }
+            const sections = await readDecisionSectionIndex({
+              key: JSON.stringify([
+                version.id,
+                version.updatedAt,
+                version.astS3Key,
+                version.contentHash,
+              ]),
+              ast,
+              readSections: async () =>
+                await Promise.resolve(sectionsRead.value),
+            });
+            return { id: version.id, text: { ast, sections } };
+          }
+          return null;
+        });
         if (Result.isError(read)) {
           logger.warn("case_law.citation_passage.ast_unavailable", {
             "error.type": errorTag(read.error),
@@ -310,25 +368,7 @@ const readDecisionTextByDecision = async (
         if (read.value === null) {
           return null;
         }
-        const sections = await readDecisionSectionIndex({
-          key: JSON.stringify([
-            pointer.id,
-            pointer.updatedAt,
-            pointer.astS3Key,
-            pointer.contentHash,
-          ]),
-          ast: read.value,
-          readSections: async () =>
-            await caseLawDb(async (tx) => {
-              const [stored] = await tx
-                .select({ sections: publishedCaseLawDecisions.sections })
-                .from(publishedCaseLawDecisions)
-                .where(eq(publishedCaseLawDecisions.id, pointer.id))
-                .limit(1);
-              return stored?.sections ?? null;
-            }),
-        });
-        return { id: pointer.id, text: { ast: read.value, sections } };
+        return read.value;
       }),
     );
     for (const entry of entries) {
