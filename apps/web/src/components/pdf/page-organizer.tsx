@@ -135,6 +135,9 @@ const THUMBNAIL_WIDTH = 176;
 // keeps one review's memory bounded.
 const MAX_CLEAN_SCAN_PAGES = 50;
 
+const loadScanEngine = async () =>
+  (await import("@stll/scan-engine")).scanEngine;
+
 const isRenderCancellation = (error: unknown): boolean =>
   error instanceof Error &&
   (error.name === "AbortError" || error.name === "RenderingCancelledException");
@@ -1051,7 +1054,7 @@ const LoadedPDFPageOrganizer = ({
     detached(
       (async () => {
         const engine = await Result.tryPromise({
-          try: async () => (await import("@stll/scan-engine")).scanEngine,
+          try: loadScanEngine,
           catch: (cause) =>
             cause instanceof Error
               ? cause.message
