@@ -10,6 +10,7 @@ import {
   withSharedTransactionTimeoutRestoration,
 } from "@/api/db/shared-pool-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import {
   configureReadTransaction,
   EXTERNAL_PUBLIC_LAW_READ_GUARDS,
@@ -175,8 +176,7 @@ test("a caught select cancellation is logged", async () => {
         )
           .select({ value: observationProbe.value })
           .from(observationProbe);
-        // swallow-ok: this test asserts cancellation telemetry after recovery.
-        return await observedQuery.catch(() => "handled cancellation");
+        return await observedQuery.catch((error: unknown) => error);
       } finally {
         executeSpy.mockRestore();
         fromSpy.mockRestore();
@@ -184,7 +184,12 @@ test("a caught select cancellation is logged", async () => {
       }
     });
 
-    expect(result).toBe("handled cancellation");
+    expect(result).toMatchObject({
+      _tag: "DatabaseError",
+      message: "Public-law statement failed",
+      cause: cancelled,
+    });
+    expect(getPgErrorCode(result)).toBe("57014");
     const cancellation = logs
       .at("WARN")
       .find(({ message }) =>

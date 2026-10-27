@@ -16,6 +16,8 @@ import {
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -80,11 +82,15 @@ const publicLawStatementName = (): string => {
 const observePublicLawStatement = async <T>(
   statementName: string,
   operation: () => Promise<T>,
-): Promise<T> => {
+): Promise<Result<T, DatabaseError>> => {
   const startedAt = performance.now();
   const outcome = await Result.tryPromise({
     try: operation,
-    catch: (error: unknown) => error,
+    catch: (cause: unknown) =>
+      new DatabaseError({
+        message: "Public-law statement failed",
+        cause,
+      }),
   });
   const durationMs = Math.round(performance.now() - startedAt);
   if (Result.isError(outcome)) {
@@ -99,7 +105,7 @@ const observePublicLawStatement = async <T>(
         durationMs,
       });
     }
-    throw outcome.error;
+    return outcome;
   }
   if (durationMs >= SLOW_PUBLIC_LAW_STATEMENT_MS) {
     logger.warn("public_law.read_statement_slow", {
@@ -107,7 +113,7 @@ const observePublicLawStatement = async <T>(
       durationMs,
     });
   }
-  return outcome.value;
+  return outcome;
 };
 
 // Wrap only executable query builders; subqueries and SQL fragments must keep
@@ -136,11 +142,19 @@ const observedQueryBuilder = <T extends object>(
         return method;
       }
       if (property === "execute") {
-        return async (...args: unknown[]) =>
-          await observePublicLawStatement(statementName, async () => {
-            const result: unknown = Reflect.apply(method, target, args);
-            return await result;
-          });
+        return async (...args: unknown[]) => {
+          const outcome = await observePublicLawStatement(
+            statementName,
+            async () => {
+              const result: unknown = Reflect.apply(method, target, args);
+              return await result;
+            },
+          );
+          if (Result.isError(outcome)) {
+            return abortTransaction(outcome.error);
+          }
+          return outcome.value;
+        };
       }
       return (...args: unknown[]) => {
         const result: unknown = Reflect.apply(method, target, args);
