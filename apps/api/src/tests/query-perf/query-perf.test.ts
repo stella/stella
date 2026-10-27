@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
+import { organizationDataExports } from "@/api/db/schema";
+import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
@@ -9,6 +11,7 @@ import {
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { DATA_EXPORT_HANDOFF_PAGE_SIZE } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 
 import {
   CASE_LAW_SCENARIOS,
@@ -16,8 +19,8 @@ import {
   describeServed,
   seedCorpusReadBudgets,
   serveCaseLaw,
-  type ServedCaseLaw,
 } from "./corpus-seed";
+import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
 import {
   budgetProblem,
@@ -33,6 +36,7 @@ import {
   queryPerfRegistry,
   READ_BUDGET_PROFILES,
   SCHEDULED_JOB_MEASUREMENTS,
+  type ScheduledJobScenario,
 } from "./registry";
 import { measureScheduledJobRun } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
@@ -40,6 +44,10 @@ import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
+const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
+  scenario.type === "case-law"
+    ? describeServed(scenario.served)
+    : `exports:${scenario.cohort}:${scenario.rows}`;
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
@@ -251,16 +259,52 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const runMetrics = async (
           jobId: string,
           task: string,
-          served: ServedCaseLaw,
+          scenario: ScheduledJobScenario,
         ) => {
-          await serveCaseLaw(db, served);
-          const generation = describeServed(served);
+          if (scenario.type === "case-law") {
+            await serveCaseLaw(db, scenario.served);
+          } else {
+            await seedDataExportScenario(db, scenario);
+          }
+          const generation = describeScheduledScenario(scenario);
+          let enqueued = 0;
           const run = await measureScheduledJobRun({
             database: db,
             openClient,
             jobId,
             task,
+            ...(scenario.type === "data-exports"
+              ? {
+                  resetAfterCapture: async () =>
+                    await seedDataExportScenario(db, scenario),
+                  dataExportMaintenance: {
+                    handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+                    enqueue: async () => {
+                      enqueued += 1;
+                      return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+                    },
+                  },
+                }
+              : {}),
           });
+          if (scenario.type === "data-exports") {
+            const retained = await db.$count(organizationDataExports);
+            if (retained !== scenario.rows) {
+              panic("Scheduled measurement consumed its export fixture", {
+                retained,
+                expected: scenario.rows,
+              });
+            }
+            const changed = run.statements.some(({ statement }) =>
+              /^update\s/iu.test(statement),
+            );
+            if (changed !== (scenario.cohort === "transitions")) {
+              panic("Export measurement missed its transition path", scenario);
+            }
+            if (enqueued > 0 !== (scenario.cohort !== "quiet")) {
+              panic("Export measurement missed its handoff path", scenario);
+            }
+          }
           log({
             event: "read_budget_job_run",
             jobId,
@@ -285,7 +329,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           }
           measured.add(budgetId);
           for (const scenario of measurement.scenarios) {
-            const label = describeServed(scenario.size);
+            const label = describeScheduledScenario(scenario.size);
             // db-await-in-loop: scenarios move the served generations, so they run one at a time.
             const size = await deadline.run(
               `run ${jobId} on ${label}`,
@@ -299,7 +343,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             }
             // db-await-in-loop: the twin scenario moves the served generations after the first run finished.
             const double = await deadline.run(
-              `run ${jobId} on ${describeServed(twin)}`,
+              `run ${jobId} on ${describeScheduledScenario(twin)}`,
               async () => await runMetrics(jobId, measurement.task, twin),
             );
             note(budgetProblem(budgetId, double));

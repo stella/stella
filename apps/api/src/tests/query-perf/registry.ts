@@ -8,6 +8,7 @@ import type {
 } from "@/api/lib/db/read-budgets";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { MAINTAIN_DATA_EXPORTS_TASK } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -18,6 +19,7 @@ import {
   LEGISLATION_CANDIDATE_COUNT,
   LEGISLATION_GENERATION,
 } from "./corpus-seed";
+import type { DataExportScenario } from "./data-export-seed";
 import type { seedQueryPerf } from "./seed";
 
 /** Tenant statements, measured as `stella` under row security per profile. */
@@ -59,9 +61,15 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
     expectedRows: number;
   }[];
 
+export type ScheduledJobScenario =
+  { type: "case-law"; served: ServedCaseLaw } | DataExportScenario;
+
 type ScheduledJobMeasurement = {
   task: string;
-  scenarios: readonly { size: ServedCaseLaw; double?: ServedCaseLaw }[];
+  scenarios: readonly {
+    size: ScheduledJobScenario;
+    double?: ScheduledJobScenario;
+  }[];
 };
 
 /**
@@ -75,10 +83,22 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  "dataExports.maintain.fiveMinute": {
+    task: MAINTAIN_DATA_EXPORTS_TASK,
+    scenarios: (["quiet", "transitions", "queued"] as const).map((cohort) => ({
+      size: { type: "data-exports", rows: 6000, cohort },
+      double: { type: "data-exports", rows: 12_000, cohort },
+    })),
+  },
   "caseLaw.reportFreshness.fiveMinute": {
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
-    scenarios: Object.values(CASE_LAW_SCENARIOS),
+    scenarios: Object.values(CASE_LAW_SCENARIOS).map((scenario) => ({
+      size: { type: "case-law", served: scenario.size },
+      ...("double" in scenario
+        ? { double: { type: "case-law" as const, served: scenario.double } }
+        : {}),
+    })),
   },
 };
 
@@ -124,6 +144,7 @@ export const scheduledJobMeasurementViolations = (
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
   "scheduled.caseLaw.reportFreshness": "corpus",
+  "scheduled.dataExports.maintain": "corpus",
   "statement.legislation.candidateRows": "corpus",
   "statement.documents.searchHits": "tenant",
 } as const satisfies Record<ReadBudgetId, "corpus" | "tenant">;

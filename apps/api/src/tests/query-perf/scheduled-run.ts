@@ -1,9 +1,19 @@
 import { panic, Result } from "better-result";
-import { type Logger, type SQL, sql } from "drizzle-orm";
+import {
+  type Logger,
+  type SQL,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
-import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import type { DataExportMaintenanceDependencies } from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import type {
+  SchedulerDb,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -22,7 +32,7 @@ import {
   QUERY_PERF_CONNECTION_SETTINGS,
 } from "./settings";
 
-type CapturedStatement = { text: string; params: readonly unknown[] };
+export type CapturedStatement = { text: string; params: readonly unknown[] };
 
 /** The statement's leading keyword, after comments and whitespace. */
 const leadingKeyword = (text: string) =>
@@ -32,10 +42,20 @@ const leadingKeyword = (text: string) =>
     ?.toLowerCase() ?? "";
 
 const SESSION_KEYWORDS: ReadonlySet<string> = new Set(["set", "reset", "show"]);
-const READ_KEYWORDS: ReadonlySet<string> = new Set([
+const TRANSACTION_KEYWORDS = new Set([
+  "begin",
+  "commit",
+  "rollback",
+  "savepoint",
+  "release",
+]);
+const MEASURED_KEYWORDS: ReadonlySet<string> = new Set([
   "select",
   "with",
   "values",
+  "delete",
+  "insert",
+  "update",
 ]);
 
 /** A captured statement as a Drizzle query with the same bound parameters. */
@@ -57,6 +77,88 @@ const asQuery = ({ text, params }: CapturedStatement): SQL => {
 
 const noopTask = () => undefined;
 
+type CaptureScheduledJobOptions = {
+  database: SchedulerDb;
+  jobId: string;
+  task: string;
+  statements: readonly CapturedStatement[];
+  now?: Date;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
+  resetAfterCapture?: () => Promise<void>;
+};
+
+/** Capture global-owner writers with real transactions; borrowed-role writers need a scope-aware replay. */
+export const captureScheduledJobRun = async ({
+  database,
+  jobId,
+  task: taskName,
+  statements,
+  now = new Date("2026-01-10T12:00:00Z"),
+  dataExportMaintenance,
+  resetAfterCapture,
+}: CaptureScheduledJobOptions) => {
+  const job =
+    DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
+    panic(`No declared scheduler job ${jobId}`);
+  if (job.task !== taskName) {
+    return panic(`${jobId} runs ${job.task}, not ${taskName}`);
+  }
+  const task =
+    createSchedulerTaskRegistry(
+      noopTask,
+      dataExportMaintenance === undefined ? {} : { dataExportMaintenance },
+    ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
+  const outcome = await Result.tryPromise({
+    try: async () =>
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          db: database,
+          dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
+          job: { id: job.id, task: job.task },
+          payload: "payload" in job ? job.payload : null,
+          signal: new AbortController().signal,
+          scheduleContinuation: noopTask,
+          logger: {
+            debug: noopTask,
+            error: noopTask,
+            info: noopTask,
+            warn: noopTask,
+          },
+        }),
+      ),
+    catch: (error: unknown) => error,
+  });
+  const wrote = statements.some(({ text }) =>
+    ["insert", "update", "delete"].includes(leadingKeyword(text)),
+  );
+  if (wrote && resetAfterCapture === undefined) {
+    return panic(
+      `${jobId} writes require an explicit fixture reset before replay`,
+    );
+  }
+  const unsupportedScope =
+    resetAfterCapture !== undefined &&
+    statements.some(
+      ({ text, params }) =>
+        SESSION_KEYWORDS.has(leadingKeyword(text)) ||
+        (/\bset_config\b/iu.test(text) &&
+          (/['"]role['"]/iu.test(text) || params.includes("role"))),
+    );
+  await resetAfterCapture?.();
+  if (unsupportedScope) {
+    return panic(
+      `${jobId} writing captures support only global-owner scope without session or role changes`,
+    );
+  }
+  if (outcome.isErr()) {
+    return panic(`${jobId} failed on the fixture`, outcome.error);
+  }
+  const result = outcome.value;
+  if (result !== undefined && !Result.isOk(result)) {
+    return panic(`${jobId} failed on the fixture: ${result.error.message}`);
+  }
+};
+
 /**
  * Pages one run of a declared job reads. The job's registered task runs once
  * against the fixture through a client that records every statement it
@@ -65,30 +167,28 @@ const noopTask = () => undefined;
  * rather than a hand-kept list of its statements means a statement added to
  * the job is measured without anyone registering it.
  *
- * Only reading jobs are measured this way: a write would change the fixture
- * the next scenario reads, so a job that writes fails here until its replay
- * runs inside a rolled-back transaction.
+ * Writing tasks commit normally on the disposable fixture, which their explicit
+ * reset restores before analysis. Only global-owner writers are supported:
+ * session commands and borrowed roles require a scope-aware replay. The
+ * analyzed replay always rolls back.
  */
 export const measureScheduledJobRun = async ({
   database,
   openClient,
   jobId,
   task: taskName,
+  now = new Date("2026-01-10T12:00:00Z"),
+  dataExportMaintenance,
+  resetAfterCapture,
 }: {
   database: GatedTestDb;
   openClient: GatedTestClientScope["openClient"];
   jobId: string;
   task: string;
+  now?: Date;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
+  resetAfterCapture?: () => Promise<void>;
 }) => {
-  const job =
-    DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
-    panic(`No declared scheduler job ${jobId}`);
-  if (job.task !== taskName) {
-    return panic(`${jobId} runs ${job.task}, not ${taskName}`);
-  }
-  const task =
-    createSchedulerTaskRegistry(noopTask).get(job.task) ??
-    panic(`No registered task ${job.task} for ${jobId}`);
   const captured: CapturedStatement[] = [];
   const logger: Logger = {
     logQuery: (text, params) => {
@@ -96,35 +196,30 @@ export const measureScheduledJobRun = async ({
     },
   };
   const { db } = openClient({
-    connection: QUERY_PERF_CONNECTION_SETTINGS,
+    connection: {
+      ...QUERY_PERF_CONNECTION_SETTINGS,
+      default_transaction_read_only:
+        resetAfterCapture === undefined ? "on" : "off",
+    },
     logger,
   });
-  const outcome = await task(
-    asTestRaw<SchedulerTaskContext>({
-      db,
-      job: { id: job.id, task: job.task },
-      payload: null,
-      signal: new AbortController().signal,
-      scheduleContinuation: noopTask,
-      logger: {
-        debug: noopTask,
-        error: noopTask,
-        info: noopTask,
-        warn: noopTask,
-      },
-    }),
-  );
-  if (outcome !== undefined && !Result.isOk(outcome)) {
-    return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
-  }
+  await captureScheduledJobRun({
+    database: db,
+    jobId,
+    task: taskName,
+    statements: captured,
+    now,
+    ...(dataExportMaintenance === undefined ? {} : { dataExportMaintenance }),
+    ...(resetAfterCapture === undefined ? {} : { resetAfterCapture }),
+  });
   const reads = captured.filter(({ text }) => {
     const keyword = leadingKeyword(text);
-    if (SESSION_KEYWORDS.has(keyword)) {
+    if (SESSION_KEYWORDS.has(keyword) || TRANSACTION_KEYWORDS.has(keyword)) {
       return false;
     }
-    if (!READ_KEYWORDS.has(keyword)) {
+    if (!MEASURED_KEYWORDS.has(keyword)) {
       return panic(
-        `${jobId} issued a ${keyword || "blank"} statement; a writing job needs a rolled-back replay before it can be measured`,
+        `${jobId} issued an unsupported ${keyword || "blank"} statement`,
       );
     }
     return true;
@@ -132,20 +227,27 @@ export const measureScheduledJobRun = async ({
   if (reads.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }
-  const statements = await database.transaction(async (tx) => {
-    await applyPlannerSettings(tx);
-    const measured: { metrics: QueryPerfMetrics; statement: string }[] = [];
-    for (const statement of reads) {
-      // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
-      const plan = await explainOwnerStatement(tx, asQuery(statement));
-      measured.push({
-        metrics: metricsFromPlan(plan),
-        statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
-      });
-    }
-    await assertPlannerSettings(tx, "owner");
-    return measured;
+  const statements: { metrics: QueryPerfMetrics; statement: string }[] = [];
+  const replay = await Result.tryPromise({
+    try: async () =>
+      await database.transaction(async (tx) => {
+        await applyPlannerSettings(tx);
+        for (const statement of reads) {
+          // db-await-in-loop: the run's statements are analyzed one at a time, in the order the job issued them.
+          const plan = await explainOwnerStatement(tx, asQuery(statement));
+          statements.push({
+            metrics: metricsFromPlan(plan),
+            statement: statement.text.replaceAll(/\s+/gu, " ").slice(0, 160),
+          });
+        }
+        await assertPlannerSettings(tx, "owner");
+        tx.rollback();
+      }),
+    catch: (error: unknown) => error,
   });
+  if (replay.isOk() || !(replay.error instanceof TransactionRollbackError)) {
+    return panic("Scheduled measurement replay must roll back", replay);
+  }
   return {
     metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
     statements,

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import api from "@/api/server";
+import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import {
@@ -29,7 +29,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           fixtures.push(large);
           for (const scenario of dataExportReadScalingScenarios) {
             expect(
-              api.routes.some(({ handler }) => handler === scenario.handler),
+              apiApp.routes.some(
+                ({ definition }) => definition === scenario.definition,
+              ),
             ).toBe(true);
             const at10 = await scenario.measure(small);
             const at200 = await scenario.measure(large);

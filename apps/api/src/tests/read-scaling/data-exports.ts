@@ -1,13 +1,13 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { auditLogs, organizationDataExports } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import downloadDataExport from "@/api/handlers/data-exports/download";
 import readDataExport from "@/api/handlers/data-exports/get";
 import listDataExports from "@/api/handlers/data-exports/list";
+import { isHttpStatusResponse } from "@/api/http/status";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -16,6 +16,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { dataExportObjectKey } from "@/api/lib/data-export/queue";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
@@ -30,6 +31,8 @@ export const seedDataExportReadScaling = async (
 ) => {
   const organizationId = mintAuthProviderId<"organization">();
   const userId = mintAuthProviderId<"user">();
+  const email = `${userId}@example.test`;
+  const membershipId = Bun.randomUUIDv7();
   const exportIds = Array.from({ length: size }, () =>
     createSafeId<"dataExport">(),
   );
@@ -48,6 +51,7 @@ export const seedDataExportReadScaling = async (
     userId,
   });
   const cleanup = async () => {
+    await db.delete(member).where(eq(member.id, membershipId));
     await db.delete(organization).where(eq(organization.id, organizationId));
     await db.delete(user).where(eq(user.id, userId));
   };
@@ -61,7 +65,19 @@ export const seedDataExportReadScaling = async (
     await db.insert(user).values({
       id: userId,
       name: "Export reader",
-      email: `${userId}@example.test`,
+      email,
+      emailVerified: true,
+    });
+    await recordNewOrganizationAccessState(db, {
+      organizationId,
+      now: new Date(),
+    });
+    await db.insert(member).values({
+      id: membershipId,
+      userId,
+      organizationId,
+      role: "owner",
+      createdAt: new Date(),
     });
     await scopedDb(
       async (tx) =>
@@ -118,6 +134,7 @@ export const seedDataExportReadScaling = async (
     return {
       organizationId,
       userId,
+      email,
       exportId,
       safeDb,
       recordAuditEvent,
@@ -135,7 +152,7 @@ type ExportReadFixture = Awaited<ReturnType<typeof seedDataExportReadScaling>>;
 export const dataExportReadScalingScenarios = [
   {
     name: "organization export list",
-    handler: listDataExports.handler,
+    definition: listDataExports,
     expectedRows: 10,
     measure: async (fixture: ExportReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -146,15 +163,16 @@ export const dataExportReadScalingScenarios = [
             safeDb: fixture.safeDb,
             scopedDb: NO_DB,
             audit: NO_AUDIT,
-            user: { id: fixture.userId },
+            user: { id: fixture.userId, email: fixture.email },
             session: { activeOrganizationId: fixture.organizationId },
+            request: new Request(
+              "https://example.test/v1/data-exports?limit=10",
+            ),
+            route: "/v1/data-exports",
             query: { limit: 10 },
           }),
         );
-        if (
-          response instanceof ElysiaCustomStatusResponse ||
-          response.items.length !== 10
-        ) {
+        if (isHttpStatusResponse(response) || response.items.length !== 10) {
           panic("Export list scaling requires a full successful page");
         }
         return {
@@ -167,7 +185,7 @@ export const dataExportReadScalingScenarios = [
   },
   {
     name: "organization export detail",
-    handler: readDataExport.handler,
+    definition: readDataExport,
     expectedRows: 1,
     measure: async (fixture: ExportReadFixture) =>
       await runWithMeasuredQueryCounter(async (counter) => {
@@ -178,13 +196,17 @@ export const dataExportReadScalingScenarios = [
             safeDb: fixture.safeDb,
             scopedDb: NO_DB,
             audit: NO_AUDIT,
-            user: { id: fixture.userId },
+            user: { id: fixture.userId, email: fixture.email },
             session: { activeOrganizationId: fixture.organizationId },
+            request: new Request(
+              `https://example.test/v1/data-exports/${fixture.exportId}`,
+            ),
+            route: "/v1/data-exports/:exportId",
             params: { exportId: fixture.exportId },
           }),
         );
         if (
-          response instanceof ElysiaCustomStatusResponse ||
+          isHttpStatusResponse(response) ||
           response.id !== fixture.exportId ||
           response.parts.length !== 1
         ) {
@@ -200,7 +222,7 @@ export const dataExportReadScalingScenarios = [
   },
   {
     name: "organization export download grant",
-    handler: downloadDataExport.handler,
+    definition: downloadDataExport,
     expectedRows: 1,
     measure: async (fixture: ExportReadFixture) => {
       const session = {
@@ -215,13 +237,18 @@ export const dataExportReadScalingScenarios = [
             safeDb: fixture.safeDb,
             scopedDb: NO_DB,
             audit: fixture.recordAuditEvent,
-            user: { id: fixture.userId },
+            user: { id: fixture.userId, email: fixture.email },
             session,
+            request: new Request(
+              `https://example.test/v1/data-exports/${fixture.exportId}/download`,
+              { method: "POST" },
+            ),
+            route: "/v1/data-exports/:exportId/download",
             params: { exportId: fixture.exportId },
             body: { file: { type: "part", index: 1 } },
           }),
         );
-        if (response instanceof ElysiaCustomStatusResponse) {
+        if (isHttpStatusResponse(response)) {
           panic("Export grant scaling requires a successful grant");
         }
         const signed = new URL(response.url);

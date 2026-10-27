@@ -74,6 +74,8 @@ import {
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import {
+  createMaintainDataExportsTask,
+  type DataExportMaintenanceDependencies,
   MAINTAIN_DATA_EXPORTS_TASK,
   maintainDataExports,
 } from "@/api/lib/scheduler/tasks/data-export-maintenance";
@@ -310,10 +312,18 @@ const SCHEDULER_TASKS = {
 
 type SchedulerTaskRegistryOptions = {
   resetReviewOrganization?: SchedulerTask;
+  dataExportMaintenance?: DataExportMaintenanceDependencies;
 };
 
-const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
+) => ({
   ...SCHEDULER_TASKS,
+  [MAINTAIN_DATA_EXPORTS_TASK]:
+    options.dataExportMaintenance === undefined
+      ? maintainDataExports
+      : createMaintainDataExportsTask(options.dataExportMaintenance),
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
 });
 
@@ -334,7 +344,7 @@ export const createSchedulerTaskRegistry = (
   options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
+    Object.entries(schedulerTasks(reapOwnerlessChatTurns, options)).map(
       ([name, registered]) => {
         const entry =
           name === RESET_REVIEW_ORGANIZATION_TASK

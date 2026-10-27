@@ -709,6 +709,7 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: MAINTAIN_DATA_EXPORTS_TASK,
+    reads: { budget: "scheduled.dataExports.maintain" },
   },
   {
     description: "Delete style set packages a replacement left behind",
