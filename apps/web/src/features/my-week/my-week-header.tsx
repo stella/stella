@@ -6,13 +6,13 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 
-import type { Week, WeekTotals } from "@/features/my-week/my-week.logic";
-import { useFormatter } from "@/i18n/formatting-context";
-import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   plainDateEpoch,
   SHORT_DATE,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
+} from "@/components/billing/format-plain-date";
+import type { Week, WeekTotals } from "@/features/my-week/my-week.logic";
+import { useFormatter } from "@/i18n/formatting-context";
+import { formatMinutes } from "@/lib/workspaces/format-duration";
 
 type MyWeekHeaderProps = {
   week: Week;

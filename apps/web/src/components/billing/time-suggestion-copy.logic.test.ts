@@ -5,7 +5,7 @@ import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-
 import {
   composeSuggestionNarrative,
   suggestionEvidenceLabels,
-} from "./time-suggestion-copy.logic";
+} from "@/components/billing/time-suggestion-copy.logic";
 
 const labels = {
   chatEvidence: (count: number, title: string) => `${count} in ${title}`,
