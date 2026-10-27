@@ -120,6 +120,7 @@ export const PdfSelectionActions = ({
       : null;
   const pages = usePDFStore((state) => state.pages);
   const setScrollTo = usePDFStore((state) => state.setScrollTo);
+  const pageSource = usePDFStore((state) => state.document?.pageSource);
   const pageIds = pages.keys().toArray();
   const pageNumberOf = (pageId: string): number | null => {
     const index = pageIds.indexOf(pageId);
@@ -130,6 +131,7 @@ export const PdfSelectionActions = ({
     entityId,
     fieldId: fileFieldId,
     file,
+    pageSource,
     workspaceId,
   });
   const [activeId, setActiveId] = useState<string | null>(null);

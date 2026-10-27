@@ -33,6 +33,7 @@ import type {
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -55,7 +56,10 @@ type DocumentMarkLocation =
   | Extract<LocatedSelection, { type: "refused" }>;
 
 export type DocumentMarks = {
-  /** False outside a signed-in session or without a document to mark. */
+  /**
+   * False outside a signed-in session, without a document to mark, or while
+   * the viewer shows anything but the file's own pages.
+   */
   available: boolean;
   /** Every mark, in reading order: by page, then by place on the page. */
   marks: DocumentMark[];
@@ -73,6 +77,12 @@ type DocumentMarksScope = {
   /** The displayed PDF; undefined while it loads. */
   file: { buffer: ArrayBuffer; fileId: string } | undefined;
   fieldId: string;
+  /**
+   * Whose pages the viewer shows; undefined while it loads. A portfolio shows
+   * the PDFs it attaches, which the file's page texts do not cover, so a mark
+   * could be neither placed nor anchored there.
+   */
+  pageSource: PDFPageSource | undefined;
   workspaceId: string;
 };
 
@@ -89,6 +99,7 @@ export const useDocumentMarks = ({
   entityId,
   fieldId,
   file,
+  pageSource,
   workspaceId,
 }: DocumentMarksScope): DocumentMarks => {
   const queryClient = useQueryClient();
@@ -102,10 +113,11 @@ export const useDocumentMarks = ({
     },
     workspaceId,
   });
-  const available = user !== null && entityId !== "";
+  const available =
+    user !== null && entityId !== "" && pageSource === "document";
   const view = useQueryView(useQuery({ ...options, enabled: available }));
   useQueryViewError(view, "useDocumentMarks:query");
-  const rows = view.type === "items" ? view.items : [];
+  const rows = available && view.type === "items" ? view.items : [];
 
   const pagesOptions = documentMarkPagesOptions({
     file,

@@ -57,9 +57,29 @@ const firstRows = (marks: readonly DocumentMark[]): DocumentMark[] => {
   return rows;
 };
 
-/** Every page a mark covers is detached, or none: the first row stands in. */
+/** Why a row has no place on the pages shown, or null when it has one. */
 const detachedReason = (mark: DocumentMark): DetachedReason | null =>
   mark.placement.type === "detached" ? mark.placement.reason : null;
+
+/** A row off the pages shown, with the words of the mark it belongs to. */
+type DetachedRow = { mark: DocumentMark; body: string | null };
+
+/**
+ * Every row a mark has off the pages shown, each read on its own: a mark
+ * over several pages can keep one page on this version and lose another, and
+ * the lost page's passage still needs a place. Only a mark's first row
+ * carries a comment's words, so each row takes them from its mark.
+ */
+const detachedRows = (marks: readonly DocumentMark[]): DetachedRow[] => {
+  const bodies = new Map(
+    firstRows(marks).map((mark) => [mark.groupId ?? mark.id, mark.body]),
+  );
+  return marks.flatMap((mark) =>
+    detachedReason(mark) === null
+      ? []
+      : [{ mark, body: bodies.get(mark.groupId ?? mark.id) ?? null }],
+  );
+};
 
 const commentItem = (
   marks: DocumentMarks,
@@ -132,14 +152,13 @@ export const DocumentMarksPanel = ({
   onComposed: () => void;
 }) => {
   const t = useTranslations();
-  const entries = firstRows(marks.marks);
-  const comments = entries.filter(
+  const comments = firstRows(marks.marks).filter(
     (mark) =>
       mark.kind === "comment" &&
       mark.body !== null &&
       detachedReason(mark) === null,
   );
-  const detachedMarks = entries.filter((mark) => detachedReason(mark) !== null);
+  const detachedMarks = detachedRows(marks.marks);
 
   return (
     <aside
@@ -228,8 +247,13 @@ export const DocumentMarksPanel = ({
               {t("workspaces.pdf.annotations.detachedHeading")}
             </h3>
             <ul className="divide-y">
-              {detachedMarks.map((mark) => (
-                <DetachedMark key={mark.id} mark={mark} marks={marks} />
+              {detachedMarks.map(({ body, mark }) => (
+                <DetachedMark
+                  body={body}
+                  key={mark.id}
+                  mark={mark}
+                  marks={marks}
+                />
               ))}
             </ul>
           </section>
@@ -254,11 +278,13 @@ const detachedLabelKey = (reason: DetachedReason) => {
   }
 };
 
-/** A mark with no place on the pages shown: its quote, and why. */
+/** A row with no place on the pages shown: its quote, its mark's words, and why. */
 const DetachedMark = ({
+  body,
   mark,
   marks,
 }: {
+  body: string | null;
   mark: DocumentMark;
   marks: DocumentMarks;
 }) => {
@@ -273,7 +299,7 @@ const DetachedMark = ({
       <ReviewCommentCard
         anchorText={mark.quote}
         author={{ image: mark.authorImage, name: mark.authorName }}
-        body={mark.body ?? t("legalReader.annotations.highlightedPassage")}
+        body={body ?? t("legalReader.annotations.highlightedPassage")}
         canDelete={removable}
         deleteLabel={
           mark.kind === "highlight"

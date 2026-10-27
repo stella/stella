@@ -34,7 +34,7 @@ const { PDF_SELECTION_CHAT, PdfSelectionToolbar } =
   await import("@/components/pdf/pdf-selection-toolbar");
 const { pdfSelectionPassage } =
   await import("@/components/pdf/pdf-selection.logic");
-const { locateSelection, placeMark } =
+const { DETACHED_REASON, locateSelection, placeMark } =
   await import("@/components/pdf/annotations/document-mark-anchor.logic");
 const { DOCUMENT_MARK_BOX_ATTRIBUTE, DocumentMarkBoxes } =
   await import("@/components/pdf/annotations/document-mark-boxes");
@@ -372,4 +372,47 @@ test("a placed mark is drawn on its page, a detached one is listed with its quot
     fireEvent.click(remove);
   }
   expect(removed).toEqual(["mark-1"]);
+});
+
+test("a mark that keeps its first page lists the page it lost, with the mark's words", () => {
+  const group = "group-1";
+  const first = markOn({
+    groupId: group,
+    id: toSafeId<"legalReaderAnnotation">("mark-a"),
+  });
+  const lost = markOn({
+    body: null,
+    groupId: group,
+    id: toSafeId<"legalReaderAnnotation">("mark-b"),
+    pageNumber: 2,
+    quote: "within thirty days",
+    placement: { type: "detached", reason: DETACHED_REASON.textChanged },
+  });
+  const marks: DocumentMarks = {
+    available: true,
+    marks: [first, lost],
+    create: async () => await Promise.resolve(undefined),
+    locate: async () =>
+      await Promise.resolve({ type: "located" as const, spans: [] }),
+    remove: async () => await Promise.resolve(undefined),
+    update: async () => await Promise.resolve(undefined),
+  };
+  const view = render(
+    <Providers>
+      <DocumentMarksPanel
+        activeId={null}
+        composing={null}
+        marks={marks}
+        onActivate={() => undefined}
+        onClose={() => undefined}
+        onComposed={() => undefined}
+      />
+    </Providers>,
+  );
+
+  expect(view.getByText("Not on this version")).toBeTruthy();
+  expect(view.getByText("within thirty days")).toBeTruthy();
+  expect(view.getByText("The words are no longer on page 2.")).toBeTruthy();
+  // The placed comment and the lost page's entry both carry its words.
+  expect(view.getAllByText("Check the delivery term.")).toHaveLength(2);
 });
