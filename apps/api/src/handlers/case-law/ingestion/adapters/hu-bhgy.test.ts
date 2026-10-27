@@ -1369,6 +1369,22 @@ describe("a listed decision with no usable publisher key", () => {
       ]);
     });
 
+    test("a key arriving without a docket adopts the summary-form row", async () => {
+      const keyed = { ...summarised, IndexId: "id-30000" };
+      const built = await assembleHuBhgyDecision({
+        row: normalizeHuBhgyRow(keyed),
+        document: undefined,
+        rawParts: huBhgyRawPartsOf(keyed, undefined),
+      });
+      const decision =
+        built.type === "detail-unavailable" ? built.decision : undefined;
+      expect(decision).toMatchObject({
+        sourceDocumentId: "id-30000",
+        sourceDocumentIdRepairAliases: [earlierId],
+        caseNumberIsPlaceholder: true,
+      });
+    });
+
     test("a row stating one form names no alias for its own identity", () => {
       expect(huBhgyIdentityOf(normalizeHuBhgyRow(summarised))).toMatchObject({
         type: "quarantined",

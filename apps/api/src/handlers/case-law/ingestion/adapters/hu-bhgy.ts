@@ -974,8 +974,7 @@ const readHuBhgyDocument = async (
 type HuBhgyBuildResult =
   | { type: "built"; decision: IngestionResult }
   /**
-   * No row this adapter can store: no publisher key and no stable field set,
-   * or a keyed row stating no docket.
+   * No row this adapter can store: no publisher key and no stable field set.
    */
   | { type: "unkeyable" }
   /**
@@ -1112,10 +1111,8 @@ export const assembleHuBhgyDecision = async ({
     };
   }
   const IndexId = identity.sourceDocumentId;
-  const caseNumber = row.Azonosito;
-  if (caseNumber === undefined) {
-    return { type: "unkeyable" };
-  }
+  const docket = row.Azonosito;
+  const caseNumber = docket ?? `BHGY listing ${IndexId}`;
   // The deciding court is the row's own field, never a constant: this source
   // publishes for every court of the country.
   const court = row.MeghozoBirosag ?? "";
@@ -1172,7 +1169,9 @@ export const assembleHuBhgyDecision = async ({
     // The listed docket and the one the document prints are two spellings of
     // one number: `Gfv.30091/2025/4` drops the thousands dot and the panel
     // numeral the document keeps. Both are exact, so both are stated.
-    identifiers: decisionIdentifiers(caseNumber, read?.documentDocket),
+    ...(docket === undefined
+      ? { caseNumberIsPlaceholder: true }
+      : { identifiers: decisionIdentifiers(docket, read?.documentDocket) }),
     sourceDocumentId: IndexId,
     ...(aliasesOf(row).length === 0
       ? {}

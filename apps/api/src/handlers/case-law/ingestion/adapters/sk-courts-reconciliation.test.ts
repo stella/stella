@@ -599,6 +599,16 @@ describe("sk-courts buildDecision", () => {
             if (degraded?.type !== "document") {
               panic("Expected a quarantined degraded listing");
             }
+            if (
+              identifikacneCislo === null &&
+              nazov === null &&
+              registreGuid === null
+            ) {
+              expect(
+                built.decision.sourceDocumentIdRepairAliases,
+              ).not.toContain(degraded.sourceDocumentId);
+              continue;
+            }
             degradedIds.add(degraded.sourceDocumentId);
             expect(built.decision.sourceDocumentIdRepairAliases).toContain(
               degraded.sourceDocumentId,
@@ -626,7 +636,12 @@ describe("sk-courts buildDecision", () => {
           ...built.decision,
           sourceDocumentIdRepairAliases: [
             ...degradedIds,
-            "unexpected-additional-publisher-identity",
+            ...Array.from(
+              {
+                length: MAX_SOURCE_IDENTITY_CANDIDATES - degradedIds.size,
+              },
+              (_, index) => `overflow-publisher-identity-${index}`,
+            ),
           ],
         },
         sourceId: createSafeId<"caseLawSource">(),
