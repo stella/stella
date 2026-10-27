@@ -5,7 +5,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 const TABLE_NAME = "legal_reader_annotations";
 
-export const READER_ANNOTATION_CLAIM_CONSTRAINTS = [
+export const READER_ANNOTATION_CONSTRAINTS = [
   {
     tableName: TABLE_NAME,
     constraintName: "legal_reader_annotations_target_type_values",
@@ -18,13 +18,19 @@ export const READER_ANNOTATION_CLAIM_CONSTRAINTS = [
     tableName: TABLE_NAME,
     constraintName: "legal_reader_annotations_workspace_organization_fk",
   },
+  {
+    tableName: TABLE_NAME,
+    constraintName: "legal_reader_annotations_matter_document_shape",
+  },
 ] as const satisfies readonly OnlineConstraintValidation[];
 
-// Migration 20261021080000 adds these NOT VALID: rows written before it leave
-// the claim columns null, which every check accepts, and new rows are checked
-// from the start. Validating here keeps the scan out of the schema transaction.
-export const READER_ANNOTATION_CLAIM_CONSTRAINT_VALIDATIONS =
-  READER_ANNOTATION_CLAIM_CONSTRAINTS.map(
+// Migrations 20261021080000 (claim comments) and 20261026120000 (matter
+// document marks, which also re-adds the target-type check) add these NOT
+// VALID: rows written before them leave the new columns null, which every
+// check accepts, and new rows are checked from the start. Validating here
+// keeps the scan out of the schema transaction.
+export const READER_ANNOTATION_CONSTRAINT_VALIDATIONS =
+  READER_ANNOTATION_CONSTRAINTS.map(
     ({ tableName, constraintName }) =>
       ({
         name: constraintName,

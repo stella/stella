@@ -784,6 +784,15 @@ const webUseIntlFormatterImport = {
     "Import useFormatter from '@/i18n/formatting-context', which formats in the reader's formatting locale rather than the UI language.",
 };
 
+// A citation's kind decides its chip: a paragraph of the open decision
+// previews from its loaded text, another decision from its metadata. The one
+// owner dispatches on that kind, so a surface never picks a chip itself.
+const webCitationChipImport = {
+  group: ["**/paragraph-reference", "**/decision-citation-chip"],
+  message:
+    "Render citations through '@/components/references/citation-chip', which picks the chip by citation kind.",
+};
+
 const apiSafeIdBrandingImport = {
   name: "@/api/lib/branded-types",
   importNames: ["toSafeId"],
@@ -1895,6 +1904,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-vacuous-throw-assertion.ts",
     "./.oxlint-plugins/no-serial-lint-case.ts",
     "./.oxlint-plugins/no-direct-dom-unregister.ts",
+    "./.oxlint-plugins/no-dropped-fake-timers.ts",
     "./.oxlint-plugins/no-internal-module-mock.ts",
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
@@ -1933,6 +1943,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/no-network-in-transaction.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
+    "./.oxlint-plugins/no-case-folded-search-match.ts",
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
     "./.oxlint-plugins/require-stable-editor-options.ts",
@@ -1941,6 +1952,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-browser-storage.ts",
     "./.oxlint-plugins/no-raw-history-state.ts",
     "./.oxlint-plugins/no-literal-view-id.ts",
+    "./.oxlint-plugins/no-route-identity-from-path.ts",
     "./.oxlint-plugins/no-detached-void.ts",
     "./.oxlint-plugins/no-broad-translation-callable.ts",
     "./.oxlint-plugins/no-partial-record-satisfies.ts",
@@ -3368,6 +3380,20 @@ const config = defineConfig({
       },
     },
     {
+      // The matter page on screen is read from the route matches; a path
+      // parser or regex restates the route tree and reads sibling pages as
+      // views or documents. Tests are out of scope: their fetch stubs route
+      // API requests by path, which names no page on screen.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-route-identity-from-path.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/**/*.test.ts", "apps/web/src/**/*.test.tsx"],
+      rules: {
+        "no-route-identity-from-path/no-route-identity-from-path": "error",
+      },
+    },
+    {
       // Persisted-storage reads: scoped to apps/web, the only surface that
       // reads localStorage/sessionStorage. The helper module itself is the
       // one place a raw JSON.parse on a persisted string is intentional.
@@ -4074,6 +4100,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4111,6 +4138,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4339,6 +4367,42 @@ const config = defineConfig({
                 message: "Use '@/lib/api-contract' instead of '@/api/'.",
               },
               ...webCrossWorkspaceImports,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The citation chip owner, and the tests that render the decision chip
+      // itself: the modules that import the chips it dispatches to. Every
+      // other apps/web import restriction still applies, so they are restated
+      // here.
+      files: [
+        "apps/web/src/components/references/citation-chip.tsx",
+        "apps/web/src/components/references/decision-citation-chip.dom.test.tsx",
+        "apps/web/src/components/legal-reader/annotations/selection-anchor-contract.dom.test.tsx",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4375,6 +4439,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4411,6 +4476,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4465,6 +4531,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -4521,6 +4588,7 @@ const config = defineConfig({
               },
               ...webCrossWorkspaceImports,
               webDatePickerImport,
+              webCitationChipImport,
               pragmaticDragAdapterDeepImportBan,
             ],
           },
@@ -5748,6 +5816,26 @@ const config = defineConfig({
       },
     },
     {
+      // The packages whose tests render React in happy-dom, where component
+      // libraries keep module state behind their timeouts. @stll/ui must
+      // build standalone, so it cannot import the shared helper.
+      files: [
+        "apps/desktop/**/*.{ts,tsx}",
+        "apps/web/**/*.{ts,tsx}",
+        "packages/decision-reader/**/*.{ts,tsx}",
+        "packages/mcp-apps/**/*.{ts,tsx}",
+        "packages/render-probe/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
+      ],
+      // Open pull request 6989 rewrites this file's teardown and migrates it.
+      excludeFiles: [
+        "apps/web/src/components/legal-reader/reader-breadcrumb.dom.test.tsx",
+      ],
+      rules: {
+        "no-dropped-fake-timers/no-dropped-fake-timers": "error",
+      },
+    },
+    {
       // Rule tests only: the shared runner (lint-single-rule.ts) owns the
       // one-oxlint-process slot and runs its lone fallbacks in turn.
       files: [
@@ -6284,6 +6372,30 @@ const config = defineConfig({
             allowedFiles: ["packages/collation/src/collation.ts"],
           },
         ],
+      },
+    },
+    {
+      // Client-side "does this text match what the user typed" goes through
+      // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize,
+      // which fold case, accents and ß/ł/ø alike in every UI locale; a
+      // lowercase-only compare misses "Dvořák" for "dvorak". The table find
+      // highlighter is exempt: it marks what the server's accent-sensitive
+      // ILIKE matched, and marking more would claim matches the server never
+      // made. Tests compute expected values independently of the owner, and
+      // the design system's browser fixtures render primitives bare.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        "packages/workspace-ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-case-folded-search-match.fixture.tsx",
+      ],
+      excludeFiles: [
+        "**/*.test.{ts,tsx}",
+        "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
+        "packages/ui/src/components/fixtures/**",
+      ],
+      rules: {
+        "no-case-folded-search-match/no-case-folded-search-match": "error",
       },
     },
     {

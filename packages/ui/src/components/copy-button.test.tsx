@@ -15,6 +15,10 @@ const { act, cleanup, renderHook } = await import("@testing-library/react");
 
 afterEach(() => {
   cleanup();
+  // Bun discards pending fake timeouts on the switch; fire them first.
+  if (jest.isFakeTimers()) {
+    jest.runOnlyPendingTimers();
+  }
   jest.useRealTimers();
 });
 afterAll(async () => GlobalRegistrator.unregister());

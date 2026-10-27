@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { WorkspaceView } from "@/lib/types";
-import {
-  getCurrentWorkspaceViewId,
-  getWorkspaceRevealTarget,
-} from "@/lib/workspaces/reveal-navigation";
+import { getWorkspaceRevealTarget } from "@/lib/workspaces/reveal-navigation";
 import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 const view = (
@@ -22,42 +19,41 @@ const filesId = "019a0000-0000-7000-8000-000000000402";
 const otherFilesId = "019a0000-0000-7000-8000-000000000403";
 
 const folderReveal = {
+  currentView: undefined,
   entityId: "folder_1",
   fallbackFolderId: "folder_1",
-  pathname: "/chat",
   targetWorkspaceId: "ws_1",
 };
 
 describe("reveal navigation", () => {
-  test("reads the active view id from workspace paths", () => {
-    expect(
-      [
-        `/workspaces/ws_1/${filesId}`,
-        `/workspaces/ws_1/${filesId}/document`,
-        `/workspaces/ws_1/${DEFAULT_WORKSPACE_VIEW_ID}`,
-      ].map((pathname) => getCurrentWorkspaceViewId(pathname, "ws_1")),
-    ).toEqual([filesId, filesId, DEFAULT_WORKSPACE_VIEW_ID]);
-  });
-
-  test("ignores paths outside the target workspace", () => {
-    expect(getCurrentWorkspaceViewId("/chat", "ws_1")).toBeNull();
-    expect(
-      getCurrentWorkspaceViewId(`/workspaces/ws_2/${filesId}`, "ws_1"),
-    ).toBeNull();
-  });
-
-  test("a matter page that is not a view names no view", () => {
-    expect(
-      [
-        "/workspaces/ws_1/reports/export-1",
-        "/workspaces/ws_1/correspondence",
-      ].map((pathname) => getCurrentWorkspaceViewId(pathname, "ws_1")),
-    ).toEqual([null, null]);
+  test("scopes into the view on screen when the matter has no tree", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        entityId: "doc_1",
-        pathname: "/workspaces/ws_1/reports/export-1",
+        currentView: { workspaceId: "ws_1", viewId: overviewId },
+        views: [view(overviewId, "overview")],
+      }).params,
+    ).toEqual({ workspaceId: "ws_1", viewId: overviewId });
+  });
+
+  test("a view on screen in another matter, or none, is not kept", () => {
+    expect(
+      [{ workspaceId: "ws_2", viewId: otherFilesId }, undefined].map(
+        (currentView) =>
+          getWorkspaceRevealTarget({
+            ...folderReveal,
+            currentView,
+            views: [
+              view(filesId, "filesystem"),
+              view(otherFilesId, "filesystem"),
+            ],
+          }).params.viewId,
+      ),
+    ).toEqual([filesId, filesId]);
+    expect(
+      getWorkspaceRevealTarget({
+        ...folderReveal,
+        currentView: { workspaceId: "ws_2", viewId: overviewId },
         views: [view(overviewId, "overview")],
       }).params.viewId,
     ).toBe(DEFAULT_WORKSPACE_VIEW_ID);
@@ -80,7 +76,7 @@ describe("reveal navigation", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        pathname: `/workspaces/ws_1/${overviewId}`,
+        currentView: { workspaceId: "ws_1", viewId: overviewId },
         views: [view(overviewId, "overview"), view(filesId, "filesystem")],
       }).params.viewId,
     ).toBe(filesId);
@@ -90,7 +86,7 @@ describe("reveal navigation", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
-        pathname: `/workspaces/ws_1/${otherFilesId}/document`,
+        currentView: { workspaceId: "ws_1", viewId: otherFilesId },
         views: [view(filesId, "filesystem"), view(otherFilesId, "filesystem")],
       }).params.viewId,
     ).toBe(otherFilesId);
@@ -117,7 +113,7 @@ describe("reveal navigation", () => {
     ).toBe("filtered");
   });
 
-  test("scopes the current view into the fallback folder when there is no tree", () => {
+  test("scopes the default view into the fallback folder when there is no tree and no view on screen", () => {
     expect(
       getWorkspaceRevealTarget({
         ...folderReveal,
