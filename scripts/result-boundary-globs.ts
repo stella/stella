@@ -177,6 +177,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
   "apps/web/src/lib/legal/**/*.{ts,tsx}",
   "apps/web/src/lib/persisted-state/**/*.ts",
+  "apps/web/src/lib/platform/**/*.ts",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
