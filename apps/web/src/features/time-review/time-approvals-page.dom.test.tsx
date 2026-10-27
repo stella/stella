@@ -6,6 +6,7 @@ import { cents } from "@stll/money";
 import { Temporal } from "@stll/time";
 
 import messages from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 import type { TimeApprovalItem } from "@/lib/workspaces/queries/time-approvals";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -44,9 +45,9 @@ const submitted = (
   overrides: Partial<TimeApprovalItem> = {},
 ): TimeApprovalItem =>
   ({
-    id,
+    id: toSafeId<"timeEntry">(id),
     activityGroup: "client",
-    workspaceId: "matter-lease",
+    workspaceId: toSafeId<"workspace">("matter-lease"),
     matterName: "Harbour lease",
     userId: "user-adam",
     timekeeperName: "Adam Novak",

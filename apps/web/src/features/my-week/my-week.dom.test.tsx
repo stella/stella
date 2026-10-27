@@ -412,7 +412,7 @@ const Harness = ({ initialDate }: { initialDate: string }) => {
   );
 };
 
-const mount = (initialDate = MONDAY, role = "owner") => {
+const mount = (initialDate = MONDAY, role: "owner" | "member" = "owner") => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });

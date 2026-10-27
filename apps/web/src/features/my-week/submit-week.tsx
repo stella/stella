@@ -124,9 +124,9 @@ export const SubmitWeekActions = ({
     onRefusals(refusals);
     stellaToast.add({
       title: t("timesheets.week.submitResult", {
-        submitted,
-        approved,
-        refused: refusals.size,
+        submitted: String(submitted),
+        approved: String(approved),
+        refused: String(refusals.size),
       }),
       type: refusals.size > 0 ? "warning" : "success",
     });

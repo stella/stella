@@ -54,9 +54,7 @@ const fetchApprovalQueuePage = async ({
     }),
   );
 
-export type TimeApprovalQueuePage = Awaited<
-  ReturnType<typeof fetchApprovalQueuePage>
->;
+type TimeApprovalQueuePage = Awaited<ReturnType<typeof fetchApprovalQueuePage>>;
 export type TimeApprovalItem = TimeApprovalQueuePage["items"][number];
 
 /** Submitted time waiting for the signed-in approver, within the filters. */
