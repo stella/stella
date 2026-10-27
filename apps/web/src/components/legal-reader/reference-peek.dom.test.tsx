@@ -14,6 +14,7 @@ import {
 
 import { sleep } from "@stll/concurrency/sleep";
 import type { ReferencePeekTarget } from "@stll/decision-reader/reference-peek.logic";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -82,6 +83,11 @@ beforeEach(() => {
   root = createRoot(container);
 });
 afterEach(async () => {
+  // React work a hover test left on a fake clock runs inside act and before
+  // the unmount, so the next test starts on real timers with nothing pending.
+  act(() => {
+    restoreRealTimers();
+  });
   await act(async () => {
     root.unmount();
   });
