@@ -9,6 +9,7 @@ import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
@@ -29,25 +30,34 @@ export const InvoicePdfDownloadButton = ({
   const messageLocale = useMessageLocale();
   const formattingLocale = useFormattingLocale();
   const analytics = useAnalytics();
+  const requestPdf = async () => {
+    const response = await invokeCapability(
+      "invoices.pdf.export",
+      async (request) =>
+        api
+          .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+            invoiceId: toSafeId<"invoice">(invoiceId),
+          })
+          .pdf.post(
+            {},
+            {
+              ...request,
+              headers: {
+                "Accept-Language": messageLocale,
+                "x-stella-formatting-locale": formattingLocale,
+                ...request.headers,
+              },
+              fetch: { signal: AbortSignal.timeout(PDF_DOWNLOAD_TIMEOUT_MS) },
+            },
+          ),
+    );
+    return unwrapApiResponse(response);
+  };
   const download = useMutation({
     mutationFn: async () => {
-      const response = await api
-        .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
-          invoiceId: toSafeId<"invoice">(invoiceId),
-        })
-        .pdf.post(
-          {},
-          {
-            headers: {
-              "Accept-Language": messageLocale,
-              "x-stella-formatting-locale": formattingLocale,
-            },
-            fetch: { signal: AbortSignal.timeout(PDF_DOWNLOAD_TIMEOUT_MS) },
-          },
-        );
-      const { downloadUrl, fileName } = unwrapApiResponse(response);
+      const { downloadUrl, fileName } = await requestPdf();
       const file = await fetchWithTimeout(downloadUrl, {
-        timeoutMs: PDF_DOWNLOAD_TIMEOUT_MS,
+        timeout: { type: "idle", ms: PDF_DOWNLOAD_TIMEOUT_MS },
       });
       if (!file.ok) {
         unwrapApiResponse({

@@ -172,3 +172,15 @@ export const INVOICE_DUE_DAY_PRESETS = [7, 14, 30] as const;
 
 /** Payment term used when neither the client nor the caller sets one. */
 export const DEFAULT_INVOICE_DUE_DAYS = 14;
+
+/** Persisted invoice-line input bounds shared by HTTP schemas and bill editors. */
+export const INVOICE_LINE_INPUT_LIMITS = {
+  descriptionMinChars: 1,
+  descriptionMaxChars: 10_000,
+  quantityPrecision: 18,
+  quantityScale: 4,
+  unitMaxChars: 32,
+  unitPriceMinMinor: 0,
+} as const;
+
+export const INVOICE_LINE_QUANTITY_PATTERN = `^(0|[1-9][0-9]{0,${INVOICE_LINE_INPUT_LIMITS.quantityPrecision - INVOICE_LINE_INPUT_LIMITS.quantityScale - 1}})(\\.[0-9]{1,${INVOICE_LINE_INPUT_LIMITS.quantityScale}})?$`;

@@ -530,6 +530,17 @@
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
+    "clientComposer": {
+      "flatFeeNote": "Lietām ar fiksētu atlīdzību izrakstiet rēķinu attiecīgās lietas rēķinu lapā.",
+      "includeMatter": "Iekļaut {matterName}",
+      "invalidPeriod": "Izvēlieties beigu datumu, kas nav agrāks par sākuma datumu.",
+      "loadFailed": "Neizdevās ielādēt darbu, par kuru vēl nav izrakstīts rēķins. Mēģiniet vēlreiz.",
+      "matterSubtotal": "Lietas summa ar PVN: {amount} · {share} no rēķina",
+      "periodEnd": "Perioda beigas",
+      "periodStart": "Perioda sākums",
+      "title": "Izrakstīt rēķinu klientam",
+      "visibility": "Šis rēķins ir redzams tikai personām ar piekļuvi visām iekļautajām lietām un norēķinu administratoriem."
+    },
     "codes": {
       "activity": "Darbība",
       "activityCode": "Darbības kods",
@@ -673,6 +684,11 @@
       "invoiceDate": "Rēķina datums",
       "invoiceDetail": "Rēķina detaļas",
       "invoiceNumber": "Rēķina numurs",
+      "lineOverrides": {
+        "editedRecorded": "Rediģēts · reģistrēts: {description}, {quantity} × {rate}",
+        "quantity": "Daudzums",
+        "resetRecorded": "Atjaunot reģistrētās vērtības"
+      },
       "linkedExpenses": "Saistītie izdevumi",
       "linkedTimeEntries": "Saistītie laika ieraksti",
       "markPaid": "Atzīmēt kā apmaksātu",

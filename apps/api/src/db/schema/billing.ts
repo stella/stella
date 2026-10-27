@@ -1,5 +1,6 @@
 import {
   INVOICE_LANGUAGES,
+  INVOICE_LINE_INPUT_LIMITS,
   INVOICE_LINE_SOURCES,
   INVOICE_STATUS,
   INVOICE_STATUSES,
@@ -19,7 +20,12 @@ import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
-import { timeEntryPolicies } from "@/api/db/rls";
+import {
+  invoiceLineOwnerReadPolicy,
+  invoiceLineVisibilityPolicy,
+  invoicePolicies,
+  timeEntryPolicies,
+} from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -48,7 +54,7 @@ import {
   wsOrganizationUserPolicies,
   wsPolicies,
 } from "./common";
-import { workspaces } from "./contacts";
+import { contacts, workspaces } from "./contacts";
 import { entities } from "./entities";
 
 export const ACTIVE_TIMER_INDEX_NAME =
@@ -954,9 +960,10 @@ export const invoices = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: safeWorkspaceId("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+    clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
+      onDelete: "no action",
+    }),
+    workspaceId: safeWorkspaceId("workspace_id"),
     invoiceNumber: p.varchar("invoice_number", { length: 64 }),
     documentType: p
       .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
@@ -1021,6 +1028,34 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .index("invoices_client_backfill_idx")
+      .on(table.id)
+      .where(
+        sql`${table.clientId} IS NULL AND ${table.workspaceId} IS NOT NULL`,
+      ),
+    p.unique("invoices_id_org_unique").on(table.id, table.organizationId),
+    p.foreignKey({
+      columns: [table.originalInvoiceId, table.organizationId],
+      foreignColumns: [table.id, table.organizationId],
+      name: "invoices_original_organization_fk",
+    }),
+    p.check(
+      "invoices_scope_check",
+      sql`${table.workspaceId} IS NOT NULL OR ${table.clientId} IS NOT NULL`,
+    ),
+    p.foreignKey({
+      columns: [table.organizationId, table.clientId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+      name: "invoices_client_organization_fk",
+    }),
+    p
+      .index("invoices_org_client_created_idx")
+      .on(table.organizationId, table.clientId, table.createdAt, table.id),
+    p
+      .uniqueIndex("invoices_client_number_uidx")
+      .on(table.organizationId, table.clientId, table.invoiceNumber)
+      .where(sql`${table.workspaceId} IS NULL`),
     p.check(
       "invoices_language_check",
       sql`${table.language} IN (${sql.join(
@@ -1041,7 +1076,14 @@ export const invoices = p.pgTable(
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "invoices_workspace_organization_fk",
       })
-      .onDelete("cascade"),
+      .onDelete("no action"),
+    p
+      .foreignKey({
+        columns: [table.workspaceId],
+        foreignColumns: [workspaces.id],
+        name: "invoices_workspace_id_workspaces_id_fkey",
+      })
+      .onDelete("no action"),
     p.unique("invoices_id_workspace_unique").on(table.id, table.workspaceId),
     p.foreignKey({
       columns: [table.originalInvoiceId, table.workspaceId],
@@ -1063,7 +1105,8 @@ export const invoices = p.pgTable(
     p
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
-    ...wsOrganizationPolicies("invoices", { columns: table }),
+    ...invoicePolicies(table),
+    ...reviewResetOwnerPolicies("invoices"),
   ],
 );
 
@@ -1086,6 +1129,10 @@ const INVOICE_LINE_SOURCE_SQL_VALUES = INVOICE_LINE_SOURCES.map((source) =>
  * so the entry can be billed again. A released line may lose its source
  * reference when that entry is later deleted; a line that still bills its
  * entry must keep it, so deleting a billed entry is refused.
+ *
+ * Matter deletion is refused while lines reference it. NO ACTION also lets
+ * an explicit organization deletion remove the matter, invoice and lines
+ * through its own cascades.
  */
 export const invoiceLines = p.pgTable(
   "invoice_lines",
@@ -1096,7 +1143,7 @@ export const invoiceLines = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+      .references(() => workspaces.id, { onDelete: "no action" }),
     invoiceId: safeUuid<"invoice">("invoice_id")
       .notNull()
       .references(() => invoices.id, { onDelete: "cascade" }),
@@ -1108,8 +1155,23 @@ export const invoiceLines = p.pgTable(
       .default(INVOICE_BILLING_PURPOSE.ORDINARY),
     position: p.integer().notNull(),
     description: p.text().notNull(),
-    quantity: p.numeric({ precision: 18, scale: 4 }).notNull(),
-    unit: p.varchar({ length: 32 }),
+    recordedDescription: p.text("recorded_description"),
+    recordedQuantity: p.numeric("recorded_quantity", {
+      precision: INVOICE_LINE_INPUT_LIMITS.quantityPrecision,
+      scale: INVOICE_LINE_INPUT_LIMITS.quantityScale,
+    }),
+    recordedUnit: p.varchar("recorded_unit", {
+      length: INVOICE_LINE_INPUT_LIMITS.unitMaxChars,
+    }),
+    recordedUnitPrice: centsColumn("recorded_unit_price"),
+    recordedNetAmount: centsColumn("recorded_net_amount"),
+    quantity: p
+      .numeric({
+        precision: INVOICE_LINE_INPUT_LIMITS.quantityPrecision,
+        scale: INVOICE_LINE_INPUT_LIMITS.quantityScale,
+      })
+      .notNull(),
+    unit: p.varchar({ length: INVOICE_LINE_INPUT_LIMITS.unitMaxChars }),
     unitPrice: centsColumn("unit_price").notNull(),
     vatRateBps: p.integer("vat_rate_bps").notNull(),
     vatTreatment: p.text("vat_treatment", { enum: VAT_TREATMENTS }).notNull(),
@@ -1133,6 +1195,12 @@ export const invoiceLines = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    invoiceLineVisibilityPolicy(table),
+    invoiceLineOwnerReadPolicy(),
+    p.check(
+      "invoice_lines_recorded_snapshot_check",
+      sql`(${table.recordedDescription} IS NULL AND ${table.recordedQuantity} IS NULL AND ${table.recordedUnitPrice} IS NULL AND ${table.recordedNetAmount} IS NULL) OR (${table.recordedDescription} IS NOT NULL AND ${table.recordedQuantity} IS NOT NULL AND ${table.recordedUnitPrice} IS NOT NULL AND ${table.recordedNetAmount} IS NOT NULL)`,
+    ),
     p.check(
       "invoice_lines_billing_purpose_check",
       sql`${table.billingPurpose} IN (${sql.join(
@@ -1146,10 +1214,13 @@ export const invoiceLines = p.pgTable(
         foreignColumns: [workspaces.id, workspaces.organizationId],
         name: "invoice_lines_workspace_organization_fk",
       })
-      .onDelete("cascade"),
+      .onDelete("no action"),
     p
       .index("invoice_lines_invoice_position_idx")
       .on(table.invoiceId, table.position, table.id),
+    p
+      .index("invoice_lines_workspace_organization_idx")
+      .on(table.workspaceId, table.organizationId),
     p.index("invoice_lines_time_entry_idx").on(table.timeEntryId),
     p.index("invoice_lines_expense_idx").on(table.expenseId),
     p

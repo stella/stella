@@ -1909,3 +1909,60 @@ export const templateChatThreadPolicies = () => [
     using: templateChatThreadScopeCheck,
   }),
 ];
+
+type InvoicePolicyColumns = {
+  id: p.AnyPgColumn;
+  organizationId: p.AnyPgColumn;
+  workspaceId: p.AnyPgColumn;
+  clientId: p.AnyPgColumn;
+  originalInvoiceId: p.AnyPgColumn;
+};
+
+/** The owner-evaluated predicate sees hidden lines, preventing partial invoices. */
+export const invoicePolicies = (table: InvoicePolicyColumns) => {
+  const access = sql`public.stella_invoice_access(${table.id}, ${table.organizationId}, ${table.workspaceId}, ${table.clientId}, ${table.originalInvoiceId})`;
+  return [
+    p.pgPolicy("invoices_workspace_select", {
+      for: "select",
+      to: stella,
+      using: access,
+    }),
+    p.pgPolicy("invoices_workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_update", {
+      for: "update",
+      to: stella,
+      using: access,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: access,
+    }),
+  ];
+};
+
+export const invoiceLineVisibilityPolicy = (table: {
+  invoiceId: p.AnyPgColumn;
+}) =>
+  p.pgPolicy("invoice_lines_complete_invoice", {
+    as: "restrictive",
+    for: "all",
+    to: stella,
+    using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+    withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+  });
+
+// FORCE RLS applies to the table owner, which runs the SECURITY DEFINER
+// invoice access, guard, and reserved-charge functions. They must see every
+// line to decide whole-invoice visibility; owner writes remain denied.
+export const invoiceLineOwnerReadPolicy = () =>
+  p.pgPolicy("invoice_lines_owner_select", {
+    for: "select",
+    to: "public",
+    using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_lines'::regclass)`,
+  });

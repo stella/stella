@@ -530,6 +530,17 @@
     "batchActions": "Hromadné akce",
     "billable": "Fakturovatelné",
     "billedAmount": "Fakturovaná částka",
+    "clientComposer": {
+      "flatFeeNote": "Spisy s paušální odměnou fakturujte ze stránky faktur daného spisu.",
+      "includeMatter": "Zahrnout {matterName}",
+      "invalidPeriod": "Vyberte datum konce stejné nebo pozdější než začátek.",
+      "loadFailed": "Nevyfakturovanou práci se nepodařilo načíst. Zkuste to znovu.",
+      "matterSubtotal": "Celkem za spis vč. DPH: {amount} · {share} faktury",
+      "periodEnd": "Konec období",
+      "periodStart": "Začátek období",
+      "title": "Fakturovat klientovi",
+      "visibility": "Tuto fakturu vidí pouze lidé s přístupem ke všem zahrnutým spisům a správci fakturace."
+    },
     "codes": {
       "activity": "Aktivita",
       "activityCode": "Kód aktivity",
@@ -673,6 +684,11 @@
       "invoiceDate": "Datum faktury",
       "invoiceDetail": "Detail faktury",
       "invoiceNumber": "Číslo faktury",
+      "lineOverrides": {
+        "editedRecorded": "Upraveno · zaznamenáno: {description}, {quantity} × {rate}",
+        "quantity": "Množství",
+        "resetRecorded": "Obnovit zaznamenané hodnoty"
+      },
       "linkedExpenses": "Přiřazené výdaje",
       "linkedTimeEntries": "Přiřazené časové záznamy",
       "markPaid": "Označit jako zaplaceno",

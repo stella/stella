@@ -530,6 +530,17 @@
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
+    "clientComposer": {
+      "flatFeeNote": "Bylų su fiksuotu atlygiu sąskaitas išrašykite bylos sąskaitų puslapyje.",
+      "includeMatter": "Įtraukti {matterName}",
+      "invalidPeriod": "Pasirinkite pabaigos datą, ne ankstesnę nei pradžios data.",
+      "loadFailed": "Nepavyko įkelti darbų, už kuriuos dar neišrašyta sąskaita. Bandykite dar kartą.",
+      "matterSubtotal": "Bylos suma su PVM: {amount} · {share} sąskaitos",
+      "periodEnd": "Laikotarpio pabaiga",
+      "periodStart": "Laikotarpio pradžia",
+      "title": "Išrašyti sąskaitą klientui",
+      "visibility": "Šią sąskaitą mato tik asmenys, turintys prieigą prie visų įtrauktų bylų, ir atsiskaitymo administratoriai."
+    },
     "codes": {
       "activity": "Veikla",
       "activityCode": "Veiklos kodas",
@@ -673,6 +684,11 @@
       "invoiceDate": "Sąskaitos data",
       "invoiceDetail": "Sąskaitos detalės",
       "invoiceNumber": "Sąskaitos numeris",
+      "lineOverrides": {
+        "editedRecorded": "Pakeista · užregistruota: {description}, {quantity} × {rate}",
+        "quantity": "Kiekis",
+        "resetRecorded": "Atkurti užregistruotas reikšmes"
+      },
       "linkedExpenses": "Susietos išlaidos",
       "linkedTimeEntries": "Susieti laiko įrašai",
       "markPaid": "Pažymėti kaip apmokėtą",

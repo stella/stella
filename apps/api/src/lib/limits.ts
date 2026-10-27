@@ -355,6 +355,8 @@ export const LIMITS = {
   /** Longest span of work dates one personal time read covers: a week. */
   timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
+  clientInvoiceMatters: 50,
+  invoiceSourceItemsPerKind: 500,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.

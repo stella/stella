@@ -302,7 +302,8 @@ const { timeEntriesOptions } =
   await import("@/lib/workspaces/queries/time-entries");
 const { expensesOptions } = await import("@/lib/workspaces/queries/expenses");
 const { MatterApprovalView } = await import("./matter-approval-view");
-const { InvoiceComposer } = await import("./invoice-composer");
+const { InvoiceComposer } =
+  await import("@/components/billing/invoice-composer");
 
 const resetServer = (entries: TimeEntry[], expenses: Expense[] = []) => {
   server.entries = new Map(entries.map((item) => [item.id, item]));

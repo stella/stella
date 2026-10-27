@@ -530,6 +530,17 @@
     "batchActions": "Massenaktionen",
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
+    "clientComposer": {
+      "flatFeeNote": "Rechnen Sie Akten mit Pauschalhonorar über die Rechnungsseite der jeweiligen Akte ab.",
+      "includeMatter": "{matterName} einschließen",
+      "invalidPeriod": "Wählen Sie ein Enddatum am oder nach dem Anfangsdatum.",
+      "loadFailed": "Nicht abgerechnete Arbeit konnte nicht geladen werden. Versuchen Sie es erneut.",
+      "matterSubtotal": "Aktensumme inkl. USt.: {amount} · {share} der Rechnung",
+      "periodEnd": "Zeitraum bis",
+      "periodStart": "Zeitraum von",
+      "title": "Kunden abrechnen",
+      "visibility": "Diese Rechnung ist nur für Personen mit Zugriff auf alle enthaltenen Akten und für Abrechnungsadministratoren sichtbar."
+    },
     "codes": {
       "activity": "Aktivität",
       "activityCode": "Aktivitätscode",
@@ -673,6 +684,11 @@
       "invoiceDate": "Rechnungsdatum",
       "invoiceDetail": "Rechnungsdetails",
       "invoiceNumber": "Rechnungsnummer",
+      "lineOverrides": {
+        "editedRecorded": "Bearbeitet · erfasst: {description}, {quantity} × {rate}",
+        "quantity": "Menge",
+        "resetRecorded": "Erfasste Werte wiederherstellen"
+      },
       "linkedExpenses": "Verknüpfte Ausgaben",
       "linkedTimeEntries": "Verknüpfte Zeiteinträge",
       "markPaid": "Als bezahlt markieren",
