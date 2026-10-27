@@ -59,6 +59,7 @@ type Source = {
   root: string;
   text: string;
   unresolvedBindings: ReadonlySet<string>;
+  configAncestry: ReadonlySet<string>;
 };
 
 type Wrapper =
@@ -146,7 +147,9 @@ const configObjectOf = (
   }
   const objects: ObjectExpression[] = [];
   for (const argument of expression.arguments) {
-    const object = resolveObject(argument, source);
+    const object =
+      resolveObject(argument, source) ??
+      verifiedImportedConfig(argument, source);
     if (object === undefined) {
       return undefined;
     }
@@ -611,12 +614,14 @@ const parseConfigSource = (
         root,
         text,
         unresolvedBindings: new Set<string>(),
+        configAncestry: new Set([file]),
       };
 };
 
 type ImportedConfigBinding =
   | { type: "named"; module: string; name: string }
-  | { type: "namespace"; module: string };
+  | { type: "namespace"; module: string }
+  | { type: "default"; module: string };
 
 const importedBinding = (
   source: Source,
@@ -633,6 +638,12 @@ const importedBinding = (
       continue;
     }
     for (const specifier of statement.specifiers) {
+      if (
+        specifier.type === "ImportDefaultSpecifier" &&
+        specifier.local.name === local
+      ) {
+        return { type: "default", module: statement.source.value };
+      }
       if (
         specifier.type === "ImportNamespaceSpecifier" &&
         specifier.local.name === local
@@ -904,10 +915,20 @@ const repositoryModule = (
     if (file.split("/").includes("node_modules")) {
       return undefined;
     }
-    return (
-      parseConfigSource(file, readFileSync(resolved, "utf-8"), source.root) ??
-      null
+    if (source.configAncestry.has(file)) {
+      return null;
+    }
+    const parsed = parseConfigSource(
+      file,
+      readFileSync(resolved, "utf-8"),
+      source.root,
     );
+    return parsed === undefined
+      ? null
+      : {
+          ...parsed,
+          configAncestry: new Set([...source.configAncestry, file]),
+        };
   } catch {
     return null;
   }
@@ -931,7 +952,7 @@ const configTarget = (source: Source): ConfigTarget | undefined => {
     ) {
       const local = expression.callee.name;
       const imported = importedBinding(source, local);
-      if (imported?.type === "namespace") {
+      if (imported !== undefined && imported.type !== "named") {
         return undefined;
       }
       let module: Source | null | undefined = source;
@@ -962,24 +983,10 @@ const configTarget = (source: Source): ConfigTarget | undefined => {
   return undefined;
 };
 
-const scanConfig = (
+const configFindings = (
+  target: ConfigTarget,
   file: string,
-  sourceText: string,
-  root: string,
 ): TestRetryFinding[] => {
-  const parsed = parseConfigSource(file, sourceText, root);
-  if (parsed === undefined) {
-    return [{ file, message: "Playwright config has TypeScript parse errors" }];
-  }
-  const target = configTarget(parsed);
-  if (target === undefined) {
-    return [
-      {
-        file,
-        message: "Playwright config must explicitly set top-level retries: 0",
-      },
-    ];
-  }
   const { object, source } = target;
   const retries = effectiveRetries(object, source);
   const findings: TestRetryFinding[] = [];
@@ -1009,6 +1016,69 @@ const scanConfig = (
   return findings;
 };
 
+const verifiedImportedConfig = (
+  argument: Node,
+  source: Source,
+): ObjectExpression | undefined => {
+  const value = unwrap(argument, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type !== "Identifier") {
+    return undefined;
+  }
+  const binding = importedBinding(source, value.name);
+  if (
+    binding === undefined ||
+    (binding.type !== "default" &&
+      !(binding.type === "named" && binding.name === "default"))
+  ) {
+    return undefined;
+  }
+  const module = repositoryModule(source, binding.module);
+  if (module === undefined || module === null) {
+    return undefined;
+  }
+  const target = configTarget(module);
+  if (
+    target === undefined ||
+    configFindings(target, module.file).length !== 0
+  ) {
+    return undefined;
+  }
+  // The entire base passed the policy, including inherited project/use
+  // settings. Compose only its verified scalar policy in the caller's scope.
+  const parsed = parseSource(
+    "verified-config.ts",
+    "export default { retries: 0 };",
+  );
+  const statement = parsed.program.body.at(0);
+  const expression =
+    statement === undefined ? undefined : exportedExpression(statement);
+  return expression?.type === "ObjectExpression" ? expression : undefined;
+};
+
+const scanConfig = (
+  file: string,
+  sourceText: string,
+  root: string,
+): TestRetryFinding[] => {
+  const parsed = parseConfigSource(file, sourceText, root);
+  if (parsed === undefined) {
+    return [{ file, message: "Playwright config has TypeScript parse errors" }];
+  }
+  const target = configTarget(parsed);
+  return target === undefined
+    ? [
+        {
+          file,
+          message: "Playwright config must explicitly set top-level retries: 0",
+        },
+      ]
+    : configFindings(target, file);
+};
+
 const scanTestSource = (
   file: string,
   sourceText: string,
@@ -1020,6 +1090,7 @@ const scanTestSource = (
     root,
     text: sourceText,
     unresolvedBindings: new Set<string>(),
+    configAncestry: new Set([file]),
   };
   const findings: TestRetryFinding[] = [];
   walk(source.program, (node) => {

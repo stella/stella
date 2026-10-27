@@ -96,7 +96,7 @@ test("imported configuration arguments are verified before composition", () => {
     );
     expect(scan()).toEqual([UNREADABLE_HELPER]);
     base(
-      'import original from "./playwright.config"; export default original;',
+      'import { defineConfig } from "@playwright/test"; import original from "./playwright.config"; export default defineConfig(original, { retries: 0 });',
     );
     expect(scan()).toEqual([UNREADABLE_HELPER]);
   } finally {
