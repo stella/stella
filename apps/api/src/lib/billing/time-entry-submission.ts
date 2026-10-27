@@ -31,7 +31,10 @@ import {
   canApproveAssignedTimeEntry,
   canApproveTimeEntries,
 } from "@/api/lib/billing/time-entry-authorization";
-import { timeEntryIsRunning } from "@/api/lib/billing/time-entry-running";
+import {
+  guardRunningTimeEntries,
+  timeEntryIsRunning,
+} from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -48,7 +51,7 @@ type SubmissionEntry = typeof timeEntries.$inferSelect & { running: boolean };
  * window does not apply; the locked period, the narrative policy and pricing
  * do, because an approver could not approve the entry either.
  */
-export const timeSubmitRefusal = ({
+const timeSubmitRefusal = ({
   entry,
   policy,
   now,
@@ -413,6 +416,24 @@ export const submitTimeEntries = async ({
           ? "approved"
           : "submitted";
       moves.push({ entry, to });
+    }
+    const approving = moves.flatMap(({ entry, to }) =>
+      to === "approved" ? [entry.id] : [],
+    );
+    if (approving.length > 0) {
+      // Approving reconciles each matter's billing cap under its matter lock.
+      // Take the timer owner, matter and entry locks first, in the order the
+      // approval queue and entry edits take them, so no entry row is held
+      // while waiting for a matter.
+      const lockError = await guardRunningTimeEntries({
+        tx,
+        organizationId,
+        actorUserId: userId,
+        selection: { type: "approval_batch", ids: approving },
+      });
+      if (lockError) {
+        return Result.err(lockError);
+      }
     }
     const moved = await writeMoves(tx, {
       scope: { userId, memberRole, startDate, endDate, policy, now },

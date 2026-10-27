@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { parsePlainDate } from "@stll/time";
 
@@ -10,6 +11,7 @@ import { submitTimeEntries } from "@/api/lib/billing/time-entry-submission";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const workDateSchema = (description: string) =>
   v.pipe(
@@ -23,7 +25,8 @@ const config = {
   contract: "patch",
   description:
     "Submit the signed-in user's draft time entries for startDate through endDate (one to seven work dates, YYYY-MM-DD) to their approvers. Each draft is submitted or refused with its reason (running_timer, unpriced, narrative_required, time_period_locked, invalid_entry; wrong_status or not_found when it changed during the call), and the rest still move. The conditions are checked again by the write itself, so a draft edited meanwhile is refused rather than submitted. A submitted entry is read-only to its timekeeper until an approver approves it or returns it to draft. Pass approve: true to approve in the same step every draft the user is the approver of (a solo practitioner); the others are submitted.",
-  permissions: { timeEntry: ["create"] },
+  permissions: { timeEntry: ["update"] },
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.TIME_ENTRY),
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
   mcp: {
@@ -93,7 +96,7 @@ const submitMyTimeEntries = createSafeRootHandler(
 declareAggregateMutation(submitMyTimeEntries, {
   type: "independent",
   reason:
-    "Locks only the caller's own draft entries for the dates and moves each with a status-guarded update; no other aggregate is read or written.",
+    "Moves only the caller's own draft entries for the dates, each with a status-guarded update. Approving in the same step takes the approval queue's timer owner, matter and entry locks before any row moves, then reconciles those matters' billing caps.",
 });
 
 export default submitMyTimeEntries;
