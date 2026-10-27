@@ -417,7 +417,7 @@ export const searchDecisionsHandler = async ({
   }
   const filterScope = await readCaseLawFilterScope({
     country,
-    courts: body.courts,
+    courts: body.courts ?? [],
     filters: {
       court: body.court,
       lang: body.language,

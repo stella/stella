@@ -603,6 +603,7 @@ test("browse and search refuse a court belonging to another country with a typed
   for (const filter of [{ court }, { courts: [court] }]) {
     const search = await searchDecisionsHandler({
       body: { country: "CZE", query: "contract", ...filter },
+      observer: "unobserved",
       caseLawDb,
     });
     expect(search).toMatchObject({
