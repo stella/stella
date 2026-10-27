@@ -47,6 +47,18 @@ const Screens = () => {
   const accountGlyph = useGlyphImage("circle-user-round");
   const tabItems = useTabHeaderItems(tab);
 
+  // A screen opened from a tab has GitHub's bar: the bare back chevron and a
+  // small title in the middle, never a large one.
+  const pushedScreen = {
+    contentStyle: { backgroundColor: colors.background },
+    headerBackButtonDisplayMode: "minimal",
+    headerShadowVisible: false,
+    headerShown: true,
+    headerStyle: { backgroundColor: colors.background },
+    headerTintColor: colors.text,
+    headerTitleStyle: { color: colors.text },
+  } as const;
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={signedIn}>
@@ -101,32 +113,14 @@ const Screens = () => {
         <Stack.Screen
           name="law/index"
           options={{
-            contentStyle: { backgroundColor: colors.background },
-            headerBackTitle: tabs("more"),
-            headerLargeTitle: true,
-            headerLargeTitleShadowVisible: false,
-            headerShadowVisible: false,
-            headerShown: true,
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.accent,
-            headerTitleStyle: { color: colors.text },
+            ...pushedScreen,
             title: tabs("law"),
           }}
         />
         <Stack.Screen name="law/[decisionId]" />
         <Stack.Screen
           name="matter/[workspaceId]/index"
-          options={{
-            contentStyle: { backgroundColor: colors.background },
-            headerBackTitle: tabs("matters"),
-            headerLargeTitle: true,
-            headerLargeTitleShadowVisible: false,
-            headerShadowVisible: false,
-            headerShown: true,
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.accent,
-            headerTitleStyle: { color: colors.text },
-          }}
+          options={pushedScreen}
         />
         <Stack.Screen
           name="matter/[workspaceId]/[entityId]"

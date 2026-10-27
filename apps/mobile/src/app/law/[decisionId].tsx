@@ -37,7 +37,7 @@ const DecisionScreen = () => {
           headerBackButtonDisplayMode: "minimal",
           headerShown: true,
           headerStyle: { backgroundColor: colors.card },
-          headerTintColor: colors.accent,
+          headerTintColor: colors.text,
           headerTitleStyle: { color: colors.text },
           title: caseNumber ?? t("title"),
         }}
