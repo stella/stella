@@ -28,7 +28,12 @@ test("the verified RC artifact run dispatches all three proof workflows", () => 
   const job = field(field(source, "jobs"), "promote-staging");
   const steps = field(job, "steps");
   const run = Array.isArray(steps)
-    ? steps.map((step) => String(field(step, "run") ?? "")).join("\n")
+    ? steps
+        .flatMap((step) => {
+          const command = field(step, "run");
+          return typeof command === "string" ? [command] : [];
+        })
+        .join("\n")
     : "";
   for (const workflow of [
     "deploy-staging.yml",

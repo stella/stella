@@ -1264,7 +1264,7 @@ if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
           DIST_ID: "fixture-distribution",
           CHANNEL: "prod",
           TEST_ROOT: root,
-          PATH: `${bin}:${process.env.PATH}`,
+          PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
           FAIL_LATEST: "false",
           FAIL_CDN: "false",
           ...env,

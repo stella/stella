@@ -111,14 +111,14 @@ test("staging and heavy run the trusted candidate checker before source executio
   for (const [name, job] of [
     ["deploy-staging", "resolve"],
     ["main-heavy", "validate"],
-  ]) {
+  ] as const) {
     const workflow: unknown = Bun.YAML.parse(
       readFileSync(
         new URL(`../.github/workflows/${name}.yml`, import.meta.url),
         "utf-8",
       ),
     );
-    const steps = field(field(field(workflow, "jobs"), job ?? ""), "steps");
+    const steps = field(field(field(workflow, "jobs"), job), "steps");
     expect(Array.isArray(steps)).toBe(true);
     const step: unknown = Array.isArray(steps)
       ? steps.find(

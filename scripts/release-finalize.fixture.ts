@@ -69,11 +69,11 @@ export const finalize = (fixture: ProofFixture = {}) => {
       ["staging/verified", "deploy-staging.yml", "Staging release proof "],
       ["main/heavy", "main-heavy.yml", "Main heavy suites "],
       ["main/pr-depth", "main-pr-depth.yml", "Main PR-depth checks "],
-    ];
+    ] as const;
     const statuses = contexts
       .map(([context], index) => ({
         context,
-        state: fixture.states?.[context ?? ""] ?? "success",
+        state: fixture.states?.[context] ?? "success",
         creator: { login: "github-actions[bot]", type: "Bot" },
         target_url: `https://github.com/stella/stella/actions/runs/${index + 1}`,
       }))
@@ -134,7 +134,7 @@ exec "${realGit}" "$@"
       ["bash", "finalize-release.sh", "stella/stella", sha],
       {
         ...process.env,
-        PATH: `${bin}:${process.env["PATH"]}`,
+        PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
         TEST_ROOT: root,
         GH_TOKEN: "fixture-token",
         RELEASE_HEALTH_TOKEN: "fixture-read-token",

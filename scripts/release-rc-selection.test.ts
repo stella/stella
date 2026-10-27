@@ -133,7 +133,7 @@ esac
           TEST_ROOT: root,
           REAL_GIT: realGit,
           PHASE: phase,
-          PATH: `${bin}:${process.env.PATH}`,
+          PATH: `${bin}:${process.env["PATH"] ?? "/usr/bin:/bin"}`,
         },
       },
     );

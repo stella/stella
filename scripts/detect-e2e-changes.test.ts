@@ -1273,10 +1273,15 @@ describe("detect-e2e-changes", () => {
     expect(
       validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
     ).toContain("^[0-9a-f]{40}$");
-    expect(
-      validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
-    ).toContain(
-      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+    const verifyAncestry = validateSteps.find(
+      ({ name }) => name === "Verify main ancestry",
+    )?.run;
+    expect(verifyAncestry).toContain(
+      'if ! git merge-base --is-ancestor "$SHA" origin/main; then',
+    );
+    expect(verifyAncestry).toContain("proof_args+=(--allow-pr-head)");
+    expect(verifyAncestry).toContain(
+      `bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "\${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA"`,
     );
     expect(
       validateSteps.find(({ name }) => name === "Fetch main history")?.run,

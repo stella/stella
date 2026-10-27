@@ -246,6 +246,7 @@ export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "scripts/release-channel.sh",
   "scripts/rename-desktop-artifacts.sh",
   "scripts/check-api-deployment.ts",
+  "scripts/check-release-publication-source.sh",
   "scripts/gh-retry.sh",
   "scripts/retry.sh",
   "scripts/build-desktop-dmg.sh",

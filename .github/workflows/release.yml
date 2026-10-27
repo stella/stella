@@ -1463,7 +1463,7 @@ jobs:
           API_DEPLOYMENT_EXPECTED_ENVIRONMENT: production
           API_DEPLOYMENT_PROBE_PATH: ready
           API_DEPLOYMENT_URL: https://api.stll.app
-        run: bun "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
 
       # Same commit gate as the staging web smoke: the web origin's
       # version marker must stably report the released commit. Read-only
@@ -1474,12 +1474,13 @@ jobs:
           API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
           API_DEPLOYMENT_PROBE_PATH: version.json
           API_DEPLOYMENT_URL: https://my.stll.app
-        run: bun "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
 
   publish-release:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [resolve, alias-manifest, promote-production]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.alias-manifest.result == 'success' && needs.promote-production.result == 'success' }}
     permissions:
       contents: write # publish the draft release
     steps:
@@ -1528,6 +1529,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     needs: [resolve, alias-manifest, promote-production]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.alias-manifest.result == 'success' && needs.promote-production.result == 'success' }}
     permissions:
       contents: read
       packages: write # advance the latest image aliases

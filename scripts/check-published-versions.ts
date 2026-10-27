@@ -2,7 +2,6 @@
 import {
   checkRegistry,
   DAY_SECONDS,
-  newestStableTag,
   readPackageManifest,
   type RegistryFetch,
   type RegistryResult,
@@ -28,6 +27,7 @@ const git: GitRunner = (args) => {
 };
 
 const DEPLOYED_COMMIT = /^[\da-f]{40}$/u;
+const FINAL_RELEASE_TAG = /^v\d+\.\d+\.\d+$/u;
 
 type PublishedVersionsOptions = {
   ref: string;
@@ -167,9 +167,10 @@ export const checkPublishedVersions = async ({
       return { result };
     }
     // Version sorting puts the earliest stable release carrying the bump first.
-    let release = newestStableTag(
-      tags.stdout.split("\n").map((tag) => tag.trim()),
-    );
+    let release = tags.stdout
+      .split("\n")
+      .map((tag) => tag.trim())
+      .find((tag) => FINAL_RELEASE_TAG.test(tag));
     if (release === undefined) {
       const version = gitRunner(["show", `${bumpCommit}:VERSION`]);
       if (version.exitCode !== 0 || version.stdout.trim() === "") {

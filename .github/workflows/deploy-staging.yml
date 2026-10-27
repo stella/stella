@@ -793,7 +793,7 @@ jobs:
           API_DEPLOYMENT_URL: https://api-staging.stll.app
           EDGE_HEADER_NAME: x-stella-edge-token
           EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}
-        run: bun "$RUNNER_TEMP/check-api-deployment.ts"
+        run: bun --no-install "$RUNNER_TEMP/check-api-deployment.ts"
 
       - name: Install dependencies
         timeout-minutes: 5

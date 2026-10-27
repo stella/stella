@@ -60,7 +60,22 @@ const run = (script: string, env: Record<string, string>) => {
   mkdirSync(bin);
   writeFileSync(
     path.join(bin, "gh"),
-    '#!/bin/bash\njq -c . >> "$STUB_PAYLOADS"\n',
+    `#!/bin/bash
+set -euo pipefail
+if [[ " $* " == *" --method POST "* ]]; then
+  jq -c . >> "$STUB_PAYLOADS"
+  exit 0
+fi
+case "$*" in
+  *actions/workflows/deploy-staging.yml/runs?*)
+    jq -cn --arg sha "$DEPLOY_SHA" --argjson id "$GITHUB_RUN_ID" '{workflow_runs: [{
+      id: $id, event: "workflow_dispatch", head_sha: $sha, head_branch: "main",
+      path: ".github/workflows/deploy-staging.yml", display_title: ("Staging release proof " + $sha),
+      repository: {full_name: "stella/stella"}}]}' ;;
+  *commits/*/statuses?*) printf '[[]]\\n' ;;
+  *) echo "Unexpected fixture GET: $*" >&2; exit 1 ;;
+esac
+`,
     { mode: 0o755 },
   );
   try {
@@ -68,6 +83,10 @@ const run = (script: string, env: Record<string, string>) => {
       env: {
         PATH: `${bin}:${process.env["PATH"] ?? ""}`,
         GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
+        STAGING_STATUS_WRITER: path.resolve(
+          import.meta.dir,
+          "post-staging-verification.sh",
+        ),
         ...env,
         GITHUB_OUTPUT: output,
         GITHUB_STEP_SUMMARY: summary,
@@ -192,7 +211,8 @@ const assertValidation = (candidate = workflow) => {
 };
 const record = (overrides: Record<string, string> = {}, candidate = workflow) =>
   run(
-    `gh() { jq -c . >> "$STUB_PAYLOADS"; }\n${findStep("Record staging verification", candidate).run ?? panic("Missing verification script")}`,
+    findStep("Record staging verification", candidate).run ??
+      panic("Missing verification script"),
     {
       GITHUB_REPOSITORY: "stella/stella",
       GITHUB_RUN_ID: "1",
@@ -240,7 +260,14 @@ test("the sole named waiver validates before checkout and derives its downstream
     workflow.on.workflow_dispatch.inputs,
   );
   expect(inputs.waive_check.options).toEqual(["none", "corpus-search"]);
-  expect(workflow.jobs["resolve"]?.steps?.at(1)?.id).toBe("waiver");
+  const resolveSteps =
+    workflow.jobs["resolve"]?.steps ?? panic("Missing resolver steps");
+  const waiverIndex = resolveSteps.findIndex(({ id }) => id === "waiver");
+  const checkoutIndex = resolveSteps.findIndex(({ uses }) =>
+    uses?.startsWith("actions/checkout@"),
+  );
+  expect(waiverIndex).toBeGreaterThanOrEqual(0);
+  expect(checkoutIndex).toBeGreaterThan(waiverIndex);
   expect(workflow.jobs["resolve"]?.outputs?.["corpus_search_waived"]).toBe(
     `\${{ steps.waiver.outputs.corpus_search_waived }}`,
   );
