@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, StyleSheet, TextInput, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
@@ -9,6 +9,7 @@ import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import { ScreenHeading } from "@/components/empty-state-screen";
 import { LoadedChats } from "@/components/loaded-chats";
 import { NewChatButton } from "@/components/new-chat-button";
+import { TextInput } from "@/components/ui/text";
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
@@ -67,10 +68,9 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
+    <View className="flex-1">
+      <View className="gap-3 px-4 pt-6">
         <ScreenHeading description={t("description")} title={tabs("chat")} />
-        <NewChatButton />
         <TextInput
           accessibilityLabel={t("search")}
           autoCapitalize="none"
@@ -79,23 +79,14 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
           maxLength={SEARCH_QUERY_MAX_LENGTH}
           onChangeText={changeSearch}
           placeholder={t("search")}
-          placeholderTextColor={colors.muted}
           returnKeyType="search"
-          style={[
-            styles.search,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
+          variant="search"
           value={typed}
         />
+        <NewChatButton />
       </View>
       <Suspense
-        fallback={
-          <ActivityIndicator color={colors.accent} style={styles.loading} />
-        }
+        fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
       >
         <LoadedChats
           load={request.load}
@@ -108,24 +99,3 @@ export const ChatsList = ({ source }: { source: AccessTokenSource }) => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  header: {
-    gap: 16,
-    paddingHorizontal: 20,
-    paddingTop: 28,
-  },
-  loading: {
-    flex: 1,
-  },
-  screen: {
-    flex: 1,
-  },
-  search: {
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    fontSize: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-});

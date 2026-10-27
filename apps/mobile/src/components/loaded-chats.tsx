@@ -1,13 +1,14 @@
 import { use, useState } from "react";
 
 import { Result } from "better-result";
-import { RefreshControl, SectionList, StyleSheet, Text } from "react-native";
+import { RefreshControl, SectionList, View } from "react-native";
 import { useTimeZone, useTranslations } from "use-intl";
 
 import { ChatThreadRow } from "@/components/chat-thread-row";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { PagingFooter, RetryButton } from "@/components/retry-button";
 import type { PagingState } from "@/components/retry-button";
+import { Text } from "@/components/ui/text";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import type { Load } from "@/state/api-request";
@@ -99,7 +100,7 @@ const ThreadTimeline = ({
 
   return (
     <SectionList
-      contentContainerStyle={[screenStyles.content, styles.content]}
+      contentContainerStyle={screenStyles.content}
       keyExtractor={(thread) => thread.id}
       ListEmptyComponent={
         firstPage === undefined ? (
@@ -134,9 +135,9 @@ const ThreadTimeline = ({
         <ChatThreadRow section={section.key} thread={item} />
       )}
       renderSectionHeader={({ section }) => (
-        <Text style={[styles.sectionHeader, { color: colors.muted }]}>
-          {t(`sections.${section.key}`)}
-        </Text>
+        <View className="pt-4 pb-1">
+          <Text variant="section">{t(`sections.${section.key}`)}</Text>
+        </View>
       )}
       sections={sectionThreads(threads, loadedAt, timeZone)}
       stickySectionHeadersEnabled={false}
@@ -159,17 +160,3 @@ const NoThreads = ({ search }: { search: string }) => {
     />
   );
 };
-
-const styles = StyleSheet.create({
-  // The screen's heading sits above the list, already padded.
-  content: {
-    paddingTop: 20,
-  },
-  sectionHeader: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.4,
-    marginBottom: 8,
-    textTransform: "uppercase",
-  },
-});

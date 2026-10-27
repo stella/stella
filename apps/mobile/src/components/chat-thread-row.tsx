@@ -1,12 +1,12 @@
 import { Link } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Text } from "@/components/ui/text";
 import type {
   ChatThreadSection,
   ChatThreadSummary,
 } from "@/state/chat-threads";
-import { useAppColors } from "@/theme";
 
 /**
  * One thread: its title, then the matter it belongs to. Today's and
@@ -20,7 +20,6 @@ export const ChatThreadRow = ({
   section: ChatThreadSection["key"];
   thread: ChatThreadSummary;
 }) => {
-  const colors = useAppColors();
   const format = useFormatter();
   const t = useTranslations("chat");
   const updatedAt = new Date(thread.updatedAt);
@@ -46,28 +45,18 @@ export const ChatThreadRow = ({
     >
       <Pressable
         accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.row,
-          {
-            backgroundColor: pressed ? colors.background : colors.card,
-            borderColor: colors.border,
-          },
-        ]}
+        className="border-border active:bg-accent gap-0.5 border-b py-3"
       >
-        <View style={styles.titleLine}>
-          <Text
-            numberOfLines={2}
-            style={[styles.title, { color: colors.text }]}
-          >
-            {title}
-          </Text>
-          <Text style={[styles.when, { color: colors.muted }]}>{when}</Text>
+        <View className="flex-row items-start gap-3">
+          <View className="flex-1">
+            <Text numberOfLines={2} variant="rowTitle">
+              {title}
+            </Text>
+          </View>
+          <Text variant="caption">{when}</Text>
         </View>
         {thread.matterName === undefined ? null : (
-          <Text
-            numberOfLines={1}
-            style={[styles.matter, { color: colors.muted }]}
-          >
+          <Text numberOfLines={1} variant="caption">
             {thread.matterName}
           </Text>
         )}
@@ -75,30 +64,3 @@ export const ChatThreadRow = ({
     </Link>
   );
 };
-
-const styles = StyleSheet.create({
-  matter: {
-    fontSize: 14,
-  },
-  row: {
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 4,
-    marginBottom: 10,
-    padding: 16,
-  },
-  title: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  titleLine: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: 12,
-  },
-  when: {
-    fontSize: 14,
-    paddingTop: 2,
-  },
-});

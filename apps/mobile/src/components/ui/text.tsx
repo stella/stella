@@ -34,13 +34,26 @@ export const Text = ({
   />
 );
 
-/** A text field with the web's input look: hairline border, card fill. */
+const INPUT_VARIANTS = {
+  /** The web's input: hairline border, card fill. */
+  default: "min-h-11 rounded-lg border border-input bg-card px-3",
+  /** A search field, filled and borderless, as iOS lists set one. */
+  search: "min-h-10 rounded-xl bg-secondary px-3",
+  /** No box of its own, for a field inside a container that draws one. */
+  bare: "min-h-9 py-2",
+} as const;
+
+/** A text field in the web's type, in one of the app's input shapes. */
 export const TextInput = ({
   className,
+  variant = "default",
   ...props
-}: TextInputProps & { className?: string }) => (
+}: TextInputProps & {
+  className?: string;
+  variant?: keyof typeof INPUT_VARIANTS;
+}) => (
   <NativeTextInput
-    className={`border-input bg-card text-foreground min-h-11 rounded-lg border px-3 font-sans text-base ${className ?? ""}`}
+    className={`text-foreground font-sans text-base ${INPUT_VARIANTS[variant]} ${className ?? ""}`}
     cursorColorClassName="accent-foreground"
     placeholderTextColorClassName="accent-muted-foreground"
     selectionColorClassName="accent-ring"

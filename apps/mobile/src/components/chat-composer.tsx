@@ -1,8 +1,9 @@
 import { useState } from "react";
 
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Text, TextInput } from "@/components/ui/text";
 import { useAppColors } from "@/theme";
 
 /**
@@ -41,99 +42,49 @@ export const ChatComposer = ({
   };
 
   return (
-    <View
-      style={[
-        styles.bar,
-        { backgroundColor: colors.card, borderTopColor: colors.border },
-      ]}
-    >
-      <TextInput
-        accessibilityLabel={t("composerPlaceholder")}
-        multiline
-        onChangeText={setDraft}
-        placeholder={t("composerPlaceholder")}
-        placeholderTextColor={colors.muted}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        value={draft}
-      />
-      {busy ? (
-        <Pressable
-          accessibilityLabel={t("stop")}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canStop }}
-          disabled={!canStop}
-          onPress={onStop}
-          style={[
-            styles.button,
-            { backgroundColor: canStop ? colors.text : colors.border },
-          ]}
-        >
-          <View style={[styles.stopMark, { backgroundColor: colors.card }]} />
-        </Pressable>
-      ) : (
-        <Pressable
-          accessibilityLabel={t("send")}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: message === "" }}
-          disabled={message === ""}
-          onPress={send}
-          style={[
-            styles.button,
-            {
-              backgroundColor: message === "" ? colors.border : colors.accent,
-            },
-          ]}
-        >
-          <Text style={[styles.sendMark, { color: colors.onAccent }]}>↑</Text>
-        </Pressable>
-      )}
+    <View className="bg-background px-3 pt-1 pb-2">
+      <View className="border-input bg-card flex-row items-end gap-2 rounded-3xl border py-1.5 pr-1.5 pl-3.5">
+        <TextInput
+          accessibilityLabel={t("composerPlaceholder")}
+          className="max-h-33 flex-1"
+          multiline
+          onChangeText={setDraft}
+          placeholder={t("composerPlaceholder")}
+          value={draft}
+          variant="bare"
+        />
+        {busy ? (
+          <Pressable
+            accessibilityLabel={t("stop")}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canStop }}
+            className={`size-9 items-center justify-center rounded-full ${canStop ? "bg-primary" : "bg-secondary"}`}
+            disabled={!canStop}
+            onPress={onStop}
+          >
+            <View
+              className="size-3 rounded-sm"
+              style={{ backgroundColor: colors.onAccent }}
+            />
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityLabel={t("send")}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: message === "" }}
+            className={`size-9 items-center justify-center rounded-full ${message === "" ? "bg-secondary" : "bg-primary"}`}
+            disabled={message === ""}
+            onPress={send}
+          >
+            <Text
+              style={{ color: message === "" ? colors.muted : colors.onAccent }}
+              variant="headline"
+            >
+              ↑
+            </Text>
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  bar: {
-    alignItems: "flex-end",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  button: {
-    alignItems: "center",
-    borderRadius: 18,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  input: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
-    maxHeight: 132,
-    minHeight: 36,
-    paddingBottom: 8,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-  },
-  sendMark: {
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  stopMark: {
-    borderRadius: 2,
-    height: 12,
-    width: 12,
-  },
-});
