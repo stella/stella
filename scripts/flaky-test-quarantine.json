@@ -2,7 +2,7 @@
   "entries": [
     {
       "id": "apps/api/src/handlers/case-law/ingestion/adapters/pl-ncourt.test.ts::the tip > a lap lists closed days only, from where the walk stopped to today",
-      "owner": "jan-kubica",
+      "owner": "stella",
       "reason": "The adapter captures the UTC date before fetching; the assertion recomputes it after fetching, so a UTC date change during the request changes the expected end date.",
       "created": "2026-10-27",
       "expires": "2026-11-10"
