@@ -960,13 +960,12 @@ export const refreshOAuthToken = async ({
         : Result.try(() =>
             v.parse(v.object({ error: v.string() }), JSON.parse(errorBody)),
           );
+    const message = "Failed to refresh MCP access token";
+    const code = refreshFailureCode(cause, oauthError);
     return Result.err(
-      new HandlerError({
-        status: 502,
-        code: refreshFailureCode(cause, oauthError),
-        message: "Failed to refresh MCP access token",
-        cause: token.error,
-      }),
+      code === null
+        ? new HandlerError({ status: 500, message, cause: token.error })
+        : new HandlerError({ status: 502, code, message, cause: token.error }),
     );
   }
 
@@ -975,13 +974,15 @@ export const refreshOAuthToken = async ({
 
 /**
  * A refused grant needs a new authorization and any other 4xx refusal new
- * credentials or configuration, so neither is retried; only throttling, a
- * server error or a transport failure is an upstream outage worth retrying.
+ * credentials or configuration, so neither is retried. A retry-later status or
+ * a transport failure is an upstream outage worth retrying. A successful
+ * response that does not parse breaks the endpoint's contract: `null`, so it
+ * stays an internal failure that is reported rather than retried.
  */
 const refreshFailureCode = (
   cause: unknown,
   oauthError: Result<{ error: string }, unknown> | null,
-) => {
+): string | null => {
   if (
     oauthError !== null &&
     Result.isOk(oauthError) &&
@@ -989,13 +990,11 @@ const refreshFailureCode = (
   ) {
     return MCP_OAUTH_INVALID_GRANT_CODE;
   }
+  if (cause instanceof SyntaxError || v.isValiError(cause)) {
+    return null;
+  }
   const status = cause instanceof FetchBoundaryError ? cause.status : undefined;
-  if (
-    status !== undefined &&
-    status >= 400 &&
-    status < 500 &&
-    !isRetryLaterStatus(status)
-  ) {
+  if (status !== undefined && !isRetryLaterStatus(status)) {
     return MCP_OAUTH_REFRESH_REFUSED_CODE;
   }
   return "upstream_unavailable";
