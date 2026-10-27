@@ -28,6 +28,7 @@ import {
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
+import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import {
@@ -485,6 +486,7 @@ const offeredShippedSkills = async (
     });
   }
   const catalog = await listAvailableChatSkillMetadata({
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     userId: context.userId,
