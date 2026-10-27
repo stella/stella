@@ -23,7 +23,6 @@ import type {
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-  SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -61,50 +60,59 @@ const instant = (value: string) =>
   Result.try({
     try: () => Temporal.Instant.from(value).epochMilliseconds,
     catch: () => fail("Invalid publisher timestamp"),
-  }).unwrap();
-const request = async (url: string, signal?: AbortSignal) => {
-  const target = restrictOutboundUrl({
-    rawUrl: url,
-    hostPolicy: { type: "exact-origin", origins: [ORIGIN] },
   });
-  if (target === null) {
-    throw fail("Invalid publisher URL");
-  }
-  const outcome = await readPublisher(target, {
-    adapterKey: KEY,
-    fetchStage: target.pathname === "/atom.xml" ? "listing" : "document",
-    retryPolicy: "publisher-backoff",
-    redirect: "error",
-    headers: { "User-Agent": INGESTION_USER_AGENT },
-    signal,
-    timeoutMs: 30_000,
+const request = (url: string, signal?: AbortSignal) =>
+  Result.gen(async function* () {
+    const target = restrictOutboundUrl({
+      rawUrl: url,
+      hostPolicy: { type: "exact-origin", origins: [ORIGIN] },
+    });
+    if (target === null) {
+      return Result.err(fail("Invalid publisher URL"));
+    }
+    const outcome = await readPublisher(target, {
+      adapterKey: KEY,
+      fetchStage: target.pathname === "/atom.xml" ? "listing" : "document",
+      retryPolicy: "publisher-backoff",
+      redirect: "error",
+      headers: { "User-Agent": INGESTION_USER_AGENT },
+      signal,
+      timeoutMs: 30_000,
+    });
+    switch (outcome.type) {
+      case "present":
+        break;
+      case "absent":
+      case "refused":
+      case "unavailable":
+        return Result.err(
+          unreadPublisherError({
+            outcome,
+            adapterKey: KEY,
+            cursor: null,
+            message: "Publisher response could not be read",
+          }),
+        );
+      default:
+        outcome satisfies never;
+        return panic("Unexpected publisher read outcome");
+    }
+    const response = outcome.value;
+    const body = response.body;
+    const bytes =
+      body === null
+        ? null
+        : yield* Result.await(
+            Result.tryPromise({
+              try: () => readCappedBytes(body, MAX_BYTES),
+              catch: adapterCatch(KEY, null),
+            }),
+          );
+    if (bytes === null) {
+      return Result.err(fail("Unreadable publisher response"));
+    }
+    return Result.ok(new TextDecoder().decode(bytes));
   });
-  switch (outcome.type) {
-    case "present":
-      break;
-    case "absent":
-    case "refused":
-    case "unavailable":
-      throw unreadPublisherError({
-        outcome,
-        adapterKey: KEY,
-        cursor: null,
-        message: "Publisher response could not be read",
-      });
-    default:
-      outcome satisfies never;
-      return panic("Unexpected publisher read outcome");
-  }
-  const response = outcome.value;
-  const bytes =
-    response.body === null
-      ? null
-      : await readCappedBytes(response.body, MAX_BYTES);
-  if (bytes === null) {
-    throw fail("Unreadable publisher response");
-  }
-  return new TextDecoder().decode(bytes);
-};
 type FeedUrlOptions = { year?: number; court?: string; page?: number };
 const feedUrl = ({ year, court, page = 1 }: FeedUrlOptions = {}) => {
   const url = new URL("/atom.xml", ORIGIN);
@@ -140,23 +148,23 @@ type UkFclPayload = v.InferOutput<typeof payloadSchema>;
 export const fetchUkFclDecision = async (
   payload: UkFclPayload,
   signal?: AbortSignal,
-) => {
-  const listed = readUkFclFeed(payload.feed, PER_PAGE).unwrap();
-  if (
-    !listed.entries.some(
-      ({ sourceDocumentId }) => sourceDocumentId === payload.sourceDocumentId,
-    )
-  ) {
-    throw fail("Document identity absent from feed");
-  }
-  return buildUkFclDecision({
-    ...payload,
-    document: await request(
-      `${ORIGIN}/${payload.sourceDocumentId}/data.xml`,
-      signal,
-    ),
-  }).unwrap();
-};
+) =>
+  Result.gen(async function* () {
+    const listed = yield* readUkFclFeed(payload.feed, PER_PAGE);
+    if (
+      !listed.entries.some(
+        ({ sourceDocumentId }) => sourceDocumentId === payload.sourceDocumentId,
+      )
+    ) {
+      return Result.err(fail("Document identity absent from feed"));
+    }
+    return buildUkFclDecision({
+      ...payload,
+      document: yield* Result.await(
+        request(`${ORIGIN}/${payload.sourceDocumentId}/data.xml`, signal),
+      ),
+    });
+  });
 
 const sweepSchema = v.strictObject({
   type: v.literal("sweep"),
@@ -180,148 +188,157 @@ const cursorSchema = v.variant("type", [sweepSchema, tipSchema]);
 const tip = (frontier: string) =>
   ({ type: "tip", frontier, pending: frontier, url: feedUrl() }) as const;
 const currentYear = () => Temporal.Now.plainDateISO("UTC").year;
-const fetchPage = async (
-  cursor: string | null,
-  signal?: AbortSignal,
-): Promise<SyncPage> => {
-  let state;
-  if (cursor === null) {
-    const head = readUkFclFeed(
-      await request(feedUrl(), signal),
-      PER_PAGE,
-    ).unwrap();
-    let boundary = "1970-01-01T00:00:00Z";
-    for (const entry of head.entries) {
-      if (instant(entry.updated) > instant(boundary)) {
-        boundary = entry.updated;
-      }
-    }
-    state = {
-      type: "sweep",
-      boundary,
-      year: FIRST_YEAR,
-      court: 0,
-      url: feedUrl({ year: FIRST_YEAR, court: UK_FCL_COURTS.at(0) }),
-    } as const;
-  } else {
-    const decoded = Result.try({
-      try: (): unknown => JSON.parse(cursor),
-      catch: () => fail("Invalid crawl cursor"),
-    });
-    if (decoded.isErr()) {
-      throw decoded.error;
-    }
-    const parsed = v.safeParse(cursorSchema, decoded.value);
-    if (!parsed.success) {
-      throw fail("Invalid crawl cursor");
-    }
-    state = parsed.output;
-    switch (state.type) {
-      case "sweep":
-        instant(state.boundary);
-        break;
-      case "tip":
-        if (instant(state.pending) < instant(state.frontier)) {
-          throw fail("Invalid daily frontier");
-        }
-        break;
-      default:
-        state satisfies never;
-        return panic("Unexpected UK crawl state");
-    }
-  }
-  for (let empty = 0; empty < MAX_EMPTY_SLICES; empty++) {
-    const sourceUrl = state.url;
-    const target = restrictOutboundUrl({
-      rawUrl: sourceUrl,
-      hostPolicy: { type: "exact-origin", origins: [ORIGIN] },
-    });
-    if (target?.pathname !== "/atom.xml") {
-      throw fail("Invalid listing URL");
-    }
-    const feed = await request(sourceUrl, signal);
-    const listed = readUkFclFeed(feed, PER_PAGE).unwrap();
-    if (listed.next === sourceUrl) {
-      throw fail("Listing continuation repeats its page");
-    }
-    const decisions: IngestionResult[] = [];
-    let reached = listed.next === null;
-    let newest = state.type === "tip" ? state.pending : state.boundary;
-    for (const entry of listed.entries) {
-      const updated = entry.updated;
-      if (state.type === "tip" && instant(updated) < instant(state.frontier)) {
-        reached = true;
-        break;
-      }
-      if (instant(updated) > instant(newest)) {
-        newest = updated;
-      }
-      // oxlint-disable-next-line no-network-await-in-loop/no-network-await-in-loop -- Publisher exposes one XML endpoint per decision; the shared gate serializes requests.
-      decisions.push(
-        await fetchUkFclDecision(
-          { feed, sourceDocumentId: entry.sourceDocumentId },
-          signal,
-        ),
+const fetchPage = async (cursor: string | null, signal?: AbortSignal) =>
+  Result.gen(async function* () {
+    let state;
+    if (cursor === null) {
+      const head = yield* readUkFclFeed(
+        yield* Result.await(request(feedUrl(), signal)),
+        PER_PAGE,
       );
+      let boundary = "1970-01-01T00:00:00Z";
+      for (const entry of head.entries) {
+        if ((yield* instant(entry.updated)) > (yield* instant(boundary))) {
+          boundary = entry.updated;
+        }
+      }
+      state = {
+        type: "sweep",
+        boundary,
+        year: FIRST_YEAR,
+        court: 0,
+        url: feedUrl({ year: FIRST_YEAR, court: UK_FCL_COURTS.at(0) }),
+      } as const;
+    } else {
+      const decoded = Result.try({
+        try: (): unknown => JSON.parse(cursor),
+        catch: () => fail("Invalid crawl cursor"),
+      });
+      if (decoded.isErr()) {
+        return Result.err(decoded.error);
+      }
+      const parsed = v.safeParse(cursorSchema, decoded.value);
+      if (!parsed.success) {
+        return Result.err(fail("Invalid crawl cursor"));
+      }
+      state = parsed.output;
+      switch (state.type) {
+        case "sweep":
+          yield* instant(state.boundary);
+          break;
+        case "tip":
+          if (
+            (yield* instant(state.pending)) < (yield* instant(state.frontier))
+          ) {
+            return Result.err(fail("Invalid daily frontier"));
+          }
+          break;
+        default:
+          state satisfies never;
+          return panic("Unexpected UK crawl state");
+      }
     }
-    switch (state.type) {
-      case "tip":
-        return {
-          decisions,
-          sourceUrl,
-          nextCursor: JSON.stringify(
-            reached
-              ? tip(newest)
-              : {
-                  type: "tip",
-                  frontier: state.frontier,
-                  pending: newest,
-                  url: listed.next,
-                },
+    for (let empty = 0; empty < MAX_EMPTY_SLICES; empty++) {
+      const sourceUrl = state.url;
+      const target = restrictOutboundUrl({
+        rawUrl: sourceUrl,
+        hostPolicy: { type: "exact-origin", origins: [ORIGIN] },
+      });
+      if (target?.pathname !== "/atom.xml") {
+        return Result.err(fail("Invalid listing URL"));
+      }
+      const feed = yield* Result.await(request(sourceUrl, signal));
+      const listed = yield* readUkFclFeed(feed, PER_PAGE);
+      if (listed.next === sourceUrl) {
+        return Result.err(fail("Listing continuation repeats its page"));
+      }
+      const decisions: IngestionResult[] = [];
+      let reached = listed.next === null;
+      let newest = state.type === "tip" ? state.pending : state.boundary;
+      for (const entry of listed.entries) {
+        const updated = entry.updated;
+        if (
+          state.type === "tip" &&
+          (yield* instant(updated)) < (yield* instant(state.frontier))
+        ) {
+          reached = true;
+          break;
+        }
+        if ((yield* instant(updated)) > (yield* instant(newest))) {
+          newest = updated;
+        }
+        // Publisher exposes one XML endpoint per decision; the shared gate serializes requests.
+        decisions.push(
+          yield* Result.await(
+            fetchUkFclDecision(
+              { feed, sourceDocumentId: entry.sourceDocumentId },
+              signal,
+            ),
           ),
-        };
-      case "sweep": {
-        if (listed.next !== null) {
-          return {
+        );
+      }
+      switch (state.type) {
+        case "tip":
+          return Result.ok({
             decisions,
             sourceUrl,
-            nextCursor: JSON.stringify({
-              type: "sweep",
-              boundary: state.boundary,
-              year: state.year,
-              court: state.court,
-              url: listed.next,
-            }),
-          };
-        }
-        const court = (state.court + 1) % UK_FCL_COURTS.length;
-        const year = state.year + (court === 0 ? 1 : 0);
-        state =
-          year > currentYear()
-            ? tip(state.boundary)
-            : {
+            nextCursor: JSON.stringify(
+              reached
+                ? tip(newest)
+                : {
+                    type: "tip",
+                    frontier: state.frontier,
+                    pending: newest,
+                    url: listed.next,
+                  },
+            ),
+          });
+        case "sweep": {
+          if (listed.next !== null) {
+            return Result.ok({
+              decisions,
+              sourceUrl,
+              nextCursor: JSON.stringify({
                 type: "sweep",
                 boundary: state.boundary,
-                year,
-                court,
-                url: feedUrl({ year, court: UK_FCL_COURTS.at(court) }),
-              };
-        if (
-          decisions.length > 0 ||
-          state.type === "tip" ||
-          empty === MAX_EMPTY_SLICES - 1
-        ) {
-          return { decisions, sourceUrl, nextCursor: JSON.stringify(state) };
+                year: state.year,
+                court: state.court,
+                url: listed.next,
+              }),
+            });
+          }
+          const court = (state.court + 1) % UK_FCL_COURTS.length;
+          const year = state.year + (court === 0 ? 1 : 0);
+          state =
+            year > currentYear()
+              ? tip(state.boundary)
+              : {
+                  type: "sweep",
+                  boundary: state.boundary,
+                  year,
+                  court,
+                  url: feedUrl({ year, court: UK_FCL_COURTS.at(court) }),
+                };
+          if (
+            decisions.length > 0 ||
+            state.type === "tip" ||
+            empty === MAX_EMPTY_SLICES - 1
+          ) {
+            return Result.ok({
+              decisions,
+              sourceUrl,
+              nextCursor: JSON.stringify(state),
+            });
+          }
+          break;
         }
-        break;
+        default:
+          state satisfies never;
+          return panic("Unexpected UK crawl state");
       }
-      default:
-        state satisfies never;
-        return panic("Unexpected UK crawl state");
     }
-  }
-  throw fail("Crawl did not return a checkpoint");
-};
+    return panic("Crawl did not return a checkpoint");
+  });
 
 const storedXmlField = {
   disposition: "stored",
@@ -438,9 +455,9 @@ const parseSlice = (value: string) => {
     max: UK_FCL_COURTS.length - 1,
   });
   if (year.isErr() || court.isErr()) {
-    throw fail("Invalid decision slice");
+    return Result.err(fail("Invalid decision slice"));
   }
-  return { year: year.value, court: court.value };
+  return Result.ok({ year: year.value, court: court.value });
 };
 export const ukFclAdapter = defineSourceAdapter({
   key: KEY,
@@ -469,27 +486,26 @@ export const ukFclAdapter = defineSourceAdapter({
   },
   reparseStoredRaw: reparseUkFclStoredRaw,
   async getTotalCount(signal) {
-    const counted = await Result.tryPromise({
-      try: async () => {
-        const raw = await request(
+    const counted = await Result.gen(async function* () {
+      const raw = yield* Result.await(
+        request(
           `${ORIGIN}/atom.xml?per_page=10&court=uksc&court=ewca%2Fciv&court=ewca%2Fcrim&${UK_FCL_COURTS.filter(
             (court) => court.startsWith("ewhc/"),
           )
             .map((court) => `court=${encodeURIComponent(court)}`)
             .join("&")}`,
           signal,
-        );
-        const $ = xml(raw);
-        const count = parseIntegerToken(
-          $("opensearch\\:totalResults").text().trim(),
-          { sign: "unsigned", min: 0 },
-        );
-        if ($("opensearch\\:totalResults").length !== 1 || count.isErr()) {
-          throw fail("Publisher total unavailable");
-        }
-        return sourceTotalRead(count.value);
-      },
-      catch: adapterCatch(KEY, null),
+        ),
+      );
+      const $ = xml(raw);
+      const count = parseIntegerToken(
+        $("opensearch\\:totalResults").text().trim(),
+        { sign: "unsigned", min: 0 },
+      );
+      if ($("opensearch\\:totalResults").length !== 1 || count.isErr()) {
+        return Result.err(fail("Publisher total unavailable"));
+      }
+      return Result.ok(sourceTotalRead(count.value));
     });
     return counted.isOk()
       ? counted.value
@@ -506,7 +522,7 @@ export const ukFclAdapter = defineSourceAdapter({
       }),
     tipWindowDays: UK_FCL_COURTS.length * 2,
     nextSlice(value) {
-      const { year, court } = parseSlice(value);
+      const { year, court } = parseSlice(value).unwrap();
       const next = slice({
         year: year + (court + 1 === UK_FCL_COURTS.length ? 1 : 0),
         court: (court + 1) % UK_FCL_COURTS.length,
@@ -517,7 +533,7 @@ export const ukFclAdapter = defineSourceAdapter({
         : next;
     },
     previousSlice(value) {
-      const { year, court } = parseSlice(value);
+      const { year, court } = parseSlice(value).unwrap();
       const previous = slice({
         year: year - (court === 0 ? 1 : 0),
         court: (court + UK_FCL_COURTS.length - 1) % UK_FCL_COURTS.length,
@@ -529,13 +545,15 @@ export const ukFclAdapter = defineSourceAdapter({
       if (!parsed.success) {
         return null;
       }
-      const entry = readUkFclFeed(parsed.output.feed, PER_PAGE)
-        .unwrap()
-        .entries.find(
-          (item) => item.sourceDocumentId === parsed.output.sourceDocumentId,
-        );
+      const listed = readUkFclFeed(parsed.output.feed, PER_PAGE);
+      if (listed.isErr()) {
+        return null;
+      }
+      const entry = listed.value.entries.find(
+        (item) => item.sourceDocumentId === parsed.output.sourceDocumentId,
+      );
       if (entry === undefined) {
-        throw fail("Document identity absent from feed");
+        return null;
       }
       return {
         sourceDocumentId: entry.sourceDocumentId,
@@ -544,37 +562,47 @@ export const ukFclAdapter = defineSourceAdapter({
       };
     },
     async listSlicePage({ slice: value, page, signal }) {
-      const { year, court } = parseSlice(value);
-      const feed = await request(
+      const coordinates = parseSlice(value);
+      if (coordinates.isErr()) {
+        return await Promise.reject(coordinates.error);
+      }
+      const { year, court } = coordinates.value;
+      const requested = await request(
         feedUrl({ year, court: UK_FCL_COURTS.at(court), page: page + 1 }),
         signal,
       );
-      const listed = readUkFclFeed(feed, PER_PAGE).unwrap();
+      if (requested.isErr()) {
+        return await Promise.reject(requested.error);
+      }
+      const feed = requested.value;
+      const listed = readUkFclFeed(feed, PER_PAGE);
+      if (listed.isErr()) {
+        return await Promise.reject(listed.error);
+      }
       return {
-        items: listed.entries.map((entry) => ({
+        items: listed.value.entries.map((entry) => ({
           identity: {
             type: "document" as const,
             sourceDocumentId: entry.sourceDocumentId,
           },
           payload: { feed, sourceDocumentId: entry.sourceDocumentId },
         })),
-        totalPages: page + (listed.next === null ? 1 : 2),
+        totalPages: page + (listed.value.next === null ? 1 : 2),
       };
     },
     async buildDecision(payload, signal) {
       const parsed = v.safeParse(payloadSchema, payload);
-      return !parsed.success
-        ? { type: "unkeyable" }
-        : {
-            type: "built",
-            decision: await fetchUkFclDecision(parsed.output, signal),
-          };
+      if (!parsed.success) {
+        return { type: "unkeyable" };
+      }
+      const built = await fetchUkFclDecision(parsed.output, signal);
+      if (built.isErr()) {
+        return await Promise.reject(built.error);
+      }
+      return { type: "built", decision: built.value };
     },
   },
   async fetchPage(cursor, _config, signal) {
-    return await Result.tryPromise({
-      try: () => fetchPage(cursor, signal),
-      catch: adapterCatch(KEY, cursor),
-    });
+    return await fetchPage(cursor, signal);
   },
 });

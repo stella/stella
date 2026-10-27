@@ -2822,10 +2822,12 @@ export const ukFclFixture = (
     ).text();
     const document = await Bun.file(documentUrl).text();
     globalThis.fetch = asFetchMock(async () => new Response(document));
-    return await fetchUkFclDecision({
-      feed,
-      sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
-    });
+    return (
+      await fetchUkFclDecision({
+        feed,
+        sourceDocumentId: "d-00000000-0000-4000-8000-000000000001",
+      })
+    ).unwrap();
   },
 });
 

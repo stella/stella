@@ -2,6 +2,8 @@ import { afterEach, expect, setSystemTime, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { ParseXmlError } from "@/api/handlers/case-law/ingestion/parsers/parse-xml-error";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { fetchUkFclDecision, UK_FCL_COURTS, ukFclAdapter } from "./uk-fcl";
@@ -51,7 +53,10 @@ test("next links alone determine pagination and other origins fail before a requ
     }),
     {},
   );
-  expect(refused.isErr()).toBe(true);
+  expect(refused).toMatchObject({
+    status: "error",
+    error: expect.any(AdapterFetchError),
+  });
   expect(requests).toBe(0);
 });
 
@@ -101,7 +106,10 @@ test("failed detail requests hold the page checkpoint", async () => {
     }),
     {},
   );
-  expect(page.isErr()).toBe(true);
+  expect(page).toMatchObject({
+    status: "error",
+    error: expect.any(AdapterFetchError),
+  });
 });
 
 const origin = "https://caselaw.nationalarchives.gov.uk";
@@ -289,10 +297,12 @@ test.each([
     globalThis.fetch = asFetchMock(
       async () => new Response(transform(document)),
     );
-    const result = await fetchUkFclDecision({
-      feed: transform(feed),
-      sourceDocumentId: entry?.sourceDocumentId ?? "",
-    });
+    const result = (
+      await fetchUkFclDecision({
+        feed: transform(feed),
+        sourceDocumentId: entry?.sourceDocumentId ?? "",
+      })
+    ).unwrap();
     expect(result.court).toBe(court);
     expect(result.caseNumber).toBe(caseNumber);
     expect(result.sourceDocumentId).toBe(entry?.sourceDocumentId);
@@ -311,7 +321,10 @@ test.each(["2026-00-extra", "2026-", "2026-999", "2000-00"])(
       await rejectionOf(
         ukFclAdapter.reconciliation.listSlicePage({ slice: value, page: 0 }),
       ),
-    ).toMatchObject({ message: "Invalid decision slice" });
+    ).toMatchObject({
+      _tag: "AdapterFetchError",
+      message: "Invalid decision slice",
+    });
     expect(requests).toBe(0);
   },
 );
@@ -327,4 +340,116 @@ test("empty backfill work stays bounded and retains the original frontier", asyn
   expect(requests).toBe(16);
   expect(page.decisions).toEqual([]);
   expect(next).toMatchObject({ type: "sweep", boundary });
+});
+
+test.each([
+  { cursor: "{", message: "Invalid crawl cursor" },
+  {
+    cursor: JSON.stringify({ type: "sweep" }),
+    message: "Invalid crawl cursor",
+  },
+  {
+    cursor: JSON.stringify({
+      type: "sweep",
+      boundary: "invalid",
+      year: 2001,
+      court: 0,
+      url: `${origin}/atom.xml`,
+    }),
+    message: "Invalid publisher timestamp",
+  },
+  {
+    cursor: JSON.stringify({
+      type: "tip",
+      frontier: boundary,
+      pending: "2026-01-01T00:00:00Z",
+      url: `${origin}/atom.xml`,
+    }),
+    message: "Invalid daily frontier",
+  },
+])(
+  "invalid crawl state returns a typed failure: $message",
+  async ({ cursor, message }) => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests++;
+      return new Response(feed);
+    });
+    const outcome = await ukFclAdapter.fetchPage(cursor, {});
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(outcome.error).toBeInstanceOf(AdapterFetchError);
+      expect(outcome.error.message).toBe(message);
+    }
+    expect(requests).toBe(0);
+  },
+);
+
+test.each([
+  { sourceFeed: "invalid", identity: "missing", error: ParseXmlError },
+  { sourceFeed: feed, identity: "missing", error: AdapterFetchError },
+])(
+  "decision input failures return typed errors before fetching",
+  async ({ sourceFeed, identity, error }) => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests++;
+      return new Response(document);
+    });
+    expect(
+      await fetchUkFclDecision({
+        feed: sourceFeed,
+        sourceDocumentId: identity,
+      }),
+    ).toMatchObject({ status: "error", error: expect.any(error) });
+    expect(requests).toBe(0);
+  },
+);
+
+test.each(["sweep", "tip"] as const)(
+  "%s listing failures withhold a checkpoint and preserve the parser error",
+  async (type) => {
+    globalThis.fetch = asFetchMock(async () => new Response("invalid"));
+    const cursor =
+      type === "sweep"
+        ? sweep()
+        : JSON.stringify({
+            type,
+            frontier: boundary,
+            pending: boundary,
+            url: `${origin}/atom.xml`,
+          });
+    expect(await ukFclAdapter.fetchPage(cursor, {})).toMatchObject({
+      status: "error",
+      error: expect.any(ParseXmlError),
+    });
+  },
+);
+
+test("reconciliation retains typed detail errors at its promise boundary", async () => {
+  globalThis.fetch = asFetchMock(async () => new Response("", { status: 404 }));
+  expect(
+    await rejectionOf(
+      ukFclAdapter.reconciliation.buildDecision({
+        feed,
+        sourceDocumentId: entry?.sourceDocumentId ?? "",
+      }),
+    ),
+  ).toBeInstanceOf(AdapterFetchError);
+});
+
+test("reconciliation revisions require a valid feed entry belonging to the payload", () => {
+  const revisionOf = ukFclAdapter.reconciliation.revisionOf;
+  expect(revisionOf(null)).toBeNull();
+  expect(
+    revisionOf({ feed: "invalid", sourceDocumentId: "missing" }),
+  ).toBeNull();
+  expect(revisionOf({ feed, sourceDocumentId: "missing" })).toBeNull();
+  expect(
+    revisionOf({ feed, sourceDocumentId: entry?.sourceDocumentId ?? "" }),
+  ).toEqual({
+    sourceDocumentId: entry?.sourceDocumentId,
+    contentHash: entry?.contentHash,
+    updated: entry?.updated,
+  });
 });
