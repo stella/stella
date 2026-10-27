@@ -19,6 +19,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import { corpusSearchGroupToken } from "@/api/lib/legal-search/corpus-search-cursor";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
   getPublicReadStatementTimeoutMs,
   runWithPublicReadStatementTimeout,
@@ -34,7 +35,6 @@ import {
   flushFailureObservations,
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
-import { PublicLawStatementError } from "@/api/lib/public-law-statement-error";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";

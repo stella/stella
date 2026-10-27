@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -28,7 +29,6 @@ import type {
   PublicLawColumnGrantsByRelation,
   PublicLawColumnPair,
 } from "@/api/lib/public-law-relations";
-import { PublicLawStatementError } from "@/api/lib/public-law-statement-error";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -53,26 +53,29 @@ type PublicLawSharedReadTransaction = Pick<Transaction, "execute" | "select">;
 
 /** The callsite names a query without exposing its SQL or bound values. */
 const publicLawStatementName = (): string => {
-  const frames = new Error("Public-law SQL callsite").stack
-    ?.split("\n")
+  const trace = { stack: "" };
+  Error.captureStackTrace(trace);
+  const frames = trace.stack
+    .split("\n")
     .filter((line) => line.includes(" at "));
-  const frame = frames?.at(PUBLIC_LAW_SQL_CALLSITE_FRAME);
+  const frame = frames.at(PUBLIC_LAW_SQL_CALLSITE_FRAME);
   if (frame === undefined) {
     logger.warn("public_law.statement_callsite_unavailable");
     return "callsite-unavailable";
   }
-  const location = /\((.+):(\d+):(\d+)\)|\s(.+):(\d+):(\d+)$/u.exec(frame);
-  if (location === null) {
+  const trimmed = frame.trim();
+  const location = trimmed.endsWith(")")
+    ? trimmed.slice(trimmed.lastIndexOf("(") + 1, -1)
+    : trimmed.slice(trimmed.lastIndexOf(" ") + 1);
+  const columnSeparator = location.lastIndexOf(":");
+  const lineSeparator = location.lastIndexOf(":", columnSeparator - 1);
+  if (lineSeparator === -1 || columnSeparator <= lineSeparator) {
     logger.warn("public_law.statement_callsite_unavailable");
     return "callsite-unavailable";
   }
-  const sourcePath = location[1] ?? location[4];
-  const line = location[2] ?? location[5];
-  const column = location[3] ?? location[6];
-  if (sourcePath === undefined || line === undefined || column === undefined) {
-    logger.warn("public_law.statement_callsite_unavailable");
-    return "callsite-unavailable";
-  }
+  const sourcePath = location.slice(0, lineSeparator);
+  const line = location.slice(lineSeparator + 1, columnSeparator);
+  const column = location.slice(columnSeparator + 1);
   const relativePath = sourcePath.startsWith(`${process.cwd()}/`)
     ? sourcePath.slice(process.cwd().length + 1)
     : (sourcePath.split("/").at(-1) ?? "unknown-source");
@@ -123,7 +126,7 @@ const observedQueryBuilder = <T extends object>(
   statementName: string,
 ): T =>
   new Proxy(builder, {
-    get: (target, property, receiver) => {
+    get: (target, property) => {
       const method = Reflect.get(target, property, target);
       if (
         property === "then" ||
@@ -134,7 +137,20 @@ const observedQueryBuilder = <T extends object>(
           return method;
         }
         return (...args: unknown[]) => {
-          const result: unknown = Reflect.apply(method, receiver, args);
+          const outcome = observePublicLawStatement(
+            statementName,
+            async () => await target,
+          ).then((result) => {
+            if (Result.isError(result)) {
+              return abortTransaction(result.error);
+            }
+            return result.value;
+          });
+          const continuation: unknown = Reflect.get(outcome, property, outcome);
+          if (typeof continuation !== "function") {
+            panic("Observed promise continuation must be callable", property);
+          }
+          const result: unknown = Reflect.apply(continuation, outcome, args);
           return result;
         };
       }

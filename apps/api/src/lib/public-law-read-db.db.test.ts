@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { integer, pgTable } from "drizzle-orm/pg-core";
@@ -11,6 +12,8 @@ import {
   withSharedTransactionTimeoutRestoration,
 } from "@/api/db/shared-pool-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -162,6 +165,39 @@ test("raw execution preserves getSQL and execute methods", async () => {
 
   expect(executedRows(rows)).toEqual([{ value: 1 }]);
 });
+
+test.each(["await", "execute", "catch", "finally"] as const)(
+  "raw statement failures retain public provenance through %s",
+  async (entry) => {
+    const outcome = await Result.tryPromise(() =>
+      db.transaction(async (transaction) => {
+        const query = observePublicLawReadTransaction(
+          asTestRaw<Transaction>(transaction),
+        ).execute(sql`SELECT missing_column FROM public_law_observation_probe`);
+        switch (entry) {
+          case "await":
+            return await query;
+          case "execute":
+            return await query.execute();
+          case "catch":
+            return await query.catch((error: unknown) =>
+              abortTransaction(error),
+            );
+          case "finally":
+            return await query.finally(() => undefined);
+          default:
+            entry satisfies never;
+            panic("Unexpected statement entry", entry);
+        }
+      }),
+    );
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error.cause).toBeInstanceOf(PublicLawStatementError);
+      expect(getPgErrorCode(outcome.error)).toBe("42703");
+    }
+  },
+);
 
 test("a caught select cancellation is logged", async () => {
   const logs = installRecordingLogger();

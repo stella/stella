@@ -1,12 +1,12 @@
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PublicLawStatementError } from "@/api/lib/legal-search/public-law-statement-error";
 import {
   getPublicReadStatementTimeoutMs,
   runWithPublicReadStatementTimeout,
 } from "@/api/lib/legal-search/public-read-timeout-context";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { PG_ERROR } from "@/api/lib/pg-error";
-import { PublicLawStatementError } from "@/api/lib/public-law-statement-error";
 import { publicCorpusClassOf } from "@/api/public-corpus-policy";
 import type { PublicCorpusClass } from "@/api/public-corpus-policy";
 

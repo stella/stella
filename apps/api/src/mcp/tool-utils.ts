@@ -861,11 +861,19 @@ export const internalFailureResult = (
     return searchIndexUnavailableResult(error);
   }
   const timeout = publicReadTimeoutError(error);
+  if (
+    timeout === null &&
+    HandlerError.is(error) &&
+    error.code !== "upstream_unavailable" &&
+    statusCodeToErrorCode(error.status) !== "internal_error"
+  ) {
+    return structuredErrorResult(projectMcpRefusal(error));
+  }
+  captureError(
+    timeout ?? error,
+    handlerErrorContext(fingerprintKey, { source: "mcp" }),
+  );
   if (timeout !== null) {
-    captureError(
-      timeout,
-      handlerErrorContext(fingerprintKey, { source: "mcp" }),
-    );
     return structuredErrorResult({
       code: "public_read_timeout",
       message: timeout.message,
@@ -873,26 +881,14 @@ export const internalFailureResult = (
       retryable: true,
     });
   }
-
-  if (HandlerError.is(error)) {
-    if (error.code === "upstream_unavailable") {
-      captureError(
-        error,
-        handlerErrorContext(fingerprintKey, { source: "mcp" }),
-      );
-      return structuredErrorResult({
-        code: "upstream_unavailable",
-        message: error.message,
-        hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
-        retryable: true,
-      });
-    }
-    const code = statusCodeToErrorCode(error.status);
-    if (code !== "internal_error") {
-      return structuredErrorResult(projectMcpRefusal(error));
-    }
+  if (HandlerError.is(error) && error.code === "upstream_unavailable") {
+    return structuredErrorResult({
+      code: "upstream_unavailable",
+      message: error.message,
+      hint: MCP_UPSTREAM_UNAVAILABLE_HINT,
+      retryable: true,
+    });
   }
-  captureError(error, handlerErrorContext(fingerprintKey, { source: "mcp" }));
   return structuredErrorResult({
     code: "internal_error",
     message: "Tool execution failed",
