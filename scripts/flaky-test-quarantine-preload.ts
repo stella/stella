@@ -267,76 +267,74 @@ const install = (reportDir: string): void => {
   // Bun defers nested describe bodies, so each body restores the path it was
   // declared under instead of relying on call nesting.
   let describePath: readonly string[] = [];
-  const wrapDescribe =
-    (original: TestFunction, receiver: unknown): TestFunction =>
-    (...args: unknown[]) => {
-      const [label, body, ...rest] = args;
-      if (!isFunction(body)) {
-        const result = Reflect.apply(original, receiver, args);
-        return isFunction(result) ? wrapDescribe(result, original) : result;
-      }
-      const scope = [
-        ...describePath,
-        isFunction(label) ? label.name : String(label),
-      ];
-      return Reflect.apply(original, receiver, [
-        label,
-        (...bodyArgs: unknown[]) => {
-          const outer = describePath;
-          describePath = scope;
-          try {
-            return body(...bodyArgs);
-          } finally {
-            describePath = outer;
-          }
-        },
-        ...rest,
-      ]);
-    };
-
-  const describe = new Proxy(bunTest.describe, {
-    get: (target, key) => {
-      const value: unknown = Reflect.get(target, key, target);
-      if (key === "each" && isFunction(value)) {
-        return (...eachArgs: unknown[]) => {
-          const registerRows = Reflect.apply(value, target, eachArgs);
-          if (!isFunction(registerRows)) {
-            return registerRows;
-          }
-          return (...args: unknown[]) => {
-            const [label, body, ...rest] = args;
-            if (typeof label !== "string" || !isFunction(body)) {
-              return Reflect.apply(registerRows, value, args);
+  const wrapDescribe = (
+    original: TestFunction,
+    receiver: unknown,
+  ): TestFunction =>
+    new Proxy(original, {
+      get: (target, key) => {
+        const value: unknown = Reflect.get(target, key, target);
+        if (key === "each" && isFunction(value)) {
+          return (...eachArgs: unknown[]) => {
+            const registerRows = Reflect.apply(value, target, eachArgs);
+            if (!isFunction(registerRows)) {
+              return registerRows;
             }
-            let rowIndex = 0;
-            return Reflect.apply(registerRows, value, [
-              label,
-              (...bodyArgs: unknown[]) => {
-                const scope = [
-                  ...describePath,
-                  formatEachTitle(label, bodyArgs, rowIndex++),
-                ];
-                const outer = describePath;
-                describePath = scope;
-                try {
-                  return body(...bodyArgs);
-                } finally {
-                  describePath = outer;
-                }
-              },
-              ...rest,
-            ]);
+            return (...args: unknown[]) => {
+              const [label, body, ...rest] = args;
+              if (typeof label !== "string" || !isFunction(body)) {
+                return Reflect.apply(registerRows, value, args);
+              }
+              const parentScope = describePath;
+              let rowIndex = 0;
+              return Reflect.apply(registerRows, value, [
+                label,
+                (...bodyArgs: unknown[]) => {
+                  const scope = [
+                    ...parentScope,
+                    formatEachTitle(label, bodyArgs, rowIndex++),
+                  ];
+                  const outer = describePath;
+                  describePath = scope;
+                  try {
+                    return body(...bodyArgs);
+                  } finally {
+                    describePath = outer;
+                  }
+                },
+                ...rest,
+              ]);
+            };
           };
-        };
-      }
-      return isFunction(value) ? wrapDescribe(value, target) : value;
-    },
-    apply: (target, _self, args: unknown[]) =>
-      wrapDescribe(
-        (...forwarded: unknown[]) => Reflect.apply(target, target, forwarded),
-        (...forwarded: unknown[]) => Reflect.apply(target, target, forwarded),
-      )(...args),
-  });
+        }
+        return isFunction(value) ? wrapDescribe(value, target) : value;
+      },
+      apply: (target, _self, args: unknown[]) => {
+        const [label, body, ...rest] = args;
+        if (!isFunction(body)) {
+          const result = Reflect.apply(target, receiver, args);
+          return isFunction(result) ? wrapDescribe(result, target) : result;
+        }
+        const scope = [
+          ...describePath,
+          isFunction(label) ? label.name : String(label),
+        ];
+        return Reflect.apply(target, receiver, [
+          label,
+          (...bodyArgs: unknown[]) => {
+            const outer = describePath;
+            describePath = scope;
+            try {
+              return body(...bodyArgs);
+            } finally {
+              describePath = outer;
+            }
+          },
+          ...rest,
+        ]);
+      },
+    });
+  const describe = wrapDescribe(bunTest.describe, bunTest.describe);
 
   const quarantine =
     (id: string, fn: TestFunction, budget: number) =>
@@ -373,35 +371,40 @@ const install = (reportDir: string): void => {
       console.error(`(quarantined fail) ${id}: ${outcome.message}`);
     };
 
-  const register =
-    (original: TestFunction, receiver: unknown): TestFunction =>
-    (...args: unknown[]) => {
-      const [label, second, third, ...rest] = args;
-      const file = typeof label === "string" ? currentFile() : undefined;
-      const id =
-        file === undefined || typeof label !== "string"
-          ? undefined
-          : testId({ file, name: [...describePath, label].join(" > ") });
-      if (id === undefined || !quarantined.has(id)) {
-        return Reflect.apply(original, receiver, args);
-      }
-      const [fn, options] = isFunction(second)
-        ? [second, third]
-        : [third, second];
-      if (!isFunction(fn) || rest.length > 0) {
-        return Reflect.apply(original, receiver, args);
-      }
-      record({ type: "registered", id });
-      const budget = timeoutOf(options) ?? DEFAULT_BUDGET_MS;
-      return Reflect.apply(original, receiver, [
-        label,
-        quarantine(id, fn, budget),
-        {
-          ...(typeof options === "object" && options !== null ? options : {}),
-          timeout: budget + RUNNER_GRACE_MS,
-        },
-      ]);
-    };
+  const register = (original: TestFunction, receiver: unknown): TestFunction =>
+    new Proxy(original, {
+      get: (target, key) => {
+        const value: unknown = Reflect.get(target, key, target);
+        return isFunction(value) ? forward(value, target) : value;
+      },
+      apply: (target, _self, args: unknown[]) => {
+        const [label, second, third, ...rest] = args;
+        const file = typeof label === "string" ? currentFile() : undefined;
+        const id =
+          file === undefined || typeof label !== "string"
+            ? undefined
+            : testId({ file, name: [...describePath, label].join(" > ") });
+        if (id === undefined || !quarantined.has(id)) {
+          return Reflect.apply(target, receiver, args);
+        }
+        const [fn, options] = isFunction(second)
+          ? [second, third]
+          : [third, second];
+        if (!isFunction(fn) || rest.length > 0) {
+          return Reflect.apply(target, receiver, args);
+        }
+        record({ type: "registered", id });
+        const budget = timeoutOf(options) ?? DEFAULT_BUDGET_MS;
+        return Reflect.apply(target, receiver, [
+          label,
+          quarantine(id, fn, budget),
+          {
+            ...(typeof options === "object" && options !== null ? options : {}),
+            timeout: budget + RUNNER_GRACE_MS,
+          },
+        ]);
+      },
+    });
 
   const WRAPPED_FORMS = new Set<PropertyKey>(["only", "concurrent", "serial"]);
   const test = new Proxy(bunTest.test, {
@@ -415,10 +418,7 @@ const install = (reportDir: string): void => {
         : forward(value, target);
     },
     apply: (target, _self, args: unknown[]) =>
-      register(
-        (...forwarded: unknown[]) => Reflect.apply(target, target, forwarded),
-        (...forwarded: unknown[]) => Reflect.apply(target, target, forwarded),
-      )(...args),
+      register(target, target)(...args),
   });
 
   void mock.module("bun:test", () => ({

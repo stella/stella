@@ -63,6 +63,11 @@ describe("outer", () => {
   test("passes", () => {
     expect(1).toBe(1);
   });
+  describe.if(true).each([["one"]])("conditional %s", () => {
+    test("conditional case", () => {
+      throw new Error("conditional group flake");
+    });
+  });
 });
 describe.concurrent("modified group", () => {
   test("modified case", () => {
@@ -194,12 +199,15 @@ const run = ({
   };
 };
 
-const runReceiverFixture = (preload: boolean) => {
+const runReceiverFixture = (preload: boolean, extraSource = "") => {
   const root = mkdtempSync(path.join(tmpdir(), "flaky-quarantine-receivers-"));
   roots.push(root);
   mkdirSync(path.join(root, "scripts"));
   mkdirSync(path.join(root, "pkg"));
-  writeFileSync(path.join(root, RECEIVER_FIXTURE), RECEIVER_SOURCE);
+  writeFileSync(
+    path.join(root, RECEIVER_FIXTURE),
+    `${RECEIVER_SOURCE}\n${extraSource}`,
+  );
   writeFileSync(
     path.join(root, "scripts/flaky-test-quarantine.json"),
     serializeRegistry({
@@ -245,6 +253,7 @@ const compareTuple = (
 
 const FAILING = [
   "outer > inner > throws",
+  "outer > conditional one > conditional case",
   "rejects",
   "calls done with an error",
   "hangs",
@@ -270,6 +279,54 @@ describe("flaky-test quarantine preload", () => {
       expect(result.output).not.toContain("test.skip.if ran");
       expect(result.output).not.toContain("test.if(false) ran");
     }
+  });
+
+  test.each([
+    {
+      form: "describe.skip.if",
+      source: `describe.skip.if(true)("conditional skipped group", () => {
+        test("skipped child", () => { throw new Error("skipped child ran"); });
+      });`,
+    },
+    {
+      form: "describe.if.each",
+      source: `describe.if(true).each([["native"]])("conditional %s", () => {
+        test("conditional child", () => { expect(true).toBe(true); });
+      });`,
+    },
+    {
+      form: "describe.concurrent.each",
+      source: `describe.concurrent.each([["native"]])("concurrent %s", () => {
+        test("concurrent child", () => { expect(true).toBe(true); });
+      });`,
+    },
+    {
+      form: "test.concurrent.if",
+      source: `test.concurrent.if(true)("conditional concurrent case", () => {
+        expect(true).toBe(true);
+      });`,
+    },
+    {
+      form: "test.serial.if",
+      source: `test.serial.if(true)("conditional serial case", () => {
+        expect(true).toBe(true);
+      });`,
+    },
+    {
+      form: "test.if.concurrent",
+      source: `test.if(true).concurrent("concurrent conditional case", () => {
+        expect(true).toBe(true);
+      });`,
+    },
+  ])("preserves native outcomes through $form", ({ source }) => {
+    const native = runReceiverFixture(false, source);
+    const preloaded = runReceiverFixture(true, source);
+    expect(native.exitCode).toBe(0);
+    expect(native.output).toMatch(/\b[1-9]\d* pass\b/u);
+    expect(preloaded.exitCode).toBe(0);
+    expect(preloaded.output.match(/\b\d+ (?:pass|skip|fail)\b/gu)).toEqual(
+      native.output.match(/\b\d+ (?:pass|skip|fail)\b/gu),
+    );
   });
 
   test("its static import graph uses only builtins and relative scripts files", () => {
@@ -326,7 +383,7 @@ describe("flaky-test quarantine preload", () => {
   test("a run whose only failures are quarantined exits zero and records each one", () => {
     const { exitCode, records, output } = run({ names: FAILING });
     expect(output).toContain("(quarantined fail)");
-    expect(exitCode).toBe(0);
+    expect(exitCode, output).toBe(0);
     expect(
       records
         .flatMap((record) =>
@@ -351,6 +408,10 @@ describe("flaky-test quarantine preload", () => {
         [
           `${FIXTURE}::outer > inner > throws`,
           "expect(received).toBe(expected)",
+        ],
+        [
+          `${FIXTURE}::outer > conditional one > conditional case`,
+          "conditional group flake",
         ],
         [`${FIXTURE}::rejects`, "network flake"],
       ].toSorted(compareTuple),
