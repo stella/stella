@@ -1,3 +1,11 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "id": "scripts/ci-package-scope.test.ts::every owner-named input declaration enters the census even through a delegated reader",
+      "owner": "stella",
+      "reason": "The fixture assumes filesystem traversal order; the glob scan can return the two reader commands in either order.",
+      "created": "2026-10-27",
+      "expires": "2026-11-03"
+    }
+  ]
 }
