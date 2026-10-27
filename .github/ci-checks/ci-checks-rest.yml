@@ -109,6 +109,14 @@ checks:
   # Root script tests belong to no workspace package, so no scoped test
   # run reaches them. Other steps call some by path; this runs every
   # other one, so a new test cannot miss CI by missing a step.
+  - name: Test depth repository scripts
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Runs repository script tests whose declared cost requires the full-depth path."
+    id: depth_repository_scripts
+    if: ${{ !cancelled() && steps.install.outcome == 'success' && needs.ci-plan.outputs.suite_depth == 'full' && github.event_name != 'merge_group' && (inputs.pr_depth_only == true || inputs.heavy_only == true) }}
+    run: bun scripts/run-unlisted-script-tests.ts --depth --timeout 120000
+
   - name: Test remaining repository scripts
     env:
       CI_CHECK_KIND: CONTEXTUAL

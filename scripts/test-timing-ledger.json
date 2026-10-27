@@ -3910,23 +3910,8 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/web/src/components/chat/markdown-selection.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::<module>::test timeout",
     "count": 4,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/components/legal-reader/legal-reader-ai-chat.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/components/workspaces/matter-combobox.dom.test.tsx::<module>::setDefaultTimeout",
-    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
@@ -3935,22 +3920,7 @@
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
-    "id": "no-unreasoned-timeout::apps/web/src/features/chat/stream-chunk-commit-budget.dom.test.tsx::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/features/knowledge/knowledge-audience.dom.test.tsx::<module>::test timeout",
-    "count": 2,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
     "id": "no-unreasoned-timeout::apps/web/src/lib/organization/feature-access/capability-action-coverage.test.ts::<module>::test timeout",
-    "count": 1,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/routes/_protected.chat/-components/chat-history-page.dom.test.tsx::<module>::setDefaultTimeout",
     "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
@@ -4186,7 +4156,7 @@
   },
   {
     "id": "no-unreasoned-timeout::scripts/ci-plan.test.ts::<module>::test timeout",
-    "count": 8,
+    "count": 9,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {
