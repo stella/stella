@@ -1,9 +1,14 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -12,14 +17,21 @@ import {
   TEMPLATE_VERSIONS_PAGE_SIZE_DEFAULT,
 } from "../versions";
 
-const listTemplateVersionsParamsSchema = t.Object({
-  templateId: tSafeId("template"),
+const listTemplateVersionsParamsSchema = v.object({
+  templateId: resourceIdSchema("template"),
 });
 
-const listTemplateVersionsQuerySchema = t.Object({
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.templateVersionsPerTemplate }),
+const listTemplateVersionsQuerySchema = v.object({
+  cursor: v.optional(paginationCursorSchema()),
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.templateVersionsPerTemplate),
+      ),
+    ),
   ),
 });
 

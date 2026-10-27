@@ -75,7 +75,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
@@ -276,12 +276,15 @@ export const DetailContent = ({
     transport ??
     ({
       save: async (write: ClauseBodyWrite) => {
-        const saved = unwrapEden(await api.clauses({ clauseId }).post(write));
+        const saved = unwrapApiResponse(
+          await api.clauses({ clauseId }).post(write),
+        );
         return { ...saved, body: write.body };
       },
-      read: async () => unwrapEden(await api.clauses({ clauseId }).get()).body,
+      read: async () =>
+        unwrapApiResponse(await api.clauses({ clauseId }).get()).body,
       restore: async (versionId: string, expectedBody: ClauseParagraph[]) =>
-        unwrapEden(
+        unwrapApiResponse(
           await api
             .clauses({ clauseId })
             .versions({ versionId })
@@ -291,7 +294,7 @@ export const DetailContent = ({
         body: ClauseParagraph[],
         expectedBody: ClauseParagraph[],
       ) => {
-        const saved = unwrapEden(
+        const saved = unwrapApiResponse(
           await api
             .clauses({ clauseId })
             .post({ body, expectedBody, snapshotVersion: true }),
@@ -320,7 +323,13 @@ export const DetailContent = ({
       setDirectiveRefusal(true);
       return;
     }
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "DetailContent.reportBodyError:failure",
+      scope: {
+        type: "handler",
+        handlerId: "DetailContent.reportBodyError:failure",
+      },
+    });
     notifyUserError(error, t("clauses.saveFailed"), {
       description: userErrorFromThrown(error, t("common.unexpectedError")),
     });
@@ -717,7 +726,7 @@ const ClauseHeader = ({
   const deleteClause = useMutation({
     mutationFn: async () => {
       const response = await api.clauses({ clauseId }).delete();
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: () => {
       stellaToast.add({

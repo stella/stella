@@ -17,7 +17,7 @@ import {
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -33,6 +33,7 @@ const PRODUCT_NAMES = {
   flexibee: "ABRA Flexi (XML)",
   ledes_1998b: "LEDES 1998B",
   ubl: "UBL 2.1 (EN 16931)",
+  peppol_sk: "Peppol (Slovakia)",
 } as const;
 
 type FormatLabel = TranslationKey | { name: string };
@@ -59,6 +60,7 @@ const FORMAT_GROUPS = [
     labelKey: "billing.invoices.export.eBilling",
     formats: [
       ["ubl", { name: PRODUCT_NAMES.ubl }],
+      ["peppol_sk", { name: PRODUCT_NAMES.peppol_sk }],
       ["ksef_fa3", "billing.invoices.export.ksefFa3"],
       ["ledes_1998b", { name: PRODUCT_NAMES.ledes_1998b }],
     ],
@@ -104,7 +106,7 @@ export const InvoiceExportMenu = ({
           { headers: { "Accept-Language": locale } },
         );
       // The presigned URL answers as an attachment under its file name.
-      const { downloadUrl } = unwrapEden(response);
+      const { downloadUrl } = unwrapApiResponse(response);
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.rel = "noopener";
@@ -112,8 +114,11 @@ export const InvoiceExportMenu = ({
       link.click();
       link.remove();
     },
-    onError: (error) => {
-      analytics.captureError(error);
+    onError: (error, format) => {
+      analytics.captureError(error, {
+        fingerprintKey: "InvoiceExportMenu:failure",
+        scope: { type: "handler", handlerId: `invoice-export.${format}` },
+      });
       notifyUserError(error, t("workspaces.views.exportFailed"));
     },
   });

@@ -1,14 +1,14 @@
 import { Result } from "better-result";
 import { and, desc, eq } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-import type { CorrespondenceChannel } from "@stll/api-contract/correspondence";
+import { CORRESPONDENCE_CHANNELS } from "@stll/api-contract/correspondence";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { correspondence } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { readOrganizationDataBoxIds } from "@/api/lib/email/correspondence/data-box/organization-boxes";
 import {
@@ -79,10 +79,7 @@ true satisfies MissingListColumn extends never ? true : never;
 true satisfies UnexpectedListColumn extends never ? true : never;
 
 // Every channel is filterable; the check fails when a channel is added.
-const CHANNEL_FILTER = t.Union([t.Literal("email"), t.Literal("data_box")]);
-true satisfies [CorrespondenceChannel] extends [Static<typeof CHANNEL_FILTER>]
-  ? true
-  : never;
+const CHANNEL_FILTER = v.picklist(CORRESPONDENCE_CHANNELS);
 
 const PAGE_SIZE = 30;
 const PAGE_SIZE_MAX = 100;
@@ -104,10 +101,19 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(t.Integer({ minimum: 1, maximum: PAGE_SIZE_MAX })),
-    channel: t.Optional(CHANNEL_FILTER),
+  query: v.object({
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(PAGE_SIZE_MAX),
+        ),
+      ),
+    ),
+    channel: v.optional(CHANNEL_FILTER),
   }),
 } satisfies WorkspaceHandlerConfig;
 

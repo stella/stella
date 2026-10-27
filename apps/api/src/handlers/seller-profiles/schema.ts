@@ -1,72 +1,79 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
-import { tCurrencyCode, tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
-const name = t.String({ minLength: 1, maxLength: 512 });
-const registrationId = t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH });
-const taxId = t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH });
-const vatId = t.String({ maxLength: PARTY_IDENTIFIER_MAX_LENGTH });
-const vatPayer = t.Boolean({
-  description:
+const name = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
+const registrationId = v.pipe(
+  v.string(),
+  v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH),
+);
+const taxId = v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH));
+const vatId = v.pipe(v.string(), v.maxLength(PARTY_IDENTIFIER_MAX_LENGTH));
+const vatPayer = v.pipe(
+  v.boolean(),
+  v.description(
     "Whether the issuer charges VAT. Requires a VAT ID; a registered person who is not a VAT payer has a VAT ID but sets this to false.",
-});
-const addressLine = t.String({ maxLength: 512 });
-const city = t.String({ maxLength: 256 });
-const postalCode = t.String({ maxLength: 32 });
-const country = t.String({ maxLength: 128 });
-const iban = t.String({ minLength: 15, maxLength: 42 });
-const bic = t.String({
-  maxLength: 11,
-  pattern: "^[A-Za-z]{6}[A-Za-z0-9]{2}([A-Za-z0-9]{3})?$",
-});
-const accountNumber = t.String({ maxLength: 64 });
-const footerNotes = t.String({ maxLength: 10_000 });
-const registrationText = t.String({ maxLength: 10_000 });
+  ),
+);
+const addressLine = v.pipe(v.string(), v.maxLength(512));
+const city = v.pipe(v.string(), v.maxLength(256));
+const postalCode = v.pipe(v.string(), v.maxLength(32));
+const country = v.pipe(v.string(), v.maxLength(128));
+const iban = v.pipe(v.string(), v.minLength(15), v.maxLength(42));
+const bic = v.pipe(
+  v.string(),
+  v.maxLength(11),
+  v.regex(/^[A-Za-z]{6}[A-Za-z0-9]{2}([A-Za-z0-9]{3})?$/u),
+);
+const accountNumber = v.pipe(v.string(), v.maxLength(64));
+const footerNotes = v.pipe(v.string(), v.maxLength(10_000));
+const registrationText = v.pipe(v.string(), v.maxLength(10_000));
 
-export const sellerProfileParams = t.Object({
-  sellerProfileId: tSafeId("sellerProfile"),
+export const sellerProfileParams = v.object({
+  sellerProfileId: resourceIdSchema("sellerProfile"),
 });
 
-export const createSellerProfileBody = t.Object({
+export const createSellerProfileBody = v.object({
   legalName: name,
-  registrationId: t.Optional(registrationId),
-  taxId: t.Optional(taxId),
-  vatId: t.Optional(vatId),
-  registerEntry: t.Optional(registrationText),
-  barRegistration: t.Optional(registrationText),
-  vatPayer: t.Optional(vatPayer),
-  addressLine1: t.Optional(addressLine),
-  addressLine2: t.Optional(addressLine),
-  city: t.Optional(city),
-  postalCode: t.Optional(postalCode),
-  country: t.Optional(country),
-  iban: t.Optional(iban),
-  bic: t.Optional(bic),
-  accountNumber: t.Optional(accountNumber),
-  defaultCurrency: tCurrencyCode,
-  footerNotes: t.Optional(footerNotes),
+  registrationId: v.optional(registrationId),
+  taxId: v.optional(taxId),
+  vatId: v.optional(vatId),
+  registerEntry: v.optional(registrationText),
+  barRegistration: v.optional(registrationText),
+  vatPayer: v.optional(vatPayer),
+  addressLine1: v.optional(addressLine),
+  addressLine2: v.optional(addressLine),
+  city: v.optional(city),
+  postalCode: v.optional(postalCode),
+  country: v.optional(country),
+  iban: v.optional(iban),
+  bic: v.optional(bic),
+  accountNumber: v.optional(accountNumber),
+  defaultCurrency: currencyCodeSchema,
+  footerNotes: v.optional(footerNotes),
 });
 
-export const updateSellerProfileBody = t.Object({
-  legalName: t.Optional(name),
-  registrationId: t.Optional(t.Nullable(registrationId)),
-  taxId: t.Optional(t.Nullable(taxId)),
-  vatId: t.Optional(t.Nullable(vatId)),
-  registerEntry: t.Optional(t.Nullable(registrationText)),
-  barRegistration: t.Optional(t.Nullable(registrationText)),
-  vatPayer: t.Optional(vatPayer),
-  addressLine1: t.Optional(t.Nullable(addressLine)),
-  addressLine2: t.Optional(t.Nullable(addressLine)),
-  city: t.Optional(t.Nullable(city)),
-  postalCode: t.Optional(t.Nullable(postalCode)),
-  country: t.Optional(t.Nullable(country)),
-  iban: t.Optional(t.Nullable(iban)),
-  bic: t.Optional(t.Nullable(bic)),
-  accountNumber: t.Optional(t.Nullable(accountNumber)),
-  defaultCurrency: t.Optional(tCurrencyCode),
-  footerNotes: t.Optional(t.Nullable(footerNotes)),
+export const updateSellerProfileBody = v.object({
+  legalName: v.optional(name),
+  registrationId: v.optional(v.nullable(registrationId)),
+  taxId: v.optional(v.nullable(taxId)),
+  vatId: v.optional(v.nullable(vatId)),
+  registerEntry: v.optional(v.nullable(registrationText)),
+  barRegistration: v.optional(v.nullable(registrationText)),
+  vatPayer: v.optional(vatPayer),
+  addressLine1: v.optional(v.nullable(addressLine)),
+  addressLine2: v.optional(v.nullable(addressLine)),
+  city: v.optional(v.nullable(city)),
+  postalCode: v.optional(v.nullable(postalCode)),
+  country: v.optional(v.nullable(country)),
+  iban: v.optional(v.nullable(iban)),
+  bic: v.optional(v.nullable(bic)),
+  accountNumber: v.optional(v.nullable(accountNumber)),
+  defaultCurrency: v.optional(currencyCodeSchema),
+  footerNotes: v.optional(v.nullable(footerNotes)),
 });
 
 export const SELLER_PROFILE_EDITABLE_FIELDS = [

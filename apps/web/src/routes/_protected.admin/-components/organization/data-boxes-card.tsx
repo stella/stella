@@ -19,7 +19,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { allCorrespondenceQueryRoot } from "@/lib/resource-query-roots.logic";
 import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
@@ -53,11 +53,15 @@ export const OrganizationDataBoxesCard = () => {
       "data-boxes.refresh-correspondence",
     );
   const add = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "OrganizationDataBoxesCard.add",
+    },
     mutationFn: async (boxId: string) =>
       invokeCapability(
         "organization-settings.correspondence.data-boxes.create",
         async (request) =>
-          unwrapEden(
+          unwrapApiResponse(
             await api["organization-settings"].correspondence[
               "data-boxes"
             ].post({ boxId }, request),
@@ -71,11 +75,15 @@ export const OrganizationDataBoxesCard = () => {
     },
   });
   const remove = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "OrganizationDataBoxesCard.remove",
+    },
     mutationFn: async (boxId: string) =>
       invokeCapability(
         "organization-settings.correspondence.data-boxes.delete",
         async (request) =>
-          unwrapEden(
+          unwrapApiResponse(
             await api["organization-settings"].correspondence["data-boxes"]({
               boxId,
             }).delete(undefined, request),

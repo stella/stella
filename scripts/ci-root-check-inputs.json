@@ -291,6 +291,13 @@
       "scripts/**",
       "bunfig.toml"
     ],
+    "Icon module imports": [
+      "apps/*/src/**",
+      "packages/*/src/**",
+      "scripts/codemod-icons.ts",
+      "scripts/codemod-icons.test.ts",
+      "bunfig.toml"
+    ],
     "Suppression waiver ledger": [
       "apps/*/src/**",
       "apps/*/scripts/**",
@@ -332,7 +339,6 @@
     "Model task default evidence guard": ["**"],
     "Model catalog snapshot drift check": ["@stll/ai-catalog"],
     "Capability description ledger": ["@stll/api", "@stll/cli"],
-    "exactMirror route guard": ["@stll/api"],
     "MCP coverage guard": ["@stll/api", "@stll/cli"],
     "MCP surface baseline self-test": ["@stll/errors"],
     "Offline catalogue pinned-content policy": ["**"],
@@ -624,6 +630,7 @@
     "Deployment feature guard": ["**"],
     "Processed-field backlog guard": ["@stll/api"],
     "GitHub API command ownership": ["**"],
+    "Tracked file sizes": ["**"],
     "CI network step retries and timeouts": ["**"],
     "Sparse checkout script dependencies": [
       ".github/workflows/**",

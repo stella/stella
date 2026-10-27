@@ -79,10 +79,14 @@ const answer = {
   kind: "explain",
   visibility: "private",
   anchor: {
-    paragraphId: "p-2",
-    quote: "Selected words",
-    startOffset: 0,
-    endOffset: 14,
+    spans: [
+      {
+        paragraphId: "p-2",
+        quote: "Selected words",
+        startOffset: 0,
+        endOffset: 14,
+      },
+    ],
   },
   messages: [
     {
@@ -305,7 +309,7 @@ test("revealing an already visible card still lets it minimise when the reader s
 });
 
 test("streaming and failed partial replies remain visible, with typed errors and invalid citation feedback", () => {
-  const { getByRole, getByText, rerender, tree, props } = mount({
+  const { getByRole, getByText, queryByRole, rerender, tree, props } = mount({
     busy: true,
     answer: {
       ...answer,
@@ -337,14 +341,12 @@ test("streaming and failed partial replies remain visible, with typed errors and
     }),
   );
   expect(getByText("Partial explanation")).toBeDefined();
-  expect(getByRole("alert").textContent).toBe(
-    "The answer budget is exhausted.",
-  );
+  expect(queryByRole("alert")).toBeNull();
   expect(getByText("2 citations could not be verified.")).toBeDefined();
 });
 
-test("a persisted timeout shows its own error and leaves follow-up and regeneration available", () => {
-  const { getByRole, handlers } = mount({
+test("a persisted timeout leaves actions available without a raw alert", () => {
+  const { getByRole, queryByRole, handlers } = mount({
     answer: {
       ...answer,
       messages: answer.messages.map((message) => ({
@@ -354,9 +356,7 @@ test("a persisted timeout shows its own error and leaves follow-up and regenerat
       })),
     },
   });
-  expect(getByRole("alert").textContent).toBe(
-    messages.readerAnswers.timeoutError,
-  );
+  expect(queryByRole("alert")).toBeNull();
   const composer = getByRole("textbox", { name: "Ask a follow-up" });
   expect(composer.hasAttribute("disabled")).toBe(false);
   const regenerate = getByRole("button", { name: "Regenerate answer" });
@@ -454,6 +454,8 @@ test("answer and comment share the canonical gutter placement without overlappin
       text: "A nearby comment",
       startAnchorId: "p-3",
       author: { name: null, image: null },
+      createdAt: "2026-09-01T10:00:00.000Z",
+      updatedAt: "2026-09-01T10:00:00.000Z",
       mine: false,
       visibility: "private",
       onDelete: () => undefined,

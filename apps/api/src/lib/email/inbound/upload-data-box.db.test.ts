@@ -285,7 +285,7 @@ if (!databaseUrl || !runPostgresTests) {
           userId: uploaderId,
         },
       ]);
-    }, 60_000);
+    });
 
     beforeEach(async () => {
       await fixtureScoped()(

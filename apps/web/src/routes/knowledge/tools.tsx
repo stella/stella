@@ -15,6 +15,7 @@ import {
 import { getTranslator } from "@/i18n/i18n-store";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { routeSearchSchema } from "@/route-search-params";
 import type { ToolDetailPayload } from "@/routes/knowledge/-components/catalogue/tool-detail-view";
 import { KnowledgeAudienceGate } from "@/routes/knowledge/-knowledge-audience-gate";
 import { PublicToolsCatalogue } from "@/routes/knowledge/-public/public-tools-catalogue";
@@ -105,7 +106,7 @@ function ToolDetailRailIconRenderer(
 
 const KIND_VALUES = ["all", "skill", "mcp"] as const;
 
-const searchSchema = v.object({
+const searchSchema = routeSearchSchema({
   kind: v.optional(v.picklist(KIND_VALUES)),
   /** Catalogue slug to open on load, e.g. `?slug=krs` from an API refusal that
    *  names where the tool is enabled. */

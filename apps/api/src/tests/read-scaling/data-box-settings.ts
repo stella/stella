@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 
@@ -9,6 +8,7 @@ import { organizationSettings } from "@/api/db/schema";
 import addDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/create";
 import removeDataBox from "@/api/handlers/organization-settings/correspondence/data-boxes/delete";
 import readDataBoxes from "@/api/handlers/organization-settings/correspondence/data-boxes/get";
+import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
@@ -46,6 +46,7 @@ export const seedDataBoxSettingsScaling = async (
     await Result.tryPromise(async () => await db.transaction(work));
   return {
     organizationId: target.organizationId,
+    userId: mintAuthProviderId<"user">(),
     boxIds,
     safeDb,
     reset: async (currentBoxIds: string[]) => {
@@ -70,13 +71,18 @@ type DataBoxFixture = Awaited<ReturnType<typeof seedDataBoxSettingsScaling>>;
 export const dataBoxSettingsScalingScenarios = [
   {
     name: "organization data-box inventory",
-    handler: readDataBoxes.handler,
+    definition: readDataBoxes,
     measure: async (fixture: DataBoxFixture) => {
       await fixture.reset(fixture.boxIds);
       return await runWithMeasuredQueryCounter(async (counter) => {
         const response = await readDataBoxes.handler(
           asTestRaw<Parameters<typeof readDataBoxes.handler>[0]>({
             session: { activeOrganizationId: fixture.organizationId },
+            user: {
+              id: fixture.userId,
+              email: `${fixture.userId}@example.test`,
+              emailVerified: true,
+            },
             memberRole: sessionMemberRole("owner"),
             safeDb: fixture.safeDb,
             request: new Request(
@@ -86,7 +92,7 @@ export const dataBoxSettingsScalingScenarios = [
           }),
         );
         if (
-          response instanceof ElysiaCustomStatusResponse ||
+          response instanceof HttpStatusResponse ||
           response.boxIds.join(",") !== fixture.boxIds.join(",")
         ) {
           panic(
@@ -104,7 +110,7 @@ export const dataBoxSettingsScalingScenarios = [
   },
   {
     name: "add organization data box",
-    handler: addDataBox.handler,
+    definition: addDataBox,
     measure: async (fixture: DataBoxFixture) => {
       const changedBox =
         fixture.boxIds.at(-1) ?? panic("Data-box capacity must be positive");
@@ -113,6 +119,11 @@ export const dataBoxSettingsScalingScenarios = [
         const response = await addDataBox.handler(
           asTestRaw<Parameters<typeof addDataBox.handler>[0]>({
             session: { activeOrganizationId: fixture.organizationId },
+            user: {
+              id: fixture.userId,
+              email: `${fixture.userId}@example.test`,
+              emailVerified: true,
+            },
             memberRole: sessionMemberRole("owner"),
             safeDb: fixture.safeDb,
             recordAuditEvent,
@@ -125,7 +136,7 @@ export const dataBoxSettingsScalingScenarios = [
           }),
         );
         if (
-          response instanceof ElysiaCustomStatusResponse ||
+          response instanceof HttpStatusResponse ||
           response.boxIds.join(",") !== fixture.boxIds.join(",")
         ) {
           panic("Settings add must fill the final available inventory slot");
@@ -141,7 +152,7 @@ export const dataBoxSettingsScalingScenarios = [
   },
   {
     name: "remove organization data box",
-    handler: removeDataBox.handler,
+    definition: removeDataBox,
     measure: async (fixture: DataBoxFixture) => {
       const changedBox =
         fixture.boxIds.at(-1) ?? panic("Data-box capacity must be positive");
@@ -150,6 +161,11 @@ export const dataBoxSettingsScalingScenarios = [
         const response = await removeDataBox.handler(
           asTestRaw<Parameters<typeof removeDataBox.handler>[0]>({
             session: { activeOrganizationId: fixture.organizationId },
+            user: {
+              id: fixture.userId,
+              email: `${fixture.userId}@example.test`,
+              emailVerified: true,
+            },
             memberRole: sessionMemberRole("owner"),
             safeDb: fixture.safeDb,
             recordAuditEvent,
@@ -162,7 +178,7 @@ export const dataBoxSettingsScalingScenarios = [
           }),
         );
         if (
-          response instanceof ElysiaCustomStatusResponse ||
+          response instanceof HttpStatusResponse ||
           response.boxIds.join(",") !== fixture.boxIds.slice(0, -1).join(",")
         ) {
           panic(

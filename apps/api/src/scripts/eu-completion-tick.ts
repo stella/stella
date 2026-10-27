@@ -30,7 +30,7 @@ import {
   assertReplaySlot,
   createReplayPreflightGate,
   readReplayGate,
-} from "@/api/scripts/replay-tick";
+} from "@/api/scripts/replay-tick-command";
 
 const QUERY_TIMEOUT_MS = 5000;
 const CLEANUP_TIMEOUT_MS = 30_000;

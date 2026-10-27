@@ -1,10 +1,11 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 
 import type { Transaction } from "@/api/db/root";
+import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   hostedCheckoutClaims,
@@ -23,7 +24,8 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createHostedSetupSession,
@@ -40,12 +42,11 @@ import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 
 /** Create a hosted setup session for an active usage policy. */
 
-const createHostedSetupBodySchema = t.Object({
-  usagePolicyId: tSafeId("usagePolicy"),
-  // Seat count for seat-based subscription checkout. Bounded well below
-  // any legitimate organisation size; larger arrangements go through an
-  // operator, not self-service.
-  seats: t.Optional(t.Integer({ minimum: 1, maximum: 1000 })),
+const createHostedSetupBodySchema = v.object({
+  usagePolicyId: resourceIdSchema("usagePolicy"),
+  seats: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1000)),
+  ),
 });
 
 const config = {
@@ -93,6 +94,24 @@ type HostedCheckoutRequest = {
 };
 
 type HostedCheckoutSession = { hostedSessionId: string; url: string };
+
+const requireHostedCheckoutDisclosure = async ({
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}) =>
+  await abortableTx(safeDb, async (tx) => {
+    await requireCurrentOrganizationMemberPermission({
+      db: tx,
+      organizationId,
+      userId,
+      permissions: { organizationSettings: ["update"] },
+    });
+  });
 
 type RecordedSessionColumns = {
   hostedSessionId: string | null;
@@ -345,7 +364,7 @@ const awaitHostedCheckoutSession = async ({
 
 type PrepareCheckoutStartOptions = {
   tx: Transaction;
-  body: typeof createHostedSetupBodySchema.static;
+  body: v.InferOutput<typeof createHostedSetupBodySchema>;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
 };
@@ -577,6 +596,13 @@ const createHostedSetup = createSafeRootHandler(
       case "ok":
         break;
       case "reuse":
+        yield* Result.await(
+          requireHostedCheckoutDisclosure({
+            organizationId: session.activeOrganizationId,
+            safeDb,
+            userId: user.id,
+          }),
+        );
         return Result.ok(dbResult.session);
       case "await": {
         const awaited = yield* Result.await(
@@ -589,6 +615,13 @@ const createHostedSetup = createSafeRootHandler(
         );
         switch (awaited.kind) {
           case "reuse":
+            yield* Result.await(
+              requireHostedCheckoutDisclosure({
+                organizationId: session.activeOrganizationId,
+                safeDb,
+                userId: user.id,
+              }),
+            );
             return Result.ok(awaited.session);
           case "released":
             return Result.err(hostedSessionUnavailableError());
@@ -670,6 +703,14 @@ const createHostedSetup = createSafeRootHandler(
     if (Result.isError(sessionResult)) {
       return Result.err(hostedSessionUnavailableError(sessionResult.error));
     }
+
+    yield* Result.await(
+      requireHostedCheckoutDisclosure({
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+      }),
+    );
 
     return Result.ok({
       hostedSessionId: sessionResult.value.id,

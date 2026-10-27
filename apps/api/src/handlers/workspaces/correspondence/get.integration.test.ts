@@ -7,6 +7,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, correspondence, entities } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -261,6 +262,8 @@ describe("data-box correspondence reads", () => {
         memberRole: sessionMemberRole("member"),
         user: { id: ids.userA1 },
         request: new Request("https://api.example.test/correspondence"),
+        route:
+          "/v1/workspaces/:workspaceId/correspondence/:correspondenceId" satisfies ApiRoutePath,
         session: { activeOrganizationId: ids.orgA },
         safeDb: asTestRaw<SafeDb>(
           createSafeDb(markRlsDatabase(tx), [ids.wsA2], ids.orgA, ids.userA1),
@@ -335,6 +338,8 @@ describe("data-box correspondence reads", () => {
         asTestRaw<Parameters<typeof listCorrespondence.handler>[0]>({
           ...context,
           query: { channel: "data_box" },
+          route:
+            "/v1/workspaces/:workspaceId/correspondence" satisfies ApiRoutePath,
         }),
       );
       expect(list).toMatchObject({
@@ -351,6 +356,8 @@ describe("data-box correspondence reads", () => {
           asTestRaw<Parameters<typeof listCorrespondence.handler>[0]>({
             ...context,
             query: { channel: "email" },
+            route:
+              "/v1/workspaces/:workspaceId/correspondence" satisfies ApiRoutePath,
           }),
         ),
       ).toMatchObject({ items: [] });

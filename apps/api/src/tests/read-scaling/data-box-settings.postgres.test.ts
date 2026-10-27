@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { apiRoutes } from "@/api/api-routes";
 import { organizationSettings } from "@/api/db/schema";
-import api from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   dataBoxSettingsScalingScenarios,
@@ -32,8 +32,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           const large =
             fixtures.at(1) ?? panic("Large settings fixture required");
           for (const scenario of dataBoxSettingsScalingScenarios) {
-            const mounted = api.routes.filter(
-              ({ handler }) => handler === scenario.handler,
+            const mounted = apiRoutes.filter(
+              ({ definition }) => definition === scenario.definition,
             );
             expect(mounted).toHaveLength(1);
             const at10 = await scenario.measure(small);

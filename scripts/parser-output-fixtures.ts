@@ -165,7 +165,9 @@ const persistedOutput = (adapter: string, raw: RawIngestionResult) => {
         : [
             ...new Set(
               result.judges
-                .map(({ nameAsPrinted }) => judgeNameKey(nameAsPrinted))
+                .map((judge) =>
+                  judgeNameKey(judge.nameAsPrinted ?? judge.czechDeclinedName),
+                )
                 .filter((key) => key !== ""),
             ),
           ],

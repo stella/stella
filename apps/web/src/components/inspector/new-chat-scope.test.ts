@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import * as ts from "typescript6";
 import { createStore } from "zustand";
 import { immer } from "zustand/middleware/immer";
 
 import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
+import {
+  type CallExpression,
+  type Node,
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 import { railChatOpenArgs } from "@/components/inspector/inspector-rail-chat.logic";
 import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
@@ -156,24 +162,24 @@ const SCOPED_BY_WHAT_THEY_OPEN: Record<string, string> = {
     "tries a skill from the skill editor, which has no matter",
 };
 
-const calleeName = (call: ts.CallExpression): string | undefined => {
-  const callee = call.expression;
-  if (ts.isPropertyAccessExpression(callee)) {
-    return callee.name.text;
+const calleeName = (call: CallExpression): string | undefined => {
+  const callee = call.callee;
+  if (
+    callee.type === "MemberExpression" &&
+    !callee.computed &&
+    callee.property.type === "Identifier"
+  ) {
+    return callee.property.name;
   }
-  if (ts.isIdentifier(callee)) {
-    return callee.text;
-  }
-  return undefined;
+  return callee.type === "Identifier" ? callee.name : undefined;
 };
-
 type OpenChatCall = {
-  argument: ts.Node;
+  argument: Node;
   file: string;
   line: number;
-  source: ts.SourceFile;
+  source: ParsedSource;
 };
-
+const EMPTY_ARGUMENT = parseSource("empty.ts", "({})").program;
 const openChatCalls = (): OpenChatCall[] =>
   sourceFileIndex(SOURCE_ROOT)
     .filter(
@@ -182,46 +188,55 @@ const openChatCalls = (): OpenChatCall[] =>
         sourceText.includes("openChat("),
     )
     .flatMap((entry) => {
-      const source = entry.sourceFile(false);
+      const source = entry.sourceFile();
       const calls: OpenChatCall[] = [];
-      const visit = (node: ts.Node) => {
-        if (ts.isCallExpression(node) && calleeName(node) === "openChat") {
+      walk(source.program, (node) => {
+        if (node.type === "CallExpression" && calleeName(node) === "openChat") {
           // A bare openChat() opens a global chat wherever the user is, so
           // it has to be listed too: its argument is the empty object.
           calls.push({
-            argument:
-              node.arguments[0] ?? ts.factory.createObjectLiteralExpression(),
+            argument: node.arguments.at(0) ?? EMPTY_ARGUMENT,
             file: entry.relativePath,
-            line:
-              source.getLineAndCharacterOfPosition(node.getStart(source)).line +
-              1,
+            line: source.locate(node.start).line,
             source,
           });
         }
-        ts.forEachChild(node, visit);
-      };
-      visit(source);
+      });
       return calls;
     });
-
-const callsBuilder = (node: ts.Node): boolean =>
-  (ts.isCallExpression(node) &&
-    ts.isIdentifier(node.expression) &&
-    ROUTE_SCOPE_BUILDERS.has(node.expression.text)) ||
-  (ts.forEachChild(node, (child) => callsBuilder(child) || undefined) ?? false);
-
+const callsBuilder = (node: Node): boolean => {
+  let found = false;
+  walk(node, (child) => {
+    if (
+      child.type === "CallExpression" &&
+      child.callee.type === "Identifier" &&
+      ROUTE_SCOPE_BUILDERS.has(child.callee.name)
+    ) {
+      found = true;
+    }
+  });
+  return found;
+};
 const MATTER_FIELDS = new Set(["contextMatterIds", "workspaceId"]);
-const readsTabMatter = (node: ts.Node, source: ts.SourceFile): boolean =>
-  (ts.isPropertyAccessExpression(node) &&
-    MATTER_FIELDS.has(node.name.text) &&
-    /tab/iu.test(node.expression.getText(source))) ||
-  (ts.isIdentifier(node) &&
-    /^tab(WorkspaceId|ContextMatterIds)$/u.test(node.text)) ||
-  (ts.forEachChild(
-    node,
-    (child) => readsTabMatter(child, source) || undefined,
-  ) ??
-    false);
+const readsTabMatter = (node: Node, source: ParsedSource): boolean => {
+  let found = false;
+  walk(node, (child) => {
+    if (
+      (child.type === "MemberExpression" &&
+        !child.computed &&
+        child.property.type === "Identifier" &&
+        MATTER_FIELDS.has(child.property.name) &&
+        /tab/iu.test(
+          source.sourceText.slice(child.object.start, child.object.end),
+        )) ||
+      (child.type === "Identifier" &&
+        /^tab(WorkspaceId|ContextMatterIds)$/u.test(child.name))
+    ) {
+      found = true;
+    }
+  });
+  return found;
+};
 
 describe("openChat census", () => {
   const calls = openChatCalls();

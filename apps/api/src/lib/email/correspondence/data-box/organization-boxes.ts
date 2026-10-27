@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   ORGANIZATION_DATA_BOX_LIMIT,
@@ -14,10 +14,11 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 
-export const dataBoxIdSchema = t.String({
-  pattern: "^[A-Za-z0-9]{7}$",
-  description: "A data-box ID: seven letters or digits.",
-});
+export const dataBoxIdSchema = v.pipe(
+  v.string(),
+  v.regex(/^[A-Za-z0-9]{7}$/u),
+  v.description("A data-box ID: seven letters or digits."),
+);
 
 const EMPTY_BOX_IDS: readonly string[] = [];
 

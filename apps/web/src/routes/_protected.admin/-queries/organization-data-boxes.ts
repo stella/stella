@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { organizationSettingsQueryRoot } from "@/lib/resource-query-roots.logic";
 
@@ -26,7 +26,7 @@ export const organizationDataBoxesOptions = ({
   queryOptions({
     queryKey: organizationDataBoxesKeys.byOrganization({ organizationId }),
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["organization-settings"].correspondence["data-boxes"].get({
           fetch: { signal },
         }),

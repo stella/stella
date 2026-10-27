@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -32,7 +32,7 @@ const config = {
     reason: "correspondence",
     consumesServices: false,
   },
-  params: t.Object({ boxId: dataBoxIdSchema }),
+  params: v.object({ boxId: dataBoxIdSchema }),
 } satisfies HandlerConfig;
 
 const removeOrganizationDataBox = createSafeRootHandler(

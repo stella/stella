@@ -1,16 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildCapabilityRouteIndex } from "@/api/lib/capability-request";
+import { apiRoutes } from "@/api/api-routes";
+import { buildCapabilityIndex } from "@/api/lib/capability-request";
 import { loadCapabilityEndpoints } from "@/api/lib/capability-request-endpoints";
-import api from "@/api/server";
 
 describe("capability request routes", () => {
   test("mounted routes resolve to the catalog capabilities the browser declares", async () => {
-    const index = buildCapabilityRouteIndex({
-      routes: api.routes,
-      endpoints: await loadCapabilityEndpoints(),
-    });
-    const routed = new Set(index.values());
+    const index = buildCapabilityIndex(await loadCapabilityEndpoints());
+    // The guard looks a request's capability up by the definition its route
+    // mounts, so only a capability whose definition is mounted can match.
+    const routed = new Set(
+      apiRoutes.flatMap(({ definition }) => {
+        const capability = index.get(definition);
+        return capability === undefined ? [] : [capability];
+      }),
+    );
 
     // An index that recognized nothing would accept no declaration at all.
     expect(routed.size).toBeGreaterThan(100);

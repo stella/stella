@@ -62,7 +62,7 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // Creates the constrained non-login correspondence maintenance role only
   // when absent, then verifies attributes, memberships, and routine ownership.
   // Static catalog checks and role DDL retain the migration's bounded timeouts.
-  "20261016101100_correspondence_source_maintenance/migration.sql:db8e3052711cb6ba1c93b49dde0c223a9c466731d141b50f8f1a2ca7fb66b11b",
+  "20261026120600_correspondence_source_maintenance/migration.sql:db8e3052711cb6ba1c93b49dde0c223a9c466731d141b50f8f1a2ca7fb66b11b",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.

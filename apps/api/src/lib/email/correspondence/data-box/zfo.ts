@@ -10,6 +10,7 @@ import * as asn1js from "asn1js";
 import { Result, TaggedError } from "better-result";
 import * as pkijs from "pkijs";
 import { type Element, parseXmlDocument } from "slimdom";
+import * as v from "valibot";
 
 import { CORRESPONDENCE_MAX_ATTACHMENTS } from "@stll/api-contract/correspondence";
 import {
@@ -20,6 +21,8 @@ import {
   type DataBoxSeal,
   type DataBoxStatedEnvelope,
 } from "@stll/api-contract/data-box";
+import { numberFromString } from "@stll/api-contract/http-input";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
@@ -59,7 +62,11 @@ export class DataBoxMessageParseError extends TaggedError(
 )<{
   message: string;
   reason: DataBoxParseFailure;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const failure = (reason: DataBoxParseFailure, message: string) =>
   Result.err(new DataBoxMessageParseError({ reason, message }));
@@ -245,16 +252,24 @@ const fieldTimestamp = (element: Element, localName: string) => {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
+const statusCodeSchema = numberFromString(
+  v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(1),
+    v.maxValue(DATA_BOX_MESSAGE_STATUSES.length),
+  ),
+);
+
 const fieldStatus = (element: Element) => {
   const text = fieldText(element, "dmMessageStatus");
   if (text === null || !/^\d{1,2}$/u.test(text)) {
     return null;
   }
-  const code = Number(text);
-  if (code < 1 || code > DATA_BOX_MESSAGE_STATUSES.length) {
-    return null;
-  }
-  return DATA_BOX_MESSAGE_STATUSES.at(code - 1) ?? null;
+  const code = v.safeParse(statusCodeSchema, text);
+  return code.success
+    ? (DATA_BOX_MESSAGE_STATUSES.at(code.output - 1) ?? null)
+    : null;
 };
 
 const boxId = (element: Element, localName: string) => {

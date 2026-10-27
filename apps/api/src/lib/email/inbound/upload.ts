@@ -45,6 +45,7 @@ import {
   parseEmailFile,
 } from "@/api/lib/email/inbound/message";
 import { finishCorrespondenceAttachments } from "@/api/lib/email/inbound/persistence";
+import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -626,7 +627,7 @@ const attemptUploadedMail = async ({
           verifyOriginal,
         }),
       },
-      sender: file.uploaderEmail.toLowerCase(),
+      sender: normalizeEmail(file.uploaderEmail),
       receivedAt: file.createdAt.toISOString(),
     }),
     attachments: [],

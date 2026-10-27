@@ -129,8 +129,13 @@ const fileMessage = async ({
 };
 
 const contextFor = (tx: Tx) => ({
+  route: "/v1/organization-settings/correspondence/data-boxes",
   memberRole: sessionMemberRole("owner"),
-  user: { id: ids.userA1 },
+  user: {
+    id: ids.userA1,
+    email: `${ids.userA1}@example.test`,
+    emailVerified: true,
+  },
   request: new Request("https://api.example.test/organization-settings"),
   session: { activeOrganizationId: ids.orgA },
   safeDb: asTestRaw<SafeDb>(
@@ -186,7 +191,7 @@ const directionOf = async (tx: Tx, id: SafeId<"correspondence">) => {
     ...contextFor(tx),
     workspaceId: stored.workspaceId,
     session: { activeOrganizationId: stored.organizationId },
-    user: { id: userId },
+    user: { id: userId, email: `${userId}@example.test`, emailVerified: true },
     safeDb: createSafeDb(
       markRlsDatabase(tx),
       [stored.workspaceId],

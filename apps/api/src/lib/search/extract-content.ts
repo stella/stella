@@ -23,6 +23,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import {
   resolveRuntimeWorkerPath,
@@ -210,6 +211,9 @@ export const extractFileText = async (
     return result.value;
   }
 
-  captureError(result.error, context);
+  captureError(
+    result.error,
+    handlerErrorContext("search.extractFileText.result_error", context),
+  );
   return null;
 };

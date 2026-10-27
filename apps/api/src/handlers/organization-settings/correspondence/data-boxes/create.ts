@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
@@ -32,7 +32,7 @@ const config = {
     reason: "correspondence",
     consumesServices: false,
   },
-  body: t.Object({ boxId: dataBoxIdSchema }),
+  body: v.object({ boxId: dataBoxIdSchema }),
 } satisfies HandlerConfig;
 
 const addOrganizationDataBox = createSafeRootHandler(

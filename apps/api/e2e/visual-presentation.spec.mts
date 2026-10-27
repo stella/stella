@@ -18,7 +18,7 @@ test.beforeAll(() => {
       "--target=browser",
       "--format=esm",
     ],
-    { encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, encoding: "utf-8" },
   );
 });
 

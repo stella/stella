@@ -1,31 +1,21 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
-export const dateOfBirthSchema = t.Union([
-  t.Object(
-    {
-      precision: t.Literal("year"),
-      year: t.Integer({ minimum: 1000, maximum: 9999 }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      precision: t.Literal("month"),
-      year: t.Integer({ minimum: 1000, maximum: 9999 }),
-      month: t.Integer({ minimum: 1, maximum: 12 }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      precision: t.Literal("day"),
-      year: t.Integer({ minimum: 1000, maximum: 9999 }),
-      month: t.Integer({ minimum: 1, maximum: 12 }),
-      day: t.Integer({ minimum: 1, maximum: 31 }),
-    },
-    { additionalProperties: false },
-  ),
+export const dateOfBirthSchema = v.union([
+  v.strictObject({
+    precision: v.literal("year"),
+    year: v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999)),
+  }),
+  v.strictObject({
+    precision: v.literal("month"),
+    year: v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999)),
+    month: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12)),
+  }),
+  v.strictObject({
+    precision: v.literal("day"),
+    year: v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999)),
+    month: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12)),
+    day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(31)),
+  }),
 ]);
 
-export type DateOfBirth = Static<typeof dateOfBirthSchema>;
+export type DateOfBirth = v.InferOutput<typeof dateOfBirthSchema>;

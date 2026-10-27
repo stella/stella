@@ -11,6 +11,7 @@ import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -69,6 +70,10 @@ if (!databaseUrl || !runPostgres) {
             name: "Presence test organization",
             slug: organizationId,
             createdAt: new Date(),
+          });
+          await recordNewOrganizationAccessState(firstDb, {
+            organizationId,
+            now: new Date(),
           });
           await firstDb.insert(member).values({
             id: mintAuthProviderIdValue(),
@@ -253,6 +258,10 @@ if (!databaseUrl || !runPostgres) {
             name: "Presence lifecycle organization",
             slug: organizationId,
             createdAt: new Date(),
+          });
+          await recordNewOrganizationAccessState(reportingDb, {
+            organizationId,
+            now: new Date(),
           });
           await reportingDb.insert(member).values([
             {

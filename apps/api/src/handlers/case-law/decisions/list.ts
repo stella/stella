@@ -1,17 +1,25 @@
-import { and, desc, eq, not, sql } from "drizzle-orm";
+import { panic } from "better-result";
+import { and, asc, desc, eq, not, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { numberFromString } from "@stll/api-contract/http-input";
+import {
+  DECISION_LIST_SORTS,
+  type DecisionListSort,
+  DEFAULT_DECISION_LIST_SORT,
+} from "@stll/api-contract/search";
 import { isUuid } from "@stll/uuid-codec";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -23,8 +31,8 @@ import {
 } from "@/api/lib/case-law/court-presentation";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
+  decisionPageOffsetSchema,
   decisionPageRequestRefusal,
-  tDecisionPageOffset,
 } from "@/api/lib/case-law/decision-page-offset";
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
@@ -36,9 +44,9 @@ import {
   redistributableCaseLawSourceFor,
 } from "@/api/lib/case-law/redistribution";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import {
   readPublicLawCountry,
@@ -54,71 +62,170 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
-export const listDecisionsQuerySchema = t.Object({
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  cursor: t.Optional(tPaginationCursor()),
-  // A page addressed by number; exclusive with `cursor` and bounded like the
-  // search's (`LIMITS.caseLawResultDepthMax`).
-  offset: t.Optional(tDecisionPageOffset()),
-  court: t.Optional(t.String({ maxLength: 512 })),
+export const listDecisionsQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
+  ),
+  cursor: v.optional(paginationCursorSchema()),
+  offset: v.exactOptional(numberFromString(decisionPageOffsetSchema())),
+  court: v.optional(v.pipe(v.string(), v.maxLength(512))),
   country: tPublicLawCountry,
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
-  decisionType: t.Optional(t.String({ maxLength: 128 })),
-  sourceId: t.Optional(tSafeId("caseLawSource")),
-  language: t.Optional(t.String({ maxLength: 8 })),
+  dateFrom: v.optional(apiDateSchema),
+  dateTo: v.optional(apiDateSchema),
+  decisionType: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  sourceId: v.optional(resourceIdSchema("caseLawSource")),
+  language: v.optional(v.pipe(v.string(), v.maxLength(8))),
+  sort: v.optional(v.picklist(DECISION_LIST_SORTS)),
 });
 
-type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
+type ListDecisionsQuery = v.InferOutput<typeof listDecisionsQuerySchema>;
 
 /**
- * The browse walk is newest decision first. Undated decisions sort last, as
- * one band, which is what the corpus-generation cursor index already stores
- * (`coalesce(decision_date, '-infinity')`, then id), so the walk is an index
- * range in either direction.
+ * The browse walk's sort key. Undated decisions coalesce to `-infinity`, one
+ * band, which is what the browse indexes store (`coalesce(decision_date,
+ * '-infinity')`, then id), so a walk in either direction is an index range:
+ * newest first reads it backward, oldest first forward.
  */
 export const decisionDateSortKeySql = (decisionDate: SQLWrapper): SQL<string> =>
   sql<string>`coalesce(${decisionDate}, '-infinity'::date)`;
 
-/** Where a browse page ended: the last row's decision date (null when undated) and id. */
-type DecisionDateCursor = {
-  decisionDate: string | null;
-  id: SafeId<"caseLawDecision">;
-};
+/**
+ * Where a browse page ended, in the order it was read: the last row's
+ * decision date and id. Bound to the order, because a position in one walk is
+ * not a position in the other. An oldest-first walk lists dated decisions
+ * only (`decisionListDatedConditions`), so its cursor always has a date.
+ */
+type DecisionDateCursor =
+  | {
+      sort: "newest";
+      /** Null in the undated band, which a newest-first walk ends with. */
+      decisionDate: string | null;
+      id: SafeId<"caseLawDecision">;
+    }
+  | {
+      sort: "oldest";
+      decisionDate: string;
+      id: SafeId<"caseLawDecision">;
+    };
 
 export const encodeDecisionDateCursor = ({
+  sort,
   decisionDate,
   id,
-}: DecisionDateCursor): string => encodePaginationCursor([decisionDate, id]);
+}: DecisionDateCursor): string =>
+  encodePaginationCursor([sort, decisionDate, id]);
 
+/** The cursor a listed row ends its page with, in the order it was read. */
+const decisionDateCursorFor = (
+  sort: DecisionListSort,
+  { decisionDate, id }: { decisionDate: string | null; id: string },
+): DecisionDateCursor => {
+  const decisionId = brandPersistedCaseLawDecisionId(id);
+  switch (sort) {
+    case "newest":
+      return { sort, decisionDate, id: decisionId };
+    case "oldest":
+      return {
+        sort,
+        decisionDate:
+          decisionDate ??
+          panic("An oldest-first page listed a decision with no date"),
+        id: decisionId,
+      };
+    default:
+      sort satisfies never;
+      return panic(`Unhandled decision list sort: ${String(sort)}`);
+  }
+};
+
+/**
+ * The position a request resumes from, or null for a cursor this order did
+ * not issue: one of the other order, or an undated position, which no
+ * oldest-first page ends on.
+ */
 export const decodeDecisionDateCursor = (
   cursor: string,
+  sort: DecisionListSort,
 ): DecisionDateCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts?.length !== 2) {
+  if (parts?.length !== 3) {
     return null;
   }
-  const [decisionDate, id] = parts;
+  const [cursorSort, decisionDate, id] = parts;
   if (
+    cursorSort !== sort ||
     typeof id !== "string" ||
     !isUuid(id) ||
-    (decisionDate !== null && !isDateOnlyPaginationCursorPart(decisionDate))
+    (decisionDate !== null && !isDateOnlyPaginationCursorPart(decisionDate)) ||
+    (sort === "oldest" && decisionDate === null)
   ) {
     return null;
   }
-  return { decisionDate, id: brandPersistedCaseLawDecisionId(id) };
+  return decisionDateCursorFor(sort, { decisionDate, id });
 };
 
 /**
  * Rows strictly after the cursor in walk order. One row comparison on the same
  * expressions the ORDER BY uses, so the predicate and the sort cannot drift.
  */
-const decisionDateKeysetAfter = ({
-  decisionDate,
-  id,
-}: DecisionDateCursor): SQL =>
-  sql`(${decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)}, ${publishedCaseLawDecisions.id})
-    < (coalesce(${decisionDate}::date, '-infinity'::date), ${id}::uuid)`;
+const decisionDateKeysetAfter = (cursor: DecisionDateCursor): SQL => {
+  const key = sql`(${decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)}, ${publishedCaseLawDecisions.id})`;
+  const position = sql`(coalesce(${cursor.decisionDate}::date, '-infinity'::date), ${cursor.id}::uuid)`;
+  switch (cursor.sort) {
+    case "newest":
+      return sql`${key} < ${position}`;
+    case "oldest":
+      return sql`${key} > ${position}`;
+    default:
+      cursor satisfies never;
+      return panic(`Unhandled decision list cursor: ${String(cursor)}`);
+  }
+};
+
+/**
+ * The walk's ORDER BY: the sort key, then id, both in the order's direction,
+ * so each browse index serves either order as one range read one way.
+ */
+const decisionListOrderBy = (sort: DecisionListSort): SQL[] => {
+  const key = decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate);
+  switch (sort) {
+    case "newest":
+      return [desc(key), desc(publishedCaseLawDecisions.id)];
+    case "oldest":
+      return [asc(key), asc(publishedCaseLawDecisions.id)];
+    default:
+      sort satisfies never;
+      return panic(`Unhandled decision list sort: ${String(sort)}`);
+  }
+};
+
+/**
+ * The decisions an order has a place for. Newest first keeps the undated band
+ * at its end, where the backward walk reaches it last. Oldest first lists
+ * dated decisions only, as the search's date order does
+ * (`decisionDatedFilterSql`): read forward, the `-infinity` band would lead
+ * every first page, and a decision the source never dated is not the oldest.
+ * Stated on the sort key, so the exclusion is where the index range starts
+ * rather than a filter over it. Applied to the siblings as well, like the
+ * request filters: an undated version the order excludes must not hide a
+ * dated one it lists.
+ */
+const decisionListDatedConditions = (
+  sort: DecisionListSort,
+  table: Pick<DecisionFilterColumns, "decisionDate">,
+): SQL[] => {
+  switch (sort) {
+    case "newest":
+      return [];
+    case "oldest":
+      return [
+        sql`${decisionDateSortKeySql(table.decisionDate)} > '-infinity'::date`,
+      ];
+    default:
+      sort satisfies never;
+      return panic(`Unhandled decision list sort: ${String(sort)}`);
+  }
+};
 
 /** The language versions of a decision, so the sibling rule can be applied to them. */
 const sibling = alias(publishedCaseLawDecisions, "sibling");
@@ -179,6 +286,7 @@ const decisionFilterConditions = (
 
 type ListDecisionsPageQueryOptions = {
   query: ListDecisionsQuery;
+  sort: DecisionListSort;
   limit: number;
   cursor: DecisionDateCursor | undefined;
   /**
@@ -192,6 +300,7 @@ type ListDecisionsPageQueryOptions = {
 /** The browse read, exposed so its access path can be checked on the real builder. */
 export const listDecisionsPageQuery = ({
   query,
+  sort,
   limit,
   cursor,
   offset = 0,
@@ -200,6 +309,7 @@ export const listDecisionsPageQuery = ({
   const conditions: SQL[] = [
     redistributableCaseLawSource,
     ...decisionFilterConditions(query, publishedCaseLawDecisions),
+    ...decisionListDatedConditions(sort, publishedCaseLawDecisions),
   ];
   if (cursor !== undefined) {
     conditions.push(decisionDateKeysetAfter(cursor));
@@ -228,6 +338,7 @@ export const listDecisionsPageQuery = ({
         sql`(${sibling.createdAt}, ${sibling.id}) < (${publishedCaseLawDecisions.createdAt}, ${publishedCaseLawDecisions.id})`,
         redistributableCaseLawSourceFor(siblingSource.descriptor),
         ...decisionFilterConditions(query, sibling),
+        ...decisionListDatedConditions(sort, sibling),
       ),
     )
     .limit(1);
@@ -248,10 +359,7 @@ export const listDecisionsPageQuery = ({
         not(hasEarlierSibling),
       ),
     )
-    .orderBy(
-      desc(decisionDateSortKeySql(publishedCaseLawDecisions.decisionDate)),
-      desc(publishedCaseLawDecisions.id),
-    )
+    .orderBy(...decisionListOrderBy(sort))
     .limit(limit + 1)
     .offset(offset);
 };
@@ -293,8 +401,9 @@ export const listDecisionsHandler = async (
   if (pageRefusal !== null) {
     return status(400, { message: pageRefusal });
   }
+  const sort = query.sort ?? DEFAULT_DECISION_LIST_SORT;
   const cursor = query.cursor
-    ? decodeDecisionDateCursor(query.cursor)
+    ? decodeDecisionDateCursor(query.cursor, sort)
     : undefined;
   if (cursor === null) {
     return status(400, { message: "Invalid cursor" });
@@ -303,6 +412,7 @@ export const listDecisionsHandler = async (
   const decisions = await caseLawDb((tx) =>
     listDecisionsPageQuery({
       query: scopedQuery,
+      sort,
       limit,
       cursor,
       offset: query.offset,
@@ -364,9 +474,11 @@ export const listDecisionsHandler = async (
     }),
     limit,
     cursorForItem: (item) =>
-      encodeDecisionDateCursor({
-        decisionDate: item.decisionDate,
-        id: item.id,
-      }),
+      encodeDecisionDateCursor(
+        decisionDateCursorFor(sort, {
+          decisionDate: item.decisionDate,
+          id: item.id,
+        }),
+      ),
   });
 };

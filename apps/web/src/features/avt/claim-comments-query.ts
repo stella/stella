@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { collectAnnotationPages } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -50,7 +50,7 @@ export const claimCommentsOptions = (key: ClaimCommentsKey) =>
           },
           fetch: { signal },
         });
-        return unwrapEden(page);
+        return unwrapApiResponse(page);
       }),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

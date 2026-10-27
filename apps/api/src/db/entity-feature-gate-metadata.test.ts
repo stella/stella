@@ -28,6 +28,8 @@ import {
 } from "@/api/tests/fixtures/entity-feature-migrations";
 import { createPolicyStatementsOf } from "@/api/tests/helpers/lock-taking-sql";
 
+import { updateEntityFeatureGateMigration } from "../../scripts/generate-entity-feature-gate-propagation";
+
 const scopePolicies = (tableName: string) => {
   const workspaceScope = sql`CASE WHEN workspace_id = ANY(COALESCE(NULLIF((SELECT pg_catalog.current_setting('app.workspace_ids', true)), '')::uuid[], ARRAY[]::uuid[])) THEN true ELSE workspace_id IN (SELECT aw.authorized_workspace_id FROM public.stella_authorized_workspaces aw) END`;
   const organizationScope = sql`organization_id = (SELECT current_setting('app.organization_id', true))`;
@@ -616,4 +618,41 @@ test("the version gate's direct parent lookup covers its complete inherited scop
     ],
   });
   expect(versions?.refs).toHaveLength(1);
+});
+
+test("migration regeneration preserves surrounding fences and is a fixed point", () => {
+  const source = `-- requires: fixture_source
+SET lock_timeout = '1s';
+CREATE OR REPLACE FUNCTION public.entity_feature_gate_graph() RETURNS jsonb LANGUAGE sql AS $graph$ SELECT $metadata\${}$metadata$::jsonb $graph$;
+-- lifecycle policies and grants stay here
+CREATE OR REPLACE FUNCTION public.entity_feature_gate_propagate() RETURNS trigger LANGUAGE plpgsql AS $function$ BEGIN RETURN NULL; END $function$;
+-- source lifecycle trigger stays here
+`;
+  const tables = Object.values(schema).filter((table) => is(table, PgTable));
+  const descriptors = entityFeatureGateMetadata(tables);
+  for (const selected of [[], descriptors.slice(0, 1), descriptors]) {
+    const updated = updateEntityFeatureGateMigration(source, selected);
+    expect(updateEntityFeatureGateMigration(updated, selected)).toBe(updated);
+    expect(
+      updated.startsWith(
+        "-- requires: fixture_source\nSET lock_timeout = '1s';\n",
+      ),
+    ).toBe(true);
+    expect(updated).toContain("-- lifecycle policies and grants stay here");
+    expect(updated.endsWith("-- source lifecycle trigger stays here\n")).toBe(
+      true,
+    );
+    expect(updated).toContain(entityFeatureGatePropagationSql(selected));
+    expect(() =>
+      updateEntityFeatureGateMigration(source + source, selected),
+    ).toThrow("Expected exactly one generated entity feature routine");
+  }
+});
+
+test("migration regeneration refuses absent generated routines", () => {
+  for (const source of ["", "-- migration without generated routines"]) {
+    expect(() => updateEntityFeatureGateMigration(source, [])).toThrow(
+      "Expected exactly one generated entity feature routine",
+    );
+  }
 });

@@ -60,6 +60,7 @@
     "@neftaly/editcontext-polyfill": "^0.1.1",
     "@silurus/ooxml": "catalog:",
     "@standard-schema/spec": "^1.1.0",
+    "@stll/agent-input": "workspace:^",
     "@stll/aho-corasick": "catalog:",
     "@stll/aho-corasick-wasm": "catalog:",
     "@stll/ai-catalog": "workspace:*",
@@ -97,7 +98,6 @@
     "@stll/portable-path": "workspace:*",
     "@stll/regex-set": "catalog:",
     "@stll/regex-set-wasm": "catalog:",
-    "@stll/scan-engine": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/ssr-kit": "workspace:^",
@@ -186,7 +186,7 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
     "@stll/playwright-tools": "workspace:*",
     "@stll/property-testing": "workspace:*",

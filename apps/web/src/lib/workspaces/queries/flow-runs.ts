@@ -5,7 +5,7 @@ import {
   isTerminalFlowRunStatus,
 } from "@/components/flows/flow-meta";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { flowRunsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -64,7 +64,7 @@ export const flowRunsOptions = ({
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .flows.runs.get({ query, fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     // Poll while any listed run is still active; the function form returns
     // `false` once everything is terminal so the interval clears itself.
@@ -91,7 +91,7 @@ export const flowRunDetailOptions = (workspaceId: string, runId: string) =>
         .flows.runs({ runId: toSafeId<"flowRun">(runId) })
         .get({ fetch: { signal } });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     refetchInterval: (query) => {
       const data = query.state.data;

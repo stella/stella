@@ -27,6 +27,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { restoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
@@ -362,7 +363,12 @@ const recordDocxVersionLanguage = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(recorded)) {
-    captureError(recorded.error, { source: "native-extraction-docx-language" });
+    captureError(
+      recorded.error,
+      handlerErrorContext("search.recordDocxVersionLanguage.recorded_error", {
+        source: "native-extraction-docx-language",
+      }),
+    );
   }
 };
 

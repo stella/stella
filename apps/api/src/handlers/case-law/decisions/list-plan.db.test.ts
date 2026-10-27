@@ -2,7 +2,12 @@ import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import type { Static } from "elysia";
+import type * as v from "valibot";
+
+import {
+  DECISION_LIST_SORTS,
+  type DecisionListSort,
+} from "@stll/api-contract/search";
 
 import { caseLawSources } from "@/api/db/schema";
 import {
@@ -63,15 +68,36 @@ afterAll(async () => {
   await client.close();
 });
 
-test(
-  "the decision list keeps its index path with grouped and ungrouped rows",
-  async () => {
+/**
+ * The scan each order reads the walk index with: a range read in one
+ * direction, so the page limit stops it. Total over the orders, so a new one
+ * does not compile until it states the direction its plan must show.
+ */
+const WALK_SCAN_NODE = {
+  newest: "Index Scan Backward",
+  oldest: "Index Scan",
+} as const satisfies Record<DecisionListSort, string>;
+
+/**
+ * Where the walk starts. Oldest first skips the undated band as the start of
+ * the index range, not as a filter over the rows the range returns.
+ */
+const DATED_BAND_COND = {
+  newest: "\\)?\\n",
+  oldest:
+    " AND \\(COALESCE\\(decision_date, '-infinity'::date\\) > '-infinity'::date\\)\\)\\n",
+} as const satisfies Record<DecisionListSort, string>;
+
+test.each(DECISION_LIST_SORTS)(
+  "the %s-first decision list keeps its index path with grouped and ungrouped rows",
+  async (sort) => {
     const plans = await withPublicLawReaderRole(db, async (roleTx) => {
       // SAFETY: the role transaction supplies the select surface the read uses.
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
       const tx = roleTx as unknown as CaseLawPublicReadTransaction;
       const query = listDecisionsPageQuery({
         query: { country: "CZE" },
+        sort,
         limit: 50,
         cursor: undefined,
         tx,
@@ -87,8 +113,11 @@ test(
       return { natural, forced, rows };
     });
 
-    const indexedDecisionScan =
-      /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: \(\(country\)::text = 'CZE'::text\)/u;
+    const scan = WALK_SCAN_NODE[sort];
+    const indexedDecisionScan = new RegExp(
+      `${scan} using case_law_decisions_country_date_published_idx on case_law_decisions\\n\\s+Index Cond: \\(+\\(country\\)::text = 'CZE'::text\\)${DATED_BAND_COND[sort]}`,
+      "u",
+    );
     expect(plans.natural).toMatch(indexedDecisionScan);
     expect(plans.forced).toMatch(indexedDecisionScan);
     for (const plan of [plans.natural, plans.forced]) {
@@ -96,10 +125,13 @@ test(
       // join (anti or lateral) the planner misjudges how many rows survive it
       // and sorts the whole country instead of stopping after one page.
       expect(plan).toMatch(
-        /Index Scan Backward using case_law_decisions_country_date_published_idx on case_law_decisions\n\s+Index Cond: [^\n]+\n\s+Filter: \(NOT EXISTS\(SubPlan \d+\)\)/u,
+        new RegExp(
+          `${scan} using case_law_decisions_country_date_published_idx on case_law_decisions\\n\\s+Index Cond: [^\\n]+\\n\\s+Filter: \\(NOT EXISTS\\(SubPlan \\d+\\)\\)`,
+          "u",
+        ),
       );
       expect(plan).not.toMatch(/Anti Join|Left Join/u);
-      expect(plan.slice(0, plan.indexOf("Index Scan Backward"))).not.toMatch(
+      expect(plan.slice(0, plan.indexOf(`${scan} using`))).not.toMatch(
         /\b(Sort|Bitmap Heap Scan)\b/u,
       );
       expect(plan).toContain("case_law_decisions_lang_group_idx");
@@ -115,12 +147,18 @@ test(
   DB_TEST_TIMEOUT_MS,
 );
 
-type BrowseQuery = Static<typeof listDecisionsQuerySchema>;
-type BrowseFilter = Exclude<keyof BrowseQuery, "cursor" | "limit" | "offset">;
+type BrowseQuery = v.InferOutput<typeof listDecisionsQuerySchema>;
+type BrowseFilter = Exclude<
+  keyof BrowseQuery,
+  "cursor" | "limit" | "offset" | "sort"
+>;
 
 /** The indexes whose order is the walk's: a page is a range of one of them. */
-const WALK_SCAN =
-  /Index Scan Backward using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\n\s+Index Cond: ([^\n]+)/u;
+const walkScan = (sort: DecisionListSort) =>
+  new RegExp(
+    `${WALK_SCAN_NODE[sort]} using (case_law_decisions_country_date_published_idx|case_law_decisions_country_court_date_idx|case_law_decisions_corpus_generation_date_cursor_idx) on case_law_decisions\\n\\s+Index Cond: ([^\\n]+)`,
+    "u",
+  );
 
 type FilterAccess =
   | {
@@ -190,13 +228,14 @@ const FILTER_ACCESS = {
   },
 } as const satisfies Record<BrowseFilter, FilterAccess>;
 
-const explainWalk = async (query: BrowseQuery) =>
+const explainWalk = async (query: BrowseQuery, sort: DecisionListSort) =>
   await withPublicLawReaderRole(db, async (roleTx) => {
     // SAFETY: the role transaction supplies the select surface the read uses.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
     const tx = roleTx as unknown as CaseLawPublicReadTransaction;
     const page = listDecisionsPageQuery({
       query,
+      sort,
       limit: 50,
       cursor: undefined,
       tx,
@@ -212,8 +251,8 @@ const explainWalk = async (query: BrowseQuery) =>
   });
 
 /** A walk index read in order, with nothing above it re-sorting its rows. */
-const orderedWalk = (plan: string) => {
-  const walk = WALK_SCAN.exec(plan);
+const orderedWalk = (plan: string, sort: DecisionListSort) => {
+  const walk = walkScan(sort).exec(plan);
   expect(walk, plan).not.toBeNull();
   // The page limit stops the walk only when nothing above it re-sorts or
   // re-reads the rows it returns.
@@ -223,14 +262,20 @@ const orderedWalk = (plan: string) => {
   return walk;
 };
 
-test.each(Object.entries(FILTER_ACCESS))(
-  "the browse walk reads its %s filter through the access path it declares",
-  async (_filter, access) => {
-    for (const plan of await explainWalk(access.query)) {
+test.each(
+  DECISION_LIST_SORTS.flatMap((sort) =>
+    Object.entries(FILTER_ACCESS).map(
+      ([filter, access]) => [sort, filter, access] as const,
+    ),
+  ),
+)(
+  "the %s-first browse walk reads its %s filter through the access path it declares",
+  async (sort, _filter, access) => {
+    for (const plan of await explainWalk(access.query, sort)) {
       expect(plan).not.toContain("Seq Scan on case_law_decisions");
       switch (access.type) {
         case "walk-range":
-          expect(orderedWalk(plan)?.[2]).toMatch(access.indexCond);
+          expect(orderedWalk(plan, sort)?.[2]).toMatch(access.indexCond);
           break;
         case "index-probe":
           expect(
@@ -241,7 +286,7 @@ test.each(Object.entries(FILTER_ACCESS))(
           ).toBe(true);
           break;
         case "walk-filter":
-          orderedWalk(plan);
+          orderedWalk(plan, sort);
           break;
         default:
           access satisfies never;

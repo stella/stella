@@ -27,6 +27,7 @@ import {
   detectFileEncryption,
   retainedFileEncryption,
 } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 class InboundAttachmentAlreadyLinked extends TaggedError(
@@ -216,7 +217,10 @@ export const finishCorrespondenceAttachments = async ({
               mimeType: file.mimeType,
               scanned: file,
             }),
-            { mimeType: file.mimeType, stage: "inbound-attachment" },
+            handlerErrorContext("inboundMail.detectEncryption", {
+              mimeType: file.mimeType,
+              stage: "inbound-attachment",
+            }),
           ),
         ] as const,
     }),
