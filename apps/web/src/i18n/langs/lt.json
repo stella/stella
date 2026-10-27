@@ -508,14 +508,20 @@
     "amount": "Suma",
     "amountMustBePositive": "Suma turi būti didesnė už nulį",
     "approval": {
+      "approveAll": "{count, plural, one {Patvirtinti # įrašą} few {Patvirtinti visus # įrašus} many {Patvirtinti visus # įrašo} other {Patvirtinti visus # įrašų}}",
       "approveSelected": "Patvirtinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
+      "billedTotal": "Apmokestinta {duration}",
       "empty": "Šioje byloje nieko nelaukia patvirtinimo.",
+      "emptyWeek": "Šią savaitę nieko nelaukia patvirtinimo. Pateiktas laikas rodomas čia.",
+      "everyone": "Visi",
       "failed": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
       "myTime": "Mano laikas",
+      "pending": "{count, plural, one {# įrašas laukia patvirtinimo} few {# įrašai laukia patvirtinimo} many {# įrašo laukia patvirtinimo} other {# įrašų laukia patvirtinimo}}",
       "refusals": {
         "invalidEntry": "Pridėkite aprašymą ir patikrinkite darbo datą, tada patvirtinkite įrašą.",
         "notApprover": "Šį įrašą gali patvirtinti tik jam priskirtas tvirtintojas arba administratorius.",
         "notFound": "Šio įrašo nebėra. Atnaujinkite sąrašą.",
+        "notSubmitted": "Šis įrašas dar nepateiktas. Pirmiausia jį turi pateikti jo autorius.",
         "runningTimer": "Prieš tvirtindami įrašą sustabdykite veikiantį laikmatį.",
         "unpriced": "Šis įrašas neturi įkainio. Nustatykite šios bylos įkainį ir tada patvirtinkite įrašą.",
         "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
@@ -530,6 +536,17 @@
     "batchActions": "Grupiniai veiksmai",
     "billable": "Apmokamas",
     "billedAmount": "Apskaičiuota suma",
+    "clientComposer": {
+      "flatFeeNote": "Bylų su fiksuotu atlygiu sąskaitas išrašykite bylos sąskaitų puslapyje.",
+      "includeMatter": "Įtraukti {matterName}",
+      "invalidPeriod": "Pasirinkite pabaigos datą, ne ankstesnę nei pradžios data.",
+      "loadFailed": "Nepavyko įkelti darbų, už kuriuos dar neišrašyta sąskaita. Bandykite dar kartą.",
+      "matterSubtotal": "Bylos suma su PVM: {amount} · {share} sąskaitos",
+      "periodEnd": "Laikotarpio pabaiga",
+      "periodStart": "Laikotarpio pradžia",
+      "title": "Išrašyti sąskaitą klientui",
+      "visibility": "Šią sąskaitą mato tik asmenys, turintys prieigą prie visų įtrauktų bylų, ir atsiskaitymo administratoriai."
+    },
     "codes": {
       "activity": "Veikla",
       "activityCode": "Veiklos kodas",
@@ -673,6 +690,11 @@
       "invoiceDate": "Sąskaitos data",
       "invoiceDetail": "Sąskaitos detalės",
       "invoiceNumber": "Sąskaitos numeris",
+      "lineOverrides": {
+        "editedRecorded": "Pakeista · užregistruota: {description}, {quantity} × {rate}",
+        "quantity": "Kiekis",
+        "resetRecorded": "Atkurti užregistruotas reikšmes"
+      },
       "linkedExpenses": "Susietos išlaidos",
       "linkedTimeEntries": "Susieti laiko įrašai",
       "markPaid": "Pažymėti kaip apmokėtą",
@@ -811,6 +833,7 @@
       "approved": "Patvirtintas",
       "billed": "Išrašyta sąskaita",
       "draft": "Juodraštis",
+      "submitted": "Pateikta",
       "written_off": "Nurašytas"
     },
     "stopTimer": "Stabdyti",
@@ -2079,7 +2102,6 @@
       "orLetUsKnowAt": "arba parašykite mums adresu",
       "viewDocumentation": "Peržiūrėti dokumentaciją"
     },
-    "error": "Klaida",
     "expenses": "Išlaidos",
     "export": {
       "citations": "Citatos",
@@ -2153,6 +2175,7 @@
     "lastUpdated": "Paskutinis atnaujinimas",
     "layoutResetAfterProblem": "Po trikties atkurtas numatytasis išdėstymas.",
     "legalDatabase": "Teisinė duomenų bazė",
+    "loadFailed": "Nepavyko įkelti.",
     "loadMore": "Įkelti daugiau",
     "loading": "Įkeliama",
     "logTime": "Registruoti laiką",
@@ -2241,7 +2264,7 @@
     "showMore": "Rodyti daugiau",
     "showSecretValue": "Rodyti slaptą reikšmę",
     "signOut": "Atsijungti",
-    "somethingWentWrong": "Kažkas nepavyko",
+    "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
@@ -2718,7 +2741,7 @@
       "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
       "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
     },
-    "actionFailed": "Veiksmas nepavyko",
+    "actionFailed": "Nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
       "caseLawCountryUnavailable": "Šios šalies teismų praktika nepasiekiama. Pasirinkite kitą šalį.",
@@ -3269,7 +3292,7 @@
     "saveSerializeFailedTitle": "Nepavyko sukurti DOCX",
     "savingDocument": "Įrašoma...",
     "showDetails": "Rodyti detales",
-    "somethingWentWrong": "Kažkas nepavyko",
+    "somethingWentWrong": "Kažkas nepavyko. Bandykite dar kartą arba, jei tai kartojasi, iš naujo įkelkite puslapį.",
     "synced": "Sinchronizuota",
     "syncing": "Sinchronizuojama",
     "tableBordersAll": "Visos kraštinės",
@@ -5882,6 +5905,16 @@
       "pendingCount": "{count, plural, one {# pasiūlymas} few {# pasiūlymai} many {# pasiūlymo} other {# pasiūlymų}}",
       "previousWeek": "Ankstesnė savaitė",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Patikrinkite darbo datą, tada pateikite šį įrašą.",
+        "narrativeRequired": "Pridėkite aprašymą, tada pateikite šį įrašą.",
+        "runningTimer": "Sustabdykite veikiantį laikmatį, tada pateikite šį įrašą.",
+        "unpriced": "Šis įrašas neturi įkainio. Paprašykite įkainio bylai, tada jį pateikite."
+      },
+      "returned": "Grąžinta: {comment}",
+      "submitAndApprove": "Pateikti ir patvirtinti",
+      "submitResult": "Pateikta: {submitted} · patvirtinta: {approved} · taisytina: {refused}",
+      "submitWeek": "Pateikti savaitę",
       "title": "Mano savaitė",
       "totals": "Užregistruota: {logged} · apmokama: {billable}"
     }

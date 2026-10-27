@@ -1839,6 +1839,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
+    "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -2034,6 +2035,7 @@ const config = defineConfig({
     "./.oxlint-plugins/request-lifetime.ts",
     "./.oxlint-plugins/no-omitted-prop-respread.ts",
     "./.oxlint-plugins/no-duplicate-jsx-sibling-key.ts",
+    "./.oxlint-plugins/no-lazy-wrapped-content.ts",
     "./.oxlint-plugins/bun-test-hygiene.ts",
     "./.oxlint-plugins/test-timing.ts",
     "./.oxlint-plugins/no-same-fixture-member-oracle.ts",
@@ -2966,6 +2968,16 @@ const config = defineConfig({
       },
     },
     {
+      // Hermes, the mobile app's JavaScript engine, has no `Array#toSorted`,
+      // `Array#toReversed` or `Array#toSpliced`; app code sorts or reverses a
+      // fresh array instead (apps/mobile/src/architecture.test.ts).
+      files: ["apps/mobile/src/**/*.{ts,tsx}"],
+      rules: {
+        "unicorn/no-array-sort": "off",
+        "unicorn/no-array-reverse": "off",
+      },
+    },
+    {
       // Two guards contradict each other in apps/web; this override picks one.
       //
       // React Compiler: bails out of any component or hook containing a logical
@@ -3836,6 +3848,20 @@ const config = defineConfig({
       ],
       rules: {
         "no-duplicate-jsx-sibling-key/no-duplicate-jsx-sibling-key": "error",
+      },
+    },
+    {
+      // React mounts a Suspense boundary's content in place of its fallback,
+      // so a lazy chunk mounted around content already on screen (a reader,
+      // a viewer) replaces it, DOM node, scroll position and focus included.
+      // Lazy chunks mount beside the content they add to.
+      files: [
+        "apps/*/src/**/*.tsx",
+        "packages/*/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-lazy-wrapped-content.fixture.tsx",
+      ],
+      rules: {
+        "no-lazy-wrapped-content/no-lazy-wrapped-content": "error",
       },
     },
     {
@@ -4869,6 +4895,26 @@ const config = defineConfig({
       ],
       rules: {
         "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
+      },
+    },
+    {
+      // Tabs can remain open while another route family is active. Context
+      // belongs to shared providers, including for tabs owned outside inspector.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
+        "apps/web/src/**/*inspector*.tsx",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
+        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
+        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
+        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
+        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
+        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+      ],
+      rules: {
+        "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
           "error",
       },
     },

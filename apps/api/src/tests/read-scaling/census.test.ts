@@ -14,6 +14,7 @@ import {
 } from "../../../../../scripts/ledger-membership.ts";
 import apiLedger from "./api-scaling-ledger.json";
 import { claimCommentScalingScenarios } from "./claim-comments";
+import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { exactIconScalingScenario } from "./link-icons";
@@ -41,6 +42,7 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  clientInvoicePrefillScalingScenario,
   ...claimCommentScalingScenarios,
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,

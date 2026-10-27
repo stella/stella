@@ -22,7 +22,7 @@ const returnTimeEntry = createSafeRootHandler(
   {
     contract: "patch",
     description:
-      "Return one draft or approved time entry to draft with a required comment (up to 2000 characters). Only its assigned approver or an organization owner/admin may return it. Running timers and locked periods are refused. The owner keeps seeing the last comment while editing; re-approval clears it. Billed or written-off entries cannot be returned.",
+      "Return one submitted or approved time entry to draft with a required comment (up to 2000 characters). Only its assigned approver or an organization owner/admin may return it. A draft that was never returned is refused as not_submitted. Running timers and locked periods are refused. The owner keeps seeing the last comment while editing and can submit again; approval clears it. Billed or written-off entries cannot be returned.",
     permissions: { timeEntry: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },

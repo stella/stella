@@ -198,6 +198,16 @@ export const isSafeIdValue = (value: string): boolean =>
  * (the api closes `SafeIdType`) parses with this schema rather than restating
  * the check and its message.
  */
+/**
+ * A user id as the auth provider issues it: an opaque string, not a UUID, so
+ * every input that names a person accepts the same shape.
+ */
+export const userIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(128),
+);
+
 export const safeIdSchema = v.pipe(
   v.string(),
   v.check(isSafeIdValue, "Expected a non-empty, well-formed identifier"),

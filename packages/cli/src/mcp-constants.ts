@@ -111,6 +111,7 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
   [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,
   upstream_unavailable: EXIT_CODES.server,
+  public_read_timeout: EXIT_CODES.server,
   search_index_unavailable: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,

@@ -508,14 +508,20 @@
     "amount": "Summa",
     "amountMustBePositive": "Summai jābūt lielākai par nulli",
     "approval": {
+      "approveAll": "{count, plural, zero {Apstiprināt visus # ierakstus} one {Apstiprināt # ierakstu} other {Apstiprināt visus # ierakstus}}",
       "approveSelected": "Apstiprināt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
+      "billedTotal": "Rēķinā {duration}",
       "empty": "Šajā lietā nekas negaida apstiprinājumu.",
+      "emptyWeek": "Šonedēļ nekas negaida apstiprinājumu. Iesniegtais laiks parādās šeit.",
+      "everyone": "Visi",
       "failed": "Izmaiņas netika saglabātas. Mēģiniet vēlreiz.",
       "myTime": "Mans laiks",
+      "pending": "{count, plural, zero {# ierakstu apstiprināšanai} one {# ieraksts apstiprināšanai} other {# ieraksti apstiprināšanai}}",
       "refusals": {
         "invalidEntry": "Pievienojiet aprakstu un pārbaudiet darba datumu, pēc tam apstipriniet ierakstu.",
         "notApprover": "Šo ierakstu var apstiprināt tikai tam piešķirtais apstiprinātājs vai administrators.",
         "notFound": "Šis ieraksts vairs nepastāv. Atsvaidziniet sarakstu.",
+        "notSubmitted": "Šis ieraksts vēl nav iesniegts. Vispirms to iesniedz tā autors.",
         "runningTimer": "Pirms ieraksta apstiprināšanas apturiet aktīvo taimeri.",
         "unpriced": "Šim ierakstam nav likmes. Iestatiet likmi šai lietai un pēc tam apstipriniet ierakstu.",
         "wrongStatus": "Šis ieraksts vairs nav melnraksts. Atsvaidziniet sarakstu."
@@ -530,6 +536,17 @@
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
+    "clientComposer": {
+      "flatFeeNote": "Lietām ar fiksētu atlīdzību izrakstiet rēķinu attiecīgās lietas rēķinu lapā.",
+      "includeMatter": "Iekļaut {matterName}",
+      "invalidPeriod": "Izvēlieties beigu datumu, kas nav agrāks par sākuma datumu.",
+      "loadFailed": "Neizdevās ielādēt darbu, par kuru vēl nav izrakstīts rēķins. Mēģiniet vēlreiz.",
+      "matterSubtotal": "Lietas summa ar PVN: {amount} · {share} no rēķina",
+      "periodEnd": "Perioda beigas",
+      "periodStart": "Perioda sākums",
+      "title": "Izrakstīt rēķinu klientam",
+      "visibility": "Šis rēķins ir redzams tikai personām ar piekļuvi visām iekļautajām lietām un norēķinu administratoriem."
+    },
     "codes": {
       "activity": "Darbība",
       "activityCode": "Darbības kods",
@@ -673,6 +690,11 @@
       "invoiceDate": "Rēķina datums",
       "invoiceDetail": "Rēķina detaļas",
       "invoiceNumber": "Rēķina numurs",
+      "lineOverrides": {
+        "editedRecorded": "Rediģēts · reģistrēts: {description}, {quantity} × {rate}",
+        "quantity": "Daudzums",
+        "resetRecorded": "Atjaunot reģistrētās vērtības"
+      },
       "linkedExpenses": "Saistītie izdevumi",
       "linkedTimeEntries": "Saistītie laika ieraksti",
       "markPaid": "Atzīmēt kā apmaksātu",
@@ -811,6 +833,7 @@
       "approved": "Apstiprināts",
       "billed": "Izrakstīts rēķins",
       "draft": "Melnraksts",
+      "submitted": "Iesniegts",
       "written_off": "Norakstīts"
     },
     "stopTimer": "Apturēt",
@@ -2079,7 +2102,6 @@
       "orLetUsKnowAt": "vai rakstiet mums uz",
       "viewDocumentation": "Skatīt dokumentāciju"
     },
-    "error": "Kļūda",
     "expenses": "Izdevumi",
     "export": {
       "citations": "Atsauces",
@@ -2153,6 +2175,7 @@
     "lastUpdated": "Pēdējoreiz atjaunināts",
     "layoutResetAfterProblem": "Pēc kļūmes tika atjaunots noklusējuma izkārtojums.",
     "legalDatabase": "Juridiskā datubāze",
+    "loadFailed": "Neizdevās ielādēt.",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
     "logTime": "Reģistrēt laiku",
@@ -2241,7 +2264,7 @@
     "showMore": "Rādīt vairāk",
     "showSecretValue": "Rādīt slepeno vērtību",
     "signOut": "Atslēgties",
-    "somethingWentWrong": "Kaut kas nogāja greizi",
+    "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "sort": "Kārtot",
     "source": "Avots",
     "stale": "Novecojis",
@@ -2718,7 +2741,7 @@
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
       "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
     },
-    "actionFailed": "Darbība neizdevās",
+    "actionFailed": "Tas neizdevās. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
@@ -3269,7 +3292,7 @@
     "saveSerializeFailedTitle": "Neizdevās izveidot DOCX",
     "savingDocument": "Saglabā...",
     "showDetails": "Rādīt detaļas",
-    "somethingWentWrong": "Kaut kas nogāja greizi",
+    "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "synced": "Sinhronizēts",
     "syncing": "Sinhronizē",
     "tableBordersAll": "Visas apmales",
@@ -5882,6 +5905,16 @@
       "pendingCount": "{count, plural, zero {# ieteikumu} one {# ieteikums} other {# ieteikumi}}",
       "previousWeek": "Iepriekšējā nedēļa",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Pārbaudiet darba datumu un pēc tam iesniedziet šo ierakstu.",
+        "narrativeRequired": "Pievienojiet aprakstu un pēc tam iesniedziet šo ierakstu.",
+        "runningTimer": "Apturiet darbojošos taimeri un pēc tam iesniedziet šo ierakstu.",
+        "unpriced": "Šim ierakstam nav likmes. Palūdziet likmi lietai un pēc tam to iesniedziet."
+      },
+      "returned": "Atgriezts: {comment}",
+      "submitAndApprove": "Iesniegt un apstiprināt",
+      "submitResult": "Iesniegti: {submitted} · apstiprināti: {approved} · jālabo: {refused}",
+      "submitWeek": "Iesniegt nedēļu",
       "title": "Mana nedēļa",
       "totals": "Reģistrēts: {logged} · apmaksājams: {billable}"
     }

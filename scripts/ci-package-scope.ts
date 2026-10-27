@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { checkPoolRegistryPath } from "./ci-check-pool-registry";
 import { GENERATORS } from "./generated-files";
@@ -1199,15 +1200,34 @@ const retainedMarkdownReader = ({
 };
 
 let rootReaders: readonly MarkdownReader[] | undefined;
-export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
-  // The tracked checkout is fixed during a planning process; fixture roots
-  // remain uncached so tests and callers can change their declarations.
-  if (root === ROOT && rootReaders !== undefined) {
-    return rootReaders;
+type FinalizeMarkdownReadersOptions = {
+  root: string;
+  sourceFileOrder: readonly string[] | undefined;
+  readers: MarkdownReader[];
+};
+const finalizeMarkdownReaders = ({
+  root,
+  sourceFileOrder,
+  readers,
+}: FinalizeMarkdownReadersOptions) => {
+  readers.sort((left, right) => compareCodeUnit(left.file, right.file));
+  if (root === ROOT && sourceFileOrder === undefined) {
+    rootReaders = readers;
+  }
+  return readers;
+};
+export const markdownReaders = (
+  root = ROOT,
+  sourceFileOrder?: readonly string[],
+): readonly MarkdownReader[] => {
+  // Fixture roots remain uncached so tests can change their declarations.
+  const cached = sourceFileOrder === undefined ? rootReaders : undefined;
+  if (root === ROOT && cached !== undefined) {
+    return cached;
   }
   const policyReaders = markdownPolicyReaders(root);
   const readers: MarkdownReader[] = [...policyReaders];
-  for (const file of sourceFiles(root)) {
+  for (const file of sourceFileOrder ?? sourceFiles(root)) {
     const source = readFileSync(path.join(root, file), "utf-8").replace(
       /^#![^\n]*/u,
       "",
@@ -1395,10 +1415,7 @@ export const markdownReaders = (root = ROOT): readonly MarkdownReader[] => {
       });
     }
   }
-  if (root === ROOT) {
-    rootReaders = readers;
-  }
-  return readers;
+  return finalizeMarkdownReaders({ root, sourceFileOrder, readers });
 };
 
 export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>
