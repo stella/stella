@@ -14,6 +14,7 @@ export const FAILURE_TAGS = [
   "AggregateLockBusy",
   "AggregateLockUpgradeRefused",
   "AnonymizedFieldBoundaryError",
+  "ApiAccessTokenError",
   "AuthorizedWorkspaceReadError",
   "BackfillFailedError",
   "BackfillHeldError",

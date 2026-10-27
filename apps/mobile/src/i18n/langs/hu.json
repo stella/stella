@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Csevegés",
+    "tasks": "Feladatok",
+    "matters": "Ügyek",
+    "settings": "Beállítások"
+  },
+  "chat": {
+    "description": "Tartsa kéznél a folyamatban lévő munkát, és folytassa bármely eszközről.",
+    "emptyTitle": "Még nincsenek beszélgetések",
+    "emptyDescription": "Az új beszélgetések és a legutóbbi szálak itt jelennek meg."
+  },
+  "tasks": {
+    "description": "Lássa, mi igényel figyelmet, anélkül hogy a teljes munkaterületet megnyitná.",
+    "emptyTitle": "Nincsenek nyitott feladatok",
+    "emptyDescription": "A hozzárendelt és a közelgő feladatok itt jelennek meg."
+  },
+  "matters": {
+    "description": "Keressen meg egy ügyet, és gyorsan tekintse át a lényeges összefüggéseit.",
+    "emptyTitle": "Még nincsenek ügyek",
+    "emptyDescription": "A legutóbbi ügyei itt jelennek meg.",
+    "loadFailed": "Az ügyeit nem sikerült betölteni.",
+    "retry": "Próbálja újra"
+  },
+  "signIn": {
+    "title": "Bejelentkezés a stella szolgáltatásba",
+    "description": "Adja meg a stella szerver címét. A bejelentkezést a böngészőben hagyja jóvá.",
+    "serverLabel": "Szervercím",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Tovább",
+    "sessionEnded": "A munkamenete lejárt. Jelentkezzen be újra.",
+    "errors": {
+      "address": "Adjon meg egy https-címet, például: stella.example.com.",
+      "unreachable": "Ezen a címen nem válaszolt stella szerver.",
+      "denied": "A bejelentkezést nem hagyták jóvá.",
+      "failed": "A bejelentkezés nem fejeződött be. Próbálja újra."
+    }
+  },
+  "settings": {
+    "accountTitle": "Fiók",
+    "server": "Szerver",
+    "signOut": "Kijelentkezés"
+  }
+}

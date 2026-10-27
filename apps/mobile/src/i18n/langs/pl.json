@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Czat",
+    "tasks": "Zadania",
+    "matters": "Sprawy",
+    "settings": "Ustawienia"
+  },
+  "chat": {
+    "description": "Miej bieżącą pracę pod ręką i kontynuuj na dowolnym urządzeniu.",
+    "emptyTitle": "Brak rozmów",
+    "emptyDescription": "Tutaj pojawią się nowe rozmowy i ostatnie wątki."
+  },
+  "tasks": {
+    "description": "Sprawdź, co wymaga uwagi, bez otwierania całego obszaru roboczego.",
+    "emptyTitle": "Brak otwartych zadań",
+    "emptyDescription": "Tutaj pojawią się przypisane i nadchodzące zadania."
+  },
+  "matters": {
+    "description": "Znajdź sprawę i szybko poznaj najważniejszy kontekst.",
+    "emptyTitle": "Nie ma jeszcze spraw",
+    "emptyDescription": "Tutaj pojawią się Twoje ostatnie sprawy.",
+    "loadFailed": "Nie udało się wczytać Twoich spraw.",
+    "retry": "Spróbuj ponownie"
+  },
+  "signIn": {
+    "title": "Zaloguj się do stella",
+    "description": "Wpisz adres swojego serwera stella. Logowanie potwierdzisz w przeglądarce.",
+    "serverLabel": "Adres serwera",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Kontynuuj",
+    "sessionEnded": "Twoja sesja wygasła. Zaloguj się ponownie.",
+    "errors": {
+      "address": "Wpisz adres https, na przykład stella.example.com.",
+      "unreachable": "Pod tym adresem nie odpowiedział żaden serwer stella.",
+      "denied": "Logowanie nie zostało zatwierdzone.",
+      "failed": "Logowanie nie zostało ukończone. Spróbuj ponownie."
+    }
+  },
+  "settings": {
+    "accountTitle": "Konto",
+    "server": "Serwer",
+    "signOut": "Wyloguj się"
+  }
+}
