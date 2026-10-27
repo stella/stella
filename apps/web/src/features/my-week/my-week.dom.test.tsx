@@ -56,7 +56,9 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const draftEntry = (overrides: Partial<MyTimeEntry> = {}): MyTimeEntry =>
+type ClientEntry = Extract<MyTimeEntry, { activityGroup: "client" }>;
+
+const draftEntry = (overrides: Partial<ClientEntry> = {}): ClientEntry =>
   ({
     id: toSafeId<"timeEntry">("entry-1"),
     activityGroup: "client",
@@ -73,7 +75,7 @@ const draftEntry = (overrides: Partial<MyTimeEntry> = {}): MyTimeEntry =>
     source: "manual",
     timerStartedAt: null,
     ...overrides,
-  }) satisfies MyTimeEntry;
+  }) satisfies ClientEntry;
 
 const suggestion = {
   fingerprint: "a".repeat(64),
