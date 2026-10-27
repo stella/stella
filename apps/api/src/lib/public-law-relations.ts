@@ -218,6 +218,11 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
   updated_at: "required",
 } as const;
 
+/** Columns added after the previous release, which never reads them. */
+const CASE_LAW_DECISION_VIEW_ONLY_COLUMNS: ReadonlySet<string> = new Set<
+  keyof typeof CASE_LAW_DECISION_VIEW_COLUMN_GRANTS
+>(["extraction_warnings"]);
+
 /**
  * Expand phase: the previous release reads the base table, so the role keeps
  * its grants on it while this release reads the views. Every column is
@@ -226,9 +231,9 @@ const CASE_LAW_DECISION_VIEW_COLUMN_GRANTS = {
  * ships with the removal of this map.
  */
 const CASE_LAW_DECISION_BASE_COLUMN_GRANTS = Object.fromEntries(
-  Object.keys(CASE_LAW_DECISION_VIEW_COLUMN_GRANTS).map(
-    (column) => [column, "permitted"] as const,
-  ),
+  Object.keys(CASE_LAW_DECISION_VIEW_COLUMN_GRANTS)
+    .filter((column) => !CASE_LAW_DECISION_VIEW_ONLY_COLUMNS.has(column))
+    .map((column) => [column, "permitted"] as const),
 );
 
 export const CASE_LAW_DECISION_VIEWS = [
