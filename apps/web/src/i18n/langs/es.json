@@ -4306,7 +4306,8 @@
       "styleHighlight": "Resaltado",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartido con la organización"
+      "visibilityShared": "Compartido con la organización",
+      "visibilitySharedWithMatter": "Compartido con el asunto"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cita en bloque con referencia",
@@ -6470,6 +6471,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo oscuro",
+      "annotations": {
+        "commentedBy": "Comentario de {name}",
+        "detachedHeading": "Fuera de esta versión",
+        "detachedOtherVersion": "Creado en la versión {version}; la página ahora dice otra cosa.",
+        "detachedTextChanged": "Estas palabras ya no están en la página {page}.",
+        "empty": "Selecciona palabras del documento y elige Comentario.",
+        "highlightedBy": "Resaltado por {name}",
+        "refusedNoText": "Esta página no tiene texto que marcar. Ejecuta primero el reconocimiento de texto del documento.",
+        "refusedNotFound": "Estas palabras no aparecen en el texto de la página. Vuelve a seleccionarlas.",
+        "refusedTooLong": "Este pasaje es demasiado largo para marcarlo. Selecciona uno más corto."
+      },
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
       "evidence": "Prueba documental",

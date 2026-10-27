@@ -4306,7 +4306,8 @@
       "styleHighlight": "Izcēlums",
       "styleSquiggly": "Viļņota līnija",
       "styleStrikethrough": "Pārsvītrojums",
-      "visibilityShared": "Kopīgots ar organizāciju"
+      "visibilityShared": "Kopīgots ar organizāciju",
+      "visibilitySharedWithMatter": "Kopīgots ar lietu"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
@@ -6470,6 +6471,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pielāgot lapas tumšajam režīmam",
+      "annotations": {
+        "commentedBy": "Komentārs: {name}",
+        "detachedHeading": "Nav šajā versijā",
+        "detachedOtherVersion": "Izveidots {version}. versijā; lapas teksts kopš tā laika ir mainījies.",
+        "detachedTextChanged": "Šo vārdu {page}. lapā vairs nav.",
+        "empty": "Atlasiet dokumenta vārdus un izvēlieties Komentārs.",
+        "highlightedBy": "Iezīmēja: {name}",
+        "refusedNoText": "Šajā lapā nav teksta, ko iezīmēt. Vispirms palaidiet dokumenta teksta atpazīšanu.",
+        "refusedNotFound": "Šie vārdi lapas tekstā netika atrasti. Atlasiet tos vēlreiz.",
+        "refusedTooLong": "Šis fragments ir pārāk garš, lai to iezīmētu. Atlasiet īsāku."
+      },
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Dokumenta informācija",
       "evidence": "Pierādījums",

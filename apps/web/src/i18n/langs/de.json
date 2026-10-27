@@ -4306,7 +4306,8 @@
       "styleHighlight": "Markierung",
       "styleSquiggly": "Wellenlinie",
       "styleStrikethrough": "Durchstreichung",
-      "visibilityShared": "Mit der Organisation geteilt"
+      "visibilityShared": "Mit der Organisation geteilt",
+      "visibilitySharedWithMatter": "Mit der Akte geteilt"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
@@ -6470,6 +6471,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Seiten für Dunkelmodus anpassen",
+      "annotations": {
+        "commentedBy": "Kommentar von {name}",
+        "detachedHeading": "Nicht in dieser Version",
+        "detachedOtherVersion": "In Version {version} erstellt; die Seite lautet inzwischen anders.",
+        "detachedTextChanged": "Diese Wörter stehen nicht mehr auf Seite {page}.",
+        "empty": "Wörter im Dokument markieren und dann „Kommentar“ wählen.",
+        "highlightedBy": "Hervorgehoben von {name}",
+        "refusedNoText": "Diese Seite enthält keinen Text zum Markieren. Führen Sie zuerst die Texterkennung für das Dokument aus.",
+        "refusedNotFound": "Diese Wörter wurden im Text der Seite nicht gefunden. Markieren Sie sie erneut.",
+        "refusedTooLong": "Diese Passage ist zu lang zum Markieren. Wählen Sie eine kürzere."
+      },
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
       "evidence": "Beweismittel",

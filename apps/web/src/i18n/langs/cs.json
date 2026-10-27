@@ -4306,7 +4306,8 @@
       "styleHighlight": "Zvýraznění",
       "styleSquiggly": "Vlnovka",
       "styleStrikethrough": "Přeškrtnutí",
-      "visibilityShared": "Sdíleno s organizací"
+      "visibilityShared": "Sdíleno s organizací",
+      "visibilitySharedWithMatter": "Sdíleno se spisem"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citací",
@@ -6470,6 +6471,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Přizpůsobit stránky pro tmavý režim",
+      "annotations": {
+        "commentedBy": "Komentář: {name}",
+        "detachedHeading": "Mimo tuto verzi",
+        "detachedOtherVersion": "Vytvořeno ve verzi {version}; text stránky se mezitím změnil.",
+        "detachedTextChanged": "Tato slova už na straně {page} nejsou.",
+        "empty": "Označte slova v dokumentu a zvolte Komentář.",
+        "highlightedBy": "Zvýraznění: {name}",
+        "refusedNoText": "Na této straně není text k označení. Nejprve na dokumentu spusťte rozpoznávání textu.",
+        "refusedNotFound": "Tato slova se v textu strany nenašla. Označte je znovu.",
+        "refusedTooLong": "Tato pasáž je na označení příliš dlouhá. Vyberte kratší."
+      },
       "backToPeek": "Zpět do náhledu",
       "entitySidebar": "Detail dokumentu",
       "evidence": "Zdůvodnění",

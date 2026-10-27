@@ -4306,7 +4306,8 @@
       "styleHighlight": "Surlignage",
       "styleSquiggly": "Ondulé",
       "styleStrikethrough": "Barré",
-      "visibilityShared": "Partagé avec l’organisation"
+      "visibilityShared": "Partagé avec l’organisation",
+      "visibilitySharedWithMatter": "Partagé avec le dossier"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citation en bloc avec référence",
@@ -6470,6 +6471,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adapter les pages au mode sombre",
+      "annotations": {
+        "commentedBy": "Commentaire de {name}",
+        "detachedHeading": "Hors de cette version",
+        "detachedOtherVersion": "Créé dans la version {version} ; la page se lit désormais autrement.",
+        "detachedTextChanged": "Ces mots ne figurent plus à la page {page}.",
+        "empty": "Sélectionnez des mots du document, puis choisissez Commenter.",
+        "highlightedBy": "Surligné par {name}",
+        "refusedNoText": "Cette page ne contient aucun texte à marquer. Lancez d’abord la reconnaissance de texte sur le document.",
+        "refusedNotFound": "Ces mots sont introuvables dans le texte de la page. Sélectionnez-les à nouveau.",
+        "refusedTooLong": "Ce passage est trop long pour être marqué. Sélectionnez-en un plus court."
+      },
       "backToPeek": "Revenir à l'aperçu",
       "entitySidebar": "Détails du document",
       "evidence": "Pièce à conviction",
