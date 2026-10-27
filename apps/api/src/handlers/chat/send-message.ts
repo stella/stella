@@ -1876,6 +1876,7 @@ const prepareValidatedIncomingMessage = async ({
     const validatedMessageResult = await validateMessage({
       message: body.message,
       persistedMessage: validationThreadState.persistedMessage,
+      refRegistry,
       resume,
       safeDb,
       threadId: body.threadId,

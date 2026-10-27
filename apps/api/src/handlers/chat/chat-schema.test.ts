@@ -50,11 +50,13 @@ import {
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
 import { normalizeStoredChatToolExecutor } from "@/api/handlers/chat/legacy-tool-compat";
+import { UPDATE_ENTITY_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createGeneratedDocumentActiveDraftContext } from "@/api/lib/chat/active-draft-context";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -83,9 +85,14 @@ const noTools = {} satisfies ChatToolMap;
 const validateMessage = async (
   input: Omit<
     Parameters<typeof validateMessageWithPersistence>[0],
-    "persistedMessage"
+    "persistedMessage" | "refRegistry"
   >,
-) => await validateMessageWithPersistence({ ...input, persistedMessage: null });
+) =>
+  await validateMessageWithPersistence({
+    refRegistry: createChatRefRegistry(),
+    ...input,
+    persistedMessage: null,
+  });
 const searchTools = {
   "search-documents": {
     name: "search-documents",
@@ -704,6 +711,180 @@ describe("parseMessage", () => {
 });
 
 describe("validateMessage", () => {
+  test("approval inputs compare by resolved identity only in declared ref fields", async () => {
+    await assertProperty(
+      "approval inputs compare by resolved identity only in declared ref fields",
+      fc.asyncProperty(fc.uuid(), fc.string(), async (id, text) => {
+        const workspaceId = toSafeId<"workspace">(`matter-${id}`);
+        const entityId = toSafeId<"entity">(`entity-${id}`);
+        const propertyId = toSafeId<"property">(`property-${id}`);
+        const contactId = toSafeId<"contact">(`contact-${id}`);
+        const refRegistry = createChatRefRegistry();
+        const matterRef = refRegistry.toMatterRef(workspaceId);
+        const entityRef = refRegistry.toEntityRef({ entityId, workspaceId });
+        const propertyRef = refRegistry.toPropertyRef(propertyId);
+        const contactRef = refRegistry.toContactRef(contactId);
+        const reboundRegistry = createChatRefRegistry();
+        reboundRegistry.toMatterRef(
+          toSafeId<"workspace">(`other-matter-${id}`),
+        );
+        reboundRegistry.toEntityRef({
+          entityId: toSafeId<"entity">(`other-entity-${id}`),
+          workspaceId,
+        });
+        reboundRegistry.toPropertyRef(
+          toSafeId<"property">(`other-property-${id}`),
+        );
+        reboundRegistry.toContactRef(
+          toSafeId<"contact">(`other-contact-${id}`),
+        );
+
+        const cases = [
+          {
+            name: "save_matter",
+            canonicalInput: {
+              matter_id: workspaceId,
+              client_id: contactId,
+              name: matterRef,
+            },
+            echoedInput: {
+              matter_id: matterRef,
+              client_id: contactRef,
+              name: matterRef,
+            },
+            tamperedInput: {
+              matter_id: matterRef,
+              client_id: contactRef,
+              name: workspaceId,
+            },
+          },
+          {
+            name: UPDATE_ENTITY_FIELDS_TOOL_NAME,
+            canonicalInput: {
+              matterRef: workspaceId,
+              entityRef: entityId,
+              propertyRef: propertyId,
+              value: {
+                opaque: [matterRef, entityRef, propertyRef, contactRef, text],
+              },
+            },
+            echoedInput: {
+              matterRef,
+              entityRef,
+              propertyRef,
+              value: {
+                opaque: [matterRef, entityRef, propertyRef, contactRef, text],
+              },
+            },
+            tamperedInput: {
+              matterRef,
+              entityRef,
+              propertyRef,
+              value: {
+                opaque: [workspaceId, entityRef, propertyRef, contactRef, text],
+              },
+            },
+          },
+          {
+            name: "save_playbook",
+            canonicalInput: {
+              positions: [{ sources: [entityId], text: entityRef }],
+            },
+            echoedInput: {
+              positions: [{ sources: [entityRef], text: entityRef }],
+            },
+            tamperedInput: {
+              positions: [{ sources: [entityRef], text: entityId }],
+            },
+          },
+        ];
+        for (const {
+          name,
+          canonicalInput,
+          echoedInput,
+          tamperedInput,
+        } of cases) {
+          expect(echoedInput).not.toEqual(canonicalInput);
+          const canonicalCall = {
+            type: "tool-call",
+            id: "approval-ref-call",
+            name,
+            input: canonicalInput,
+            arguments: JSON.stringify(canonicalInput),
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+            approval: { id: "approval-ref-interrupt", needsApproval: true },
+            state: "approval-requested",
+          } satisfies ChatParts[number];
+          const request = {
+            refRegistry,
+            message: {
+              id: chatMessageId("approval-ref-message"),
+              role: "assistant",
+              parts: [
+                {
+                  ...canonicalCall,
+                  input: echoedInput,
+                  arguments: JSON.stringify(echoedInput),
+                  approval: { ...canonicalCall.approval, approved: true },
+                  state: "approval-responded",
+                },
+              ],
+            },
+            persistedMessage: {
+              role: "assistant",
+              content: toPersistedChatMessageContentV3({
+                data: [canonicalCall],
+              }),
+            },
+            safeDb: noDbReads,
+            threadId: chatThreadId("approval-ref-thread"),
+            tools: {
+              [name]: { name, description: "Update the selected resource" },
+            },
+            userId: userId("approval-ref-user"),
+          } as const satisfies Parameters<
+            typeof validateMessageWithPersistence
+          >[0];
+          const accepted = await validateMessageWithPersistence(request);
+          expect(Result.isOk(accepted)).toBe(true);
+          if (Result.isOk(accepted)) {
+            expect(accepted.value.message.parts.at(0)).toMatchObject({
+              input: canonicalInput,
+              arguments: JSON.stringify(canonicalInput),
+            });
+          }
+          const rebound = await validateMessageWithPersistence({
+            ...request,
+            refRegistry: reboundRegistry,
+          });
+          expect(Result.isError(rebound)).toBe(true);
+          if (Result.isError(rebound)) {
+            expect(rebound.error).toMatchObject({
+              code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+            });
+          }
+          const tampered = await validateMessageWithPersistence({
+            ...request,
+            message: {
+              ...request.message,
+              parts: request.message.parts.map((part) => ({
+                ...part,
+                input: tamperedInput,
+                arguments: JSON.stringify(tamperedInput),
+              })),
+            },
+          });
+          expect(Result.isError(tampered)).toBe(true);
+          if (Result.isError(tampered)) {
+            expect(tampered.error).toMatchObject({
+              code: CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+            });
+          }
+        }
+      }),
+    );
+  });
+
   test("defers invalid server input only while a generated turn waits for approval", () => {
     const gate = {
       arguments: "{}",
@@ -842,6 +1023,7 @@ describe("validateMessage", () => {
     expect(beforeRefs.values).toContainEqual(completed.output);
     for (const serverDefinition of [true, false]) {
       const result = await validateMessageWithPersistence({
+        refRegistry: createChatRefRegistry(),
         message: {
           id,
           role: "assistant",
@@ -917,6 +1099,7 @@ describe("validateMessage", () => {
     } as const;
     const id = chatMessageId("msg_server_continuation");
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -985,6 +1168,7 @@ describe("validateMessage", () => {
       metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     } as const;
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -1071,6 +1255,7 @@ describe("validateMessage", () => {
     } as const;
     for (const nativeResume of [true, false]) {
       const result = await validateMessageWithPersistence({
+        refRegistry: createChatRefRegistry(),
         message: {
           id,
           role: "assistant",
@@ -1423,6 +1608,7 @@ describe("validateMessage", () => {
     const id = chatMessageId("msg_rich_continuation");
     const trustedAudio = richChatParts[0];
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -1550,6 +1736,7 @@ describe("validateMessage", () => {
     } satisfies ChatParts[number];
 
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -1614,6 +1801,7 @@ describe("validateMessage", () => {
     ]);
 
     const omittedHistory = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -1651,6 +1839,7 @@ describe("validateMessage", () => {
   test("rejects a continuation that rewrites the awaited tool arguments", async () => {
     const id = chatMessageId("msg_bound_continuation");
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -1792,6 +1981,7 @@ describe("validateMessage", () => {
         throw new Error("The client fixture is not a valid tool call");
       }
       const result = await validateMessageWithPersistence({
+        refRegistry: createChatRefRegistry(),
         message: {
           id,
           role: "assistant",
@@ -1890,6 +2080,7 @@ describe("validateMessage", () => {
     );
 
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -1955,6 +2146,7 @@ describe("validateMessage", () => {
         type: "tool-call",
       } satisfies ChatParts[number];
       const result = await validateMessageWithPersistence({
+        refRegistry: createChatRefRegistry(),
         message: {
           id,
           role: "assistant",
@@ -2033,6 +2225,7 @@ describe("validateMessage", () => {
         }),
       );
       return await validateMessageWithPersistence({
+        refRegistry: createChatRefRegistry(),
         message: {
           id,
           role: "assistant",
@@ -2185,6 +2378,7 @@ describe("validateMessage", () => {
     } as const;
 
     const accepted = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
       resume: [
@@ -2202,6 +2396,7 @@ describe("validateMessage", () => {
     expect(Result.isOk(accepted)).toBe(true);
 
     const rejectedCancelledTransition = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
       resume: [
@@ -2218,6 +2413,7 @@ describe("validateMessage", () => {
     expect(Result.isError(rejectedCancelledTransition)).toBe(true);
 
     const rejectedMismatchedPayload = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
       resume: [
@@ -2235,6 +2431,7 @@ describe("validateMessage", () => {
     expect(Result.isError(rejectedMismatchedPayload)).toBe(true);
 
     const rejectedUnknownInterrupt = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: { id, role: "assistant", parts: [...continuationParts] },
       resume: [
@@ -2252,6 +2449,7 @@ describe("validateMessage", () => {
     expect(Result.isError(rejectedUnknownInterrupt)).toBe(true);
 
     const rejected = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: {
         id,
@@ -2283,6 +2481,7 @@ describe("validateMessage", () => {
     );
 
     const rejectedSiblingTransition = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: {
         id,
@@ -2312,6 +2511,7 @@ describe("validateMessage", () => {
     expect(Result.isError(rejectedSiblingTransition)).toBe(true);
 
     const rejectedMissingCall = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       ...sharedProps,
       message: {
         id,
@@ -2339,6 +2539,7 @@ describe("validateMessage", () => {
       state: "approval-requested",
     } satisfies ChatParts[number];
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
@@ -2404,6 +2605,7 @@ describe("validateMessage", () => {
       state: "input-complete",
     } satisfies ChatParts[number];
     const result = await validateMessageWithPersistence({
+      refRegistry: createChatRefRegistry(),
       message: {
         id,
         role: "assistant",
