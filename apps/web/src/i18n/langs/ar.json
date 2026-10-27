@@ -527,6 +527,7 @@
         "wrongStatus": "هذا القيد لم يعد مسودة. حدّث القائمة."
       },
       "returnComment": "سبب الإرجاع",
+      "returnSelected": "إرجاع {count, plural, zero {لا قيود محددة} one {قيد محدد واحد} two {قيدين محددين} few {# قيود محددة} many {# قيدًا محددًا} other {# قيد محدد}}",
       "selectEntry": "تحديد القيد",
       "timeEntries": "قيود الوقت",
       "title": "الاعتماد"

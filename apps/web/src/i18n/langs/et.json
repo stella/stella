@@ -527,6 +527,7 @@
         "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
       },
       "returnComment": "Tagastamise põhjus",
+      "returnSelected": "Tagasta {count, plural, one {# valitud kanne} other {# valitud kannet}}",
       "selectEntry": "Vali kanne",
       "timeEntries": "Ajakanded",
       "title": "Kinnitamine"

@@ -12,16 +12,20 @@ import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import {
   approveTimeEntries,
-  returnTimeEntry,
+  returnTimeEntries,
   sendTimeEntryMutation,
 } from "@/lib/workspaces/time-entries-api";
 
 // A review decision changes the matters' time and what they can invoice, and
-// every approver's queue.
+// every approver's queue. A batch the API refused entirely changed nothing.
 const refreshReviewedTime = async (
   queryClient: QueryClient,
   workspaceIds: readonly string[],
+  batch: { results: readonly { status: string }[] },
 ) => {
+  if (batch.results.every(({ status }) => status === "refused")) {
+    return;
+  }
   await Promise.all([
     ...[...new Set(workspaceIds)].flatMap((workspaceId) => [
       queryClient.invalidateQueries({
@@ -53,8 +57,8 @@ export const useApproveTimeEntries = () => {
       workspaceIds: readonly string[];
       ids: readonly string[];
     }) => await approveTimeEntries(ids),
-    onSuccess: async (_result, { workspaceIds }) => {
-      await refreshReviewedTime(queryClient, workspaceIds);
+    onSuccess: async (batch, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds, batch);
     },
     onError: (error) => {
       analytics.captureError(error, {
@@ -65,29 +69,30 @@ export const useApproveTimeEntries = () => {
   });
 };
 
-export const useReturnTimeEntry = () => {
+/**
+ * Returns a selection to draft with one comment in one call. Like approval,
+ * a refusal comes back per entry, not as a failed request.
+ */
+export const useReturnTimeEntries = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({
-      id,
+      ids,
       comment,
     }: {
-      /** The matter the entry belongs to; null for internal work. */
-      workspaceId: string | null;
-      id: string;
+      /** The matters the entries belong to, whose time and invoices refresh. */
+      workspaceIds: readonly string[];
+      ids: readonly string[];
       comment: string;
-    }) => await returnTimeEntry({ id, comment }),
-    onSuccess: async (_result, { workspaceId }) => {
-      await refreshReviewedTime(
-        queryClient,
-        workspaceId === null ? [] : [workspaceId],
-      );
+    }) => await returnTimeEntries({ ids, comment }),
+    onSuccess: async (batch, { workspaceIds }) => {
+      await refreshReviewedTime(queryClient, workspaceIds, batch);
     },
     onError: (error) => {
       analytics.captureError(error, {
-        fingerprintKey: "useReturnTimeEntry:failure",
-        scope: { type: "handler", handlerId: "useReturnTimeEntry:failure" },
+        fingerprintKey: "useReturnTimeEntries:failure",
+        scope: { type: "handler", handlerId: "useReturnTimeEntries:failure" },
       });
     },
   });

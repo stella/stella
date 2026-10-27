@@ -527,6 +527,7 @@
         "wrongStatus": "Dieser Eintrag ist kein Entwurf mehr. Aktualisieren Sie die Liste."
       },
       "returnComment": "Grund für Rückgabe",
+      "returnSelected": "{count, plural, one {# ausgewählten Eintrag} other {# ausgewählte Einträge}} zurückgeben",
       "selectEntry": "Eintrag auswählen",
       "timeEntries": "Zeiteinträge",
       "title": "Freigaben"

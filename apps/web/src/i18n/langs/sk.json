@@ -527,6 +527,7 @@
         "wrongStatus": "Tento záznam už nie je koncept. Obnovte zoznam."
       },
       "returnComment": "Dôvod vrátenia",
+      "returnSelected": "Vrátiť {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamov}}",
       "selectEntry": "Vybrať záznam",
       "timeEntries": "Časové záznamy",
       "title": "Schvaľovanie"

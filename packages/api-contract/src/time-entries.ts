@@ -550,7 +550,21 @@ export const parseTimeSubmitBatch = (input: unknown) => {
   return parsed.success ? parsed.output : null;
 };
 
-export const parseTimeEntryReturnResponse = (input: unknown) =>
-  isRecord(input) && typeof input.id === "string" && input.status === "draft"
-    ? { id: input.id, status: input.status }
-    : null;
+const timeReturnBatchSchema = v.object({
+  results: v.array(
+    v.variant("status", [
+      v.object({ id: v.string(), status: v.literal("returned") }),
+      v.object({
+        id: v.string(),
+        status: v.literal("refused"),
+        reason: v.picklist(TIME_APPROVAL_REFUSALS),
+      }),
+    ]),
+  ),
+});
+
+/** One outcome per requested id: returned to draft, or refused with its reason. */
+export const parseTimeReturnBatch = (input: unknown) => {
+  const parsed = v.safeParse(timeReturnBatchSchema, input);
+  return parsed.success ? parsed.output : null;
+};

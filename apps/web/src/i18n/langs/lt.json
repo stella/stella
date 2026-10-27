@@ -527,6 +527,7 @@
         "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
       },
       "returnComment": "Grąžinimo priežastis",
+      "returnSelected": "Grąžinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
       "selectEntry": "Pasirinkti įrašą",
       "timeEntries": "Laiko įrašai",
       "title": "Patvirtinimai"

@@ -527,6 +527,7 @@
         "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
       },
       "returnComment": "Motivo de devolución",
+      "returnSelected": "Devolver {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
       "selectEntry": "Seleccionar registro",
       "timeEntries": "Registros de tiempo",
       "title": "Aprobaciones"

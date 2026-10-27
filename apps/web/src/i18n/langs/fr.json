@@ -527,6 +527,7 @@
         "wrongStatus": "Cette saisie n’est plus un brouillon. Actualisez la liste."
       },
       "returnComment": "Motif du renvoi",
+      "returnSelected": "Renvoyer {count, plural, one {# saisie sélectionnée} other {# saisies sélectionnées}}",
       "selectEntry": "Sélectionner la saisie",
       "timeEntries": "Saisies de temps",
       "title": "Approbations"

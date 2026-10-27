@@ -527,6 +527,7 @@
         "wrongStatus": "Šis ieraksts vairs nav melnraksts. Atsvaidziniet sarakstu."
       },
       "returnComment": "Atgriešanas iemesls",
+      "returnSelected": "Atgriezt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
       "selectEntry": "Atlasīt ierakstu",
       "timeEntries": "Laika ieraksti",
       "title": "Apstiprinājumi"

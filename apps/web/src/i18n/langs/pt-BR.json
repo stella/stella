@@ -527,6 +527,7 @@
         "wrongStatus": "Este registro não é mais um rascunho. Atualize a lista."
       },
       "returnComment": "Motivo da devolução",
+      "returnSelected": "Devolver {count, plural, one {# registro selecionado} other {# registros selecionados}}",
       "selectEntry": "Selecionar registro",
       "timeEntries": "Registros de tempo",
       "title": "Aprovações"

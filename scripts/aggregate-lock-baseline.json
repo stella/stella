@@ -1794,12 +1794,6 @@
     "reason": "builder-for in apps/api/src/handlers/templates/lookup-formats/default/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/handlers/time-entries/approval-queue/return.ts",
-    "fingerprint": "70ab4c7191c68e21c3a9feb15656bbe87d2115f0afe57b4e56a7ee0761d6fdd2",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/time-entries/approval-queue/return.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/batch/delete.ts",
     "fingerprint": "06d8436fa79273835b7bf775d500456418fd3298ceadeb8b71eb6315ace7feed",
     "count": 1,
@@ -2179,9 +2173,9 @@
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-approval.ts",
-    "fingerprint": "00ad883a7d690bee58227f10fc2b0e668089a9071cc0cd4c307aa00710db044e",
+    "fingerprint": "1062846dc1709bc585d5006f940b566082038d494103626fc7a6bd1f5a8a12db",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/billing/time-entry-approval.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Approval and return share one locked read of the reviewed entries; the single-entry return's own acquisition is removed."
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-insert.ts",

@@ -527,6 +527,7 @@
         "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
       },
       "returnComment": "Visszaküldés oka",
+      "returnSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} visszaküldése",
       "selectEntry": "Bejegyzés kijelölése",
       "timeEntries": "Időbejegyzések",
       "title": "Jóváhagyások"
