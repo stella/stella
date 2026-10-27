@@ -4,7 +4,6 @@ import { describe, expect, test } from "bun:test";
 import {
   assembleCaseLawCoverageAnswer,
   type CaseLawCoveragePart,
-  createCaseLawCoverageCache,
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -98,43 +97,26 @@ const PARTS = [
   "provision-processing",
 ] as const satisfies readonly CaseLawCoveragePart[];
 
-/** Two reads of one key through the shared cache; how many computations ran. */
-const computationsForTwoReads = async (assembly: Assembly) => {
-  const cache = createCaseLawCoverageCache(() => 1000);
-  let computations = 0;
-  const compute = async () => {
-    computations += 1;
-    return await assembleCaseLawCoverageAnswer(assembly);
-  };
-  const first = await cache.read("policy", compute);
-  await cache.read("policy", compute);
-  return { computations, first };
-};
+describe("coverage summary publication eligibility", () => {
+  test("a complete answer can replace the stored summary", async () => {
+    const computation = await assembleCaseLawCoverageAnswer(answeringReaders());
 
-describe("the shared coverage answer", () => {
-  test("a complete answer is computed once and served again", async () => {
-    const { computations, first } =
-      await computationsForTwoReads(answeringReaders());
-
-    expect(first.complete).toBe(true);
-    expect(computations).toBe(1);
+    expect(computation.complete).toBe(true);
+    expect("message" in computation.answer).toBe(false);
   });
 
   for (const part of PARTS) {
-    test(`an answer without ${part} still answers but is computed again`, async () => {
-      const { computations, first } = await computationsForTwoReads(
-        failing(part),
-      );
+    test(`an answer without ${part} cannot replace the stored summary`, async () => {
+      const computation = await assembleCaseLawCoverageAnswer(failing(part));
 
-      expect("message" in first.answer).toBe(false);
-      expect(first.complete).toBe(false);
-      expect(computations).toBe(2);
+      expect("message" in computation.answer).toBe(false);
+      expect(computation.complete).toBe(false);
     });
   }
 
-  test("an unavailable answer is computed again", async () => {
+  test("an unavailable answer cannot replace the stored summary", async () => {
     const readers = answeringReaders();
-    const { computations, first } = await computationsForTwoReads({
+    const computation = await assembleCaseLawCoverageAnswer({
       ...readers,
       load: {
         ...readers.load,
@@ -142,7 +124,7 @@ describe("the shared coverage answer", () => {
       },
     });
 
-    expect(first.answer).toEqual({ message: "Coverage is unavailable" });
-    expect(computations).toBe(2);
+    expect(computation.answer).toEqual({ message: "Coverage is unavailable" });
+    expect(computation.complete).toBe(false);
   });
 });
