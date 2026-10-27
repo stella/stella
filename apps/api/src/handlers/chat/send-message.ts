@@ -110,6 +110,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-run";
 import type {
   ChatTurnObservation,
+  ChatTurnOwnership,
   ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -511,6 +512,7 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
+  ownership?: ChatTurnOwnership;
   startAdmission?: typeof startExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
@@ -682,6 +684,7 @@ const CHAT_SEND_ACTION_KIND = "chat.send";
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
+  private readonly ownership: ChatTurnOwnership;
   private admission: ExecutionAdmission | undefined;
   private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
@@ -697,6 +700,7 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+    this.ownership = options.ownership ?? processChatTurnOwnership;
   }
 
   /** Once accepted durably, a turn belongs to its lease rather than a viewer. */
@@ -760,7 +764,7 @@ export class ChatSendLifecycle {
         ? {}
         : { owningAssistantMessage }),
     };
-    this.releaseClaim = processChatTurnOwnership.holdClaim({
+    this.releaseClaim = this.ownership.holdClaim({
       execution,
       safeDb: this.options.safeDb,
     });
@@ -890,6 +894,7 @@ export class ChatSendLifecycle {
       return panic("Cannot start a run for a turn this send does not hold");
     }
     const run = new ChatTurnRun({
+      ownership: this.ownership,
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,

@@ -21,7 +21,7 @@ import {
 import { env } from "@/api/env";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
-import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
+import { ChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
   ChatSendLifecycle,
@@ -526,6 +526,17 @@ describe("agent connector isolation", () => {
 describe("send message disconnect handling", () => {
   test("tracks a preflight claim until settlement and rollback finish", async () => {
     for (const settlementFails of [false, true]) {
+      const ownership = new ChatTurnOwnership();
+      const releaseClaim = mock(() => undefined);
+      const holdClaim = ownership.holdClaim.bind(ownership);
+      ownership.holdClaim = (claim) => {
+        const release = holdClaim(claim);
+        return () => {
+          releaseClaim();
+          release();
+        };
+      };
+      const leaseShortened = Promise.withResolvers<undefined>();
       const settlementStarted = Promise.withResolvers<undefined>();
       const finishSettlement =
         Promise.withResolvers<Result<boolean, DatabaseError>>();
@@ -538,9 +549,11 @@ describe("send message disconnect handling", () => {
           settlementStarted.resolve(undefined);
           return await finishSettlement.promise;
         }
+        leaseShortened.resolve(undefined);
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,
         externalMcpToolsLoader:
@@ -568,25 +581,24 @@ describe("send message disconnect handling", () => {
       );
       const cleanup = lifecycle.cleanup();
       await settlementStarted.promise;
-      const relinquishing = processChatTurnOwnership.relinquish();
-      const finishedEarly = await Promise.race([
-        relinquishing.then(() => true),
-        Bun.sleep(20).then(() => false),
-      ]);
-      expect(finishedEarly).toBe(false);
+      const relinquishing = ownership.relinquish();
+      expect(
+        await Promise.race([
+          leaseShortened.promise.then(() => true),
+          relinquishing.then(() => false),
+        ]),
+      ).toBe(true);
+      expect(releaseClaim).not.toHaveBeenCalled();
       finishSettlement.resolve(
         settlementFails
           ? Result.err(new DatabaseError({ message: "settlement failed" }))
           : Result.ok(true),
       );
       await rollbackStarted.promise;
-      const finishedDuringRollback = await Promise.race([
-        relinquishing.then(() => true),
-        Bun.sleep(20).then(() => false),
-      ]);
-      expect(finishedDuringRollback).toBe(false);
+      expect(releaseClaim).not.toHaveBeenCalled();
       finishRollback.resolve(undefined);
       await cleanup;
+      expect(releaseClaim).toHaveBeenCalledTimes(1);
       expect(await relinquishing).toBe("stored");
     }
   });
