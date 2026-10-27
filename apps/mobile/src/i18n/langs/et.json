@@ -22,6 +22,36 @@
     "loadFailed": "Teie toimikuid ei õnnestunud laadida.",
     "retry": "Proovi uuesti"
   },
+  "matter": {
+    "documents": "Dokumendid",
+    "tasks": "Ülesanded",
+    "emptyTitle": "Siin pole veel midagi",
+    "emptyDescription": "Selle asja dokumendid ja ülesanded kuvatakse siin.",
+    "loadFailed": "Asja ei õnnestunud laadida.",
+    "loadMoreFailed": "Rohkem kirjeid ei õnnestunud laadida.",
+    "loadMore": "Laadi veel",
+    "retry": "Proovi uuesti",
+    "untitled": "Pealkirjata",
+    "updated": "Muudetud {time}",
+    "kind": {
+      "folder": "Kaust",
+      "document": "Dokument",
+      "task": "Ülesanne"
+    },
+    "status": {
+      "open": "Avatud",
+      "in_progress": "Töös",
+      "in_review": "Ülevaatusel",
+      "done": "Tehtud",
+      "cancelled": "Tühistatud"
+    }
+  },
+  "entity": {
+    "type": "Tüüp",
+    "reference": "Viitenumber",
+    "currentVersion": "Praegune versioon",
+    "loadFailed": "Kirjet ei õnnestunud laadida."
+  },
   "signIn": {
     "title": "Logige sisse rakendusse stella",
     "description": "Sisestage oma stella serveri aadress. Sisselogimise kinnitate brauseris.",

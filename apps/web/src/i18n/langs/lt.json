@@ -5872,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Vidaus darbas"
+    },
+    "week": {
+      "allLogged": "Viskas užregistruota. Nauja veikla atsiras čia jums dirbant.",
+      "days": "Savaitės dienos",
+      "entriesTitle": "Užregistruotas laikas",
+      "nextWeek": "Kita savaitė",
+      "noActivity": "Kol kas nėra ką registruoti. Dirbkite byloje, ir jūsų veikla atsiras čia, kad galėtumėte ją priimti.",
+      "pendingCount": "{count, plural, one {# pasiūlymas} few {# pasiūlymai} many {# pasiūlymo} other {# pasiūlymų}}",
+      "previousWeek": "Ankstesnė savaitė",
+      "range": "{start} – {end}",
+      "title": "Mano savaitė",
+      "totals": "Užregistruota: {logged} · apmokama: {billable}"
     }
   },
   "translate": {

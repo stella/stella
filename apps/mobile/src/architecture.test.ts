@@ -70,6 +70,27 @@ describe("the connection layer", () => {
   );
 });
 
+/** Every module the app bundles: tests run under Bun, never on the phone. */
+const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
+  .map(String)
+  .filter((name) => /\.tsx?$/u.test(name) && !name.includes(".test."))
+  .toSorted();
+
+describe("the app's dates", () => {
+  test("finds the app's modules to scan", () => {
+    expect(appModules).toContain(path.join("components", "matter-row.tsx"));
+  });
+
+  // Hermes has no Intl.RelativeTimeFormat; use-intl then logs an error per
+  // call and shows the raw date.
+  test.each(appModules)("%s formats no relative time", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    expect(source.match(/relativeTime\(|RelativeTimeFormat/gu) ?? []).toEqual(
+      [],
+    );
+  });
+});
+
 describe("the app's builds", () => {
   const configs = MOBILE_APP_VARIANTS.map((variant) => ({
     variant,
