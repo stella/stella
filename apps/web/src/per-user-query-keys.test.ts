@@ -423,6 +423,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
   },
+  "entities/annotations/list.ts": { kind: "no-web-caller", calls: [] },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],

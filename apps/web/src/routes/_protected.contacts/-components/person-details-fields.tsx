@@ -55,7 +55,6 @@ export const PersonDetailsFields = ({
   const visibleCodes = filterNationalityOptions({
     countries: allCountries,
     query,
-    locale,
   }).map(({ code }) => code);
 
   return (

@@ -1027,6 +1027,12 @@
       "matchedIn": "Dopasowanie w języku {language}"
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "marginFilter": {
+      "label": "Filtr przywołanych przepisów",
+      "paragraph": "{count, plural, =0 {Brak przepisów przywołanych w ¶{paragraph}} one {# przepis przywołany w ¶{paragraph}} few {# przepisy przywołane w ¶{paragraph}} many {# przepisów przywołanych w ¶{paragraph}} other {# przepisu przywołanego w ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Brak przepisów przywołanych w zaznaczonym fragmencie} one {# przepis przywołany w zaznaczonym fragmencie} few {# przepisy przywołane w zaznaczonym fragmencie} many {# przepisów przywołanych w zaznaczonym fragmencie} other {# przepisu przywołanego w zaznaczonym fragmencie}}",
+      "unnumberedParagraph": "{count, plural, =0 {Brak przepisów przywołanych w tym akapicie} one {# przepis przywołany w tym akapicie} few {# przepisy przywołane w tym akapicie} many {# przepisów przywołanych w tym akapicie} other {# przepisu przywołanego w tym akapicie}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# orzeczenie było już tutaj zapisane} few {# orzeczenia były już tutaj zapisane} many {# orzeczeń było już tutaj zapisanych} other {# orzeczeń było już tutaj zapisanych}}",
       "empty": "W tej sprawie nie zapisano jeszcze żadnego orzeczenia.",
@@ -1051,6 +1057,7 @@
       "human": "Ludzkie",
       "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
     },
+    "oldestDecisions": "Najstarsze orzeczenia",
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
@@ -1156,6 +1163,8 @@
     "showWholeHeadnote": "Pokaż całą tezę",
     "sort": {
       "newest": "Najnowsze",
+      "oldest": "Najstarsze",
+      "oldestUnavailable": "Wyniki wyszukiwania są sortowane według trafności lub od najnowszych. Aby zobaczyć najpierw najstarsze orzeczenia, wyczyść wyszukiwanie.",
       "relevance": "Najtrafniejsze"
     },
     "viewer": {
@@ -1723,21 +1732,8 @@
       "describe-stella-function": "Przygotowywanie odczytu danych",
       "describe_template": "Odczytywanie pól szablonu",
       "discover_tools": "Przygotowywanie odczytu danych",
-      "docxCommentSummary": "Dodaj komentarz do {blockId}",
-      "docxDeleteSummary": "Usuń {blockId}",
-      "docxDeleteTableColumnSummary": "Usuń kolumnę tabeli przy {blockId}",
-      "docxDeleteTableRowSummary": "Usuń wiersz tabeli przy {blockId}",
       "docxEditMore": "{count, plural, one {# kolejna zmiana} few {# kolejne zmiany} many {# kolejnych zmian} other {# kolejnej zmiany}}",
       "docxEditSummary": "{count, plural, one {# proponowana zmiana} few {# proponowane zmiany} many {# proponowanych zmian} other {# proponowanej zmiany}}",
-      "docxInsertAfterSummary": "Wstaw tekst po {blockId}",
-      "docxInsertBeforeSummary": "Wstaw tekst przed {blockId}",
-      "docxInsertTableColumnSummary": "Wstaw kolumnę tabeli w pobliżu {blockId}",
-      "docxInsertTableRowSummary": "Wstaw wiersz tabeli w pobliżu {blockId}",
-      "docxMergeTableCellsSummary": "Scal komórki tabeli przy {blockId}",
-      "docxReplaceBlockSummary": "Zastąp {blockId}",
-      "docxReplaceSummary": "Zastąp „{find}” tekstem „{replace}”",
-      "docxSignatureTableSummary": "Wstaw tabelę podpisów w pobliżu {blockId}",
-      "docxSplitTableCellSummary": "Podziel komórkę tabeli przy {blockId}",
       "execute-typescript": "Odczytywanie danych sprawy",
       "execute_typescript": "Odczytywanie danych sprawy",
       "expand-chat-history": "Odczytywanie historii czatu",
@@ -4787,10 +4783,8 @@
   },
   "readerAnswers": {
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
-    "citation": "¶{paragraph}",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Zadaj dodatkowe pytanie",
     "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
     "loading": "Generowanie odpowiedzi…",
@@ -6660,10 +6654,12 @@
       "selectOperator": "Wybierz operator",
       "setPromptPlaceholder": "Ustaw prompt do wyodrębnienia informacji",
       "singleSelect": "Jednokrotny wybór",
-      "sortAscending": "Sortuj rosnąco",
       "sortAscendingDate": "Od najstarszych",
-      "sortDescending": "Sortuj malejąco",
+      "sortAscendingNumber": "Od najniższych",
+      "sortAscendingText": "A → Ż",
       "sortDescendingDate": "Od najnowszych",
+      "sortDescendingNumber": "Od najwyższych",
+      "sortDescendingText": "Ż → A",
       "splitOptions": "{count, plural, one {Podziel na # opcję} few {Podziel na # opcje} many {Podziel na # opcji} other {Podziel na # opcji}}",
       "suggestWithAI": "Zaproponuj z AI",
       "text": "Tekst",

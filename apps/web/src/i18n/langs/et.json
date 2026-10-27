@@ -1027,6 +1027,12 @@
       "matchedIn": "Vaste keeles: {language}"
     },
     "loadingMore": "Laadib rohkem...",
+    "marginFilter": {
+      "label": "Viidatud sätete filter",
+      "paragraph": "{count, plural, =0 {¶{paragraph} ei viita ühelegi sättele} one {¶{paragraph} viitab # sättele} other {¶{paragraph} viitab # sättele}}",
+      "selection": "{count, plural, =0 {Valitud tekst ei viita ühelegi sättele} one {Valitud tekst viitab # sättele} other {Valitud tekst viitab # sättele}}",
+      "unnumberedParagraph": "{count, plural, =0 {See lõik ei viita ühelegi sättele} one {See lõik viitab # sättele} other {See lõik viitab # sättele}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# lahend oli siia juba salvestatud} other {# lahendit oli siia juba salvestatud}}",
       "empty": "Sellesse toimikusse pole veel kohtupraktikat salvestatud.",
@@ -1051,6 +1057,7 @@
       "human": "Inimeste",
       "toggleState": "{label}: {state, select, on {sees} other {väljas}}"
     },
+    "oldestDecisions": "Vanimad lahendid",
     "pagination": {
       "goToPage": "Mine leheküljele {page}",
       "label": "Tulemuste leheküljed",
@@ -1156,6 +1163,8 @@
     "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
     "sort": {
       "newest": "Uusimad",
+      "oldest": "Vanimad",
+      "oldestUnavailable": "Otsingu tulemused järjestatakse asjakohasuse järgi või uuemad enne. Vanimate lahendite esmalt nägemiseks tühjendage otsing.",
       "relevance": "Asjakohaseimad"
     },
     "viewer": {
@@ -1723,21 +1732,8 @@
       "describe-stella-function": "Andmepäringu ettevalmistamine",
       "describe_template": "Malli väljade lugemine",
       "discover_tools": "Andmepäringu ettevalmistamine",
-      "docxCommentSummary": "Lisa kommentaar plokile {blockId}",
-      "docxDeleteSummary": "Kustuta {blockId}",
-      "docxDeleteTableColumnSummary": "Kustuta tabeli veerg ploki {blockId} juures",
-      "docxDeleteTableRowSummary": "Kustuta tabeli rida ploki {blockId} juures",
       "docxEditMore": "{count, plural, one {veel # muudatus} other {veel # muudatust}}",
       "docxEditSummary": "{count, plural, one {# kavandatud muudatus} other {# kavandatud muudatust}}",
-      "docxInsertAfterSummary": "Lisa tekst ploki {blockId} järele",
-      "docxInsertBeforeSummary": "Lisa tekst ploki {blockId} ette",
-      "docxInsertTableColumnSummary": "Lisa tabeli veerg ploki {blockId} lähedale",
-      "docxInsertTableRowSummary": "Lisa tabeli rida ploki {blockId} lähedale",
-      "docxMergeTableCellsSummary": "Ühenda tabeli lahtrid ploki {blockId} juures",
-      "docxReplaceBlockSummary": "Asenda {blockId}",
-      "docxReplaceSummary": "Asenda „{find}“ sõnaga „{replace}“",
-      "docxSignatureTableSummary": "Lisa allkirjatabel ploki {blockId} lähedale",
-      "docxSplitTableCellSummary": "Tükelda tabeli lahter ploki {blockId} juures",
       "execute-typescript": "Toimiku andmete lugemine",
       "execute_typescript": "Toimiku andmete lugemine",
       "expand-chat-history": "Vestlusajaloo lugemine",
@@ -4787,10 +4783,8 @@
   },
   "readerAnswers": {
     "budgetError": "Vastuste eelarve on ammendatud.",
-    "citation": "¶{paragraph}",
     "expand": "Laienda vastust",
     "explain": "Selgita",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Esita täpsustav küsimus",
     "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
     "loading": "Vastuse loomine…",
@@ -6660,10 +6654,12 @@
       "selectOperator": "Valige operaator",
       "setPromptPlaceholder": "Määrake päring teabe eraldamiseks",
       "singleSelect": "Ühekordne valik",
-      "sortAscending": "Sorteeri kasvavalt",
       "sortAscendingDate": "Vanemad enne",
-      "sortDescending": "Sorteeri kahanevalt",
+      "sortAscendingNumber": "Väiksemad enne",
+      "sortAscendingText": "A → Ü",
       "sortDescendingDate": "Uuemad enne",
+      "sortDescendingNumber": "Suuremad enne",
+      "sortDescendingText": "Ü → A",
       "splitOptions": "{count, plural, one {Jaga # valikuks} other {Jaga # valikuks}}",
       "suggestWithAI": "Soovita AI-ga",
       "text": "Tekst",
