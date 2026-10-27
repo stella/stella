@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { installContentSecurityPolicyCollector } from "../helpers/content-security-policy";
+import { pushRouterPath } from "../helpers/decision-reader";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
@@ -48,17 +49,11 @@ test.describe("public legal reader content security policy", () => {
       await page.goto("/auth", { waitUntil: "domcontentloaded" });
       await expect(page.locator('input[type="email"]')).toBeVisible();
       await policy.assertClean();
-      await page.waitForFunction(
-        () => !history.pushState.toString().includes("[native code]"),
-      );
       const destination = DOCKED_CHAT_LEGAL_ROUTES[surface].path;
       const firstParagraph =
         dockedChatLegalPayloads[surface].fulltext.split("\n\n").at(0) ??
         panic("Legal reader fixture has no text");
-      await page.evaluate(
-        (url) => history.pushState(null, "", url),
-        destination,
-      );
+      await pushRouterPath(page, destination);
       await expect(page.getByText(firstParagraph, { exact: true })).toBeVisible(
         {
           timeout: 30_000,
