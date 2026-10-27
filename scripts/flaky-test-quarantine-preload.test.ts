@@ -111,6 +111,7 @@ const entry = (name: string): QuarantineEntry => ({
 
 type RunOptions = {
   names: readonly string[];
+  source?: string;
   // Makes the fixture's unquarantined test fail too.
   failUnquarantined?: boolean;
   reportDir?: "set" | "unset";
@@ -118,6 +119,7 @@ type RunOptions = {
 
 const run = ({
   names,
+  source = SOURCE,
   failUnquarantined = false,
   reportDir = "set",
 }: RunOptions) => {
@@ -129,7 +131,7 @@ const run = ({
     path.join(root, "scripts/flaky-test-quarantine.json"),
     serializeRegistry({ entries: names.map(entry) }),
   );
-  writeFileSync(path.join(root, FIXTURE), SOURCE);
+  writeFileSync(path.join(root, FIXTURE), source);
   writeFileSync(path.join(root, "runner.ts"), RUNNER);
   if (failUnquarantined) {
     writeFileSync(path.join(root, "fail-unquarantined"), "");
@@ -188,6 +190,42 @@ const FAILING = [
 ];
 
 describe("flaky-test quarantine preload", () => {
+  test.each(["skip", "only", "concurrent", "serial"])(
+    "retains native test.%s.each receivers and behavior",
+    (modifier) => {
+      const result = run({
+        names: ["sentinel"],
+        source: `import { expect, test } from "bun:test";
+test("sentinel", () => {});
+test.${modifier}.each([1])("native row %i", (value) => {
+  ${modifier === "skip" ? 'throw new TypeError("Skipped body ran");' : "expect(value).toBe(1);"}
+});`,
+      });
+      expect(result.output).not.toContain("ERR_INVALID_THIS");
+      expect(result.output).not.toContain("is not a function");
+      expect(result.exitCode).toBe(0);
+    },
+  );
+
+  test.each(["skip", "only", "concurrent", "serial"])(
+    "retains native describe.%s.each receivers and behavior",
+    (modifier) => {
+      const result = run({
+        names: ["sentinel"],
+        source: `import { describe, expect, test } from "bun:test";
+test("sentinel", () => {});
+describe.${modifier}.each([1])("native scope %i", (value) => {
+  test("native row", () => {
+    ${modifier === "skip" ? 'throw new TypeError("Skipped body ran");' : "expect(value).toBe(1);"}
+  });
+});`,
+      });
+      expect(result.output).not.toContain("ERR_INVALID_THIS");
+      expect(result.output).not.toContain("is not a function");
+      expect(result.exitCode).toBe(0);
+    },
+  );
+
   test("its static import graph uses only builtins and relative scripts files", () => {
     const pending = [PRELOAD];
     const visited = new Set<string>();

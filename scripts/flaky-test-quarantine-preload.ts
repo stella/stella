@@ -255,75 +255,67 @@ const install = (reportDir: string): void => {
   // Bun defers nested describe bodies, so each body restores the path it was
   // declared under instead of relying on call nesting.
   let describePath: readonly string[] = [];
-  const wrapDescribe =
-    (original: TestFunction): TestFunction =>
-    (...args: unknown[]) => {
-      const [label, body, ...rest] = args;
-      if (!isFunction(body)) {
-        const result = original(...args);
-        return isFunction(result) ? wrapDescribe(result) : result;
-      }
-      const scope = [
-        ...describePath,
-        isFunction(label) ? label.name : String(label),
-      ];
-      return original(
-        label,
-        (...bodyArgs: unknown[]) => {
-          const outer = describePath;
-          describePath = scope;
-          try {
-            return body(...bodyArgs);
-          } finally {
-            describePath = outer;
-          }
-        },
-        ...rest,
-      );
-    };
-
-  const describe = new Proxy(bunTest.describe, {
-    get: (target, key) => {
-      const value: unknown = Reflect.get(target, key, target);
-      if (key === "each" && isFunction(value)) {
+  type DescribeCallableOptions = {
+    original: CallableFunction;
+    receiver?: CallableFunction | undefined;
+    rows?: { index: number } | undefined;
+  };
+  const wrapDescribe = ({
+    original,
+    receiver,
+    rows,
+  }: DescribeCallableOptions): TestFunction => {
+    const forward = (...args: unknown[]) =>
+      Reflect.apply(original, receiver, args);
+    return new Proxy(forward, {
+      get: (_target, key) => {
+        const value: unknown = Reflect.get(original, key, original);
+        if (!isFunction(value)) {
+          return value;
+        }
+        if (key !== "each") {
+          return wrapDescribe({ original: value, receiver: original, rows });
+        }
         return (...eachArgs: unknown[]) => {
-          const registerRows = value.apply(target, eachArgs);
-          if (!isFunction(registerRows)) {
-            return registerRows;
-          }
-          return (...args: unknown[]) => {
-            const [label, body, ...rest] = args;
-            if (typeof label !== "string" || !isFunction(body)) {
-              return registerRows(...args);
-            }
-            let rowIndex = 0;
-            return registerRows(
-              label,
-              (...bodyArgs: unknown[]) => {
-                const scope = [
-                  ...describePath,
-                  formatEachTitle(label, bodyArgs, rowIndex++),
-                ];
-                const outer = describePath;
-                describePath = scope;
-                try {
-                  return body(...bodyArgs);
-                } finally {
-                  describePath = outer;
-                }
-              },
-              ...rest,
-            );
-          };
+          const registerRows = Reflect.apply(value, original, eachArgs);
+          return isFunction(registerRows)
+            ? wrapDescribe({ original: registerRows, rows: { index: 0 } })
+            : registerRows;
         };
-      }
-      return isFunction(value) ? wrapDescribe(value.bind(target)) : value;
-    },
-    apply: (target, _self, args: unknown[]) =>
-      wrapDescribe((...forwarded: unknown[]) =>
-        Reflect.apply(target, undefined, forwarded),
-      )(...args),
-  });
+      },
+      apply: (_target, _self, args: unknown[]) => {
+        const [label, body, ...rest] = args;
+        if (!isFunction(body)) {
+          const result = forward(...args);
+          return isFunction(result)
+            ? wrapDescribe({ original: result, rows })
+            : result;
+        }
+        const declaredPath = describePath;
+        const declaredName = isFunction(label) ? label.name : String(label);
+        return forward(
+          label,
+          (...bodyArgs: unknown[]) => {
+            const scope = [
+              ...declaredPath,
+              rows === undefined
+                ? declaredName
+                : formatEachTitle(String(label), bodyArgs, rows.index++),
+            ];
+            const outer = describePath;
+            describePath = scope;
+            try {
+              return body(...bodyArgs);
+            } finally {
+              describePath = outer;
+            }
+          },
+          ...rest,
+        );
+      },
+    });
+  };
+  const describe = wrapDescribe({ original: bunTest.describe });
 
   const quarantine =
     (id: string, fn: TestFunction, budget: number) =>
@@ -387,20 +379,37 @@ const install = (reportDir: string): void => {
     };
 
   const WRAPPED_FORMS = new Set<PropertyKey>(["only", "concurrent", "serial"]);
-  const test = new Proxy(bunTest.test, {
-    get: (target, key) => {
-      const value: unknown = Reflect.get(target, key, target);
-      if (!isFunction(value)) {
-        return value;
-      }
-      const bound = value.bind(target);
-      return WRAPPED_FORMS.has(key) ? register(bound) : bound;
-    },
-    apply: (target, _self, args: unknown[]) =>
-      register((...forwarded: unknown[]) =>
-        Reflect.apply(target, undefined, forwarded),
-      )(...args),
-  });
+  // Bun's modifiers are callable scope objects. Binding them turns them into
+  // ordinary functions, so chained methods such as skip.each lose their
+  // native receiver. Proxy the callable and each member without replacing it.
+  type TestCallableOptions = {
+    original: CallableFunction;
+    receiver?: CallableFunction | undefined;
+    registration: "wrap" | "native";
+  };
+  const wrapTest = ({
+    original,
+    receiver,
+    registration,
+  }: TestCallableOptions): TestFunction => {
+    const forward = (...args: unknown[]) =>
+      Reflect.apply(original, receiver, args);
+    return new Proxy(forward, {
+      get: (_target, key) => {
+        const value: unknown = Reflect.get(original, key, original);
+        return isFunction(value)
+          ? wrapTest({
+              original: value,
+              receiver: original,
+              registration: WRAPPED_FORMS.has(key) ? "wrap" : "native",
+            })
+          : value;
+      },
+      apply: (_target, _self, args: unknown[]) =>
+        registration === "wrap" ? register(forward)(...args) : forward(...args),
+    });
+  };
+  const test = wrapTest({ original: bunTest.test, registration: "wrap" });
 
   void mock.module("bun:test", () => ({
     ...bunTest,
