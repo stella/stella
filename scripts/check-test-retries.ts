@@ -1,6 +1,5 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
-import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -11,18 +10,12 @@ import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import {
   type ArrayExpression,
-  type ArrowFunctionExpression,
-  type BindingPattern,
-  type BindingRestElement,
   type CallExpression,
-  type FormalParameterRest,
-  type Function as SyntaxFunction,
   type Node,
   type ObjectExpression,
   type ObjectProperty,
   parseSource,
   type Program,
-  type TSParameterProperty,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 
@@ -58,7 +51,6 @@ type Source = {
   program: Program;
   root: string;
   text: string;
-  unresolvedBindings: ReadonlySet<string>;
   configAncestry: ReadonlySet<string>;
 };
 
@@ -241,9 +233,6 @@ const resolveDevicePreset = (
 };
 
 const resolveVariable = (name: string, source: Source): Node | undefined => {
-  if (source.unresolvedBindings.has(name)) {
-    return undefined;
-  }
   for (const statement of source.program.body) {
     let declaration: Node = statement;
     if (
@@ -561,6 +550,10 @@ const nestedObjectLiterals = (
           visitExpression(member.argument, true, false);
           continue;
         }
+        if (member.kind !== "init") {
+          unknownConfig = true;
+          continue;
+        }
         let name: string | undefined;
         if (member.shorthand || isPropertyAssignment(member)) {
           name = propertyName(member);
@@ -613,7 +606,6 @@ const parseConfigSource = (
         program: parsed.program,
         root,
         text,
-        unresolvedBindings: new Set<string>(),
         configAncestry: new Set([file]),
       };
 };
@@ -627,9 +619,6 @@ const importedBinding = (
   source: Source,
   local: string,
 ): ImportedConfigBinding | undefined => {
-  if (source.unresolvedBindings.has(local)) {
-    return undefined;
-  }
   for (const statement of source.program.body) {
     if (
       statement.type !== "ImportDeclaration" ||
@@ -666,155 +655,7 @@ const importedBinding = (
   return undefined;
 };
 
-// A config helper declared at the top level: `const helper = () => ...`,
-// `function helper() {}`, exported or not.
-const topLevelFunction = (
-  source: Source,
-  name: string,
-): SyntaxFunction | ArrowFunctionExpression | undefined => {
-  for (const statement of source.program.body) {
-    const declaration =
-      statement.type === "ExportNamedDeclaration"
-        ? statement.declaration
-        : statement;
-    if (
-      declaration?.type === "FunctionDeclaration" &&
-      declaration.id?.name === name
-    ) {
-      return declaration;
-    }
-    if (declaration?.type !== "VariableDeclaration") {
-      continue;
-    }
-    for (const declarator of declaration.declarations) {
-      const init =
-        declarator.init === null
-          ? undefined
-          : unwrap(declarator.init, [
-              "ParenthesizedExpression",
-              "TSAsExpression",
-              "TSSatisfiesExpression",
-            ]);
-      if (
-        declarator.id.type === "Identifier" &&
-        declarator.id.name === name &&
-        (init?.type === "ArrowFunctionExpression" ||
-          init?.type === "FunctionExpression")
-      ) {
-        return init;
-      }
-    }
-  }
-  return undefined;
-};
-
-// What a helper returns: an arrow's expression body, or the one `return` its
-// body ends with.
-const returnedExpression = (
-  helper: SyntaxFunction | ArrowFunctionExpression,
-): Node | undefined => {
-  const { body } = helper;
-  if (body === null) {
-    return undefined;
-  }
-  if (body.type !== "BlockStatement") {
-    return body;
-  }
-  let returnCount = 0;
-  walk(body, (node) => {
-    // A nested function owns its returns; control-flow blocks do not.
-    if (
-      node.type === "FunctionDeclaration" ||
-      node.type === "FunctionExpression" ||
-      node.type === "ArrowFunctionExpression"
-    ) {
-      return "skip-children";
-    }
-    if (node.type === "ReturnStatement") {
-      returnCount += 1;
-    }
-    return undefined;
-  });
-  const last = body.body.at(-1);
-  return returnCount === 1 &&
-    last?.type === "ReturnStatement" &&
-    last.argument !== null
-    ? last.argument
-    : undefined;
-};
-
 type ConfigTarget = { object: ObjectExpression; source: Source };
-
-type ConfigBindingPattern =
-  | BindingPattern
-  | BindingRestElement
-  | FormalParameterRest
-  | TSParameterProperty;
-
-const bindingNames = (pattern: ConfigBindingPattern): string[] => {
-  switch (pattern.type) {
-    case "Identifier":
-      return [pattern.name];
-    case "RestElement":
-      return bindingNames(pattern.argument);
-    case "AssignmentPattern":
-      return bindingNames(pattern.left);
-    case "TSParameterProperty":
-      return bindingNames(pattern.parameter);
-    case "ArrayPattern":
-      return pattern.elements.flatMap((element) =>
-        element === null ? [] : bindingNames(element),
-      );
-    case "ObjectPattern":
-      return pattern.properties.flatMap((property) =>
-        bindingNames(
-          property.type === "RestElement" ? property.argument : property.value,
-        ),
-      );
-    default:
-      pattern satisfies never;
-      return panic("Unexpected configuration binding pattern");
-  }
-};
-
-const helperBindingNames = (
-  helper: SyntaxFunction | ArrowFunctionExpression,
-) => {
-  const names = new Set(helper.params.flatMap(bindingNames));
-  if (helper.type !== "ArrowFunctionExpression" && helper.id !== null) {
-    names.add(helper.id.name);
-  }
-  walk(helper, (node) => {
-    if (node.type === "FunctionDeclaration" && node !== helper) {
-      if (node.id !== null) {
-        names.add(node.id.name);
-      }
-      return "skip-children";
-    }
-    if (
-      (node.type === "FunctionExpression" ||
-        node.type === "ArrowFunctionExpression") &&
-      node !== helper
-    ) {
-      return "skip-children";
-    }
-    if (node.type === "VariableDeclarator") {
-      for (const name of bindingNames(node.id)) {
-        names.add(name);
-      }
-    }
-    if (node.type === "ClassDeclaration" && node.id !== null) {
-      names.add(node.id.name);
-    }
-    if (node.type === "CatchClause" && node.param !== null) {
-      for (const name of bindingNames(node.param)) {
-        names.add(name);
-      }
-    }
-    return undefined;
-  });
-  return names;
-};
 
 const playwrightFactoryLocal = (
   callee: Node,
@@ -848,147 +689,6 @@ const playwrightFactoryLocal = (
   return binding?.type === "namespace" && binding.module === "@playwright/test"
     ? local
     : undefined;
-};
-
-const scopeForHelper = (
-  helper: SyntaxFunction | ArrowFunctionExpression,
-  source: Source,
-) => ({
-  ...source,
-  unresolvedBindings: new Set([
-    ...source.unresolvedBindings,
-    ...helperBindingNames(helper),
-  ]),
-});
-
-const pureConfigCall = (call: CallExpression, source: Source): boolean => {
-  const callee = unwrap(call.callee, [
-    "ParenthesizedExpression",
-    "TSAsExpression",
-    "TSSatisfiesExpression",
-  ]);
-  if (
-    callee.type === "FunctionExpression" ||
-    callee.type === "ArrowFunctionExpression"
-  ) {
-    return !helperHasEffects(callee, scopeForHelper(callee, source));
-  }
-  if (playwrightFactoryLocal(callee, source) !== undefined) {
-    return true;
-  }
-  if (callee.type === "Identifier") {
-    const binding = importedBinding(source, callee.name);
-    return (
-      binding?.type === "named" &&
-      (binding.module === "node:path" || binding.module === "path") &&
-      (binding.name === "join" || binding.name === "resolve")
-    );
-  }
-  if (
-    callee.type !== "MemberExpression" ||
-    callee.object.type !== "Identifier"
-  ) {
-    return false;
-  }
-  const member =
-    !callee.computed && callee.property.type === "Identifier"
-      ? callee.property.name
-      : literalText(callee.property);
-  const binding = importedBinding(source, callee.object.name);
-  return (
-    binding !== undefined &&
-    (binding.type === "default" || binding.type === "namespace") &&
-    (binding.module === "node:path" || binding.module === "path") &&
-    (member === "join" || member === "resolve")
-  );
-};
-
-const CONFIG_EFFECT_NODE_TYPES = new Set([
-  "AssignmentExpression",
-  "UpdateExpression",
-  "NewExpression",
-  "TaggedTemplateExpression",
-  "ImportExpression",
-  "AwaitExpression",
-  "YieldExpression",
-]);
-
-const helperHasEffects = (
-  helper: SyntaxFunction | ArrowFunctionExpression,
-  source: Source,
-): boolean => {
-  let effects = false;
-  const returned = returnedExpression(helper);
-  walk(helper, (node, ancestors) => {
-    if (
-      node !== helper &&
-      (node.type === "FunctionDeclaration" ||
-        node.type === "FunctionExpression" ||
-        node.type === "ArrowFunctionExpression")
-    ) {
-      return "skip-children";
-    }
-    if (
-      CONFIG_EFFECT_NODE_TYPES.has(node.type) ||
-      (node.type === "UnaryExpression" && node.operator === "delete") ||
-      (node.type === "Property" && node.kind !== "init")
-    ) {
-      effects = true;
-    }
-    if (node.type === "CallExpression" && !pureConfigCall(node, source)) {
-      effects = true;
-    }
-    // A property read before the return can invoke an unknown getter.
-    if (
-      node.type === "MemberExpression" &&
-      (returned === undefined ||
-        node.start < returned.start ||
-        node.end > returned.end)
-    ) {
-      const parent = ancestors.at(-1);
-      if (
-        parent?.type !== "CallExpression" ||
-        parent.callee !== node ||
-        !pureConfigCall(parent, source)
-      ) {
-        effects = true;
-      }
-    }
-    return effects ? "skip-children" : undefined;
-  });
-  return effects;
-};
-
-const helperConfig = (
-  helper: SyntaxFunction | ArrowFunctionExpression,
-  source: Source,
-): ConfigTarget | undefined => {
-  const returned = returnedExpression(helper);
-  const expression =
-    returned === undefined
-      ? undefined
-      : unwrap(returned, [
-          "ParenthesizedExpression",
-          "TSAsExpression",
-          "TSSatisfiesExpression",
-        ]);
-  if (expression === undefined) {
-    return undefined;
-  }
-  // Local values are not evaluated; lookups preserve their shadowing rather
-  // than falling back to same-named module declarations or imports.
-  const helperSource = scopeForHelper(helper, source);
-  if (helperHasEffects(helper, helperSource)) {
-    return undefined;
-  }
-  if (expression.type === "CallExpression") {
-    const local = playwrightFactoryLocal(expression.callee, helperSource);
-    if (local === undefined) {
-      return undefined;
-    }
-  }
-  const object = configObjectOf(expression, helperSource);
-  return object === undefined ? undefined : { object, source: helperSource };
 };
 
 /**
@@ -1034,12 +734,9 @@ const repositoryModule = (
   }
 };
 
-/**
- * The object a config exports. A config built by a helper in this repository
- * (`export default sharedConfig({...})`) is read from the object the helper
- * returns; a helper the reader cannot follow yields no config, which fails
- * closed.
- */
+// Configuration roots are literal data or the imported Playwright factory.
+// Repository functions stay opaque: reading their return values cannot prove
+// the configuration that executing them produces.
 const configTarget = (source: Source): ConfigTarget | undefined => {
   for (const statement of source.program.body) {
     const expression = exportedExpression(statement);
@@ -1048,32 +745,9 @@ const configTarget = (source: Source): ConfigTarget | undefined => {
     }
     if (
       expression.type === "CallExpression" &&
-      expression.callee.type === "Identifier"
+      playwrightFactoryLocal(expression.callee, source) === undefined
     ) {
-      const local = expression.callee.name;
-      const imported = importedBinding(source, local);
-      if (imported !== undefined && imported.type !== "named") {
-        return undefined;
-      }
-      let module: Source | null | undefined = source;
-      if (imported !== undefined) {
-        module =
-          imported.module === "@playwright/test"
-            ? undefined
-            : repositoryModule(source, imported.module);
-      }
-      if (module === null) {
-        return undefined;
-      }
-      if (module !== undefined) {
-        const helper = topLevelFunction(module, imported?.name ?? local);
-        if (helper !== undefined) {
-          return helperConfig(helper, module);
-        }
-        if (imported !== undefined) {
-          return undefined;
-        }
-      }
+      return undefined;
     }
     const object = configObjectOf(expression, source);
     if (object !== undefined) {
@@ -1189,7 +863,6 @@ const scanTestSource = (
     program: parseSource(file, sourceText).program,
     root,
     text: sourceText,
-    unresolvedBindings: new Set<string>(),
     configAncestry: new Set([file]),
   };
   const findings: TestRetryFinding[] = [];
