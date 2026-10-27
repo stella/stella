@@ -520,6 +520,22 @@ const unresolvedCitationTextAnchors = ({
     };
   });
 
+type TextSpan = { start: number; end: number };
+
+/** The spans that share no character with any linked span of the block. */
+const outsideLinkedSpans = <TSpan extends TextSpan>(
+  spans: readonly TSpan[] | undefined,
+  linked: readonly (readonly TextSpan[] | undefined)[],
+): TSpan[] | undefined =>
+  spans?.filter(
+    (span) =>
+      !linked.some((group) =>
+        group?.some(
+          (other) => other.start < span.end && span.start < other.end,
+        ),
+      ),
+  );
+
 const buildAnchorsByPieceId = ({
   adapters,
   annotations,
@@ -634,19 +650,17 @@ const buildAnchorsByPieceId = ({
         start: span.start,
       });
     }
-    // An official CURIA link already navigates; an unresolved peek over the
-    // same words would have nothing to open, so the link keeps them.
-    const externalDecisions = externalCjeuSpansByBlock.get(blockId);
+    // A resolved decision link or an official CURIA link already navigates;
+    // an unresolved peek over the same words (a longer docket such as
+    // `4 Tdo 1323/2020-906` around a resolved `4 Tdo 1323/2020`) would have
+    // nothing to open, so the link keeps them.
     anchors.push(
       ...unresolvedCitationTextAnchors({
         annotations: blockAnnotations,
-        spans: unresolvedCitationSpans[blockId]?.filter(
-          (span) =>
-            externalDecisions?.some(
-              (external) =>
-                external.start < span.end && span.start < external.end,
-            ) !== true,
-        ),
+        spans: outsideLinkedSpans(unresolvedCitationSpans[blockId], [
+          citationSpans[blockId],
+          externalCjeuSpansByBlock.get(blockId),
+        ]),
       }),
     );
     for (const span of provisionSpans[blockId] ?? []) {

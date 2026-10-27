@@ -311,6 +311,64 @@ test("a citation the corpus could not resolve is marked in the text, not linked"
   expect(mark[0]).not.toContain("href=");
 });
 
+test("a resolved decision link keeps words an unresolved citation also covers", () => {
+  const overlapText =
+    "Soud odkázal na usnesení 4 Tdo 1323/2020-906 téhož senátu.";
+  const overlapAst = {
+    ...ast,
+    blocks: [
+      {
+        type: "paragraph",
+        id: "overlap",
+        anchorId: "p-1",
+        inlines: [{ type: "text", text: overlapText }],
+        plainText: overlapText,
+      },
+    ],
+  } satisfies DocumentAst;
+  const placements = prepareDecisionTextPlacements({
+    adapters: fakeReaderAdapters,
+    blocks: overlapAst.blocks,
+    annotationAnchors: [],
+    statuteCitationAnchors: [],
+    citationAnchors: [
+      {
+        id: "resolved",
+        citationText: "4 Tdo 1323/2020",
+        treatment: "positive",
+        decision: {
+          id: "cited",
+          caseNumberType: "case-number",
+          ecli: null,
+          caseNumber: "4 Tdo 1323/2020",
+          court: "Nejvyšší soud",
+          country: "CZE",
+          language: "cs",
+          slug: null,
+          languageAlternates: [],
+          decisionDate: null,
+        },
+      },
+    ],
+    unresolvedCitationAnchors: [
+      { id: "unresolved-longer", citationText: "4 Tdo 1323/2020-906" },
+    ],
+    provisionAnchors: [],
+  });
+  const markup = renderToStaticMarkup(
+    <DecisionReaderProvider adapters={fakeReaderAdapters}>
+      <DecisionText
+        decision={{ ...decision, documentAst: overlapAst }}
+        decisionId={decision.id}
+        isHydrated
+        placements={placements}
+      />
+    </DecisionReaderProvider>,
+  );
+  expect(markup).toContain('href="#decision-cited"');
+  expect(markup).not.toContain('data-unresolved-citation="unresolved-longer"');
+});
+
 test("an unresolved CJEU citation keeps its official CURIA link", () => {
   const cjeuText = "Soudní dvůr ve věci C-106/89 rozhodl jinak.";
   const cjeuAst = {

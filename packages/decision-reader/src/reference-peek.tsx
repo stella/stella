@@ -364,9 +364,13 @@ export const ReferencePeek = ({
         align="start"
         className="reader-chrome w-[min(28rem,calc(100vw-2rem))]"
         finalFocus={() => {
+          // The trigger is handed back once: a later close of a peek opened
+          // by hover took no focus and must not move it to this one.
+          const returnTo = focusedTrigger.current;
+          focusedTrigger.current = null;
           // Restoring keyboard focus after dismissal must not reopen the peek.
           restoringFocus.current = true;
-          focusedTrigger.current?.focus({ preventScroll: true });
+          returnTo?.focus({ preventScroll: true });
           restoringFocus.current = false;
           return false;
         }}
