@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
@@ -16,6 +18,7 @@ import {
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { INVOICE_LEGACY_PAYMENT_BACKFILL } from "@/api/lib/billing/invoice-payment-backfill";
 import { recordInvoicePayment } from "@/api/lib/billing/invoice-payments";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -41,6 +44,8 @@ const TOTAL = 10_000;
 type Fixture = {
   /** The database owner: seeds invoices; payments force RLS even for it. */
   db: GatedTestDb;
+  /** The owner's connection as the online migration phase uses it. */
+  owner: OnlineMigrationConnection;
   /** Runs as the application role scoped to the fixture's owner. */
   asApp: <T>(run: (tx: Transaction) => Promise<T>) => Promise<T>;
   /** One connection per interleaved actor. */
@@ -58,7 +63,7 @@ const withFixture = async (
   run: (fixture: Fixture) => Promise<void>,
 ) =>
   await withGatedTestClients(url, async ({ openClient }) => {
-    const { db } = openClient({ max: 1 });
+    const { db, sql: ownerSql } = openClient({ max: 1 });
     const actors = {
       a: openClient({ max: 1 }).db,
       b: openClient({ max: 1 }).db,
@@ -121,6 +126,15 @@ const withFixture = async (
       );
       await run({
         db,
+        owner: {
+          execute: async (query, params = []) => {
+            await ownerSql.unsafe(query, [...params]);
+          },
+          query: async (query, params = []) => [
+            ...(await ownerSql.unsafe(query, [...params])),
+          ],
+          release: () => {},
+        },
         asApp: async (work) => await asApp(work),
         actors,
         organizationId,
@@ -287,4 +301,48 @@ if (!databaseUrl || !runPostgres) {
       expect(results).toHaveLength(6);
     });
   }, 60_000); // timeout: six interleavings, each with its own pair of real Postgres sessions and lock waits
+
+  // The online phase runs as the table owner, which forced row security
+  // admits only through the backfill's own policies: it must see existing
+  // payments (or it would settle an invoice twice) and may insert only a
+  // recorder-less settlement.
+  test("the settling-payment backfill runs as the owner under forced row security", async () => {
+    await withFixture(databaseUrl, async (fixture) => {
+      const { db, asApp, owner, invoiceId } = fixture;
+      await db
+        .update(invoices)
+        .set({
+          status: INVOICE_STATUS.PAID,
+          paidAt: new Date("2026-07-01T10:00:00Z"),
+        })
+        .where(eq(invoices.id, invoiceId));
+      await INVOICE_LEGACY_PAYMENT_BACKFILL.repair(owner);
+      await INVOICE_LEGACY_PAYMENT_BACKFILL.repair(owner);
+      expect(
+        (await INVOICE_LEGACY_PAYMENT_BACKFILL.readCompletion(owner)).type,
+      ).toBe("complete");
+      expect(
+        await asApp(
+          async (tx) =>
+            await tx
+              .select({
+                amount: invoicePayments.amount,
+                paidOn: invoicePayments.paidOn,
+                recordedBy: invoicePayments.recordedBy,
+              })
+              .from(invoicePayments)
+              .where(eq(invoicePayments.invoiceId, invoiceId)),
+        ),
+      ).toEqual([{ amount: TOTAL, paidOn: "2026-07-01", recordedBy: null }]);
+      // The owner may not insert a payment someone is said to have entered.
+      const forged = await Result.tryPromise(
+        async () =>
+          await owner.query(
+            `INSERT INTO public.invoice_payments (id, organization_id, invoice_id, amount, paid_on, method, recorded_by) VALUES (gen_random_uuid(), $1, $2, 1, '2026-07-01', 'other', 'someone') RETURNING id`,
+            [fixture.organizationId, invoiceId],
+          ),
+      );
+      expect(forged.isErr()).toBe(true);
+    });
+  }, 60_000); // timeout: real Postgres sessions run the backfill twice
 }

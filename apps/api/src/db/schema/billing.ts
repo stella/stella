@@ -26,6 +26,7 @@ import {
   completeInvoiceVisibilityPolicy,
   invoiceLineOwnerReadPolicy,
   invoicePaymentNoDeletePolicy,
+  invoicePaymentOwnerBackfillPolicies,
   invoicePolicies,
   timeEntryPolicies,
 } from "@/api/db/rls";
@@ -1339,7 +1340,9 @@ export const invoicePayments = p.pgTable(
     note: p.varchar("note", {
       length: INVOICE_PAYMENT_INPUT_LIMITS.noteMaxChars,
     }),
-    recordedBy: p.text("recorded_by").notNull().$type<SafeId<"user">>(),
+    // Null only on a settlement recorded for an invoice marked paid before
+    // payment records existed (`lib/billing/invoice-payment-backfill`): nobody entered it.
+    recordedBy: p.text("recorded_by").$type<SafeId<"user">>(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     voidedAt: timestamptz("voided_at"),
     voidedBy: p.text("voided_by").$type<SafeId<"user">>(),
@@ -1358,6 +1361,7 @@ export const invoicePayments = p.pgTable(
     ),
     completeInvoiceVisibilityPolicy("invoice_payments", table),
     invoicePaymentNoDeletePolicy(),
+    ...invoicePaymentOwnerBackfillPolicies(),
     ...reviewResetOwnerPolicies("invoice_payments"),
     ...orgPolicies(),
   ],

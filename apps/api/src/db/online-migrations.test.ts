@@ -1629,6 +1629,13 @@ const createHarness = ({
           ) {
             return [];
           }
+          // ...and with its invoices' sent markers and settling payments.
+          if (
+            query.includes("i.sent_at IS NULL") ||
+            query.includes("FROM public.invoice_payments p")
+          ) {
+            return [];
+          }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
             if (timeoutRepairBatch) {

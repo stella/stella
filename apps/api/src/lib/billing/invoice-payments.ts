@@ -205,9 +205,14 @@ const refusedStatus = (status: InvoiceStatus): HandlerError | null => {
         status: 409,
         message: "A void invoice cannot take payments",
       });
+    case INVOICE_STATUS.PAID:
+      return new HandlerError({
+        status: 409,
+        message: "This invoice is already paid; nothing is outstanding",
+        hint: "To correct its payments, void the wrong payment first; that reopens the invoice for a new one.",
+      });
     case INVOICE_STATUS.FINALIZED:
     case INVOICE_STATUS.SENT:
-    case INVOICE_STATUS.PAID:
       return null;
     default:
       status satisfies never;

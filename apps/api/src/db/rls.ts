@@ -1963,6 +1963,27 @@ export const completeInvoiceVisibilityPolicy = (
     withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
   });
 
+const INVOICE_PAYMENTS_OWNER = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)`;
+
+/**
+ * FORCE RLS applies to the table owner, which runs the online backfill that
+ * records the settlement of invoices marked paid before payment records
+ * existed. It reads every payment (so a repaired invoice leaves its selection)
+ * and inserts only recorder-less settlements; it never updates or deletes.
+ */
+export const invoicePaymentOwnerBackfillPolicies = () => [
+  p.pgPolicy("invoice_payments_owner_select", {
+    for: "select",
+    to: "public",
+    using: INVOICE_PAYMENTS_OWNER,
+  }),
+  p.pgPolicy("invoice_payments_owner_backfill_insert", {
+    for: "insert",
+    to: "public",
+    withCheck: sql`${INVOICE_PAYMENTS_OWNER} AND recorded_by IS NULL`,
+  }),
+];
+
 /**
  * Payments are reversed by voiding, never removed: the request role cannot
  * delete one. The organization's own deletion still cascades.

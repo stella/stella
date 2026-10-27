@@ -21,7 +21,7 @@ CREATE TABLE "invoice_payments" (
   "method" text NOT NULL,
   "reference" varchar(140),
   "note" varchar(1000),
-  "recorded_by" text NOT NULL,
+  "recorded_by" text,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   "voided_at" timestamptz,
   "voided_by" text,
@@ -62,4 +62,15 @@ CREATE POLICY "review_reset_owner_select" ON "invoice_payments" FOR SELECT TO PU
 CREATE POLICY "review_reset_owner_delete" ON "invoice_payments" FOR DELETE TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)
   AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);;--> statement-breakpoint
+
+-- The online backfill (apps/api/src/lib/billing/invoice-payment-backfill.ts) runs as
+-- the owner: it reads every payment and inserts only the recorder-less
+-- settlement of an invoice marked paid before payment records existed.
+CREATE POLICY "invoice_payments_owner_select" ON "invoice_payments" FOR SELECT TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)
+);--> statement-breakpoint
+CREATE POLICY "invoice_payments_owner_backfill_insert" ON "invoice_payments" FOR INSERT TO PUBLIC WITH CHECK (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)
+  AND recorded_by IS NULL
 );
