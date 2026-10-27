@@ -1425,6 +1425,15 @@ export const hasDeclaredMarkdownReader = (file: string, root = ROOT) =>
       reader.inputs.some((input) => matches(file, input)),
   );
 
+// Code-point order without a collation package: the scope planner runs
+// before dependencies are installed.
+const compareCodePoints = (left: string, right: string) => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
 export const markdownChecks = ({
   changed,
   root = ROOT,
@@ -1445,7 +1454,11 @@ export const markdownChecks = ({
     }
     checks.set(JSON.stringify(reader.command), reader.command);
   }
-  return [...checks.values()];
+  // Readers come in file-listing order, which varies by filesystem; the plan
+  // is ordered by command so the same change always yields the same checks.
+  return [...checks.entries()]
+    .toSorted(([left], [right]) => compareCodePoints(left, right))
+    .map(([, command]) => command);
 };
 
 type ScopeOptions = {
