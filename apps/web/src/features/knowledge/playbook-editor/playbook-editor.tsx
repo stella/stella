@@ -93,7 +93,10 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
-import { useLocale, useStepsMarkerStyle } from "@/i18n/formatting-context";
+import {
+  useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -120,8 +123,9 @@ import {
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { usePlaybookNavStore } from "@/stores/knowledge/playbook-nav-store";
 
 import { usePlaybookPaneLifecycle } from "./use-playbook-pane-lifecycle";
@@ -365,7 +369,7 @@ const PlaybookEditorLoader = ({
         ? false
         : OPEN_EDITOR_REFETCH_INTERVAL_MS,
   });
-  const detailView = useQueryView(detailQuery, {
+  const detailView = queryView(detailQuery, {
     isEmpty: (detail) => !("positions" in detail),
   });
   const seed = resolveDetailSeed({
@@ -740,7 +744,7 @@ const PlaybookEditorForm = ({
     initial.draft.documentTypeKey,
   );
   const documentTypesDataQuery = useQuery(documentTypesOptions(organizationId));
-  const documentTypesDataView = useQueryView(documentTypesDataQuery);
+  const documentTypesDataView = queryView(documentTypesDataQuery);
   useQueryViewError(documentTypesDataView, "PlaybookEditorForm:query");
   const documentTypesData =
     documentTypesDataView.type === "items"
@@ -1903,7 +1907,7 @@ const OutlineRail = ({
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
-  const formattingLocale = useLocale();
+  const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
   return (
     <nav

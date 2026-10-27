@@ -1,12 +1,18 @@
+import { useTranslations } from "use-intl";
+
 import { EmptyStateScreen } from "@/components/empty-state-screen";
 
-const ChatsScreen = () => (
-  <EmptyStateScreen
-    description="Keep ongoing work close and continue from any device."
-    emptyDescription="New conversations and recent threads will appear here."
-    emptyTitle="No conversations yet"
-    title="Chats"
-  />
-);
+const ChatsScreen = () => {
+  const t = useTranslations();
+
+  return (
+    <EmptyStateScreen
+      description={t("chat.description")}
+      emptyDescription={t("chat.emptyDescription")}
+      emptyTitle={t("chat.emptyTitle")}
+      title={t("tabs.chat")}
+    />
+  );
+};
 
 export default ChatsScreen;

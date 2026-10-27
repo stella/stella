@@ -61,8 +61,6 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { useLegalDocumentChatThreads } =
   await import("@/features/chat/legal-document-chat-threads");
-const { ChatEditorProvider } =
-  await import("@/components/chat-editor-provider");
 const { LegalReaderAIChat } = await import("./legal-reader-ai-chat");
 const { askAboutReaderPassage } =
   await import("./annotations/reader-annotation-target");
@@ -92,7 +90,10 @@ afterAll(async () => {
 
 type ActiveLegal = Parameters<typeof LegalReaderAIChat>[0]["activeLegal"];
 
-/** The law route as the app mounts a reader: no AI key gate above it. */
+/**
+ * The law route as the app mounts a member's reader: neither the AI key gate
+ * nor a chat editor above it.
+ */
 const mountReader = async (activeLegal: ActiveLegal) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -100,11 +101,9 @@ const mountReader = async (activeLegal: ActiveLegal) => {
   const router = createRouter({
     routeTree: createRootRoute({
       component: () => (
-        <ChatEditorProvider>
-          <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
-            <p>{READER_CONTENT}</p>
-          </LegalReaderAIChat>
-        </ChatEditorProvider>
+        <LegalReaderAIChat activeLegal={activeLegal} aiMode="enabled">
+          <p>{READER_CONTENT}</p>
+        </LegalReaderAIChat>
       ),
     }),
     history: createMemoryHistory({ initialEntries: ["/law/cz/statutes"] }),
@@ -136,10 +135,10 @@ const mountReader = async (activeLegal: ActiveLegal) => {
 };
 
 // The statute and decision readers, in the main view and in their inspector
-// views, all reach the chat through this component. Every route that mounts
-// it provides the chat editor, but none may be trusted to put the AI key gate
-// above it, so the overlay must bring its own rather than panic in a
-// signed-in reader's face.
+// views, all reach the chat through this component. No route may be trusted
+// to put the AI key gate or a chat editor above it (a provider added above a
+// mounted reader would replace the reader), so the overlay must bring its own
+// rather than panic in a signed-in reader's face.
 test.each([
   {
     type: "statute",
@@ -152,12 +151,13 @@ test.each([
     caseNumber: "7 Azs 172/2025",
   } as const,
 ])(
-  "a signed-in $type reader renders its chat without a route-level AI gate",
+  "a signed-in $type reader renders its chat without route-level chat providers",
   async (activeLegal) => {
     availabilityReads = 0;
     const queryClient = await mountReader(activeLegal);
-    // Nothing above the reader provides the gate, so the only availability
-    // read is the one the overlay host makes for itself. Without it the
+    // Nothing above the reader provides the gate or the editor, so the only
+    // availability read is the one the overlay host makes for itself, and the
+    // composer below registers with the host's own editor. Without either the
     // overlay panics and its boundary shows the error fallback instead.
     await waitFor(
       () => {

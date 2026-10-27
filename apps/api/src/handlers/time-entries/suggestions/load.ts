@@ -1,19 +1,25 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 
+import type { TimeEntrySource } from "@stll/api-contract";
+import { parseTimeEntrySuggestionEvidence } from "@stll/api-contract/time-entries";
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   chatMessages,
   chatThreads,
   entities,
+  TIME_ENTRY_SOURCE,
+  timeEntries,
   timeEntrySuggestions,
 } from "@/api/db/schema";
 import {
   type ActivitySignal,
   clusterActivitySignals,
+  subtractRecordedTime,
   type SuggestionCluster,
 } from "@/api/handlers/time-entries/suggestions/cluster";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -118,8 +124,103 @@ export type LoadTimeSuggestionsOptions = {
 type LoadedTimeSuggestions = {
   date: string;
   /** Clusters the timekeeper has not accepted or dismissed yet, in time order. */
-  pending: SuggestionCluster[];
+  pending: (SuggestionCluster & { alreadyCovered: boolean })[];
+  loggedMinutes: number;
 };
+
+const signalIdentityKey = (identity: ActivitySignal["identity"]) =>
+  `${identity.source}\n${identity.resourceId}\n${identity.timestamp}`;
+
+// Stored evidence is read as untrusted JSON: a decision whose evidence does not
+// parse, or names no signal identities, covers no signals.
+const decidedSignalKeys = (storedEvidence: unknown) =>
+  Array.isArray(storedEvidence)
+    ? storedEvidence.flatMap((item) => {
+        const parsed = parseTimeEntrySuggestionEvidence(item);
+        return parsed === null ? [] : parsed.signals.map(signalIdentityKey);
+      })
+    : [];
+
+const excludeDecidedSignals = (
+  signals: readonly ActivitySignal[],
+  decidedEvidence: readonly unknown[],
+) => {
+  const coveredSignalKeys = new Set(decidedEvidence.flatMap(decidedSignalKeys));
+  return signals.filter(
+    ({ identity }) => !coveredSignalKeys.has(signalIdentityKey(identity)),
+  );
+};
+
+// A fingerprint is a decision's idempotency key: once decided, a suggestion
+// with that fingerprint can never be resolved again, so it is never pending,
+// even when its decision's evidence names no signals to exclude.
+const withoutDecidedFingerprints = <T extends { fingerprint: string }>(
+  clusters: readonly T[],
+  decidedRows: readonly { fingerprint: string }[],
+) => {
+  const decided = new Set(decidedRows.map(({ fingerprint }) => fingerprint));
+  return clusters.filter(({ fingerprint }) => !decided.has(fingerprint));
+};
+
+// The day's logged time counts only entries booked to it; a timer booked to
+// the previous day that ran past midnight covers activity but is not logged here.
+const loggedMinutesOn = (
+  date: string,
+  recordedRows: readonly { dateWorked: string; durationMinutes: number }[],
+) => {
+  let minutes = 0;
+  for (const entry of recordedRows) {
+    if (entry.dateWorked === date) {
+      minutes += entry.durationMinutes;
+    }
+  }
+  return minutes;
+};
+
+type RecordedTimeScope = {
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  date: string;
+  range: { start: Date; end: Date };
+};
+
+// The timekeeper's time booked to the day, plus timed entries booked to
+// another day whose clock overlaps this one: a timer booked to the previous
+// day still covers this day's activity past midnight.
+const loadRecordedTime = async (
+  tx: Transaction,
+  { workspaceId, userId, date, range }: RecordedTimeScope,
+) =>
+  await tx
+    .select({
+      dateWorked: timeEntries.dateWorked,
+      source: timeEntries.source,
+      durationMinutes: timeEntries.durationMinutes,
+      startedAt: timeEntries.timerStartedAt,
+      endedAt: timeEntries.timerStoppedAt,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.workspaceId, workspaceId),
+        eq(timeEntries.userId, userId),
+        or(
+          eq(timeEntries.dateWorked, date),
+          and(
+            sql`${timeEntries.timerStartedAt} < ${range.end.toISOString()}::timestamptz`,
+            sql`${timeEntries.timerStoppedAt} > ${range.start.toISOString()}::timestamptz`,
+          ),
+        ),
+      ),
+    );
+
+// An accepted suggestion's entry paid for exactly the signals its decision
+// covers, which are already excluded before clustering; counting its minutes
+// again would mark unrelated activity as covered.
+const recordedOutsideSuggestions = <T extends { source: TimeEntrySource }>(
+  recordedRows: readonly T[],
+) =>
+  recordedRows.filter(({ source }) => source !== TIME_ENTRY_SOURCE.SUGGESTED);
 
 // Recomputes the day's suggested entries from the timekeeper's own signals in
 // this matter: the chat messages they sent and the audit rows their actions
@@ -229,7 +330,10 @@ export const loadTimeSuggestions = async function* ({
           : [];
 
       const decidedRows = await tx
-        .select({ fingerprint: timeEntrySuggestions.fingerprint })
+        .select({
+          fingerprint: timeEntrySuggestions.fingerprint,
+          evidence: timeEntrySuggestions.evidence,
+        })
         .from(timeEntrySuggestions)
         .where(
           and(
@@ -239,23 +343,42 @@ export const loadTimeSuggestions = async function* ({
           ),
         );
 
+      const recordedRows = await loadRecordedTime(tx, {
+        workspaceId,
+        userId,
+        date,
+        range,
+      });
+
       return {
         auditRows,
         chatRows,
         decidedRows,
         entityNames: new Map(entityRows.map((row) => [row.id, row.name])),
         resourceEntityIds,
+        recordedRows,
       };
     }),
   );
-  const { auditRows, chatRows, decidedRows, entityNames, resourceEntityIds } =
-    reads;
+  const {
+    auditRows,
+    chatRows,
+    decidedRows,
+    entityNames,
+    resourceEntityIds,
+    recordedRows,
+  } = reads;
 
   const signals: ActivitySignal[] = [];
   for (const row of chatRows) {
     signals.push({
       at: row.createdAt,
       key: `chat:${row.id}`,
+      identity: {
+        source: "chat_message",
+        resourceId: row.id,
+        timestamp: row.createdAt.toISOString(),
+      },
       evidence: { type: "chat_thread", id: row.threadId, title: row.title },
     });
   }
@@ -264,6 +387,11 @@ export const loadTimeSuggestions = async function* ({
     signals.push({
       at: row.createdAt,
       key: `audit:${row.id}`,
+      identity: {
+        source: "audit_log",
+        resourceId: row.id,
+        timestamp: row.createdAt.toISOString(),
+      },
       evidence: entityId
         ? {
             type: "resource",
@@ -282,27 +410,42 @@ export const loadTimeSuggestions = async function* ({
     });
   }
 
+  const uncoveredSignals = excludeDecidedSignals(
+    signals,
+    decidedRows.map(({ evidence }) => evidence),
+  );
   const clusters = clusterActivitySignals({
     date,
-    signals,
+    signals: uncoveredSignals,
     mergeGapMinutes: LIMITS.timeSuggestionMergeGapMinutes,
     tailMinutes: LIMITS.timeSuggestionTailMinutes,
   });
 
-  const decided = new Set(decidedRows.map((row) => row.fingerprint));
-
   const loaded: LoadedTimeSuggestions = {
     date,
-    pending: clusters.filter((cluster) => !decided.has(cluster.fingerprint)),
+    pending: withoutDecidedFingerprints(
+      subtractRecordedTime(clusters, recordedOutsideSuggestions(recordedRows)),
+      decidedRows,
+    ),
+    loggedMinutes: loggedMinutesOn(date, recordedRows),
   };
   return loaded;
 };
 
-export const serializeSuggestion = (cluster: SuggestionCluster) => ({
+export const serializeSuggestion = (
+  cluster: SuggestionCluster & { alreadyCovered: boolean },
+  minimumUnitMinutes: number,
+  billableByDefault: boolean,
+) => ({
   fingerprint: cluster.fingerprint,
   startedAt: cluster.startedAt.toISOString(),
   endedAt: cluster.endedAt.toISOString(),
-  durationMinutes: cluster.durationMinutes,
+  durationMinutes:
+    Math.ceil(cluster.durationMinutes / minimumUnitMinutes) *
+    minimumUnitMinutes,
+  engagedMinutes: cluster.durationMinutes,
+  alreadyCovered: cluster.alreadyCovered,
+  billableByDefault,
   signalCount: cluster.signalCount,
   evidence: cluster.evidence,
 });

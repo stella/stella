@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Vestlus",
+    "tasks": "Ülesanded",
+    "matters": "Toimikud",
+    "settings": "Seaded"
+  },
+  "chat": {
+    "description": "Hoidke pooleliolev töö käepärast ja jätkake mis tahes seadmest.",
+    "emptyTitle": "Vestlusi pole veel",
+    "emptyDescription": "Uued vestlused ja hiljutised lõimed ilmuvad siia."
+  },
+  "tasks": {
+    "description": "Vaadake, mis vajab tähelepanu, ilma kogu tööruumi avamata.",
+    "emptyTitle": "Avatud ülesandeid pole",
+    "emptyDescription": "Määratud ja eelseisvad ülesanded ilmuvad siia."
+  },
+  "matters": {
+    "description": "Leidke toimik ja saage kiiresti ülevaade olulisest kontekstist.",
+    "emptyTitle": "Toimikuid veel pole",
+    "emptyDescription": "Teie hiljutised toimikud ilmuvad siia.",
+    "loadFailed": "Teie toimikuid ei õnnestunud laadida.",
+    "retry": "Proovi uuesti"
+  },
+  "signIn": {
+    "title": "Logige sisse rakendusse stella",
+    "description": "Sisestage oma stella serveri aadress. Sisselogimise kinnitate brauseris.",
+    "serverLabel": "Serveri aadress",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Jätka",
+    "sessionEnded": "Teie seanss lõppes. Logige uuesti sisse.",
+    "errors": {
+      "address": "Sisestage https-aadress, näiteks stella.example.com.",
+      "unreachable": "Sellel aadressil ei vastanud ükski stella server.",
+      "denied": "Sisselogimist ei kinnitatud.",
+      "failed": "Sisselogimine jäi pooleli. Proovige uuesti."
+    }
+  },
+  "settings": {
+    "accountTitle": "Konto",
+    "server": "Server",
+    "signOut": "Logi välja"
+  }
+}

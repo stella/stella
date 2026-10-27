@@ -50,7 +50,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { downloadFile } from "@/lib/utils";
 
 const ERROR_CAPTURE = {
@@ -100,7 +100,7 @@ export const TwoFactorCard = () => {
   // as distinct from "no password needed": starting a password-gated action
   // before the account type is known could otherwise fire the plugin call
   // without a password for a credential account.
-  const accountsView = useQueryView(accountsQuery, { isEmpty: () => false });
+  const accountsView = queryView(accountsQuery, { isEmpty: () => false });
   const requiresPassword =
     accountsView.type === "items" && accountsView.refetchError === undefined
       ? accountsView.items.some(
@@ -117,7 +117,7 @@ export const TwoFactorCard = () => {
     ...authCapabilitiesOptions,
     enabled: isAnyDialogOpen,
   });
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const capabilitiesView = queryView(capabilitiesQuery);
   const canEmailConfirmationCode =
     capabilitiesView.type === "items" &&
     capabilitiesView.refetchError === undefined

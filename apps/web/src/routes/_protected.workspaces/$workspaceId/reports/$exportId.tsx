@@ -20,6 +20,7 @@ import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 function ReportExportRecoveryPage() {
   const t = useTranslations();
@@ -102,9 +103,10 @@ function ReportExportRecoveryPage() {
       if (destination === null) {
         return null;
       }
+      // The report page sits outside every view of the matter.
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
+        params: { workspaceId, viewId: DEFAULT_WORKSPACE_VIEW_ID },
         search: {
           entity: destination.entityId,
           field: destination.fieldId,

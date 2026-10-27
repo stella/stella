@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { compareByLocale } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterToolsCatalogueEntries } from "./tools-catalogue-search.logic";
 
@@ -33,6 +34,11 @@ const searchTextArbitrary = fc
   )
   .map((parts) => parts.join(""));
 const compareName = compareByLocale("en");
+
+const matchesFolded = (field: string, query: string) =>
+  foldSearchMatchText(field.toWellFormed()).includes(
+    foldSearchMatchText(query.trim().toWellFormed()),
+  );
 
 const entries = [
   {
@@ -96,7 +102,7 @@ describe("knowledge tool catalogue filtering", () => {
     ]);
   });
 
-  test("uses literal punctuation and does not fold accents", () => {
+  test("keeps punctuation literal while ignoring case and accents", () => {
     expect(
       filterToolsCatalogueEntries({
         compareName,
@@ -122,7 +128,24 @@ describe("knowledge tool catalogue filtering", () => {
         query: "+",
       }).map(({ displayName }) => displayName),
     ).toEqual(["Punctuation"]);
-    expect(filter("cafe")).toEqual([]);
+    expect(
+      filterToolsCatalogueEntries({
+        compareName,
+        entries: [
+          {
+            description: "Café Straße",
+            displayName: "Accented",
+            jurisdictions: [],
+            kind: "mcp",
+            tags: [],
+          },
+        ],
+        filter: "all",
+        jurisdictionFilter: new Set(),
+        localizedName: (entry) => entry.displayName,
+        query: "cafe strasse",
+      }).map(({ displayName }) => displayName),
+    ).toEqual(["Accented"]);
   });
 
   test("matches malformed surrogates as replacement characters and rejects half-astral queries", () => {
@@ -158,9 +181,9 @@ describe("knowledge tool catalogue filtering", () => {
     expect(filterEntries(astralEntries, "\ude00")).toEqual([]);
   });
 
-  test("knowledge tool filtering matches the previous pipeline for generated Unicode inputs", () => {
+  test("knowledge tool filtering keeps exactly the folded matches for generated Unicode inputs", () => {
     assertProperty(
-      "knowledge tool filtering matches the previous pipeline for generated Unicode inputs",
+      "knowledge tool filtering keeps exactly the folded matches for generated Unicode inputs",
       fc.property(
         fc.array(
           fc.record({
@@ -188,7 +211,6 @@ describe("knowledge tool catalogue filtering", () => {
           const localizedName = (entry: (typeof generatedEntries)[number]) =>
             entry.localizedName;
           const jurisdictionFilter = new Set(jurisdictionCodes);
-          const normalised = query.trim().toLowerCase().toWellFormed();
           const subset = generatedEntries.filter((entry) => {
             if (filterKind !== "all" && entry.kind !== filterKind) {
               return false;
@@ -200,25 +222,11 @@ describe("knowledge tool catalogue filtering", () => {
             ) {
               return false;
             }
-            if (normalised === "") {
-              return true;
-            }
             return (
-              entry.displayName
-                .toLowerCase()
-                .toWellFormed()
-                .includes(normalised) ||
-              localizedName(entry)
-                .toLowerCase()
-                .toWellFormed()
-                .includes(normalised) ||
-              entry.description
-                .toLowerCase()
-                .toWellFormed()
-                .includes(normalised) ||
-              entry.tags.some((tag) =>
-                tag.toLowerCase().toWellFormed().includes(normalised),
-              )
+              matchesFolded(entry.displayName, query) ||
+              matchesFolded(localizedName(entry), query) ||
+              matchesFolded(entry.description, query) ||
+              entry.tags.some((tag) => matchesFolded(tag, query))
             );
           });
           const expected = [...subset].toSorted((left, right) => {

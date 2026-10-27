@@ -17,12 +17,7 @@ import {
   useInfiniteQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import {
-  getRouteApi,
-  Link,
-  useMatch,
-  useRouterState,
-} from "@tanstack/react-router";
+import { getRouteApi, Link, useMatch, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -150,10 +145,10 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
@@ -163,6 +158,8 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
+import { DEFAULT_WORKSPACE_VIEW_ID } from "@/lib/workspaces/view-params.logic";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
 // SidebarContent); a thin track over the narrow icon strip reads as a bright
@@ -263,7 +260,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
   });
-  const inboxView = useQueryView(inboxQuery);
+  const inboxView = queryView(inboxQuery);
   // This badge decorates an always-available inbox link; hide it when the count cannot be read.
   const openInboxCount = inboxView.type === "items" ? inboxView.items.count : 0;
   const mounted = useHasMounted();
@@ -274,7 +271,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     }),
     enabled: mounted,
   });
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   // Thread activity only orders the matter shortcuts; the matter list remains independently available.
   const groupedChatThreads = mergeGroupedChatThreadPages(
     groupedThreadsView.type === "items"
@@ -1522,6 +1519,7 @@ const MatterItem = ({
               <MenuTrigger
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
+                tooltip={t("common.actions")}
               >
                 <EllipsisVerticalIcon className="size-4" />
               </MenuTrigger>
@@ -1612,7 +1610,7 @@ type MatterActivityListProps = {
   workspaceId: string;
 };
 
-const MatterActivityList = ({
+export const MatterActivityList = ({
   activeOrganizationId,
   id,
   userId,
@@ -1621,9 +1619,7 @@ const MatterActivityList = ({
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const mounted = useHasMounted();
   const {
     data,
@@ -1660,7 +1656,7 @@ const MatterActivityList = ({
       await navigateToWorkspaceFolder({
         folderId: entityId,
         navigate,
-        pathname,
+        router,
         queryClient,
         targetWorkspaceId: workspaceId,
       });
@@ -1668,13 +1664,18 @@ const MatterActivityList = ({
     }
 
     if (destination.type === "document") {
-      await openEntityInInspector(entityId, title, workspaceId);
+      await openEntityInInspector({
+        documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+        entityId,
+        label: title,
+        workspaceId,
+      });
       return;
     }
 
     await navigate({
       to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
+      params: { workspaceId, viewId: DEFAULT_WORKSPACE_VIEW_ID },
     });
   };
 

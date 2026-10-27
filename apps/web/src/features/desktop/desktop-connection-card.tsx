@@ -33,7 +33,7 @@ import {
 } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { notifyUserProblem } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 const serverHost = () => window.location.host;
 
@@ -53,7 +53,7 @@ export const DesktopConnectionCard = () => {
       organizationId: user.activeOrganizationId,
     }),
   );
-  const presenceView = useQueryView(presenceQuery);
+  const presenceView = queryView(presenceQuery);
   // An unreadable record never claims a link; the card falls back to what it
   // can see on this computer.
   const presence =

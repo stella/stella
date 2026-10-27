@@ -190,7 +190,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -204,6 +204,23 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -341,7 +358,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -6834,7 +6851,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -6848,6 +6865,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -6985,7 +7019,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -14254,7 +14288,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -14268,6 +14302,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -14405,7 +14456,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -16274,7 +16325,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Search case law is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Without strict, empty first relevance pages try some_terms hits ranked by term coverage; short pages may append them after all_terms hits. Totals/facets count full matches (facets: first phrasing, page one; total: uncounted for multiple phrasings). Filters: court, language, dates, decision type, provision, source_id (facets.source value). searches[] reports queryUsed and warnings. strict requires every word; otherwise function words are optional. Hits carry match, citationAuthority, matchingPassages, resourceName and caseNumber. read_case_law_decision types the reference; read_case_law_citations gives citing polarity. Use \`url\` for the reader and \`source_url\` for the publisher.",
+    "description": "Search case law. \`queries\` merges phrasings; matchedQueries names each hit's phrasings. \`limit\` is split evenly. Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values. Use \`url\` for the reader and \`source_url\` for the publisher.",
     "annotations": {
       "title": "Search case law",
       "destructiveHint": false,
@@ -16288,6 +16339,23 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       ],
       "additionalProperties": false,
       "properties": {
+        "facets": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "court",
+              "decisionType",
+              "source",
+              "language",
+              "year",
+              "courtYear"
+            ],
+            "type": "string"
+          },
+          "maxItems": 6,
+          "description": "Opt-in facet names; first phrasing, page one only.",
+          "default": []
+        },
         "queries": {
           "type": "array",
           "items": {
@@ -16425,7 +16493,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",

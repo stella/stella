@@ -54,7 +54,7 @@ import { cn } from "@stll/ui/utils";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import {
   useFormatter,
-  useLocale,
+  useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -190,7 +190,7 @@ const currentStep = (state: StudioState, hasResults: boolean): number => {
 
 function ContactImportStudio() {
   const t = useTranslations();
-  const formattingLocale = useLocale();
+  const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
   const queryClient = Route.useRouteContext({
     select: ({ queryClient: client }) => client,
