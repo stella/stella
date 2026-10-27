@@ -29,7 +29,7 @@ export const declarationsOf = (css: string, selector: string): Scope => {
       continue;
     }
     for (const [, name, value] of block.matchAll(
-      /(--[\w-]+)\s*:\s*([^;]+);/gu,
+      /(?<![\w-])(--[\w-]+)\s*:\s*([^\s;][^;]*);/gu,
     )) {
       if (name !== undefined && value !== undefined) {
         found.set(name, value.replaceAll(/\s+/gu, " ").trim());
@@ -66,20 +66,24 @@ export const substitute = (
   if (depth > 32) {
     return panic(`Theme variables reference each other: ${value}`);
   }
-  const mixed = value.replaceAll(
-    /--alpha\(\s*([^/]+?)\s*\/\s*([\d.]+%)\s*\)/gu,
-    (_alpha, color: string, amount: string) =>
-      `color-mix(in oklab, ${color} ${amount}, transparent)`,
+  const expanded = value.replaceAll(
+    /var\((--[\w-]+)\)/gu,
+    (_var, name: string) => {
+      const definition = scopes
+        .map((scope) => scope.get(name))
+        .find((candidate) => candidate !== undefined);
+      if (definition === undefined) {
+        return panic(`The theme uses ${name}, which nothing defines`);
+      }
+      return substitute(definition, scopes, depth + 1);
+    },
   );
-  return mixed.replaceAll(/var\((--[\w-]+)\)/gu, (_var, name: string) => {
-    const definition = scopes
-      .map((scope) => scope.get(name))
-      .find((candidate) => candidate !== undefined);
-    if (definition === undefined) {
-      return panic(`The theme uses ${name}, which nothing defines`);
-    }
-    return substitute(definition, scopes, depth + 1);
-  });
+  // Tailwind's `--alpha(color / n%)`, read once its colour is spelled out.
+  return expanded.replaceAll(
+    /(?<![\w-])--alpha\(((?:[^/()]|\([^()]*\))*)\/\s*([\d.]+%)\s*\)/gu,
+    (_alpha, color: string, amount: string) =>
+      `color-mix(in oklab, ${color.trim()} ${amount}, transparent)`,
+  );
 };
 
 /** A static CSS colour as sRGB hex, the form React Native reads. */
@@ -105,9 +109,12 @@ const camelCase = (name: string) =>
 export const mobileUiTheme = (uiCss: string, tailwindCss: string) => {
   // Tailwind declares its palette once, inside `@layer theme`.
   const palette = new Map(
-    [...tailwindCss.matchAll(/(--color-[\w-]+)\s*:\s*([^;]+);/gu)].flatMap(
-      ([, name, value]) =>
-        name === undefined || value === undefined ? [] : [[name, value.trim()]],
+    [
+      ...tailwindCss.matchAll(
+        /(?<![\w-])(--color-[\w-]+)\s*:\s*([^\s;][^;]*);/gu,
+      ),
+    ].flatMap(([, name, value]) =>
+      name === undefined || value === undefined ? [] : [[name, value.trim()]],
     ),
   );
   const light = declarationsOf(uiCss, ":root");
