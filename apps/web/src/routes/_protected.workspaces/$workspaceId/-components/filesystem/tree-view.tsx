@@ -67,7 +67,7 @@ import { RowActions } from "@/components/workspaces/row-actions";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import {
   draggable,
@@ -1831,7 +1831,7 @@ const formatDateValue = (
 };
 
 const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   if (column.type === "metadata") {
     switch (column.id) {
       case FILESYSTEM_CREATED_BY_ID:

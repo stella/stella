@@ -51,7 +51,8 @@ import {
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
@@ -137,7 +138,7 @@ export const CaseNumberCell = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const openDecision = useOpenDecisionTab();
   const { caseNumber, languageAlternates } = decision;
   const target = preferredDecisionTarget(decision, {

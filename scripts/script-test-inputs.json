@@ -150,6 +150,7 @@
       "turbo.json"
     ],
     "scripts/ci-browser-scope.test.ts": ["**"],
+    "scripts/ci-check-budgets.test.ts": [".github/ci-checks/**"],
     "scripts/ci-check-pool.test.ts": [
       ".github/**",
       "packages/property-testing/property-seeds.json"
@@ -442,6 +443,7 @@
       "packages/**",
       "scripts/**"
     ],
+    "scripts/tsdown-declaration-tools.test.ts": ["**"],
     "scripts/type-cost-measurement.test.ts": [
       ".github/workflows/type-cost-measurement.yml",
       "scripts/type-cost-projects.py"
