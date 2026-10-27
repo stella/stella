@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -18,16 +18,14 @@ const { stellaToast } = await import("@stll/ui/toast");
 
 const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
-let restoreToastSpy: () => void = () => {};
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients) {
     client.clear();
   }
   clients.length = 0;
   globalThis.fetch = originalFetch;
-  restoreToastSpy();
-  restoreToastSpy = () => {};
 });
 afterAll(async () => {
   await unregisterDomEnvironment();
@@ -37,9 +35,6 @@ test("bilingual document creation succeeds without an idempotency header", async
   const toastAdd = spyOn(stellaToast, "add").mockImplementation(
     () => "success-toast",
   );
-  restoreToastSpy = () => {
-    toastAdd.mockRestore();
-  };
   const requests: Request[] = [];
   globalThis.fetch = Object.assign(
     async (input: string | URL | Request, init?: RequestInit) => {
