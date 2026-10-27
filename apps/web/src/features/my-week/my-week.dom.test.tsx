@@ -25,6 +25,9 @@ const { IntlProvider } = await import("use-intl");
 const { stellaToast } = await import("@stll/ui/toast");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { roleOptions } = await import("@/lib/auth-queries");
+const { timeEntriesKeys } =
+  await import("@/lib/workspaces/queries/time-entries");
+const { invoicesKeys } = await import("@/lib/workspaces/queries/invoices");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { weekOf } = await import("@/features/my-week/my-week.logic");
@@ -443,6 +446,7 @@ const mount = (initialDate = MONDAY) => {
       </IntlProvider>
     </QueryClientProvider>,
   );
+  return client;
 };
 
 const weekTotalsText = (logged: string, billable: string) =>
@@ -713,6 +717,28 @@ describe("my week", () => {
     });
     expect(screen.queryByText("Later draft")).toBeNull();
     expect(submit.hasAttribute("disabled")).toBe(false);
+  });
+
+  test("submitting and approving refreshes the matters' time and invoice data", async () => {
+    serveWeek({ entries: [draftEntry()], suggestions: [] });
+    const client = mount();
+    // A matter's time list and invoice prefill an approver opened earlier.
+    const matterTime = timeEntriesKeys.all(LEASE_MATTER.id);
+    const matterInvoices = invoicesKeys.all(LEASE_MATTER.id);
+    client.setQueryData(matterTime, { items: [] });
+    client.setQueryData(matterInvoices, { items: [] });
+
+    const submitAndApprove = await screen.findByRole("button", {
+      name: messages.timesheets.week.submitAndApprove,
+    });
+    await act(async () => {
+      fireEvent.click(submitAndApprove);
+    });
+
+    await waitFor(() => {
+      expect(client.getQueryState(matterTime)?.isInvalidated).toBe(true);
+      expect(client.getQueryState(matterInvoices)?.isInvalidated).toBe(true);
+    });
   });
 
   test("a week with more drafts than one batch is submitted day by day", async () => {

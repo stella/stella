@@ -23,8 +23,13 @@ export const expensesQueryRoot = (workspaceId: string) =>
 export const flowRunsQueryRoot = (workspaceId: string) =>
   ["flow-runs", workspaceId] as const;
 
+const INVOICES_QUERY_ROOT = "invoices";
+
+/** Every matter's invoice queries, for a change that spans matters. */
+export const allInvoicesQueryRoot = () => [INVOICES_QUERY_ROOT] as const;
+
 export const invoicesQueryRoot = (workspaceId: string) =>
-  ["invoices", workspaceId] as const;
+  [INVOICES_QUERY_ROOT, workspaceId] as const;
 
 export const legalListsQueryRoot = (workspaceId: string) =>
   ["legal-lists", workspaceId] as const;

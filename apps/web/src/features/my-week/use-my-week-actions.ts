@@ -12,6 +12,7 @@ import type {
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { allInvoicesQueryRoot } from "@/lib/resource-query-roots.logic";
 import {
   useDecideTimeSuggestion,
   useUpdateTimeEntry,
@@ -19,6 +20,7 @@ import {
 import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { myTimeSuggestionsKeys } from "@/lib/workspaces/queries/my-time-suggestions";
 import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
+import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 
 export type SuggestionTarget = {
   matter: MySuggestionMatter["matter"];
@@ -72,10 +74,14 @@ export const useMyWeekActions = ({
   const submitWeek = useMutation({
     mutationFn: async (request: SubmitWeekRequest) =>
       unwrapApiResponse(await api["time-entries"].me.submissions.post(request)),
+    // A submission spans matters: their time lists change, and with approval
+    // so does what they can invoice.
     onSuccess: async () => {
       await Promise.all([
         refreshWeek(),
         queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+        queryClient.invalidateQueries({ queryKey: timeEntriesKeys.root() }),
+        queryClient.invalidateQueries({ queryKey: allInvoicesQueryRoot() }),
       ]);
     },
   });
