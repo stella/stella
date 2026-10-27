@@ -24,8 +24,8 @@ skip() {
 }
 
 case "$(uname -m)" in
-  x86_64 | amd64) ARCH=x64; SHA256="$SHA256_X64" ;;
-  aarch64 | arm64) ARCH=arm64; SHA256="$SHA256_ARM64" ;;
+  x86_64 | amd64) arch=x64; SHA256="$SHA256_X64" ;;
+  aarch64 | arm64) arch=arm64; SHA256="$SHA256_ARM64" ;;
   *) skip "unsupported CPU $(uname -m)" ;;
 esac
 
@@ -42,35 +42,35 @@ if command -v gitleaks >/dev/null 2>&1 && [ "$(gitleaks version 2>/dev/null)" = 
   exit 0
 fi
 
-ARCHIVE="gitleaks_${VERSION}_linux_${ARCH}.tar.gz"
-URL="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${ARCHIVE}"
+archive="gitleaks_${VERSION}_linux_${arch}.tar.gz"
+URL="https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/${archive}"
 SCRATCH="$(mktemp -d)" || skip "no temporary directory"
 
 if command -v curl >/dev/null 2>&1; then
-  curl -fsSL --retry 3 --max-time 120 -o "$SCRATCH/$ARCHIVE" "$URL" || skip "download failed: $URL"
+  curl -fsSL --retry 3 --max-time 120 -o "$SCRATCH/$archive" "$URL" || skip "download failed: $URL"
 elif command -v wget >/dev/null 2>&1; then
-  wget -q --tries=3 --timeout=120 -O "$SCRATCH/$ARCHIVE" "$URL" || skip "download failed: $URL"
+  wget -q --tries=3 --timeout=120 -O "$SCRATCH/$archive" "$URL" || skip "download failed: $URL"
 else
   skip "neither curl nor wget is installed"
 fi
 
-ACTUAL="$(sha256sum "$SCRATCH/$ARCHIVE" | cut -d' ' -f1)"
-[ "$ACTUAL" = "$SHA256" ] || skip "checksum mismatch for $ARCHIVE: expected $SHA256, got $ACTUAL"
+ACTUAL="$(sha256sum "$SCRATCH/$archive" | cut -d' ' -f1)"
+[ "$ACTUAL" = "$SHA256" ] || skip "checksum mismatch for $archive: expected $SHA256, got $ACTUAL"
 
-tar -xzf "$SCRATCH/$ARCHIVE" -C "$SCRATCH" gitleaks || skip "archive has no gitleaks binary"
+tar -xzf "$SCRATCH/$archive" -C "$SCRATCH" gitleaks || skip "archive has no gitleaks binary"
 $SUDO install -d -m 755 /usr/local/bin || skip "cannot create /usr/local/bin"
 $SUDO install -m 755 "$SCRATCH/gitleaks" /usr/local/bin/gitleaks || skip "cannot write /usr/local/bin/gitleaks"
 rm -rf -- "$SCRATCH"
 SCRATCH=""
 
 hash -r
-INSTALLED="$(command -v gitleaks || true)"
-if [ "$INSTALLED" != /usr/local/bin/gitleaks ]; then
-  echo "gitleaks WARNING: installed at /usr/local/bin/gitleaks, but PATH finds '${INSTALLED:-nothing}' first" >&2
+installed="$(command -v gitleaks || true)"
+if [ "$installed" != /usr/local/bin/gitleaks ]; then
+  echo "gitleaks WARNING: installed at /usr/local/bin/gitleaks, but PATH finds '${installed:-nothing}' first" >&2
 fi
 REPORTED="$(/usr/local/bin/gitleaks version 2>&1 || true)"
 if [ "$REPORTED" != "$VERSION" ]; then
   $SUDO rm -f /usr/local/bin/gitleaks
   skip "installed binary reported '$REPORTED', expected $VERSION (removed again)"
 fi
-echo "gitleaks $VERSION installed at /usr/local/bin/gitleaks ($ARCH, sha256 $SHA256)"
+echo "gitleaks $VERSION installed at /usr/local/bin/gitleaks ($arch, sha256 $SHA256)"
