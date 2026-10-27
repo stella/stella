@@ -38,7 +38,7 @@ const replayBoeSearch = async (body: string) => {
         limit: "5",
         query: buildSearchQuery({}),
       },
-    )}`,
+    ).toString()}`,
     contentType: "application/json",
     operation: async () => await searchConsolidatedLegislation({ limit: 5 }),
   });
@@ -135,14 +135,13 @@ describe("external-source output contracts", () => {
         recordings.length,
         `Register a response fixture for ${toolName}`,
       ).toBeGreaterThan(0);
-      const contract = getStaticMcpToolOutputContract(toolName);
-      if (contract === undefined) {
-        return panic(`Missing output contract for ${toolName}`);
-      }
+      const contract =
+        getStaticMcpToolOutputContract(toolName) ??
+        panic(`Missing output contract for ${toolName}`);
       for (const fixture of recordings) {
-        const file = Bun.file(`${fixtureRoot}${fixture.file}`);
-        const bytes = await file.bytes();
-        const sidecar = await Bun.file(`${file.name}.provenance.json`).text();
+        const path = `${fixtureRoot}${fixture.file}`;
+        const bytes = await Bun.file(path).bytes();
+        const sidecar = await Bun.file(`${path}.provenance.json`).text();
         const provenance: unknown = JSON.parse(sidecar);
         expect(provenance).toMatchObject({
           capture: fixture.capture,
@@ -153,16 +152,17 @@ describe("external-source output contracts", () => {
         } else {
           expect(provenance).toMatchObject({ note: expect.any(String) });
         }
-        const data = await fixture.replay(await file.text());
+        const data = await fixture.replay(new TextDecoder().decode(bytes));
         const parsed = parseStrippingUndeclaredKeys(
           contract.outputSchemaSource,
           contract.project(data),
         );
         if (Result.isError(parsed)) {
-          return panic(
-            `${toolName}: ${fixture.file} violates its output contract`,
+          expect(
             parsed.error,
-          );
+            `${toolName}: ${fixture.file} violates its output contract`,
+          ).toBeUndefined();
+          expect.unreachable();
         }
         expect(
           parsed.value.undeclaredPaths,

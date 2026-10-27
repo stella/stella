@@ -27,13 +27,15 @@ export const replay = async <T>({
   const originalFetch = globalThis.fetch;
   let requests = 0;
   const fixtureFetch: typeof fetch = Object.assign(
-    async (input: Parameters<typeof fetch>[0]) => {
+    async (input: Parameters<typeof fetch>[0]): Promise<Response> => {
       const url = input instanceof Request ? input.url : String(input);
       if (url !== sourceUrl) {
         return panic(`Unexpected fixture replay request: ${url}`);
       }
       requests += 1;
-      return new Response(body, { headers: { "content-type": contentType } });
+      return await Promise.resolve(
+        new Response(body, { headers: { "content-type": contentType } }),
+      );
     },
     { preconnect: originalFetch.preconnect },
   );
