@@ -142,14 +142,19 @@ export const refreshJobClassificationDigests = (root: string, base: string) =>
   });
 
 // A job that writes the repository publishes; only `priority` says so. Checked
-// on the head alone: the base keeps whatever it reviewed before this rule.
+// on the head alone: the base keeps whatever it reviewed before this rule. A
+// decision whose digest is stale goes through review first, which shows the
+// sensitive change; the kind is judged once the reviewed digest is current.
 const misclassifiedWriters = (
   jobs: ReadonlyMap<string, DerivedJob>,
   decisions: ClassificationInputs["decisions"],
 ) =>
   [...jobs].flatMap(([key, job]) => {
-    const kind = decisions[key]?.kind;
-    return job.writesRepository && kind !== undefined && kind !== "priority"
+    const decision = decisions[key];
+    return job.writesRepository &&
+      decision !== undefined &&
+      decision.reviewedDigest === job.digest &&
+      decision.kind !== "priority"
       ? [key]
       : [];
   });
