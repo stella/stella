@@ -1,7 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { bearer } from "better-auth/plugins";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -34,7 +33,6 @@ const createTestAuth = (sessionForKeys = false) =>
     }),
     emailAndPassword: { enabled: true },
     plugins: [
-      bearer(),
       apiKey([
         {
           ...desktopRegistryKeyConfig,
@@ -294,13 +292,15 @@ describe("desktop registry API-key configuration", () => {
       timeWindow: env.RATE_LIMIT_API_KEY_DESKTOP_WINDOW_MS,
     });
     const auth = createTestAuth();
-    const signedUp = await auth.api.signUpEmail({
-      body: {
-        email: "desktop-registry@example.test",
-        name: "Desktop Registry",
-        password: "A secure password 123!",
-      },
-    });
+    const { headers: signUpHeaders, response: signedUp } =
+      await auth.api.signUpEmail({
+        body: {
+          email: "desktop-registry@example.test",
+          name: "Desktop Registry",
+          password: "A secure password 123!",
+        },
+        returnHeaders: true,
+      });
     const created = await auth.api.createApiKey({
       body: {
         configId: DESKTOP_REGISTRY_KEY_CONFIG,
@@ -346,15 +346,17 @@ describe("desktop registry API-key configuration", () => {
       expect(sessionResult).toBeNull();
     }
 
-    const sessionToken =
-      signedUp.token ?? panic("sign-up issued no session token");
+    const sessionCookie = signUpHeaders
+      .getSetCookie()
+      .map((value) => value.split(";").at(0))
+      .join("; ");
     await auth.api.updateApiKey({
       body: {
         configId: DESKTOP_REGISTRY_KEY_CONFIG,
         keyId: created.id,
         enabled: false,
       },
-      headers: { authorization: `Bearer ${sessionToken}` },
+      headers: { cookie: sessionCookie },
     });
     const disabledVerification = await auth.api
       .verifyApiKey({

@@ -27,6 +27,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { ApiKeyConfigId } from "@/api/lib/api-key-plugin-configs";
+import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
@@ -597,7 +598,8 @@ const isSessionLive = async (
       and(
         eq(sessionTable.id, sessionId),
         eq(sessionTable.userId, userId),
-        sql`${sessionTable.expiresAt} > now()`,
+        // The one liveness rule: expiry, the absolute cap and handoff limits.
+        liveSessionPredicate(new Date(), sessionTable),
       ),
     )
     .limit(1);

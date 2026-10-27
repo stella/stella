@@ -206,8 +206,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
   "SELFHOST_LOCAL_PASSWORD_AUTH",
-  "SESSION_TOKEN_ROTATION_ENABLED",
-  "SESSION_LIFETIME_CAP_ENABLED",
   "MCP_WEB_HANDOFF_MINT_ENABLED",
   "MCP_WEB_HANDOFF_TEXT_ENABLED",
   "MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS",
@@ -598,16 +596,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
-  SESSION_TOKEN_ROTATION_ENABLED:
-    "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
   MCP_WEB_HANDOFF_MINT_ENABLED:
     "Enable sign-in handoffs on connected-app links. Defaults off.",
   MCP_WEB_HANDOFF_TEXT_ENABLED:
     "Include sign-in handoff codes in MCP text links. Defaults off; opt in separately from link minting.",
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS:
     "Absolute lifetime in seconds for sessions created from MCP text links; defaults to twelve hours and cannot exceed it.",
-  SESSION_LIFETIME_CAP_ENABLED:
-    "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
   SMTP_HOST: "SMTP relay hostname.",
   SMTP_PORT: "SMTP relay port.",
@@ -979,11 +973,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SELFHOST_LOCAL_PASSWORD_AUTH: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
   SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: ENV_CREDENTIAL_KIND.notCredential,
-  SESSION_LIFETIME_CAP_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   MCP_WEB_HANDOFF_MINT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   MCP_WEB_HANDOFF_TEXT_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: ENV_CREDENTIAL_KIND.notCredential,
-  SESSION_TOKEN_ROTATION_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   SES_ACCESS_KEY_ID: ENV_CREDENTIAL_KIND.notCredential,
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
   SES_REGION: ENV_CREDENTIAL_KIND.notCredential,
