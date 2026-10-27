@@ -1,3 +1,4 @@
+// parser-output-unchanged: the UK_FCL publisher mapping is new; existing adapter mappings and shared functions are unchanged, so their parsed output is identical.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 // parser-output-unchanged: gate definitions share their owner and immediate request-boundary checks share publisher pacing; response parsing and stored output are unchanged.

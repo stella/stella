@@ -1,3 +1,4 @@
+// parser-output-unchanged: UK_FCL entries extend the key, parser-version and fingerprint maps; existing adapter keys and values are unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 /** Adapter keys for all supported court data sources. */
 export const ADAPTER_KEYS = {
