@@ -356,7 +356,6 @@ export const ReferencePeek = ({
         }}
         openOnHover
         render={trigger.element}
-        tooltip={false}
       >
         {children}
       </PopoverTrigger>
