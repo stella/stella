@@ -475,7 +475,7 @@ export default defineConfig({ retries: 0, ${settings} });`).some(
 });
 
 test("resolves literal array/object spreads and inspects their retry policies", () => {
-  const source = `
+  const source = `import { defineConfig } from "@playwright/test";
     const use = { viewport: { width: 100, height: 100 } };
     const project = { name: "chromium", retries: 0, use: { ...use } };
     const projects = [project];

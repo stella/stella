@@ -47,6 +47,7 @@ export type TestRetryFinding = {
 type SourceMap = ReadonlyMap<string, string>;
 
 type Source = {
+  type: "playwright" | "test";
   file: string;
   program: Program;
   root: string;
@@ -274,6 +275,9 @@ const resolveObject = (
   if (value.type !== "Identifier" || visited.has(value.name)) {
     return undefined;
   }
+  if (source.type === "playwright" && !staticConfigModule(source)) {
+    return undefined;
+  }
   visited.add(value.name);
   const initializer = resolveVariable(value.name, source);
   return initializer === undefined
@@ -305,6 +309,9 @@ const resolveArray = (
     return value;
   }
   if (value.type !== "Identifier" || visited.has(value.name)) {
+    return undefined;
+  }
+  if (source.type === "playwright" && !staticConfigModule(source)) {
     return undefined;
   }
   visited.add(value.name);
@@ -602,6 +609,7 @@ const parseConfigSource = (
   return hasErrors
     ? undefined
     : {
+        type: "playwright",
         file,
         program: parsed.program,
         root,
@@ -736,9 +744,9 @@ const DYNAMIC_CONFIG_NODE_TYPES = new Set([
   "ClassExpression",
 ]);
 
-// Imported configuration is data construction, not a module interpreter.
-// Restrict the whole composition module so statements and calls cannot change
-// policy objects after their literal initializers have been inspected.
+// Named policy data must retain the value of its literal initializer.
+// Restrict its construction module before resolving bindings, so statements
+// and calls cannot change those objects before composition.
 const staticConfigModule = (source: Source): boolean => {
   const declarationsOnly = source.program.body.every((statement) => {
     if (
@@ -898,7 +906,7 @@ const verifiedImportedConfig = (
     return undefined;
   }
   const module = repositoryModule(source, binding.module);
-  if (module === undefined || module === null || !staticConfigModule(module)) {
+  if (module === undefined || module === null) {
     return undefined;
   }
   const target = configTarget(module);
@@ -946,6 +954,7 @@ const scanTestSource = (
   root: string,
 ): TestRetryFinding[] => {
   const source: Source = {
+    type: "test",
     file,
     program: parseSource(file, sourceText).program,
     root,
