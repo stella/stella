@@ -119,5 +119,27 @@ describe("the app's builds", () => {
     ]) {
       expect(new Set(configs.map(read)).size).toBe(configs.length);
     }
+
+/** Every module the app bundles: tests run under Bun, never on the phone. */
+const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
+  .map(String)
+  .filter((name) => /\.tsx?$/u.test(name) && !name.includes(".test."))
+  .toSorted();
+
+describe("the app's JavaScript engine", () => {
+  test("finds the app's modules to scan", () => {
+    expect(appModules).toContain(path.join("state", "chat-threads.ts"));
+  });
+
+  test.each(appModules)(
+    "%s calls no array method Hermes lacks (toSorted, toReversed, toSpliced)",
+    (name) => {
+      const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+      expect(
+        source.match(/\.(?:toSorted|toReversed|toSpliced)\(/gu) ?? [],
+      ).toEqual([]);
+    },
+  );
+});
   });
 });

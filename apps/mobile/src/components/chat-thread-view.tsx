@@ -158,7 +158,7 @@ const ThreadMessages = ({
   return (
     <FlatList
       contentContainerStyle={styles.content}
-      data={entries.toReversed()}
+      data={[...entries].reverse()}
       inverted
       keyExtractor={(entry) => entry.id}
       ListEmptyComponent={
