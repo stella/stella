@@ -518,13 +518,16 @@ const expectedFileDerivativeWorkerVariables: Record<string, string> = {
     "gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME",
   ),
 };
+const fileDerivativeWorkerVariableKeys = new Set([
+  ...Object.keys(fileDerivativeWorkerTemplateVariables),
+  ...Object.keys(expectedFileDerivativeWorkerVariables),
+]);
 expect(
-  JSON.stringify(
-    Object.entries(fileDerivativeWorkerTemplateVariables).toSorted(),
-  ) ===
-    JSON.stringify(
-      Object.entries(expectedFileDerivativeWorkerVariables).toSorted(),
-    ),
+  [...fileDerivativeWorkerVariableKeys].every(
+    (key) =>
+      fileDerivativeWorkerTemplateVariables[key] ===
+      expectedFileDerivativeWorkerVariables[key],
+  ),
   "file-derivative worker template variables must be exactly the API references it needs",
 );
 
