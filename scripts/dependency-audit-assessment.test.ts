@@ -284,6 +284,27 @@ test("an advisory spanning release lines keeps each line's forward patch", () =>
   ).toEqual({ status: "fix_available", patchedVersions: ["1.2.3", "2.1.1"] });
 });
 
+test("a workspace manifest pin blocks the fix like a root pin", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<1.0.1" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      workspaces: {
+        "": { name: "root" },
+        "apps/web": { name: "web", dependencies: { example: "1.0.0" } },
+      },
+      packages: { example: ["example@1.0.0", "", {}] },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.0.0", "1.0.1"]]]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "pinned_resolution_blocked",
+    pins: ["apps/web/package.json dependencies.example=1.0.0"],
+    patchedVersions: ["1.0.1"],
+  });
+});
+
 test("a root requirement never hides a locked copy without a forward patch", () => {
   const [result] = assessAdvisories({
     advisories: [

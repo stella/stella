@@ -94,7 +94,28 @@ const resolvedKey = ({
   return keys.has(dependency) ? dependency : undefined;
 };
 
-// Every root manifest requirement on the package, and the ones that admit no
+// The root manifest plus every workspace manifest bun.lock records: a pin in
+// any of them blocks the fix the same way.
+type ManifestSource = { label: string; manifest: unknown };
+const manifestSources = (
+  manifest: unknown,
+  lockfile: string,
+): ManifestSource[] => {
+  const parsed: unknown = Bun.JSONC.parse(lockfile);
+  const workspaces =
+    record(parsed) && record(parsed["workspaces"]) ? parsed["workspaces"] : {};
+  return [
+    { label: "package.json", manifest },
+    ...Object.entries(workspaces)
+      .filter(([workspace]) => workspace !== "")
+      .map(([workspace, entry]) => ({
+        label: `${workspace}/package.json`,
+        manifest: entry,
+      })),
+  ];
+};
+
+// Every manifest requirement on the package, and the ones that admit no
 // patched release: a pin blocks the fix until the manifest changes.
 const MANIFEST_REQUIREMENT_FIELDS = [
   "dependencies",
@@ -105,30 +126,32 @@ const MANIFEST_REQUIREMENT_FIELDS = [
   "overrides",
 ] as const;
 type ManifestPinsOptions = {
-  manifest: unknown;
+  sources: readonly ManifestSource[];
   packageName: string;
   patchedVersions: readonly string[];
 };
 const manifestPins = ({
-  manifest,
+  sources,
   packageName,
   patchedVersions,
 }: ManifestPinsOptions): { requirements: string[]; pins: string[] } => {
   const requirements: string[] = [];
   const pins: string[] = [];
-  for (const field of MANIFEST_REQUIREMENT_FIELDS) {
-    const entries = record(manifest) ? manifest[field] : undefined;
-    const requirement = record(entries) ? entries[packageName] : undefined;
-    if (typeof requirement !== "string") {
-      continue;
-    }
-    requirements.push(requirement);
-    if (
-      !patchedVersions.some((version) =>
-        Bun.semver.satisfies(version, requirement),
-      )
-    ) {
-      pins.push(`package.json ${field}.${packageName}=${requirement}`);
+  for (const { label, manifest } of sources) {
+    for (const field of MANIFEST_REQUIREMENT_FIELDS) {
+      const entries = record(manifest) ? manifest[field] : undefined;
+      const requirement = record(entries) ? entries[packageName] : undefined;
+      if (typeof requirement !== "string") {
+        continue;
+      }
+      requirements.push(requirement);
+      if (
+        !patchedVersions.some((version) =>
+          Bun.semver.satisfies(version, requirement),
+        )
+      ) {
+        pins.push(`${label} ${field}.${packageName}=${requirement}`);
+      }
     }
   }
   return { requirements, pins };
@@ -143,6 +166,7 @@ export const assessAdvisories = ({
 }: AssessAdvisoriesOptions): AdvisoryAssessment[] => {
   const packages = lockPackages(lockfile);
   const keys = new Set(packages.map(({ key }) => key));
+  const sources = manifestSources(manifest, lockfile);
   return advisories.map((advisory) => {
     if (advisory.vulnerableVersions === "") {
       return invalidAssessment(
@@ -205,7 +229,7 @@ export const assessAdvisories = ({
       }
     }
     const { requirements: manifestRequirements, pins } = manifestPins({
-      manifest,
+      sources,
       packageName: advisory.package,
       patchedVersions,
     });
