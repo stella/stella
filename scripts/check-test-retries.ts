@@ -781,6 +781,9 @@ const helperBindingNames = (
   helper: SyntaxFunction | ArrowFunctionExpression,
 ) => {
   const names = new Set(helper.params.flatMap(bindingNames));
+  if (helper.type !== "ArrowFunctionExpression" && helper.id !== null) {
+    names.add(helper.id.name);
+  }
   walk(helper, (node) => {
     if (node.type === "FunctionDeclaration" && node !== helper) {
       if (node.id !== null) {
@@ -847,6 +850,115 @@ const playwrightFactoryLocal = (
     : undefined;
 };
 
+const scopeForHelper = (
+  helper: SyntaxFunction | ArrowFunctionExpression,
+  source: Source,
+) => ({
+  ...source,
+  unresolvedBindings: new Set([
+    ...source.unresolvedBindings,
+    ...helperBindingNames(helper),
+  ]),
+});
+
+const pureConfigCall = (call: CallExpression, source: Source): boolean => {
+  const callee = unwrap(call.callee, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (
+    callee.type === "FunctionExpression" ||
+    callee.type === "ArrowFunctionExpression"
+  ) {
+    return !helperHasEffects(callee, scopeForHelper(callee, source));
+  }
+  if (playwrightFactoryLocal(callee, source) !== undefined) {
+    return true;
+  }
+  if (callee.type === "Identifier") {
+    const binding = importedBinding(source, callee.name);
+    return (
+      binding?.type === "named" &&
+      (binding.module === "node:path" || binding.module === "path") &&
+      (binding.name === "join" || binding.name === "resolve")
+    );
+  }
+  if (
+    callee.type !== "MemberExpression" ||
+    callee.object.type !== "Identifier"
+  ) {
+    return false;
+  }
+  const member =
+    !callee.computed && callee.property.type === "Identifier"
+      ? callee.property.name
+      : literalText(callee.property);
+  const binding = importedBinding(source, callee.object.name);
+  return (
+    binding !== undefined &&
+    (binding.type === "default" || binding.type === "namespace") &&
+    (binding.module === "node:path" || binding.module === "path") &&
+    (member === "join" || member === "resolve")
+  );
+};
+
+const CONFIG_EFFECT_NODE_TYPES = new Set([
+  "AssignmentExpression",
+  "UpdateExpression",
+  "NewExpression",
+  "TaggedTemplateExpression",
+  "ImportExpression",
+  "AwaitExpression",
+  "YieldExpression",
+]);
+
+const helperHasEffects = (
+  helper: SyntaxFunction | ArrowFunctionExpression,
+  source: Source,
+): boolean => {
+  let effects = false;
+  const returned = returnedExpression(helper);
+  walk(helper, (node, ancestors) => {
+    if (
+      node !== helper &&
+      (node.type === "FunctionDeclaration" ||
+        node.type === "FunctionExpression" ||
+        node.type === "ArrowFunctionExpression")
+    ) {
+      return "skip-children";
+    }
+    if (
+      CONFIG_EFFECT_NODE_TYPES.has(node.type) ||
+      (node.type === "UnaryExpression" && node.operator === "delete") ||
+      (node.type === "Property" && node.kind !== "init")
+    ) {
+      effects = true;
+    }
+    if (node.type === "CallExpression" && !pureConfigCall(node, source)) {
+      effects = true;
+    }
+    // A property read before the return can invoke an unknown getter.
+    if (
+      node.type === "MemberExpression" &&
+      (returned === undefined ||
+        node.start < returned.start ||
+        node.end > returned.end)
+    ) {
+      const parent = ancestors.at(-1);
+      if (
+        parent?.type !== "CallExpression" ||
+        parent.callee !== node ||
+        !pureConfigCall(parent, source)
+      ) {
+        effects = true;
+      }
+    }
+    return effects ? "skip-children" : undefined;
+  });
+  return effects;
+};
+
 const helperConfig = (
   helper: SyntaxFunction | ArrowFunctionExpression,
   source: Source,
@@ -865,13 +977,10 @@ const helperConfig = (
   }
   // Local values are not evaluated; lookups preserve their shadowing rather
   // than falling back to same-named module declarations or imports.
-  const helperSource = {
-    ...source,
-    unresolvedBindings: new Set([
-      ...source.unresolvedBindings,
-      ...helperBindingNames(helper),
-    ]),
-  };
+  const helperSource = scopeForHelper(helper, source);
+  if (helperHasEffects(helper, helperSource)) {
+    return undefined;
+  }
   if (expression.type === "CallExpression") {
     const local = playwrightFactoryLocal(expression.callee, helperSource);
     if (local === undefined) {
