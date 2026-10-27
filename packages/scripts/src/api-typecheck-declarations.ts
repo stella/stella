@@ -200,6 +200,9 @@ const constructorModule = (specifier: string, relative: string) => {
 // declaration surface consumed by secondary compiler programs. A module is a
 // boundary by its name, or by building routes or a server whatever its name.
 const isApiRuntimeBoundary = (filename: string, text: string) => {
+  if (JSON_MODULE.test(filename)) {
+    return false;
+  }
   const relative = filename
     .replaceAll(path.sep, "/")
     .split("/apps/api/src/")[1];

@@ -1051,6 +1051,7 @@
       "human": "Ludzkie",
       "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
     },
+    "oldestDecisions": "Najstarsze orzeczenia",
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
@@ -1112,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
       "runTitle": "Odpowiedz na tej stronie",
       "savedQuestions": "Zapisane pytania",
-      "title": "Tabele badawcze",
-      "updated": "Ostatnia edycja {date}"
+      "title": "Tabele badawcze"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1157,8 @@
     "showWholeHeadnote": "Pokaż całą tezę",
     "sort": {
       "newest": "Najnowsze",
+      "oldest": "Najstarsze",
+      "oldestUnavailable": "Wyniki wyszukiwania są sortowane według trafności lub od najnowszych. Aby zobaczyć najpierw najstarsze orzeczenia, wyczyść wyszukiwanie.",
       "relevance": "Najtrafniejsze"
     },
     "viewer": {
@@ -6661,10 +6663,12 @@
       "selectOperator": "Wybierz operator",
       "setPromptPlaceholder": "Ustaw prompt do wyodrębnienia informacji",
       "singleSelect": "Jednokrotny wybór",
-      "sortAscending": "Sortuj rosnąco",
       "sortAscendingDate": "Od najstarszych",
-      "sortDescending": "Sortuj malejąco",
+      "sortAscendingNumber": "Od najniższych",
+      "sortAscendingText": "A → Ż",
       "sortDescendingDate": "Od najnowszych",
+      "sortDescendingNumber": "Od najwyższych",
+      "sortDescendingText": "Ż → A",
       "splitOptions": "{count, plural, one {Podziel na # opcję} few {Podziel na # opcje} many {Podziel na # opcji} other {Podziel na # opcji}}",
       "suggestWithAI": "Zaproponuj z AI",
       "text": "Tekst",

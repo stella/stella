@@ -1051,6 +1051,7 @@
       "human": "Ľudské",
       "toggleState": "{label}: {state, select, on {zapnuté} other {vypnuté}}"
     },
+    "oldestDecisions": "Najstaršie rozhodnutia",
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
@@ -1112,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí}}.",
       "runTitle": "Odpovedať na tejto stránke",
       "savedQuestions": "Uložené otázky",
-      "title": "Rešeršné tabuľky",
-      "updated": "Naposledy upravené {date}"
+      "title": "Rešeršné tabuľky"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1157,8 @@
     "showWholeHeadnote": "Zobraziť celú právnu vetu",
     "sort": {
       "newest": "Najnovšie",
+      "oldest": "Najstaršie",
+      "oldestUnavailable": "Vyhľadávanie radí výsledky podľa relevantnosti alebo od najnovších. Ak chcete zobraziť najskôr najstaršie rozhodnutia, vymažte vyhľadávanie.",
       "relevance": "Najrelevantnejšie"
     },
     "viewer": {
@@ -6661,10 +6663,12 @@
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
       "singleSelect": "Jednoduchý výber",
-      "sortAscending": "Radiť vzostupne",
       "sortAscendingDate": "Od najstarších",
-      "sortDescending": "Radiť zostupne",
+      "sortAscendingNumber": "Od najnižšej hodnoty",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Od najnovších",
+      "sortDescendingNumber": "Od najvyššej hodnoty",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností}}",
       "suggestWithAI": "Navrhnúť pomocou AI",
       "text": "Text",

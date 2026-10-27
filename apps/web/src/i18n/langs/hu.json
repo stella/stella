@@ -1051,6 +1051,7 @@
       "human": "Emberi",
       "toggleState": "{label}: {state, select, on {be} other {ki}}"
     },
+    "oldestDecisions": "Legrégebbi határozatok",
     "pagination": {
       "goToPage": "Ugrás a(z) {page}. oldalra",
       "label": "Találati oldalak",
@@ -1112,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# határozat} other {# határozat}} × {columns, plural, one {# kérdés} other {# kérdés}} ezen az oldalon: {cells, plural, one {# válasz} other {# válasz}} készül.",
       "runTitle": "Ezen oldal megválaszolása",
       "savedQuestions": "Mentett kérdések",
-      "title": "Kutatási táblák",
-      "updated": "Utoljára szerkesztve: {date}"
+      "title": "Kutatási táblák"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1157,8 @@
     "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
     "sort": {
       "newest": "Legújabb",
+      "oldest": "Legrégebbi",
+      "oldestUnavailable": "A keresés találatai relevancia szerint vagy a legújabbtól kezdve rendeződnek. A legrégebbi határozatok elöl való megjelenítéséhez törölje a keresést.",
       "relevance": "Legrelevánsabb"
     },
     "viewer": {
@@ -6661,10 +6663,12 @@
       "selectOperator": "Operátor kiválasztása",
       "setPromptPlaceholder": "Adjon meg promptot az információ kinyeréséhez",
       "singleSelect": "Egyszeres választás",
-      "sortAscending": "Növekvő rendezés",
       "sortAscendingDate": "Legrégebbi elöl",
-      "sortDescending": "Csökkenő rendezés",
+      "sortAscendingNumber": "Legkisebb elöl",
+      "sortAscendingText": "A → Zs",
       "sortDescendingDate": "Legújabb elöl",
+      "sortDescendingNumber": "Legnagyobb elöl",
+      "sortDescendingText": "Zs → A",
       "splitOptions": "{count, plural, one {Felosztás # lehetőségre} other {Felosztás # lehetőségre}}",
       "suggestWithAI": "Javaslat AI-val",
       "text": "Szöveg",
