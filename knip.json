@@ -8,7 +8,12 @@
     ".": {
       // Include compiler-only ambient types from the tooling/test projects.
       "typescript": { "config": ["tsconfig*.json", "package.json"] },
-      "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
+      "entry": [
+        "scripts/*.ts",
+        "oxlint.config.ts",
+        "oxlint.design.config.ts",
+        "oxlint.tailwind.config.ts"
+      ],
       "ignoreDependencies": [
         // tsc-native.ts constructs this compiler binary path dynamically.
         "tsrs",
