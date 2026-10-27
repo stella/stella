@@ -76,6 +76,20 @@ test("counts a non-icon component as a possible visible label", async () => {
   ).toEqual([]);
 });
 
+test("counts a loader as a glyph, never as a visible label", async () => {
+  expect(
+    await lintSingleRule(
+      "icon-button-requires-tooltip",
+      [
+        'const a = <Button aria-label="Add" size="sm"><Loader variant="decorative" /><PlusIcon /></Button>;',
+        'const b = <Button aria-label="Save" size="sm"><Loader label="Saving" /></Button>;',
+        'const c = <Button size="sm"><Loader variant="decorative" />Save</Button>;',
+      ].join("\n"),
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([1, 2]);
+});
+
 test("accepts tooltip ancestry and visible labels", async () => {
   expect(
     await lintSingleRule(

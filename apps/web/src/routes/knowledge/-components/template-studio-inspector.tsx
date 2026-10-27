@@ -1044,6 +1044,7 @@ const StudioInsertRow = () => {
         className="flex-1 [&>button:first-child]:flex-1 [&>button:first-child]:justify-start"
         menuLabel={t("templates.studio.insert")}
         onPrimaryClick={primaryAction.onClick}
+        primaryContent="text"
         primaryLabel={primaryAction.label}
         size="sm"
         onOpenChange={(open, eventDetails) => {

@@ -156,9 +156,11 @@ const isIconElement = (node: unknown): boolean => {
   if (name === null) {
     return false;
   }
+  // `Loader` draws a spinner in every variant; its `label` is never visible.
   return (
     name === "svg" ||
     name === "DirectionalIcon" ||
+    name === "Loader" ||
     name === "StellaMark" ||
     name.endsWith("Icon")
   );

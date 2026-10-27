@@ -119,6 +119,7 @@ export const DownloadSplitButton = ({
   }
   return (
     <SplitButton
+      primaryContent="icon"
       primaryLabel={downloadLabel}
       menuLabel={downloadAsLabel}
       onPrimaryClick={() => onDownload("original")}

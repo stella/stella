@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 
 import { ChevronDownIcon } from "../icons";
 import { cn } from "../lib/utils";
-import { Button } from "./button";
+import { Button, BUTTON_CONTENT } from "./button";
 import { Menu, MenuTrigger } from "./menu";
 import { Popover, PopoverTrigger } from "./popover";
 
@@ -20,9 +20,15 @@ type SplitButtonSharedProps = {
   className?: string;
 };
 
+// Rich primary content names itself through `primaryLabel` and says what it
+// shows: a glyph alone gets that name as its tooltip, visible text gets none.
 type SplitButtonPrimary =
-  | { children: ReactNode; primaryLabel: string }
-  | { children: string; primaryLabel?: never };
+  | {
+      children: ReactNode;
+      primaryContent: (typeof BUTTON_CONTENT)[keyof typeof BUTTON_CONTENT];
+      primaryLabel: string;
+    }
+  | { children: string; primaryContent?: never; primaryLabel?: never };
 
 type SplitButtonProps = SplitButtonSharedProps &
   SplitButtonPrimary &
@@ -86,8 +92,11 @@ export const SplitButton = (props: SplitButtonProps) => {
         disabled={primaryDisabled}
         onClick={onPrimaryClick}
         size="sm"
-        // A `primaryLabel` names content that may be a bare glyph.
-        tooltip={primaryLabel}
+        tooltip={
+          props.primaryContent === BUTTON_CONTENT.icon
+            ? primaryLabel
+            : undefined
+        }
         variant="ghost"
       >
         {children}
