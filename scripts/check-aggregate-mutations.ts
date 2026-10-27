@@ -1226,56 +1226,52 @@ const calleeCallbackCredit = (
       resultPropertyCredit(options))
     : undefined;
 
-const hasLockIds = (expression: ts.Expression | undefined): boolean => {
-  if (expression === undefined) {
+const hasLockIds = (argument: Argument | undefined): boolean => {
+  if (argument === undefined || argument.type === "SpreadElement") {
     return false;
   }
-  const ids = unwrapExpression(expression);
+  const ids = unwrapExpression(argument);
   return (
-    !(ts.isArrayLiteralExpression(ids) && ids.elements.length === 0) &&
-    !(ts.isIdentifier(ids) && ids.text === "undefined") &&
-    ids.kind !== ts.SyntaxKind.NullKeyword &&
-    !ts.isVoidExpression(ids)
+    !(ids.type === "ArrayExpression" && ids.elements.length === 0) &&
+    !(ids.type === "Identifier" && ids.name === "undefined") &&
+    !(ids.type === "Literal" && ids.value === null) &&
+    !(ids.type === "UnaryExpression" && ids.operator === "void")
   );
 };
 
 const hasWorkspaceParentBatch = (
-  call: ts.CallExpression,
+  call: CallExpression,
   access: SourceAccess,
 ): boolean => {
-  if (!ts.isIdentifier(call.expression)) {
-    return false;
-  }
   const options = call.arguments.at(0);
   if (
+    call.callee.type !== "Identifier" ||
     !isTrustedImport({
-      identifier: call.expression,
+      identifier: call.callee,
       access,
       module: REGISTRY,
       exported: ["withAggregateParentBatch"],
     }) ||
-    options === undefined ||
-    !ts.isObjectLiteralExpression(options) ||
+    options?.type !== "ObjectExpression" ||
     !options.properties.every(
       (property) =>
-        (ts.isPropertyAssignment(property) ||
-          ts.isShorthandPropertyAssignment(property)) &&
-        !ts.isComputedPropertyName(property.name),
+        property.type === "Property" &&
+        !property.computed &&
+        !property.method &&
+        property.kind === "init",
     )
   ) {
     return false;
   }
   const workspaceIds = options.properties.filter(
-    (property) =>
-      ts.isPropertyAssignment(property) &&
-      staticPropertyKey(property) === "workspaceIds",
+    (property) => staticPropertyKey(property) === "workspaceIds",
   );
   const field = workspaceIds.at(0);
   return (
     workspaceIds.length === 1 &&
     field !== undefined &&
-    ts.isPropertyAssignment(field) &&
-    hasLockIds(field.initializer)
+    isPropertyAssignment(field) &&
+    hasLockIds(field.value)
   );
 };
 
@@ -1341,16 +1337,16 @@ const awaitedAggregateNames = ({
           module: REGISTRY,
           exported: ["withInvoiceMatterLocks"],
         }) &&
-        hasLockIds(node.expression.arguments.at(1))
+        hasLockIds(node.argument.arguments.at(1))
       ) {
         names.add("workspace");
       }
-      if (hasWorkspaceParentBatch(node.expression, access)) {
+      if (hasWorkspaceParentBatch(node.argument, access)) {
         names.add("workspace");
       }
       if (
         isTrustedImport({
-          identifier: node.expression.expression,
+          identifier: node.argument.callee,
           access,
           module: REGISTRY,
           exported: ["withAggregateLock", "withAggregateRowQuery"],
