@@ -1,6 +1,7 @@
 // One assessment per advisory, including every vulnerable lockfile resolution.
 import { panic, Result, TaggedError } from "better-result";
 
+import { readInstallPolicy } from "./check-stll-quarantine-excludes";
 import type { Advisory, BaselineEntry } from "./dependency-audit";
 
 export class AuditAssessmentError extends TaggedError("AuditAssessmentError")<{
@@ -426,22 +427,53 @@ export const printAssessments = (
   }
 };
 
+// The quarantine Bun applies while resolving: a release younger than the
+// minimum age cannot be installed unless its package is excluded.
+export type ReleaseAgePolicy = {
+  minimumReleaseAgeSeconds: number;
+  excludes: ReadonlySet<string>;
+};
+export const readReleaseAgePolicy = (bunfig: string): ReleaseAgePolicy => {
+  const { excludes, minimumReleaseAge } = readInstallPolicy(bunfig);
+  return { minimumReleaseAgeSeconds: minimumReleaseAge ?? 0, excludes };
+};
+
+type InstallableVersionsOptions = {
+  name: string;
+  versions: readonly string[];
+  publishedAt: Readonly<Record<string, unknown>>;
+  policy: ReleaseAgePolicy;
+  now: Date;
+};
+// A patch still in quarantine is not yet a fix: Bun would refuse to install it.
+export const installableVersions = ({
+  name,
+  versions,
+  publishedAt,
+  policy,
+  now,
+}: InstallableVersionsOptions): string[] =>
+  versions.filter((version) => {
+    if (policy.excludes.has(name)) {
+      return true;
+    }
+    const published = publishedAt[version];
+    return (
+      typeof published === "string" &&
+      Date.parse(published) + policy.minimumReleaseAgeSeconds * 1000 <=
+        now.getTime()
+    );
+  });
+
 // Use Bun's registry configuration, as audit does, with no manifest cache so
 // a newly published compatible patch changes the assessment immediately.
-export const readPublishedVersions = async (
+const readBunInfo = async (
   name: string,
-): Promise<string[]> => {
+  field: "versions" | "time",
+): Promise<unknown> => {
   const result = await Result.tryPromise(async () => {
     const proc = Bun.spawn(
-      [
-        "bun",
-        "--no-env-file",
-        "info",
-        name,
-        "versions",
-        "--json",
-        "--no-cache",
-      ],
+      ["bun", "--no-env-file", "info", name, field, "--json", "--no-cache"],
       {
         stdout: "pipe",
         stderr: "pipe",
@@ -459,18 +491,34 @@ export const readPublishedVersions = async (
       );
     }
     const body: unknown = JSON.parse(stdout);
-    if (
-      !Array.isArray(body) ||
-      !body.every((version): version is string => typeof version === "string")
-    ) {
-      return invalidAssessment(
-        `Registry lookup for ${name} has no version list`,
-      );
-    }
     return body;
   });
   if (result.isErr()) {
     return invalidAssessment(`Cannot assess ${name}: ${result.error.message}`);
   }
   return result.value;
+};
+
+// Published versions Bun would install now, honouring the quarantine.
+export const readInstallableVersions = async (
+  name: string,
+  policy: ReleaseAgePolicy,
+  now: Date,
+): Promise<string[]> => {
+  const [versions, publishedAt] = await Promise.all([
+    readBunInfo(name, "versions"),
+    readBunInfo(name, "time"),
+  ]);
+  if (
+    !Array.isArray(versions) ||
+    !versions.every((version): version is string => typeof version === "string")
+  ) {
+    return invalidAssessment(`Registry lookup for ${name} has no version list`);
+  }
+  if (!record(publishedAt)) {
+    return invalidAssessment(
+      `Registry lookup for ${name} has no publish times`,
+    );
+  }
+  return installableVersions({ name, versions, publishedAt, policy, now });
 };

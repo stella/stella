@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Advisory, BaselineEntry } from "./dependency-audit";
-import { assessAdvisories } from "./dependency-audit-assessment";
+import {
+  assessAdvisories,
+  installableVersions,
+  readReleaseAgePolicy,
+} from "./dependency-audit-assessment";
 
 const lockfile = await Bun.file(
   new URL("fixtures/dependency-audit/bun-lock.json", import.meta.url),
@@ -427,4 +431,65 @@ test("a patch on an older release line is no upgrade for a newer locked copy", (
       published: ["1.2.3", "2.1.0"],
     })?.status,
   ).toBe("upstream_blocked");
+});
+
+describe("installable versions honour the release-age quarantine", () => {
+  const policy = readReleaseAgePolicy(
+    [
+      "[install]",
+      "minimumReleaseAge = 432_000",
+      "minimumReleaseAgeExcludes = [",
+      '  "excluded",',
+      "]",
+      "",
+    ].join("\n"),
+  );
+  const now = new Date("2026-10-27T08:00:00.000Z");
+  const publishedAt = {
+    created: "2013-06-19T17:20:36.004Z",
+    "1.4.0": "2026-03-24T21:44:34.668Z",
+    "1.4.1": "2026-10-27T04:44:07.718Z",
+  };
+
+  test("a release younger than the minimum age is not installable yet", () => {
+    expect(
+      installableVersions({
+        name: "node-forge",
+        versions: ["1.4.0", "1.4.1"],
+        publishedAt,
+        policy,
+        now,
+      }),
+    ).toEqual(["1.4.0"]);
+    expect(
+      installableVersions({
+        name: "node-forge",
+        versions: ["1.4.0", "1.4.1"],
+        publishedAt,
+        policy,
+        now: new Date("2026-11-01T04:44:07.718Z"),
+      }),
+    ).toEqual(["1.4.0", "1.4.1"]);
+  });
+
+  test("an excluded package installs a fresh release, and a version without a publish time never", () => {
+    expect(
+      installableVersions({
+        name: "excluded",
+        versions: ["1.4.0", "1.4.1"],
+        publishedAt,
+        policy,
+        now,
+      }),
+    ).toEqual(["1.4.0", "1.4.1"]);
+    expect(
+      installableVersions({
+        name: "node-forge",
+        versions: ["1.4.0", "9.9.9"],
+        publishedAt,
+        policy,
+        now,
+      }),
+    ).toEqual(["1.4.0"]);
+  });
 });

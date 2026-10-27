@@ -55,7 +55,8 @@ import {
   assessAdvisories,
   AuditAssessmentError,
   printAssessments,
-  readPublishedVersions,
+  readInstallableVersions,
+  readReleaseAgePolicy,
 } from "./dependency-audit-assessment";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
@@ -369,15 +370,18 @@ const formatAcceptanceTerm = (acceptance: BaselineEntry): string => {
 };
 
 const assessCurrent = async (advisories: Advisory[]): Promise<void> => {
-  const [baseline, lockfile, manifest] = await Promise.all([
+  const [baseline, lockfile, manifest, policy] = await Promise.all([
     readBaseline(),
     Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
     Bun.file(path.resolve(REPO_ROOT, "package.json")).json(),
+    readRootReleaseAgePolicy(),
   ]);
+  const now = new Date();
   const versions = new Map(
     await Promise.all(
       [...new Set(advisories.map(({ package: name }) => name))].map(
-        async (name) => [name, await readPublishedVersions(name)] as const,
+        async (name) =>
+          [name, await readInstallableVersions(name, policy, now)] as const,
       ),
     ),
   );
@@ -483,25 +487,25 @@ export const diffAgainstBaseline = (
   };
 };
 
-// The npm registry's `latest` dist-tag for a package, or undefined when the
-// lookup fails; an `untilPatched` acceptance then lapses (fail closed).
+const readRootReleaseAgePolicy = async () =>
+  readReleaseAgePolicy(
+    await Bun.file(path.resolve(REPO_ROOT, "bunfig.toml")).text(),
+  );
+
+// The newest stable release Bun would install now, or undefined when the
+// lookup fails; an `untilPatched` acceptance then lapses (fail closed). A
+// patch still in quarantine is not installable, so it lapses nothing yet.
 const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
-  const response = await Result.tryPromise(async () =>
-    fetch(`https://registry.npmjs.org/${pkg.replaceAll("/", "%2f")}/latest`, {
-      signal: AbortSignal.timeout(15_000),
-    }),
+  const installable = await Result.tryPromise(async () =>
+    readInstallableVersions(pkg, await readRootReleaseAgePolicy(), new Date()),
   );
-  if (Result.isError(response) || !response.value.ok) {
+  if (Result.isError(installable)) {
     return undefined;
   }
-  const body = await Result.tryPromise(async (): Promise<unknown> =>
-    response.value.json(),
-  );
-  if (Result.isError(body) || !isRecord(body.value)) {
-    return undefined;
-  }
-  const version = asText(body.value["version"]);
-  return version === "" ? undefined : version;
+  return installable.value
+    .filter((version) => !version.includes("-"))
+    .toSorted(Bun.semver.order)
+    .at(-1);
 };
 
 type CheckLapsedAcceptancesOptions = {
