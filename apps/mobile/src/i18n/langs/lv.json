@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Konts",
     "server": "Serveris",
-    "signOut": "Atslēgties"
+    "signOut": "Atslēgties",
+    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz."
   }
 }

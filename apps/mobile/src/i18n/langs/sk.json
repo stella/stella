@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Účet",
     "server": "Server",
-    "signOut": "Odhlásiť sa"
+    "signOut": "Odhlásiť sa",
+    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova."
   }
 }

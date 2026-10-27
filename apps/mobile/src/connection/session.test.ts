@@ -2,12 +2,14 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Fetch } from "./http";
 import {
   createAccessTokenSource,
   createSessionStore,
   EARLY_REFRESH_MS,
+  isCurrentSessionSource,
   type SessionGeneration,
   type StoredSession,
 } from "./session";
@@ -43,11 +45,14 @@ const rotatingTokenEndpoint = () => {
 };
 
 const memoryStore = (initial: StoredSession | undefined) => {
-  let stored = initial;
+  let stored: StoredSession | null | undefined = initial;
   const store = createSessionStore({
     read: async () => stored,
     write: async (session) => {
       stored = session;
+    },
+    prepareClear: async () => {
+      stored = null;
     },
     clear: async () => {
       stored = undefined;
@@ -58,7 +63,7 @@ const memoryStore = (initial: StoredSession | undefined) => {
 
 const deferredPersistence = () => {
   type Pending = { readonly apply: () => void; readonly resolve: () => void };
-  let stored: StoredSession | undefined;
+  let stored: StoredSession | null | undefined;
   const pending: Pending[] = [];
   const waiters: (() => void)[] = [];
   const defer = async (apply: () => void) =>
@@ -76,6 +81,9 @@ const deferredPersistence = () => {
         await defer(() => {
           stored = session;
         });
+      },
+      prepareClear: async () => {
+        stored = null;
       },
       clear: async () => {
         await defer(() => {
@@ -213,7 +221,7 @@ describe("access tokens", () => {
 
     const refreshing = token(source);
     await Promise.resolve();
-    await memory.store.clear();
+    await memory.store.clear(memory.store.advance());
     resolveRefresh?.(
       Response.json({
         access_token: "late-access",
@@ -227,6 +235,108 @@ describe("access tokens", () => {
     expect(memory.stored()).toBeUndefined();
     expect(await token(source)).toBe("SignedOutError");
     expect(memory.stored()).toBeUndefined();
+  });
+
+  test("a superseded source yields neither cached tokens nor session metadata", async () => {
+    const memory = memoryStore(SESSION);
+    const source = createAccessTokenSource({
+      fetch: rotatingTokenEndpoint().fetch,
+      initialAccess: { token: "cached-access", expiresAt: 900_000 },
+      now: () => 0,
+      session: SESSION,
+      generation: memory.store.generation(),
+      store: memory.store,
+    });
+
+    memory.store.advance();
+
+    expect(source.session()).toBeUndefined();
+    expect(await token(source)).toBe("SignedOutError");
+  });
+
+  test("a late terminal refresh cannot clear a replacement session", async () => {
+    let resolveRefresh: ((response: Response) => void) | undefined;
+    const memory = memoryStore(SESSION);
+    const sourceA = createAccessTokenSource({
+      fetch: async () =>
+        await new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      generation: memory.store.generation(),
+      store: memory.store,
+    });
+    const refreshingA = token(sourceA);
+    await Promise.resolve();
+    const sessionB = { ...SESSION, refreshToken: "refresh-b" };
+    const generationB = memory.store.advance();
+    await memory.store.write(sessionB, generationB);
+
+    resolveRefresh?.(
+      Response.json({ error: "invalid_grant" }, { status: 400 }),
+    );
+
+    expect(await refreshingA).toBe("SignedOutError");
+    expect(memory.stored()).toEqual(sessionB);
+  });
+
+  test("only the source whose request failed can end the current session", () => {
+    const memory = memoryStore(SESSION);
+    const sourceA = createAccessTokenSource({
+      fetch: rotatingTokenEndpoint().fetch,
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      generation: memory.store.generation(),
+      store: memory.store,
+    });
+    const generationB = memory.store.advance();
+    const sourceB = createAccessTokenSource({
+      fetch: rotatingTokenEndpoint().fetch,
+      initialAccess: undefined,
+      now: () => 0,
+      session: { ...SESSION, refreshToken: "refresh-b" },
+      generation: generationB,
+      store: memory.store,
+    });
+
+    expect(isCurrentSessionSource(sourceB, sourceA)).toBeFalse();
+    expect(isCurrentSessionSource(sourceB, sourceB)).toBeTrue();
+  });
+
+  test("a failed deletion is retried before credentials can be restored", async () => {
+    let stored: StoredSession | null | undefined = SESSION;
+    let deletionAttempts = 0;
+    const persistence = {
+      read: async () => stored,
+      write: async (session: StoredSession) => {
+        stored = session;
+      },
+      prepareClear: async () => {
+        stored = null;
+      },
+      clear: async () => {
+        deletionAttempts += 1;
+        if (deletionAttempts === 1) {
+          throw new Error("keychain unavailable");
+        }
+        stored = undefined;
+      },
+    };
+    const firstRun = createSessionStore(persistence);
+    const signingOut = firstRun.clear(firstRun.advance());
+
+    expect(await rejectionOf(signingOut)).toHaveProperty(
+      "message",
+      "keychain unavailable",
+    );
+    expect(stored).toBeNull();
+    const nextRun = createSessionStore(persistence);
+    expect(await nextRun.read(nextRun.generation())).toBeUndefined();
+    expect(deletionAttempts).toBe(2);
+    expect(stored).toBeUndefined();
   });
 
   test("a superseded sign-in cannot publish after its write resolves", async () => {
@@ -275,7 +385,7 @@ describe("access tokens", () => {
       return outcome;
     });
     await persistence.reached(1);
-    const pendingSignOut = store.clear().then(() => {
+    const pendingSignOut = store.clear(store.advance()).then(() => {
       published = undefined;
       return undefined;
     });
@@ -288,6 +398,25 @@ describe("access tokens", () => {
     await pendingSignOut;
     expect(persistence.stored()).toBeUndefined();
     expect(published).toBeUndefined();
+  });
+
+  test("a sign-out supersedes authentication that has not completed", async () => {
+    const memory = memoryStore(undefined);
+    let finishAuthentication: ((session: StoredSession) => void) | undefined;
+    const authentication = new Promise<StoredSession>((resolve) => {
+      finishAuthentication = resolve;
+    });
+    const transition = memory.store.begin();
+    const signingIn = authentication.then(
+      async (session) => await transition.write(session),
+    );
+
+    const signingOut = memory.store.begin();
+    await signingOut.clear();
+    finishAuthentication?.(SESSION);
+
+    expect(await signingIn).toEqual({ type: "stale" });
+    expect(memory.stored()).toBeUndefined();
   });
 
   test("credentials follow session generations across event interleavings", async () => {
@@ -338,8 +467,8 @@ describe("access tokens", () => {
             );
           } else if (currentEvent === "sign-out") {
             expected = undefined;
-            const clearing = store.clear();
-            const generation = store.generation();
+            const generation = store.advance();
+            const clearing = store.clear(generation);
             mutations.push(
               clearing
                 .then(() => {

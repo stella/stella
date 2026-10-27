@@ -22,6 +22,7 @@ export const deviceCrypto: AuthorizationCrypto = {
 };
 
 const SESSION_KEY = "stella.session";
+const PENDING_DELETION = JSON.stringify({ status: "pending-deletion" });
 
 /**
  * The Keychain on iOS, the Keystore-encrypted store on Android. Readable once
@@ -35,6 +36,9 @@ export const deviceSessionStore = createSessionStore({
     const stored = await getItemAsync(SESSION_KEY, KEYCHAIN);
     if (stored === null) {
       return undefined;
+    }
+    if (stored === PENDING_DELETION) {
+      return null;
     }
     const parsed = v.safeParse(
       v.pipe(v.string(), v.parseJson(), storedSessionSchema),
@@ -50,6 +54,9 @@ export const deviceSessionStore = createSessionStore({
   },
   write: async (session) => {
     await setItemAsync(SESSION_KEY, JSON.stringify(session), KEYCHAIN);
+  },
+  prepareClear: async () => {
+    await setItemAsync(SESSION_KEY, PENDING_DELETION, KEYCHAIN);
   },
   clear: async () => {
     await deleteItemAsync(SESSION_KEY, KEYCHAIN);

@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Fiók",
     "server": "Szerver",
-    "signOut": "Kijelentkezés"
+    "signOut": "Kijelentkezés",
+    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra."
   }
 }

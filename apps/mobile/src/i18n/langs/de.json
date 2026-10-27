@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Server",
-    "signOut": "Abmelden"
+    "signOut": "Abmelden",
+    "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
   }
 }

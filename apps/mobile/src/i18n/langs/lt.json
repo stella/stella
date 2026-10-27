@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Paskyra",
     "server": "Serveris",
-    "signOut": "Atsijungti"
+    "signOut": "Atsijungti",
+    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą."
   }
 }

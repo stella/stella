@@ -56,7 +56,10 @@ const requestTokens = async (
     : Result.err(
         new TokenError({
           message: "The token endpoint answered an unexpected body",
-          cause: new v.ValiError(tokens.issues),
+          cause: tokens.issues.map((issue) => ({
+            message: issue.message,
+            path: issue.path?.map((item) => String(item.key)),
+          })),
         }),
       );
 };

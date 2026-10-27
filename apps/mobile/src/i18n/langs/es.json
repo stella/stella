@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Cuenta",
     "server": "Servidor",
-    "signOut": "Cerrar sesión"
+    "signOut": "Cerrar sesión",
+    "signOutFailed": "No se pudo completar el cierre de sesión. Inténtalo de nuevo."
   }
 }

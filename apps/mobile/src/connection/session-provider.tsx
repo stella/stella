@@ -12,7 +12,10 @@ import {
   deviceSessionStore,
   openDeviceAuthSession,
 } from "@/connection/platform";
-import { createAccessTokenSource } from "@/connection/session";
+import {
+  createAccessTokenSource,
+  isCurrentSessionSource,
+} from "@/connection/session";
 import type {
   AccessToken,
   AccessTokenSource,
@@ -37,9 +40,9 @@ type SessionContextValue = {
   readonly signIn: (
     serverUrlInput: string,
   ) => Promise<Result<void, SignInError>>;
-  readonly signOut: () => Promise<void>;
+  readonly signOut: () => Promise<Result<void, TokenError>>;
   /** The server refused the session; the person has to sign in again. */
-  readonly end: () => void;
+  readonly end: (source: AccessTokenSource) => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -49,9 +52,24 @@ const SessionContext = createContext<SessionContextValue | null>(null);
  * that cannot be read (the device locked during a background launch) starts
  * signed out; signing in writes a fresh session over whatever was there.
  */
-const restoredSession: Promise<StoredSession | undefined> = Result.tryPromise(
-  async () => await deviceSessionStore.read(),
-).then((read) => (Result.isOk(read) ? read.value : undefined));
+let restoredSession:
+  | {
+      readonly generation: SessionGeneration;
+      readonly promise: Promise<StoredSession | undefined>;
+    }
+  | undefined;
+
+const sessionToRestore = async () => {
+  const generation = deviceSessionStore.generation();
+  if (restoredSession?.generation === generation) {
+    return await restoredSession.promise;
+  }
+  const promise = Result.tryPromise(
+    async () => await deviceSessionStore.read(generation),
+  ).then((read) => (Result.isOk(read) ? read.value : undefined));
+  restoredSession = { generation, promise };
+  return await promise;
+};
 
 const sourceFor = (
   session: StoredSession,
@@ -68,7 +86,7 @@ const sourceFor = (
   });
 
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
-  const restored = use(restoredSession);
+  const restored = use(sessionToRestore());
   const [state, setState] = useState<SessionState>(() =>
     restored === undefined
       ? { status: "signed-out", ended: false }
@@ -85,6 +103,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const value: SessionContextValue = {
     state,
     signIn: async (serverUrlInput) => {
+      const transition = deviceSessionStore.begin();
       const signedIn = await signInToServer({
         crypto: deviceCrypto,
         fetch,
@@ -100,9 +119,8 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         return Result.err(signedIn.error);
       }
       const { session } = signedIn.value;
-      const generation = deviceSessionStore.advance();
       const stored = await Result.tryPromise({
-        try: async () => await deviceSessionStore.write(session, generation),
+        try: async () => await transition.write(session),
         catch: (cause) =>
           new TokenError({
             message: "The keychain refused the session",
@@ -142,25 +160,40 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       if (state.status === "signed-in") {
         const session = state.source.session();
         // Best effort: an unreachable server cannot keep the phone signed in.
-        (
-          await revokeRefreshToken({
-            clientId: session.clientId,
-            fetch,
-            refreshToken: session.refreshToken,
-            revocationEndpoint: session.revocationEndpoint,
-          })
-        ).unwrapOr(undefined);
+        if (session !== undefined) {
+          (
+            await revokeRefreshToken({
+              clientId: session.clientId,
+              fetch,
+              refreshToken: session.refreshToken,
+              revocationEndpoint: session.revocationEndpoint,
+            })
+          ).unwrapOr(undefined);
+        }
       }
-      // The refresh token is revoked already, so a session the keychain
-      // keeps fails its first refresh and ends; signing out still happens.
-      (
-        await Result.tryPromise(async () => {
-          await deviceSessionStore.clear();
-        })
-      ).unwrapOr(undefined);
+      const transition = deviceSessionStore.begin();
+      restoredSession = undefined;
+      const cleared = await Result.tryPromise({
+        try: async () => await transition.clear(),
+        catch: (cause) =>
+          new TokenError({
+            message: "The keychain kept the session",
+            cause,
+          }),
+      });
+      if (Result.isError(cleared)) {
+        return Result.err(cleared.error);
+      }
       setState({ status: "signed-out", ended: false });
+      return Result.ok(undefined);
     },
-    end: () => {
+    end: (source) => {
+      if (
+        state.status !== "signed-in" ||
+        !isCurrentSessionSource(state.source, source)
+      ) {
+        return;
+      }
       setState({ status: "signed-out", ended: true });
     },
   };

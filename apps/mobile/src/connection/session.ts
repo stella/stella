@@ -24,8 +24,10 @@ export const storedSessionSchema = v.object({
 export type StoredSession = v.InferOutput<typeof storedSessionSchema>;
 
 type SessionPersistence = {
-  readonly read: () => Promise<StoredSession | undefined>;
+  /** `null` is a durable sign-out tombstone awaiting deletion. */
+  readonly read: () => Promise<StoredSession | null | undefined>;
   readonly write: (session: StoredSession) => Promise<void>;
+  readonly prepareClear: () => Promise<void>;
   readonly clear: () => Promise<void>;
 };
 
@@ -38,16 +40,27 @@ export type SessionWriteOutcome =
   | { readonly type: "committed"; readonly generation: SessionGeneration }
   | { readonly type: "stale" };
 
+export type SessionTransition = {
+  readonly generation: SessionGeneration;
+  readonly write: (session: StoredSession) => Promise<SessionWriteOutcome>;
+  readonly clear: () => Promise<SessionWriteOutcome>;
+};
+
 export type SessionStore = {
-  readonly read: () => Promise<StoredSession | undefined>;
+  readonly read: (
+    generation: SessionGeneration,
+  ) => Promise<StoredSession | undefined>;
   readonly generation: () => SessionGeneration;
   readonly advance: () => SessionGeneration;
+  readonly begin: () => SessionTransition;
   readonly isCurrent: (generation: SessionGeneration) => boolean;
   readonly write: (
     session: StoredSession,
     generation: SessionGeneration,
   ) => Promise<SessionWriteOutcome>;
-  readonly clear: () => Promise<void>;
+  readonly clear: (
+    generation: SessionGeneration,
+  ) => Promise<SessionWriteOutcome>;
 };
 
 /** Owns every credential mutation and orders it against session generation changes. */
@@ -70,10 +83,25 @@ export const createSessionStore = (
     return await pending;
   };
 
-  return {
-    read: persistence.read,
+  const store: SessionStore = {
+    read: async (captured) => {
+      const session = await persistence.read();
+      if (session === null) {
+        await persistence.clear();
+        return undefined;
+      }
+      return captured === generation ? session : undefined;
+    },
     generation: () => generation,
     advance,
+    begin: () => {
+      const captured = advance();
+      return {
+        generation: captured,
+        write: async (session) => await store.write(session, captured),
+        clear: async () => await store.clear(captured),
+      };
+    },
     isCurrent: (captured) => captured === generation,
     write: async (session, captured) =>
       await enqueue(async () => {
@@ -85,11 +113,19 @@ export const createSessionStore = (
           ? { type: "committed", generation: captured }
           : { type: "stale" };
       }),
-    clear: async () => {
-      advance();
-      await enqueue(persistence.clear);
-    },
+    clear: async (captured) =>
+      await enqueue(async () => {
+        if (captured !== generation) {
+          return { type: "stale" };
+        }
+        await persistence.prepareClear();
+        await persistence.clear();
+        return captured === generation
+          ? { type: "committed", generation: captured }
+          : { type: "stale" };
+      }),
   };
+  return store;
 };
 
 export type AccessToken = {
@@ -109,7 +145,8 @@ const TERMINAL_REFRESH_ERRORS: ReadonlySet<string> = new Set([
 ]);
 
 export type AccessTokenSource = {
-  readonly session: () => StoredSession;
+  /** Metadata is unavailable once another transition owns the session. */
+  readonly session: () => StoredSession | undefined;
   /** A current access token, refreshing first when the held one is spent. */
   readonly accessToken: () => Promise<
     Result<string, SignedOutError | TokenError>
@@ -117,6 +154,12 @@ export type AccessTokenSource = {
   /** After the server rejects a token it is spent, whatever its clock says. */
   readonly invalidate: () => void;
 };
+
+/** Matches an asynchronous failure to the source that still owns the UI. */
+export const isCurrentSessionSource = (
+  current: AccessTokenSource | undefined,
+  failed: AccessTokenSource,
+): boolean => current === failed && failed.session() !== undefined;
 
 /**
  * Hands out access tokens for one signed-in session. Concurrent callers
@@ -161,7 +204,12 @@ export const createAccessTokenSource = ({
     if (Result.isError(refreshed)) {
       const { oauthError } = refreshed.error;
       if (oauthError !== undefined && TERMINAL_REFRESH_ERRORS.has(oauthError)) {
-        await store.clear();
+        const cleared = await store.clear(generation);
+        if (cleared.type === "stale") {
+          return Result.err(
+            new SignedOutError({ message: "The session is no longer current" }),
+          );
+        }
         return Result.err(
           new SignedOutError({
             message: `The server ended the session: ${oauthError}`,
@@ -206,8 +254,13 @@ export const createAccessTokenSource = ({
   };
 
   return {
-    session: () => current,
+    session: () => (store.isCurrent(generation) ? current : undefined),
     accessToken: async () => {
+      if (!store.isCurrent(generation)) {
+        return Result.err(
+          new SignedOutError({ message: "The session is no longer current" }),
+        );
+      }
       if (access !== undefined && access.expiresAt - EARLY_REFRESH_MS > now()) {
         return Result.ok(access.token);
       }

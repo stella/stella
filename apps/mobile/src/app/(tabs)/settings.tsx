@@ -1,4 +1,4 @@
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import {
   ActivityIndicator,
@@ -20,8 +20,11 @@ const SettingsScreen = () => {
   const colors = useAppColors();
   const { signOut, state } = useSession();
   const [pending, startTransition] = useTransition();
+  const [signOutFailed, setSignOutFailed] = useState(false);
   const serverUrl =
-    state.status === "signed-in" ? state.source.session().serverUrl : null;
+    state.status === "signed-in"
+      ? (state.source.session()?.serverUrl ?? null)
+      : null;
 
   return (
     <SafeAreaView
@@ -55,7 +58,8 @@ const SettingsScreen = () => {
           disabled={pending}
           onPress={() => {
             startTransition(async () => {
-              await signOut();
+              const result = await signOut();
+              setSignOutFailed(result.isErr());
             });
           }}
           style={({ pressed }) => [
@@ -74,6 +78,11 @@ const SettingsScreen = () => {
             </Text>
           )}
         </Pressable>
+        {signOutFailed ? (
+          <Text style={[styles.error, { color: colors.muted }]}>
+            {t("settings.signOutFailed")}
+          </Text>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -82,6 +91,9 @@ const SettingsScreen = () => {
 export default SettingsScreen;
 
 const styles = StyleSheet.create({
+  error: {
+    fontSize: 14,
+  },
   button: {
     alignItems: "center",
     borderRadius: 14,

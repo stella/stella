@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Compte",
     "server": "Serveur",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "signOutFailed": "La déconnexion n’a pas pu aboutir. Réessayez."
   }
 }

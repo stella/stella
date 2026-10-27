@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Account",
     "server": "Server",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "signOutFailed": "Sign-out could not be completed. Try again."
   }
 }

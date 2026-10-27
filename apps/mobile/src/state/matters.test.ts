@@ -55,6 +55,7 @@ const sourceFor = (fetch: Fetch) => {
   const store = createSessionStore({
     read: async () => SESSION,
     write: async () => {},
+    prepareClear: async () => {},
     clear: async () => {},
   });
   return createAccessTokenSource({

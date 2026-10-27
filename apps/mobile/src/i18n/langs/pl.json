@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Serwer",
-    "signOut": "Wyloguj się"
+    "signOut": "Wyloguj się",
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
   }
 }

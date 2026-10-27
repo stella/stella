@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "الحساب",
     "server": "الخادم",
-    "signOut": "تسجيل الخروج"
+    "signOut": "تسجيل الخروج",
+    "signOutFailed": "تعذّر إكمال تسجيل الخروج. حاول مرة أخرى."
   }
 }

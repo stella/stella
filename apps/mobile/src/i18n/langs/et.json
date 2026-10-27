@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Konto",
     "server": "Server",
-    "signOut": "Logi välja"
+    "signOut": "Logi välja",
+    "signOutFailed": "Väljalogimist ei saanud lõpule viia. Proovige uuesti."
   }
 }

@@ -69,6 +69,7 @@
   "settings": {
     "accountTitle": "Conta",
     "server": "Servidor",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "signOutFailed": "Não foi possível concluir a saída. Tente novamente."
   }
 }

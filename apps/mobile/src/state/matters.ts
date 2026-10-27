@@ -1,7 +1,8 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
-import type { SignedOutError, TokenError } from "@/connection/errors";
+import { SignedOutError } from "@/connection/errors";
+import type { TokenError } from "@/connection/errors";
 import { fetchWithTimeout } from "@/connection/http";
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -102,7 +103,13 @@ export const listMatters = async ({
   readonly source: AccessTokenSource;
 }): Promise<Result<MatterSummary[], MattersError>> =>
   await Result.gen(async function* () {
-    const { serverUrl } = source.session();
+    const session = source.session();
+    if (session === undefined) {
+      return Result.err(
+        new SignedOutError({ message: "The session is no longer current" }),
+      );
+    }
+    const { serverUrl } = session;
     const token = yield* Result.await(source.accessToken());
     const first = await requestMatters(fetch, serverUrl, token);
     if (Result.isOk(first) || first.error.status !== 401) {
