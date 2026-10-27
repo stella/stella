@@ -33,8 +33,11 @@ type SessionContextValue = {
     serverUrlInput: string,
   ) => Promise<Result<void, SignInError>>;
   readonly signOut: () => Promise<void>;
-  /** The server refused the session; the person has to sign in again. */
-  readonly end: () => void;
+  /**
+   * The server refused `source`'s session; the person has to sign in again.
+   * A source left over from an earlier sign-in ends nothing.
+   */
+  readonly end: (source: AccessTokenSource) => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -116,8 +119,12 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       ).unwrapOr(undefined);
       setState({ status: "signed-out", ended: false });
     },
-    end: () => {
-      setState({ status: "signed-out", ended: true });
+    end: (source) => {
+      setState((current) =>
+        current.status === "signed-in" && current.source === source
+          ? { status: "signed-out", ended: true }
+          : current,
+      );
     },
   };
 

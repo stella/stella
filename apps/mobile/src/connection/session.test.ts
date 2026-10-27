@@ -151,11 +151,11 @@ describe("access tokens", () => {
   });
 
   test("a session kept for another server is neither adopted nor cleared", async () => {
+    // A server controls its own discovery document, so it can claim another
+    // server's issuer, client, endpoints and resource; only its URL differs.
     const other: StoredSession = {
       ...SESSION,
       serverUrl: "https://other.example.com",
-      tokenEndpoint: "https://other.example.com/api/auth/oauth2/token",
-      resource: "https://other.example.com/v1",
       refreshToken: "other-refresh",
     };
     const memory = memoryStore(other);
