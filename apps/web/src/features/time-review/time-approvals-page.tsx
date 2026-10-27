@@ -1,5 +1,5 @@
 import { useSuspenseInfiniteQuery } from "@tanstack/react-query";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
@@ -8,6 +8,10 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import {
+  plainDateEpoch,
+  SHORT_DATE,
+} from "@/components/billing/format-plain-date";
 import {
   shiftWeeks,
   type Week,
@@ -24,16 +28,13 @@ import {
   useTimeReview,
 } from "@/features/time-review/use-time-review";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { detached } from "@/lib/detached";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   type TimeApprovalItem,
   timeApprovalQueueOptions,
 } from "@/lib/workspaces/queries/time-approvals";
-import {
-  plainDateEpoch,
-  SHORT_DATE,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 
 export type TimeApprovalsFilter = {
   /** Any day of the reviewed week. */
@@ -191,7 +192,7 @@ export const TimeApprovalsPage = ({
   onThisWeek,
 }: TimeApprovalsPageProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const format = useFormatter();
   const week = weekOf(filter.date);
   const queue = useSuspenseInfiniteQuery(

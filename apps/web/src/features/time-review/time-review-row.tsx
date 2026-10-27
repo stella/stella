@@ -11,13 +11,13 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Input } from "@stll/ui/input";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
-import type { TimeReview } from "@/features/time-review/use-time-review";
-import { useFormatter } from "@/i18n/formatting-context";
-import { formatMinutes } from "@/lib/workspaces/format-duration";
 import {
   plainDateEpoch,
   SHORT_DATE,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
+} from "@/components/billing/format-plain-date";
+import type { TimeReview } from "@/features/time-review/use-time-review";
+import { useFormatter } from "@/i18n/formatting-context";
+import { formatMinutes } from "@/lib/workspaces/format-duration";
 
 /** What a reviewer sees of one entry, whichever list it came from. */
 export type TimeReviewRowData = {
