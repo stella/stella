@@ -442,8 +442,6 @@ const ComboboxChipRemove = (props: ComboboxPrimitive.ChipRemove.Props) => (
   </ComboboxPrimitive.ChipRemove>
 );
 
-const useComboboxFilter = ComboboxPrimitive.useFilter;
-
 export {
   Combobox,
   ComboboxChipsInput,
@@ -463,5 +461,4 @@ export {
   ComboboxCollection,
   ComboboxChips,
   ComboboxChip,
-  useComboboxFilter,
 };

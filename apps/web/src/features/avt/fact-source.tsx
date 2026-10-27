@@ -1,9 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 /**
  * Where an anchor fact comes from: its first source's document and page,
  * opening the document there.
  */
-
-import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@stll/ui/button";
 
@@ -15,7 +14,8 @@ import {
 import { evidenceSourceDocumentName } from "@/features/avt/fact-source.logic";
 import type { EvidenceFact } from "@/features/avt/types";
 import type { LegalListSourceLocator } from "@/lib/api-contract";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
 
 type FactSourceProps = {
@@ -57,8 +57,8 @@ export const EvidenceFactSource = ({
   source,
 }: EvidenceFactSourceProps) => {
   const filesQuery = useQuery(workspaceFilesOptions(workspaceId));
-  const filesView = useQueryView(filesQuery);
-  useQueryViewError(filesView);
+  const filesView = queryView(filesQuery);
+  useQueryViewError(filesView, "EvidenceFactSource:query");
   const files =
     (filesView.type === "items" ? filesView.items : undefined) ?? [];
   if (source === undefined) {

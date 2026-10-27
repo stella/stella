@@ -182,6 +182,8 @@ const context = ({
     event: modelledEvent(event),
     plan: {
       ...plan,
+      heavy_proof: String(event !== "pull_request" || proveFix),
+      armed_delta: "false",
       queue_depth: queueDepth,
       ...(event === "pull_request"
         ? { fix_tests_on_base_required: "true" }
@@ -190,6 +192,7 @@ const context = ({
     vars: {
       MERGE_QUEUE_DEPTH: variable,
       QUEUE_BROWSER_SUITES: queueBrowserSuites,
+      CI_POSTGRES_PR_SELECTION: "",
     },
     needsResults: Object.fromEntries(needs.map((job) => [job, "success"])),
   });
@@ -201,8 +204,10 @@ const context = ({
     "completed-depth": {
       outputs: {
         normal_completion: "required",
-        pr_heavy_suites: "run",
         run_required: value.needs["ci-plan"]?.outputs["run_required"] ?? "true",
+        pr_heavy_suites: "run",
+        armed: String(proveFix),
+        armed_proof: "",
       },
     },
     "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
@@ -364,6 +369,12 @@ const expectedPrSelection = ({
   if (disposition === undefined) {
     panic(`Missing CI event disposition: ${job}`);
   }
+  if (disposition === "armed") {
+    return (
+      value.needs["ci-plan"]?.outputs["heavy_proof"] === "true" &&
+      (job === "e2e-report" ? baseline : true)
+    );
+  }
   if (job === "ci-browser") {
     expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
@@ -409,6 +420,8 @@ const expectedPrSelection = ({
     );
   }
   switch (disposition) {
+    // These contexts model unarmed pull requests.
+    case "armed":
     case "queue":
     case "main":
       return false;
@@ -418,6 +431,8 @@ const expectedPrSelection = ({
           (label) => label.name === "prove-fix",
         ) && baseline
       );
+    // A schema PR job gates on its own planner output, like a fast PR job.
+    case "schema-pr":
     case "pr-fast":
       return baseline;
     default:
@@ -822,8 +837,8 @@ test("failure-only cancellation jobs resolve both successful and failed dependen
   }
 });
 
-test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
-  expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
+test("route smoke certifies planned queue and heavy builds while skipping unarmed PRs", () => {
+  expect(eventPolicy["ci.yml/route-smoke"]).toBe("armed");
   const cases = events
     .flatMap((event) =>
       ["full", "thin"].map((queueDepth) => ({ event, queueDepth })),
@@ -891,9 +906,9 @@ test("unset and full preserve historical predicates except declared PR, Postgres
   // Jobs that became one part of a shared job: the part's step condition,
   // under the shared job's condition, keeps the historical predicate.
   const foldedParts = new Map([
-    ["parser-version-guard", "ci-quick-checks"],
-    ["ci-checks-docs", "ci-quick-checks"],
-    ["dated-waiver-expiry", "ci-quick-checks"],
+    ["parser-version-guard", "pr-heavy-gate"],
+    ["ci-checks-docs", "pr-heavy-gate"],
+    ["dated-waiver-expiry", "pr-heavy-gate"],
   ]);
   const partSelected = (job: string, value: ReturnType<typeof context>) => {
     const host = foldedParts.get(job);
@@ -937,6 +952,8 @@ test("unset and full preserve historical predicates except declared PR, Postgres
         "scan-engine-wasm-drift",
         "dependency-audit",
         "dependency-review",
+        "database-migrations-check",
+        "database-migrations-apply-fresh",
       ]),
     ].toSorted(),
   );
@@ -968,7 +985,7 @@ test("unset and full preserve historical predicates except declared PR, Postgres
           expected = expectedServiceSelection(value);
         } else if (job === "postgres-service-suites") {
           expected = expectedPostgresSelection(value);
-        } else if (job === "route-smoke") {
+        } else if (job === "route-smoke" && event.event !== "pull_request") {
           expected = expectedRouteSelection(value);
         } else if (event.event === "pull_request") {
           expected = expectedPrSelection({
@@ -1311,12 +1328,14 @@ test("the planner emits the canonical thin set only when derived planning is sel
             inputs: { heavy_only: heavyOnly },
             steps: {
               depth: { outputs: { queue_depth: queueDepth } },
-              "completed-depth": { outputs: { run_required: "true" } },
+              "completed-depth": {
+                outputs: { run_required: "true", armed: "false" },
+              },
               // The derivation also waits for the planner install.
               "planner-deps": { outcome: "success" },
             },
           }),
-        ).toBe(heavyOnly || (event === "merge_group" && queueDepth === "thin"));
+        ).toBe(heavyOnly || event === "merge_group");
       }
     }
   }
@@ -1461,5 +1480,20 @@ test("scoped queue eligibility is invariant under depth and the retired browser 
         ]);
       }
     }
+  }
+});
+
+test("every current CI job disposition is modelled for pull requests", () => {
+  // The historical baseline moves with main-heavy.yml edits, so a job only
+  // enters that comparison later; model its disposition when it is declared.
+  const value = context({
+    event: { event: "pull_request", message: "ordinary" },
+    variable: "",
+    queueDepth: "full",
+  });
+  for (const job of Object.keys(ci.jobs)) {
+    expect(typeof expectedPrSelection({ job, baseline: true, value })).toBe(
+      "boolean",
+    );
   }
 });

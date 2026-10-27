@@ -1,4 +1,5 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { panic } from "better-result";
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { SIGN_IN_MODE } from "@/components/auth/sign-in-mode";
@@ -20,16 +21,32 @@ export const Route = createFileRoute("/auth/otp")({
     if (navigation) {
       redirect({ ...navigation, throw: true });
     }
+    if (search.email === undefined) {
+      redirect({
+        to:
+          search.mode === SIGN_IN_MODE.reauthenticate
+            ? "/auth/reauth"
+            : "/auth",
+        search: { redirectTo: search.redirectTo },
+        replace: true,
+        throw: true,
+      });
+      return panic("TanStack Router did not throw the sign-in redirect.");
+    }
+    return { otpEmail: search.email };
   },
-  loader: async ({ deps }) => ({ devOtp: await fetchDevOtp(deps.email) }),
+  loader: async ({ context }) => ({
+    devOtp: await fetchDevOtp(context.otpEmail),
+  }),
   component: OTP,
 });
 
 function OTP() {
   const navigate = useNavigate();
-  const { email, redirectTo, mode } = Route.useSearch({
-    select: (s) => ({ email: s.email, redirectTo: s.redirectTo, mode: s.mode }),
+  const { redirectTo, mode } = Route.useSearch({
+    select: (s) => ({ redirectTo: s.redirectTo, mode: s.mode }),
   });
+  const email = Route.useRouteContext({ select: (c) => c.otpEmail });
   const devOtp = Route.useLoaderData({ select: (d) => d.devOtp });
 
   const handleUseDifferentEmail = async () => {

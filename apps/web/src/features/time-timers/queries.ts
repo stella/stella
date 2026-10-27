@@ -1,7 +1,7 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
 export const timeTimersKeys = {
@@ -17,7 +17,7 @@ export const timeTimersOptions = (organizationId: string, userId: string) =>
     queryKey: timeTimersKeys.all(organizationId, userId),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["time-timers"].get({
           query: {
             limit: 100,

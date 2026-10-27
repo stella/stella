@@ -70,6 +70,7 @@ export type TimeEntrySuggestionEvidence =
       id: string;
       title: string;
       messageCount: number;
+      signals: TimeEntrySuggestionSignalIdentity[];
     }
   | {
       type: "resource";
@@ -77,7 +78,14 @@ export type TimeEntrySuggestionEvidence =
       resourceType: string;
       name: string | null;
       actions: string[];
+      signals: TimeEntrySuggestionSignalIdentity[];
     };
+
+export type TimeEntrySuggestionSignalIdentity = {
+  source: "chat_message" | "audit_log";
+  resourceId: string;
+  timestamp: string;
+};
 
 export type TimeEntrySuggestion = {
   /** Stable identity of the cluster for the day: survives later signals extending it. */
@@ -85,6 +93,10 @@ export type TimeEntrySuggestion = {
   startedAt: string;
   endedAt: string;
   durationMinutes: number;
+  /** Raw activity remaining after recorded timer windows are removed. */
+  engagedMinutes: number;
+  alreadyCovered: boolean;
+  billableByDefault: boolean;
   signalCount: number;
   evidence: TimeEntrySuggestionEvidence[];
 };
@@ -93,6 +105,7 @@ export type TimeEntrySuggestionsResponse = {
   date: string;
   /** Sum of suggested minutes still awaiting a decision. */
   activeMinutes: number;
+  loggedMinutes: number;
   items: TimeEntrySuggestion[];
 };
 

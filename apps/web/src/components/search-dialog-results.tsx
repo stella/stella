@@ -43,13 +43,14 @@ import type { api } from "@/lib/api";
 import type { GlobalSearchHit } from "@/lib/api-contract";
 import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
 import type {
   RecentFileWithIdentity,
   RecentSearch,
 } from "@/lib/search-recents";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
 type SearchSummaryData = NonNullable<
@@ -461,8 +462,8 @@ const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
     ...entityOptions(file.workspaceId, file.entityId),
     enabled: false,
   });
-  const entityView = useQueryView(entityQuery);
-  useQueryViewError(entityView);
+  const entityView = queryView(entityQuery);
+  useQueryViewError(entityView, "RecentFileTypeIcon:query");
   const entity = entityView.type === "items" ? entityView.items : undefined;
   const fieldId = entity
     ? resolveRecentFilePreviewFieldId({

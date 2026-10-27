@@ -17,6 +17,9 @@
      ~100 characters a line; ~70 is the length prose is read at. */
   --reader-measure: 70ch;
   --reader-paragraph-gap: 1em;
+  /* The gutter a statute list item's designator hangs in: room for `a)`,
+     `aa)` and `10.` at the text's own size. */
+  --reader-list-gutter: 1.75em;
   --reader-section-gap-top: 2.5em;
   --reader-section-gap-bottom: 0.8em;
   --reader-anchor-offset: 88px;
@@ -61,26 +64,42 @@
   border-radius: 0.25rem;
 }
 
-/* Hyphenation at every width, justification on desktop — how a law report is
-   set. Hyphenation is line breaking: it alters no character of the text, and
-   it is what keeps a justified column from opening rivers of white space. The
-   dictionary comes from the document's own language, which each reader puts
-   on its <article> as `lang`, so Czech, Slovak and Polish break at their own
-   points. The limits keep short words whole and leave at least three letters
-   on each side of a break.
-   text-align-last: start prevents short/single-line paragraphs from being
-   stretched. */
-.reader-justify {
+/* Running text is set ragged, aligned to the start edge, so a right-to-left
+   document aligns right. Justification stretched the word spaces of every
+   line that holds a long unbreakable token (a case number, a file
+   reference, a citation), and decision text is full of them.
+   Hyphenation stays: it alters no character of the text and keeps the rag
+   even in a narrow pane. The dictionary comes from the document's own
+   language, which each reader puts on its <article> as `lang`, so Czech,
+   Slovak and Polish break at their own points. The limits keep short words
+   whole and leave at least three letters on each side of a break. */
+.reader-prose {
+  text-align: start;
   -webkit-hyphens: auto;
   hyphens: auto;
   hyphenate-limit-chars: 7 3 3;
 }
 
-@media (min-width: 1024px) {
-  .reader-justify {
-    text-align: justify;
-    text-align-last: start;
-  }
+/* A statute list item (`a)`, `1.`) hangs its designator in a gutter, so its
+   wrapped lines align with its words rather than under its letter. The first
+   line pulls back by the gutter, the designator fills it (or overruns it by
+   its own width), and every later line starts past it. */
+.reader-list-hang {
+  padding-inline-start: var(--reader-list-gutter);
+  text-indent: calc(var(--reader-list-gutter) * -1);
+}
+
+.reader-list-marker {
+  display: inline-block;
+  min-width: var(--reader-list-gutter);
+  padding-inline-end: 0.25em;
+  text-indent: 0;
+}
+
+/* Provision wording quoted in a card: its items sit close, so a lead-in and
+   the list it opens read as one unit. */
+.reader-quote {
+  --reader-paragraph-gap: 0.25em;
 }
 
 /* Paper-like background for the reader.

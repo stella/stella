@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/observability/case-law-freshness-metrics.ts",
+  "delta": 1,
+  "reason": "The hourly freshness report walks each served generation's queue in turn, one bounded index read per generation (the serving one plus each flipped jurisdiction's, a handful at most), each limited by what the earlier walks left of one shared row cap, so the order is the bound."
+}

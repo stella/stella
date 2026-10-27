@@ -11,39 +11,41 @@ import {
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { EmailCitationSource } from "@/lib/files/email-citations";
 import type { OfficeCitationSource } from "@/lib/files/office-citations";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type { WorkspaceEntity } from "@/lib/types";
+import type { CurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 const openDisplayableFile = ({
+  documentOnScreen,
   entityId,
   fields,
   label,
   workspaceId,
-  openInPreview = false,
 }: {
+  /** The main document page the tab defers to; `undefined` for a tab that
+   * must open on its preview. */
+  documentOnScreen: CurrentWorkspaceDocument;
   entityId: string;
   fields: Iterable<FileTabSourceField>;
   label: string;
   workspaceId: string;
-  openInPreview?: boolean | undefined;
 }) => {
   const tab = toFileTab({ entityId, fields, label, workspaceId });
   if (tab === null) {
     return false;
   }
-  const sameAsMainRoute = isEntityActiveInMainRoute(entityId, workspaceId);
   useInspectorTabsStore.getState().openFile({
     ...tab,
     // The file is already in the main view; don't compete with
     // it — open the inspector to its metadata view so the
     // mention click reveals fields/properties instead of
     // re-rendering the same document.
-    ...(sameAsMainRoute && !openInPreview
+    ...(isEntityActiveInMainRoute({ entityId, workspaceId }, documentOnScreen)
       ? { metadataLane: "expanded" as const }
       : {}),
   });
@@ -73,10 +75,11 @@ export const openEntityFileFieldInInspector = ({
       continue;
     }
     const opened = openDisplayableFile({
+      // A cited field opens on its preview even when it is the main view.
+      documentOnScreen: undefined,
       entityId,
       fields: [field],
       label,
-      openInPreview: true,
       workspaceId,
     });
     if (opened) {
@@ -120,12 +123,23 @@ const openEntityByKind = ({
 /** Open an entity reference from chat. Documents open in the
  *  file inspector, tasks open in the task inspector, and folders
  *  are returned to the caller for route-level navigation. */
-export const openEntityInInspector = async (
-  entityId: string,
-  label: string,
-  workspaceId = "",
-  entity?: WorkspaceEntity,
-): Promise<OpenEntityResult> => {
+type OpenEntityInInspectorOptions = {
+  /** The main document page (`getCurrentWorkspaceDocument`): an entity it
+   * already shows opens on its metadata instead. */
+  documentOnScreen: CurrentWorkspaceDocument;
+  entity?: WorkspaceEntity;
+  entityId: string;
+  label: string;
+  workspaceId: string;
+};
+
+export const openEntityInInspector = async ({
+  documentOnScreen,
+  entity,
+  entityId,
+  label,
+  workspaceId,
+}: OpenEntityInInspectorOptions): Promise<OpenEntityResult> => {
   if (!workspaceId) {
     return { type: "unsupported" };
   }
@@ -142,6 +156,7 @@ export const openEntityInInspector = async (
     }
 
     openDisplayableFile({
+      documentOnScreen,
       entityId,
       fields: definedFields(entity),
       label,
@@ -156,7 +171,7 @@ export const openEntityInInspector = async (
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .get();
 
-    const data = unwrapEden(response);
+    const data = unwrapApiResponse(response);
 
     const responseLabel = data.name;
     const openedByKind = openEntityByKind({
@@ -170,6 +185,7 @@ export const openEntityInInspector = async (
     }
 
     const opened = openDisplayableFile({
+      documentOnScreen,
       entityId,
       fields: data.fields,
       label: responseLabel,
@@ -184,7 +200,10 @@ export const openEntityInInspector = async (
     notifyUserError(undefined, t("errors.actionFailed"));
     return { type: "unsupported" };
   } catch (error) {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "openEntityInInspector:failure",
+      scope: { type: "handler", handlerId: "openEntityInInspector:failure" },
+    });
     const t = getTranslator();
     notifyUserError(error, t("errors.actionFailed"));
     return { type: "unsupported" };
@@ -216,7 +235,7 @@ export const openSourceBoundEntityFile = async ({
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .field({ fieldId: toSafeId<"field">(fieldId) })
       .file.get();
-    const data = unwrapEden(response);
+    const data = unwrapApiResponse(response);
     if (
       isCurrent() &&
       data.entityVersionId === entityVersionId &&
@@ -242,26 +261,39 @@ export const openSourceBoundEntityFile = async ({
     notifyUserError(undefined, t("errors.actionFailed"));
     return false;
   } catch (error) {
-    getAnalytics().captureError(error);
+    getAnalytics().captureError(error, {
+      fingerprintKey: "openSourceBoundEntityFile:failure",
+      scope: {
+        type: "handler",
+        handlerId: "openSourceBoundEntityFile:failure",
+      },
+    });
     const t = getTranslator();
     notifyUserError(error, t("errors.actionFailed"));
     return false;
   }
 };
 
+type OpenFileCitationSourceOptions<TSource> = {
+  /** The main document page (`getCurrentWorkspaceDocument`): a file field
+   * it already shows opens on its metadata instead. */
+  documentOnScreen: CurrentWorkspaceDocument;
+  source: TSource;
+  workspaceId: string;
+};
+
 const openFileCitationSource = ({
+  documentOnScreen,
   source,
   workspaceId,
-}: {
-  source: EmailCitationSource | OfficeCitationSource;
-  workspaceId: string;
-}): void => {
+}: OpenFileCitationSourceOptions<
+  EmailCitationSource | OfficeCitationSource
+>): void => {
   const inspector = useInspectorTabsStore.getState();
-  const sameAsMainRoute = isFileActiveInMainRoute({
-    entityId: source.entityId,
-    fieldId: source.fieldId,
-    workspaceId,
-  });
+  const sameAsMainRoute = isFileActiveInMainRoute(
+    { entityId: source.entityId, fieldId: source.fieldId, workspaceId },
+    documentOnScreen,
+  );
   inspector.openFile({
     id: source.fieldId,
     entityId: source.entityId,
@@ -276,12 +308,10 @@ const openFileCitationSource = ({
   inspector.setFileFacet(source.fieldId, "preview");
 };
 
-export const openEmailCitationSource = (options: {
-  source: EmailCitationSource;
-  workspaceId: string;
-}): void => openFileCitationSource(options);
+export const openEmailCitationSource = (
+  options: OpenFileCitationSourceOptions<EmailCitationSource>,
+): void => openFileCitationSource(options);
 
-export const openOfficeCitationSource = (options: {
-  source: OfficeCitationSource;
-  workspaceId: string;
-}): void => openFileCitationSource(options);
+export const openOfficeCitationSource = (
+  options: OpenFileCitationSourceOptions<OfficeCitationSource>,
+): void => openFileCitationSource(options);

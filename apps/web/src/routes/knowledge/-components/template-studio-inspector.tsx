@@ -87,8 +87,9 @@ import {
   templateFillDiscoverOptions,
   templateRecipesOptions,
 } from "@/lib/knowledge/queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { LinkClauseDialog } from "@/routes/knowledge/-components/link-clause-dialog";
 import { parseArrayItemKey } from "@/routes/knowledge/-components/template-array-item-key";
 import { TemplateCheckDialog } from "@/routes/knowledge/-components/template-check-dialog";
@@ -158,8 +159,8 @@ function TemplateStudioInspectorView({
   const detailDataQuery = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );
-  const detailDataView = useQueryView(detailDataQuery);
-  useQueryViewError(detailDataView);
+  const detailDataView = queryView(detailDataQuery);
+  useQueryViewError(detailDataView, "TemplateStudioInspectorView:query");
   const detailData =
     detailDataView.type === "items" ? detailDataView.items : undefined;
   const detail =
@@ -334,8 +335,8 @@ const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
   const format = useFormatter();
   const organizationId = useAuthenticatedUser().activeOrganizationId;
   const dataQuery = useQuery(templateCheckOptions(organizationId, templateId));
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "StudioHealthBadge:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
   // Nothing to show until the first result lands; keeps the row from flashing
@@ -358,6 +359,7 @@ const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
       )}
       size="xs"
       title={t("templates.checkTemplate")}
+      tooltip={t("templates.checkTemplate")}
       variant={hasErrors ? "destructive-ghost" : "ghost"}
     >
       {issueCount === 0 ? (
@@ -416,8 +418,8 @@ const TemplateFillFacet = ({
   const clausePreviewQuery = useQuery({
     ...templateClausePreviewOptions(facetOrgId, templateId),
   });
-  const clausePreviewView = useQueryView(clausePreviewQuery);
-  useQueryViewError(clausePreviewView);
+  const clausePreviewView = queryView(clausePreviewQuery);
+  useQueryViewError(clausePreviewView, "TemplateFillFacet:query");
   const clausePreview =
     clausePreviewView.type === "items" ? clausePreviewView.items : undefined;
   // Leaving the facet clears the in-document preview (and drops any pending
@@ -430,8 +432,8 @@ const TemplateFillFacet = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
   const detailDataQuery = useQuery(detailOptions);
-  const detailDataView = useQueryView(detailDataQuery);
-  useQueryViewError(detailDataView);
+  const detailDataView = queryView(detailDataQuery);
+  useQueryViewError(detailDataView, "TemplateFillFacet:query-2");
   const detailData =
     detailDataView.type === "items" ? detailDataView.items : undefined;
   const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
@@ -457,8 +459,8 @@ const TemplateFillFacet = ({
     templateClausesOptions(activeOrganizationId, templateId),
   );
   const { isPending: clauseSourcesPending } = clauseSourcesQuery;
-  const clauseSourcesView = useQueryView(clauseSourcesQuery);
-  useQueryViewError(clauseSourcesView);
+  const clauseSourcesView = queryView(clauseSourcesQuery);
+  useQueryViewError(clauseSourcesView, "TemplateFillFacet:query-3");
   const clauseSources =
     clauseSourcesView.type === "items" ? clauseSourcesView.items : undefined;
   const sourceStamp =
@@ -482,8 +484,8 @@ const TemplateFillFacet = ({
     }),
   );
   const { isLoading: discovering } = discoveredQuery;
-  const discoveredView = useQueryView(discoveredQuery);
-  useQueryViewError(discoveredView);
+  const discoveredView = queryView(discoveredQuery);
+  useQueryViewError(discoveredView, "TemplateFillFacet:query-4");
   const discovered =
     discoveredView.type === "items" ? discoveredView.items : undefined;
 
@@ -948,16 +950,16 @@ const StudioInsertRow = () => {
     ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
     enabled: sessionTemplateId !== null,
   });
-  const clausesDataView = useQueryView(clausesDataQuery);
-  useQueryViewError(clausesDataView);
+  const clausesDataView = queryView(clausesDataQuery);
+  useQueryViewError(clausesDataView, "StudioInsertRow:query");
   const clausesData =
     clausesDataView.type === "items" ? clausesDataView.items : undefined;
   // Saved recipes (org-wide) feed the Insert > Recipes submenu.
   const recipesDataQuery = useQuery(
     templateRecipesOptions(activeOrganizationId),
   );
-  const recipesDataView = useQueryView(recipesDataQuery);
-  useQueryViewError(recipesDataView);
+  const recipesDataView = queryView(recipesDataQuery);
+  useQueryViewError(recipesDataView, "StudioInsertRow:query-2");
   const recipesData =
     recipesDataView.type === "items" ? recipesDataView.items : undefined;
   // The loop-counter submenu only makes sense inside
@@ -1043,6 +1045,7 @@ const StudioInsertRow = () => {
         className="flex-1 [&>button:first-child]:flex-1 [&>button:first-child]:justify-start"
         menuLabel={t("templates.studio.insert")}
         onPrimaryClick={primaryAction.onClick}
+        primaryContent="text"
         primaryLabel={primaryAction.label}
         size="sm"
         onOpenChange={(open, eventDetails) => {
@@ -1313,8 +1316,8 @@ const StudioOverviewSummary = ({
     templateId,
   );
   const clausesDataQuery = useQuery(clausesOptions);
-  const clausesDataView = useQueryView(clausesDataQuery);
-  useQueryViewError(clausesDataView);
+  const clausesDataView = queryView(clausesDataQuery);
+  useQueryViewError(clausesDataView, "StudioOverviewSummary:query");
   const clausesData =
     clausesDataView.type === "items" ? clausesDataView.items : undefined;
   const links: LinkedClause[] =
@@ -1429,8 +1432,8 @@ const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
   const detailDataQuery = useQuery(
     templateDetailOptions(activeOrganizationId, templateId),
   );
-  const detailDataView = useQueryView(detailDataQuery);
-  useQueryViewError(detailDataView);
+  const detailDataView = queryView(detailDataQuery);
+  useQueryViewError(detailDataView, "TemplateGuidanceFacet:query");
   const detailData =
     detailDataView.type === "items" ? detailDataView.items : undefined;
   const detail =

@@ -13,10 +13,11 @@ import type { TypstRenderOutcome } from "@/api/handlers/invoices/pdf/typst/sessi
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -55,6 +56,7 @@ const invoiceRenderRejection = ({
   return classifyFailure(
     new HandlerError({
       status: infrastructureFailure ? 503 : 409,
+      code: "internal_error",
       message: infrastructureFailure
         ? "The invoice PDF renderer is temporarily unavailable."
         : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
@@ -88,7 +90,7 @@ export const createInvoicePdfExport = (
         reason: "billing_admin",
         consumesServices: false,
       },
-      params: workspaceParams({ invoiceId: tSafeId("invoice") }),
+      params: workspaceParams({ invoiceId: resourceIdSchema("invoice") }),
       realtime: noResourceSetUpdates(
         "Stores a generated PDF download; nothing a web view lists changes.",
       ),
@@ -222,6 +224,7 @@ export const createInvoicePdfExport = (
           catch: (cause) =>
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "The invoice PDF could not be stored.",
               cause,
             }),
@@ -237,7 +240,7 @@ export const createInvoicePdfExport = (
               resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
               resourceId: loaded.invoice.id,
               userId: user.id,
-              source: { kind: "request", sessionId: session.id },
+              source: callerDownloadSource(session),
               s3Key: key,
               s3Keyspace: "exports",
               expiresInSeconds: EXPORT_URL_TTL_SECONDS,

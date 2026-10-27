@@ -1,47 +1,21 @@
-import Elysia from "elysia";
-
 import clearSearchHistory from "@/api/handlers/search-history/clear";
 import deleteSearchHistoryEntry from "@/api/handlers/search-history/delete";
 import importSearchHistory from "@/api/handlers/search-history/import";
 import importClock from "@/api/handlers/search-history/import-clock";
 import listSearchHistory from "@/api/handlers/search-history/list";
 import upsertSearchHistory from "@/api/handlers/search-history/upsert";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import { routes } from "@/api/http/route";
 
-export const searchHistoryRoute = new Elysia({ prefix: "/search-history" })
-  .use(authMacro)
-  .use(permissionMacro)
-  .guard({ validateAuth: true })
-  .get("/", listSearchHistory.handler, {
-    query: listSearchHistory.config.query,
-    permissions: listSearchHistory.config.permissions,
-    accountAccess: listSearchHistory.config.accountAccess,
-  })
-  .post("/", upsertSearchHistory.handler, {
-    body: upsertSearchHistory.config.body,
-    query: upsertSearchHistory.config.query,
-    permissions: upsertSearchHistory.config.permissions,
-    accountAccess: upsertSearchHistory.config.accountAccess,
-  })
-  .get("/import-clock", importClock.handler, {
-    query: importClock.config.query,
-    permissions: importClock.config.permissions,
-    accountAccess: importClock.config.accountAccess,
-  })
-  .post("/import", importSearchHistory.handler, {
-    body: importSearchHistory.config.body,
-    query: importSearchHistory.config.query,
-    permissions: importSearchHistory.config.permissions,
-    accountAccess: importSearchHistory.config.accountAccess,
-  })
-  .delete("/", clearSearchHistory.handler, {
-    query: clearSearchHistory.config.query,
-    permissions: clearSearchHistory.config.permissions,
-    accountAccess: clearSearchHistory.config.accountAccess,
-  })
-  .delete("/:entryId", deleteSearchHistoryEntry.handler, {
-    params: deleteSearchHistoryEntry.config.params,
-    query: deleteSearchHistoryEntry.config.query,
-    permissions: deleteSearchHistoryEntry.config.permissions,
-    accountAccess: deleteSearchHistoryEntry.config.accountAccess,
-  });
+export const searchHistoryRoute = routes(
+  {
+    "/": {
+      GET: listSearchHistory,
+      POST: upsertSearchHistory,
+      DELETE: clearSearchHistory,
+    },
+    "/import-clock": { GET: importClock },
+    "/import": { POST: importSearchHistory },
+    "/:entryId": { DELETE: deleteSearchHistoryEntry },
+  },
+  { prefix: "/search-history" },
+);

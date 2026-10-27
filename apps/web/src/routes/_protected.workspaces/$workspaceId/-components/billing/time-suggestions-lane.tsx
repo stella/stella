@@ -1,10 +1,11 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, PencilIcon, XIcon } from "@stll/ui/icons";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
 import { timeEntryActionLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-copy.logic";
 import {
@@ -120,9 +121,16 @@ export const TimeSuggestionsLane = ({
                     {EVIDENCE_SEPARATOR}
                     {evidence}
                   </BidiText>
+                  <span className="text-muted-foreground block text-xs tabular-nums">
+                    {suggestion.alreadyCovered
+                      ? t("alreadyCovered")
+                      : t("engagedTime", {
+                          duration: formatMinutes(suggestion.engagedMinutes),
+                        })}
+                  </span>
                 </span>
               </button>
-              <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
+              <span className="shrink-0 text-sm font-medium tabular-nums">
                 {formatMinutes(suggestion.durationMinutes)}
               </span>
               <Button

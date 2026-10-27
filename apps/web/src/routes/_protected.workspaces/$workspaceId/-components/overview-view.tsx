@@ -65,22 +65,22 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { queryView } from "@/lib/query-view.logic";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
   DAY_AND_MONTH_FORMAT,
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -165,7 +165,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
   const timeBillingEnabled = useTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();
@@ -186,7 +186,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     });
   // Views — find view IDs by layout type for stat card navigation
   const viewsQuery = useQuery(viewsOptions(workspaceId));
-  const viewsView = useQueryView(viewsQuery);
+  const viewsView = queryView(viewsQuery);
   const views = viewsView.type === "items" ? viewsView.items : undefined;
   // The Workflows tab owns the runs fetch; this matter-overview entry point only
   // reads that cache (`enabled: false`) so the general matter shell never fires
@@ -197,7 +197,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     ...flowRunsOptions({ workspaceId }),
     enabled: false,
   });
-  const flowRunsDataView = useQueryView(flowRunsDataQuery);
+  const flowRunsDataView = queryView(flowRunsDataQuery);
   const flowRunsData =
     flowRunsDataView.type === "items" ? flowRunsDataView.items : undefined;
   const activeFlowRunCount =
@@ -255,7 +255,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([
@@ -350,7 +350,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
-  const timeSummaryView = useQueryView(
+  const timeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntrySummaryOptions(
@@ -364,7 +364,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     }),
   );
 
-  const teamTimeSummaryView = useQueryView(
+  const teamTimeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntryTeamSummaryOptions(
@@ -388,7 +388,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     [weekStart],
   );
 
-  const previousTimeSummaryView = useQueryView(
+  const previousTimeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntrySummaryOptions(

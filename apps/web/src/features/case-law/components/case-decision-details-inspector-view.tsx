@@ -19,8 +19,9 @@ import { DecisionMainViewAction } from "@/features/case-law/components/decision-
 import { decisionOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The facts of a decision, on the inspector's bounded width: the court and
@@ -36,8 +37,8 @@ export const CaseDecisionDetailsInspectorView = ({
   const format = useFormatter();
   const decisionId = toSafeId<"caseLawDecision">(tab.payload.decisionId);
   const decisionQuery = useQuery(decisionOptions(decisionId));
-  const decisionView = useQueryView(decisionQuery);
-  useQueryViewError(decisionView);
+  const decisionView = queryView(decisionQuery);
+  useQueryViewError(decisionView, "CaseDecisionDetailsInspectorView:query");
   const { isPending } = decisionQuery;
   const decision =
     decisionView.type === "items" ? decisionView.items : undefined;

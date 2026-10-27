@@ -69,7 +69,12 @@ const fixture = (script = subject) => {
   const repo = path.join(directory, "repo");
   mkdirSync(path.join(repo, "scripts"), { recursive: true });
   writeFileSync(path.join(repo, "scripts/check-release-candidate.sh"), script);
-  for (const name of ["verify-release-tree-proof.sh", "gh-retry.sh"]) {
+  for (const name of [
+    "verify-release-tree-proof.sh",
+    "verify-release-candidate-tree.mjs",
+    "gh-retry.sh",
+    "retry.sh",
+  ]) {
     writeFileSync(
       path.join(repo, "scripts", name),
       readFileSync(new URL(name, import.meta.url), "utf-8"),
@@ -125,6 +130,37 @@ const assertIdentity = (script = subject) => {
     rmSync(directory, { recursive: true, force: true });
   }
 };
+const helperSteps = [
+  {
+    name: "Checkout network retry helper",
+    "timeout-minutes": 2,
+    uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+    with: {
+      repository: `\${{ github.repository }}`,
+      ref: `\${{ github.workflow_sha }}`,
+      path: ".network-retry",
+      "persist-credentials": false,
+      "sparse-checkout": "scripts/retry.sh",
+      "sparse-checkout-cone-mode": false,
+    },
+  },
+  {
+    name: "Stage network retry helper",
+    run: [
+      'mkdir -p "$RUNNER_TEMP/network-retry"',
+      'cp "$GITHUB_WORKSPACE/.network-retry/scripts/retry.sh" "$RUNNER_TEMP/network-retry/retry.sh"',
+      'echo "NETWORK_RETRY_SCRIPT=$RUNNER_TEMP/network-retry/retry.sh" >> "$GITHUB_ENV"',
+      "",
+    ].join("\n"),
+  },
+];
+// The helper checkout's `with:` inputs, for mutating in place.
+const checkoutInputs = (jobSteps: Record<string, unknown>[]) => {
+  const checkout = jobSteps.at(0) ?? panic("Missing helper checkout");
+  const inputs = v.parse(v.record(v.string(), v.unknown()), checkout["with"]);
+  checkout["with"] = inputs;
+  return inputs;
+};
 const assertDispatch = (
   workflow: v.InferOutput<typeof schema>,
   job: string,
@@ -134,9 +170,15 @@ const assertDispatch = (
     workflow.on.workflow_dispatch.inputs["release_candidate"],
   );
   expect(input.default).toBe(false);
+  // Only workflow-revision tooling runs before the preflight: no candidate
+  // code runs first.
+  const steps = workflow.jobs[job]?.steps ?? panic("Missing release steps");
+  expect(
+    steps.slice(0, helperSteps.length),
+    "only the network retry helper may run before the release preflight",
+  ).toEqual(helperSteps);
   const first =
-    workflow.jobs[job]?.steps?.at(0) ??
-    panic("Missing first release preflight");
+    steps.at(helperSteps.length) ?? panic("Missing first release preflight");
   expect(first.name, "release preflight must run first").toBe(
     "Check release candidate",
   );
@@ -169,6 +211,71 @@ const assertDispatch = (
 
 test("only untagged candidates matching the pending main VERSION pass before gate statuses exist", () =>
   assertIdentity());
+test("an earlier release keeps its version commit after a later release merges", () => {
+  const { directory, repo, previous, sha } = fixture();
+  const versionCommitFor = (version: string) =>
+    Bun.spawnSync(
+      [
+        "bash",
+        "scripts/check-release-candidate.sh",
+        "--version-commit-for",
+        version,
+      ],
+      { cwd: repo },
+    );
+  try {
+    git(repo, "commit", "--allow-empty", "-qm", "feature after 1.2.4");
+    writeFileSync(path.join(repo, "VERSION"), "1.2.5\n");
+    git(repo, "add", "VERSION");
+    git(repo, "commit", "-qm", "chore: release v1.2.5");
+    const next = git(repo, "rev-parse", "HEAD");
+    git(repo, "commit", "--allow-empty", "-qm", "feature after 1.2.5");
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+    for (const [version, commit] of [
+      ["1.2.3", previous],
+      ["1.2.4", sha],
+      ["1.2.5", next],
+    ] as const) {
+      const resolved = versionCommitFor(version);
+      expect(resolved.exitCode, resolved.stderr.toString()).toBe(0);
+      expect(resolved.stdout.toString(), version).toBe(`${commit}\n`);
+    }
+    const pending = Bun.spawnSync(
+      ["bash", "scripts/check-release-candidate.sh", "--version-commit"],
+      { cwd: repo },
+    );
+    expect(pending.stdout.toString()).toBe(`${next}\n`);
+
+    const unknown = versionCommitFor("9.9.9");
+    expect(unknown.exitCode).toBe(1);
+    expect(unknown.stderr.toString()).toContain("sets VERSION to 9.9.9");
+    const malformed = versionCommitFor("1.2");
+    expect(malformed.exitCode).toBe(1);
+    expect(malformed.stdout.toString()).toBe("");
+    const missing = Bun.spawnSync(
+      ["bash", "scripts/check-release-candidate.sh", "--version-commit-for"],
+      { cwd: repo },
+    );
+    expect(missing.exitCode).toBe(2);
+    expect(missing.stderr.toString()).toContain("Usage:");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+test("the release workflow resolves the tag's version commit through the trusted checker", () => {
+  const release = readFileSync(
+    new URL("../.github/workflows/release.yml", import.meta.url),
+    "utf-8",
+  );
+  expect(release).toContain(
+    'cp "$GITHUB_WORKSPACE/.gh-retry/scripts/check-release-candidate.sh" "$RUNNER_TEMP/check-release-candidate.sh"',
+  );
+  expect(release).toContain(
+    'version_commit="$(bash "$RELEASE_CANDIDATE_CHECKER" --version-commit-for "$VERSION")"',
+  );
+  expect(release).not.toMatch(/git log -n 1 [^\n]*origin\/main -- VERSION/u);
+});
 test("removing tagged or version commit refusals violates the candidate identity contract", () => {
   for (const [before, after, failure] of [
     [
@@ -203,7 +310,8 @@ test("both workflows check release candidates first only for explicit opt-in pin
     ]) {
       const mutant = structuredClone(workflow);
       const first =
-        mutant.jobs[job]?.steps?.at(0) ?? panic("Missing mutation target");
+        mutant.jobs[job]?.steps?.at(helperSteps.length) ??
+        panic("Missing mutation target");
       const original = first.if ?? panic("Missing condition");
       first.if = original.replace(remove, "");
       expect(first.if).not.toBe(original);
@@ -212,13 +320,46 @@ test("both workflows check release candidates first only for explicit opt-in pin
       );
     }
     const reordered = structuredClone(workflow);
-    reordered.jobs[job]?.steps?.reverse();
+    const reorderedSteps =
+      reordered.jobs[job]?.steps ?? panic("Missing reorder target");
+    const [preflight] = reorderedSteps.splice(helperSteps.length, 1);
+    reorderedSteps.splice(
+      helperSteps.length + 1,
+      0,
+      preflight ?? panic("Missing preflight"),
+    );
     expect(() => assertDispatch(reordered, job)).toThrow(
       "release preflight must run first",
     );
+    const helperMutants: ((jobSteps: Record<string, unknown>[]) => void)[] = [
+      (jobSteps) => {
+        jobSteps.splice(0, 0, { name: "Candidate step", run: "true" });
+      },
+      (jobSteps) => {
+        jobSteps.splice(1, 1);
+      },
+      (jobSteps) => {
+        checkoutInputs(jobSteps)["ref"] = `\${{ inputs.sha }}`;
+      },
+      (jobSteps) => {
+        checkoutInputs(jobSteps)["sparse-checkout"] = "scripts/";
+      },
+      (jobSteps) => {
+        const stage = jobSteps.at(1) ?? panic("Missing stage step");
+        stage["run"] =
+          `${v.parse(v.string(), stage["run"])}bash scripts/check-release-candidate.sh\n`;
+      },
+    ];
+    for (const mutate of helperMutants) {
+      const mutant = structuredClone(workflow);
+      mutate(mutant.jobs[job]?.steps ?? panic("Missing helper mutation"));
+      expect(() => assertDispatch(mutant, job)).toThrow(
+        "only the network retry helper may run before the release preflight",
+      );
+    }
     const nonblocking = structuredClone(workflow);
     const first =
-      nonblocking.jobs[job]?.steps?.at(0) ??
+      nonblocking.jobs[job]?.steps?.at(helperSteps.length) ??
       panic("Missing preflight mutation");
     first["continue-on-error"] = true;
     expect(() => assertDispatch(nonblocking, job)).toThrow(
@@ -243,6 +384,8 @@ const assertBootstrap = (preflight: string) => {
         env: {
           PATH: process.env["PATH"] ?? "",
           RUNNER_TEMP: runner,
+          NETWORK_RETRY_SCRIPT: path.join(repo, "scripts/retry.sh"),
+          RETRY_DELAYS_SECONDS: "0",
           GH_TOKEN: "fixture",
           REPOSITORY: "fixture",
           SERVER_URL: server,

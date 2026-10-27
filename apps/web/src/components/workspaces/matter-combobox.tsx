@@ -14,7 +14,6 @@ import {
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
-  useComboboxFilter,
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -27,6 +26,7 @@ import { MatterOptionLabel } from "@/components/matter-option-label";
 import {
   groupMatterOptions,
   isBrowsingMatters,
+  matchesMatterOption,
   MATTER_OPTION_GROUP,
   MATTER_PICKER_RECENT_LIMIT,
 } from "@/components/workspaces/matter-combobox.logic";
@@ -41,7 +41,7 @@ import {
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 export type MatterOption = {
@@ -105,7 +105,6 @@ export const MatterCombobox = ({
   value,
 }: MatterComboboxProps) => {
   const t = useTranslations();
-  const { contains } = useComboboxFilter({ sensitivity: "base", value });
   const [query, setQuery] = useState(value?.name ?? "");
   const pinnedOrder = usePinnedStore((state) => state.pinnedOrder);
   const {
@@ -124,7 +123,7 @@ export const MatterCombobox = ({
   const groupedThreadsQuery = useInfiniteQuery(
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
-  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const groupedThreadsView = queryView(groupedThreadsQuery);
   const chatHistory =
     groupedThreadsView.type === "items" ? groupedThreadsView.items : undefined;
   const browsing = isBrowsingMatters({
@@ -157,13 +156,10 @@ export const MatterCombobox = ({
   return (
     <div className="flex flex-col gap-2">
       <Combobox
-        // A matter matches on its name or its client's, accent- and
-        // case-insensitively. While the input still shows the chosen
-        // matter's name, the filter keeps every matter in view.
-        filter={(matter: MatterOption, search) =>
-          contains(matter, search, matterName) ||
-          contains(matter, search, matterClientName)
-        }
+        // While the input still shows the chosen matter's name, Base UI
+        // skips the filter and keeps every matter in view.
+        // A callback, so the combobox takes its item type from `items`.
+        filter={(matter, typed) => matchesMatterOption(matter, typed)}
         isItemEqualToValue={(item, selected) => item.id === selected.id}
         items={items}
         itemToStringLabel={(matter) => matter.name}
@@ -227,11 +223,3 @@ export const MatterCombobox = ({
     </div>
   );
 };
-
-function matterName(matter: MatterOption): string {
-  return matter.name;
-}
-
-function matterClientName(matter: MatterOption): string {
-  return matter.clientName ?? "";
-}

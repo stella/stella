@@ -1,6 +1,9 @@
 import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import * as v from "valibot";
 
 import type { ScopeOutput } from "./ci-plan-scope";
+import { predicateVariables } from "./ci-plan-variables";
 
 const MODELLED_EVENTS = [
   "merge_group",
@@ -57,6 +60,8 @@ export type ModelledRunContext = {
   };
   vars: Record<string, string> & {
     CI_POSTGRES_PR_SELECTION: string;
+    CI_PR_DEPTH_PILOT: string;
+    CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: string;
     MERGE_QUEUE_DEPTH: string;
     QUEUE_BROWSER_SUITES: string;
   };
@@ -68,6 +73,32 @@ export type ModelledRunContext = {
   success: () => boolean;
   startsWith: (value: string, prefix: string) => boolean;
   format: (template: string, value: string) => string;
+};
+
+let variableDefaults: Record<string, string> | undefined;
+const defaultVariables = () => {
+  if (variableDefaults) {
+    return variableDefaults;
+  }
+  const workflow = v.parse(
+    v.object({
+      jobs: v.object({
+        "ci-plan": v.object({ outputs: v.object({ variables: v.string() }) }),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  variableDefaults = Object.fromEntries(
+    predicateVariables(workflow.jobs["ci-plan"].outputs.variables).map(
+      (name) => [name, ""],
+    ),
+  );
+  return variableDefaults;
 };
 
 const REPOSITORY = "stella/stella";
@@ -91,11 +122,13 @@ const DEFAULT_CHANGED_FILE_OUTPUTS = {
   collaboration_suite_required: "false",
   comparison_base: "",
   corpus_suites_required: "false",
+  database_migrations_required: "false",
   dependency_changes_required: "false",
   dependency_malware_required: "false",
   desktop_browser_required: "false",
   desktop_rust_checks_required: "false",
   desktop_windows_dry_run_required: "false",
+  dev_seed_required: "false",
   docker_checks_pr_required: "false",
   docker_checks_required: "false",
   docs_changed_files: "",
@@ -140,12 +173,16 @@ const PLAN_BOOLEAN_OUTPUTS = [
   "pr_heavy_gate_required",
   "query_perf_required",
   "service_suites_required",
+  "web_build_pr_required",
 ];
 
 const defaultPlan = () => ({
   ...Object.fromEntries(PLAN_BOOLEAN_OUTPUTS.map((name) => [name, "false"])),
   api_test_shards: "4",
+  // The queue-only suites run (an armed run or a merge group); no armed delta.
+  armed_delta: "false",
   coverage_profile: "normal-v1",
+  heavy_proof: "true",
   pilot_fast_jobs: "[]",
   pr_depth_reused: "false",
   queue_depth: "full",
@@ -168,10 +205,15 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   check: { trusted: "true" },
   "completed-depth": {
     plan_config: "fixture-plan-config",
+    armed: "false",
+    armed_proof: "",
+    armed_proof_source_run_id: "",
+    armed_proof_jobs: "[]",
     completed_run_id: "",
     marker: "",
     metadata_only: "false",
     normal_completion: "required",
+    normal_source_run_id: "",
     pr_depth_reused: "false",
     pr_depth_source_run_id: "",
     pr_heavy_source_run_id: "",
@@ -189,12 +231,29 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
     specs: "[]",
   },
   generate: { input_hash: "" },
-  "heavy-plan": { heavy_jobs: "[]", queue_jobs: "[]", thin_jobs: "[]" },
-  images: { playwright: "", postgres: "", quickwit: "", redis: "", valkey: "" },
+  "heavy-plan": {
+    heavy_jobs: "[]",
+    queue_jobs: "[]",
+    thin_jobs: "[]",
+    armed_job_scopes: "{}",
+  },
+  images: {
+    playwright: "",
+    postgres: "",
+    quickwit: "",
+    redis: "",
+    rustfs: "",
+    valkey: "",
+  },
   "legal-atlas-scope": { api_source_required: "false" },
   "marketing-release": { required: "false" },
   outcome: { required_summary: "" },
-  "patch-id": { patch_id: "", workflow_version: "" },
+  "patch-id": {
+    patch_id: "",
+    workflow_version: "",
+    tested_tree: "",
+    workflow_tree: "",
+  },
   "pilot-plan": { fast_jobs: "[]" },
   "pilot-queue-plan": { queue_jobs: "[]" },
   pilot: { coverage_profile: "normal-v1" },
@@ -206,6 +265,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   "pr-jobs-plan": { pr_depth_jobs: "[]", pr_heavy_jobs: "[]" },
   "query-perf-scope": { query_perf_required: "false" },
   "root-checks": { root_checks: "[]" },
+  suites: { armed_delta: "false", run_required: "true", heavy_proof: "true" },
   "target-base": { base_sha: "" },
 };
 
@@ -249,6 +309,14 @@ export const ciExpressionContext = ({
     outputs: {
       ...steps["completed-depth"]?.outputs,
       run_required: plan.run_required,
+    },
+  };
+  steps["suites"] = {
+    outputs: {
+      ...steps["suites"]?.outputs,
+      heavy_proof:
+        planOverrides["heavy_proof"] ??
+        String(plan.run_required !== "false" && event !== "pull_request"),
     },
   };
   const modelledSteps: Record<string, ModelledStep> = {
@@ -299,7 +367,10 @@ export const ciExpressionContext = ({
       sha: "",
     },
     vars: {
+      ...defaultVariables(),
       CI_POSTGRES_PR_SELECTION: "",
+      CI_PR_DEPTH_PILOT: "",
+      CI_PR_DEPTH_PILOT_CERTIFIED_UNTIL: "",
       MERGE_QUEUE_DEPTH: "",
       QUEUE_BROWSER_SUITES: "",
       ...vars,

@@ -119,7 +119,17 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
       "Save generated sources": { class: "advisory", owner: "ci" },
     },
   },
-  "pr-heavy-gate": { class: "correctness" },
+  "pr-heavy-gate": {
+    class: "correctness",
+    steps: {
+      "dated-waiver-expiry: Check dated waiver expiry on the current tree": {
+        class: "time-based",
+        owner: "code-health",
+        enforcedBy:
+          "scripts/dated-waivers.ts scopes expiry failures to pull requests that touch the waiver",
+      },
+    },
+  },
   "ci-tests": { class: "correctness" },
   "api-test-durations": { class: "advisory" },
   "ci-browser": { class: "correctness" },
@@ -130,6 +140,8 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
   "query-perf": { class: "correctness" },
   "postgres-service-suites": { class: "correctness" },
   "service-suites": { class: "correctness" },
+  "database-migrations-check": { class: "correctness" },
+  "database-migrations-apply-fresh": { class: "correctness" },
   "migration-upgrade-rehearsal": { class: "correctness" },
   "release-typecheck": { class: "correctness" },
   "fix-tests-on-base": {

@@ -73,11 +73,7 @@ test.each(cases)(
         );
       }
       mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-      for (const file of [
-        "tsc-native.ts",
-        "child-exit-status.ts",
-        "tsgo-compiler-options.ts",
-      ]) {
+      for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
         writeFileSync(
           path.join(root, "packages/scripts/src", file),
           readFileSync(path.join(repo, "packages/scripts/src", file)),
@@ -339,11 +335,7 @@ test.each(projectCases)("autofix $name", ({ name, layout, invalid }) => {
       readFileSync(new URL("typecheck-coverage.ts", import.meta.url)),
     );
     mkdirSync(path.join(root, "packages/scripts/src"), { recursive: true });
-    for (const file of [
-      "tsc-native.ts",
-      "child-exit-status.ts",
-      "tsgo-compiler-options.ts",
-    ]) {
+    for (const file of ["tsc-native.ts", "child-exit-status.ts"]) {
       writeFileSync(
         path.join(root, "packages/scripts/src", file),
         readFileSync(path.join(repo, "packages/scripts/src", file)),

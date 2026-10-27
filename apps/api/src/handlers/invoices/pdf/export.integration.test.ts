@@ -15,6 +15,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -138,7 +139,7 @@ const context = (
       method: "POST",
       headers: { "Accept-Language": "en" },
     }),
-    route: "/test/invoice/pdf",
+    route: "/v1/invoices/:workspaceId/:invoiceId/pdf" satisfies ApiRoutePath,
     safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
     scopedDb: createScopedDb(testDb, [workspaceId], organizationId, userId),
     session: { activeOrganizationId: organizationId },
@@ -217,11 +218,13 @@ describe("invoice document export", () => {
       stored.push(object.data);
       return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
     });
-    const requestContext = context("own", []);
-    requestContext.request = new Request("https://example.test/invoice/pdf", {
-      method: "POST",
-      headers: { "Accept-Language": "sk" },
-    });
+    const requestContext = {
+      ...context("own", []),
+      request: new Request("https://example.test/invoice/pdf", {
+        method: "POST",
+        headers: { "Accept-Language": "sk" },
+      }),
+    };
     await handler.handler(requestContext);
     const pdf = stored.at(0);
     if (pdf === undefined) {
@@ -273,7 +276,11 @@ describe("invoice document export", () => {
   test("refuses delivery without a download audit when storage fails", async () => {
     const events: AuditEvent[] = [];
     const handler = createInvoicePdfExport(async () => {
-      throw new HandlerError({ status: 502, message: "Storage unavailable" });
+      throw new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Storage unavailable",
+      });
     });
     const response = await handler.handler(context("own", events));
     expect(response).toMatchObject({ code: 502 });

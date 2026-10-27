@@ -290,10 +290,10 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@aws-sdk/client-s3"],
   },
   {
-    path: "apps/api/src/lib/email/inbound/sqs.ts",
+    path: "apps/api/src/lib/email/sns-queue-drain.ts",
     class: "vendor-sdk",
     reason:
-      "Reads inbound email queue messages from the configured AWS account.",
+      "Reads inbound mail and delivery event queue messages from the configured AWS account.",
     transports: ["module:@aws-sdk/client-sqs"],
   },
   {
@@ -460,13 +460,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "vendor-sdk",
     reason: "Invokes the configured AWS visual preview function.",
     transports: ["module:@aws-sdk/client-lambda"],
-  },
-  {
-    path: "apps/api/src/lib/scheduler/tasks/inbound-mail-receive.ts",
-    class: "vendor-sdk",
-    reason:
-      "Receives inbound mail notifications from the configured AWS account.",
-    transports: ["module:@aws-sdk/client-sqs"],
   },
   {
     path: "apps/api/src/lib/observability/otel.ts",
@@ -1019,6 +1012,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Sends Docker API requests over the configured Unix socket with existing cancellation deadlines.",
+    transports: ["global:fetch"],
+  },
+  {
+    path: "packages/api-client/src/index.ts",
+    class: "package-owned-client",
+    reason:
+      "Typed stella API client; sends each route call to the configured API origin through the caller's fetcher or the global fetch.",
     transports: ["global:fetch"],
   },
   {

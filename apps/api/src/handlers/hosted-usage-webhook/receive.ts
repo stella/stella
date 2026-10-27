@@ -36,6 +36,10 @@ import {
   getHostedUsageProviderKind,
   getWebhookSecret,
 } from "@/api/lib/hosted-usage-provider/config";
+import {
+  IGNORED_EVENT_REASONS,
+  renderIgnoredEventReason,
+} from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import {
   hostedUsageUnknownEventEnvelopeSchema,
@@ -49,6 +53,7 @@ import {
   updateWebhookEventResultInTx,
 } from "@/api/lib/hosted-usage-provider/webhook-store";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -79,6 +84,14 @@ class HostedProviderContractMismatch extends TaggedError(
 )<{ message: string }> {}
 const providerContractMismatch = failureSink({
   event: "usage_provider.webhook.contract_mismatch",
+  expected: [],
+});
+
+class HostedEventNeedsOperator extends TaggedError("HostedEventNeedsOperator")<{
+  message: string;
+}> {}
+const eventNeedsOperator = failureSink({
+  event: "usage_provider.webhook.event_needs_operator",
   expected: [],
 });
 
@@ -116,7 +129,12 @@ export const receiveHostedUsageWebhook = async (
   try {
     parsedJson = JSON.parse(rawBody);
   } catch (error) {
-    captureError(error, { source: "usage_provider.webhook.json_parse" });
+    captureError(
+      error,
+      handlerErrorContext("usageWebhook.parseBody", {
+        source: "usage_provider.webhook.json_parse",
+      }),
+    );
     return respond(400, "Malformed JSON body");
   }
 
@@ -221,7 +239,14 @@ export const receiveHostedUsageWebhook = async (
   // hit a clean table and try again.
   let outcome:
     | { kind: "duplicate" }
-    | { kind: "applied" | "ignored"; inner: DispatchOutcome };
+    | {
+        kind: "applied";
+        inner: Exclude<DispatchOutcome, { kind: "ignored" }>;
+      }
+    | {
+        kind: "ignored";
+        inner: Extract<DispatchOutcome, { kind: "ignored" }>;
+      };
   try {
     outcome = await runTransaction(async (tx) => {
       const inserted = await insertWebhookEventInTx({
@@ -249,7 +274,10 @@ export const receiveHostedUsageWebhook = async (
           tx,
           eventId,
           result: "ignored",
-          errorMessage: dispatched.reason,
+          errorMessage: renderIgnoredEventReason(
+            dispatched.reason,
+            dispatched.detail,
+          ),
         });
         return { kind: "ignored" as const, inner: dispatched };
       }
@@ -267,11 +295,14 @@ export const receiveHostedUsageWebhook = async (
     // NOT persist a failure row, because that would re-introduce
     // the "dedupe committed without dispatch" hole this refactor
     // closed.
-    captureError(error, {
-      source: "usage_provider.webhook.dispatch",
-      eventId,
-      eventType: envelope.type,
-    });
+    captureError(
+      error,
+      handlerErrorContext("usageWebhook.dispatch", {
+        source: "usage_provider.webhook.dispatch",
+        eventId,
+        eventType: envelope.type,
+      }),
+    );
     return respond(500, "Dispatch failed");
   }
 
@@ -279,6 +310,24 @@ export const receiveHostedUsageWebhook = async (
     return respond(200, "Already processed");
   }
   if (outcome.kind === "ignored") {
+    if (
+      IGNORED_EVENT_REASONS[outcome.inner.reason].disposition ===
+      "needs_operator"
+    ) {
+      observeFailure(
+        new HostedEventNeedsOperator({
+          message: "Provider event requires operator action",
+        }),
+        {
+          sink: eventNeedsOperator,
+          ctx: {
+            requestId: eventId,
+            operation: envelope.type,
+            step: outcome.inner.reason,
+          },
+        },
+      );
+    }
     return respond(200, "Event ignored");
   }
   return respond(200, "Applied");
@@ -348,11 +397,14 @@ const persistUnknownEventType = async ({
       });
       return UNKNOWN_EVENT_RECORD.rejected;
     }
-    captureError(error, {
-      source: "usage_provider.webhook.unknown_event_persist",
-      eventId,
-      eventType,
-    });
+    captureError(
+      error,
+      handlerErrorContext("hostedusagewebhook.persistUnknownEventType", {
+        source: "usage_provider.webhook.unknown_event_persist",
+        eventId,
+        eventType,
+      }),
+    );
     return UNKNOWN_EVENT_RECORD.retry;
   }
 };

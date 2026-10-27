@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { panic } from "better-result";
 
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type {
   CaptionLineKind,
   DecisionCaption,
@@ -17,6 +18,10 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import {
+  statuteListMarkerEnd,
+  withStatuteListDepth,
+} from "@stll/legal-ast/statute-list";
 import { useCopyConfirmation } from "@stll/ui/copy-button";
 import { CheckIcon } from "@stll/ui/icons";
 import {
@@ -70,10 +75,24 @@ export const anchorsForPiece = (
 
 /**
  * Whether blocks are the document itself (they carry its DOM ids and its
- * in-document navigation) or an excerpt set inside another page, which must
- * not repeat those ids and has no targets for a fragment link to reach.
+ * in-document navigation), an excerpt set inside another page, which must
+ * not repeat those ids and has no targets for a fragment link to reach, or
+ * wording quoted inside another document's reader (a cited provision's
+ * card), which carries no block anchors at all: that reader's position,
+ * selection and margin logic walk `[data-anchor]` and would read a quoted
+ * block as one of its own.
  */
-export type AnchorPresentation = "document" | "embedded";
+export type AnchorPresentation = "document" | "embedded" | "quoted";
+
+/** Which anchor attributes a block carries under each presentation. */
+const ANCHOR_ATTRIBUTES = {
+  document: { dataAnchor: true, domId: true },
+  embedded: { dataAnchor: true, domId: false },
+  quoted: { dataAnchor: false, domId: false },
+} as const satisfies Record<
+  AnchorPresentation,
+  { dataAnchor: boolean; domId: boolean }
+>;
 
 type HighlightContext = {
   activeMatchIndex: number;
@@ -556,7 +575,7 @@ const renderInline = ({
     // An excerpt carries none of the ids a fragment points at, and the page
     // around it may carry the same id for something else: the reference
     // keeps its words and loses the jump.
-    if (context.anchorPresentation === "embedded") {
+    if (!ANCHOR_ATTRIBUTES[context.anchorPresentation].domId) {
       return <Fragment key={key}>{children}</Fragment>;
     }
     return (
@@ -795,6 +814,7 @@ export const InlineContent = ({
 export const HighlightedText = ({
   activeMatchIndex,
   className,
+  "data-reader-chrome": readerChrome,
   pieceId,
   ranges,
   segmentStart = 0,
@@ -802,13 +822,14 @@ export const HighlightedText = ({
 }: {
   activeMatchIndex: number;
   className?: string | undefined;
+  "data-reader-chrome"?: "" | undefined;
   pieceId: string;
   ranges: ReaderMarkRange[];
   /** Offset of this slice within the complete search piece. */
   segmentStart?: number | undefined;
   text: string;
 }) => (
-  <span className={className}>
+  <span className={className} data-reader-chrome={readerChrome}>
     {renderHighlightedSlice({
       activeMatchIndex,
       elisions: shiftedElisions(text, segmentStart),
@@ -886,13 +907,16 @@ const PERMALINK_PLACEMENT_CLASS = {
   inline: "ms-1",
 } as const satisfies Record<PermalinkPlacement, string>;
 
+/** Running document text: start-aligned and hyphenated (see `reader.css`). */
+export const READER_PROSE_CLASS = "reader-prose";
+
 /**
  * Reader chrome on a block (its permalink, a provision's actions) stays out
  * of the text until the reader points at or focuses the block. A device that
  * cannot hover shows it always, since there would be no way to reveal it.
  */
 export const READER_BLOCK_CHROME_REVEAL_CLASS =
-  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
 
 /**
  * A block's own address, as a link the reader can take with them.
@@ -1117,12 +1141,13 @@ export const BlockRenderer = ({
   rangesByPieceId: Record<string, ReaderMarkRange[]>;
   variant: ReaderVariant;
 }) => {
+  const attributes = ANCHOR_ATTRIBUTES[anchorPresentation];
   const documentAnchorProps = {
-    "data-anchor": block.anchorId,
+    "data-anchor": attributes.dataAnchor ? block.anchorId : undefined,
     "data-reader-landing": landing ? "" : undefined,
-    id: anchorPresentation === "document" ? block.anchorId : undefined,
+    id: attributes.domId ? block.anchorId : undefined,
   };
-  const isAddressable = anchorPresentation === "document";
+  const isAddressable = attributes.domId;
   const permalink = isAddressable ? (
     <BlockPermalink anchorId={block.anchorId} />
   ) : null;
@@ -1231,7 +1256,9 @@ export const BlockRenderer = ({
       activeMatchIndex,
       anchorPresentation,
       anchorsByPieceId,
-      block,
+      // A statute's list nesting lives in its anchors, so it is read here,
+      // where every statute surface draws its paragraphs.
+      block: variant === "statute" ? withStatuteListDepth(block) : block,
       documentAnchorProps,
       isAddressable,
       noteBackJumpTo,
@@ -1284,7 +1311,7 @@ type RenderTextBlockOptions = {
   anchorPresentation: AnchorPresentation;
   anchorsByPieceId: Record<string, TextAnchor[]> | undefined;
   documentAnchorProps: {
-    "data-anchor": string;
+    "data-anchor": string | undefined;
     "data-reader-landing": string | undefined;
     id: string | undefined;
   };
@@ -1303,6 +1330,42 @@ type RenderParagraphOptions = RenderTextBlockOptions & {
 const CASE_NUMBER_CLASS =
   "reader-chrome text-muted-foreground mb-2 text-end text-[calc(0.95rem*var(--reader-text-scale))]";
 
+/**
+ * A statute list item's printed designator split off the words it opens, so
+ * the designator hangs in a gutter and the item's wrapped lines align with
+ * its words (`reader-list-hang` in reader.css). The split is drawn, not
+ * stored: the designator keeps its characters and its offsets in the piece,
+ * so search ranges and annotation offsets index the text as before.
+ *
+ * Only a designator wholly inside a plain first text node, with no anchor
+ * (a citation link) reaching into it, is split; any other item keeps its
+ * indent with the designator running in its text.
+ */
+type HangingListMarker = { end: number; marker: string; rest: Inline[] };
+
+const hangingListMarker = (
+  block: ParagraphBlock,
+  anchors: readonly TextAnchor[],
+): HangingListMarker | null => {
+  const end = statuteListMarkerEnd(block);
+  const [first, ...others] = block.inlines;
+  if (
+    end === null ||
+    first?.type !== "text" ||
+    first.anonymized === true ||
+    first.text.length < end ||
+    anchors.some((anchor) => anchor.start < end)
+  ) {
+    return null;
+  }
+  const rest = first.text.slice(end);
+  return {
+    end,
+    marker: first.text.slice(0, end),
+    rest: rest === "" ? others : [{ text: rest, type: "text" }, ...others],
+  };
+};
+
 /** A paragraph's classes, for `cn`: shared by a block and a wrapped run. */
 const paragraphClassValues = (block: ParagraphBlock) => {
   // Short standalone roman numerals (I, II, III …) that the
@@ -1312,21 +1375,20 @@ const paragraphClassValues = (block: ParagraphBlock) => {
   const isRomanNumeralDivider = /^[IVX]+\.?$/u.test(block.plainText.trim());
   // Non-body roles (case number, closing formula, signature)
   // need their own alignment; every other paragraph — including
-  // intro, argumentation and unroled body text — defaults to
-  // justified reading layout.
-  const nonJustifiedRoles = new Set([
+  // intro, argumentation and unroled body text — is running text.
+  const nonProseRoles = new Set([
     "case-number",
     "closing",
     "signature",
     "parties",
     "front-matter",
   ]);
-  const shouldJustify =
+  const isProse =
     !isRomanNumeralDivider &&
-    (block.role === undefined || !nonJustifiedRoles.has(block.role));
+    (block.role === undefined || !nonProseRoles.has(block.role));
   return [
     "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
-    shouldJustify && "reader-justify",
+    isProse && READER_PROSE_CLASS,
     block.role === "holding" && "font-[520]",
     // Indented, slightly condensed; never italicized or reflowed —
     // a reproduced passage must not be visually altered.
@@ -1371,9 +1433,15 @@ const renderParagraphBlock = ({
     noteHead &&
     noteLabel !== null &&
     !footnoteTextCarriesLabel(noteLabel, block.plainText);
+  const anchors = anchorsForPiece(anchorsByPieceId, block.id);
+  const ranges = rangesForPiece(rangesByPieceId, block.id);
+  const listMarker = hangingListMarker(block, anchors);
   return (
     <p
-      className={cn(paragraphClassValues(block))}
+      className={cn(
+        paragraphClassValues(block),
+        listMarker !== null && "reader-list-hang",
+      )}
       {...documentAnchorProps}
       data-note={block.note?.type}
     >
@@ -1407,13 +1475,23 @@ const renderParagraphBlock = ({
           text={String(block.number)}
         />
       )}
+      {listMarker !== null && (
+        <HighlightedText
+          activeMatchIndex={activeMatchIndex}
+          className="reader-list-marker"
+          pieceId={block.id}
+          ranges={ranges}
+          text={listMarker.marker}
+        />
+      )}
       <InlineContent
         activeMatchIndex={activeMatchIndex}
         anchorPresentation={anchorPresentation}
-        anchors={anchorsForPiece(anchorsByPieceId, block.id)}
-        inlines={block.inlines}
+        anchors={anchors}
+        initialOffset={listMarker?.end ?? 0}
+        inlines={listMarker?.rest ?? block.inlines}
         pieceId={block.id}
-        ranges={rangesForPiece(rangesByPieceId, block.id)}
+        ranges={ranges}
       />
       {noteBackJumpTo !== undefined && block.note?.type === "footnote" && (
         <NoteBackJump headAnchorId={noteBackJumpTo} />
@@ -1639,7 +1717,11 @@ const renderTableBlock = ({
                     // The table around it is a container: `selectionAnchorsFrom`
                     // takes the innermost anchored element, so the two never
                     // both claim the same selection.
-                    data-anchor={pieceId}
+                    data-anchor={
+                      ANCHOR_ATTRIBUTES[anchorPresentation].dataAnchor
+                        ? pieceId
+                        : undefined
+                    }
                     key={pieceId}
                     rowSpan={cell.rowSpan}
                   >
@@ -1665,15 +1747,6 @@ const renderTableBlock = ({
   );
 };
 
-export const buildFulltextParagraphBlocks = (text: string): ParagraphBlock[] =>
-  text.split(/\n{2,}/u).map((paragraph, index) => ({
-    id: `fulltext:${index}`,
-    anchorId: `fulltext:${index}`,
-    type: "paragraph",
-    plainText: paragraph,
-    inlines: [{ text: paragraph, type: "text" }],
-  }));
-
 export const FulltextFallback = ({
   activeMatchIndex,
   anchorsByPieceId,
@@ -1698,7 +1771,10 @@ export const FulltextFallback = ({
         return (
           <Fragment key={pieceId}>
             <p
-              className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
+              className={cn(
+                READER_PROSE_CLASS,
+                "mb-[var(--reader-paragraph-gap)] last:mb-0",
+              )}
               data-anchor={pieceId}
               id={pieceId}
             >

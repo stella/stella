@@ -1,0 +1,44 @@
+{
+  "tabs": {
+    "chat": "Tērzēšana",
+    "tasks": "Uzdevumi",
+    "matters": "Lietas",
+    "settings": "Iestatījumi"
+  },
+  "chat": {
+    "description": "Turiet iesākto darbu pa rokai un turpiniet no jebkuras ierīces.",
+    "emptyTitle": "Sarunu vēl nav",
+    "emptyDescription": "Šeit tiks parādītas jaunās sarunas un nesenie pavedieni."
+  },
+  "tasks": {
+    "description": "Skatiet, kam nepieciešama uzmanība, neatverot visu darbvietu.",
+    "emptyTitle": "Nav atvērtu uzdevumu",
+    "emptyDescription": "Šeit tiks parādīti piešķirtie un gaidāmie uzdevumi."
+  },
+  "matters": {
+    "description": "Atrodiet lietu un ātri iegūstiet būtisko kontekstu.",
+    "emptyTitle": "Lietu vēl nav",
+    "emptyDescription": "Šeit tiks parādītas jūsu nesenās lietas.",
+    "loadFailed": "Jūsu lietas neizdevās ielādēt.",
+    "retry": "Mēģināt vēlreiz"
+  },
+  "signIn": {
+    "title": "Pieslēdzieties stella",
+    "description": "Ievadiet sava stella servera adresi. Pieslēgšanos apstiprināsiet pārlūkprogrammā.",
+    "serverLabel": "Servera adrese",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Turpināt",
+    "sessionEnded": "Jūsu sesija ir beigusies. Pieslēdzieties vēlreiz.",
+    "errors": {
+      "address": "Ievadiet https adresi, piemēram, stella.example.com.",
+      "unreachable": "Šajā adresē neatbildēja neviens stella serveris.",
+      "denied": "Pieslēgšanās netika apstiprināta.",
+      "failed": "Pieslēgšanās netika pabeigta. Mēģiniet vēlreiz."
+    }
+  },
+  "settings": {
+    "accountTitle": "Konts",
+    "server": "Serveris",
+    "signOut": "Atslēgties"
+  }
+}

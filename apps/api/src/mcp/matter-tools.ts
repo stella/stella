@@ -9,7 +9,7 @@ import {
   resourceRef,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
-import { vApiDate } from "@stll/api-contract/api-date";
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -412,7 +412,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveMatterTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_MATTER_PROJECTION, {
@@ -482,7 +485,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(updated)) {
-      return internalFailureResult(updated.error);
+      return internalFailureResult(
+        updated.error,
+        "mcp.handleSaveMatterTool.updated_error",
+      );
     }
   }
 
@@ -495,7 +501,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(archived)) {
-      return internalFailureResult(archived.error);
+      return internalFailureResult(
+        archived.error,
+        "mcp.handleSaveMatterTool.archived_error",
+      );
     }
   } else if (input.status === "active") {
     const unarchived = await Result.gen(() =>
@@ -506,7 +515,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(unarchived)) {
-      return internalFailureResult(unarchived.error);
+      return internalFailureResult(
+        unarchived.error,
+        "mcp.handleSaveMatterTool.unarchived_error",
+      );
     }
   }
 
@@ -566,7 +578,10 @@ const handleDeleteMatterTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteMatterTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -632,7 +647,10 @@ const handleListContactsTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListContactsTool.listed_error",
+    );
   }
   const page = projectionPayload(LIST_CONTACTS_PROJECTION, {
     ...listed.value,
@@ -854,7 +872,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
       nationalityCodes: input.nationality_codes,
     });
     if (detailsError) {
-      return internalFailureResult(detailsError);
+      return internalFailureResult(
+        detailsError,
+        "mcp.handleSaveContactTool.detailsError",
+      );
     }
     const created = await Result.gen(() =>
       createContactHandler({
@@ -889,7 +910,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(
+        created.error,
+        "mcp.handleSaveContactTool.created_error",
+      );
     }
     return toolDataResult(
       projectionPayload(SAVE_CONTACT_PROJECTION, {
@@ -932,7 +956,10 @@ const handleSaveContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(updated)) {
-    return internalFailureResult(updated.error);
+    return internalFailureResult(
+      updated.error,
+      "mcp.handleSaveContactTool.updated_error",
+    );
   }
   return toolDataResult(
     projectionPayload(SAVE_CONTACT_PROJECTION, {
@@ -979,7 +1006,10 @@ const handleDeleteContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteContactTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -1060,7 +1090,10 @@ const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
     },
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleLookupBusinessRegistryTool.result_error",
+    );
   }
   // Passthrough: the output is public business-register data and the query is
   // caller-supplied, so no tenant-authored text needs redaction. Forwarded
@@ -1114,7 +1147,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
     ),
     birth_date: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "Full birth date; use date_of_birth for partial dates, never invent a day.",
@@ -1258,7 +1291,10 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
 
   const subject = toCounterpartyCheckSubject(parsed.output.subject);
   if (Result.isError(subject)) {
-    return internalFailureResult(subject.error);
+    return internalFailureResult(
+      subject.error,
+      "mcp.handleCheckCounterpartyTool.subject_error",
+    );
   }
   const observer = actionRequestObserver(
     context.organizationId,
@@ -1278,7 +1314,10 @@ const handleCheckCounterpartyTool = withThirdPartyOutbound<
     },
   });
   if (Result.isError(result)) {
-    return internalFailureResult(result.error);
+    return internalFailureResult(
+      result.error,
+      "mcp.handleCheckCounterpartyTool.result_error",
+    );
   }
   // Passthrough: public-register and public-list data about a subject the
   // caller named.
@@ -1341,7 +1380,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_from: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "List only tasks due on or after this ISO date (YYYY-MM-DD)",
@@ -1350,7 +1389,7 @@ const listTasksArgsSchema = nullAsAbsent(
     ),
     date_to: v.optional(
       v.pipe(
-        vApiDate,
+        apiDateSchema,
         v.maxLength(10),
         v.description(
           "List only tasks due on or before this ISO date (YYYY-MM-DD)",
@@ -1593,7 +1632,10 @@ const handleListTasksTool: TypedMcpToolHandler<
     },
   });
   if (Result.isError(listed)) {
-    return internalFailureResult(listed.error);
+    return internalFailureResult(
+      listed.error,
+      "mcp.handleListTasksTool.listed_error",
+    );
   }
 
   const tasks = listed.value.items;
@@ -1657,7 +1699,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       ),
       due_date: v.optional(
         v.pipe(
-          v.nullable(v.pipe(vApiDate, v.maxLength(10))),
+          v.nullable(v.pipe(apiDateSchema, v.maxLength(10))),
           v.description("Due date (ISO YYYY-MM-DD); pass null to clear"),
         ),
       ),
@@ -1965,6 +2007,8 @@ const validateSaveTaskTargets = async ({
   return null;
 };
 
+const SAVE_TASK_CREATE_KEY = "mcp.handleSaveTaskTool.created_error";
+
 const handleSaveTaskTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TASK_PROJECTION>
 > = async ({ args, context }) => {
@@ -2017,7 +2061,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(created)) {
-      return internalFailureResult(created.error);
+      return internalFailureResult(created.error, SAVE_TASK_CREATE_KEY);
     }
     return toolDataResult(
       projectionPayload(SAVE_TASK_PROJECTION, {
@@ -2087,7 +2131,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(updated)) {
-      return internalFailureResult(updated.error);
+      return internalFailureResult(
+        updated.error,
+        "mcp.handleSaveTaskTool.updated_error",
+      );
     }
   }
 
@@ -2102,7 +2149,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(added)) {
-      return internalFailureResult(added.error);
+      return internalFailureResult(
+        added.error,
+        "mcp.handleSaveTaskTool.added_error",
+      );
     }
   }
 
@@ -2117,7 +2167,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(removed)) {
-      return internalFailureResult(removed.error);
+      return internalFailureResult(
+        removed.error,
+        "mcp.handleSaveTaskTool.removed_error",
+      );
     }
   }
 
@@ -2138,7 +2191,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(linked)) {
-      return internalFailureResult(linked.error);
+      return internalFailureResult(
+        linked.error,
+        "mcp.handleSaveTaskTool.linked_error",
+      );
     }
   }
 
@@ -2153,7 +2209,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(unlinked)) {
-      return internalFailureResult(unlinked.error);
+      return internalFailureResult(
+        unlinked.error,
+        "mcp.handleSaveTaskTool.unlinked_error",
+      );
     }
   }
 
@@ -2216,7 +2275,10 @@ const handleDeleteTaskTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(deleted)) {
-    return internalFailureResult(deleted.error);
+    return internalFailureResult(
+      deleted.error,
+      "mcp.handleDeleteTaskTool.deleted_error",
+    );
   }
   return toolDataResult(
     projectionPayload(DELETED_TRUE_PROJECTION, {
@@ -2359,7 +2421,10 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
       }),
     );
     if (Result.isError(removed)) {
-      return internalFailureResult(removed.error);
+      return internalFailureResult(
+        removed.error,
+        "mcp.handleLinkMatterContactTool.removed_error",
+      );
     }
     return toolDataResult(
       projectionPayload(LINK_MATTER_CONTACT_UNLINK_PROJECTION, {
@@ -2385,7 +2450,10 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     }),
   );
   if (Result.isError(created)) {
-    return internalFailureResult(created.error);
+    return internalFailureResult(
+      created.error,
+      "mcp.handleLinkMatterContactTool.created_error",
+    );
   }
   return toolDataResult(
     projectionPayload(LINK_MATTER_CONTACT_LINK_PROJECTION, {
@@ -2577,19 +2645,13 @@ export const MATTER_TOOL_DEFINITIONS = [
       openWorldHint: true,
     },
     description:
-      "Screen a company or person for due diligence. `check` picks the " +
-      "source. A register check returns one outcome: clear, found (adverse " +
-      "records), not-registered (no record; not a clearance), unavailable " +
-      "(no answer: NOT cleared) or not-covered (cannot screen this " +
-      "subject, or needs the tax ID). The sanctions check returns one " +
-      "outcome per list in `lists`, with whether it binds the firm: clear; " +
-      "possible-match (resembling entries with score and conflicting " +
-      "fields; each needs human review, none confirmed); incomplete (only " +
-      "a bounded subset screened, nothing matched: NOT cleared); or " +
-      "unavailable (stale, not loaded, or company name unreadable: NOT " +
-      "cleared, edition not screened). Top level is clear only if every " +
-      "list was fully screened clear. Person matches rest on name and " +
-      "birth date: compare the record first.",
+      "Screen a company or person; `check` selects the source. Register outcomes " +
+      "are clear, found, not-registered (not a clearance), unavailable (not " +
+      "cleared), or not-covered. Sanctions returns each list's firm applicability " +
+      "and outcome: clear, possible-match requiring human review, incomplete " +
+      "(not cleared), or unavailable (not cleared). Only fully screened clear " +
+      "lists produce top-level clear. " +
+      "Verify person matches against name and birth date.",
     inputSchema: CHECK_COUNTERPARTY_ARGS_SCHEMA,
     inputNormalization: {
       check: { kind: AGENT_INPUT_NORMALIZATION_KIND.enum },

@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
-import type { Static } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -9,6 +7,7 @@ import {
   resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -20,11 +19,12 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
+import { status } from "@/api/http/status";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics/capture";
+import { captureError, createErrorCapture } from "@/api/lib/analytics/capture";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,
@@ -35,11 +35,12 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
-import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import { resourceIdSchema, userIdSchema } from "@/api/lib/custom-schema";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
@@ -139,68 +140,81 @@ export const searchSummaryOutputSchema = v.strictObject({
   ),
 });
 
-export const refineSearchBodySchema = t.Object({
-  query: t.String({
-    minLength: 1,
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  locale: t.Optional(t.String({ maxLength: 16 })),
+export const refineSearchBodySchema = v.object({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+  ),
+  locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
 });
 
-const isoDateTime = t.String({ format: "date-time" });
+const isoDateTime = apiDateTimeSchema;
 
-export const summarizeSearchBodySchema = t.Object({
-  query: t.String({
-    minLength: 1,
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  originalQuery: t.Optional(
-    t.String({
-      minLength: 1,
-      maxLength: LIMITS.searchQueryMaxLength,
-    }),
+export const summarizeSearchBodySchema = v.object({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
   ),
-  locale: t.Optional(t.String({ maxLength: 16 })),
-  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
-  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
-    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
-  }),
-  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
-  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
-  updatedFrom: t.Optional(isoDateTime),
-  updatedTo: t.Optional(isoDateTime),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: SEARCH_SUMMARY_RESULT_LIMIT,
-      default: SEARCH_SUMMARY_RESULT_LIMIT,
-    }),
+  originalQuery: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
+  ),
+  locale: v.optional(v.pipe(v.string(), v.maxLength(16))),
+  workspaceIds: v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(64)),
+  types: v.pipe(
+    v.array(v.picklist(GLOBAL_SEARCH_RESULT_TYPES)),
+    v.maxLength(GLOBAL_SEARCH_RESULT_TYPES.length),
+  ),
+  editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
+  mimeTypes: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  updatedFrom: v.optional(isoDateTime),
+  updatedTo: v.optional(isoDateTime),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(SEARCH_SUMMARY_RESULT_LIMIT),
+    ),
+    SEARCH_SUMMARY_RESULT_LIMIT,
   ),
 });
 
-export const searchSummaryChatBodySchema = t.Object({
-  query: summarizeSearchBodySchema.properties.query,
-  originalQuery: summarizeSearchBodySchema.properties.originalQuery,
-  title: t.String({ minLength: 1, maxLength: 120 }),
-  summary: t.String({ minLength: 1, maxLength: 4000 }),
-  citations: t.Array(
-    t.Object({
-      number: t.Integer({ minimum: 1, maximum: SEARCH_SUMMARY_RESULT_LIMIT }),
-    }),
-    { maxItems: SEARCH_SUMMARY_CITATION_LIMIT },
+export const searchSummaryChatBodySchema = v.object({
+  query: summarizeSearchBodySchema.entries.query,
+  originalQuery: summarizeSearchBodySchema.entries.originalQuery,
+  title: v.pipe(v.string(), v.minLength(1), v.maxLength(120)),
+  summary: v.pipe(v.string(), v.minLength(1), v.maxLength(4000)),
+  citations: v.pipe(
+    v.array(
+      v.object({
+        number: v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(SEARCH_SUMMARY_RESULT_LIMIT),
+        ),
+      }),
+    ),
+    v.maxLength(SEARCH_SUMMARY_CITATION_LIMIT),
   ),
-  workspaceIds: summarizeSearchBodySchema.properties.workspaceIds,
-  types: summarizeSearchBodySchema.properties.types,
-  editedByUserIds: summarizeSearchBodySchema.properties.editedByUserIds,
-  mimeTypes: summarizeSearchBodySchema.properties.mimeTypes,
-  updatedFrom: summarizeSearchBodySchema.properties.updatedFrom,
-  updatedTo: summarizeSearchBodySchema.properties.updatedTo,
-  limit: summarizeSearchBodySchema.properties.limit,
+  workspaceIds: summarizeSearchBodySchema.entries.workspaceIds,
+  types: summarizeSearchBodySchema.entries.types,
+  editedByUserIds: summarizeSearchBodySchema.entries.editedByUserIds,
+  mimeTypes: summarizeSearchBodySchema.entries.mimeTypes,
+  updatedFrom: summarizeSearchBodySchema.entries.updatedFrom,
+  updatedTo: summarizeSearchBodySchema.entries.updatedTo,
+  limit: summarizeSearchBodySchema.entries.limit,
 });
 
-type RefineSearchBody = Static<typeof refineSearchBodySchema>;
-type SummarizeSearchBody = Static<typeof summarizeSearchBodySchema>;
-type SearchSummaryChatBody = Static<typeof searchSummaryChatBodySchema>;
+type RefineSearchBody = v.InferOutput<typeof refineSearchBodySchema>;
+type SummarizeSearchBody = v.InferOutput<typeof summarizeSearchBodySchema>;
+type SearchSummaryChatBody = v.InferOutput<typeof searchSummaryChatBodySchema>;
 
 type SearchAIContext = {
   organizationId: SafeId<"organization">;
@@ -572,10 +586,13 @@ export const summarizeSearchResults = async ({
 
   if (result.isErr()) {
     aiAnalytics.captureError(result.error);
-    captureError(result.error, {
-      feature: "search.summary",
-      organizationId,
-    });
+    captureError(
+      result.error,
+      handlerErrorContext("search.summarizeSearchResults.result_error", {
+        feature: "search.summary",
+        organizationId,
+      }),
+    );
     const mapped = aiErrorStatusBody(result.error, {
       status: 502,
       message: "Failed to summarize search results",
@@ -807,16 +824,26 @@ export const createSearchSummaryChatThread = async ({
   });
 
   if (insertResult.isErr()) {
-    captureError(insertResult.error, {
-      feature: "search.summary.chat",
-      organizationId,
-    });
+    captureError(
+      insertResult.error,
+      handlerErrorContext(
+        "search.createSearchSummaryChatThread.insertResult_error",
+        {
+          feature: "search.summary.chat",
+          organizationId,
+        },
+      ),
+    );
     return status(500, { message: "Failed to create chat thread" });
   }
 
   // Index the freshly seeded summary thread so it is findable in
   // global search. Fire-and-forget: indexing must not fail the create.
-  upsertSearchDocument(threadId).catch(captureError);
+  upsertSearchDocument(threadId).catch(
+    createErrorCapture(
+      handlerErrorContext("createSearchSummaryChatThread.upsertSearchDocument"),
+    ),
+  );
 
   return { threadId };
 };
@@ -864,9 +891,7 @@ const loadSummaryContexts = async ({
       mimeTypes: filters.mimeTypes,
       updatedFrom: filters.updatedFrom,
       updatedTo: filters.updatedTo,
-      limit: normalizeTenantPageLimit(
-        filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
-      ),
+      limit: normalizeTenantPageLimit(filters.limit),
     },
     { scopedDb },
   );
