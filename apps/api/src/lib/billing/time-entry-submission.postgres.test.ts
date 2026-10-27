@@ -13,8 +13,10 @@ import {
   TIME_ENTRY_SOURCE,
   timeEntries,
   timeTimers,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import resumeTimer from "@/api/handlers/time-timers/resume";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -47,7 +49,12 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 type Fixture = {
+  /** The database owner: seeds and resets rows outside forced RLS. */
   db: GatedTestDb;
+  /** One connection per interleaved actor. */
+  actors: Record<"a" | "b", GatedTestDb>;
+  /** Runs as the application role scoped to the fixture's owner. */
+  asApp: <T>(run: (tx: Transaction) => Promise<T>) => Promise<T>;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -64,6 +71,10 @@ const withFixture = async (
 ) =>
   await withGatedTestClients(url, async ({ openClient }) => {
     const { db } = openClient({ max: 1 });
+    const actors = {
+      a: openClient({ max: 1 }).db,
+      b: openClient({ max: 1 }).db,
+    };
     const organizationId = mintAuthProviderId<"organization">();
     const userId = mintAuthProviderId<"user">();
     const workspaceId = createSafeId<"workspace">();
@@ -109,6 +120,7 @@ const withFixture = async (
         name: "Submission test matter",
         reference: workspaceId,
       });
+      await db.insert(workspaceMembers).values({ workspaceId, userId });
       await db.insert(timeEntries).values({
         id: entryId,
         organizationId,
@@ -125,8 +137,16 @@ const withFixture = async (
         billable: true,
         ...entry,
       });
+      const asApp = createScopedDb(
+        markRlsDatabase(db),
+        [workspaceId],
+        organizationId,
+        userId,
+      );
       await run({
         db,
+        actors,
+        asApp: async (work) => await asApp(work),
         organizationId,
         userId,
         workspaceId,
@@ -146,6 +166,31 @@ const inTransaction = (tx: Transaction) =>
   asTestRaw<SafeDb>(async (run: (current: Transaction) => Promise<unknown>) =>
     Result.ok(await run(tx)),
   );
+
+type Step = { name: string; run: (tx: Transaction) => Promise<unknown> };
+
+// Each actor runs its steps as the application role, as a request would.
+const appParticipant = (
+  fixture: Fixture,
+  actor: "a" | "b",
+  steps: readonly Step[],
+) => {
+  const safeDb = createSafeDb(
+    markRlsDatabase(fixture.actors[actor]),
+    [fixture.workspaceId],
+    fixture.organizationId,
+    fixture.userId,
+  );
+  return {
+    steps,
+    transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+      (
+        await safeDb(run, {
+          retry: { times: 0, delayMs: 0, backoff: "constant" },
+        })
+      ).unwrap(),
+  };
+};
 
 const submitStep = (fixture: Fixture, approve: boolean) => ({
   name: "submit",
@@ -193,27 +238,25 @@ if (!databaseUrl || !runPostgres) {
       const { db, entryId, workspaceId } = fixture;
       const results = await withInterleaving({
         databaseUrl,
-        a: { steps: [submitStep(fixture, true)] },
-        b: {
-          steps: [
-            {
-              name: "matter",
-              run: async (tx: Transaction) =>
-                await tx.execute(
-                  sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-                ),
-            },
-            {
-              name: "entry",
-              run: async (tx: Transaction) =>
-                await tx
-                  .select({ id: timeEntries.id })
-                  .from(timeEntries)
-                  .where(eq(timeEntries.id, entryId))
-                  .for("update"),
-            },
-          ],
-        },
+        a: appParticipant(fixture, "a", [submitStep(fixture, true)]),
+        b: appParticipant(fixture, "b", [
+          {
+            name: "matter",
+            run: async (tx: Transaction) =>
+              await tx.execute(
+                sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+              ),
+          },
+          {
+            name: "entry",
+            run: async (tx: Transaction) =>
+              await tx
+                .select({ id: timeEntries.id })
+                .from(timeEntries)
+                .where(eq(timeEntries.id, entryId))
+                .for("update"),
+          },
+        ]),
         reset: async () => {
           await db
             .delete(auditLogs)
@@ -254,71 +297,80 @@ if (!databaseUrl || !runPostgres) {
       async (fixture) => {
         const { db, entryId, organizationId, userId, workspaceId } = fixture;
         const timerId = createSafeId<"timeTimer">();
-        await db.insert(timeTimers).values({
-          id: timerId,
-          organizationId,
-          workspaceId,
-          userId,
-          legacyTimeEntryId: entryId,
-          description: "Client work",
-          state: "paused",
-          startedAt: new Date(Date.now() - 3_600_000),
-          accumulatedSeconds: 60,
-          lastResumedAt: null,
-        });
+        // time_timers forces row-level security even for its owner.
+        await fixture.asApp(
+          async (tx) =>
+            await tx.insert(timeTimers).values({
+              id: timerId,
+              organizationId,
+              workspaceId,
+              userId,
+              legacyTimeEntryId: entryId,
+              description: "Client work",
+              state: "paused",
+              startedAt: new Date(Date.now() - 3_600_000),
+              accumulatedSeconds: 60,
+              lastResumedAt: null,
+            }),
+        );
         const answers: string[] = [];
         const results = await withInterleaving({
           databaseUrl,
-          a: { steps: [submitStep(fixture, false)] },
-          b: {
-            steps: [
-              {
-                name: "resume",
-                run: async (tx: Transaction) => {
-                  const answer = await resumeTimer.handler(
-                    createTestHandlerContext<
-                      Parameters<typeof resumeTimer.handler>[0]
-                    >({
-                      safeDb: inTransaction(tx),
-                      scopedDb: NO_DB,
-                      audit: fixture.recordAuditEvent,
-                      workspaceId,
-                      memberRole: sessionMemberRole("owner"),
-                      session: { activeOrganizationId: organizationId },
-                      user: { id: userId },
-                      featureAccessSnapshot: enrolledTimeBillingSnapshot({
-                        organizationId,
-                        userId,
-                      }),
-                      params: { id: timerId },
+          a: appParticipant(fixture, "a", [submitStep(fixture, false)]),
+          b: appParticipant(fixture, "b", [
+            {
+              name: "resume",
+              run: async (tx: Transaction) => {
+                const answer = await resumeTimer.handler(
+                  createTestHandlerContext<
+                    Parameters<typeof resumeTimer.handler>[0]
+                  >({
+                    safeDb: inTransaction(tx),
+                    scopedDb: NO_DB,
+                    audit: fixture.recordAuditEvent,
+                    workspaceId,
+                    memberRole: sessionMemberRole("owner"),
+                    session: { activeOrganizationId: organizationId },
+                    user: { id: userId },
+                    featureAccessSnapshot: enrolledTimeBillingSnapshot({
+                      organizationId,
+                      userId,
                     }),
-                  );
-                  answers.push(resumeAnswer(answer));
-                },
+                    params: { id: timerId },
+                  }),
+                );
+                answers.push(resumeAnswer(answer));
               },
-            ],
-          },
+            },
+          ]),
           reset: async () => {
             await db
               .delete(auditLogs)
               .where(eq(auditLogs.organizationId, organizationId));
-            await db
-              .update(timeTimers)
-              .set({ state: "paused", lastResumedAt: null })
-              .where(eq(timeTimers.id, timerId));
+            await fixture.asApp(
+              async (tx) =>
+                await tx
+                  .update(timeTimers)
+                  .set({ state: "paused", lastResumedAt: null })
+                  .where(eq(timeTimers.id, timerId)),
+            );
             await db
               .update(timeEntries)
               .set({ status: "draft" })
               .where(eq(timeEntries.id, entryId));
           },
+          // The running signal is visible to its owner only.
           readState: async () =>
-            await db
-              .select({
-                status: timeEntries.status,
-                running: timeEntryIsRunning(),
-              })
-              .from(timeEntries)
-              .where(eq(timeEntries.id, entryId)),
+            await fixture.asApp(
+              async (tx) =>
+                await tx
+                  .select({
+                    status: timeEntries.status,
+                    running: timeEntryIsRunning(),
+                  })
+                  .from(timeEntries)
+                  .where(eq(timeEntries.id, entryId)),
+            ),
           invariant: ({ outcomes, state }) => {
             expect(outcomes).toEqual(COMMITTED);
             expect([
