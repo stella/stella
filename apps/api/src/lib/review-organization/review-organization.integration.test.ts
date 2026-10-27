@@ -30,8 +30,12 @@ import {
   correspondenceAllowedSenders,
   entities,
   entityDeletionCleanupRequests,
+  expenses,
   featureEnrolments,
   fileComparisonUploads,
+  INVOICE_STATUS,
+  invoiceLines,
+  invoices,
   organizationSettings,
   playbookDefinitions,
   rateEntries,
@@ -51,6 +55,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
+import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import { reviewOrganizationConfigFrom } from "@/api/lib/review-organization/config";
@@ -956,6 +961,78 @@ describe("review organization seed and reset", () => {
       .insert(organizationSettings)
       .values({ organizationId: fixture.reviewOrgId })
       .onConflictDoNothing();
+    // Billing records a matter deletion refuses: the reset clears them before
+    // the matters, so they never hold one back.
+    const [workItem] = await testDb
+      .select({ id: entities.id, workspaceId: entities.workspaceId })
+      .from(entities)
+      .innerJoin(workspaces, eq(workspaces.id, entities.workspaceId))
+      .where(eq(workspaces.organizationId, fixture.reviewOrgId))
+      .limit(1);
+    if (workItem === undefined) {
+      panic("The seeded review organization has a matter document");
+    }
+    await testDb.insert(expenses).values({
+      id: createSafeId<"expense">(),
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      userId: fixture.reviewUserId,
+      matterId: workItem.id,
+      dateIncurred: "2026-08-30",
+      amount: cents(2500),
+      currency: "EUR",
+      category: "filing_fee",
+      description: "Reviewer expense",
+    });
+    // A line that still bills an entry refuses the entry's deletion, so the
+    // reset must take the invoice and its lines first.
+    const billedEntryId = createSafeId<"timeEntry">();
+    await testDb.insert(timeEntries).values({
+      id: billedEntryId,
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      userId: fixture.reviewUserId,
+      dateWorked: "2026-08-30",
+      timezoneId: "Europe/Prague",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(100),
+      currency: "EUR",
+      narrative: "Billed reviewer work",
+      status: "billed",
+    });
+    const reviewerInvoiceId = createSafeId<"invoice">();
+    await testDb.insert(invoices).values({
+      id: reviewerInvoiceId,
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      invoiceNumber: `REVIEW-${reviewerInvoiceId}`,
+      invoiceDate: "2026-10-01",
+      currency: "EUR",
+      status: INVOICE_STATUS.DRAFT,
+    });
+    await testDb.insert(invoiceLines).values({
+      id: createSafeId<"invoiceLine">(),
+      organizationId: fixture.reviewOrgId,
+      workspaceId: workItem.workspaceId,
+      invoiceId: reviewerInvoiceId,
+      position: 0,
+      description: "Reviewer services",
+      quantity: "1.0000",
+      unit: "h",
+      unitPrice: cents(100),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(100),
+      vatAmount: cents(21),
+      grossAmount: cents(121),
+      source: "time_entry",
+      timeEntryId: billedEntryId,
+    });
+    const timeEntriesBefore = await testDb.$count(
+      timeEntries,
+      eq(timeEntries.organizationId, fixture.reviewOrgId),
+    );
 
     const outcome = await resetReviewOrganization({
       config: config(fixture.reviewOrgId),
@@ -976,6 +1053,30 @@ describe("review organization seed and reset", () => {
     });
     expect(report.swept.get("chat_threads")).toBe(1);
     expect(report.swept.get("saved_searches")).toBe(1);
+    // The invoice's lines go with it.
+    expect(Object.fromEntries(report.billing)).toEqual({
+      invoices: 1,
+      expenses: 1,
+      time_entries: timeEntriesBefore,
+    });
+    expect(
+      await testDb.$count(
+        invoices,
+        eq(invoices.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        expenses,
+        eq(expenses.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
+    expect(
+      await testDb.$count(
+        invoiceLines,
+        eq(invoiceLines.organizationId, fixture.reviewOrgId),
+      ),
+    ).toBe(0);
     expect(
       await testDb.$count(chatThreads, eq(chatThreads.id, extraThreadId)),
     ).toBe(0);
