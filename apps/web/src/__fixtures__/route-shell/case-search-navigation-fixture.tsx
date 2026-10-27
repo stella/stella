@@ -113,7 +113,7 @@ export const declareCaseSearchNavigationCases = (fixture: FixtureRuntime) => {
     >;
   }[];
   for (const scenario of audienceCases) {
-    test(`case search keeps the content after typing a query and navigating to page two as ${scenario.name}`, async () => {
+    test(`case search keeps the content and pager focus after stepping to page two as ${scenario.name}`, async () => {
       const searched: v.InferOutput<typeof searchBody>[] = [];
       fixture.state.audience = scenario.audience;
       fixture.state.response = async (request) => {
@@ -138,11 +138,15 @@ export const declareCaseSearchNavigationCases = (fixture: FixtureRuntime) => {
           expect(runtime.router.state.location.search.q).toBe(query);
           expect(document.body.textContent).toContain("SYN 1/2026");
         });
-        await fixture.act(async () => {
-          await runtime.router.navigate({
-            to: "/law/cases",
-            search: { country: "svk", q: query, page: 2 },
-          });
+        const next = document.querySelector('a[aria-label="Next"]');
+        if (!(next instanceof HTMLAnchorElement)) {
+          panic("The case-law pager must offer the next page");
+        }
+        next.focus();
+        expect(document.activeElement).toBe(next);
+        const { fireEvent } = await import("@testing-library/react");
+        fixture.act(() => {
+          fireEvent.click(next);
         });
         await fixture.waitFor(() => {
           expect(
@@ -153,6 +157,8 @@ export const declareCaseSearchNavigationCases = (fixture: FixtureRuntime) => {
           expect(document.body.textContent).toContain("SYN 51/2026");
           expect(searchInput().value).toBe(query);
         });
+        expect(next.isConnected).toBe(true);
+        expect(document.activeElement).toBe(next);
         expect(searched).toContainEqual({ query, offset: 0 });
         expect(searched).toContainEqual({ query, offset: 50 });
         expect(runtime.caughtErrors).toEqual([]);

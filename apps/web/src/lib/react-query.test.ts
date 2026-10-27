@@ -9,7 +9,9 @@ import type { QueryFunctionContext } from "@tanstack/react-query";
 import { describe, expect, mock, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { queryView } from "@/lib/query-view.logic";
 import {
   CriticalQueryTimeoutError,
   ensureCriticalQueryData,
@@ -75,6 +77,57 @@ describe("ensureCriticalQueryData", () => {
         status: "error",
       },
     );
+  });
+
+  test("a mounted read exposes a deadline failure and can retry after cancellation", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let recovered = false;
+    const options = queryOptions({
+      queryKey: ["critical-query", "mounted-timeout"],
+      queryFn: async ({ signal }) => {
+        if (recovered) {
+          return "recovered";
+        }
+        return await new Promise<string>((_resolve, reject) => {
+          signal.addEventListener(
+            "abort",
+            () => reject(new Error("Query aborted", { cause: signal.reason })),
+            { once: true },
+          );
+        });
+      },
+    });
+    const observer = new QueryObserver(queryClient, options);
+    const deadlineObserved = Promise.withResolvers<undefined>();
+    const unsubscribe = observer.subscribe((result) => {
+      if (CriticalQueryTimeoutError.is(result.error)) {
+        deadlineObserved.resolve(undefined);
+      }
+    });
+    const error = await rejectionOf(
+      ensureCriticalQueryData(queryClient, options, { timeoutMs: 1 }),
+    );
+    expect(CriticalQueryTimeoutError.is(error)).toBe(true);
+    await deadlineObserved.promise;
+
+    const view = queryView(observer.getCurrentResult());
+    expect(view.type).toBe("error");
+    if (view.type !== "error") {
+      unsubscribe();
+      queryClient.clear();
+      throw new Error("Expected retryable deadline failure");
+    }
+    expect(CriticalQueryTimeoutError.is(view.error)).toBe(true);
+    recovered = true;
+    await view.retry();
+    expect(queryView(observer.getCurrentResult())).toMatchObject({
+      type: "items",
+      items: "recovered",
+    });
+    unsubscribe();
+    queryClient.clear();
   });
 
   test("does not cancel queries that resolve before the timeout", async () => {

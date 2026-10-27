@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
@@ -8,6 +8,10 @@ import { APIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 import type { FixtureRuntime } from "./route-shell-provider-fixture";
+
+class FixtureRouteLoaderError extends TaggedError("FixtureRouteLoaderError")<{
+  message: string;
+}> {}
 
 type StatutesResponse = PublicLawData<typeof api.law.statutes.get>;
 
@@ -43,6 +47,113 @@ const statutesResponse = {
 export const declareStatuteSearchNavigationCases = (
   fixture: FixtureRuntime,
 ) => {
+  test("a failed statute route retries its unchanged search", async () => {
+    const { Route } = await import("@/routes/law/$country/statutes/index");
+    const originalLoader = Route.options.loader;
+    if (typeof originalLoader !== "function") {
+      panic("The statute route must have a loader");
+    }
+    let loaderCalls = 0;
+    let fails = true;
+    Route.options.loader = async (context) => {
+      loaderCalls += 1;
+      if (fails) {
+        throw new FixtureRouteLoaderError({
+          message: "Fixture route loader failure",
+        });
+      }
+      const data: unknown = await originalLoader(context);
+      return data;
+    };
+    fixture.state.audience = "anonymous";
+    fixture.state.response = (request) => {
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/v1/law/statutes") {
+        return Response.json(statutesResponse);
+      }
+      if (pathname === "/v1/law/statutes/facets") {
+        return Response.json({ documentType: [] });
+      }
+      return undefined;
+    };
+    const runtime = await mountStatutes(fixture);
+    try {
+      await fixture.waitFor(() => {
+        expect(
+          runtime.router.state.matches.find(
+            (match) => match.routeId === "/law/$country/statutes/",
+          )?.status,
+        ).toBe("error");
+        expect(button("Retry")).not.toBeNull();
+      });
+      const failedSearch = runtime.router.state.location.search;
+      const failedLoaderCalls = loaderCalls;
+      fails = false;
+      fixture.act(() => button("Retry")?.click());
+      await fixture.waitFor(() => {
+        expect(loaderCalls).toBeGreaterThan(failedLoaderCalls);
+        expect(runtime.router.state.location.search).toEqual(failedSearch);
+        expect(document.body.textContent).toContain("Fixture act");
+        expect(
+          runtime.router.state.matches.find(
+            (match) => match.routeId === "/law/$country/statutes/",
+          )?.status,
+        ).toBe("success");
+      });
+    } finally {
+      Route.options.loader = originalLoader;
+      await unmountStatutes(fixture, runtime);
+    }
+  });
+
+  test("a failed case-law route retries its unchanged search", async () => {
+    const { Route } = await import("@/routes/law/cases/index");
+    const originalLoader = Route.options.loader;
+    if (typeof originalLoader !== "function") {
+      panic("The case-law route must have a loader");
+    }
+    let loaderCalls = 0;
+    let fails = true;
+    Route.options.loader = async (context) => {
+      loaderCalls += 1;
+      if (fails) {
+        throw new FixtureRouteLoaderError({
+          message: "Fixture route loader failure",
+        });
+      }
+      const data: unknown = await originalLoader(context);
+      return data;
+    };
+    fixture.state.audience = "anonymous";
+    const runtime = await mountStatutes(fixture, "/law/cases?country=svk");
+    try {
+      await fixture.waitFor(() => {
+        expect(
+          runtime.router.state.matches.find(
+            (match) => match.routeId === "/law/cases/",
+          )?.status,
+        ).toBe("error");
+        expect(button("Retry")).not.toBeNull();
+      });
+      const failedSearch = runtime.router.state.location.search;
+      const failedLoaderCalls = loaderCalls;
+      fails = false;
+      fixture.act(() => button("Retry")?.click());
+      await fixture.waitFor(() => {
+        expect(loaderCalls).toBeGreaterThan(failedLoaderCalls);
+        expect(runtime.router.state.location.search).toEqual(failedSearch);
+        expect(
+          runtime.router.state.matches.find(
+            (match) => match.routeId === "/law/cases/",
+          )?.status,
+        ).toBe("success");
+      });
+    } finally {
+      Route.options.loader = originalLoader;
+      await unmountStatutes(fixture, runtime);
+    }
+  });
+
   test("statute list keeps search and filters after a server failure, then retries successfully", async () => {
     let listReads = 0;
     fixture.state.audience = "anonymous";
@@ -150,8 +261,11 @@ export const declareStatuteSearchNavigationCases = (
   });
 };
 
-async function mountStatutes(fixture: FixtureRuntime) {
-  const runtime = fixture.createFixtureRouter("/law/cze/statutes");
+async function mountStatutes(
+  fixture: FixtureRuntime,
+  initialEntry = "/law/cze/statutes",
+) {
+  const runtime = fixture.createFixtureRouter(initialEntry);
   runtime.queryClient.setDefaultOptions({ queries: { retry: false } });
   await fixture.initializeI18n();
   await fixture.act(async () => {

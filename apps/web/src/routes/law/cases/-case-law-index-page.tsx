@@ -304,6 +304,7 @@ export function PublicCaseLawIndex({
     }) ?? panic("The case-law route rendered without a launch-ready country.");
   const countryParam = toCaseLawCountryParam(scope);
   const scopedSearch = { ...search, country: countryParam };
+  const { page: _page, pageSize: _pageSize, ...resultSetSearch } = scopedSearch;
   const intent = readDecisionIntent(search.q, { jurisdiction: scope });
   const { layout, setLayout } = useDecisionColumnPreferences(countryParam);
   const typedFilters = createDecisionFiltersFromSearch(scopedSearch, {
@@ -426,8 +427,9 @@ export function PublicCaseLawIndex({
     page: rows === "rows" ? pager.nextPage : null,
     pageSize,
   });
-  // A page the reader steps to brings them to its first row once it is drawn.
+  // Keep the pager reachable for another keyboard step after the rows change.
   const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "preserve",
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });
@@ -837,7 +839,7 @@ export function PublicCaseLawIndex({
           />
         ) : (
           <PublicLawResultsBoundary
-            searchKey={JSON.stringify(scopedSearch)}
+            searchKey={JSON.stringify(resultSetSearch)}
             resetOn={pageData}
           >
             <DecisionTable

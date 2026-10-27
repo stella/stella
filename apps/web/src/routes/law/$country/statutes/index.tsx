@@ -567,6 +567,7 @@ function PublicStatuteList({
     data?.pages.at(pager.currentPage - 1)?.items ?? EMPTY_STATUTES;
   // A page the reader steps to brings them to its first row once it is drawn.
   const requestPage = usePublicLawPageArrival({
+    focusOnArrival: "first-result",
     regionRef: paneRef,
     shownPage: rows === "rows" ? pager.currentPage : null,
   });

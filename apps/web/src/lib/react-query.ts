@@ -1,4 +1,5 @@
 import {
+  CancelledError,
   defaultShouldDehydrateQuery,
   InfiniteQueryObserver,
   QueryClient,
@@ -100,23 +101,35 @@ const withCriticalQueryTimeout = async <TData>(
       operation(),
       new Promise<never>((_resolve, reject) => {
         timeoutId = setTimeout(() => {
+          const timeoutError = new CriticalQueryTimeoutError({
+            message: `Critical query timed out after ${timeoutMs}ms: ${formatQueryKey(queryKey)}`,
+            queryKey,
+            timeoutMs,
+          });
+          const query = queryClient
+            .getQueryCache()
+            .find({ exact: true, queryKey });
           detached(
-            queryClient.cancelQueries(
-              {
-                exact: true,
-                queryKey,
-              },
-              { revert: false },
-            ),
+            queryClient
+              .cancelQueries({ exact: true, queryKey }, { revert: false })
+              .then(() => {
+                if (
+                  query?.state.fetchStatus !== "idle" ||
+                  !(query.state.error instanceof CancelledError)
+                ) {
+                  return undefined;
+                }
+                // The deadline is a read failure; the cancellation only stops its
+                // transport. Mounted readers need the real failure to offer retry.
+                query.setState({
+                  error: timeoutError,
+                  fetchFailureReason: timeoutError,
+                });
+                return undefined;
+              }),
             "react-query.cancel-queries",
           );
-          reject(
-            new CriticalQueryTimeoutError({
-              message: `Critical query timed out after ${timeoutMs}ms: ${formatQueryKey(queryKey)}`,
-              queryKey,
-              timeoutMs,
-            }),
-          );
+          reject(timeoutError);
         }, timeoutMs);
       }),
     ]);
