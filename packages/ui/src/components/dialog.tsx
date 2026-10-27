@@ -108,7 +108,7 @@ function DialogTrigger({
   ...props
 }: DialogPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />,
   });
 }
@@ -118,7 +118,7 @@ function DialogClose({
   ...props
 }: DialogPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
   return renderTooltipTrigger({
-    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    tooltip,
     trigger: <DialogPrimitive.Close data-slot="dialog-close" {...props} />,
   });
 }

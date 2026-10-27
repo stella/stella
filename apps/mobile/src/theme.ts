@@ -6,6 +6,7 @@ const lightColors = {
   border: "#deded8",
   card: "#ffffff",
   muted: "#676761",
+  onAccent: "#ffffff",
   text: "#171715",
 } as const;
 
@@ -15,6 +16,7 @@ const darkColors = {
   border: "#363631",
   card: "#1b1b18",
   muted: "#a4a49d",
+  onAccent: "#11110f",
   text: "#f4f4ef",
 } as const;
 

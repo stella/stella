@@ -507,11 +507,56 @@
     "addEntry": "Pievienot ierakstu",
     "amount": "Summa",
     "amountMustBePositive": "Summai jābūt lielākai par nulli",
+    "approval": {
+      "approveAll": "{count, plural, zero {Apstiprināt visus # ierakstus} one {Apstiprināt # ierakstu} other {Apstiprināt visus # ierakstus}}",
+      "approveSelected": "Apstiprināt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
+      "billedTotal": "Rēķinā {duration}",
+      "empty": "Šajā lietā nekas negaida apstiprinājumu.",
+      "emptyWeek": "Šonedēļ nekas negaida apstiprinājumu. Iesniegtais laiks parādās šeit.",
+      "everyone": "Visi",
+      "failed": "Izmaiņas netika saglabātas. Mēģiniet vēlreiz.",
+      "myTime": "Mans laiks",
+      "pending": "{count, plural, zero {# ierakstu apstiprināšanai} one {# ieraksts apstiprināšanai} other {# ieraksti apstiprināšanai}}",
+      "refusals": {
+        "invalidEntry": "Pievienojiet aprakstu un pārbaudiet darba datumu, pēc tam apstipriniet ierakstu.",
+        "notApprover": "Šo ierakstu var apstiprināt tikai tam piešķirtais apstiprinātājs vai administrators.",
+        "notFound": "Šis ieraksts vairs nepastāv. Atsvaidziniet sarakstu.",
+        "notSubmitted": "Šis ieraksts vēl nav iesniegts. Vispirms to iesniedz tā autors.",
+        "runningTimer": "Pirms ieraksta apstiprināšanas apturiet aktīvo taimeri.",
+        "unpriced": "Šim ierakstam nav likmes. Iestatiet likmi šai lietai un pēc tam apstipriniet ierakstu.",
+        "wrongStatus": "Šis ieraksts vairs nav melnraksts. Atsvaidziniet sarakstu."
+      },
+      "returnComment": "Atgriešanas iemesls",
+      "returnRefusals": {
+        "invalidEntry": "Pārbaudiet ieraksta darba datumu un pēc tam to atgrieziet.",
+        "notApprover": "Šo ierakstu var atgriezt tikai tam piešķirtais apstiprinātājs vai administrators.",
+        "notFound": "Šis ieraksts vairs nepastāv, tāpēc to nevar atgriezt. Atsvaidziniet sarakstu.",
+        "notSubmitted": "Šis melnraksts nekad nav iesniegts, tāpēc nav ko atgriezt.",
+        "runningTimer": "Pirms ieraksta atgriešanas apturiet aktīvo taimeri.",
+        "timePeriodLocked": "Šis mēnesis ir bloķēts, tāpēc ierakstu nevar atgriezt. Lūdziet administratoram to atbloķēt.",
+        "wrongStatus": "Laiku, par kuru izrakstīts rēķins vai kurš norakstīts, nevar atgriezt tā autoram."
+      },
+      "returnSelected": "Atgriezt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
+      "selectEntry": "Atlasīt ierakstu",
+      "timeEntries": "Laika ieraksti",
+      "title": "Apstiprinājumi"
+    },
     "approve": "Apstiprināt",
     "approveSelected": "Apstiprināt atlasītos",
     "batchActions": "Grupas darbības",
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
+    "clientComposer": {
+      "flatFeeNote": "Lietām ar fiksētu atlīdzību izrakstiet rēķinu attiecīgās lietas rēķinu lapā.",
+      "includeMatter": "Iekļaut {matterName}",
+      "invalidPeriod": "Izvēlieties beigu datumu, kas nav agrāks par sākuma datumu.",
+      "loadFailed": "Neizdevās ielādēt darbu, par kuru vēl nav izrakstīts rēķins. Mēģiniet vēlreiz.",
+      "matterSubtotal": "Lietas summa ar PVN: {amount} · {share} no rēķina",
+      "periodEnd": "Perioda beigas",
+      "periodStart": "Perioda sākums",
+      "title": "Izrakstīt rēķinu klientam",
+      "visibility": "Šis rēķins ir redzams tikai personām ar piekļuvi visām iekļautajām lietām un norēķinu administratoriem."
+    },
     "codes": {
       "activity": "Darbība",
       "activityCode": "Darbības kods",
@@ -594,6 +639,7 @@
       "openInvoice": "Atvērt rēķinu",
       "otherCurrency": "{count, plural, zero {# pozīciju ir reģistrētas} one {# pozīcija ir reģistrēta} other {# pozīcijas ir reģistrētas}} citā valūtā, nevis {currency}, un paliek atsevišķam rēķinam.",
       "outsideScope": "Neietilpst PVN piemērošanas jomā, 0 %",
+      "pendingApprovals": "{count, plural, zero {# vienumi gaida} one {# vienums gaida} other {# vienumi gaida}} apstiprinājumu. Pārskatīt apstiprinājumus.",
       "rate": "Likme",
       "readyDescription": "Izrakstot rēķinam tiek piešķirts nākamais numurs no jūsu numuru sērijas, un tas tiek bloķēts. Melnrakstu var turpināt rediģēt.",
       "readyTitle": "Gatavs izrakstīšanai",
@@ -654,6 +700,11 @@
       "invoiceDate": "Rēķina datums",
       "invoiceDetail": "Rēķina detaļas",
       "invoiceNumber": "Rēķina numurs",
+      "lineOverrides": {
+        "editedRecorded": "Rediģēts · reģistrēts: {description}, {quantity} × {rate}",
+        "quantity": "Daudzums",
+        "resetRecorded": "Atjaunot reģistrētās vērtības"
+      },
       "linkedExpenses": "Saistītie izdevumi",
       "linkedTimeEntries": "Saistītie laika ieraksti",
       "markPaid": "Atzīmēt kā apmaksātu",
@@ -678,6 +729,7 @@
     "markNonBillableSelected": "Atzīmēt kā neapmaksājamus",
     "matterRequired": "Lūdzu, izvēlieties lietu",
     "minutes": "Minūtes",
+    "moveEntryHint": "Saglabājot ieraksts tiek pārvietots uz šo lietu un novērtēts pēc tās likmēm.",
     "narrative": "Apraksts",
     "narrativePlaceholder": "Aprakstiet veikto darbu...",
     "noActiveTimer": "Nav aktīva taimeris",
@@ -792,13 +844,16 @@
       "approved": "Apstiprināts",
       "billed": "Izrakstīts rēķins",
       "draft": "Melnraksts",
+      "submitted": "Iesniegts",
       "written_off": "Norakstīts"
     },
     "stopTimer": "Apturēt",
     "suggestions": {
       "actionCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
       "activeVsLogged": "Aktivitāte: {active} · Reģistrēts: {logged}",
+      "alreadyCovered": "Jau ietverts reģistrētajā laikā",
       "chatEvidence": "{count, plural, zero {# ziņojumu} one {# ziņojums} other {# ziņojumi}} sarunā „{title}”",
+      "engagedTime": "{duration} aktīvā laika",
       "keyboardHint": "Enter pieņem, E ļauj rediģēt pirms pieņemšanas, Delete noraida",
       "privacyNote": "Šos ieteikumus redzat tikai jūs. Nekas netiek reģistrēts, kamēr to nepieņemat.",
       "title": "Ieteikumi, balstoti uz jūsu aktivitāti",
@@ -892,9 +947,14 @@
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "dateUnavailable": "Datums nav norādīts",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
+      "goToMention": "Pāriet uz {number}. pieminējumu",
+      "goToParagraph": "Pāriet uz {paragraph}. punktu",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
+      "mentionMark": "{number}. pieminējums",
+      "mentionsInDecision": "{count, plural, zero {Šajā nolēmumā citēts # reižu} one {Šajā nolēmumā citēts # reizi} other {Šajā nolēmumā citēts # reizes}}",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
       "none": "Citējumi vēl nav reģistrēti.",
+      "notInStella": "Lietotnē stella vēl nav",
       "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
       "paragraphLabel": "{paragraph}. punkts",
@@ -939,7 +999,6 @@
     "coverage": {
       "completeness": "Pilnīgums",
       "courtsHeading": "Pēc tiesas",
-      "courtsUnavailable": "Sadalījums pēc tiesām pašlaik nav pieejams.",
       "decisionYears": "Nolēmumu gadi",
       "description": "Cik daudz tiesu prakses ir korpusā pa valstīm un tiesām un cik aktuāls ir katrs avots.",
       "generatedAt": "Dati uz {date}",
@@ -950,20 +1009,16 @@
       "healthStalled": "Apstājies",
       "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
-      "knownGaps": "Zināmie iztrūkumi",
       "lastSync": "Pēdējā sinhronizācija",
-      "noGapsRecorded": "Iztrūkumi nav reģistrēti",
       "notCountedYet": "Vēl nav saskaitīts",
       "notMeasuredYet": "Vēl nav izmērīts",
-      "pendingTexts": "Neiegūtie teksti",
       "reportedByListing": "Saskaitīts pēc publicētāja saraksta",
       "reportedByOperator": "Ievadīts manuāli",
       "reportedByPublisher": "Paša publicētāja skaits",
       "searchable": "Meklējami",
       "title": "Tiesu prakses aptvērums",
       "totalFrom": "Kopskaits uz {date}",
-      "unavailable": "Aptvēruma dati pašlaik nav pieejami.",
-      "unreadListingPeriods": "Nenolasītie saraksta periodi"
+      "unavailable": "Aptvēruma dati pašlaik nav pieejami."
     },
     "decisionNotFound": "Lēmums nav atrasts",
     "decisionTypes": {
@@ -1003,6 +1058,12 @@
       "matchedIn": "Atbilstība valodā: {language}"
     },
     "loadingMore": "Ielādē vairāk...",
+    "marginFilter": {
+      "label": "Citēto normu filtrs",
+      "paragraph": "{count, plural, =0 {¶{paragraph} nav citētu normu} one {¶{paragraph} citēta # norma} zero {¶{paragraph} citētas # normu} other {¶{paragraph} citētas # normas}}",
+      "selection": "{count, plural, =0 {Atlasē nav citētu normu} one {Atlasē citēta # norma} zero {Atlasē citētas # normu} other {Atlasē citētas # normas}}",
+      "unnumberedParagraph": "{count, plural, =0 {Šajā rindkopā nav citētu normu} one {Šajā rindkopā citēta # norma} zero {Šajā rindkopā citētas # normu} other {Šajā rindkopā citētas # normas}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, zero {# nolēmumu jau bija saglabāti šeit} one {# nolēmums jau bija saglabāts šeit} other {# nolēmumi jau bija saglabāti šeit}}",
       "empty": "Šajā lietā vēl nav saglabāta tiesu prakse.",
@@ -1024,8 +1085,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Cilvēku"
+      "human": "Cilvēku",
+      "toggleState": "{label}: {state, select, on {ieslēgts} other {izslēgts}}"
     },
+    "oldestDecisions": "Vecākie nolēmumi",
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
@@ -1087,8 +1150,7 @@
       "runEstimate": "{rows, plural, zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}} × {columns, plural, zero {# jautājumu} one {# jautājums} other {# jautājumi}} šajā lapā: {cells, plural, zero {tiks izveidotas # atbilžu} one {tiks izveidota # atbilde} other {tiks izveidotas # atbildes}}.",
       "runTitle": "Atbildēt šajā lapā",
       "savedQuestions": "Saglabātie jautājumi",
-      "title": "Pētījumu tabulas",
-      "updated": "Pēdējo reizi labota {date}"
+      "title": "Pētījumu tabulas"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1194,8 @@
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
+      "oldest": "Vecākie",
+      "oldestUnavailable": "Meklēšanas rezultāti tiek kārtoti pēc atbilstības vai no jaunākajiem. Lai vispirms redzētu vecākos nolēmumus, notīriet meklēšanu.",
       "relevance": "Atbilstošākie"
     },
     "viewer": {
@@ -1147,6 +1211,7 @@
       "citedDecisionPassage": "Fragments nolēmumā",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {Pāriet uz rindkopām} one {Pāriet uz rindkopu} other {Pāriet uz rindkopām}}",
       "judgeRole": {
         "advocateGeneral": "Ģenerāladvokāts",
         "dissenting": "Atsevišķās domas",
@@ -1698,21 +1763,8 @@
       "describe-stella-function": "Datu meklēšanas sagatavošana",
       "describe_template": "Veidnes lauku lasīšana",
       "discover_tools": "Datu meklēšanas sagatavošana",
-      "docxCommentSummary": "Pievienot komentāru pie {blockId}",
-      "docxDeleteSummary": "Dzēst {blockId}",
-      "docxDeleteTableColumnSummary": "Dzēst tabulas kolonnu pie {blockId}",
-      "docxDeleteTableRowSummary": "Dzēst tabulas rindu pie {blockId}",
       "docxEditMore": "{count, plural, zero {vēl # labojumu} one {vēl # labojums} other {vēl # labojumi}}",
       "docxEditSummary": "{count, plural, zero {# ierosinātu labojumu} one {# ierosināts labojums} other {# ierosināti labojumi}}",
-      "docxInsertAfterSummary": "Ievietot tekstu aiz {blockId}",
-      "docxInsertBeforeSummary": "Ievietot tekstu pirms {blockId}",
-      "docxInsertTableColumnSummary": "Ievietot tabulas kolonnu pie {blockId}",
-      "docxInsertTableRowSummary": "Ievietot tabulas rindu pie {blockId}",
-      "docxMergeTableCellsSummary": "Apvienot tabulas šūnas pie {blockId}",
-      "docxReplaceBlockSummary": "Aizstāt {blockId}",
-      "docxReplaceSummary": "Aizstāt „{find}” ar „{replace}”",
-      "docxSignatureTableSummary": "Ievietot parakstu tabulu pie {blockId}",
-      "docxSplitTableCellSummary": "Sadalīt tabulas šūnu pie {blockId}",
       "execute-typescript": "Lietas datu lasīšana",
       "execute_typescript": "Lietas datu lasīšana",
       "expand-chat-history": "Lasa tērzēšanas vēsturi",
@@ -2056,8 +2108,6 @@
       "orLetUsKnowAt": "vai rakstiet mums uz",
       "viewDocumentation": "Skatīt dokumentāciju"
     },
-    "enterKey": "↵",
-    "error": "Kļūda",
     "expenses": "Izdevumi",
     "export": {
       "citations": "Atsauces",
@@ -2131,6 +2181,7 @@
     "lastUpdated": "Pēdējoreiz atjaunināts",
     "layoutResetAfterProblem": "Pēc kļūmes tika atjaunots noklusējuma izkārtojums.",
     "legalDatabase": "Juridiskā datubāze",
+    "loadFailed": "Neizdevās ielādēt.",
     "loadMore": "Ielādēt vairāk",
     "loading": "Ielādē",
     "logTime": "Reģistrēt laiku",
@@ -2205,10 +2256,12 @@
     "scrollToTop": "Ritināt uz augšu",
     "search": "Meklēt...",
     "searchIn": "Meklēt",
+    "searchMembers": "Meklēt dalībniekus…",
     "selectAMatter": "Izvēlieties lietu",
     "selectARole": "Izvēlieties lomu",
     "selectAll": "Atlasīt visus",
     "selectDate": "Izvēlēties datumu…",
+    "selected": "Atlasīts",
     "sessions": "Sesijas",
     "settings": "Iestatījumi",
     "showAll": "Rādīt visu",
@@ -2217,7 +2270,7 @@
     "showMore": "Rādīt vairāk",
     "showSecretValue": "Rādīt slepeno vērtību",
     "signOut": "Atslēgties",
-    "somethingWentWrong": "Kaut kas nogāja greizi",
+    "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "sort": "Kārtot",
     "source": "Avots",
     "stale": "Novecojis",
@@ -2694,7 +2747,7 @@
       "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
       "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
     },
-    "actionFailed": "Darbība neizdevās",
+    "actionFailed": "Tas neizdevās. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
       "caseLawCountryUnavailable": "Šīs valsts judikatūra nav pieejama. Izvēlieties citu valsti.",
@@ -3245,7 +3298,7 @@
     "saveSerializeFailedTitle": "Neizdevās izveidot DOCX",
     "savingDocument": "Saglabā...",
     "showDetails": "Rādīt detaļas",
-    "somethingWentWrong": "Kaut kas nogāja greizi",
+    "somethingWentWrong": "Kaut kas nogāja greizi. Mēģiniet vēlreiz vai, ja tas atkārtojas, pārlādējiet lapu.",
     "synced": "Sinhronizēts",
     "syncing": "Sinhronizē",
     "tableBordersAll": "Visas apmales",
@@ -4253,6 +4306,8 @@
       "commentPlaceholder": "Rakstiet komentāru…",
       "commentText": "Komentāra teksts",
       "commentedPassage": "Komentētais fragments",
+      "editComment": "Rediģēt komentāru",
+      "editedAt": "Rediģēts {time}",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
       "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
@@ -4282,7 +4337,12 @@
       "styleHighlight": "Izcēlums",
       "styleSquiggly": "Viļņota līnija",
       "styleStrikethrough": "Pārsvītrojums",
-      "visibilityShared": "Kopīgots ar organizāciju"
+      "visibilityShared": "Kopīgots ar organizāciju",
+      "visibilitySharedWithMatter": "Kopīgots ar lietu"
+    },
+    "contents": {
+      "aiSection": "{section} (AI ģenerēta sadaļa)",
+      "headingWithAiSection": "{heading} (AI ģenerēta sadaļa: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Bloka citāts ar atsauci",
@@ -4759,10 +4819,8 @@
   },
   "readerAnswers": {
     "budgetError": "Atbilžu budžets ir izsmelts.",
-    "citation": "¶{paragraph}",
     "expand": "Izvērst atbildi",
     "explain": "Izskaidrot",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Uzdot papildjautājumu",
     "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
     "loading": "Tiek ģenerēta atbilde…",
@@ -5843,6 +5901,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Iekšējais darbs"
+    },
+    "week": {
+      "allLogged": "Viss ir reģistrēts. Jauna aktivitāte parādīsies šeit, kamēr strādājat.",
+      "days": "Nedēļas dienas",
+      "entriesTitle": "Reģistrētais laiks",
+      "nextWeek": "Nākamā nedēļa",
+      "noActivity": "Pagaidām nav ko reģistrēt. Strādājiet lietā, un jūsu aktivitāte parādīsies šeit apstiprināšanai.",
+      "pendingCount": "{count, plural, zero {# ieteikumu} one {# ieteikums} other {# ieteikumi}}",
+      "previousWeek": "Iepriekšējā nedēļa",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Pārbaudiet darba datumu un pēc tam iesniedziet šo ierakstu.",
+        "narrativeRequired": "Pievienojiet aprakstu un pēc tam iesniedziet šo ierakstu.",
+        "runningTimer": "Apturiet darbojošos taimeri un pēc tam iesniedziet šo ierakstu.",
+        "unpriced": "Šim ierakstam nav likmes. Palūdziet likmi lietai un pēc tam to iesniedziet."
+      },
+      "returned": "Atgriezts: {comment}",
+      "submitAndApprove": "Iesniegt un apstiprināt",
+      "submitResult": "Iesniegti: {submitted} · apstiprināti: {approved} · jālabo: {refused}",
+      "submitWeek": "Iesniegt nedēļu",
+      "title": "Mana nedēļa",
+      "totals": "Reģistrēts: {logged} · apmaksājams: {billable}"
     }
   },
   "translate": {
@@ -6210,8 +6290,7 @@
         "lead": "Atbildīgais",
         "leadActive": "Atbildīgais",
         "leadInactive": "Iestatīt vadītāju",
-        "noLead": "Nav atbildīgā",
-        "searchMembers": "Meklēt dalībniekus…"
+        "noLead": "Nav atbildīgā"
       },
       "to": "Līdz"
     },
@@ -6273,6 +6352,7 @@
       "deleteAll": "Dzēst visus",
       "deleteAllConfirm": "Dzēst visus {count} vienumus kolonnā \"{column}\"?",
       "hideColumn": "Paslēpt kolonnu",
+      "moveFailed": "{failed, plural, zero {Neizdevās pārvietot # no {total} vienumiem.} one {Neizdevās pārvietot # no {total} vienumiem.} other {Neizdevās pārvietot # no {total} vienumiem.}}",
       "readOnlyGrouping": "Šis grupējums ir tikai lasāms",
       "selectPropertyHint": "Rīkjoslā izvēlieties rekvizītu grupēšanai",
       "uploadDocument": "Augšupielādēt dokumentu",
@@ -6291,10 +6371,10 @@
       "addMember": "Pievienot dalībnieku",
       "addMemberDescription": "Pievienot komandas dalībnieku šai lietai",
       "alreadyMember": "Lietotājs jau ir dalībnieks",
+      "alreadyOnMatter": "Jau ir šajā lietā",
       "cannotRemoveLast": "Nevar noņemt pēdējo dalībnieku",
       "noMembersFound": "Dalībnieki nav atrasti",
-      "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?",
-      "selectMember": "Izvēlēties dalībnieku"
+      "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?"
     },
     "newDocument": "Jauns dokuments",
     "newFolder": "Jauna mape",
@@ -6332,7 +6412,6 @@
           "approvedBy": "Apstiprināja",
           "channel": "Kanāls",
           "dateTime": "Datums un laiks",
-          "eventId": "Notikuma ID",
           "notAvailable": "Nav pieejams",
           "openTarget": "Atvērt vienumu",
           "runId": "Izpildes ID",
@@ -6449,6 +6528,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pielāgot lapas tumšajam režīmam",
+      "annotations": {
+        "commentedBy": "Komentārs: {name}",
+        "detachedHeading": "Nav šajā versijā",
+        "detachedOtherVersion": "Izveidots {version}. versijā; lapas teksts kopš tā laika ir mainījies.",
+        "detachedTextChanged": "Šo vārdu {page}. lapā vairs nav.",
+        "empty": "Atlasiet dokumenta vārdus un izvēlieties Komentārs.",
+        "highlightedBy": "Iezīmēja: {name}",
+        "refusedNoText": "Šajā lapā nav teksta, ko iezīmēt. Vispirms palaidiet dokumenta teksta atpazīšanu.",
+        "refusedNotFound": "Šie vārdi lapas tekstā netika atrasti. Atlasiet tos vēlreiz.",
+        "refusedTooLong": "Šis fragments ir pārāk garš, lai to iezīmētu. Atlasiet īsāku."
+      },
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Dokumenta informācija",
       "evidence": "Pierādījums",
@@ -6457,6 +6547,36 @@
       "pageEditor": {
         "addPDF": "Pievienot PDF",
         "applyCrop": "Lietot apgriešanu",
+        "cleanScan": {
+          "applied": "Lietota notīrītā versija",
+          "apply": "Lietot",
+          "applyAll": "Lietot visus",
+          "applyPage": "Lietot notīrīto {number}. lappusi",
+          "cleaned": "Notīrīts",
+          "cleaning": "Notiek lappuses tīrīšana",
+          "contentCrop": "Apgriezt līdz saturam",
+          "description": "{count, plural, zero {Pirms izmantošanas pārskatiet katru no # notīrītajām lappusēm. Dokuments mainās tikai tad.} one {Pirms izmantošanas pārskatiet notīrīto lappusi. Dokuments mainās tikai tad.} other {Pirms izmantošanas pārskatiet katru no # notīrītajām lappusēm. Dokuments mainās tikai tad.}}",
+          "deskew": "Iztaisnot",
+          "failedEngine": "Tīrīšana neizdevās. Lappuse paliek nemainīta.",
+          "failedRender": "Lappusi neizdevās sagatavot tīrīšanai. Tā paliek nemainīta.",
+          "failedTimeout": "Tīrīšana ilga pārāk ilgi. Lappuse paliek nemainīta.",
+          "heading": "Notīrīt skenējumu",
+          "output": "Krāsu režīms",
+          "outputBinary": "Melnbalts",
+          "outputGrayscale": "Pelēktoņu",
+          "pageLimit": "Vienlaikus var notīrīt ne vairāk kā {max} lappuses. Atlasiet mazāk lappušu.",
+          "preview": "Notīrītā {number}. lappuse",
+          "progress": "Apstrādātas {done} no {total} lappusēm",
+          "reject": "Paturēt oriģinālu",
+          "rejectPage": "Paturēt oriģinālo {number}. lappusi",
+          "rejected": "Oriģināls paturēts",
+          "scope": "{count, plural, =0 {Iztaisnot un notīrīt visas lappuses} zero {Iztaisnot un notīrīt # atlasītās lappuses} one {Iztaisnot un notīrīt atlasīto lappusi} other {Iztaisnot un notīrīt # atlasītās lappuses}}",
+          "unrecognized": "Lappuse netika atpazīta kā skenējums. Tā paliek nemainīta.",
+          "unrecognizedNoContent": "Šajā lappusē netika atrasts saturs. Tā paliek nemainīta.",
+          "unrecognizedNoPage": "Neizdevās atrast lappuses malas. Lappuse paliek nemainīta.",
+          "unrecognizedTooLarge": "Lappuse ir pārāk liela, lai to notīrītu. Tā paliek nemainīta.",
+          "use": "{count, plural, =0 {Izmantot notīrītās lappuses} zero {Izmantot # notīrītās lappuses} one {Izmantot # notīrīto lappusi} other {Izmantot # notīrītās lappuses}}"
+        },
         "crop": "Apgriezt",
         "cropAdvanced": "Papildu iestatījumi",
         "cropBottom": "Apakšā (mm)",
@@ -6504,7 +6624,10 @@
         "saveVersion": "Saglabāt versiju",
         "selectAll": "Atlasīt visu",
         "selectPage": "Atlasīt lappusi {number}",
+        "signAfterSave": "Saglabā lappušu izmaiņas kā jaunu versiju un pēc tam to paraksta",
+        "signSavedVersionMissing": "Jaunā versija tika saglabāta, bet to neizdevās atvērt parakstīšanai. Parakstiet to dokumenta skatītājā.",
         "signatureWarning": "Rediģējot šo PDF, digitālie paraksti kļūs nederīgi.",
+        "signatureWarningWithSign": "Rediģējot esošie digitālie paraksti kļūst nederīgi. Parakstot šeit, vispirms tiek saglabātas jūsu izmaiņas un parakstīta jaunā versija.",
         "sourceLimit": "PDF failu kopējais izmērs nedrīkst pārsniegt 100 MB.",
         "title": "Rediģēt lapas",
         "undo": "Atsaukt lappuses labojumu",
@@ -6515,6 +6638,11 @@
       },
       "passwordLabel": "Ievadiet PDF paroli",
       "previousPage": "Iepriekšējā lappuse",
+      "selection": {
+        "explainPassagePrompt": "Izskaidro šo {citation} fragmentu:\n\n„{quote}”",
+        "pageLocator": "{page}. lpp.",
+        "pageRangeLocator": "{start}.–{end}. lpp."
+      },
       "showOriginal": "Rādīt oriģinālās lapas",
       "unlock": "Atbloķēt"
     },
@@ -6628,10 +6756,12 @@
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
-      "sortAscending": "Kārtot augošā secībā",
       "sortAscendingDate": "Vecākie vispirms",
-      "sortDescending": "Kārtot dilstošā secībā",
+      "sortAscendingNumber": "Mazākie vispirms",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Jaunākie vispirms",
+      "sortDescendingNumber": "Lielākie vispirms",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, zero {Sadalīt # iespējās} one {Sadalīt # iespējā} other {Sadalīt # iespējās}}",
       "suggestWithAI": "Ieteikt ar AI",
       "text": "Teksts",

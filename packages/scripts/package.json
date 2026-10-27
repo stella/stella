@@ -10,6 +10,9 @@
     "i18n-typegen": "src/i18n-typegen.ts"
   },
   "type": "module",
+  "exports": {
+    "./src/*": "./src/*.ts"
+  },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "test": "bun test",
@@ -32,8 +35,7 @@
     "@stll/time": "0.4.1",
     "better-result": "catalog:",
     "oxc-parser": "catalog:",
-    "oxc-transform-react": "catalog:",
-    "typescript6": "catalog:"
+    "oxc-transform-react": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

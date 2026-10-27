@@ -1,12 +1,17 @@
-import { type PropsWithChildren, type ReactNode, useId } from "react";
+import {
+  type PropsWithChildren,
+  type ReactNode,
+  type Ref,
+  useCallback,
+  useId,
+} from "react";
 
-import { Link } from "@tanstack/react-router";
+import { Link, useLocation } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
-import { ReviewStatusDot } from "@stll/ui/review-severity-dot";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -21,13 +26,17 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { Globe, type GlobeMarker } from "@/components/globe";
-import { toCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
+import {
+  caseLawCoverageAnchor,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
+import { CaseLawHealthSignal } from "@/features/case-law/components/case-law-health-signal";
 import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
 import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
 import { caseLawCompletenessPercent } from "@/features/case-law/coverage-completeness";
 import {
   useFormatter,
-  useLocale,
+  useFormattingLocale,
   useRelativeTime,
 } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
@@ -36,14 +45,12 @@ import {
   CALENDAR_DATE_FORMAT,
   MEDIUM_DATE_SHORT_TIME_FORMAT,
 } from "@/lib/relative-time";
+import { AvailableCoverageSection } from "@/routes/law/-law-coverage/available-coverage-section";
 import {
   CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS,
   CASE_LAW_COVERAGE_AVAILABILITY_TONES,
-  CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS,
-  CASE_LAW_COVERAGE_HEALTH_TONES,
   CASE_LAW_TOTAL_REPORTER_LABEL_KEYS,
   type CaseLawCoverageCountry,
-  type CaseLawCoverageHealth,
   type CaseLawCoverageResponse,
   type CaseLawCoverageSource,
   type CaseLawMeasuredCompleteness,
@@ -134,7 +141,7 @@ export const CaseLawCoveragePage = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
 
   // Not a discriminated union: the endpoint answers either the figures or a
   // message saying it cannot state them.
@@ -447,18 +454,6 @@ const Delta = ({ value }: { value: number | null }) => {
   );
 };
 
-/** Freshness as a word, with the dot as its second reading and never its only one. */
-const HealthSignal = ({ health }: { health: CaseLawCoverageHealth }) => {
-  const t = useTranslations();
-
-  return (
-    <span className="inline-flex items-center gap-1.5 text-sm whitespace-nowrap">
-      <ReviewStatusDot tone={CASE_LAW_COVERAGE_HEALTH_TONES[health]} />
-      {t(CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS[health])}
-    </span>
-  );
-};
-
 type TableBlockProps = PropsWithChildren<{
   title: string;
 }>;
@@ -480,8 +475,11 @@ const TableBlock = ({ children, title }: TableBlockProps) => {
 };
 
 type CountryCardProps = PropsWithChildren<{
+  /** The section's fragment, so a link from elsewhere can land on one country. */
+  anchor?: string;
   header: ReactNode;
   headingId?: string;
+  ref?: Ref<HTMLElement>;
 }>;
 
 /**
@@ -489,10 +487,18 @@ type CountryCardProps = PropsWithChildren<{
  * the other. Side by side, a source's name wraps to three lines and the
  * newest court's date is cut off before the width they would need.
  */
-const CountryCard = ({ children, header, headingId }: CountryCardProps) => (
+const CountryCard = ({
+  anchor,
+  children,
+  header,
+  headingId,
+  ref,
+}: CountryCardProps) => (
   <section
     aria-labelledby={headingId}
-    className="bg-background flex flex-col rounded-xl border shadow-xs/5"
+    className="bg-background flex scroll-mt-4 flex-col rounded-xl border shadow-xs/5"
+    id={anchor}
+    ref={ref}
   >
     <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-3">
       {header}
@@ -505,9 +511,25 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
   const t = useTranslations();
   const format = useFormatter();
   const headingId = useId();
+  const anchor = caseLawCoverageAnchor(country.country);
+  const isTarget = useLocation({ select: ({ hash }) => hash === anchor });
+  // The figures arrive after the navigation, so the router's own hash scroll
+  // finds no section yet: the section a link named brings itself into view
+  // when it mounts. Stable per target, so a background refetch that
+  // re-renders the page does not pull the reader back.
+  const scrollIntoViewOnArrival = useCallback(
+    (node: HTMLElement | null) => {
+      if (isTarget && node !== null) {
+        node.scrollIntoView({ block: "start" });
+      }
+    },
+    [isTarget],
+  );
 
   return (
     <CountryCard
+      anchor={anchor}
+      ref={scrollIntoViewOnArrival}
       header={
         <>
           <h2 className="text-base font-semibold" id={headingId}>
@@ -542,7 +564,11 @@ const CountrySection = ({ country }: { country: CaseLawCoverageCountry }) => {
     >
       <SourcesTable sources={country.sources} />
       {country.availability === "searchable" && (
-        <CourtsTable country={country.country} courts={country.courts} />
+        <AvailableCoverageSection data={country.courts}>
+          {(courts) => (
+            <CourtsTable country={country.country} courts={courts} />
+          )}
+        </AvailableCoverageSection>
       )}
     </CountryCard>
   );
@@ -646,7 +672,6 @@ const SourcesTable = ({
               >
                 <bdi>{source.name}</bdi>
               </a>
-              <SourceCoverageDetails source={source} />
             </TableHead>
             <TableCell className="text-end tabular-nums">
               {source.storedDecisions === null
@@ -654,7 +679,7 @@ const SourcesTable = ({
                 : format.number(source.storedDecisions)}
             </TableCell>
             <TableCell>
-              <HealthSignal health={source.health} />
+              <CaseLawHealthSignal className="text-sm" health={source.health} />
             </TableCell>
             <TableCell className={"text-muted-foreground text-end"}>
               {source.lastSyncAt === null
@@ -671,59 +696,6 @@ const SourcesTable = ({
         ))}
       </TableBody>
     </Table>
-  );
-};
-
-const SourceCoverageDetails = ({
-  source,
-}: {
-  source: CaseLawCoverageSource;
-}) => {
-  const t = useTranslations();
-  const formatter = useFormatter();
-  const years =
-    source.decisionYearFrom === null || source.decisionYearTo === null
-      ? NO_VALUE
-      : `${formatter.number(source.decisionYearFrom, YEAR_FORMAT)}–${formatter.number(source.decisionYearTo, YEAR_FORMAT)}`;
-  // An unreviewed source states nothing about gaps rather than a line saying
-  // it cannot; unknown is still never shown as "no gaps recorded".
-  let gaps: string | null;
-  switch (source.knownGaps.type) {
-    case "not_reconciled":
-      gaps = null;
-      break;
-    case "reconciled": {
-      // Decisions and listing periods are different units: each keeps its
-      // own label rather than adding into one number.
-      const { missing, unlistedSlices } = source.knownGaps.summary;
-      const parts = [
-        ...(missing > 0
-          ? [`${t("caseLaw.coverage.knownGaps")}: ${formatter.number(missing)}`]
-          : []),
-        ...(unlistedSlices > 0
-          ? [
-              `${t("caseLaw.coverage.unreadListingPeriods")}: ${formatter.number(unlistedSlices)}`,
-            ]
-          : []),
-      ];
-      gaps =
-        parts.length === 0
-          ? t("caseLaw.coverage.noGapsRecorded")
-          : parts.join(" · ");
-      break;
-    }
-    default:
-      source.knownGaps satisfies never;
-      return panic("Unhandled case-law source gap state");
-  }
-
-  return (
-    <span className="text-muted-foreground mt-1 block text-xs">
-      {t("caseLaw.coverage.decisionYears")}: {years} ·{" "}
-      {t("caseLaw.coverage.pendingTexts")}:{" "}
-      {formatter.number(source.pendingTextCount)}
-      {gaps !== null && ` · ${gaps}`}
-    </span>
   );
 };
 
@@ -862,31 +834,16 @@ const CourtsTableHead = () => {
  * by name, the wide tiers as one row each naming their tier, and the courts
  * beyond the listed ones as the closing row. No heading rows between them: a
  * dozen rows read better as one list than as four lists of three.
- *
- * A breakdown the endpoint could not read says so in the table's place. An
- * empty table would claim the index names no court.
  */
 const CourtsTable = ({
   country,
   courts,
 }: {
   country: CaseLawJurisdiction;
-  courts: SearchableCountry["courts"];
+  courts: NonNullable<SearchableCountry["courts"]>;
 }) => {
   const t = useTranslations();
 
-  if (courts === null) {
-    return (
-      <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">
-          {t("caseLaw.coverage.courtsHeading")}
-        </h3>
-        <p className="text-muted-foreground text-xs">
-          {t("caseLaw.coverage.courtsUnavailable")}
-        </p>
-      </div>
-    );
-  }
   return (
     <TableBlock title={t("caseLaw.coverage.courtsHeading")}>
       <TableColumns columns={COURT_COLUMNS} />
