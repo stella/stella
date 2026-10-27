@@ -3,11 +3,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 
 import {
+  PanelTrigger,
   Sidebar,
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
   SidebarProvider,
   SidebarRail,
+  SidebarTrigger,
 } from "./sidebar";
 import {
   deriveSidebarState,
@@ -128,6 +130,36 @@ describe("SidebarProvider / Sidebar", () => {
       },
     );
   }
+});
+
+describe("PanelTrigger", () => {
+  // The sidebar trigger and a panel trigger at the opposite edge share one
+  // toolbar row; they must differ only in which panel icon they draw.
+  test("the sidebar trigger and a right panel trigger render as mirror images", () => {
+    const markup = renderToStaticMarkup(
+      <SidebarProvider>
+        <SidebarTrigger className="-ms-1" label="Sidebar" />
+        <PanelTrigger className="-me-1" label="Inspector" side="right" />
+      </SidebarProvider>,
+    );
+    const buttonClasses = [
+      ...markup.matchAll(/<button[^>]*class="([^"]*)"/gu),
+    ].map((match) => match[1]);
+    const iconClasses = [...markup.matchAll(/<svg[^>]*class="([^"]*)"/gu)].map(
+      (match) => match[1],
+    );
+
+    expect(buttonClasses).toHaveLength(2);
+    expect(buttonClasses[0]?.replace(" -ms-1", "")).toBe(
+      buttonClasses[1]?.replace(" -me-1", ""),
+    );
+    expect(iconClasses).toHaveLength(2);
+    expect(iconClasses[0]).toContain("panel-left");
+    expect(iconClasses[1]).toContain("panel-right");
+    expect(iconClasses[0]?.replaceAll("panel-left", "panel-right")).toBe(
+      iconClasses[1],
+    );
+  });
 });
 
 describe("SidebarRail", () => {
