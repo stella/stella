@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 6.0.0
+
+### Major Changes
+
+- [#6947](https://github.com/stella/stella/pull/6947) [`e67e5f9`](https://github.com/stella/stella/commit/e67e5f9173316aa577c7a7a4a32c0c7b954b1091) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `organization-settings document-ocr-availability get` reports `type` (`live`, `batched` or `unconfigured`) in place of `available`, and a queued `entities ocr create` response carries the `availability` it was accepted under.
+
+### Patch Changes
+
+- [#6908](https://github.com/stella/stella/pull/6908) [`4255127`](https://github.com/stella/stella/commit/4255127c504a9fd486a41ca18b7aa37729eea29a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `case-law coverage` for a listed country that holds no case law yet (Austria, the United Kingdom, the United States) reports it as unavailable with the reason, instead of failing with "Case-law country not found".
+
+- [#6829](https://github.com/stella/stella/pull/6829) [`f2ce46f`](https://github.com/stella/stella/commit/f2ce46f514d410a50203e6dfafca0e4c30424b8f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `stella search-history list` accepts a country to list one jurisdiction's entries, and each entry names its jurisdiction.
+
 ## 5.8.0
 
 ### Minor Changes

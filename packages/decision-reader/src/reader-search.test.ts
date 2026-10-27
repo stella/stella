@@ -1,8 +1,74 @@
 import { describe, expect, it } from "bun:test";
 
-import { normalizeUnicode } from "@stll/text-normalize";
+import { foldSearchMatchText, normalizeUnicode } from "@stll/text-normalize";
 
 import { buildSearchResults } from "./reader-search";
+
+/**
+ * A decision's own spelling against what a reader types into the find bar,
+ * with the words a list filter finds the same way. Each row's shown word folds
+ * to a different length or shape, so the mark has to be mapped back.
+ */
+const FIND_CASES = [
+  {
+    language: "cs",
+    text: "Rozsudek Dvořákové.",
+    typed: "dvorakove",
+    marked: ["Dvořákové"],
+  },
+  {
+    language: "de",
+    text: "Die Straße ist gesperrt.",
+    typed: "strasse",
+    marked: ["Straße"],
+  },
+  {
+    language: "de",
+    text: "Herr MÜLLER klagt.",
+    typed: "muller",
+    marked: ["MÜLLER"],
+  },
+  {
+    language: "fr",
+    text: "L'œuvre ﬁnale d'Élise.",
+    typed: "oeuvre finale elise",
+    marked: ["œuvre", "ﬁnale", "Élise"],
+  },
+  {
+    language: "ar",
+    text: "قال مُحَمَّد إن أحمد",
+    typed: "محمد احمد",
+    marked: ["مُحَمَّد", "أحمد"],
+  },
+  {
+    language: "tr",
+    text: "İSTANBUL ve Istanbul",
+    typed: "istanbul",
+    marked: ["İSTANBUL", "Istanbul"],
+  },
+] as const;
+
+describe("find in a decision, across languages", () => {
+  for (const { language, marked, text, typed } of FIND_CASES) {
+    it(`${language}: "${typed}" marks the decision's own spelling`, () => {
+      // Each fixture must fold to something else, or the mapping is untested.
+      for (const word of marked) {
+        expect(foldSearchMatchText(word)).not.toBe(word);
+      }
+      const result = buildSearchResults({
+        pieces: [{ id: "p1", text }],
+        query: typed,
+      });
+
+      expect(
+        result.rangesByPieceId["p1"]?.map(({ end, start }) =>
+          text.slice(start, end),
+        ),
+      ).toEqual([...marked]);
+      expect(result.matchCount).toBe(marked.length);
+    });
+  }
+});
 
 describe("buildSearchResults", () => {
   it("matches case-insensitively and ignores diacritics", () => {

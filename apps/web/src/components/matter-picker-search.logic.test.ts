@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 
@@ -29,12 +30,27 @@ const filter = (query: string, selectedId?: string | null) =>
     selectedId,
   });
 
+/**
+ * The search contract: a field matches when it contains the trimmed query once
+ * both are folded for search (case, accents, ligatures, Arabic variants).
+ */
+const matchesFolded = (field: string | null | undefined, query: string) => {
+  const needle = foldSearchMatchText(query.trim().toWellFormed());
+  return (
+    needle === "" ||
+    (field !== null &&
+      field !== undefined &&
+      foldSearchMatchText(field.toWellFormed()).includes(needle))
+  );
+};
+
 describe("matter picker search", () => {
-  test("trims and case-folds a substring over names or client labels separately", () => {
+  test("trims and folds a substring over names or client labels separately", () => {
     expect(filter("  NORTH ").map(({ id }) => id)).toEqual(["one"]);
     expect(filter("beta").map(({ id }) => id)).toEqual(["two"]);
     expect(filter("alpha north")).toEqual([]);
-    expect(filter("ces")).toEqual([]);
+    expect(filter("cesky").map(({ id }) => id)).toEqual(["three"]);
+    expect(filter("NAVRH").map(({ id }) => id)).toEqual(["three"]);
     expect(filter("   ")).toEqual(matters);
   });
 
@@ -101,7 +117,7 @@ describe("matter picker search", () => {
   });
 });
 
-test("matter picker filtering preserves the previous field and selection rules", () => {
+test("matter picker filtering keeps the folded matches and selection rules", () => {
   const text = fc
     .array(
       fc.constantFrom(
@@ -126,7 +142,7 @@ test("matter picker filtering preserves the previous field and selection rules",
     .map((parts) => parts.join(""));
 
   assertProperty(
-    "matter picker filtering preserves the previous field and selection rules",
+    "matter picker filtering keeps the folded matches and selection rules",
     fc.property(
       fc.array(fc.record({ id: text, name: text, clientLabel: text }), {
         maxLength: PROPERTY_MATTERS_MAX,
@@ -134,20 +150,13 @@ test("matter picker filtering preserves the previous field and selection rules",
       fc.oneof(fc.constant(null), text),
       text,
       (items, selectedId, query) => {
-        const needle = query.trim().toLowerCase().toWellFormed();
-        const matchingItems =
-          needle.length === 0
-            ? items
-            : items.filter(
-                (item) =>
-                  item.name.toLowerCase().toWellFormed().includes(needle) ||
-                  item.clientLabel
-                    .toLowerCase()
-                    .toWellFormed()
-                    .includes(needle),
-              );
+        const matchingItems = items.filter(
+          (item) =>
+            matchesFolded(item.name, query) ||
+            matchesFolded(item.clientLabel, query),
+        );
         const selected =
-          needle.length === 0
+          query.trim().length === 0
             ? matchingItems.find((item) => item.id === selectedId)
             : undefined;
         const expected =

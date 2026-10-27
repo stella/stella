@@ -9,6 +9,7 @@ import {
   findForbiddenGuidance,
   findForbiddenTerms,
   findIcuError,
+  findInternalIdArguments,
   findMissingPluralCategories,
   findPlaceholderMismatch,
   hasEmDash,
@@ -81,6 +82,29 @@ describe("em dash in catalogue copy", () => {
     expect(hasEmDash("Draft (not sent)")).toBe(false);
     expect(hasEmDash("\u2014")).toBe(false);
     expect(hasEmDash(" \u2014 ")).toBe(true);
+  });
+});
+
+describe("findInternalIdArguments", () => {
+  test("flags an argument that names a storage handle", () => {
+    expect(findInternalIdArguments("Replace {blockId}")).toEqual(["blockId"]);
+    expect(
+      findInternalIdArguments(
+        "{count, plural, one {# edit in {paraId}} other {# edits in {commentIds}}}",
+      ),
+    ).toEqual(["commentIds", "paraId"]);
+  });
+
+  test("accepts arguments that describe what the reader knows", () => {
+    expect(
+      findInternalIdArguments("Replace “{find}” with “{replace}”"),
+    ).toEqual([]);
+    expect(
+      findInternalIdArguments(
+        "{label, select, none {Rewrite a paragraph} other {Rewrite paragraph {label}}}",
+      ),
+    ).toEqual([]);
+    expect(findInternalIdArguments("Paid {amount} on {valid}")).toEqual([]);
   });
 });
 
