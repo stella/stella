@@ -201,7 +201,7 @@ export const useDocumentMarks = ({
         pageNumber: first?.pageNumber ?? 1,
       };
     }
-    const selectedPages = await queryClient.fetchQuery(
+    const selectedPages = await queryClient.query(
       selectedMarkPagesOptions({
         file,
         pageNumbers: layers.map((layer) => layer.pageNumber),
