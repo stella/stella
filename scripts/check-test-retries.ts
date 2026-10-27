@@ -1,5 +1,6 @@
 /** Prevent automated retries from hiding flaky test behavior. */
 
+import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -11,13 +12,17 @@ import { isPathInside, repoRelativePath } from "@stll/portable-path";
 import {
   type ArrayExpression,
   type ArrowFunctionExpression,
+  type BindingPattern,
+  type BindingRestElement,
   type CallExpression,
+  type FormalParameterRest,
   type Function as SyntaxFunction,
   type Node,
   type ObjectExpression,
   type ObjectProperty,
   parseSource,
   type Program,
+  type TSParameterProperty,
   walk,
 } from "../packages/scripts/src/syntax-tree";
 
@@ -48,7 +53,13 @@ export type TestRetryFinding = {
 
 type SourceMap = ReadonlyMap<string, string>;
 
-type Source = { file: string; program: Program; root: string; text: string };
+type Source = {
+  file: string;
+  program: Program;
+  root: string;
+  text: string;
+  unresolvedBindings: ReadonlySet<string>;
+};
 
 type Wrapper =
   "ParenthesizedExpression" | "TSAsExpression" | "TSSatisfiesExpression";
@@ -197,20 +208,12 @@ const resolveDevicePreset = (
   }
   const binding = access.object.name;
   const presetName = access.property.value;
-  const imported = source.program.body.some(
-    (statement) =>
-      statement.type === "ImportDeclaration" &&
-      statement.source.value === "@playwright/test" &&
-      statement.specifiers.some(
-        (entry) =>
-          entry.type === "ImportSpecifier" &&
-          entry.local.name === binding &&
-          (entry.imported.type === "Identifier"
-            ? entry.imported.name
-            : entry.imported.value) === "devices",
-      ),
-  );
-  if (!imported) {
+  const imported = importedBinding(source, binding);
+  if (
+    imported?.type !== "named" ||
+    imported.module !== "@playwright/test" ||
+    imported.name !== "devices"
+  ) {
     return undefined;
   }
   const descriptor = playwrightDevices(source)?.[presetName];
@@ -235,6 +238,9 @@ const resolveDevicePreset = (
 };
 
 const resolveVariable = (name: string, source: Source): Node | undefined => {
+  if (source.unresolvedBindings.has(name)) {
+    return undefined;
+  }
   for (const statement of source.program.body) {
     let declaration: Node = statement;
     if (
@@ -597,13 +603,28 @@ const parseConfigSource = (
     const severity: string = error.severity;
     return severity === "Error";
   });
-  return hasErrors ? undefined : { file, program: parsed.program, root, text };
+  return hasErrors
+    ? undefined
+    : {
+        file,
+        program: parsed.program,
+        root,
+        text,
+        unresolvedBindings: new Set<string>(),
+      };
 };
+
+type ImportedConfigBinding =
+  | { type: "named"; module: string; name: string }
+  | { type: "namespace"; module: string };
 
 const importedBinding = (
   source: Source,
   local: string,
-): { module: string; name: string } | undefined => {
+): ImportedConfigBinding | undefined => {
+  if (source.unresolvedBindings.has(local)) {
+    return undefined;
+  }
   for (const statement of source.program.body) {
     if (
       statement.type !== "ImportDeclaration" ||
@@ -613,6 +634,12 @@ const importedBinding = (
     }
     for (const specifier of statement.specifiers) {
       if (
+        specifier.type === "ImportNamespaceSpecifier" &&
+        specifier.local.name === local
+      ) {
+        return { type: "namespace", module: statement.source.value };
+      }
+      if (
         specifier.type === "ImportSpecifier" &&
         specifier.importKind !== "type" &&
         specifier.local.name === local
@@ -621,7 +648,7 @@ const importedBinding = (
           specifier.imported.type === "Identifier"
             ? specifier.imported.name
             : specifier.imported.value;
-        return { module: statement.source.value, name };
+        return { type: "named", module: statement.source.value, name };
       }
     }
   }
@@ -707,42 +734,49 @@ const returnedExpression = (
 
 type ConfigTarget = { object: ObjectExpression; source: Source };
 
-const bindingIncludes = (pattern: Node, name: string): boolean => {
+type ConfigBindingPattern =
+  | BindingPattern
+  | BindingRestElement
+  | FormalParameterRest
+  | TSParameterProperty;
+
+const bindingNames = (pattern: ConfigBindingPattern): string[] => {
   switch (pattern.type) {
     case "Identifier":
-      return pattern.name === name;
+      return [pattern.name];
     case "RestElement":
-      return bindingIncludes(pattern.argument, name);
+      return bindingNames(pattern.argument);
     case "AssignmentPattern":
-      return bindingIncludes(pattern.left, name);
+      return bindingNames(pattern.left);
+    case "TSParameterProperty":
+      return bindingNames(pattern.parameter);
     case "ArrayPattern":
-      return pattern.elements.some(
-        (element) => element !== null && bindingIncludes(element, name),
+      return pattern.elements.flatMap((element) =>
+        element === null ? [] : bindingNames(element),
       );
     case "ObjectPattern":
-      return pattern.properties.some((property) =>
-        bindingIncludes(
+      return pattern.properties.flatMap((property) =>
+        bindingNames(
           property.type === "RestElement" ? property.argument : property.value,
-          name,
         ),
       );
     default:
-      return false;
+      pattern satisfies never;
+      return panic("Unexpected configuration binding pattern");
   }
 };
 
-const helperShadows = (
+const helperBindingNames = (
   helper: SyntaxFunction | ArrowFunctionExpression,
-  name: string,
-): boolean => {
-  let shadowed = helper.params.some((parameter) =>
-    bindingIncludes(parameter, name),
-  );
+) => {
+  const names = new Set(helper.params.flatMap(bindingNames));
   walk(helper, (node) => {
     switch (node.type) {
       case "FunctionDeclaration":
         if (node !== helper) {
-          shadowed ||= node.id?.name === name;
+          if (node.id !== null) {
+            names.add(node.id.name);
+          }
           return "skip-children";
         }
         break;
@@ -753,20 +787,28 @@ const helperShadows = (
         }
         break;
       case "VariableDeclarator":
-        shadowed ||= bindingIncludes(node.id, name);
+        for (const name of bindingNames(node.id)) {
+          names.add(name);
+        }
         break;
       case "ClassDeclaration":
-        shadowed ||= node.id?.name === name;
+        if (node.id !== null) {
+          names.add(node.id.name);
+        }
         break;
       case "CatchClause":
-        shadowed ||= node.param !== null && bindingIncludes(node.param, name);
+        if (node.param !== null) {
+          for (const name of bindingNames(node.param)) {
+            names.add(name);
+          }
+        }
         break;
       default:
         break;
     }
     return undefined;
   });
-  return shadowed;
+  return names;
 };
 
 const playwrightFactoryLocal = (
@@ -780,7 +822,8 @@ const playwrightFactoryLocal = (
   ]);
   if (value.type === "Identifier") {
     const binding = importedBinding(source, value.name);
-    return binding?.module === "@playwright/test" &&
+    return binding?.type === "named" &&
+      binding.module === "@playwright/test" &&
       binding.name === "defineConfig"
       ? value.name
       : undefined;
@@ -796,17 +839,8 @@ const playwrightFactoryLocal = (
     return undefined;
   }
   const local = value.object.name;
-  return source.program.body.some(
-    (statement) =>
-      statement.type === "ImportDeclaration" &&
-      statement.importKind !== "type" &&
-      statement.source.value === "@playwright/test" &&
-      statement.specifiers.some(
-        (specifier) =>
-          specifier.type === "ImportNamespaceSpecifier" &&
-          specifier.local.name === local,
-      ),
-  )
+  const binding = importedBinding(source, local);
+  return binding?.type === "namespace" && binding.module === "@playwright/test"
     ? local
     : undefined;
 };
@@ -827,14 +861,23 @@ const helperConfig = (
   if (expression === undefined) {
     return undefined;
   }
+  // Local values are not evaluated; lookups preserve their shadowing rather
+  // than falling back to same-named module declarations or imports.
+  const helperSource = {
+    ...source,
+    unresolvedBindings: new Set([
+      ...source.unresolvedBindings,
+      ...helperBindingNames(helper),
+    ]),
+  };
   if (expression.type === "CallExpression") {
-    const local = playwrightFactoryLocal(expression.callee, source);
-    if (local === undefined || helperShadows(helper, local)) {
+    const local = playwrightFactoryLocal(expression.callee, helperSource);
+    if (local === undefined) {
       return undefined;
     }
   }
-  const object = configObjectOf(expression, source);
-  return object === undefined ? undefined : { object, source };
+  const object = configObjectOf(expression, helperSource);
+  return object === undefined ? undefined : { object, source: helperSource };
 };
 
 /**
@@ -888,6 +931,9 @@ const configTarget = (source: Source): ConfigTarget | undefined => {
     ) {
       const local = expression.callee.name;
       const imported = importedBinding(source, local);
+      if (imported?.type === "namespace") {
+        return undefined;
+      }
       let module: Source | null | undefined = source;
       if (imported !== undefined) {
         module =
@@ -973,6 +1019,7 @@ const scanTestSource = (
     program: parseSource(file, sourceText).program,
     root,
     text: sourceText,
+    unresolvedBindings: new Set<string>(),
   };
   const findings: TestRetryFinding[] = [];
   walk(source.program, (node) => {
