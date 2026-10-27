@@ -45,6 +45,15 @@ const decisionAst = () =>
   }) satisfies DocumentAst;
 
 describe("corpus reader schema at persistence boundaries", () => {
+  test("stores a canonical AST unchanged, so its content hash and extra fields survive", () => {
+    const ast = { ...decisionAst(), parserExtra: { kept: true } };
+    const keysBefore = JSON.stringify(ast);
+    const prepared = prepareCorpusAst({ ast, source: "synthetic" });
+    expect(prepared.type).toBe("readable");
+    expect(prepared.ast).toBe(ast);
+    expect(JSON.stringify(prepared.ast)).toBe(keysBefore);
+  });
+
   test("preserves readable ASTs and explicit absent shapes", () => {
     const ast = decisionAst();
     expect(v.safeParse(persistedDocumentAstSchema, ast).success).toBe(true);

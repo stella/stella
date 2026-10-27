@@ -7,6 +7,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import { zstdDecompressToStringBounded } from "@/api/lib/compression";
 import { parseCorpusLocation } from "@/api/lib/legal-search/corpus-location";
@@ -52,12 +53,15 @@ type CorpusAstCensusCounts = {
   unreadable: number;
 };
 
+/** Each census read is one bounded page; a slow page fails rather than piling up. */
+const CENSUS_STATEMENT_TIMEOUT_MS = 5000;
+
 export const readCorpusAstCensusBatch = async (
   ingestionDb: CaseLawIngestionHandle,
   after: string | undefined,
 ): Promise<CorpusAstCensusRow[]> =>
   await ingestionDb(async (tx) => {
-    await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+    await setSharedStatementTimeout(tx, CENSUS_STATEMENT_TIMEOUT_MS);
     return await tx
       .select({
         id: publishedCaseLawDecisions.id,
@@ -84,7 +88,7 @@ export const censusTombstoneReader =
   (ingestionDb: CaseLawIngestionHandle): CorpusTombstoneReader =>
   async (locations) =>
     await ingestionDb(async (tx) => {
-      await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
+      await setSharedStatementTimeout(tx, CENSUS_STATEMENT_TIMEOUT_MS);
       return await corpusTombstoneReaderForTx(tx)(locations);
     });
 

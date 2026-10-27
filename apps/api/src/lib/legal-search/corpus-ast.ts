@@ -2,7 +2,10 @@ import { TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
-import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import {
+  isDocumentAst,
+  persistedDocumentAstSchema,
+} from "@stll/legal-ast/document-ast";
 
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -41,7 +44,13 @@ export const prepareCorpusAst = ({
 }: PrepareCorpusAstOptions) => {
   const parsed = v.safeParse(persistedCorpusAstSchema, ast);
   if (parsed.success) {
-    return { type: "readable", ast: parsed.output } as const;
+    // Keep a canonical AST as the parser produced it: the parsed output is a
+    // rebuilt object (schema key order, undeclared fields dropped), and the
+    // content hash is order-sensitive JSON, so writing it would change every
+    // unchanged decision's hash and lose fields the schema does not name.
+    // Only a legacy-shaped AST is written in its normalized form.
+    const stored = isDocumentAst(ast) ? ast : parsed.output;
+    return { type: "readable", ast: stored } as const;
   }
   const sourceSystem =
     isRecord(ast) &&
