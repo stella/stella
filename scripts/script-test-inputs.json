@@ -150,7 +150,7 @@
       "turbo.json"
     ],
     "scripts/ci-browser-scope.test.ts": ["**"],
-    "scripts/ci-check-budgets.test.ts": [".github/ci-checks/**"],
+    "scripts/ci-check-budgets.test.ts": [".github/ci-checks/**", "scripts/**"],
     "scripts/ci-check-pool.test.ts": [
       ".github/**",
       "packages/property-testing/property-seeds.json"
@@ -322,17 +322,7 @@
     "scripts/quarantine-prune.test.sh": [
       ".github/workflows/quarantine-prune.yml"
     ],
-    "scripts/query-perf-scope.test.ts": [
-      "apps/api/src/lib/extraction-runs/extraction-source-owner.ts",
-      "apps/api/src/lib/search/contact-workspace-access-sql.ts",
-      "apps/api/src/lib/search/cursor.ts",
-      "apps/api/src/lib/search/highlight.ts",
-      "apps/api/src/lib/search/pg-fts-search-query.ts",
-      "apps/api/src/lib/search/query.ts",
-      "apps/api/src/lib/search/sql.ts",
-      "apps/api/src/lib/search/types.ts",
-      "apps/api/src/tests/query-perf/registry.ts"
-    ],
+    "scripts/query-perf-scope.test.ts": ["apps/api/**"],
     "scripts/rehearse-better-auth-constraint-retry.test.ts": ["scripts/**"],
     "scripts/rehearse-exact-base-upgrade.test.ts": [
       "scripts/rehearse-exact-base-upgrade.sh",
