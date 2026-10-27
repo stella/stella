@@ -169,8 +169,9 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
             tx,
             query: { country: "CZE", court: "Court 00" },
             sort: DEFAULT_DECISION_LIST_SORT,
-            limit: PAGE_SIZE,
-            cursor: undefined,
+            band: "dated",
+            take: PAGE_SIZE + 1,
+            position: undefined,
           });
           expect(rows).toHaveLength(PAGE_SIZE + 1);
           const browse = captured.at(0) ?? panic("Browse SQL was not captured");
