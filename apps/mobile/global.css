@@ -3,6 +3,10 @@
 @import "uniwind";
 @import "./ui-theme.gen.css";
 
+/* Classes the app takes from the web's shared tokens, which uniwind
+   generates only for the files it scans. */
+@source "../../packages/ui/src/components/composer-tokens.ts";
+
 @theme {
   /* The web's typeface, DM Sans, by the names the expo-font plugin embeds. */
   --font-sans: "DMSans-Regular";
