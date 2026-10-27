@@ -158,6 +158,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.duplicate` | write | stella:matters_write, stella:documents_write | — | generic invoke → `stella capability entities duplicate` |
 | `entities.files.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.filesystem-tree.get` | read | stella:read | — | covered by `list_documents` |
+| `entities.folder-from-selection.create` | write | stella:documents_write | — | generic invoke → `stella capability entities folder-from-selection-create` |
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |
@@ -713,18 +714,18 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 36 |
+| auth_plumbing | 34 |
 | billing_ui | 1 |
 | chat_thread_ui | 17 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 22 |
+| document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 9 |
+| public_indexing | 8 |
 | realtime_stream | 9 |
 | search_ui | 19 |
 | session_token_exchange | 21 |

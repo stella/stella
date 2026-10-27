@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -29,7 +29,7 @@ import {
   publisherHeadnoteMetadataSql,
   publisherKeywordsMetadataSql,
 } from "@/api/lib/case-law/publisher-summary";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
@@ -94,6 +94,9 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "documentFetchAttempts",
   "sourceHash",
   "sourceHashVersion",
+  "parsedSourceHash",
+  "parsedSourceHashVersion",
+  "parsedSourceRawS3Key",
   "sourceObservedAt",
   "sourceObservationOrder",
   "sourceObservationHash",
@@ -210,7 +213,7 @@ export const createReadDecisionSummaryHandler = (
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "search_ui" },
       cache: { kind: "none" },
-      params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+      params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
       response: safePublicHandlerResponseSchemasWithStatusText(
         decisionSummaryResponseSchema,
       ),

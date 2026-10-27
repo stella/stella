@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "Ponownie zapisuj nowe wycinki z <bdi>{source}</bdi>",
     "pause": "Wstrzymaj przechwytywanie",
     "plainText": "Zwykły tekst",
+    "plainTextPreview": "Podgląd zwykłego tekstu",
     "retention": "Przechowuj historię",
     "retentionWeek": "Tydzień",
     "retentionMonth": "Miesiąc",

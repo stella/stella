@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "Mentse ismét az új klipeket innen: <bdi>{source}</bdi>",
     "pause": "Rögzítés szüneteltetése",
     "plainText": "Egyszerű szöveg",
+    "plainTextPreview": "Egyszerű szöveges előnézet",
     "retention": "Előzmények megőrzése",
     "retentionWeek": "Egy hét",
     "retentionMonth": "Egy hónap",

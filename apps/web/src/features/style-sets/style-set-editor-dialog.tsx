@@ -174,7 +174,13 @@ const LoadedStyleSetEditor = ({
       // rejected request, so it has to reach analytics the same way too; the
       // catch in `handleSubmit` only ever sees the rejection.
       const apiError = toAPIError(error);
-      getAnalytics().captureError(apiError);
+      getAnalytics().captureError(apiError, {
+        fingerprintKey: "LoadedStyleSetEditor.finishSave:apiError",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.finishSave:apiError",
+        },
+      });
       setSaving(false);
       notifyUserError(apiError, t("styleSets.editor.saveFailed"));
       return;
@@ -219,7 +225,13 @@ const LoadedStyleSetEditor = ({
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     save().catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "LoadedStyleSetEditor.handleSubmit:failure",
+        scope: {
+          type: "handler",
+          handlerId: "LoadedStyleSetEditor.handleSubmit:failure",
+        },
+      });
       setSaving(false);
       notifyUserError(error, t("styleSets.editor.saveFailed"));
     });

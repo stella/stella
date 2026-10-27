@@ -138,7 +138,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
   useOwnerScopedState,
@@ -152,7 +152,7 @@ import { getChatSendMode } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -184,6 +184,10 @@ import {
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
+import {
+  getCurrentWorkspaceDocument,
+  useCurrentWorkspaceView,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchSummaryCitation = {
   id: string;
@@ -579,12 +583,13 @@ export const SearchDialog = ({
   mode = BROWSE_MODE,
 }: SearchDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const router = useRouter();
+  const currentView = useCurrentWorkspaceView();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
@@ -924,7 +929,10 @@ export const SearchDialog = ({
   const analytics = useAnalytics();
   useExternalSyncEffect(() => {
     if (searchError) {
-      analytics.captureError(searchError);
+      analytics.captureError(searchError, {
+        fingerprintKey: "SearchDialog:searchError",
+        scope: { type: "handler", handlerId: "SearchDialog:searchError" },
+      });
     }
   }, [analytics, searchError]);
 
@@ -970,10 +978,13 @@ export const SearchDialog = ({
         ...(params.limit !== undefined ? { limit: params.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure",
+        scope: { type: "handler", handlerId: "SearchDialog:failure" },
+      });
     },
   });
 
@@ -984,10 +995,13 @@ export const SearchDialog = ({
         locale: vars.locale,
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-2",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-2" },
+      });
     },
   });
 
@@ -1012,10 +1026,13 @@ export const SearchDialog = ({
         ...(vars.limit !== undefined ? { limit: vars.limit } : {}),
       });
 
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-3",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-3" },
+      });
     },
   });
 
@@ -1044,7 +1061,10 @@ export const SearchDialog = ({
       return threadRef.threadId;
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "SearchDialog:failure-4",
+        scope: { type: "handler", handlerId: "SearchDialog:failure-4" },
+      });
       notifyUserError(error, t("common.somethingWentWrong"));
     },
   });
@@ -1104,7 +1124,13 @@ export const SearchDialog = ({
       }
       detached(
         navigateToTarget().catch((error: unknown) => {
-          analytics.captureError(error);
+          analytics.captureError(error, {
+            fingerprintKey: "SearchDialog.navigateAfterClose:failure",
+            scope: {
+              type: "handler",
+              handlerId: "SearchDialog.navigateAfterClose:failure",
+            },
+          });
           notifyUserError(error, t("common.somethingWentWrong"));
         }),
         "search-dialog.navigate-to-target",
@@ -1244,8 +1270,8 @@ export const SearchDialog = ({
         }
         await navigate(options);
       },
-      pathname: router.state.location.pathname,
       queryClient,
+      router,
       targetWorkspaceId: location.workspaceId,
     });
   };
@@ -1270,7 +1296,12 @@ export const SearchDialog = ({
     if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
       return;
     }
-    await openEntityInInspector(entityId, label, workspaceId);
+    await openEntityInInspector({
+      documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+      entityId,
+      label,
+      workspaceId,
+    });
   };
 
   const openRecentFile = (file: RecentFileWithIdentity) => {
@@ -1316,7 +1347,7 @@ export const SearchDialog = ({
         await openEntityLocation(location);
         return;
       }
-      await navigate(getRecentFileRoute({ ...file, fileFieldId }));
+      await navigate(getRecentFileRoute({ ...file, currentView, fileFieldId }));
     });
   };
 
@@ -1343,6 +1374,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1461,6 +1493,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(

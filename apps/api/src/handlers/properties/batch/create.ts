@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { properties, propertyDependencies } from "@/api/db/schema";
@@ -40,8 +40,12 @@ const config = {
     reason: "workspace_schema",
     consumesServices: false,
   },
-  body: t.Object({
-    items: t.Array(createPropertyBodySchema, { minItems: 1, maxItems: 10 }),
+  body: v.object({
+    items: v.pipe(
+      v.array(createPropertyBodySchema),
+      v.minLength(1),
+      v.maxLength(10),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 

@@ -4,13 +4,14 @@ import { SIGN_IN_MODE } from "@/components/auth/sign-in-mode";
 import type { SignInMode } from "@/components/auth/sign-in-mode";
 import { afterSignInNavigation, redirectToSchema } from "@/lib/redirect";
 import { emailSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 
-export const otpSearchSchema = v.strictObject({
+export const otpSearchSchema = routeSearchSchema({
   mode: v.optional(
     v.picklist(Object.values(SIGN_IN_MODE)),
     SIGN_IN_MODE.signIn,
   ),
-  email: emailSchema(),
+  email: v.optional(emailSchema()),
   redirectTo: redirectToSchema,
 });
 

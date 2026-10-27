@@ -110,6 +110,7 @@ image = { version = "0.25", default-features = false, features = [
   "webp",
 ] }
 keyring-core = "1"
+minisign-verify = "0.3"
 opener = "0.9"
 notify = "8"
 ring = "0.17"
@@ -174,7 +175,7 @@ stella-desktop-macos = { path = "crates/macos-park", version = "0.0.1" }
 stella-desktop-windows-signing = { path = "crates/windows-signing", version = "0.0.1" }
 windows-icons = "0.4.0"
 windows-native-keyring-store = "1"
-windows-registry = "0.6"
+windows-registry = "0.100"
 winsafe = { version = "0.0.29", features = ["kernel", "user", "version"] }
 
 [features]

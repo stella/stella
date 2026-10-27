@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "استئناف حفظ المقاطع الجديدة من <bdi>{source}</bdi>",
     "pause": "إيقاف الالتقاط مؤقتاً",
     "plainText": "نص عادي",
+    "plainTextPreview": "معاينة كنص عادي",
     "retention": "الاحتفاظ بالسجل لمدة",
     "retentionWeek": "أسبوع واحد",
     "retentionMonth": "شهر واحد",

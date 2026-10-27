@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -9,7 +9,10 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import {
+  defaultVarcharSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { createTemplateBuffer } from "@/api/lib/docx-authoring/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
@@ -20,9 +23,9 @@ import {
 } from "@/api/lib/templates/create-template";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const createBlankTemplateBodySchema = t.Object({
-  name: tDefaultVarchar,
-  categoryId: t.Optional(tSafeId("templateCategory")),
+const createBlankTemplateBodySchema = v.object({
+  name: defaultVarcharSchema,
+  categoryId: v.exactOptional(resourceIdSchema("templateCategory")),
 });
 
 type CreateBlankTemplateProps = {

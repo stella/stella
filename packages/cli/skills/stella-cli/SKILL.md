@@ -188,7 +188,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella capability describe`
   - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
-  - optional: --domain, --access (all|read|write)
+  - optional: --domain, --query, --access (all|read|write)
 - `stella capability read`
   - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
@@ -232,7 +232,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
   - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
-  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (string)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
   - optional: --detail (standard|full)
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
@@ -412,13 +412,13 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 430
+Beyond the curated commands above, the CLI generates 431
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
 multi-segment capability actions are flattened with hyphens into `<action>`.
 
-- **Discover**: `stella capability list [--domain <d>] [--access read|write]`
+- **Discover**: `stella capability list [--query <text>] [--domain <d>] [--access read|write]`
   enumerates them (paginated); `stella capability describe --capability <id>` prints one
   capability's full input schema, scope, and flags.
 - **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or

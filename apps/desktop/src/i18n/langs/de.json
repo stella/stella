@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "Neue Ausschnitte aus <bdi>{source}</bdi> wieder speichern",
     "pause": "Erfassung pausieren",
     "plainText": "Nur Text",
+    "plainTextPreview": "Vorschau ohne Formatierung",
     "retention": "Verlauf aufbewahren",
     "retentionWeek": "Eine Woche",
     "retentionMonth": "Einen Monat",

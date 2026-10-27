@@ -169,7 +169,7 @@ privileged_exit=0
 privileged_output=$(docker run --rm --name "$probe" --label "$owner_label=$run_id" \
   --network "container:$postgres" "${api_env[@]}" \
   --env "DATABASE_URL=$legacy_database_url" \
-  "$image_id" timeout 30 /app/server 2>&1) || privileged_exit=$?
+  "$image_id" timeout 30 bun --no-env-file /app/server.js 2>&1) || privileged_exit=$?
 if [[ "$privileged_exit" == 0 || "$privileged_exit" == 124 \
   || "$privileged_output" != *'Database login requires NOSUPERUSER NOBYPASSRLS role attributes.'* ]]; then
   printf 'FAIL: privileged database login did not fail startup\n%s\n' "$privileged_output" >&2
@@ -255,7 +255,7 @@ if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
 fi
 echo 'PASS: collab reached environment validation'
 
-for entrypoint in /app/document-processing-worker.js /app/backfill.js /app/complete-sk-us-raw.js /app/import-cz-us-roster.js /app/review-account.js; do
+for entrypoint in /app/document-processing-worker.js /app/backfill-case-law-slugs.js /app/complete-sk-us-raw.js /app/import-cz-us-roster.js /app/review-account.js /app/partner-oauth-client.js; do
   output=$(run_probe "$image_id" timeout 20 bun "$entrypoint" 2>&1 || true)
   if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
     || ! grep -q 'Invalid environment variables' <<< "$output"; then

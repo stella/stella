@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "Salvesta rakenduse <bdi>{source}</bdi> uusi lõikeid taas",
     "pause": "Peata salvestamine",
     "plainText": "Lihttekst",
+    "plainTextPreview": "Lihtteksti eelvaade",
     "retention": "Ajaloo säilitamine",
     "retentionWeek": "Üks nädal",
     "retentionMonth": "Üks kuu",

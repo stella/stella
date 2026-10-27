@@ -1,6 +1,6 @@
 {
   "name": "@stll/agent-input",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "Lenient readers for values agents write: dates, date bounds, date-format specs, numbers, booleans, locales, countries, enum and vocabulary values, ids, ELIs, string lists",
   "keywords": [
     "agent",
@@ -33,6 +33,7 @@
     "./country": "./src/country.ts",
     "./date-value": "./src/date-value.ts",
     "./locale": "./src/locale.ts",
+    "./numeric-token": "./src/numeric-token.ts",
     "./string-list": "./src/string-list.ts"
   },
   "publishConfig": {
@@ -62,6 +63,7 @@
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

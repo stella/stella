@@ -1,13 +1,18 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { t } from "elysia";
 import nodePath from "node:path";
+import * as v from "valibot";
 
+import type { RouteEntry } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
   createSafePublicHandler,
   isSafePublicHandler,
 } from "@/api/lib/api-handlers";
+import {
+  isValibotSchema,
+  toRouteJsonSchema,
+} from "@/api/lib/json-schema/valibot-to-json-schema";
 
 import allowlist from "./public-response-text-bounds.allowlist.json";
 
@@ -109,8 +114,9 @@ const unboundedStringFields = (schema: unknown, path: string): string[] => {
       fields.push(...unboundedStringFields(branch, path));
     }
   }
-  // Elysia cleans undeclared response properties by default; an explicit
-  // additional-properties schema opts values into the serialized response.
+  // A response is sent as its schema's validated output, which drops
+  // undeclared properties; an explicit additional-properties schema opts
+  // values into the sent answer.
   for (const keyword of ["additionalProperties", "unevaluatedProperties"]) {
     if (schema[keyword] !== undefined) {
       fields.push(...unboundedStringFields(schema[keyword], `${path}.*`));
@@ -128,8 +134,17 @@ type PublicRoute = {
   method: string;
   path: string;
   handler: unknown;
-  hooks: { response?: unknown };
+  /** The route's declared response schemas, normally a map by status. */
+  response: unknown;
 };
+
+/**
+ * A response schema as the walk reads it: a route's valibot schema rendered
+ * the way clients see it. Anything else is walked as it is, and an object
+ * that is not JSON Schema reads as unbounded.
+ */
+const renderedResponse = (schema: unknown): unknown =>
+  isValibotSchema(schema) ? toRouteJsonSchema(schema) : schema;
 
 const publicRouteUnboundedFields = (
   routes: readonly PublicRoute[],
@@ -140,27 +155,45 @@ const publicRouteUnboundedFields = (
       continue;
     }
     const prefix = `${route.method} ${route.path}`;
-    const response = route.hooks.response;
+    const response = route.response;
     if (!isSchemaNode(response)) {
       fields.push(`${prefix} response-schema`);
       continue;
     }
     const statuses = Object.keys(response);
-    // TypeBox Any and Unknown have no enumerable type keyword. Only a
-    // nonempty HTTP-status map can be interpreted as response alternatives.
+    // Only a nonempty HTTP-status map can be interpreted as response
+    // alternatives; one schema in its place is read as the whole response.
     if (
+      isValibotSchema(response) ||
       statuses.length === 0 ||
       !statuses.every((status) => /^[1-5]\d{2}$/u.test(status))
     ) {
-      fields.push(...unboundedStringFields(response, `${prefix} response`));
+      fields.push(
+        ...unboundedStringFields(
+          renderedResponse(response),
+          `${prefix} response`,
+        ),
+      );
       continue;
     }
     for (const [status, schema] of Object.entries(response)) {
-      fields.push(...unboundedStringFields(schema, `${prefix} ${status}`));
+      fields.push(
+        ...unboundedStringFields(
+          renderedResponse(schema),
+          `${prefix} ${status}`,
+        ),
+      );
     }
   }
   return [...new Set(fields)].toSorted();
 };
+
+/** The handler a safe factory recorded for a mounted route, if any. */
+const routeHandler = (entry: RouteEntry): unknown =>
+  "handler" in entry.definition ? entry.definition.handler : undefined;
+
+/** A schema as the census walks it, for the fixtures below. */
+const rendered = (schema: v.GenericSchema) => toRouteJsonSchema(schema);
 
 const WHOLE_DOCUMENT_TEXT_REASON =
   "Whole official document text by design; bounded per source at ingestion, not at the response; a windowed reader contract is a separate change.";
@@ -316,11 +349,15 @@ describe("anonymous response text bounds", () => {
   });
 
   test("every mounted public response string has a finite byte bound or an existing exception", async () => {
-    const { default: api } = await import("@/api/server");
-    await api.modules;
-    const routes = api.routes.filter((route) =>
-      isSafePublicHandler(route.handler),
-    );
+    const { apiRoutes } = await import("@/api/api-routes");
+    const routes = apiRoutes
+      .map((entry) => ({
+        method: entry.method,
+        path: entry.path,
+        handler: routeHandler(entry),
+        response: entry.definition.config.response,
+      }))
+      .filter((route) => isSafePublicHandler(route.handler));
     expect(routes.length).toBeGreaterThan(0);
     const fields = publicRouteUnboundedFields(routes);
     const exceptions = Object.keys(allowlist).toSorted();
@@ -365,15 +402,24 @@ describe("anonymous response text bounds", () => {
   });
 
   test.each([
-    ["Any", t.Any()],
-    ["Unknown", t.Unknown()],
-    ["an integer wire-schema string branch", t.Integer()],
-    ["a union containing Any", t.Union([t.Number(), t.Any()])],
-    ["a union containing Unknown", t.Union([t.Number(), t.Unknown()])],
-    ["an intersection containing Any", t.Intersect([t.Number(), t.Any()])],
+    ["Any", rendered(v.any())],
+    ["Unknown", rendered(v.unknown())],
+    [
+      "an integer with an unbounded string branch",
+      { anyOf: [{ type: "string", format: "integer" }, { type: "integer" }] },
+    ],
+    ["a union containing Any", rendered(v.union([v.number(), v.any()]))],
+    [
+      "a union containing Unknown",
+      rendered(v.union([v.number(), v.unknown()])),
+    ],
+    [
+      "an intersection containing Any",
+      rendered(v.intersect([v.number(), v.any()])),
+    ],
     [
       "an intersection containing Unknown",
-      t.Intersect([t.Number(), t.Unknown()]),
+      rendered(v.intersect([v.number(), v.unknown()])),
     ],
     ["an empty schema", {}],
     ["an unfamiliar type", { type: "unreviewed" }],
@@ -394,15 +440,16 @@ describe("anonymous response text bounds", () => {
 
   test("known string-free and finite scalar schemas remain bounded", () => {
     for (const schema of [
-      t.Number(),
-      { type: "integer" },
-      t.Boolean(),
-      t.Null(),
-      t.Never(),
-      t.Literal("ready"),
-      t.Literal(1),
-      t.Union([t.Number(), t.Null()]),
-      t.String({ maxLength: 12 }),
+      rendered(v.number()),
+      rendered(v.pipe(v.number(), v.integer())),
+      rendered(v.boolean()),
+      rendered(v.null()),
+      rendered(v.never()),
+      rendered(v.literal("ready")),
+      rendered(v.literal(1)),
+      rendered(v.picklist(["ready", "done"])),
+      rendered(v.nullable(v.number())),
+      rendered(v.pipe(v.string(), v.maxLength(12))),
       false,
     ]) {
       expect(unboundedStringFields(schema, "fixture")).toEqual([]);
@@ -412,12 +459,14 @@ describe("anonymous response text bounds", () => {
   test("unknown nested values and open containers remain unbounded", () => {
     expect(
       unboundedStringFields(
-        t.Object({
-          any: t.Any(),
-          unknown: t.Unknown(),
-          nested: t.Array(t.Unknown()),
-          values: t.Record(t.String(), t.Any()),
-        }),
+        rendered(
+          v.object({
+            any: v.any(),
+            unknown: v.unknown(),
+            nested: v.array(v.unknown()),
+            values: v.record(v.string(), v.any()),
+          }),
+        ),
         "fixture",
       ),
     ).toEqual([
@@ -429,12 +478,23 @@ describe("anonymous response text bounds", () => {
     expect(unboundedStringFields({ type: "object" }, "fixture")).toEqual([
       "fixture.*",
     ]);
-    expect(unboundedStringFields(t.Object({}), "fixture")).toEqual([]);
+    expect(unboundedStringFields(rendered(v.object({})), "fixture")).toEqual(
+      [],
+    );
+    expect(
+      unboundedStringFields(rendered(v.looseObject({})), "fixture"),
+    ).toEqual(["fixture.*"]);
+    expect(
+      unboundedStringFields(
+        rendered(v.objectWithRest({}, v.unknown())),
+        "fixture",
+      ),
+    ).toEqual(["fixture.*"]);
     expect(
       unboundedStringFields(
         {
-          allOf: [t.Object({})],
-          unevaluatedProperties: t.Unknown(),
+          allOf: [rendered(v.object({}))],
+          unevaluatedProperties: rendered(v.unknown()),
         },
         "fixture",
       ),
@@ -446,8 +506,8 @@ describe("anonymous response text bounds", () => {
       true,
       "unreviewed",
       {},
-      t.Any(),
-      t.Unknown(),
+      rendered(v.any()),
+      rendered(v.unknown()),
     ]) {
       expect(
         unboundedStringFields(
@@ -492,21 +552,35 @@ describe("anonymous response text bounds", () => {
       },
     );
     for (const response of [
-      t.Any(),
-      t.Unknown(),
+      v.any(),
+      v.unknown(),
       {},
       { futureKeyword: true },
     ]) {
       expect(
         publicRouteUnboundedFields([
-          {
-            method: "GET",
-            path: "/fixture",
-            handler,
-            hooks: { response },
-          },
+          { method: "GET", path: "/fixture", handler, response },
         ]),
       ).toEqual(["GET /fixture response"]);
+    }
+    // One valibot schema in place of the status map is walked as the whole
+    // response, not mistaken for a map whose keys are its own fields.
+    expect(
+      publicRouteUnboundedFields([
+        {
+          method: "GET",
+          path: "/fixture",
+          handler,
+          response: v.object({ message: v.string() }),
+        },
+      ]),
+    ).toEqual(["GET /fixture response.message"]);
+    for (const response of [true, undefined]) {
+      expect(
+        publicRouteUnboundedFields([
+          { method: "GET", path: "/fixture", handler, response },
+        ]),
+      ).toEqual(["GET /fixture response-schema"]);
     }
     expect(
       publicRouteUnboundedFields([
@@ -514,20 +588,33 @@ describe("anonymous response text bounds", () => {
           method: "GET",
           path: "/fixture",
           handler,
-          hooks: { response: true },
+          response: { 200: v.any(), 400: v.unknown() },
         },
       ]),
-    ).toEqual(["GET /fixture response-schema"]);
+    ).toEqual(["GET /fixture 200", "GET /fixture 400"]);
     expect(
       publicRouteUnboundedFields([
         {
           method: "GET",
           path: "/fixture",
           handler,
-          hooks: { response: { 200: t.Any(), 400: t.Unknown() } },
+          response: {
+            200: v.object({ title: v.pipe(v.string(), v.maxLength(80)) }),
+          },
         },
       ]),
-    ).toEqual(["GET /fixture 200", "GET /fixture 400"]);
+    ).toEqual([]);
+    // A handler no public factory produced is not this census's subject.
+    expect(
+      publicRouteUnboundedFields([
+        {
+          method: "GET",
+          path: "/fixture",
+          handler: async () => ({}),
+          response: { 200: v.any() },
+        },
+      ]),
+    ).toEqual([]);
   });
 
   test("the guard rejects a newly unbounded fixture field", () => {

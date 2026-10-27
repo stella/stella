@@ -22,6 +22,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import type { WebSearchProvider } from "@/api/lib/web-search/types";
 
 const BUSINESS_REGISTRY_LOOKUP_TOOL_NAME = "business_registry_lookup" as const;
 
@@ -43,7 +44,10 @@ const QUERY_DESCRIPTION_BASE =
   "DE143593636) or company name. " +
   "Numeric inputs that match the registry's canonical ID format " +
   "route to a direct lookup; everything else is treated as a " +
-  "name search where the selected registry supports name search.";
+  "name search where supported.";
+
+const VERIFIED_NAME_SEARCH_GUIDANCE =
+  " Company-name matches are verified against the selected register.";
 
 /**
  * Holds one call to the turn's source scope (`scopeBusinessRegistryLookup`):
@@ -67,6 +71,7 @@ type CreateBusinessRegistryToolsArgs = {
    * jurisdiction picker the model cannot use).
    */
   enabledHandlers: readonly RegistryHandler[];
+  webSearchProvider?: WebSearchProvider | null | undefined;
   /** The turn's registry chips; absent on an unscoped turn. */
   scopeCall?: BusinessRegistryCallScope | undefined;
 };
@@ -82,6 +87,7 @@ type CreateBusinessRegistryToolsArgs = {
 export const createBusinessRegistryTools = ({
   enabledHandlers,
   organizationId,
+  webSearchProvider = null,
   scopeCall,
 }: CreateBusinessRegistryToolsArgs) => {
   const enabledJurisdictions = [
@@ -104,7 +110,11 @@ export const createBusinessRegistryTools = ({
     ...RegistryJurisdictionCode[],
   ] = [first, ...rest];
   const canonicalOnlyJurisdictions = enabledHandlers
-    .filter(({ search }) => search === null)
+    .filter(
+      ({ search, webCandidateNameSearch }) =>
+        search === null &&
+        (webCandidateNameSearch === undefined || webSearchProvider === null),
+    )
     .map(({ country }) => country);
   const canonicalOnlyGuidance = canonicalOnlyJurisdictions
     .map(canonicalOnlyQueryGuidanceFor)
@@ -112,6 +122,14 @@ export const createBusinessRegistryTools = ({
   const canonicalOnlySuffix =
     canonicalOnlyGuidance.length > 0
       ? ` Name search is not supported for these enabled registries: ${canonicalOnlyGuidance}. Ask the user for the canonical identifier instead of passing a company name.`
+      : "";
+  const nameSearchGuidance =
+    webSearchProvider !== null &&
+    enabledHandlers.some(
+      ({ search, webCandidateNameSearch }) =>
+        search === null && webCandidateNameSearch !== undefined,
+    )
+      ? VERIFIED_NAME_SEARCH_GUIDANCE
       : "";
 
   const [firstHandler, ...otherHandlers] = enabledHandlers;
@@ -134,7 +152,9 @@ export const createBusinessRegistryTools = ({
     ),
     query: v.pipe(
       v.string(),
-      v.description(QUERY_DESCRIPTION_BASE + canonicalOnlySuffix),
+      v.description(
+        QUERY_DESCRIPTION_BASE + nameSearchGuidance + canonicalOnlySuffix,
+      ),
     ),
     registry: v.optional(
       v.pipe(
@@ -162,7 +182,8 @@ export const createBusinessRegistryTools = ({
   return {
     [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: toolDefinition({
       name: BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
-      description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
+      description:
+        TOOL_DESCRIPTION_BASE + nameSearchGuidance + canonicalOnlySuffix,
       inputSchema: toTanStackToolSchema(inputSchema),
     }).server(async ({ detail, jurisdiction, limit, query, registry }) => {
       const observer = actionRequestObserver(
@@ -195,6 +216,18 @@ export const createBusinessRegistryTools = ({
         handler,
         query,
         detail,
+        loadWebSearch: () =>
+          Result.ok(
+            webSearchProvider === null
+              ? null
+              : {
+                  provider: webSearchProvider,
+                  observer: actionRequestObserver(
+                    organizationId,
+                    ACTION_COST_CALL_KIND.webSearchRequest,
+                  ).onRequest,
+                },
+          ),
         ...(limit === undefined ? {} : { limit }),
       });
       // executeRegistryLookup returns a HandlerError instance for

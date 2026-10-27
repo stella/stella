@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   CONTACT_IMPORT_CUSTOM_FIELD_DESTINATION,
+  CONTACT_IMPORT_FIELDS,
   CONTACT_IMPORT_LABELED_FIELDS,
   CONTACT_IMPORT_MAX_ROWS,
   CONTACT_IMPORT_SCHEMA_VERSION,
@@ -49,6 +50,19 @@ const preview = (text: string, mapping: PreviewMapping) => {
     throw result.error;
   }
   return result.value;
+};
+
+// The bound is read off the stored schema, not copied, so a test cannot pass
+// against a limit the schema no longer enforces.
+const maxLengthOf = (schema: {
+  readonly pipe: readonly { readonly type: string }[];
+}) => {
+  const action = schema.pipe.find(({ type }) => type === "max_length");
+  return action !== undefined &&
+    "requirement" in action &&
+    typeof action.requirement === "number"
+    ? action.requirement
+    : 0;
 };
 
 // A checksum-valid CPF (person) and CNPJ (organization); the third fails the
@@ -305,6 +319,12 @@ describe("labeled contact import blocks", () => {
       }
     }
   });
+
+  test("every field name suggests its own field", () => {
+    for (const field of CONTACT_IMPORT_FIELDS) {
+      expect([field, suggestedTargetForHeader(field)]).toEqual([field, field]);
+    }
+  });
 });
 
 describe("custom field columns", () => {
@@ -335,7 +355,7 @@ describe("custom field columns", () => {
   });
 
   test("flags a custom field value the contact schema could not store", () => {
-    const valueLimit = contactCustomFieldSchema.properties.value.maxLength ?? 0;
+    const valueLimit = maxLengthOf(contactCustomFieldSchema.entries.value);
     expect(valueLimit).toBeGreaterThan(0);
     const result = preview(`Nome: Long\nRG: ${"9".repeat(valueLimit + 1)}`, {
       defaultType: "person",
@@ -368,7 +388,7 @@ describe("custom field columns", () => {
   });
 
   test("rejects a mapping whose custom field label exceeds the schema bound", () => {
-    const labelLimit = contactCustomFieldSchema.properties.label.maxLength ?? 0;
+    const labelLimit = maxLengthOf(contactCustomFieldSchema.entries.label);
     expect(labelLimit).toBeGreaterThan(0);
     const header = "L".repeat(labelLimit + 1);
     const result = previewContactImport({
@@ -515,9 +535,10 @@ describe("candidate validation", () => {
   });
 
   test("reports custom fields the contact schema could not store", () => {
-    const labelLimit = contactCustomFieldSchema.properties.label.maxLength ?? 0;
-    const countLimit =
-      contactMetadataSchema.properties.customFields.maxItems ?? 0;
+    const labelLimit = maxLengthOf(contactCustomFieldSchema.entries.label);
+    const countLimit = maxLengthOf(
+      contactMetadataSchema.entries.customFields.wrapped,
+    );
     expect(labelLimit).toBeGreaterThan(0);
     expect(countLimit).toBeGreaterThan(0);
 
@@ -616,7 +637,7 @@ describe("candidate validation", () => {
   });
 
   test("reports a custom field value the contact schema could not store", () => {
-    const valueLimit = contactCustomFieldSchema.properties.value.maxLength ?? 0;
+    const valueLimit = maxLengthOf(contactCustomFieldSchema.entries.value);
     const { issues } = validateContactImportCandidate({
       candidate: candidate({
         metadata: {

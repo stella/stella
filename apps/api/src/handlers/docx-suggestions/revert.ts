@@ -3,7 +3,7 @@ import { and, eq, ne } from "drizzle-orm";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { syncReviewFindingsForSuggestions } from "@/api/lib/document-review/suggestion-finding-sync";
 import {
   DOCX_PENDING_CAPACITY,
@@ -55,8 +55,8 @@ const revertDocxSuggestion = createSafeHandler(
       "The document review store updates reverted suggestions locally and hydrates them when the document opens.",
     ),
     params: workspaceParams({
-      entityId: tSafeId("entity"),
-      suggestionId: tSafeId("docxSuggestion"),
+      entityId: resourceIdSchema("entity"),
+      suggestionId: resourceIdSchema("docxSuggestion"),
     }),
   },
   async function* ({ workspaceId, params, recordAuditEvent, safeDb, user }) {

@@ -127,7 +127,7 @@ import {
 type ActivityPanelProps = { workspaceId: string };
 
 /** The matter whose activity is shown; file thumbnails are served per matter. */
-const ActivityWorkspaceContext = createContext<string | null>(null);
+export const ActivityWorkspaceContext = createContext<string | null>(null);
 
 type ActivityDay = [ActivityGroup, ...ActivityGroup[]];
 type ActivityViewMode = "timeline" | "list";
@@ -462,7 +462,13 @@ const ActivityAdvancedFilters = ({
                       .fetchNextPage()
                       .then((result) => {
                         if (result.isError) {
-                          getAnalytics().captureError(result.error);
+                          getAnalytics().captureError(result.error, {
+                            fingerprintKey: "ActivityAdvancedFilters:failure",
+                            scope: {
+                              type: "handler",
+                              handlerId: "ActivityAdvancedFilters:failure",
+                            },
+                          });
                           notifyUserError(
                             result.error,
                             t("errors.actionFailed"),
@@ -477,7 +483,13 @@ const ActivityAdvancedFilters = ({
                         return result;
                       })
                       .catch((error: unknown) => {
-                        getAnalytics().captureError(error);
+                        getAnalytics().captureError(error, {
+                          fingerprintKey: "ActivityAdvancedFilters:failure-2",
+                          scope: {
+                            type: "handler",
+                            handlerId: "ActivityAdvancedFilters:failure-2",
+                          },
+                        });
                         notifyUserError(error, t("errors.actionFailed"), {
                           description: userErrorFromThrown(
                             error,
@@ -548,7 +560,10 @@ const ActivityExportMenu = ({
     });
     setExporting(false);
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "ActivityExportMenu.exportActivity:failure",
+        scope: { type: "handler", handlerId: `activity-export.${format}` },
+      });
       notifyUserError(
         result.error,
         APIError.is(result.error) && result.error.status === 413
@@ -581,7 +596,10 @@ const ActivityExportMenu = ({
   const startExport = (format: "csv" | "json") => {
     detached(
       exportActivity(format).catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityExportMenu.startExport:failure",
+          scope: { type: "handler", handlerId: `activity-export.${format}` },
+        });
         notifyUserError(error, t("workspaces.views.exportFailed"));
       }),
       "activity-panel.export",
@@ -646,7 +664,13 @@ const ActivityTimeline = ({
           // The resolved error result reaches the user through the same toast
           // as a rejection, so it is captured here too; the `.catch` below only
           // sees a rejected request.
-          getAnalytics().captureError(result.error);
+          getAnalytics().captureError(result.error, {
+            fingerprintKey: "ActivityTimeline.loadEarlier:failure",
+            scope: {
+              type: "handler",
+              handlerId: "ActivityTimeline.loadEarlier:failure",
+            },
+          });
           notifyUserError(result.error, t("errors.actionFailed"), {
             description: userErrorFromThrown(
               result.error,
@@ -657,7 +681,13 @@ const ActivityTimeline = ({
         return result;
       })
       .catch((error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey: "ActivityTimeline.loadEarlier:failure-2",
+          scope: {
+            type: "handler",
+            handlerId: "ActivityTimeline.loadEarlier:failure-2",
+          },
+        });
         notifyUserError(error, t("errors.actionFailed"), {
           description: userErrorFromThrown(error, t("common.unexpectedError")),
         });
@@ -1339,7 +1369,7 @@ const ActivityList = ({
   );
 };
 
-const ActivityDetailsSheet = ({
+export const ActivityDetailsSheet = ({
   group,
   onOpenChange,
   workspaceId,
@@ -1412,13 +1442,6 @@ const ActivityDetailsSheet = ({
                               MEDIUM_DATE_SHORT_TIME_FORMAT,
                             )}
                           </time>
-                          <span aria-hidden="true"> · </span>
-                          {t(
-                            "workspaces.overview.activity.details.eventId",
-                          )}:{" "}
-                          <BidiText as="span" className="break-all">
-                            {batchItem.id}
-                          </BidiText>
                         </span>
                       </span>
                     </>
@@ -1484,10 +1507,6 @@ const ActivityDetailsSheet = ({
           },
         ]
       : []),
-    {
-      label: t("workspaces.overview.activity.details.eventId"),
-      value: <BidiText as="span">{item.id}</BidiText>,
-    },
   ];
 
   return (

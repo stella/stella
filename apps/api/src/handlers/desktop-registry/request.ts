@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import type {
   DesktopRegistryConfig,
@@ -28,7 +28,10 @@ import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
 } from "@/api/lib/business-registries/desktop/auth";
-import { desktopRegistryRequestBody } from "@/api/lib/business-registries/desktop/request-contract";
+import {
+  desktopRegistryRequestBody,
+  desktopRegistryRequestHeaders,
+} from "@/api/lib/business-registries/desktop/request-contract";
 import { revokeDesktopRegistryCredential } from "@/api/lib/business-registries/desktop/revocation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -38,6 +41,7 @@ const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },
   body: desktopRegistryRequestBody,
+  headers: desktopRegistryRequestHeaders,
 } as const;
 
 export const desktopRequestAuthorization = {
@@ -47,7 +51,7 @@ export const desktopRequestAuthorization = {
   format: authorizeDesktopRegistry,
   setDefaultFormat: authorizeDesktopRegistry,
 } as const satisfies Record<
-  Static<typeof config.body>["type"],
+  v.InferOutput<typeof config.body>["type"],
   typeof authorizeDesktopAccount
 >;
 

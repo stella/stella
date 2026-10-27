@@ -1,9 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
-import { type Static, t } from "elysia";
-
-import { SECTION_UNITS } from "@stll/legal-atlas/provision-citation-profile";
+import * as v from "valibot";
 
 import {
   caseLawProvisionCitations,
@@ -12,33 +10,43 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import { provisionAnchorSubtreeSql } from "@/api/lib/case-law/provision-anchor-lineage";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { LIMITS } from "@/api/lib/limits";
 
+const pathValueSchema = v.optional(
+  v.pipe(v.string(), v.minLength(1), v.maxLength(8)),
+);
+
 /**
  * A provision a search is narrowed to: the decisions whose recorded provision
- * links cite it. The section is required; each level below narrows, and a
- * level left out matches every value of it, so `§ 316` matches a link to
- * `§ 316 odst. 2` while `§ 316 odst. 2` does not match `§ 316 odst. 1`.
+ * links cite it or anything under it. Each level the caller names narrows,
+ * and a level left out matches every value of it: `§ 316` matches a link to
+ * `§ 316 odst. 2`, `§ 316 odst. 2` does not match `§ 316 odst. 1`, and
+ * `§ 265b písm. g)` matches `§ 265b odst. 1 písm. g)` as well as
+ * `§ 265b písm. g)`.
  *
- * The structured columns are compared rather than the anchor string: an
- * anchor prefix would need its wildcard characters escaped and would let
- * `par_31` reach `par_316`.
+ * Two parts, one per job. `anchor` is the seek: the anchor of the levels
+ * named from the section down without a gap (`par_265b` for
+ * `§ 265b písm. g)`, `par_316-odst_2` for `§ 316 odst. 2`). Its subtree is one
+ * byte-ordered range of the links' work-subtree index
+ * ({@link provisionAnchorSubtreeSql}), so every read seeks the provision's
+ * own links, never every link of its act; a civil code has millions. The
+ * named levels below the section are then compared by column within that
+ * range, which is what lets an omitted level stay a wildcard.
+ *
+ * Built by {@link caseLawProvisionFilterOf} from a resolved citation.
  */
-export const caseLawProvisionFilterSchema = t.Object({
-  /** EU targets are independent of the citing decision country. */
-  jurisdiction: t.Optional(t.Literal("EU")),
-  /** The work's display identity or EU CELEX as links record it. */
-  work: t.String({ minLength: 1, maxLength: 64 }),
-  unit: t.UnionEnum(SECTION_UNITS),
-  section: t.Integer({ minimum: 1, maximum: 99_999 }),
-  sectionSuffix: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-  subsection: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-  letter: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
-  point: t.Optional(t.String({ minLength: 1, maxLength: 8 })),
+export const caseLawProvisionFilterSchema = v.object({
+  jurisdiction: v.optional(v.literal("EU")),
+  work: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+  anchor: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+  subsection: pathValueSchema,
+  letter: pathValueSchema,
+  point: pathValueSchema,
 });
 
-export type CaseLawProvisionFilter = Static<
+export type CaseLawProvisionFilter = v.InferOutput<
   typeof caseLawProvisionFilterSchema
 >;
 
@@ -48,6 +56,12 @@ type ProvisionScopeOptions = {
   provision: CaseLawProvisionFilter;
 };
 
+/** The jurisdiction the provision's links are stored under. */
+const linkJurisdictionOf = ({
+  jurisdiction,
+  provision,
+}: ProvisionScopeOptions): string => provision.jurisdiction ?? jurisdiction;
+
 /**
  * A path value as links store it: lowercase, no leading zeros, the form the
  * citation resolver mints. A caller spelling `G` or `02` reads the same link.
@@ -55,30 +69,103 @@ type ProvisionScopeOptions = {
 const canonicalPathValue = (value: string) =>
   value.toLowerCase().replace(/^0+(?=\d)/u, "");
 
+const canonicalLevel = (value: string | null) =>
+  value === null ? null : canonicalPathValue(value);
+
+/** A cited provision path, outermost level first. */
+export type CitedProvisionPath = {
+  unit: "article" | "section";
+  section: number;
+  sectionSuffix: string | null;
+  subsection: string | null;
+  letter: string | null;
+  point: string | null;
+};
+
 /**
- * The link rows that cite the provision, level by level. The leading
- * jurisdiction and work equalities are the prefix of the links' work index,
- * so a read of every decision citing a provision walks that index rather
- * than the table.
+ * The filter for a resolved citation. The path is canonicalised here, once,
+ * before anything is derived from it, so the seek anchor and the compared
+ * levels always spell a value the way links store it (`(01)` reads as `1`);
+ * no caller can hand over an anchor minted from another spelling.
+ *
+ * The seek anchor is minted, by the citation grammar's own `anchorOf`, from
+ * the levels named from the section down without a gap; a level after the
+ * first one the citation leaves out is compared by column instead, so a gap
+ * never narrows the range past the links stored with the level filled in.
  */
-const provisionLinkConditions = ({
+export const caseLawProvisionFilterOf = ({
   jurisdiction,
-  provision,
-}: ProvisionScopeOptions): SQL[] => {
+  work,
+  path,
+  anchorOf,
+}: {
+  jurisdiction?: "EU";
+  work: string;
+  path: CitedProvisionPath;
+  /** The citation grammar's anchor for a canonical path. */
+  anchorOf: (path: CitedProvisionPath) => string;
+}): CaseLawProvisionFilter => {
+  const canonical: CitedProvisionPath = {
+    unit: path.unit,
+    section: path.section,
+    sectionSuffix: canonicalLevel(path.sectionSuffix),
+    subsection: canonicalLevel(path.subsection),
+    letter: canonicalLevel(path.letter),
+    point: canonicalLevel(path.point),
+  };
+  const { subsection, letter, point } = canonical;
+  const seek: CitedProvisionPath = {
+    ...canonical,
+    letter: subsection === null ? null : letter,
+    point: subsection === null || letter === null ? null : point,
+  };
+  return {
+    ...(jurisdiction === undefined ? {} : { jurisdiction }),
+    work,
+    anchor: anchorOf(seek),
+    ...(subsection === null ? {} : { subsection }),
+    ...(letter === null ? {} : { letter }),
+    ...(point === null ? {} : { point }),
+  };
+};
+
+/**
+ * The link rows that cite the provision or one under it. The jurisdiction,
+ * the work and the anchor range are the work-subtree index's whole key, so
+ * every read of a provision's citing decisions seeks that provision's own
+ * links; the named levels are compared within them.
+ */
+const provisionLinkConditions = (scope: ProvisionScopeOptions): SQL[] => {
   const link = caseLawProvisionCitations;
-  const levels: SQL[] = [
-    sql`${link.jurisdiction} = ${provision.jurisdiction ?? jurisdiction}`,
+  const { jurisdiction, provision } = scope;
+  const linkJurisdiction = linkJurisdictionOf(scope);
+  const conditions: SQL[] = [
+    sql`${link.jurisdiction} = ${linkJurisdiction}`,
     sql`${link.workIdentifier} = ${provision.work}`,
-    sql`${link.unit} = ${provision.unit}`,
-    sql`${link.section} = ${provision.section}`,
-    provision.sectionSuffix === undefined
-      ? sql`${link.sectionSuffix} IS NULL`
-      : sql`${link.sectionSuffix} = ${canonicalPathValue(provision.sectionSuffix)}`,
+    provisionAnchorSubtreeSql(link.anchor, {
+      jurisdiction: linkJurisdiction,
+      anchor: provision.anchor,
+    }),
   ];
+  if (provision.subsection !== undefined) {
+    conditions.push(
+      sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
+    );
+  }
+  if (provision.letter !== undefined) {
+    conditions.push(
+      sql`${link.letter} = ${canonicalPathValue(provision.letter)}`,
+    );
+  }
+  if (provision.point !== undefined) {
+    conditions.push(
+      sql`${link.point} = ${canonicalPathValue(provision.point)}`,
+    );
+  }
   if (provision.jurisdiction === "EU") {
     // EU target identity does not name the citing country. Keep an id set and
     // its broad-set warning within the requested country's published corpus.
-    levels.push(sql`EXISTS (
+    conditions.push(sql`EXISTS (
       SELECT 1 FROM ${publishedCaseLawDecisions}
       INNER JOIN ${caseLawSources} ON ${caseLawSources.id} = ${publishedCaseLawDecisions.sourceId}
       WHERE ${publishedCaseLawDecisions.id} = ${link.decisionId}
@@ -86,18 +173,31 @@ const provisionLinkConditions = ({
         AND ${redistributableCaseLawSource}
     )`);
   }
-  if (provision.subsection !== undefined) {
-    levels.push(
-      sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
-    );
-  }
-  if (provision.letter !== undefined) {
-    levels.push(sql`${link.letter} = ${canonicalPathValue(provision.letter)}`);
-  }
-  if (provision.point !== undefined) {
-    levels.push(sql`${link.point} = ${canonicalPathValue(provision.point)}`);
-  }
-  return levels;
+  return conditions;
+};
+
+/**
+ * Whether the corpus records any citation of the provision's act. A filter
+ * on an act no link names answers an exact 0 that says only that the act's
+ * citations were never extracted, so a caller asks this before reading one.
+ * One probe of the work index's leading key.
+ */
+export const readProvisionWorkLinked = async (
+  tx: CaseLawPublicReadTransaction,
+  scope: ProvisionScopeOptions,
+): Promise<boolean> => {
+  const link = caseLawProvisionCitations;
+  const rows = await tx
+    .select({ decisionId: link.decisionId })
+    .from(link)
+    .where(
+      and(
+        eq(link.jurisdiction, linkJurisdictionOf(scope)),
+        eq(link.workIdentifier, scope.provision.work),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
 };
 
 /**
@@ -188,8 +288,9 @@ export const readCaseLawProvisionScope = async (
 
 /**
  * The ids of every decision citing the provision, as a subquery a page read
- * filters by. It drives from the links' work index, so a provision-only list
- * reads the provision's own links rather than probing every decision.
+ * filters by. It drives from the links' work-subtree index, so a
+ * provision-only list reads the provision's own links rather than probing
+ * every decision or every link of its act.
  */
 export const citingDecisionIdsSubquery = (
   tx: CaseLawPublicReadTransaction,

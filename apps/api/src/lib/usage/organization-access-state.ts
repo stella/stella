@@ -8,6 +8,7 @@
 
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { DAY_IN_MS } from "@stll/time";
 
@@ -16,10 +17,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
+  ORGANIZATION_ACCESS_STATE_ORIGIN,
   organizationAccessStates,
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { defineLifecycle, transitionLifecycle } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   MANAGED_MODEL_TIER,
@@ -108,36 +111,88 @@ type OrganizationAccessStateChange = {
   now: Date;
 };
 
+const ORGANIZATION_EVALUATION_LIFECYCLE = defineLifecycle({
+  table: organizationAccessStates,
+  key: "organizationId",
+  graphs: {
+    state: {
+      edges: {
+        [ORGANIZATION_ACCESS_STATE.selfManagedKeys]: [
+          ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        ],
+        [ORGANIZATION_ACCESS_STATE.evaluationPeriod]: [
+          ORGANIZATION_ACCESS_STATE.evaluationEnded,
+        ],
+        [ORGANIZATION_ACCESS_STATE.evaluationEnded]: [],
+      },
+      terminal: [ORGANIZATION_ACCESS_STATE.evaluationEnded],
+    },
+  },
+});
+
 /**
  * Records a new organization's state once. With the flag on it starts the
  * evaluation period; with it off the organization keeps today's
- * self-managed-keys path. The insert never overwrites, so a replayed call
- * cannot start a second evaluation or move an existing organization.
+ * self-managed-keys path. An enabled creation supersedes only a legacy
+ * reconciler row, which closes the rolling-deployment race between those
+ * writers. A replayed creation cannot restart or move a final state.
  */
 export const recordNewOrganizationAccessState = async (
-  db: Pick<Transaction, "insert">,
+  db: Pick<PgAsyncDatabase<PgQueryResultHKT>, "insert">,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<void> => {
-  const values = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")
-    ? {
-        organizationId,
-        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        evaluationStartedAt: now,
-        evaluationEndsAt: addDays(
-          now,
-          // The env invariant refuses to boot with the flag on and no length.
-          env.ORG_EVALUATION_PERIOD_DAYS ??
-            panic("ORG_EVALUATION_PERIOD_DAYS is unset"),
-        ),
-      }
-    : {
+  const enforced = isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE");
+  if (!enforced) {
+    // audit: skip - organization creation records the initial access state
+    await db
+      .insert(organizationAccessStates)
+      .values({
         organizationId,
         state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
-      };
+        origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+      })
+      .onConflictDoNothing({ target: organizationAccessStates.organizationId });
+    return;
+  }
+  const evaluationEndsAt = addDays(
+    now,
+    // The env invariant refuses to boot with the flag on and no length.
+    env.ORG_EVALUATION_PERIOD_DAYS ??
+      panic("ORG_EVALUATION_PERIOD_DAYS is unset"),
+  );
+  const legacyReconcileRow =
+    and(
+      eq(
+        organizationAccessStates.state,
+        ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+      ),
+      eq(
+        organizationAccessStates.origin,
+        ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile,
+      ),
+    ) ?? panic("Expected the legacy access-state conflict predicate");
+  // audit: skip - organization creation records the initial access state
   await db
     .insert(organizationAccessStates)
-    .values(values)
-    .onConflictDoNothing({ target: organizationAccessStates.organizationId });
+    .values({
+      organizationId,
+      state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+      origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+      evaluationStartedAt: now,
+      evaluationEndsAt,
+    })
+    .onConflictDoUpdate({
+      target: organizationAccessStates.organizationId,
+      set: {
+        state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+        origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+        evaluationStartedAt: now,
+        evaluationEndsAt,
+        evaluationEndedAt: null,
+        updatedAt: now,
+      },
+      setWhere: legacyReconcileRow,
+    });
 };
 
 const addDays = (from: Date, days: number): Date =>
@@ -149,26 +204,23 @@ const addDays = (from: Date, days: number): Date =>
  * nothing.
  */
 export const endOrganizationEvaluation = async (
-  db: Pick<Transaction, "update">,
+  db: Transaction,
   { organizationId, now }: OrganizationAccessStateChange,
 ): Promise<boolean> => {
-  const ended = await db
-    .update(organizationAccessStates)
-    .set({
-      state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
-      evaluationEndedAt: now,
-    })
-    .where(
-      and(
-        eq(organizationAccessStates.organizationId, organizationId),
-        eq(
-          organizationAccessStates.state,
-          ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-        ),
-      ),
-    )
-    .returning({ organizationId: organizationAccessStates.organizationId });
-  return ended.length > 0;
+  const ended = await transitionLifecycle({
+    tx: db,
+    spec: ORGANIZATION_EVALUATION_LIFECYCLE,
+    id: organizationId,
+    moves: {
+      state: {
+        from: [ORGANIZATION_ACCESS_STATE.evaluationPeriod],
+        to: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+      },
+    },
+    set: { evaluationEndedAt: now },
+    recordTransitionAuditEvent: async () => await Promise.resolve(),
+  });
+  return ended.type === "transitioned";
 };
 
 /**
@@ -182,8 +234,8 @@ export const recordMissingOrganizationAccessStates = async (
   db: Pick<Transaction, "execute">,
 ): Promise<void> => {
   await db.execute(sql`
-    INSERT INTO ${organizationAccessStates} (organization_id, state)
-    SELECT ${organization.id}, ${ORGANIZATION_ACCESS_STATE.selfManagedKeys}
+    INSERT INTO ${organizationAccessStates} (organization_id, state, origin)
+    SELECT ${organization.id}, ${ORGANIZATION_ACCESS_STATE.selfManagedKeys}, ${ORGANIZATION_ACCESS_STATE_ORIGIN.legacyReconcile}
     FROM ${organization}
     ON CONFLICT (organization_id) DO NOTHING
   `);

@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "Voltar a salvar novos recortes de <bdi>{source}</bdi>",
     "pause": "Pausar captura",
     "plainText": "Texto simples",
+    "plainTextPreview": "Prévia em texto simples",
     "retention": "Manter histórico por",
     "retentionWeek": "Uma semana",
     "retentionMonth": "Um mês",

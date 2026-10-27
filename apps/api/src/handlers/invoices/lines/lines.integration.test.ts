@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -7,7 +8,6 @@ import {
   test,
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
-import { Elysia } from "elysia";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
 
@@ -35,7 +35,11 @@ import { exportCsvHandler } from "@/api/handlers/time-entries/csv/export";
 import deleteTimeEntryById from "@/api/handlers/time-entries/delete";
 import { exportLedesHandler } from "@/api/handlers/time-entries/ledes/export";
 import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -43,9 +47,12 @@ import {
   type FieldDiffs,
 } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { defineEndpoint } from "@/api/lib/endpoints";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -827,7 +834,7 @@ describe("invoice lines", () => {
       vatTreatment: "reverse_charge",
     });
 
-    // Through Elysia's own validation, which fills absent fields it coerces.
+    // Through the HTTP layer's own validation, which must not fill absent fields.
     const body = await parseUpdateBody({ description: "Revised advice" });
     expect(body).toEqual({ description: "Revised advice" });
     await runUpdate(invoiceId, lineId, body);
@@ -961,7 +968,44 @@ const manual = (
   vatTreatment: "domestic_vat",
 });
 
-const contextFor = <TContext>(
+const invoiceRouteForHandler = (handler: unknown): ApiRoutePath => {
+  if (handler === createInvoice.handler) {
+    return "/v1/invoices/:workspaceId";
+  }
+  if (handler === addEntries.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/entries";
+  }
+  if (handler === createInvoiceLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines";
+  }
+  if (handler === updateInvoiceLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === deleteInvoiceLine.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/lines/:lineId";
+  }
+  if (handler === readInvoiceById.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId";
+  }
+  if (handler === transitionInvoice.handler) {
+    return "/v1/invoices/:workspaceId/:invoiceId/transition";
+  }
+  if (handler === deleteTimeEntryById.handler) {
+    return "/v1/time-entries/:workspaceId";
+  }
+  if (handler === batchUpdateTimeEntries.handler) {
+    return "/v1/time-entries/:workspaceId/batch";
+  }
+  if (handler === updateExpense.handler) {
+    return "/v1/expenses/:workspaceId";
+  }
+  if (handler === deleteExpense.handler) {
+    return "/v1/expenses/:workspaceId";
+  }
+  return panic("Invoice test context received an unregistered handler");
+};
+
+const contextFor = <TContext extends SafeHandlerLogContext>(
   _handler: (handlerContext: TContext) => unknown,
   {
     body,
@@ -993,7 +1037,7 @@ const contextFor = <TContext>(
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
-    route: "/test/invoices/lines",
+    route: invoiceRouteForHandler(_handler),
     safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     session: { activeOrganizationId: ids.orgA },
@@ -1043,20 +1087,28 @@ const runAddEntries = async (
     }),
   );
 
-/** The body the handler receives after Elysia validates the request. */
+/** The body the handler receives after the HTTP layer reads and validates the request. */
 const parseUpdateBody = async (
   body: Record<string, unknown>,
 ): Promise<UpdateBody> => {
-  let parsed: unknown = null;
-  const app = new Elysia().patch(
-    "/line",
-    ({ body: received }) => {
-      parsed = received;
-      return "ok";
-    },
-    { body: updateInvoiceLine.config.body },
+  const received: UpdateBody[] = [];
+  await using server = serveForTest(
+    createHttpApp({
+      middleware: [errorBoundary],
+      routes: routes({
+        "/line": {
+          PATCH: defineEndpoint.public(
+            { body: updateInvoiceLine.config.body },
+            ({ body: decoded }) => {
+              received.push(decoded);
+              return "ok";
+            },
+          ),
+        },
+      }),
+    }),
   );
-  const response = await app.handle(
+  const response = await server.fetch(
     new Request("http://localhost/line", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
@@ -1064,7 +1116,11 @@ const parseUpdateBody = async (
     }),
   );
   expect(response.status).toBe(200);
-  return asTestRaw<UpdateBody>(parsed);
+  const [parsed] = received;
+  if (received.length !== 1 || parsed === undefined) {
+    throw new Error(`Expected one decoded body, got ${received.length}`);
+  }
+  return parsed;
 };
 
 const readStoredAmounts = async (invoiceId: SafeId<"invoice">) =>

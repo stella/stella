@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { McpDefaultResourceScope } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
@@ -40,6 +42,7 @@ import {
   type McpToolVisibleTo,
 } from "@/api/mcp/tool-visibility";
 import { WEB_HANDOFF_TOOL_SET } from "@/api/mcp/web-handoff-links";
+import { advertisedMcpOutputSchema } from "@/api/mcp/write-result-omission";
 
 export { MCP_STATIC_TOOL_NAMES };
 
@@ -436,11 +439,37 @@ const MCP_TOOL_DEFINITION_MAPS = {
   law: toToolDefinitionMap(MCP_TOOL_DEFINITIONS_BY_MODE.law),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
+/**
+ * Each tool's runtime contract, with the schema it advertises: a write tool's
+ * also accepts the omitted result the transport answers when the action ran
+ * but its result exceeds the response byte limit. `outputSchemaSource` stays
+ * the handler's own contract, which the omission never passes through.
+ */
 const toOutputContractMap = (
   toolSets: readonly McpToolSet<readonly McpToolDefinition[]>[],
 ) =>
   new Map<string, RuntimeMcpToolOutputContract>(
-    toolSets.flatMap((toolSet) => Object.entries(toolSet.outputs)),
+    toolSets.flatMap((toolSet) =>
+      toolSet.definitions.map((definition) => {
+        const contract: RuntimeMcpToolOutputContract | undefined =
+          toolSet.outputs[definition.name];
+        if (contract === undefined) {
+          return panic(
+            `Static MCP tool is missing its output contract: ${definition.name}`,
+          );
+        }
+        return [
+          definition.name,
+          {
+            ...contract,
+            outputSchema: advertisedMcpOutputSchema({
+              contract,
+              access: definition.access,
+            }),
+          },
+        ] as const;
+      }),
+    ),
   );
 
 const toHandlerMap = (

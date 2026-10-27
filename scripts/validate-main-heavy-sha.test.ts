@@ -1,7 +1,13 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
@@ -78,7 +84,11 @@ const runActionScript = async (
 };
 
 const runGit = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+  execFileSync("git", args, {
+    maxBuffer: 2 ** 30,
+    cwd,
+    encoding: "utf-8",
+  }).trim();
 
 const runStep = (
   script: string,
@@ -105,8 +115,9 @@ test("dispatch SHA validation delegates main and authorized release heads to the
     runGit(fixture, "config", "user.name", "Fixture");
     runGit(fixture, "config", "user.email", "fixture@example.invalid");
     runGit(fixture, "config", "commit.gpgsign", "false");
-    writeFileSync(path.join(fixture, "tracked"), "main\n");
-    runGit(fixture, "add", "tracked");
+    writeFileSync(path.join(fixture, "VERSION"), "1.2.2\n");
+    writeFileSync(path.join(fixture, "bun.lock"), "{}\n");
+    runGit(fixture, "add", "VERSION", "bun.lock");
     runGit(fixture, "commit", "-m", "main commit");
     const mainSha = runGit(fixture, "rev-parse", "HEAD");
     runGit(fixture, "update-ref", "refs/remotes/origin/main", mainSha);
@@ -119,17 +130,21 @@ test("dispatch SHA validation delegates main and authorized release heads to the
     const siblingSha = runGit(fixture, "rev-parse", "HEAD");
 
     runGit(fixture, "checkout", "-b", "release", mainSha);
-    writeFileSync(path.join(fixture, "tracked"), "release\n");
-    runGit(fixture, "add", "tracked");
+    mkdirSync(path.join(fixture, "docs/changelog"), { recursive: true });
+    writeFileSync(path.join(fixture, "VERSION"), "1.2.3\n");
+    writeFileSync(path.join(fixture, "docs/changelog/v1.2.3.md"), "release\n");
+    runGit(fixture, "add", "VERSION", "docs/changelog/v1.2.3.md");
     runGit(fixture, "commit", "-m", "release commit");
     const releaseSha = runGit(fixture, "rev-parse", "HEAD");
-    writeFileSync(
-      path.join(fixture, "verify-release-tree-proof.sh"),
-      readFileSync(
-        new URL("verify-release-tree-proof.sh", import.meta.url),
-        "utf-8",
-      ),
-    );
+    for (const script of [
+      "verify-release-tree-proof.sh",
+      "verify-release-candidate-tree.mjs",
+    ]) {
+      writeFileSync(
+        path.join(fixture, script),
+        readFileSync(new URL(script, import.meta.url), "utf-8"),
+      );
+    }
     writeFileSync(
       path.join(fixture, "gh-retry.sh"),
       `#!/usr/bin/env bash
@@ -140,7 +155,7 @@ case "$endpoint" in
     sha="\${endpoint#repos/stella/stella/commits/}"
     sha="\${sha%%/*}"
     if [[ "$sha" == "${releaseSha}" ]]; then
-      printf '%s\\n' '[[{"number":1,"title":"chore: release v1.2.3","state":"open","merged_at":null,"head":{"sha":"${releaseSha}","repo":{"full_name":"stella/stella"}},"base":{"sha":"${mainSha}","ref":"main","repo":{"full_name":"stella/stella"}}}]]'
+      printf '%s\\n' '[[{"number":1,"title":"chore: release v1.2.3","state":"open","draft":false,"merged_at":null,"head":{"sha":"${releaseSha}","repo":{"full_name":"stella/stella"}},"base":{"sha":"${mainSha}","ref":"main","repo":{"full_name":"stella/stella"}}}]]'
     else printf '%s\\n' '[[]]'; fi
     ;;
   repos/stella/stella/commits/*)
@@ -204,9 +219,32 @@ esac
   }
 }, 30_000);
 
+// Checkouts other than the network retry helper, which is pinned to the
+// workflow's own revision and holds only scripts/retry.sh.
+const trustedCheckouts = (
+  steps: readonly {
+    readonly uses?: string | undefined;
+    readonly with?: Record<string, unknown> | undefined;
+  }[],
+) =>
+  steps.filter((step) => {
+    if (!step.uses?.startsWith("actions/checkout@")) {
+      return false;
+    }
+    if (step.with?.["path"] !== ".network-retry") {
+      return true;
+    }
+    expect(step.with["ref"]).toBe(`\${{ github.workflow_sha }}`);
+    expect(step.with["sparse-checkout"]).toBe("scripts/retry.sh");
+    expect(step.with["persist-credentials"]).toBe(false);
+    return false;
+  });
+
 test("only trusted main tooling is checked out before target verification", () => {
   const names = validationSteps.map(({ name }) => name);
   expect(names).toEqual([
+    "Checkout network retry helper",
+    "Stage network retry helper",
     "Check release candidate",
     "Validate merge queue depth",
     "Checkout trusted release proof tooling",
@@ -221,9 +259,7 @@ test("only trusted main tooling is checked out before target verification", () =
     "Fetch main history",
     "Verify main ancestry",
   ]);
-  const checkouts = validationSteps.filter(({ uses }) =>
-    uses?.startsWith("actions/checkout@"),
-  );
+  const checkouts = trustedCheckouts(validationSteps);
   expect(checkouts).toHaveLength(1);
   expect(checkouts.at(0)?.with?.["ref"]).toBe("main");
   expect(checkouts.at(0)?.with?.["path"]).toBe(".release-proof");
@@ -383,9 +419,7 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
     expect(names.indexOf("Fetch main history"), name).toBeLessThan(
       names.indexOf("Verify main ancestry"),
     );
-    const checkouts = steps.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
-    );
+    const checkouts = trustedCheckouts(steps);
     expect(checkouts).toHaveLength(1);
     expect(checkouts.at(0)?.with?.["ref"], name).toBe("main");
     const fetch = steps.find(
@@ -393,6 +427,9 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
     );
     expect(fetch?.run, name).toContain(
       "show origin/main:scripts/verify-release-tree-proof.sh",
+    );
+    expect(fetch?.run, name).toContain(
+      "show origin/main:scripts/verify-release-candidate-tree.mjs",
     );
     const ancestry = steps.find(
       ({ name: stepName }) => stepName === "Verify main ancestry",

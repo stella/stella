@@ -322,6 +322,7 @@
     "removeSourceAppExclusion": "Znova ukladať nové výstrižky z aplikácie <bdi>{source}</bdi>",
     "pause": "Pozastaviť ukladanie",
     "plainText": "Obyčajný text",
+    "plainTextPreview": "Ukážka obyčajného textu",
     "retention": "Uchovávať históriu",
     "retentionWeek": "Jeden týždeň",
     "retentionMonth": "Jeden mesiac",
