@@ -28,16 +28,19 @@ import { useAppColors } from "@/theme";
 
 /** Loads one thread's latest messages, and again on every pull to refresh. */
 export const ChatThreadView = ({
+  matterId,
   source,
   threadId,
 }: {
+  /** The thread's matter; the server refuses a matter's thread read without it. */
+  matterId: string | undefined;
   source: AccessTokenSource;
   threadId: string;
 }) => {
   const colors = useAppColors();
   const { end } = useSession();
   const loadThread = async (): Promise<Load<ChatMessagesPage>> => {
-    const result = await readChatThread({ fetch, source, threadId });
+    const result = await readChatThread({ fetch, matterId, source, threadId });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
       end();
     }
@@ -57,6 +60,7 @@ export const ChatThreadView = ({
     >
       <LoadedThread
         load={load}
+        matterId={matterId}
         onReload={reload}
         refreshing={refreshing}
         source={source}
@@ -68,12 +72,14 @@ export const ChatThreadView = ({
 
 const LoadedThread = ({
   load,
+  matterId,
   onReload,
   refreshing,
   source,
   threadId,
 }: {
   load: Promise<Load<ChatMessagesPage>>;
+  matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
   source: AccessTokenSource;
@@ -98,6 +104,7 @@ const LoadedThread = ({
       firstPage={result.value}
       // A refresh starts over from the thread's newest page.
       key={loadedAt}
+      matterId={matterId}
       onReload={onReload}
       refreshing={refreshing}
       source={source}
@@ -113,12 +120,14 @@ const LoadedThread = ({
  */
 const ThreadMessages = ({
   firstPage,
+  matterId,
   onReload,
   refreshing,
   source,
   threadId,
 }: {
   firstPage: ChatMessagesPage;
+  matterId: string | undefined;
   onReload: () => void;
   refreshing: boolean;
   source: AccessTokenSource;
@@ -139,6 +148,7 @@ const ThreadMessages = ({
     const page = await readOlderChatMessages({
       before: cursor,
       fetch,
+      matterId,
       source,
       threadId,
     });

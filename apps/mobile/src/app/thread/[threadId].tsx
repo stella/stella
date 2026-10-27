@@ -7,12 +7,13 @@ import { screenStyles } from "@/components/empty-state-screen";
 import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
 
-/** One chat thread, opened from the Chat tab, which passes its title along so the header shows it before the messages load. */
+/** One chat thread, opened from the Chat tab, which passes its title along so the header shows it before the messages load, and its matter, which the server asks for. */
 const ThreadScreen = () => {
   const colors = useAppColors();
   const t = useTranslations("chat");
   const { state } = useSession();
-  const { threadId, title } = useLocalSearchParams<{
+  const { matterId, threadId, title } = useLocalSearchParams<{
+    matterId?: string;
     threadId: string;
     title?: string;
   }>();
@@ -33,7 +34,11 @@ const ThreadScreen = () => {
         }}
       />
       {state.status === "signed-in" ? (
-        <ChatThreadView source={state.source} threadId={threadId} />
+        <ChatThreadView
+          matterId={matterId}
+          source={state.source}
+          threadId={threadId}
+        />
       ) : null}
     </SafeAreaView>
   );

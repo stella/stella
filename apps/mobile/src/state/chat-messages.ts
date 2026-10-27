@@ -98,13 +98,35 @@ export const prependOlderPage = (
 const threadPath = (threadId: string) =>
   `/v1/chat/threads/${encodeURIComponent(threadId)}/messages`;
 
+/**
+ * The query of a messages read: the page to continue from, and the thread's
+ * matter, without which the server refuses a matter's thread as out of scope.
+ */
+export const messagesQuery = ({
+  before,
+  matterId,
+}: {
+  readonly before?: string | undefined;
+  readonly matterId: string | undefined;
+}): string => {
+  const params = [
+    ...(before === undefined ? [] : [`before=${encodeURIComponent(before)}`]),
+    ...(matterId === undefined
+      ? []
+      : [`workspaceId=${encodeURIComponent(matterId)}`]),
+  ];
+  return params.length === 0 ? "" : `?${params.join("&")}`;
+};
+
 /** A thread's latest messages. */
 export const readChatThread = async ({
   fetch,
+  matterId,
   source,
   threadId,
 }: {
   readonly fetch: Fetch;
+  readonly matterId: string | undefined;
   readonly source: AccessTokenSource;
   readonly threadId: string;
 }): Promise<Result<ChatMessagesPage, ApiError>> =>
@@ -112,7 +134,7 @@ export const readChatThread = async ({
     const page = yield* Result.await(
       requestApi({
         fetch,
-        path: threadPath(threadId),
+        path: `${threadPath(threadId)}${messagesQuery({ matterId })}`,
         schema: messagesPageSchema,
         source,
       }),
@@ -124,11 +146,13 @@ export const readChatThread = async ({
 export const readOlderChatMessages = async ({
   before,
   fetch,
+  matterId,
   source,
   threadId,
 }: {
   readonly before: string;
   readonly fetch: Fetch;
+  readonly matterId: string | undefined;
   readonly source: AccessTokenSource;
   readonly threadId: string;
 }): Promise<Result<ChatMessagesPage, ApiError>> =>
@@ -136,7 +160,7 @@ export const readOlderChatMessages = async ({
     const page = yield* Result.await(
       requestApi({
         fetch,
-        path: `${threadPath(threadId)}/older?before=${encodeURIComponent(before)}`,
+        path: `${threadPath(threadId)}/older${messagesQuery({ before, matterId })}`,
         schema: messagesPageSchema,
         source,
       }),
