@@ -38,6 +38,38 @@ test("requires retries: 0 as the effective top-level Playwright setting", () => 
   );
 });
 
+test("all root factory arguments contribute to the effective retry policy", () => {
+  expect(
+    config(`
+      const overrides = { retries: 2 };
+      export default defineConfig({ retries: 0 }, overrides);
+    `),
+  ).toEqual([
+    {
+      file: "apps/example/playwright.config.ts",
+      message:
+        "Playwright config must explicitly set top-level retries: 0 as its effective value",
+    },
+  ]);
+  expect(
+    config(`
+      const overrides = { retries: 0 };
+      export default defineConfig({ retries: 2 }, overrides);
+    `),
+  ).toEqual([]);
+  expect(
+    config(`
+      const projects = () => ({ projects: [{ name: "browser", retries: 2 }] });
+      export default defineConfig(projects(), { retries: 0 });
+    `),
+  ).toEqual([
+    {
+      file: "apps/example/playwright.config.ts",
+      message: "Playwright config must explicitly set top-level retries: 0",
+    },
+  ]);
+});
+
 test("follows literal config spreads and rejects a later override", () => {
   expect(
     config(`
