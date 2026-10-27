@@ -77,6 +77,14 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/create.ts",
   },
+  "GET /v1/tasks/:workspaceId/:taskId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/tasks/get.ts",
+  },
+  "PATCH /v1/tasks/:workspaceId": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/update.ts",
+  },
   "GET /v1/chat/threads": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/threads/list.ts",
