@@ -68,4 +68,89 @@ describe("cutting a line's end", () => {
       rewriteInlineWhitespace(inlines, (text) => text.toUpperCase()),
     ).toEqual(inlines);
   });
+
+  test("a removed newline drops its line break", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n", "")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("a newline replaced by a space becomes text", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n", " ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: " " },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("an untouched newline stays a line break", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second  " },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("  ", " ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second " },
+    ]);
+  });
+
+  test("nested children around a line break keep their offsets", () => {
+    const inlines: Inline[] = [
+      {
+        type: "bold",
+        children: [
+          { type: "text", text: "first" },
+          {
+            type: "italic",
+            children: [
+              { type: "line-break" },
+              { type: "text", text: "  second" },
+            ],
+          },
+        ],
+      },
+      { type: "text", text: "  third" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replaceAll("  ", " ")),
+    ).toEqual([
+      {
+        type: "bold",
+        children: [
+          { type: "text", text: "first" },
+          {
+            type: "italic",
+            children: [
+              { type: "line-break" },
+              { type: "text", text: " second" },
+            ],
+          },
+        ],
+      },
+      { type: "text", text: " third" },
+    ]);
+  });
 });

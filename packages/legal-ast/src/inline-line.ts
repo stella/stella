@@ -284,8 +284,12 @@ export const rewriteInlineWhitespace = (
         return text.length === 0 ? [] : [{ ...node, text }];
       }
       if (node.type === "line-break") {
+        const text = kept[offset] ?? "";
         offset += 1;
-        return [node];
+        if (text === "\n") {
+          return [node];
+        }
+        return text.length === 0 ? [] : [{ type: "text", text }];
       }
       return hasInlineChildren(node)
         ? [{ ...node, children: apply(node.children) }]
