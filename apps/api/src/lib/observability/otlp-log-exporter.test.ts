@@ -294,7 +294,9 @@ describe("OTLP log export", () => {
     for (let index = 0; index < 65; index += 1) {
       exporter.emit(info(`queued.${index}`));
     }
-    const pendingFlushes = Array.from({ length: 32 }, () => exporter.flush());
+    const pendingFlushes = Array.from({ length: 32 }, async () =>
+      exporter.flush(),
+    );
     firstResponse.resolve(new Response("rejected", { status: 400 }));
     await Promise.all(pendingFlushes);
 
@@ -367,7 +369,7 @@ describe("OTLP log export", () => {
     const receiver = startReceiver();
     const { exporter } = exporterFor(receiver.url);
 
-    await Promise.all(Array.from({ length: 32 }, () => exporter.flush()));
+    await Promise.all(Array.from({ length: 32 }, async () => exporter.flush()));
     expect(receiver.requests).toHaveLength(0);
 
     exporter.emit(info("after.empty.flushes"));
