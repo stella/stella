@@ -889,13 +889,16 @@ const PERMALINK_PLACEMENT_CLASS = {
   inline: "ms-1",
 } as const satisfies Record<PermalinkPlacement, string>;
 
+/** Running document text: start-aligned and hyphenated (see `reader.css`). */
+export const READER_PROSE_CLASS = "reader-prose";
+
 /**
  * Reader chrome on a block (its permalink, a provision's actions) stays out
  * of the text until the reader points at or focuses the block. A device that
  * cannot hover shows it always, since there would be no way to reveal it.
  */
 export const READER_BLOCK_CHROME_REVEAL_CLASS =
-  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+  "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
 
 /**
  * A block's own address, as a link the reader can take with them.
@@ -1315,21 +1318,20 @@ const paragraphClassValues = (block: ParagraphBlock) => {
   const isRomanNumeralDivider = /^[IVX]+\.?$/u.test(block.plainText.trim());
   // Non-body roles (case number, closing formula, signature)
   // need their own alignment; every other paragraph — including
-  // intro, argumentation and unroled body text — defaults to
-  // justified reading layout.
-  const nonJustifiedRoles = new Set([
+  // intro, argumentation and unroled body text — is running text.
+  const nonProseRoles = new Set([
     "case-number",
     "closing",
     "signature",
     "parties",
     "front-matter",
   ]);
-  const shouldJustify =
+  const isProse =
     !isRomanNumeralDivider &&
-    (block.role === undefined || !nonJustifiedRoles.has(block.role));
+    (block.role === undefined || !nonProseRoles.has(block.role));
   return [
     "group relative mb-[var(--reader-paragraph-gap)] scroll-mt-[var(--reader-anchor-offset)] last:mb-0",
-    shouldJustify && "reader-justify",
+    isProse && READER_PROSE_CLASS,
     block.role === "holding" && "font-[520]",
     // Indented, slightly condensed; never italicized or reflowed —
     // a reproduced passage must not be visually altered.
@@ -1692,7 +1694,10 @@ export const FulltextFallback = ({
         return (
           <Fragment key={pieceId}>
             <p
-              className="reader-justify mb-[var(--reader-paragraph-gap)] last:mb-0"
+              className={cn(
+                READER_PROSE_CLASS,
+                "mb-[var(--reader-paragraph-gap)] last:mb-0",
+              )}
               data-anchor={pieceId}
               id={pieceId}
             >

@@ -54,8 +54,9 @@ import { useLawHistory } from "@/features/law-search-history/law-search-history-
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
@@ -257,10 +258,9 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 );
 
 function LawHome() {
-  const { record: historyRecord } = useLawHistory();
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();
@@ -286,6 +286,11 @@ function LawHome() {
   const scope =
     publicCaseLawCountryFromParam(country) ??
     panic("The law route rendered without a launch-ready country.");
+  // The same list Recent shows, so recording and listing share one query.
+  const { record: historyRecord } = useLawHistory({
+    filter: "all",
+    country: scope,
+  });
   const countryParam = toCaseLawCountryParam(scope);
   // The results page reads this jurisdiction's stored excerpt length too, so
   // the lookup below and the list it falls back to share one cached result set.
@@ -324,7 +329,7 @@ function LawHome() {
     if (trimmed.length === 0) {
       return;
     }
-    historyRecord.mutate({ kind: "search", query: trimmed });
+    historyRecord.mutate({ kind: "search", query: trimmed, country: scope });
 
     if (
       statuteCountry !== null &&
@@ -522,7 +527,7 @@ function LawHome() {
           <LandingEmpty>{t("lawHome.noSignals")}</LandingEmpty>
         )}
       </LandingSection>
-      <LawRecent onSearch={rerunSearch} />
+      <LawRecent country={scope} onSearch={rerunSearch} />
     </LandingLayout>
   );
 }

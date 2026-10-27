@@ -1060,6 +1060,12 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "Replacing the reader-note policies installs catalog metadata without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
   },
   {
+    migration: "20261025180000_search_history_entry_country",
+    form: "add-column",
+    reason:
+      "The nullable, default-free country and country_used_at columns are catalog-only changes under a 1s lock_timeout; the index is built online.",
+  },
+  {
     migration: "20261021080000_reader_annotation_verification_claims",
     form: "row-level-security",
     reason:
@@ -1076,6 +1082,42 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
     form: "create-policy",
     reason:
       "The account export owner policy adds catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261026100000_account_email_undeliverable",
+    form: "add-column",
+    reason:
+      "The three refusal columns are nullable and default-free, a catalog-only addition to user without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026100000_account_email_undeliverable",
+    form: "add-constraint",
+    reason:
+      "The refusal-shape CHECK is added NOT VALID without scanning existing users, under 1s lock_timeout and 5s statement_timeout; the online phase validates it after the schema lock is released.",
+  },
+  {
+    migration: "20261026120000_reader_annotation_matter_documents",
+    form: "add-column",
+    reason:
+      "The document and page-digest columns are nullable and default-free, a catalog-only addition to reader notes without a rewrite, under 1s lock_timeout and 5s statement_timeout.",
+  },
+  {
+    migration: "20261026120000_reader_annotation_matter_documents",
+    form: "add-constraint",
+    reason:
+      "The widened target-type and document-shape CHECKs are added NOT VALID without scanning existing notes, under 1s lock_timeout and 5s statement_timeout; the online phase validates them after the schema lock is released.",
+  },
+  {
+    migration: "20261026120000_reader_annotation_matter_documents",
+    form: "create-policy",
+    reason:
+      "The document-cleanup owner policies add catalog metadata to reader notes without reading rows, with DDL lock acquisition bounded by 1s and the statement by 5s.",
+  },
+  {
+    migration: "20261026120000_reader_annotation_matter_documents",
+    form: "create-trigger",
+    reason:
+      "The statement-level document cleanup trigger installs metadata on the entities table without scanning rows, under 1s lock_timeout and 5s statement_timeout.",
   },
 ];
 export type LockBaselineEntry = {

@@ -507,6 +507,24 @@
     "addEntry": "Add entry",
     "amount": "Amount",
     "amountMustBePositive": "Amount must be greater than zero",
+    "approval": {
+      "approveSelected": "Approve {count, plural, one {# selected entry} other {# selected entries}}",
+      "empty": "Nothing on this matter is waiting for approval.",
+      "failed": "The change was not saved. Try again.",
+      "myTime": "My time",
+      "refusals": {
+        "invalidEntry": "Add a description and check the work date, then approve the entry.",
+        "notApprover": "Only the entry's assigned approver or an administrator can approve it.",
+        "notFound": "This entry no longer exists. Refresh the list.",
+        "runningTimer": "Stop the running timer before approving this entry.",
+        "unpriced": "This entry has no rate. Set a rate for this matter, then approve it.",
+        "wrongStatus": "This entry is no longer a draft. Refresh the list."
+      },
+      "returnComment": "Reason for returning",
+      "selectEntry": "Select entry",
+      "timeEntries": "Time entries",
+      "title": "Approvals"
+    },
     "approve": "Approve",
     "approveSelected": "Approve selected",
     "batchActions": "Batch actions",
@@ -594,6 +612,7 @@
       "openInvoice": "Open invoice",
       "otherCurrency": "{count, plural, one {# item is} other {# items are}} recorded in another currency than {currency} and stay unbilled for a separate invoice.",
       "outsideScope": "Outside the scope of VAT, 0 %",
+      "pendingApprovals": "{count, plural, one {# item is awaiting approval} other {# items are awaiting approval}}. Review approvals.",
       "rate": "Rate",
       "readyDescription": "Issuing assigns the next number from your number series and locks the invoice. A draft can still be edited.",
       "readyTitle": "Ready to issue",
@@ -892,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Not cited} one {Cited once} other {Cited # times}}",
       "dateUnavailable": "Date unavailable",
       "decisionCount": "{count, plural, =0 {No decisions} one {# decision} other {# decisions}}",
+      "goToMention": "Go to mention {number}",
+      "goToParagraph": "Go to paragraph {paragraph}",
       "lastNegative": "last negative treatment in {year}",
+      "mentionMark": "mention {number}",
+      "mentionsInDecision": "{count, plural, one {Cited once in this decision} other {Cited # times in this decision}}",
       "negativeCount": "{count, plural, one {# negative} other {# negative}}",
       "none": "No citations recorded yet.",
+      "notInStella": "Not in stella yet",
       "openAtCitation": "Open at the citation",
       "openDecision": "Open decision",
       "paragraphLabel": "Paragraph {paragraph}",
@@ -1003,6 +1027,12 @@
       "matchedIn": "Matched in {language}"
     },
     "loadingMore": "Loading more...",
+    "marginFilter": {
+      "label": "Cited provisions filter",
+      "paragraph": "{count, plural, =0 {No provisions cited in ¶{paragraph}} one {# provision cited in ¶{paragraph}} other {# provisions cited in ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {No provisions cited in the selection} one {# provision cited in the selection} other {# provisions cited in the selection}}",
+      "unnumberedParagraph": "{count, plural, =0 {No provisions cited in this paragraph} one {# provision cited in this paragraph} other {# provisions cited in this paragraph}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decision was already saved here} other {# decisions were already saved here}}",
       "empty": "No case law is kept in this matter yet.",
@@ -1024,8 +1054,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Human"
+      "human": "Human",
+      "toggleState": "{label}: {state, select, on {on} other {off}}"
     },
+    "oldestDecisions": "Oldest decisions",
     "pagination": {
       "goToPage": "Go to page {page}",
       "label": "Result pages",
@@ -1087,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# decision} other {# decisions}} × {columns, plural, one {# question} other {# questions}} on this page: {cells, plural, one {# answer} other {# answers}} will be produced.",
       "runTitle": "Answer this page",
       "savedQuestions": "Saved questions",
-      "title": "Research tables",
-      "updated": "Last edited {date}"
+      "title": "Research tables"
     },
     "results": {
       "excerpt": {
@@ -1132,6 +1163,8 @@
     "showWholeHeadnote": "Show whole headnote",
     "sort": {
       "newest": "Newest",
+      "oldest": "Oldest",
+      "oldestUnavailable": "A search is ordered by relevance or newest first. Clear the search to list the oldest decisions first.",
       "relevance": "Most relevant"
     },
     "viewer": {
@@ -1147,6 +1180,7 @@
       "citedDecisionPassage": "Passage in the decision",
       "cites": "Cites",
       "dissentByline": "Dissenting: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Go to paragraph} other {Go to paragraphs}}",
       "judgeRole": {
         "advocateGeneral": "Advocate General",
         "dissenting": "Dissenting opinion",
@@ -1698,21 +1732,8 @@
       "describe-stella-function": "Preparing data lookup",
       "describe_template": "Reading template fields",
       "discover_tools": "Preparing data lookup",
-      "docxCommentSummary": "Add a comment to {blockId}",
-      "docxDeleteSummary": "Delete {blockId}",
-      "docxDeleteTableColumnSummary": "Delete table column at {blockId}",
-      "docxDeleteTableRowSummary": "Delete table row at {blockId}",
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}",
       "docxEditSummary": "{count, plural, one {# proposed edit} other {# proposed edits}}",
-      "docxInsertAfterSummary": "Insert text after {blockId}",
-      "docxInsertBeforeSummary": "Insert text before {blockId}",
-      "docxInsertTableColumnSummary": "Insert table column near {blockId}",
-      "docxInsertTableRowSummary": "Insert table row near {blockId}",
-      "docxMergeTableCellsSummary": "Merge table cells at {blockId}",
-      "docxReplaceBlockSummary": "Replace {blockId}",
-      "docxReplaceSummary": "Replace “{find}” with “{replace}”",
-      "docxSignatureTableSummary": "Insert signature table near {blockId}",
-      "docxSplitTableCellSummary": "Split table cell at {blockId}",
       "execute-typescript": "Reading workspace data",
       "execute_typescript": "Reading workspace data",
       "expand-chat-history": "Reading chat history",
@@ -2056,7 +2077,6 @@
       "orLetUsKnowAt": "or let us know at",
       "viewDocumentation": "View documentation"
     },
-    "enterKey": "↵",
     "error": "Error",
     "expenses": "Expenses",
     "export": {
@@ -2205,10 +2225,12 @@
     "scrollToTop": "Scroll to top",
     "search": "Search...",
     "searchIn": "Search in",
+    "searchMembers": "Search members…",
     "selectAMatter": "Select a matter",
     "selectARole": "Select a role",
     "selectAll": "Select all",
     "selectDate": "Select date…",
+    "selected": "Selected",
     "sessions": "Sessions",
     "settings": "Settings",
     "showAll": "Show all",
@@ -4253,6 +4275,8 @@
       "commentPlaceholder": "Write a comment…",
       "commentText": "Comment text",
       "commentedPassage": "Commented passage",
+      "editComment": "Edit comment",
+      "editedAt": "Edited {time}",
       "guestAuthor": "You",
       "guestLimitReached": "This tab can hold up to {count} highlights and notes. Create an account to save more.",
       "guestMigrationComplete": "Highlights and notes saved.",
@@ -4282,7 +4306,12 @@
       "styleHighlight": "Highlight",
       "styleSquiggly": "Squiggly",
       "styleStrikethrough": "Strikethrough",
-      "visibilityShared": "Shared with organization"
+      "visibilityShared": "Shared with organization",
+      "visibilitySharedWithMatter": "Shared with the matter"
+    },
+    "contents": {
+      "aiSection": "{section} (AI-generated section)",
+      "headingWithAiSection": "{heading} (AI-generated section: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Block quote with citation",
@@ -4759,10 +4788,8 @@
   },
   "readerAnswers": {
     "budgetError": "The answer budget is exhausted.",
-    "citation": "¶{paragraph}",
     "expand": "Expand answer",
     "explain": "Explain",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Ask a follow-up",
     "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}",
     "loading": "Generating answer…",
@@ -6210,8 +6237,7 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Set lead",
-        "noLead": "No lead",
-        "searchMembers": "Search members…"
+        "noLead": "No lead"
       },
       "to": "To"
     },
@@ -6273,6 +6299,7 @@
       "deleteAll": "Delete all",
       "deleteAllConfirm": "Delete all {count} items in \"{column}\"?",
       "hideColumn": "Hide column",
+      "moveFailed": "{failed, plural, one {# of {total} items could not be moved.} other {# of {total} items could not be moved.}}",
       "readOnlyGrouping": "This grouping is read-only",
       "selectPropertyHint": "Select a property to group by in the toolbar",
       "uploadDocument": "Upload document",
@@ -6291,10 +6318,10 @@
       "addMember": "Add to matter",
       "addMemberDescription": "Choose an existing team member to add to this matter",
       "alreadyMember": "User is already a member",
+      "alreadyOnMatter": "Already on this matter",
       "cannotRemoveLast": "Cannot remove the last member",
       "noMembersFound": "No members found",
-      "removeMemberConfirm": "Remove this member from the matter?",
-      "selectMember": "Select a member"
+      "removeMemberConfirm": "Remove this member from the matter?"
     },
     "newDocument": "New document",
     "newFolder": "New folder",
@@ -6332,7 +6359,6 @@
           "approvedBy": "Approved by",
           "channel": "Channel",
           "dateTime": "Date and time",
-          "eventId": "Event ID",
           "notAvailable": "Not available",
           "openTarget": "Open item",
           "runId": "Run ID",
@@ -6419,6 +6445,7 @@
       "addParty": "Add party",
       "changeClient": "Change client",
       "client": "Client",
+      "movedToClient": "Moved <bdi>{matterName}</bdi> to <bdi>{clientName}</bdi>",
       "noClient": "No client assigned",
       "noClientOptional": "No client (optional)",
       "noParties": "No parties added to this matter.",
@@ -6437,6 +6464,7 @@
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
       "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.",
+      "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
       "promotedSuccess": "Matter promoted",
       "recentClients": "Recent clients",
       "removeClient": "Remove client",
@@ -6447,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode",
+      "annotations": {
+        "commentedBy": "Comment by {name}",
+        "detachedHeading": "Not on this version",
+        "detachedOtherVersion": "Made on version {version}; the page now reads differently.",
+        "detachedTextChanged": "The words are no longer on page {page}.",
+        "empty": "Select words in the document, then choose Comment.",
+        "highlightedBy": "Highlighted by {name}",
+        "refusedNoText": "This page has no text to mark. Run text recognition on the document first.",
+        "refusedNotFound": "These words were not found in the page's text. Select them again.",
+        "refusedTooLong": "This passage is too long to mark. Select a shorter one."
+      },
       "backToPeek": "Back to peek",
       "entitySidebar": "Document details",
       "evidence": "Justification",
@@ -6513,6 +6552,11 @@
       },
       "passwordLabel": "Enter the PDF password",
       "previousPage": "Previous page",
+      "selection": {
+        "explainPassagePrompt": "Explain this passage of {citation}:\n\n“{quote}”",
+        "pageLocator": "p. {page}",
+        "pageRangeLocator": "pp. {start}–{end}"
+      },
       "showOriginal": "Show original pages",
       "unlock": "Unlock"
     },
@@ -6626,10 +6670,12 @@
       "selectOperator": "Select operator",
       "setPromptPlaceholder": "Set a prompt to extract the information",
       "singleSelect": "Single Select",
-      "sortAscending": "Sort ascending",
       "sortAscendingDate": "Oldest first",
-      "sortDescending": "Sort descending",
+      "sortAscendingNumber": "Lowest first",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Newest first",
+      "sortDescendingNumber": "Highest first",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Split into # option} other {Split into # options}}",
       "suggestWithAI": "Suggest with AI",
       "text": "Text",
