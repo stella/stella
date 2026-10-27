@@ -1,0 +1,7 @@
+# Immutable Playwright device presets for configuration
+
+Generated from `scripts/ownership/playwright-device-presets.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                          | Owner                                                                                                                                | Enforcement                              | Summary                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `playwright-device-presets` — Immutable Playwright device presets for configuration | `packages/playwright-tools/src/devices.ts`, `packages/playwright-tools/src/devices.gen.ts`, `scripts/generate-playwright-devices.ts` | import `devices` from `@playwright/test` | Runtime configurations and the retry-policy reader share generated, recursively frozen descriptors. The generator reads the public SDK export and retains exactly the configured presets. |
