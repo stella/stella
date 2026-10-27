@@ -169,7 +169,7 @@ type TimeSuggestionDecision =
       durationMinutes: number;
       narrative: string;
       narrativeLanguage?: string | null;
-      billable: boolean;
+      billable?: boolean;
     }
   | { type: "dismiss" };
 

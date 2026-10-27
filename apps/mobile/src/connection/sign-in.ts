@@ -1,7 +1,5 @@
 import { Result } from "better-result";
 
-import { MOBILE_REDIRECT_URI } from "@stll/api-contract/mobile-client";
-
 import { buildAuthorizeUrl, readAuthorizationCallback } from "./authorize";
 import { resolveClientId } from "./client-id";
 import { discoverAuthorizationServer } from "./discovery";
@@ -54,6 +52,7 @@ export const signIn = async ({
   fetch,
   now,
   openAuthSession,
+  redirectUri,
   resourceFor,
   serverUrlInput,
   transport,
@@ -62,6 +61,8 @@ export const signIn = async ({
   readonly fetch: Fetch;
   readonly now: () => number;
   readonly openAuthSession: OpenAuthSession;
+  /** This build's redirect (`mobileRedirectUri`). */
+  readonly redirectUri: string;
   readonly resourceFor: (serverUrl: string) => string;
   readonly serverUrlInput: string;
   readonly transport: TransportPolicy;
@@ -73,7 +74,7 @@ export const signIn = async ({
     );
     const resource = resourceFor(serverUrl);
     const clientId = yield* Result.await(
-      resolveClientId({ fetch, metadata, resource }),
+      resolveClientId({ fetch, metadata, redirectUri, resource }),
     );
     const pkce = await createPkcePair(crypto);
     const state = createAuthorizationState(crypto);
@@ -82,10 +83,11 @@ export const signIn = async ({
         clientId,
         codeChallenge: pkce.codeChallenge,
         metadata,
+        redirectUri,
         resource,
         state,
       }),
-      MOBILE_REDIRECT_URI,
+      redirectUri,
     );
     if (outcome.type === "cancel") {
       return Result.err(
@@ -101,6 +103,7 @@ export const signIn = async ({
       expectedState: state,
       issuerRequired:
         metadata.authorization_response_iss_parameter_supported === true,
+      redirectUri,
     });
     const tokens = yield* Result.await(
       redeemAuthorizationCode({
@@ -108,6 +111,7 @@ export const signIn = async ({
         clientId,
         code,
         codeVerifier: pkce.codeVerifier,
+        redirectUri,
         resource,
         tokenEndpoint: metadata.token_endpoint,
       }),

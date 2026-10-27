@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  MOBILE_REDIRECT_URI,
   mobileClientMetadataUrl,
+  mobileRedirectUri,
 } from "@stll/api-contract/mobile-client";
 
 import type { Fetch } from "./http";
@@ -14,6 +14,7 @@ const SERVER = "https://stella.example.com";
 const ISSUER = `${SERVER}/api/auth`;
 const RESOURCE = `${SERVER}/v1`;
 const CLIENT_ID = mobileClientMetadataUrl(ISSUER) ?? "";
+const REDIRECT_URI = mobileRedirectUri("preview");
 
 const METADATA = {
   issuer: ISSUER,
@@ -98,6 +99,7 @@ const signInWith = async (
     fetch: server.fetch,
     now: () => 1_000_000,
     openAuthSession,
+    redirectUri: REDIRECT_URI,
     resourceFor: () => RESOURCE,
     serverUrlInput: SERVER,
     transport: { allowPlainHttp: false },
@@ -127,9 +129,7 @@ describe("sign-in", () => {
       access: { token: "access-1", expiresAt: 1_000_000 + 900_000 },
     });
     expect(authorizeUrl?.searchParams.get("client_id")).toBe(CLIENT_ID);
-    expect(authorizeUrl?.searchParams.get("redirect_uri")).toBe(
-      MOBILE_REDIRECT_URI,
-    );
+    expect(authorizeUrl?.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
     expect(authorizeUrl?.searchParams.get("resource")).toBe(RESOURCE);
     expect(authorizeUrl?.searchParams.get("code_challenge_method")).toBe(
       "S256",
@@ -140,7 +140,7 @@ describe("sign-in", () => {
       grant_type: "authorization_code",
       client_id: CLIENT_ID,
       code: "code-1",
-      redirect_uri: MOBILE_REDIRECT_URI,
+      redirect_uri: REDIRECT_URI,
       resource: RESOURCE,
     });
   });

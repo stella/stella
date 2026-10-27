@@ -149,6 +149,7 @@ export const DOC_SOURCES = {
       "expo",
       "expo-constants",
       "expo-crypto",
+      "expo-dev-client",
       "expo-doctor",
       "expo-linking",
       "expo-router",

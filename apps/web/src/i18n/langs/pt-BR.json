@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# ação} many {# ações} other {# ações}}",
       "activeVsLogged": "{active} de atividade · {logged} lançados",
+      "alreadyCovered": "Já coberto pelo tempo registrado",
       "chatEvidence": "{count, plural, one {# mensagem} many {# mensagens} other {# mensagens}} em “{title}”",
+      "engagedTime": "{duration} de atividade",
       "keyboardHint": "Enter aceita, E edita antes de aceitar, Delete descarta",
       "privacyNote": "Só você vê estas sugestões. Nada é registrado até você aceitar.",
       "title": "Sugestões a partir da sua atividade",

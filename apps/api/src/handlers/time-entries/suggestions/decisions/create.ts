@@ -35,6 +35,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
+import { resolveSuggestionBillingDefault } from "../billing-default";
+
 const SUGGESTION_UNAVAILABLE_HINT =
   "The suggestion was already accepted or dismissed, or the day's activity " +
   "regrouped it. Call time-entries.suggestions.list for the day again and " +
@@ -96,6 +98,31 @@ const acceptSuggestion = async function* ({
 }: DecisionContext & {
   body: DecisionBody & { decision: v.InferOutput<typeof acceptDecisionSchema> };
 }) {
+  const existingDecision = yield* Result.await(
+    safeDb(async (tx) => {
+      const [existing] = await tx
+        .select({
+          status: timeEntrySuggestions.status,
+          timeEntryId: timeEntrySuggestions.timeEntryId,
+        })
+        .from(timeEntrySuggestions)
+        .where(
+          and(
+            eq(timeEntrySuggestions.workspaceId, workspaceId),
+            eq(timeEntrySuggestions.userId, userId),
+            eq(timeEntrySuggestions.fingerprint, body.fingerprint),
+          ),
+        );
+      return existing;
+    }),
+  );
+  if (existingDecision) {
+    return {
+      fingerprint: body.fingerprint,
+      status: existingDecision.status,
+      timeEntryId: existingDecision.timeEntryId,
+    };
+  }
   const loaded = yield* loadTimeSuggestions({
     safeDb,
     featureAccessSnapshot,
@@ -121,19 +148,27 @@ const acceptSuggestion = async function* ({
   const policy = yield* Result.await(
     readTimePolicy({ safeDb, organizationId }),
   );
+  const billingDefault = yield* resolveSuggestionBillingDefault({
+    safeDb,
+    workspaceId,
+    userId,
+    dateWorked: body.date,
+  });
+  const billable = body.decision.billable ?? billingDefault.billable;
   const prepared = yield* prepareTimeEntryInsert({
     safeDb,
     policy,
     canApprove: canApproveTimeEntries(memberRole),
     workspaceId,
     userId,
+    resolvedRate: billingDefault.rate,
     body: {
       dateWorked: body.date,
       timezoneId: body.timezoneId,
       durationMinutes: body.decision.durationMinutes,
       narrative: body.decision.narrative,
       narrativeLanguage: body.decision.narrativeLanguage,
-      billable: body.decision.billable,
+      billable,
       taskCode: body.decision.taskCode,
       activityCode: body.decision.activityCode,
     },
@@ -221,7 +256,7 @@ const dismissSuggestion = async function* ({
     date: body.date,
     timezoneId: body.timezoneId,
   });
-  const pending = loaded.pending.some(
+  const pending = loaded.pending.find(
     (candidate) => candidate.fingerprint === body.fingerprint,
   );
   const stored = yield* Result.await(
@@ -267,6 +302,7 @@ const dismissSuggestion = async function* ({
         dateWorked: body.date,
         fingerprint: body.fingerprint,
         status: TIME_ENTRY_SUGGESTION_STATUS.DISMISSED,
+        evidence: pending.evidence,
       });
       return Result.ok({
         status: TIME_ENTRY_SUGGESTION_STATUS.DISMISSED,
