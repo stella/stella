@@ -5,11 +5,14 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  PUBLIC_READ_STATEMENT_TIMEOUT_MS,
   setSharedTransactionTimeouts,
   withSharedStatementTimeout,
   withSharedTransactionTimeoutRestoration,
 } from "@/api/db/shared-pool-timeouts";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
+import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import {
   configureReadTransaction,
@@ -185,11 +188,17 @@ test("a caught select cancellation is logged", async () => {
     });
 
     expect(result).toMatchObject({
-      _tag: "DatabaseError",
+      _tag: "PublicLawStatementError",
       message: "Public-law statement failed",
       cause: cancelled,
     });
     expect(getPgErrorCode(result)).toBe("57014");
+    const timeout = runWithPublicReadStatementTimeout(
+      PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse,
+      () => publicReadTimeoutError(result),
+    );
+    expect(timeout).toMatchObject({ status: 503, code: "PUBLIC_READ_TIMEOUT" });
+    expect(publicReadTimeoutError(result)).toBeNull();
     const cancellation = logs
       .at("WARN")
       .find(({ message }) =>

@@ -17,7 +17,6 @@ import {
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
-import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
 import { logger } from "@/api/lib/observability/logger";
 import { getPgErrorCode } from "@/api/lib/pg-error";
@@ -29,6 +28,7 @@ import type {
   PublicLawColumnGrantsByRelation,
   PublicLawColumnPair,
 } from "@/api/lib/public-law-relations";
+import { PublicLawStatementError } from "@/api/lib/public-law-statement-error";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -82,12 +82,12 @@ const publicLawStatementName = (): string => {
 const observePublicLawStatement = async <T>(
   statementName: string,
   operation: () => Promise<T>,
-): Promise<Result<T, DatabaseError>> => {
+): Promise<Result<T, PublicLawStatementError>> => {
   const startedAt = performance.now();
   const outcome = await Result.tryPromise({
     try: operation,
     catch: (cause: unknown) =>
-      new DatabaseError({
+      new PublicLawStatementError({
         message: "Public-law statement failed",
         cause,
       }),

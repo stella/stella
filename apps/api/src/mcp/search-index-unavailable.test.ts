@@ -10,7 +10,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CorpusServingGenerationAbsentError } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
@@ -34,6 +34,7 @@ import {
   flushFailureObservations,
   resetFailureObservationsForTesting,
 } from "@/api/lib/observability/failure-shadow";
+import { PublicLawStatementError } from "@/api/lib/public-law-statement-error";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES } from "@/api/mcp/error-codes";
@@ -447,6 +448,49 @@ describe("search_index_unavailable", () => {
 });
 
 describe("public corpus statement budgets", () => {
+  test("a scoped annotation cancellation keeps its own error inside a public-read budget", async () => {
+    const context = createContext();
+    let reached = false;
+    const result = await handleMcpToolCall({
+      toolName: "list_reader_annotations",
+      args: { target_type: "decision", target_id: WORKSPACE_ID },
+      context: {
+        ...context,
+        safeDb: async () => {
+          reached = true;
+          expect(getPublicReadStatementTimeoutMs()).toBe(
+            PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse,
+          );
+          return Result.err(
+            new UnhandledException({
+              cause: new DatabaseError({
+                message: "Workspace statement failed",
+                cause: Object.assign(
+                  new Error("workspace statement cancelled"),
+                  {
+                    code: "57014",
+                  },
+                ),
+              }),
+            }),
+          );
+        },
+        testDependencies: {
+          ...context.testDependencies,
+          resolveAnnotationTarget: async () => ({
+            status: "available",
+            readBlocks: async () => [],
+          }),
+        },
+      },
+    });
+    expect(reached).toBe(true);
+    expect(result.isError).toBe(true);
+    expect(payloadOf(result)).toMatchObject({
+      error: { code: "internal_error" },
+    });
+  });
+
   test("every corpus disposition runs at dispatch under its class budget", async () => {
     const corpusTools = Object.entries(LAW_MCP_TOOL_DISPOSITION)
       .filter(([, disposition]) => disposition === "corpus")
@@ -518,8 +562,11 @@ describe("public corpus statement budgets", () => {
               expect(getPublicReadStatementTimeoutMs()).toBe(
                 PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
               );
-              throw Object.assign(new Error("private SQL diagnostics"), {
-                code: "57014",
+              throw new PublicLawStatementError({
+                message: "Public-law statement failed",
+                cause: Object.assign(new Error("private SQL diagnostics"), {
+                  code: "57014",
+                }),
               });
             },
           },
@@ -563,8 +610,11 @@ describe("public corpus statement budgets", () => {
 
   test("failed Results map cancels only inside the public-read budget", () => {
     const cancelled = new UnhandledException({
-      cause: Object.assign(new Error("private SQL diagnostics"), {
-        errno: "57014",
+      cause: new PublicLawStatementError({
+        message: "Public-law statement failed",
+        cause: Object.assign(new Error("private SQL diagnostics"), {
+          errno: "57014",
+        }),
       }),
     });
     const within = runWithPublicReadStatementTimeout(
