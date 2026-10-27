@@ -11,7 +11,7 @@ const CONTENTS = Object.values(BUTTON_CONTENT);
 // The primary action is the first button the split renders; Base UI marks the
 // element a mounted tooltip is attached to.
 const primaryHasTooltip = (markup: string) => {
-  const primary = markup.match(/<button[^>]*>/u)?.at(0);
+  const primary = /<button[^>]*>/u.exec(markup)?.at(0);
   expect(primary).toBeDefined();
   return primary?.includes("data-base-ui-tooltip-trigger") ?? false;
 };
