@@ -1112,8 +1112,7 @@
       "runEstimate": "{rows, plural, zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}} × {columns, plural, zero {# jautājumu} one {# jautājums} other {# jautājumi}} šajā lapā: {cells, plural, zero {tiks izveidotas # atbilžu} one {tiks izveidota # atbilde} other {tiks izveidotas # atbildes}}.",
       "runTitle": "Atbildēt šajā lapā",
       "savedQuestions": "Saglabātie jautājumi",
-      "title": "Pētījumu tabulas",
-      "updated": "Pēdējo reizi labota {date}"
+      "title": "Pētījumu tabulas"
     },
     "results": {
       "excerpt": {

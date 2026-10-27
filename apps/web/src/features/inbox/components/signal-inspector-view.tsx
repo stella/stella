@@ -15,6 +15,7 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
@@ -125,9 +126,9 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
           )}
         </time>
       </div>
-      <h2 className="text-base font-semibold text-balance">
+      <InspectorTitle isEmpty={signal.title === ""}>
         <UserText>{signal.title}</UserText>
-      </h2>
+      </InspectorTitle>
       <UserText as="p" className="text-muted-foreground text-sm text-pretty">
         {signal.summary}
       </UserText>

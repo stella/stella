@@ -1,60 +1,58 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type ParsedSource,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const featureRoot = path.resolve(import.meta.dir, "../../..");
 const sourceOf = (relativePath: string) =>
-  ts.createSourceFile(
+  parseSource(
     relativePath,
     readFileSync(path.join(featureRoot, relativePath), "utf-8"),
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith("tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
-const importedCalls = (source: ts.SourceFile, exportedName: string) => {
+const importedCalls = (source: ParsedSource, exportedName: string) => {
   const localNames = new Set<string>();
-  for (const statement of source.statements) {
+  for (const statement of source.program.body) {
     if (
-      !ts.isImportDeclaration(statement) ||
-      statement.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
+      statement.type !== "ImportDeclaration" ||
+      statement.importKind === "type"
     ) {
       continue;
     }
     if (
       exportedName === "useLazyDecisionAnalysis" &&
-      (!ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !==
-          "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis")
+      statement.source.value !==
+        "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis"
     ) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) {
-      continue;
-    }
-    for (const binding of bindings.elements) {
+    for (const binding of statement.specifiers) {
       if (
-        !binding.isTypeOnly &&
-        (binding.propertyName?.text ?? binding.name.text) === exportedName
+        binding.type === "ImportSpecifier" &&
+        binding.importKind !== "type" &&
+        (binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value) === exportedName
       ) {
-        localNames.add(binding.name.text);
+        localNames.add(binding.local.name);
       }
     }
   }
   let calls = 0;
-  const visit = (node: ts.Node) => {
+  walk(source.program, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      localNames.has(node.expression.text)
+      node.type === "CallExpression" &&
+      node.callee.type === "Identifier" &&
+      localNames.has(node.callee.name)
     ) {
       calls += 1;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
+  });
   return calls;
 };
 

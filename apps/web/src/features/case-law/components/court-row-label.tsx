@@ -30,10 +30,9 @@ const uiTier = (tier: string): CourtTier =>
 
 /**
  * What a breakdown row stands for: one court by name, a whole tier of them,
- * or every court beyond the ones the breakdown lists. One component for the
- * coverage page and the corpus-status popover, so the two name the same row
- * the same way. The rows stand in one flat list, so a tier row names its
- * tier itself rather than sitting under a heading.
+ * or every court beyond the ones the breakdown lists. The rows stand in one
+ * flat list, so a tier row names its tier itself rather than sitting under a
+ * heading.
  */
 export const CourtRowLabel = ({ row }: { row: CourtBreakdownRow }) => {
   const t = useTranslations();

@@ -1112,8 +1112,7 @@
       "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
       "runTitle": "Odpowiedz na tej stronie",
       "savedQuestions": "Zapisane pytania",
-      "title": "Tabele badawcze",
-      "updated": "Ostatnia edycja {date}"
+      "title": "Tabele badawcze"
     },
     "results": {
       "excerpt": {
