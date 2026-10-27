@@ -17,8 +17,6 @@ import {
   SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
-import { Button } from "@stll/ui/button";
-import { RefreshCwIcon, SearchXIcon } from "@stll/ui/icons";
 
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import { publicLawNumberedPagerModel } from "@/components/public-law-table/public-law-pagination.logic";
@@ -127,7 +125,10 @@ import {
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
-import { isSearchUnavailableError } from "@/lib/public-law-api";
+import {
+  PublicLawListFailure,
+  PublicLawResultsBoundary,
+} from "@/routes/law/-components/public-law-list-failure";
 
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { Route } from "./index";
@@ -376,7 +377,7 @@ export function PublicCaseLawIndex({
     searchFetched: firstPageQuery.isFetched,
     searchFetchStatus: firstPageQuery.fetchStatus,
   });
-  // A backend that cannot be reached is this region's failure, not the page's.
+  // A failed search is this region's failure, not the page's.
   // The loader lets it through for the same reason, so both the first render
   // and a filter applied to a drawn page arrive here.
   const loadedSearch = Route.useMatch({
@@ -384,9 +385,7 @@ export function PublicCaseLawIndex({
   });
   const isSearchUnavailable = publicLawSearchOutage({
     hasPages: pageData !== undefined,
-    isQueryOutage:
-      isSearchUnavailableError(error) ||
-      isSearchUnavailableError(firstPageQuery.error),
+    isQueryOutage: error !== null || firstPageQuery.error !== null,
     loaded: loadedSearch,
   });
   // The rows are the only region that waits: either they are not there yet,
@@ -826,8 +825,10 @@ export function PublicCaseLawIndex({
         />
 
         {isSearchUnavailable ? (
-          <SearchUnavailable
-            onRetry={() => {
+          <PublicLawListFailure
+            description={t("caseLaw.searchUnavailable.description")}
+            error={error ?? firstPageQuery.error}
+            reset={() => {
               detached(
                 Promise.all([refetch(), firstPageQuery.refetch()]),
                 "cases.search-retry",
@@ -835,7 +836,10 @@ export function PublicCaseLawIndex({
             }}
           />
         ) : (
-          <>
+          <PublicLawResultsBoundary
+            searchKey={JSON.stringify(scopedSearch)}
+            resetOn={pageData}
+          >
             <DecisionTable
               dateOrder={dateOrder}
               decisions={find.rows}
@@ -884,7 +888,7 @@ export function PublicCaseLawIndex({
               )}
               pageSize={pageSize}
             />
-          </>
+          </PublicLawResultsBoundary>
         )}
       </div>
     </main>
@@ -984,36 +988,3 @@ const useCaseLawRewriteFlow = ({
     searchOriginalWords,
   };
 };
-
-type SearchUnavailableProps = {
-  onRetry: () => void;
-};
-
-/**
- * The results region when the search backend could not be reached. It stands
- * where the grid stands, so the box and the filters above it keep working and
- * the reader's query stays in the URL for the retry to use.
- *
- * The same shape the workspace tables and the citation panels use for a read
- * that failed, rather than the page-level `EmptyScreen`: this replaces one
- * region of a drawn page, and a hero would read as the whole page being gone.
- */
-function SearchUnavailable({ onRetry }: SearchUnavailableProps) {
-  const t = useTranslations();
-
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-      <SearchXIcon className="text-muted-foreground size-8" />
-      <div className="max-w-sm">
-        <p className="text-sm">{t("caseLaw.searchUnavailable.title")}</p>
-        <p className="text-foreground-strong-muted mt-1 text-xs">
-          {t("caseLaw.searchUnavailable.description")}
-        </p>
-      </div>
-      <Button onClick={onRetry} size="sm" variant="secondary">
-        <RefreshCwIcon />
-        {t("common.retry")}
-      </Button>
-    </div>
-  );
-}
