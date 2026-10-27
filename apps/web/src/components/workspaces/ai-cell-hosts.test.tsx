@@ -365,6 +365,54 @@ const assertHostsUseSharedAdapters = (
 };
 
 describe("AI table host census", () => {
+  test.each([
+    { declaration: 'import columns from "./factory";', runtime: true },
+    { declaration: 'import { columns } from "./factory";', runtime: true },
+    { declaration: 'import * as columns from "./factory";', runtime: true },
+    {
+      declaration: 'import columns, { type Shape } from "./factory";',
+      runtime: true,
+    },
+    {
+      declaration:
+        'import columns, { type Shape, type Other } from "./factory";',
+      runtime: true,
+    },
+    { declaration: 'import {} from "./factory";', runtime: true },
+    { declaration: 'import "./factory";', runtime: true },
+    { declaration: 'import { type Shape } from "./factory";', runtime: false },
+    { declaration: 'import type columns from "./factory";', runtime: false },
+    { declaration: 'import type { Shape } from "./factory";', runtime: false },
+    { declaration: 'import type {} from "./factory";', runtime: false },
+  ])(
+    "preserves runtime dependency semantics for $declaration",
+    ({ declaration, runtime }) => {
+      const census = sourceCensus(
+        new Map([
+          [
+            "synthetic/adapter.tsx",
+            'import { AiCell } from "@/components/workspaces/ai-cell"; export const SyntheticCell = () => <AiCell state={{type: "running"}} />;',
+          ],
+          [
+            "synthetic/factory.tsx",
+            'import { SyntheticCell } from "./adapter"; export const columns = (kind) => { switch(kind) { case "question": return { cell: () => <SyntheticCell /> }; } };',
+          ],
+          [
+            "synthetic/host.tsx",
+            `import { PublicLawTable } from "@/components/public-law-table/public-law-table"; ${declaration} export const Host = () => <PublicLawTable />;`,
+          ],
+        ]),
+      );
+      expect(census.hosts.map((host) => host.file)).toEqual(
+        runtime ? ["synthetic/host"] : [],
+      );
+      if (runtime) {
+        expect([...census.hosts.flatMap((host) => [...host.adapters])]).toEqual(
+          ["SyntheticCell"],
+        );
+      }
+    },
+  );
   test("discovers aliased and namespace table hosts even when their shared adapter is removed", () => {
     const sources = new Map([
       [
