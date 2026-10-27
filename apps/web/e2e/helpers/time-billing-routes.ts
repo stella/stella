@@ -6,7 +6,7 @@ import {
   type Node,
   parseSource,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 const ROUTES_DIRECTORY = path.resolve(import.meta.dirname, "../../src/routes");
 const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";
@@ -102,7 +102,6 @@ const readRoute = (filePath: string) => {
       (property) =>
         property.type === "Property" &&
         property.kind === "init" &&
-        !property.method &&
         !property.shorthand &&
         !property.computed &&
         source.sourceText.slice(property.key.start, property.key.end) ===
@@ -124,14 +123,14 @@ const readRoute = (filePath: string) => {
 };
 
 /** Real dedicated guards plus descendants that inherit their beforeLoad. */
-export const listTimeBillingRoutes = () => {
-  const routes = readdirSync(ROUTES_DIRECTORY, {
+export const listTimeBillingRoutes = (routesDirectory = ROUTES_DIRECTORY) => {
+  const routes = readdirSync(routesDirectory, {
     recursive: true,
     encoding: "utf-8",
   })
     .filter((file) => file.endsWith(".tsx"))
     .flatMap((file) => {
-      const route = readRoute(path.join(ROUTES_DIRECTORY, file));
+      const route = readRoute(path.join(routesDirectory, file));
       return route === null ? [] : [route];
     });
   const guarded = routes.filter((route) => route.dedicated);
