@@ -174,6 +174,39 @@ import {
 } from "../../../../packages/cli/src/output.ts";
 import { parsePayload as parseCliPayload } from "../../../../packages/cli/src/run-leaf-command.ts";
 
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockReset();
+  listCaseLawProvisionDecisionsMock.mockReset();
+  listStatuteVersionsHandlerMock.mockReset();
+  loadAllowlistByWorkspaceMock.mockClear();
+  loadGazetteerByWorkspaceMock.mockClear();
+  readCaseLawProvisionScopeMock.mockReset();
+  readContactExecute.mockReset();
+  readContentAcrossMattersExecute.mockReset();
+  readDecisionHandlerMock.mockReset();
+  readGatedDecisionCitationDigestMock.mockReset();
+  readGatedDecisionCitationsMock.mockReset();
+  readGatedDecisionMock.mockReset();
+  readLegislationProvisionVersionsMock.mockReset();
+  readOverviewHandlerMock.mockReset();
+  readProvisionHistoryHandlerMock.mockReset();
+  readProvisionWorkLinkedMock.mockReset();
+  readPublicLegislationHandlerMock.mockReset();
+  readVersionBlocksMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+  readWorkspaceMembersHandlerMock.mockReset();
+  resolveStatuteExpressionMock.mockReset();
+  resolveStatuteWorkVersionMock.mockReset();
+  searchAcrossMattersExecute.mockReset();
+  searchDecisionsHandlerMock.mockReset();
+  searchLegislationHandlerMock.mockReset();
+  searchProviderSearchMock.mockClear();
+  withRedistributableSubjectMock.mockReset();
+  withTimeoutMock.mockReset();
+  withTimeoutMock.mockImplementation(withTimeoutDefault);
+});
+
 const wireSchemaValidator = createWireSchemaValidator();
 
 /**
@@ -356,9 +389,9 @@ const seedDocxFile = async (fileId: string, workspaceId = WORKSPACE_ID) => {
 // test exercises the real S3-read-and-convert logic unchanged. Individual
 // tests override this with `mockImplementationOnce` to simulate the
 // operation timing out, without an actual wall-clock wait.
-const withTimeoutMock = mock(
-  async (operation: () => Promise<unknown>) => await operation(),
-);
+const withTimeoutDefault = async (operation: () => Promise<unknown>) =>
+  await operation();
+const withTimeoutMock = mock(withTimeoutDefault);
 const withTimeoutDependency = asTestRaw<typeof withTimeout>(withTimeoutMock);
 
 const anonymizeTextFieldsMock = mock();

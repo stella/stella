@@ -49,6 +49,22 @@ test("rejects case-folded keys handed to the literal key helpers", async () => {
   expect(await lintSingleRule(RULE, source)).toEqual([1, 3, 4]);
 });
 
+test("rejects a search fold assembled from the owner's building blocks", async () => {
+  const source = [
+    "stripDiacritics(normalizeUnicode(text, 'NFKC')).toLowerCase();",
+    "applyArabicFolds(text);",
+    "foldToAscii(label).toLowerCase();",
+    "const key = stripDiacritics(text.trim());",
+    "arabicNormalize(text);",
+    "applyArabicFoldsWithOffsets(text);",
+    "foldSearchMatchText(text);",
+    "foldSearchMatchTextWithOffsets(text);",
+    "normalizeUnicode(text, 'NFC');",
+    "stripUnicodeMarks(name, { form: 'NFD', markClass: 'basic-combining' });",
+  ].join("\n");
+  expect(await lintSingleRule(RULE, source)).toEqual([1, 2, 3, 4, 5, 6]);
+});
+
 test("accepts constant tokens, the owner, and compares without a case fold", async () => {
   const source = [
     'fileName.toLowerCase().endsWith(".pdf");',
@@ -86,7 +102,7 @@ test("rejects a self-filtering combobox or command left on the collator filter",
   ).toEqual([1, 2, 3, 4]);
 });
 
-test("covers the web app and the design system outside tests, with one named exception", () => {
+test("covers the web app, the decision reader and the design system outside tests, with named exceptions", () => {
   const matching = oxlintConfig.overrides.filter(
     (override) => override.rules?.[RULE_ID] !== undefined,
   );
@@ -96,6 +112,7 @@ test("covers the web app and the design system outside tests, with one named exc
   expect(override?.files).toEqual(
     expect.arrayContaining([
       "apps/web/src/**/*.{ts,tsx}",
+      "packages/decision-reader/src/**/*.{ts,tsx}",
       "packages/ui/src/**/*.{ts,tsx}",
       "packages/workspace-ui/src/**/*.{ts,tsx}",
     ]),
@@ -107,6 +124,7 @@ test("covers the web app and the design system outside tests, with one named exc
   ).toEqual([
     "**/*.test.{ts,tsx}",
     "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
+    "apps/web/src/routes/_protected.contacts/-import-candidate.ts",
     "packages/ui/src/components/fixtures/**",
   ]);
 });

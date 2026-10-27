@@ -1,6 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -14,32 +23,31 @@ const requests: RecordedRequest[] = [];
 const unexpectedRequests: string[] = [];
 // An answer may be held open, to look at the UI while a request is in flight.
 const answers: (Response | Promise<Response>)[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const { pathname } = new URL(request.url);
-      if (pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      const text = await request.text();
-      requests.push({
-        method: request.method,
-        path: pathname,
-        body: text === "" ? null : JSON.parse(text),
-      });
-      const answer = answers.shift();
-      if (answer === undefined) {
-        unexpectedRequests.push(`${request.method} ${pathname}`);
-        return panic(
-          `Unexpected network request: ${request.method} ${pathname}`,
-        );
-      }
-      return answer;
-    },
-    { preconnect: () => undefined },
-  ),
+let fetchBoundary: Mock<typeof globalThis.fetch>;
+const originalFetch = globalThis.fetch;
+const fetchImplementation = Object.assign(
+  async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = new Request(input, init);
+    const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/api/auth/")) {
+      return Response.json(null);
+    }
+    const text = await request.text();
+    requests.push({
+      method: request.method,
+      path: pathname,
+      body: text === "" ? null : JSON.parse(text),
+    });
+    const answer = answers.shift();
+    if (answer === undefined) {
+      unexpectedRequests.push(`${request.method} ${pathname}`);
+      return panic(`Unexpected network request: ${request.method} ${pathname}`);
+    }
+    return answer;
+  },
+  { preconnect: () => undefined },
 );
+globalThis.fetch = fetchImplementation;
 const { cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -105,7 +113,15 @@ const page = (items: ReturnType<typeof comment>[]) =>
   Response.json({ items, limit: 100, nextCursor: null });
 
 const clients: InstanceType<typeof QueryClient>[] = [];
+beforeEach(() => {
+  globalThis.fetch = fetchImplementation;
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    fetchImplementation,
+  );
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients) {
     client.clear();
@@ -119,6 +135,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
+  globalThis.fetch = originalFetch;
   await unregisterDomEnvironment();
 });
 

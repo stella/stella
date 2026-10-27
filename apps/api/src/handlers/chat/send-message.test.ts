@@ -57,6 +57,21 @@ import type {
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
 
+beforeEach(() => {
+  compactMessagesForContextMock.mockClear();
+  loadExternalMcpToolsForUserMock.mockClear();
+  loadWebSearchProvidersForOrgMock.mockClear();
+  rollbackUnpersistedChatSideEffectsMock.mockReset();
+  rollbackUnpersistedChatSideEffectsMock.mockImplementation(
+    rollbackUnpersistedChatSideEffectsDefault,
+  );
+  uploadMessageFilesWithRollbackMock.mockReset();
+  uploadMessageFilesWithRollbackMock.mockImplementation(
+    uploadMessageFilesWithRollbackDefault,
+  );
+  upsertChatThreadSearchDocumentMock.mockClear();
+});
+
 let webSearchProviderLoadHook: (() => void) | undefined;
 const loadWebSearchProvidersForOrgMock = mock(async () => {
   webSearchProviderLoadHook?.();
@@ -87,24 +102,26 @@ const loadExternalMcpToolsForUserMock = mock(async () => {
 });
 const realRollbackUnpersistedChatSideEffects =
   chatSideEffectsModule.rollbackUnpersistedChatSideEffects;
+const uploadMessageFilesWithRollbackDefault = async ({
+  message,
+}: {
+  message: PersistableChatMessage;
+}): Promise<
+  Result<
+    { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
+    never
+  >
+> => Result.ok({ message, uploadedFiles: [] });
 const uploadMessageFilesWithRollbackMock = mock(
-  async ({
-    message,
-  }: {
-    message: PersistableChatMessage;
-  }): Promise<
-    Result<
-      { message: PersistableChatMessage; uploadedFiles: UploadedChatFile[] },
-      never
-    >
-  > => Result.ok({ message, uploadedFiles: [] }),
+  uploadMessageFilesWithRollbackDefault,
 );
+const rollbackUnpersistedChatSideEffectsDefault = async (
+  options: Parameters<
+    typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
+  >[0],
+) => await realRollbackUnpersistedChatSideEffects(options);
 const rollbackUnpersistedChatSideEffectsMock = mock(
-  async (
-    options: Parameters<
-      typeof chatSideEffectsModule.rollbackUnpersistedChatSideEffects
-    >[0],
-  ) => await realRollbackUnpersistedChatSideEffects(options),
+  rollbackUnpersistedChatSideEffectsDefault,
 );
 const compactMessagesForContextMock = mock(compactMessagesForContext);
 const sendMessage = createSendMessage({
