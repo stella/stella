@@ -1051,6 +1051,7 @@
       "human": "Humaines",
       "toggleState": "{label} : {state, select, on {activé} other {désactivé}}"
     },
+    "oldestDecisions": "Décisions les plus anciennes",
     "pagination": {
       "goToPage": "Aller à la page {page}",
       "label": "Pages de résultats",
@@ -1156,6 +1157,8 @@
     "showWholeHeadnote": "Afficher le sommaire complet",
     "sort": {
       "newest": "Les plus récentes",
+      "oldest": "Les plus anciennes",
+      "oldestUnavailable": "Une recherche est triée par pertinence ou de la plus récente à la plus ancienne. Effacez la recherche pour afficher d'abord les décisions les plus anciennes.",
       "relevance": "Les plus pertinentes"
     },
     "viewer": {
@@ -6660,10 +6663,12 @@
       "selectOperator": "Sélectionner un opérateur",
       "setPromptPlaceholder": "Définir un prompt pour extraire l'information",
       "singleSelect": "Sélection unique",
-      "sortAscending": "Tri croissant",
       "sortAscendingDate": "Plus anciens en premier",
-      "sortDescending": "Tri décroissant",
+      "sortAscendingNumber": "Plus petits en premier",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Plus récents en premier",
+      "sortDescendingNumber": "Plus grands en premier",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Diviser en # option} other {Diviser en # options}}",
       "suggestWithAI": "Suggérer avec l’IA",
       "text": "Texte",
