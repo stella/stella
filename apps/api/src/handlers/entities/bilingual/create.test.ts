@@ -26,6 +26,12 @@ import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  createEntityFromBufferMock.mockClear();
+  loadEntityVersionDocxBufferMock.mockClear();
+  scanFileMock.mockClear();
+});
+
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
 );

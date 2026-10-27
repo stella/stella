@@ -182,6 +182,76 @@ fn present(window: &WebviewWindow) -> tauri::Result<()> {
   window.show().and_then(|()| window.set_focus())
 }
 
+/// Shows the editor as the key window of the active app: WebKit draws the
+/// caret and focus ring only in an active app's key window. The editor opens
+/// from the non-activating clipboard panel, so the app the user was in is
+/// still frontmost; it is recorded here, before activation, and gets
+/// activation back when the editor closes.
+///
+/// A reopen reaches this synchronously from the Edit click: Tauri runs
+/// synchronous commands on the main thread, so the activation request is
+/// stella's direct response to the user's click in the panel. The panel's
+/// prevents-activation state stops only the window server activating stella
+/// on that click itself; the click is still delivered to stella. A first open
+/// presents once the editor page has loaded instead.
+#[cfg(target_os = "macos")]
+fn present_editor(window: &WebviewWindow) -> tauri::Result<()> {
+  let presented = on_main_thread(window, false, |window| {
+    remember_return_app(window);
+    stella_desktop_macos::present_activating_window(window)
+  });
+  if presented {
+    return Ok(());
+  }
+  window.show().and_then(|()| window.set_focus())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn present_editor(window: &WebviewWindow) -> tauri::Result<()> {
+  window.show().and_then(|()| window.set_focus())
+}
+
+/// Records the frontmost app unless it is stella itself: reopening the editor
+/// while stella is active keeps the app recorded when it first opened.
+#[cfg(target_os = "macos")]
+fn remember_return_app(window: &WebviewWindow) {
+  let Some(foreground) = crate::foreground_app::current_on_main_thread() else {
+    return;
+  };
+  if u32::try_from(foreground.process_id).is_ok_and(|id| id == std::process::id()) {
+    return;
+  }
+  window
+    .state::<ClipboardEditorSessions>()
+    .remember_return_app(foreground.process_id);
+}
+
+/// Hands activation back to the app recorded when the editor opened, if stella
+/// is still active and that app still runs.
+#[cfg(target_os = "macos")]
+fn return_activation(window: &WebviewWindow) {
+  use stella_desktop_macos::ActivationReturn;
+
+  let Some(process_id) = window.state::<ClipboardEditorSessions>().take_return_app()
+  else {
+    return;
+  };
+  let outcome = on_main_thread(window, ActivationReturn::NotOnMainThread, move |_| {
+    stella_desktop_macos::return_activation(process_id)
+  });
+  match outcome {
+    ActivationReturn::Requested
+    | ActivationReturn::NotActive
+    | ActivationReturn::PreviousAppGone => {}
+    ActivationReturn::Declined | ActivationReturn::NotOnMainThread => {
+      tracing::warn!(
+        ?outcome,
+        "clipboard editor could not return activation to the previous app"
+      );
+    }
+  }
+}
+
 /// Parks the window instead of hiding it. Returns false when parking is not
 /// possible (no main thread, no window handle); the caller then falls back to
 /// ordering the window out.
@@ -426,6 +496,9 @@ pub struct ClipboardEditorSessions(Mutex<EditorSessions>);
 struct EditorSessions {
   last: u64,
   open: Option<OpenEditor>,
+  /// Process identifier of the app that was frontmost when the editor opened.
+  #[cfg(target_os = "macos")]
+  return_app: Option<i32>,
 }
 
 struct OpenEditor {
@@ -487,6 +560,18 @@ impl ClipboardEditorSessions {
     Ok(())
   }
 
+  #[cfg(target_os = "macos")]
+  fn remember_return_app(&self, process_id: i32) {
+    if let Ok(mut sessions) = self.0.lock() {
+      sessions.return_app = Some(process_id);
+    }
+  }
+
+  #[cfg(target_os = "macos")]
+  fn take_return_app(&self) -> Option<i32> {
+    self.0.lock().ok()?.return_app.take()
+  }
+
   fn is_open(&self) -> bool {
     self.0.lock().is_ok_and(|sessions| sessions.open.is_some())
   }
@@ -520,24 +605,25 @@ pub fn open_editor(app: &AppHandle, item_id: String) -> Result<(), String> {
   let session = sessions.begin(item_id, ClipboardOpenKind::Reopen)?;
   announce_session(app, &EditorSessionEvent::Open { session });
   place_editor(app, &window);
-  window
-    .show()
-    .and_then(|()| window.set_focus())
-    .map_err(|error| {
-      capture_window_error(
-        app,
-        DesktopTelemetryOperation::ClipboardWindowOpen,
-        DesktopTelemetryWindow::ClipboardEditor,
-      );
-      format!("clipboard editor could not be shown: {error}")
-    })
+  present_editor(&window).map_err(|error| {
+    capture_window_error(
+      app,
+      DesktopTelemetryOperation::ClipboardWindowOpen,
+      DesktopTelemetryWindow::ClipboardEditor,
+    );
+    format!("clipboard editor could not be shown: {error}")
+  })
 }
 
 /// Ends the session and hides the window for the next open; the webview drops
-/// the closed clip before it is shown again.
+/// the closed clip before it is shown again. Every close (Escape, the close
+/// buttons, save) ends here and hands activation back to the app the editor
+/// opened over.
 pub fn close_editor(window: &WebviewWindow) -> Result<(), String> {
   window.state::<ClipboardEditorSessions>().end()?;
   announce_session(window.app_handle(), &EditorSessionEvent::Idle);
+  #[cfg(target_os = "macos")]
+  return_activation(window);
   window.hide().map_err(|error| {
     tracing::warn!(error = %error, "clipboard editor could not be hidden");
     format!("clipboard editor could not be closed: {error}")
@@ -596,7 +682,7 @@ fn build_editor(app: &AppHandle) -> Result<(), String> {
     {
       return;
     }
-    if window.show().and_then(|()| window.set_focus()).is_err() {
+    if present_editor(&window).is_err() {
       capture_window_error(
         window.app_handle(),
         DesktopTelemetryOperation::ClipboardWindowOpen,

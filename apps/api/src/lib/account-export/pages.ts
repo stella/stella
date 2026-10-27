@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { READER_MATTER_TARGET_TYPES } from "@stll/api-contract/legal-reader-annotations";
 import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
 
 import { member } from "@/api/db/auth-schema";
@@ -402,7 +403,9 @@ const readLegalReaderAnnotationsPage = async ({
     extraWhere: and(
       or(
         eq(legalReaderAnnotations.visibility, "private"),
-        eq(legalReaderAnnotations.targetType, "verification-claim"),
+        inArray(legalReaderAnnotations.targetType, [
+          ...READER_MATTER_TARGET_TYPES,
+        ]),
       ),
       stillMember(organizationId, userId),
       after(legalReaderAnnotations.id, cursor),

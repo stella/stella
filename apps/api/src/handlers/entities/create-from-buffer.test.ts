@@ -64,6 +64,14 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+beforeEach(() => {
+  broadcastMock.mockReset();
+  enqueueImageThumbnailOrMarkFailedMock.mockClear();
+  enqueuePdfDerivativeOrMarkFailedMock.mockClear();
+  flushSearchRepairsMock.mockClear();
+  processExtractionMock.mockClear();
+});
+
 setDefaultTimeout(120_000);
 
 const enqueueSearchRepairsMock = mock(enqueueEntitySearchRepairs);
