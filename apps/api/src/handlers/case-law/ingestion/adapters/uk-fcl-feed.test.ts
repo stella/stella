@@ -51,6 +51,10 @@ test("feed identity and repeated fields survive raw assembly and offline replay"
   const initial = build();
   expect(initial.plainTextOutcome.type).toBe("accepted");
   expect(initial.sourceDocumentId).toBe(sourceDocumentId);
+  expect(initial.decisionType).toBe("judgment");
+  expect(initial.metadata["ecliAvailability"]).toEqual({
+    status: "not_published",
+  });
   expect(initial.metadata["feedFields"]).toMatchObject({
     "{http://www.w3.org/2005/Atom}link": [{}, {}, {}],
   });

@@ -30,7 +30,7 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 const ATOM = "http://www.w3.org/2005/Atom";
 const TNA = "https://caselaw.nationalarchives.gov.uk";
 const ORIGIN = "https://caselaw.nationalarchives.gov.uk";
-const PARSER_VERSION = 2;
+const PARSER_VERSION = 3;
 const invalid = (message: string) =>
   new ParseXmlError({ message, cause: undefined });
 const children = (node: slimdom.Element) => Array.from(node.children);
@@ -252,6 +252,7 @@ export const buildUkFclDecision = ({
     caseNumber,
     court,
     decisionDate,
+    decisionType,
     judges,
     fulltext,
     documentAst,
@@ -283,6 +284,7 @@ export const buildUkFclDecision = ({
       country: "GBR",
       language: "en",
       decisionDate,
+      decisionType,
       judges,
       fulltext,
       documentAst,
@@ -298,6 +300,7 @@ export const buildUkFclDecision = ({
         courtSlug: entry.courtSlug,
         caseName,
         ecli: { type: "absent", reason: "not_published" },
+        ecliAvailability: { status: "not_published" },
       }),
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       sourceRaw,
