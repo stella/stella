@@ -40,6 +40,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
 import {
+  describeProposedDocxEdits,
   describeSuggestChangesApplyOutcome,
   hasAutomaticApproval,
 } from "@/components/chat/tool-approval-card.logic";
@@ -152,112 +153,16 @@ type SuggestChangesSummaryProps = {
   activeFileName?: string | undefined;
 };
 
-/**
- * The fields the card shows for one proposed operation. The model-facing
- * `suggest_changes` input is loosely typed (folio's parser owns the
- * contract), so the card narrows each operation locally and skips anything
- * it cannot describe.
- */
-type SummaryOperation = {
-  type: string;
-  blockId: string;
-  find?: string;
-  replace?: string;
-};
-
-const readOptionalString = (
-  value: Record<string, unknown>,
-  key: string,
-): string | undefined => {
-  const candidate = value[key];
-  return typeof candidate === "string" ? candidate : undefined;
-};
-
-const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/** Range ops carry their anchor on the `find_text` handle; block ops carry it directly. */
-const readSummaryOperation = (operation: unknown): SummaryOperation | null => {
-  if (!isPlainRecord(operation)) {
-    return null;
-  }
-  const type = readOptionalString(operation, "type");
-  const range = operation["range"];
-  const blockId =
-    readOptionalString(operation, "blockId") ??
-    (isPlainRecord(range) ? readOptionalString(range, "blockId") : undefined);
-  if (type === undefined || blockId === undefined) {
-    return null;
-  }
-  const find = readOptionalString(operation, "find");
-  const replace = readOptionalString(operation, "replace");
-  return {
-    type,
-    blockId,
-    ...(find !== undefined && { find }),
-    ...(replace !== undefined && { replace }),
-  };
-};
-
 const SuggestChangesSummary = ({
   activeFileName,
   operations,
 }: SuggestChangesSummaryProps) => {
   const t = useTranslations("chat.tool");
-  const summaries = operations.flatMap((operation) => {
-    const summary = readSummaryOperation(operation);
-    return summary === null ? [] : [summary];
-  });
-  const previewOperations = summaries.slice(0, 3);
+  const edits = describeProposedDocxEdits(operations);
+  const previewEdits = edits.slice(0, 3);
   // Only describable operations can be "more"; the count line above still
   // reports every operation the model sent.
-  const hiddenCount = summaries.length - previewOperations.length;
-
-  const renderOperationSummary = (operation: SummaryOperation) => {
-    const { blockId } = operation;
-    switch (operation.type) {
-      case "replaceInBlock":
-        return operation.find !== undefined && operation.replace !== undefined
-          ? t("docxReplaceSummary", {
-              find: operation.find,
-              replace: operation.replace,
-            })
-          : t("docxReplaceBlockSummary", { blockId });
-      // Range-addressed ops reuse the block-level summaries: the range
-      // handle anchors to one block, and the card only needs to say
-      // which block is touched.
-      case "replaceBlock":
-      case "replaceRange":
-        return t("docxReplaceBlockSummary", { blockId });
-      case "commentOnBlock":
-      case "commentOnRange":
-        return t("docxCommentSummary", { blockId });
-      case "insertAfterBlock":
-        return t("docxInsertAfterSummary", { blockId });
-      case "insertBeforeBlock":
-        return t("docxInsertBeforeSummary", { blockId });
-      case "deleteBlock":
-        return t("docxDeleteSummary", { blockId });
-      case "insertSignatureTable":
-        return t("docxSignatureTableSummary", { blockId });
-      case "insertTableRow":
-        return t("docxInsertTableRowSummary", { blockId });
-      case "deleteTableRow":
-        return t("docxDeleteTableRowSummary", { blockId });
-      case "insertTableColumn":
-        return t("docxInsertTableColumnSummary", { blockId });
-      case "deleteTableColumn":
-        return t("docxDeleteTableColumnSummary", { blockId });
-      case "mergeTableCells":
-        return t("docxMergeTableCellsSummary", { blockId });
-      case "splitTableCell":
-        return t("docxSplitTableCellSummary", { blockId });
-      default:
-        // An operation kind this card has no line for yet (folio's parser
-        // decides validity); the count above still includes it.
-        return t("docxReplaceBlockSummary", { blockId });
-    }
-  };
+  const hiddenCount = edits.length - previewEdits.length;
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2 text-xs">
@@ -269,13 +174,18 @@ const SuggestChangesSummary = ({
       <div className="text-muted-foreground">
         {t("docxEditSummary", { count: operations.length })}
       </div>
-      {previewOperations.map((operation, index) => (
+      {previewEdits.map((edit, index) => (
         <div
-          className="text-foreground-strong-muted truncate"
-          // oxlint-disable-next-line react/no-array-index-key -- previewOperations is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
-          key={`${operation.blockId}-${operation.type}-${index}`}
+          className="flex min-w-0 flex-col"
+          // oxlint-disable-next-line react/no-array-index-key -- previewEdits is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
+          key={index}
         >
-          {renderOperationSummary(operation)}
+          <span className="text-foreground-strong-muted truncate">
+            {edit.summary}
+          </span>
+          {edit.text !== null && (
+            <span className="text-muted-foreground truncate">{edit.text}</span>
+          )}
         </div>
       ))}
       {hiddenCount > 0 && (

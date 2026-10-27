@@ -11,9 +11,6 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { Frame, FramePanel } from "@stll/ui/frame";
-import { CheckCircle2Icon } from "@stll/ui/icons";
-
 import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
 import { ConsentCard } from "@/components/oauth-consent/consent-card";
 import {
@@ -23,7 +20,6 @@ import {
 import { useOAuthAccountSwitch } from "@/components/oauth-consent/oauth-account";
 import { OAuthClientDetails } from "@/components/oauth-consent/oauth-client-details";
 import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
-import { useMountEffect } from "@/hooks/use-effect";
 import { authClient, submitOAuthConsent } from "@/lib/auth-client";
 import {
   refreshAuthQueries,
@@ -34,7 +30,6 @@ import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  getOauthClientDisplayName,
   getOauthHashFragment,
   getOauthRedirectUrl,
   getSignedOauthQueryFromHash,
@@ -48,6 +43,7 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
+import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
@@ -165,8 +161,7 @@ function ConsentPage() {
   const scopes = scope ? scope.split(" ").filter(Boolean) : [];
   const identity = resolveConsentClientIdentity(
     clientQuery.data,
-    getOauthClientDisplayName(clientQuery.data) ??
-      t("consent.defaultClientName"),
+    t("consent.defaultClientName"),
   );
   const clientName = identity.name;
   const organizationName =
@@ -246,7 +241,7 @@ function ConsentPage() {
   if (submission.status === "connected") {
     return (
       <ConsentSuccess
-        clientName={clientName}
+        identity={identity}
         redirectUrl={submission.redirectUrl}
       />
     );
@@ -333,40 +328,3 @@ type ConsentSubmission =
   | { status: "pending" }
   | { status: "error" }
   | { status: "connected"; redirectUrl: string };
-
-const SUCCESS_REDIRECT_DELAY_MS = 1500;
-
-function ConsentSuccess({
-  clientName,
-  redirectUrl,
-}: {
-  clientName: string;
-  redirectUrl: string;
-}) {
-  const t = useTranslations();
-  useMountEffect(() => {
-    const timeout = window.setTimeout(
-      () => window.location.assign(redirectUrl),
-      SUCCESS_REDIRECT_DELAY_MS,
-    );
-    return () => window.clearTimeout(timeout);
-  });
-  return (
-    <main className="bg-muted/40 flex min-h-dvh flex-1 px-4 py-6">
-      <Frame className="m-auto w-full max-w-xl">
-        <FramePanel
-          className="flex flex-col items-center gap-4 py-10 text-center"
-          role="status"
-        >
-          <CheckCircle2Icon className="size-9" aria-hidden="true" />
-          <h1 className="text-2xl font-medium text-balance">
-            {t("consent.connectedTitle", { clientName })}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {t("consent.returnToAgent")}
-          </p>
-        </FramePanel>
-      </Frame>
-    </main>
-  );
-}

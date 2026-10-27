@@ -93,7 +93,10 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
-import { useLocale, useStepsMarkerStyle } from "@/i18n/formatting-context";
+import {
+  useFormattingLocale,
+  useStepsMarkerStyle,
+} from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -1907,7 +1910,7 @@ const OutlineRail = ({
   onJump: (sourceId: string) => void;
 }) => {
   const t = useTranslations();
-  const formattingLocale = useLocale();
+  const formattingLocale = useFormattingLocale();
   const markerStyle = useStepsMarkerStyle();
   return (
     <nav

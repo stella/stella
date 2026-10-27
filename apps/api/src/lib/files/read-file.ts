@@ -30,6 +30,30 @@ type ReadFileHandlerProps = {
   readSessionAuthority: SyntheticSessionAuthorityReader;
 };
 
+type DisplayedFileContent = {
+  id: string;
+  mimeType: string;
+  pdfFileId: string | null;
+};
+
+/**
+ * The PDF the viewer shows for a file field: its PDF rendition, else the
+ * file itself when it is a PDF. Null when the viewer renders the file
+ * natively, or there is no PDF to show. Anything anchored to what the
+ * reader saw (a mark's page text) reads these bytes.
+ */
+export const displayedPdfFileId = (
+  content: DisplayedFileContent,
+): string | null => {
+  if (isNativelyRenderableMimeType(content.mimeType)) {
+    return null;
+  }
+  return (
+    content.pdfFileId ??
+    (content.mimeType === PDF_MIME_TYPE ? content.id : null)
+  );
+};
+
 export const fileFieldQuery = async (
   scopedDb: ScopedDb,
   fieldId: SafeId<"field">,
@@ -176,10 +200,10 @@ export const readFileHandler = async ({
     };
   }
 
-  if (!content.pdfFileId && content.mimeType !== PDF_MIME_TYPE) {
+  const displayFileId = displayedPdfFileId(content);
+  if (displayFileId === null) {
     return status(400);
   }
-  const displayFileId = content.pdfFileId ?? content.id;
   const displayFileKey = createFileKey({
     organizationId,
     workspaceId,

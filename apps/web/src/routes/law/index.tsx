@@ -54,8 +54,9 @@ import { useLawHistory } from "@/features/law-search-history/law-search-history-
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
@@ -260,7 +261,7 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 function LawHome() {
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();

@@ -61,7 +61,7 @@ import {
   KanbanGroupingSettings,
 } from "@/components/workspaces/view-grouping-controls";
 import { FilterChips } from "@/components/workspaces/view-toolbar-filters";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -536,7 +536,7 @@ type TableExportMenuProps = {
 
 const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const [exportingFormat, setExportingFormat] =
     useState<TableExportFormat | null>(null);

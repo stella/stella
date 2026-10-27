@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { ComponentProps } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -11,9 +10,7 @@ import {
   DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogFormState,
   DialogHeader,
-  DialogPanel,
   DialogPopup,
   DialogTitle,
   DialogTrigger,
@@ -24,13 +21,9 @@ import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
-import {
-  AddableMemberSelect,
-  useAddableMembers,
-} from "@/components/workspaces/addable-member-select";
+import { AddMemberDialog } from "@/components/workspaces/add-member-dialog";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -40,7 +33,6 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import type { QueryView } from "@/lib/query-view.logic";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import {
   workspaceMembersKeys,
@@ -120,14 +112,7 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
         <h3 className="text-muted-foreground text-sm font-medium">
           {t("common.members")}
         </h3>
-        {canUpdate && (
-          <AddMemberDialog
-            showTriggerLabel={false}
-            triggerSize="icon-xs"
-            triggerVariant="ghost"
-            workspaceId={workspaceId}
-          />
-        )}
+        {canUpdate && <AddMemberButton workspaceId={workspaceId} />}
       </div>
       <MembersList
         view={view}
@@ -251,127 +236,27 @@ const MemberRow = ({
   );
 };
 
-type AddMemberDialogProps = {
-  workspaceId: string;
-  triggerClassName?: string | undefined;
-  triggerSize?: ComponentProps<typeof Button>["size"] | undefined;
-  triggerVariant?: ComponentProps<typeof Button>["variant"] | undefined;
-  showTriggerLabel?: boolean | undefined;
-};
-
-const AddMemberDialog = ({
-  workspaceId,
-  triggerClassName,
-  triggerSize = "sm",
-  triggerVariant = "outline",
-  showTriggerLabel = true,
-}: AddMemberDialogProps) => {
+const AddMemberButton = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
-  const addMember = useAddWorkspaceMember();
-  const submitOnce = useSingleFlight();
-  const memberQuery = useAddableMembers(workspaceId);
-  const [isOpen, setIsOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-
-  const selectedMember =
-    memberQuery.view.type === "items"
-      ? memberQuery.view.items.find((item) => item.value === selectedUserId)
-      : undefined;
-
-  const addSelectedMember = (settled: () => void) => {
-    if (!selectedMember) {
-      settled();
-      return;
-    }
-
-    addMember.mutate(
-      { workspaceId, userId: selectedMember.value },
-      {
-        onSettled: settled,
-        onSuccess: () => {
-          stellaToast.add({
-            title: t("success.memberAdded"),
-            type: "success",
-          });
-          detached(
-            queryClient.invalidateQueries({
-              queryKey: workspaceMembersKeys.all(workspaceId),
-            }),
-            "members-section.invalidate",
-          );
-          setIsOpen(false);
-          setSelectedUserId(null);
-        },
-        onError: (error) => {
-          notifyUserError(error, t("errors.actionFailed"));
-        },
-      },
-    );
-  };
-  const handleSubmit = () => {
-    detached(
-      submitOnce.runSettled(addSelectedMember),
-      "members-section.submit",
-    );
-  };
-
+  const [open, setOpen] = useState(false);
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        setIsOpen(open);
-        if (!open) {
-          setSelectedUserId(null);
-        }
-      }}
-      open={isOpen}
+    <AddMemberDialog
+      onOpenChange={setOpen}
+      open={open}
+      workspaceId={workspaceId}
     >
       <DialogTrigger
         render={
           <Button
             aria-label={t("workspaces.members.addMember")}
-            className={triggerClassName}
-            size={triggerSize}
+            size="icon-xs"
             title={t("workspaces.members.addMember")}
-            variant={triggerVariant}
+            variant="ghost"
           />
         }
       >
         <PlusIcon className="size-3.5" />
-        {showTriggerLabel ? t("workspaces.members.addMember") : null}
       </DialogTrigger>
-      <DialogPopup>
-        <DialogFormState
-          dirty={selectedUserId !== null}
-          onDiscard={() => {
-            setSelectedUserId(null);
-          }}
-        />
-        <DialogHeader>
-          <DialogTitle>{t("workspaces.members.addMember")}</DialogTitle>
-          <DialogDescription>
-            {t("workspaces.members.addMemberDescription")}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogPanel className="flex flex-col gap-4">
-          <AddableMemberSelect
-            query={memberQuery}
-            onValueChange={setSelectedUserId}
-            value={selectedUserId}
-          />
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={selectedMember === undefined || addMember.isPending}
-            onClick={handleSubmit}
-          >
-            {t("workspaces.members.addMember")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+    </AddMemberDialog>
   );
 };

@@ -65,7 +65,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
@@ -165,7 +165,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
   const timeBillingEnabled = useTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();

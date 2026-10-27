@@ -1,5 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 import { Temporal } from "@stll/time";
@@ -7,13 +16,7 @@ import { Temporal } from "@stll/time";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async () =>
-      new Response("{}", { headers: { "Content-Type": "application/json" } }),
-    { preconnect: globalThis.fetch.preconnect },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 const { act, cleanup, render, renderHook } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -30,7 +33,18 @@ const { WINDOWS_EXE_URL } = await import("@/lib/desktop-downloads");
 const en = (await import("@/i18n/langs/en.json")).default;
 const ar = (await import("@/i18n/langs/ar.json")).default;
 
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async () =>
+        new Response("{}", { headers: { "Content-Type": "application/json" } }),
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+});
+
 afterEach(async () => {
+  mock.restore();
   await act(async () => {
     stellaToast.close();
   });
@@ -105,8 +119,9 @@ for (const { locale, messages } of [
   }
 }
 
-for (const failureReason of Object.values(DESKTOP_HANDOFF_FAILURE)) {
-  test(`PDF signing: ${failureReason} replaces the waiting toast after one session read`, async () => {
+test.each(Object.values(DESKTOP_HANDOFF_FAILURE))(
+  "PDF signing: %s replaces the waiting toast after one session read",
+  async (failureReason) => {
     let reads = 0;
     const expiresAt = Temporal.Now.instant().add({ minutes: 2 }).toString();
     fetchBoundary.mockImplementation(
@@ -175,5 +190,5 @@ for (const failureReason of Object.values(DESKTOP_HANDOFF_FAILURE)) {
       en.workspaces.files.pdfSigning.expiredTitle,
     );
     client.clear();
-  });
-}
+  },
+);

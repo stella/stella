@@ -3,23 +3,14 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
-
+import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
+import type { MemberOption } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { UserIdentity } from "@/components/user-avatar";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
-
-const NO_OWNER_VALUE = "__none";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -50,15 +41,14 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
     organizationView.type === "items" ? organizationView.items : undefined;
 
   const organizationMembers = organization ? organization.members : [];
-  const memberItems = organizationMembers.map((member) => ({
+  const memberOptions = organizationMembers.map((member) => ({
     email: member.user.email,
-    image: member.user.image,
+    image: member.user.image ?? null,
     name: member.user.name,
-    value: member.userId,
+    userId: member.userId,
   }));
 
-  const updateOwner = (field: ContactOwnerField, value: string | null) => {
-    const nextValue = value === NO_OWNER_VALUE ? null : value;
+  const updateOwner = (field: ContactOwnerField, nextValue: string | null) => {
     if (contact[field] === nextValue) {
       return;
     }
@@ -77,53 +67,44 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
         {t("contacts.attorneys.title")}
       </h2>
       <div className="space-y-3 text-sm">
-        <OwnerSelect
+        <OwnerField
           disabled={
             updateContact.isPending || organizationView.type !== "items"
           }
           label={t("contacts.attorneys.originating")}
-          members={memberItems}
+          members={memberOptions}
           noneLabel={t("contacts.attorneys.none")}
           onValueChange={(value) => updateOwner("originatingAttorneyId", value)}
           selectedOwner={contact.originatingAttorney}
-          value={contact.originatingAttorneyId ?? NO_OWNER_VALUE}
+          value={contact.originatingAttorneyId}
         />
-        <OwnerSelect
+        <OwnerField
           disabled={
             updateContact.isPending || organizationView.type !== "items"
           }
           label={t("contacts.attorneys.responsible")}
-          members={memberItems}
+          members={memberOptions}
           noneLabel={t("contacts.attorneys.none")}
           onValueChange={(value) => updateOwner("responsibleAttorneyId", value)}
           selectedOwner={contact.responsibleAttorney}
-          value={contact.responsibleAttorneyId ?? NO_OWNER_VALUE}
+          value={contact.responsibleAttorneyId}
         />
       </div>
     </section>
   );
 };
 
-type OwnerSelectProps = {
+type OwnerFieldProps = {
   disabled: boolean;
   label: string;
-  members: {
-    email: string;
-    image?: string | null | undefined;
-    name: string;
-    value: string;
-  }[];
+  members: readonly MemberOption[];
   noneLabel: string;
-  onValueChange: (value: string | null) => void;
-  selectedOwner?: {
-    id: string;
-    image: string | null;
-    name: string;
-  } | null;
-  value: string;
+  onValueChange: (userId: string | null) => void;
+  selectedOwner: ContactData["originatingAttorney"];
+  value: string | null;
 };
 
-const OwnerSelect = ({
+const OwnerField = ({
   disabled,
   label,
   members,
@@ -131,63 +112,29 @@ const OwnerSelect = ({
   onValueChange,
   selectedOwner,
   value,
-}: OwnerSelectProps) => (
+}: OwnerFieldProps) => (
   <div className="flex items-center gap-2">
     <span className="text-muted-foreground w-32 shrink-0">{label}</span>
-    <Select disabled={disabled} onValueChange={onValueChange} value={value}>
-      <SelectTrigger className="min-w-0 flex-1">
-        <SelectValue>
-          {(current) => {
-            const member = members.find((item) => item.value === current);
-            if (!member) {
-              if (current === NO_OWNER_VALUE) {
-                return (
-                  <span className="text-muted-foreground">{noneLabel}</span>
-                );
+    <div className="min-w-0 flex-1">
+      <MemberCombobox
+        choice={{ type: MEMBER_CHOICE.memberOrNone, noneLabel }}
+        disabled={disabled}
+        label={label}
+        members={members}
+        onValueChange={onValueChange}
+        placeholder={noneLabel}
+        selectedFallback={
+          selectedOwner
+            ? {
+                userId: selectedOwner.id,
+                name: selectedOwner.name,
+                email: null,
+                image: selectedOwner.image,
               }
-
-              if (selectedOwner) {
-                return (
-                  <UserIdentity
-                    avatarClassName="size-7 shrink-0 text-3xs"
-                    className="min-w-0"
-                    image={selectedOwner.image}
-                    name={selectedOwner.name}
-                  />
-                );
-              }
-
-              return <span className="text-muted-foreground">{noneLabel}</span>;
-            }
-
-            return (
-              <UserIdentity
-                avatarClassName="size-7 shrink-0 text-3xs"
-                className="min-w-0"
-                image={member.image}
-                name={member.name}
-                secondaryText={member.email}
-              />
-            );
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectPopup>
-        <SelectItem value={NO_OWNER_VALUE}>
-          <span className="text-muted-foreground">{noneLabel}</span>
-        </SelectItem>
-        {members.map((member) => (
-          <SelectItem key={member.value} value={member.value}>
-            <UserIdentity
-              avatarClassName="size-7 shrink-0 text-3xs"
-              className="min-w-0"
-              image={member.image}
-              name={member.name}
-              secondaryText={member.email}
-            />
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
+            : null
+        }
+        value={value}
+      />
+    </div>
   </div>
 );

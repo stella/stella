@@ -175,7 +175,7 @@ const courts = v.pipe(
 export const corpusStatusResponseSchema = v.object({
   decisions: v.number(),
   updatedAt: date,
-  courts,
+  health: v.enum(CASE_LAW_COVERAGE_HEALTH),
 } satisfies Record<
   keyof Success<typeof readCaseLawCorpusStatusHandler>,
   v.GenericSchema

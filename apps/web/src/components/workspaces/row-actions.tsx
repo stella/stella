@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -176,6 +176,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
@@ -287,6 +288,7 @@ const useOpenPDFPageEditor = ({
   workspaceId,
 }: UseOpenPDFPageEditorOptions): (() => void) | undefined => {
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return undefined;
   }
@@ -294,7 +296,7 @@ const useOpenPDFPageEditor = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
+        params: viewParams,
         search: {
           entity: entityId,
           field: target.fieldId,
@@ -397,6 +399,7 @@ export const RowActions = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
@@ -527,7 +530,7 @@ export const RowActions = ({
         detached(
           navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
-            params: { workspaceId, viewId: "all" },
+            params: viewParams,
             search: {
               entity: entity.entityId,
               field: file.fieldId,
@@ -986,7 +989,7 @@ export const RowActions = ({
       if (openedDuplicate) {
         await navigate({
           to: "/workspaces/$workspaceId/$viewId/document",
-          params: { workspaceId, viewId: "all" },
+          params: viewParams,
           search: {
             entity: openedDuplicate.entityId,
             field: openedDuplicate.fieldId,
@@ -1722,10 +1725,7 @@ const RowTranslationDialog = ({
   target: TranslationTarget | null;
   workspaceId: string;
 }) => {
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return null;
   }
@@ -1739,7 +1739,7 @@ const RowTranslationDialog = ({
       mode="controlled"
       onOpenChange={onOpenChange}
       open={open}
-      viewId={viewMatch?.params.viewId ?? "all"}
+      viewId={viewId}
       workspaceId={workspaceId}
     />
   );

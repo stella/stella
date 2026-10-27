@@ -1,3 +1,4 @@
+import path from "node:path";
 // One TypeScript parse per (dialect, text), shared by the ratchet's counters.
 //
 // The ratchet runs dozens of counters over each file in turn, and most of them
@@ -8,6 +9,11 @@
 // time, so a small window catches every repeat without holding the whole
 // tree's syntax in memory.
 import ts from "typescript6";
+
+import {
+  type ParsedSource,
+  parseSource as parseSyntaxTree,
+} from "../packages/scripts/src/syntax-tree.ts";
 
 type ParseDialect = ts.ScriptKind.TS | ts.ScriptKind.TSX;
 
@@ -58,4 +64,26 @@ export const parseSource = ({
   return DECLARATION_FILE_NAME.test(fileName)
     ? parse()
     : RECENT_PARSES[dialect](text, parse);
+};
+
+// The extension selects grammar and module mode. Keep that parser input
+// intact rather than maintaining a second table of equivalent extensions.
+const RECENT_SYNTAX_TREES = new Map<string, RecentMemo<ParsedSource>>();
+
+/** The oxc syntax tree of `text`, shared by every reader of the same text. */
+export const parseSyntax = ({
+  fileName,
+  text,
+}: ParseSourceOptions): ParsedSource => {
+  const parse = () => parseSyntaxTree(fileName, text);
+  if (DECLARATION_FILE_NAME.test(fileName)) {
+    return parse();
+  }
+  const extension = path.extname(fileName);
+  let memo = RECENT_SYNTAX_TREES.get(extension);
+  if (memo === undefined) {
+    memo = memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT);
+    RECENT_SYNTAX_TREES.set(extension, memo);
+  }
+  return memo(text, parse);
 };
