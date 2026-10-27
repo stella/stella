@@ -1012,7 +1012,7 @@ describe("account export capability authority", () => {
   );
   const oauthCredential = { type: "oauth_client", clientId: "client" } as const;
 
-  const listedAccountIds = async (context: McpRequestContext) => {
+  const listedAccountIds = async (context: AuthorizedMcpRequestContext) => {
     const result = await handleMcpToolCall({
       mode: "advanced",
       toolName: "list_capabilities",
@@ -1715,7 +1715,7 @@ describe("describe_capability", () => {
         ...baseContext.grantedScopes,
         ...Object.values(ACCOUNT_EXPORT_SCOPES),
       ],
-    } satisfies McpRequestContext;
+    } satisfies AuthorizedMcpRequestContext;
     const drift: string[] = [];
     for (const entry of capabilityCatalog) {
       if (entry.inputSchema === undefined) {

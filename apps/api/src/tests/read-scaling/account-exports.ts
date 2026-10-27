@@ -1,11 +1,11 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
 import { inArray } from "drizzle-orm";
-import { ElysiaCustomStatusResponse } from "elysia";
 
 import { user } from "@/api/db/auth-schema";
 import { accountExports } from "@/api/db/schema";
 import personalDataExportDownloadLink from "@/api/handlers/account-exports/download/get";
+import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -17,7 +17,7 @@ type AccountExportScalingMeasurementOptions = {
 
 export const accountExportDownloadScalingScenario = {
   name: "account export download link",
-  handler: personalDataExportDownloadLink.handler,
+  definition: personalDataExportDownloadLink,
   measure: async ({
     size,
     handler,
@@ -78,15 +78,15 @@ export const accountExportDownloadScalingScenario = {
         },
       ]);
       const denied = await handler(context(otherExportId));
-      expect(denied).toBeInstanceOf(ElysiaCustomStatusResponse);
-      if (!(denied instanceof ElysiaCustomStatusResponse)) {
+      expect(denied).toBeInstanceOf(HttpStatusResponse);
+      if (!(denied instanceof HttpStatusResponse)) {
         panic("Another account's export must not return a download link");
       }
       expect(denied.code).toBe(404);
 
       return await runWithMeasuredQueryCounter(async (counter) => {
         const response = await handler(context(exportId));
-        if (response instanceof ElysiaCustomStatusResponse) {
+        if (response instanceof HttpStatusResponse) {
           panic("Ready account export must return its download link");
         }
         const url = new URL(response.download.downloadUrl);

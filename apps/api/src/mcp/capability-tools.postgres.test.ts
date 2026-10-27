@@ -13,7 +13,7 @@ import {
   createMembershipScopedDb,
 } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -70,7 +70,7 @@ const parsePayload = (
 };
 
 const invoke = async (
-  context: McpRequestContext,
+  context: McpRequestResources,
   capability: string,
   input: Record<string, unknown> = {},
 ) =>
@@ -93,7 +93,7 @@ describe.skipIf(!postgresTestsEnabled)(
     const organizationId = toSafeId<"organization">(
       `export-handler-org-${suffix}`,
     );
-    let context: McpRequestContext;
+    let context: McpRequestResources;
 
     beforeAll(async () => {
       await rootDb.insert(user).values([
@@ -129,7 +129,7 @@ describe.skipIf(!postgresTestsEnabled)(
       };
       const scopedDb = createMembershipScopedDb(rlsDb, identity);
       const safeDb = createMembershipSafeDb(rlsDb, identity);
-      context = asTestRaw<McpRequestContext>({
+      context = asTestRaw<McpRequestResources>({
         accessibleWorkspaceIds: [],
         accessibleWorkspaceIdSet: new Set(),
         accessibleWorkspaceStatusById: new Map(),
