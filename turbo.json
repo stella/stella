@@ -1125,6 +1125,7 @@
         "$TURBO_ROOT$/packages/anonymize-chat/**",
         "$TURBO_ROOT$/packages/api-contract/**",
         "$TURBO_ROOT$/packages/auth-model/**",
+        "$TURBO_ROOT$/packages/boe/**",
         "$TURBO_ROOT$/packages/business-registries/**",
         "$TURBO_ROOT$/packages/calculations/**",
         "$TURBO_ROOT$/packages/cli/**",
