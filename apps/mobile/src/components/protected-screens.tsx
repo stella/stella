@@ -1,6 +1,4 @@
-import { useState } from "react";
-
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { useWindowDimensions, View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -14,11 +12,17 @@ import { useSession } from "@/connection/session-provider";
 import { useAppColors } from "@/theme";
 
 /** Signed out, only sign-in exists; signed in, only the app does. */
-export const ProtectedScreens = () => (
-  <HeaderSearchProvider>
-    <Screens />
-  </HeaderSearchProvider>
-);
+export const ProtectedScreens = () => {
+  const segments: readonly string[] = useSegments();
+  // A screen pushed over the tabs keeps the tab's search for the way back.
+  const activeTab =
+    segments[0] === "(tabs)" ? (segments[1] ?? "index") : undefined;
+  return (
+    <HeaderSearchProvider activeTab={activeTab}>
+      <Screens />
+    </HeaderSearchProvider>
+  );
+};
 
 /**
  * The app's screens. The tabs share t3code's header: the platform's own bar,
@@ -34,12 +38,11 @@ const Screens = () => {
   const signedIn = state.status === "signed-in";
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const { setQuery } = useHeaderSearch();
+  const { searching, setQuery, setSearching } = useHeaderSearch();
   const settingsGlyph = useGlyphImage("cog");
   const searchGlyph = useGlyphImage("search");
   // Search folds into a header button, as t3code's does, and opens the
   // system's field under the bar when pressed.
-  const [searching, setSearching] = useState(false);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -63,7 +66,6 @@ const Screens = () => {
                   autoFocus: true,
                   hideWhenScrolling: false,
                   onCancelButtonPress: () => {
-                    setQuery("");
                     setSearching(false);
                   },
                   onChangeText: (event) => {
