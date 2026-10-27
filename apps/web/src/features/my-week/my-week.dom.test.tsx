@@ -7,6 +7,7 @@ import { Temporal } from "@stll/time";
 
 import type { MyTimeEntry } from "@/features/my-week/my-week-day";
 import messages from "@/i18n/langs/en.json";
+import { toSafeId } from "@/lib/safe-id";
 import type { MyTimeSuggestionRange as MySuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -30,12 +31,12 @@ const { MyWeek } = await import("@/features/my-week/my-week");
 const ORGANIZATION_ID = "organization-1";
 const USER_ID = "user-1";
 const LEASE_MATTER = {
-  id: "matter-lease",
+  id: toSafeId<"workspace">("matter-lease"),
   name: "Harbour lease",
   reference: "M-1",
 };
 const SUPPLY_MATTER = {
-  id: "matter-supply",
+  id: toSafeId<"workspace">("matter-supply"),
   name: "Supply agreement",
   reference: "M-2",
 };
@@ -58,7 +59,7 @@ afterAll(async () => {
 
 const draftEntry = (overrides: Partial<MyTimeEntry> = {}): MyTimeEntry =>
   ({
-    id: "entry-1",
+    id: toSafeId<"timeEntry">("entry-1"),
     activityGroup: "client",
     workspaceId: LEASE_MATTER.id,
     workspaceName: LEASE_MATTER.name,
@@ -125,6 +126,7 @@ const serveWeek = ({
   refusals = {},
   pendingCount = 0,
   pageSize = 200,
+  failLaterPages = false,
 }: {
   entries: MyTimeEntry[];
   /** Drafts the fake API refuses to submit, with the reason it gives. */
@@ -132,6 +134,8 @@ const serveWeek = ({
   /** Submitted entries waiting for the signed-in approver. */
   pendingCount?: number;
   pageSize?: number;
+  /** Fail every page request after the first. */
+  failLaterPages?: boolean;
   suggestions: {
     matter: typeof LEASE_MATTER;
     date: string;
@@ -237,7 +241,7 @@ const serveWeek = ({
       });
     }
     const created = draftEntry({
-      id: `entry-${entries.length + 1}`,
+      id: toSafeId<"timeEntry">(`entry-${entries.length + 1}`),
       workspaceId: group.matter.id,
       workspaceName: group.matter.name,
       workspaceReference: group.matter.reference,
@@ -323,7 +327,11 @@ const serveWeek = ({
         url.searchParams.get("date") ?? url.searchParams.get("startDate") ?? "";
       const end = url.searchParams.get("endDate") ?? start;
       if (request.method === "GET" && path === "/time-entries/me") {
-        return json(entryPage(start, end, url.searchParams.get("cursor")));
+        const cursor = url.searchParams.get("cursor");
+        if (failLaterPages && cursor !== null) {
+          return new Response("unavailable", { status: 503 });
+        }
+        return json(entryPage(start, end, cursor));
       }
       if (request.method === "GET" && path === "/time-entries/me/suggestions") {
         return json(suggestionRange(start, end));
@@ -567,7 +575,7 @@ describe("my week", () => {
         entries: [
           draftEntry(),
           draftEntry({
-            id: "entry-2",
+            id: toSafeId<"timeEntry">("entry-2"),
             dateWorked: tuesday,
             narrative: "Draft the termination notice",
             ...later,
@@ -600,11 +608,43 @@ describe("my week", () => {
     },
   );
 
+  test("a failed later page says so and keeps the loaded entries", async () => {
+    const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
+    serveWeek({
+      entries: [
+        draftEntry(),
+        draftEntry({
+          id: toSafeId<"timeEntry">("entry-2"),
+          dateWorked: tuesday,
+          narrative: "Draft the termination notice",
+        }),
+      ],
+      suggestions: [],
+      pageSize: 1,
+      failLaterPages: true,
+    });
+    mount();
+
+    expect(await screen.findByText("Review lease schedule")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.loadMore }),
+      );
+    });
+
+    expect(
+      (await screen.findByText(messages.errors.actionFailed)).getAttribute(
+        "role",
+      ),
+    ).toBe("alert");
+    expect(screen.getByText("Review lease schedule")).toBeTruthy();
+  });
+
   test("only drafts are editable from the week", async () => {
     serveWeek({
       entries: [
         draftEntry({
-          id: "entry-approved",
+          id: toSafeId<"timeEntry">("entry-approved"),
           narrative: "Approved call",
           status: "approved",
         }),
