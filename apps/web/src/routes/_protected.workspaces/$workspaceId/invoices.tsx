@@ -128,7 +128,12 @@ const useInvoiceColumns = (): InvoiceColumn[] => {
     {
       id: "status",
       header: () => t("common.status"),
-      cell: (invoice) => <InvoiceStatusBadge status={invoice.status} />,
+      cell: (invoice) => (
+        <InvoiceStatusBadge
+          partiallyPaid={invoice.status === "sent" && invoice.paidAmount > 0}
+          status={invoice.status}
+        />
+      ),
       skeletonCell: () => <Skeleton className="h-5 w-16 rounded-md" />,
     },
     {

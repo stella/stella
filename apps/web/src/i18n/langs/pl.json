@@ -697,10 +697,29 @@
       },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
-      "markPaid": "Oznacz jako zapłaconą",
       "noEntries": "Brak wpisów powiązanych z tą fakturą",
       "noInvoices": "Brak faktur",
       "paidAt": "Zapłacono",
+      "payments": {
+        "amountTooHigh": "Kwota przekracza pozostałą do zapłaty kwotę {amount}.",
+        "confirmVoid": "Płatność pozostanie w ewidencji jako anulowana i nie będzie już zaliczana na poczet tej faktury.",
+        "empty": "Nie zarejestrowano jeszcze żadnych płatności",
+        "method": "Forma płatności",
+        "methods": {
+          "bank_transfer": "Przelew bankowy",
+          "card": "Karta",
+          "cash": "Gotówka",
+          "other": "Inna forma"
+        },
+        "outstandingAmount": "Pozostało do zapłaty {amount}",
+        "paidOn": "Data płatności",
+        "partiallyPaid": "Częściowo zapłacona",
+        "record": "Zarejestruj płatność",
+        "summary": "Zapłacono {paid}, pozostało {outstanding}",
+        "title": "Płatności",
+        "void": "Anuluj płatność",
+        "voided": "Anulowana"
+      },
       "removeEntries": "Usuń wpisy",
       "send": "Wyślij",
       "statuses": {
