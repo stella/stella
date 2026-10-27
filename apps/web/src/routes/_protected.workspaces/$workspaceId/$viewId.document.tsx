@@ -20,6 +20,7 @@ import {
   createFileRoute,
   Navigate,
   stripSearchParams,
+  useRouter,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -116,6 +117,7 @@ import {
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { routeSearchSchema } from "@/route-search-params";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
@@ -1274,6 +1276,7 @@ function RouteComponentInner({
 /** Recovers by opening the file where every format renders, the side panel. */
 const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
   const t = useTranslations();
+  const router = useRouter();
   const navigate = Route.useNavigate();
   const { viewId, workspaceId } = Route.useParams({
     select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
@@ -1293,7 +1296,14 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { viewId, workspaceId },
                 });
-                await openEntityInInspector(entityId, "", workspaceId);
+                await openEntityInInspector({
+                  documentOnScreen: getCurrentWorkspaceDocument(
+                    router.state.matches,
+                  ),
+                  entityId,
+                  label: "",
+                  workspaceId,
+                });
               } catch (openError) {
                 getAnalytics().captureError(openError, {
                   fingerprintKey: "DocumentDisplayUnavailable:openError",

@@ -3,6 +3,8 @@ import type { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, getTableName, inArray, sql } from "drizzle-orm";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import {
   apikey,
   member,
@@ -136,25 +138,22 @@ if (!databaseUrl || !runPostgres) {
                 panic("Fixture organization must exist");
               }
               pending.push(create(firstDb), create(secondDb));
-              const deadline = performance.now() + 5000;
-              while (performance.now() < deadline) {
-                const [snapshot] = await observerDb
-                  .select({
-                    waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
-                    WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
-                      AND wait_event_type = 'Lock'
-                      AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for no key update`})`,
-                  })
-                  .from(organization)
-                  .where(eq(organization.id, organizationId));
-                if (snapshot?.waiting === 2) {
-                  return;
-                }
-                await Bun.sleep(10);
-              }
-              panic(
-                "Both competing mints must wait at the organization reservation SELECT",
-              );
+              await waitForExternalState({
+                description:
+                  "both competing mints wait at the organization reservation SELECT",
+                read: async () =>
+                  (
+                    await observerDb
+                      .select({
+                        waiting: sql<number>`(SELECT count(*)::integer FROM pg_stat_activity
+                      WHERE pid IN (${firstWorker.pid}, ${secondWorker.pid})
+                        AND wait_event_type = 'Lock'
+                        AND query ILIKE ${`% from "${escapeLike(getTableName(organization))}" where % for no key update`})`,
+                      })
+                      .from(organization)
+                      .where(eq(organization.id, organizationId))
+                  ).at(0)?.waiting === 2,
+              });
             });
           } finally {
             // The control transaction has released the lock even on failure.

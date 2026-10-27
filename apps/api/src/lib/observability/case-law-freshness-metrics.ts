@@ -6,7 +6,10 @@ import { caseLawSources, corpusIndexProjectionStates } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { readServedCorpusIndexGenerationsTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
-import { readCorpusIndexProjectionConvergenceTx } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import {
+  type CorpusIndexProjectionQueueStatus,
+  readCorpusIndexProjectionQueueStatusTx,
+} from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { corpusIndexProjectionNeedsWork } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -44,7 +47,12 @@ type CaseLawFreshnessReport = {
   backlogCapped: boolean;
   oldestUnpublishedAge: CaseLawOldestUnpublishedAge;
   sourceAges: readonly { source: string; ageSeconds: number }[];
-  convergence: string | null;
+  /**
+   * The serving generation's state queue only. The revision checks behind
+   * census readiness read every applied revision, so a recurring report never
+   * runs them.
+   */
+  convergence: CorpusIndexProjectionQueueStatus | null;
 };
 const requiredNumber = (row: unknown, key: string): number => {
   if (!isRecord(row) || typeof row[key] !== "number") {
@@ -92,7 +100,7 @@ export const CASE_LAW_FRESHNESS_SCAN_CAP = 10_000;
  * only for a state it claimed from this queue, and the state leaves the queue
  * only once that revision is applied, so a revision in flight is already
  * counted through its state. Cleanup of a superseded revision changes nothing
- * readers are served; the convergence status reports it.
+ * readers are served; the serving flip's convergence check reports it.
  */
 export const caseLawFreshnessPendingStatesQuery = (
   target: { family: CorpusFamily; generation: string },
@@ -224,7 +232,7 @@ export const readCaseLawFreshnessReportTx = async (
   const convergence =
     served === null
       ? null
-      : await readCorpusIndexProjectionConvergenceTx(tx, served.serving);
+      : await readCorpusIndexProjectionQueueStatusTx(tx, served.serving);
   return {
     backlogItems: Math.min(backlog.count, CASE_LAW_FRESHNESS_SCAN_CAP),
     backlogCapped: backlog.capped,

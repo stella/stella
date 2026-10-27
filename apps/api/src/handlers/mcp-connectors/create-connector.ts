@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
 import * as v from "valibot";
 
+import { slugify } from "@stll/text-normalize";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { mcpConnectors } from "@/api/db/schema";
 import type { McpConnectorAuthType } from "@/api/db/schema";
@@ -170,7 +172,7 @@ export const createMcpConnectorHandler = ({
         input.displayName?.trim() || new URL(normalizedUrl).hostname;
       const [slug, iconUrl] = await Promise.all([
         nextSlug({
-          base: slugify(displayName),
+          base: connectorSlug(displayName),
           organizationId: session.activeOrganizationId,
           safeDb,
         }),
@@ -284,21 +286,13 @@ const findDuplicateConnector = async ({
   return Result.ok(result.value.at(0));
 };
 
-const slugify = (value: string): string => {
-  let slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .slice(0, 60);
-
-  while (slug.startsWith("-")) {
-    slug = slug.slice(1);
-  }
-  while (slug.endsWith("-")) {
-    slug = slug.slice(0, -1);
-  }
-
-  return slug || "mcp-server";
-};
+const connectorSlug = (value: string): string =>
+  slugify(value, {
+    charset: "ascii",
+    fallback: "mcp-server",
+    maxLength: 60,
+    separator: "-",
+  });
 
 const nextSlug = async ({
   base,

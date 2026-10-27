@@ -50,9 +50,38 @@ import type {
 const SEPARATED_PART =
   "before:text-muted-foreground before:mx-1.5 before:content-['·'_/_'']";
 
+/**
+ * Whether the header's open button waits for its card. A card in the text or
+ * the margin sits beside many others, so its button appears only while the
+ * reader points at or focuses that card; a hover card is already the one
+ * thing the reader is looking at, so its button stays.
+ */
+export const PROVISION_OPEN_BUTTON = {
+  always: "always",
+  revealOnCard: "reveal-on-card",
+} as const;
+
+type ProvisionOpenButton =
+  (typeof PROVISION_OPEN_BUTTON)[keyof typeof PROVISION_OPEN_BUTTON];
+
+/** The card a revealed open button belongs to. */
+const PROVISION_CARD_GROUP = "group/provision-card";
+
+/**
+ * Opacity alone, so the button keeps its slot (the date beside it never
+ * reflows on hover) and its tab stop (focusing it reveals it). A coarse
+ * pointer cannot hover, so there it always shows.
+ */
+const OPEN_BUTTON_PRESENCE = {
+  always: "",
+  "reveal-on-card":
+    "opacity-0 transition-opacity group-hover/provision-card:opacity-100 group-focus-within/provision-card:opacity-100 pointer-coarse:opacity-100",
+} as const satisfies Record<ProvisionOpenButton, string>;
+
 type ProvisionCardHeaderProps = {
   /** What the card is about, e.g. `§ 226 odst. 1`; never shortened. */
   label: string;
+  openButton: ProvisionOpenButton;
   provision: ProvisionViewPayload;
 };
 
@@ -71,6 +100,7 @@ type ProvisionCardHeaderProps = {
  */
 export const ProvisionCardHeader = ({
   label,
+  openButton,
   provision,
 }: ProvisionCardHeaderProps) => {
   const messages = useReaderMessages();
@@ -119,19 +149,23 @@ export const ProvisionCardHeader = ({
             : messages.provisionEffectiveFrom(date)}
         </span>
       </span>
-      <Button
-        aria-label={messages["statutes.openProvision"]}
-        className="shrink-0"
-        onClick={(event) => {
-          event.stopPropagation();
-          openProvision(provision);
-        }}
-        size="icon-xs"
-        tooltip={messages["statutes.openProvision"]}
-        variant="ghost"
+      <span
+        className={cn("flex shrink-0", OPEN_BUTTON_PRESENCE[openButton])}
+        data-slot="provision-card-open"
       >
-        <PanelRightIcon aria-hidden="true" className="size-3.5" />
-      </Button>
+        <Button
+          aria-label={messages["statutes.openProvision"]}
+          onClick={(event) => {
+            event.stopPropagation();
+            openProvision(provision);
+          }}
+          size="icon-xs"
+          tooltip={messages["statutes.openProvision"]}
+          variant="ghost"
+        >
+          <PanelRightIcon aria-hidden="true" className="size-3.5" />
+        </Button>
+      </span>
     </span>
   );
 };
@@ -463,6 +497,7 @@ export const CitedProvisionExpansion = ({
     <ReaderInsetBox
       aria-expanded={expanded}
       className={cn(
+        PROVISION_CARD_GROUP,
         "flex cursor-pointer flex-col gap-1.5",
         placement === "inline" ? "my-2" : "w-full",
       )}
@@ -475,7 +510,11 @@ export const CitedProvisionExpansion = ({
       role="button"
       tabIndex={0}
     >
-      <ProvisionCardHeader label={label} provision={first.payload} />
+      <ProvisionCardHeader
+        label={label}
+        openButton={PROVISION_OPEN_BUTTON.revealOnCard}
+        provision={first.payload}
+      />
       <span
         className={cn(
           "contents",
@@ -549,7 +588,11 @@ export const CitedProvisionPeek = ({
       scrollFade
     >
       <div className="flex flex-col gap-1.5">
-        <ProvisionCardHeader label={label} provision={provision.payload} />
+        <ProvisionCardHeader
+          label={label}
+          openButton={PROVISION_OPEN_BUTTON.always}
+          provision={provision.payload}
+        />
         <ProvisionTrailLine
           language={wording?.language}
           trail={provisionTrail({ label, passage, wording })}
