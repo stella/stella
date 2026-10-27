@@ -24,7 +24,7 @@ import { cn } from "@stll/ui/utils";
 import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
 import { filterMatterPickerItems } from "@/components/matter-picker-search.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
@@ -210,7 +210,7 @@ export const ChatMatterPicker = ({
 }: ChatMatterPickerProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const searchRef = useRef<HTMLInputElement>(null);

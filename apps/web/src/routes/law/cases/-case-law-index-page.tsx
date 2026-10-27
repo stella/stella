@@ -116,8 +116,9 @@ import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logi
 import { useCaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import {
   searchTiming,
@@ -246,7 +247,7 @@ export function PublicCaseLawIndex({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const search = Route.useSearch({
     select: ({
       country,

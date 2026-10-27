@@ -12,7 +12,7 @@ import { eq } from "drizzle-orm";
 import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
-  markAccountEmailUndeliverable,
+  markAccountEmailsUndeliverable,
   readAccountEmailUndeliverable,
 } from "@/api/lib/db/account-row";
 import { sendNewDeviceLoginEmail } from "@/api/lib/email/email";
@@ -57,22 +57,22 @@ describe("account email deliverability", () => {
     ).toBeUndefined();
 
     expect(
-      await markAccountEmailUndeliverable({
+      await markAccountEmailsUndeliverable({
         database: rootDb,
-        email: account.email,
+        emails: [account.email],
         reason: "suppressed",
         at,
       }),
-    ).toBe(true);
+    ).toBe(1);
     // A later refusal of the same address keeps the first reason and time.
     expect(
-      await markAccountEmailUndeliverable({
+      await markAccountEmailsUndeliverable({
         database: rootDb,
-        email: account.email,
+        emails: [account.email],
         reason: "complaint",
         at: new Date(),
       }),
-    ).toBe(false);
+    ).toBe(0);
     expect(await readAccountEmailUndeliverable(rootDb, account.email)).toEqual({
       userId: account.userId,
       reason: "suppressed",
@@ -127,20 +127,73 @@ describe("account email deliverability", () => {
 
   test("an address no account uses changes nothing", async () => {
     expect(
-      await markAccountEmailUndeliverable({
+      await markAccountEmailsUndeliverable({
         database: rootDb,
-        email: normalizeEmail(`nobody-${Bun.randomUUIDv7()}@example.test`),
+        emails: [normalizeEmail(`nobody-${Bun.randomUUIDv7()}@example.test`)],
         reason: "hard_bounce",
         at,
       }),
-    ).toBe(false);
+    ).toBe(0);
+  });
+
+  test("one statement marks every account the event names and only those", async () => {
+    const [first, second, alreadyRefused, bystander] = await Promise.all([
+      newAccount(),
+      newAccount(),
+      newAccount(),
+      newAccount(),
+    ]);
+    await markAccountEmailsUndeliverable({
+      database: rootDb,
+      emails: [alreadyRefused.email],
+      reason: "suppressed",
+      at,
+    });
+    expect(
+      await markAccountEmailsUndeliverable({
+        database: rootDb,
+        emails: [
+          first.email,
+          second.email,
+          alreadyRefused.email,
+          normalizeEmail(`nobody-${Bun.randomUUIDv7()}@example.test`),
+        ],
+        reason: "hard_bounce",
+        at,
+      }),
+    ).toBe(2);
+    for (const marked of [first, second]) {
+      expect(await readAccountEmailUndeliverable(rootDb, marked.email)).toEqual(
+        { userId: marked.userId, reason: "hard_bounce" },
+      );
+    }
+    // Each account records its own address, and an earlier refusal stands.
+    const [stored] = await rootDb
+      .select({ address: user.emailUndeliverableAddress })
+      .from(user)
+      .where(eq(user.id, second.userId));
+    expect(stored?.address).toBe(second.email);
+    expect(
+      await readAccountEmailUndeliverable(rootDb, alreadyRefused.email),
+    ).toEqual({ userId: alreadyRefused.userId, reason: "suppressed" });
+    expect(
+      await readAccountEmailUndeliverable(rootDb, bystander.email),
+    ).toBeUndefined();
+    expect(
+      await markAccountEmailsUndeliverable({
+        database: rootDb,
+        emails: [],
+        reason: "hard_bounce",
+        at,
+      }),
+    ).toBe(0);
   });
 
   test("a send to a refused address is skipped with its reason and no address", async () => {
     const account = await newAccount();
-    await markAccountEmailUndeliverable({
+    await markAccountEmailsUndeliverable({
       database: rootDb,
-      email: account.email,
+      emails: [account.email],
       reason: "hard_bounce",
       at,
     });

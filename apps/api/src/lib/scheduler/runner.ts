@@ -469,7 +469,7 @@ export const startLeaseHeartbeat = ({
       return;
     }
     if (pausedJob) {
-      logPausedJob({ id: jobId, ...pausedJob });
+      logOperatorPause({ id: jobId, ...pausedJob }, "while_running");
     }
     markLost();
   };
@@ -500,13 +500,32 @@ export const startLeaseHeartbeat = ({
 
 type PausedJob = Pick<SchedulerJob, "id" | "task" | "pausedBy" | "pauseReason">;
 
-const logPausedJob = ({ id, task, pausedBy, pauseReason }: PausedJob) => {
-  logger.error("scheduler.job.paused_job_ran", {
-    jobId: id,
-    task,
-    ...(pausedBy !== null && { pausedBy }),
-    ...(pauseReason !== null && { pauseReason }),
+// Where the runner met an operator pause. A pause that kept a run from starting
+// or stopped it is the pause working, so it is operator-owned state, not an error.
+type OperatorPausePhase = "before_start" | "while_running";
+
+const pausedJobAttributes = ({
+  id,
+  task,
+  pausedBy,
+  pauseReason,
+}: PausedJob) => ({
+  jobId: id,
+  task,
+  ...(pausedBy !== null && { pausedBy }),
+  ...(pauseReason !== null && { pauseReason }),
+});
+
+const logOperatorPause = (job: PausedJob, phase: OperatorPausePhase) => {
+  logger.info("scheduler.job.pause_honored", {
+    ...pausedJobAttributes(job),
+    phase,
   });
+};
+
+// A run that completed after its pause committed did work under the pause.
+const logPausedJobRan = (job: PausedJob) => {
+  logger.error("scheduler.job.paused_job_ran", pausedJobAttributes(job));
 };
 
 type RunJobOptions = {
@@ -559,7 +578,10 @@ export const runJob = async ({
       }
       if (current.paused || !current.enabled) {
         if (current.paused) {
-          logPausedJob({ id: job.id, task: job.task, ...current });
+          logOperatorPause(
+            { id: job.id, task: job.task, ...current },
+            "before_start",
+          );
         }
         await finishRunSkipped({
           db,
@@ -708,7 +730,7 @@ export const runJob = async ({
           )
           .limit(1);
         if (pausedJob) {
-          logPausedJob(pausedJob);
+          logPausedJobRan(pausedJob);
         }
       }
 

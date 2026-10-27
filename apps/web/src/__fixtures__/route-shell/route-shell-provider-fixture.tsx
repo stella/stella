@@ -526,7 +526,7 @@ const loadFixtureRuntime = async (
     }
     await initializeI18n();
   };
-  const { useFormatter, useLocale } = await import("@/i18n/formatting-context");
+  const { useFormatter, useFormattingLocale } = await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
     await import("@/lib/analytics/route-error-lifecycle-context");
   const { ApiVersionMismatchReporter } =
@@ -656,7 +656,7 @@ const loadFixtureRuntime = async (
     waitFor,
     initializeI18n: initializeFixtureI18n,
     useFormatter,
-    useLocale,
+    useFormattingLocale,
     useRouteErrorLifecycle,
     ApiVersionMismatchReporter,
     useAuthenticatedUser,
@@ -820,7 +820,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
     waitFor,
     initializeI18n,
     useFormatter,
-    useLocale,
+    useFormattingLocale,
     useRouteErrorLifecycle,
     ApiVersionMismatchReporter,
     useAuthenticatedUser,
@@ -897,7 +897,7 @@ const declareLeafCases = (fixture: FixtureRuntime) => {
         };
         const Probe = () => {
           const formatter = useFormatter();
-          const locale = useLocale();
+          const locale = useFormattingLocale();
           const lifecycle = useRouteErrorLifecycle();
           const maybeUser = useMaybeAuthenticatedUser();
           const routeId = useMatches({
