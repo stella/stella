@@ -129,39 +129,41 @@ const words = fc.constantFrom(
 );
 
 describe("anchor paths a publisher mints", () => {
-  for (const grammar of GRAMMARS) {
-    test(`${grammar.name}: a path is drawn as deep as it nests, and only its own designator hangs`, () => {
-      assertProperty(
-        `statute-list.${grammar.name}.depth-and-hang`,
-        fc.property(
-          pathIn(grammar),
-          fc.constantFrom(")", "."),
-          words,
-          ({ anchorId, designator, kinds }, closer, text) => {
-            const printed =
-              designator === null ? text : `${designator}${closer} ${text}`;
-            const block = withStatuteListDepth(
-              paragraphFromPreview({ anchorId, id: anchorId, text: printed }),
-              grammar.scheme,
-            );
-            // Widened: the expectation counts levels, the AST names them.
-            const depth: number | null = block.listDepth ?? null;
-            expect(depth).toBe(
-              kinds.length === 0 ? null : grammar.expectedDepth(kinds),
-            );
-            const end = statuteListMarkerEnd(block, grammar.scheme);
-            expect(end === null ? null : printed.slice(0, end)).toBe(
-              designator === null ? null : `${designator}${closer} `,
-            );
-            // Reading the depth again keeps it: the renderer may see a block
-            // that already carries one.
-            expect(withStatuteListDepth(block, grammar.scheme)).toBe(block);
-          },
-        ),
-        { numRuns: 300 },
-      );
-    });
-  }
+  test("a path is drawn as deep as it nests, and only its own designator hangs", () => {
+    // Every publisher's grammar in one property, so its id is the title.
+    const minted = fc
+      .constantFrom(...GRAMMARS)
+      .chain((grammar) => pathIn(grammar).map((path) => ({ grammar, path })));
+    assertProperty(
+      "a path is drawn as deep as it nests, and only its own designator hangs",
+      fc.property(
+        minted,
+        fc.constantFrom(")", "."),
+        words,
+        ({ grammar, path: { anchorId, designator, kinds } }, closer, text) => {
+          const printed =
+            designator === null ? text : `${designator}${closer} ${text}`;
+          const block = withStatuteListDepth(
+            paragraphFromPreview({ anchorId, id: anchorId, text: printed }),
+            grammar.scheme,
+          );
+          // Widened: the expectation counts levels, the AST names them.
+          const depth: number | null = block.listDepth ?? null;
+          expect(depth).toBe(
+            kinds.length === 0 ? null : grammar.expectedDepth(kinds),
+          );
+          const end = statuteListMarkerEnd(block, grammar.scheme);
+          expect(end === null ? null : printed.slice(0, end)).toBe(
+            designator === null ? null : `${designator}${closer} `,
+          );
+          // Reading the depth again keeps it: the renderer may see a block
+          // that already carries one.
+          expect(withStatuteListDepth(block, grammar.scheme)).toBe(block);
+        },
+      ),
+      { numRuns: 300 * GRAMMARS.length },
+    );
+  });
 
   test("no publisher's paths state a list in another publisher's grammar", () => {
     const minted = fc
@@ -170,7 +172,7 @@ describe("anchor paths a publisher mints", () => {
         pathIn(minter).map(({ anchorId }) => ({ anchorId, minter })),
       );
     assertProperty(
-      "statute-list.cross-publisher-isolation",
+      "no publisher's paths state a list in another publisher's grammar",
       fc.property(minted, ({ anchorId, minter }) => {
         const block = paragraphFromPreview({
           anchorId,
