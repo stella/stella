@@ -305,6 +305,44 @@ test("a workspace manifest pin blocks the fix like a root pin", () => {
   });
 });
 
+test("each workspace requirement is judged against the copy it resolves to", () => {
+  const assess = (published: string[]) =>
+    assessAdvisories({
+      advisories: [
+        {
+          ...sdk,
+          package: "example",
+          vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+        },
+      ],
+      accepted: [],
+      lockfile: JSON.stringify({
+        workspaces: {
+          "": { name: "root" },
+          "apps/one": { name: "one", dependencies: { example: "^1.0.0" } },
+          "apps/two": { name: "two", dependencies: { example: "^2.0.0" } },
+        },
+        packages: {
+          example: ["example@1.2.2", "", {}],
+          "two/example": ["example@2.1.0", "", {}],
+        },
+      }),
+      manifest: {},
+      versions: new Map([["example", published]]),
+    }).at(0)?.disposition;
+  expect(assess(["1.2.2", "1.2.3", "2.1.0", "2.1.1"])).toEqual({
+    status: "fix_available",
+    patchedVersions: ["1.2.3", "2.1.1"],
+  });
+  expect(assess(["1.2.2", "1.2.3", "2.1.0"])).toEqual({
+    status: "upstream_blocked",
+    blockers: [
+      "apps/two/package.json requires example ^2.0.0 (two/example@2.1.0)",
+    ],
+    patchedVersions: ["1.2.3"],
+  });
+});
+
 test("a root requirement never hides a locked copy without a forward patch", () => {
   const [result] = assessAdvisories({
     advisories: [
@@ -326,9 +364,7 @@ test("a root requirement never hides a locked copy without a forward patch", () 
   });
   expect(result?.disposition).toEqual({
     status: "upstream_blocked",
-    blockers: [
-      "other/example@2.1.0: no forward patched release allowed by package.json",
-    ],
+    blockers: ["other/example@2.1.0: no patched release in resolved major"],
     patchedVersions: ["1.2.3"],
   });
 });
