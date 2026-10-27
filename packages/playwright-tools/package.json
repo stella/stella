@@ -8,7 +8,8 @@
   "sideEffects": false,
   "exports": {
     "./marketing-case-law.json": "./src/marketing-case-law.json",
-    "./marketing-config": "./src/marketing-config.ts"
+    "./app-marketing-config": "./src/app-marketing-config.ts",
+    "./landing-marketing-config": "./src/landing-marketing-config.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
