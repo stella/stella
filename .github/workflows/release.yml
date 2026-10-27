@@ -816,12 +816,10 @@ jobs:
             '{releaseRef: $release_ref, releaseSha: $release_sha, targetEnvironment: $target_environment}' \
             > web-image-publication.json
 
-      # The registry refused this upload on v0.6.22 with a 403 on the first
-      # blob, then accepted the identical digest 13 minutes later with nothing
-      # changed. The image is already published by this point, so a refusal
-      # that outlives a couple of attempts is the only one worth failing on.
-      # The backoff is longer than ./.github/actions/provenance's single 10s
-      # retry because 10s would not have covered the one refusal we have seen.
+      # Registry refusals of an attestation upload can be transient. The image
+      # is already published by this point, so only a refusal that outlives
+      # the retries below fails the job; the backoff is deliberately longer
+      # than ./.github/actions/provenance's single short retry.
       - name: Attest web image publication
         id: attest-web
         if: steps.existing.outputs.reused != 'true'

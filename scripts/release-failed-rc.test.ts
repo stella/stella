@@ -51,3 +51,20 @@ test("the npm stable publisher cannot consume an RC artifact run", () => {
   expect(guard).toContain("^v[0-9]+");
   expect(guard).toContain('[[ "$release_ref" != *-* ]]');
 });
+
+// The Actions jobs API reports a job's display name, which is its `name:`
+// when one is declared and its job id otherwise. The publication guard
+// matches `promote-production`, so that job must keep reporting exactly that.
+test("the production promotion job reports the name the publication guard matches", () => {
+  const guard = readFileSync(
+    new URL("check-release-publication-source.sh", import.meta.url),
+    "utf-8",
+  );
+  const matched = /^job=(\S+)$/mu.exec(guard)?.[1];
+  expect(matched).toBe("promote-production");
+  const workflow: unknown = Bun.YAML.parse(read("release.yml"));
+  const job = field(field(workflow, "jobs"), "promote-production");
+  expect(job).toBeDefined();
+  const displayName = field(job, "name") ?? "promote-production";
+  expect(displayName).toBe(matched);
+});
