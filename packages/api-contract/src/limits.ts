@@ -19,6 +19,12 @@ export const HTTP_REQUEST_BODY_MAX_BYTES = 128 * 1024 * 1024;
  */
 export const DEFAULT_VARCHAR_MAX_LENGTH = 256;
 
+/**
+ * Max time entries one approval request may name. The approver's selection is
+ * sent in batches of at most this many entries.
+ */
+export const TIME_ENTRIES_APPROVAL_BATCH_MAX = 200;
+
 /** Max input documents a single flow run may be launched against. */
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
 

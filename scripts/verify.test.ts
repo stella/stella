@@ -734,6 +734,8 @@ case "$1" in
   run) if [[ "$2" == typegen ]]; then exec '${process.execPath}' "$@"; fi ;;
   *check-tauri-package-alignment.ts) printf false ;;
   scripts/*|apps/*|packages/*|test|fmt|--bun|--no-install) ;;
+  # Offline checks load the network preload ahead of their entry.
+  --preload) [[ "$2" == ./scripts/offline-network-preload.ts ]] || { echo "Unexpected fixture preload: $2" >&2; exit 127; } ;;
   *) echo "Unexpected fixture Bun command: $1" >&2; exit 127 ;;
 esac
 printf '%s executed' "$TEST_ENTRY" > "$TEST_ENTRY_RECEIPT"
