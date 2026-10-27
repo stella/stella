@@ -2,10 +2,14 @@ import { panic, Result } from "better-result";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+import { isUuid } from "@stll/uuid-codec";
+
 import type { Transaction } from "@/api/db/root";
 import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
+  schedulerJobs,
 } from "@/api/db/schema";
 import {
   AUDIT_ACTION,
@@ -80,6 +84,36 @@ const before = (column: AnyColumn, cutoff: Date) =>
   sql<boolean>`${column} < ${cutoff.toISOString()}::timestamptz`;
 
 type QueuedCursor = { createdAt: Date; id: string };
+
+const queuedCursor = (
+  payload: Record<string, unknown> | null,
+): QueuedCursor | null => {
+  const cursor = payload?.["queuedCursor"];
+  if (cursor === undefined || cursor === null) {
+    return null;
+  }
+  if (typeof cursor !== "object" || Array.isArray(cursor)) {
+    return panic("Data-export maintenance cursor must be an object");
+  }
+  const cursorCreatedAt = "createdAt" in cursor ? cursor.createdAt : undefined;
+  const createdAt =
+    typeof cursorCreatedAt === "string"
+      ? Result.try(() => Temporal.Instant.from(cursorCreatedAt))
+      : null;
+  if (
+    createdAt === null ||
+    Result.isError(createdAt) ||
+    !("id" in cursor) ||
+    typeof cursor.id !== "string" ||
+    !isUuid(cursor.id)
+  ) {
+    return panic("Data-export maintenance cursor is invalid");
+  }
+  return {
+    createdAt: new Date(createdAt.value.epochMilliseconds),
+    id: cursor.id,
+  };
+};
 
 // Keyset position after `cursor` in (createdAt, id) order.
 const afterQueued = (cursor: QueuedCursor | null) =>
@@ -330,7 +364,10 @@ const readQueuedPage = async ({
     { limit: pageSize, cursorForItem: (row) => row.id },
   );
 
-const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
+const requeueQueued = async (
+  { db, deps, summary, now }: StepArgs,
+  initialCursor: QueuedCursor | null,
+): Promise<QueuedCursor | null> => {
   const settledBefore = new Date(now.getTime() - QUEUED_HANDOFF_SETTLE_MS);
   const settled = and(
     eq(organizationDataExports.status, "queued"),
@@ -371,7 +408,7 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
   // A handoff leaves its row queued (the job id makes it idempotent), so a
   // run pages past every settled row instead of rereading the oldest page:
   // a backlog of rows already waiting in the queue never hides later ones.
-  let cursor: QueuedCursor | null = null;
+  let cursor = initialCursor;
   for (let page = 0; page < MAX_HANDOFF_PAGES; page += 1) {
     // db-await-in-loop: keyset pages are sequential by design; each page starts after the previous page's last row
     const queuedPage = await readQueuedPage({
@@ -409,11 +446,12 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
     }
     const last = queuedPage.items.at(-1);
     if (queuedPage.nextCursor === null || last === undefined) {
-      return;
+      return null;
     }
     cursor = { createdAt: last.createdAt, id: String(last.id) };
   }
   summary.hasMore = true;
+  return cursor;
 };
 
 /**
@@ -424,7 +462,7 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
  */
 export const createMaintainDataExportsTask =
   (deps: DataExportMaintenanceDependencies): SchedulerTask =>
-  async ({ db, dueAt, logger, signal, scheduleContinuation }) => {
+  async ({ db, dueAt, job, logger, signal, scheduleContinuation }) => {
     if (signal.aborted) {
       panic("SchedulerAborted");
     }
@@ -439,7 +477,33 @@ export const createMaintainDataExportsTask =
     const step = { db, deps, summary, now: dueAt.toDate() };
     await expireReady(step);
     await resumeStaleRuns(step);
-    await requeueQueued(step);
+    const nextQueuedCursor = await requeueQueued(
+      step,
+      queuedCursor(job.payload),
+    );
+    const leaseToken =
+      job.lockedBy ??
+      panic("Data-export maintenance requires a scheduler lease");
+    // audit: skip - scheduler cursor bookkeeping is recorded by scheduler runs
+    await db
+      .update(schedulerJobs)
+      .set({
+        payload: {
+          queuedCursor:
+            nextQueuedCursor === null
+              ? null
+              : {
+                  createdAt: nextQueuedCursor.createdAt.toISOString(),
+                  id: nextQueuedCursor.id,
+                },
+        },
+      })
+      .where(
+        and(
+          eq(schedulerJobs.id, job.id),
+          eq(schedulerJobs.lockedBy, leaseToken),
+        ),
+      );
     // Transitions remove handled rows from the next scan; queue workers
     // remove handed-off rows when they claim them. The sentinel requests
     // another bounded pass without treating a full batch as complete.

@@ -18,6 +18,7 @@ import {
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const DOWNLOAD_FILE = {
@@ -136,7 +137,7 @@ const downloadDataExport = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
           resourceId: params.exportId,
           userId: user.id,
-          source: { kind: "request", sessionId: session.id },
+          source: callerDownloadSource(session),
           s3Key: dataExportObjectKey({
             organizationId,
             exportId: params.exportId,

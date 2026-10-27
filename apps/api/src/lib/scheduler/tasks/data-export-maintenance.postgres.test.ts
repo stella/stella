@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
+  schedulerJobs,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -37,6 +38,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           const organizationId = mintAuthProviderId<"organization">();
           const userId = mintAuthProviderId<"user">();
           const exportId = createSafeId<"dataExport">();
+          const jobId = `data-export-maintenance-${exportId}`;
           const now = new Date("2026-10-24T12:00:00Z");
           const locked = Promise.withResolvers<undefined>();
           const release = Promise.withResolvers<undefined>();
@@ -111,11 +113,26 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 return "requeued";
               },
             });
+            await sweep.db.insert(schedulerJobs).values({
+              id: jobId,
+              task: "dataExports.maintain",
+              schedule: { type: "interval", everyMs: 60_000 },
+              nextRunAt: now,
+              lockedBy: "heartbeat-test",
+            });
+            const [job] = await sweep.db
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId));
+            if (job === undefined) {
+              panic("Scheduler job fixture required");
+            }
             const sweeping = Promise.resolve(
               task(
                 asTestRaw<SchedulerTaskContext>({
                   db: sweep.db,
                   dueAt: DueSlot.of({ nextRunAt: now }),
+                  job,
                   logger,
                   signal: new AbortController().signal,
                   scheduleContinuation: () => {},
@@ -153,9 +170,103 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               .delete(organization)
               .where(eq(organization.id, organizationId));
             await observer.db.delete(user).where(eq(user.id, userId));
+            await observer.db
+              .delete(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId));
           }
         });
       },
     );
+
+    test("a continuation hands off queued exports beyond the per-run page bound", async () => {
+      const databaseUrl =
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required");
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const client = openClient();
+        const now = new Date("2026-10-24T12:00:00Z");
+        const userId = mintAuthProviderId<"user">();
+        const jobId = `data-export-maintenance-${Bun.randomUUIDv7()}`;
+        const organizations = Array.from({ length: 513 }, (_, index) => ({
+          id: mintAuthProviderId<"organization">(),
+          name: `Export fixture ${index}`,
+          slug: `export-fixture-${Bun.randomUUIDv7()}`,
+          createdAt: now,
+        }));
+        const exportIds = organizations.map(() => createSafeId<"dataExport">());
+        const lateExportId =
+          exportIds.at(512) ?? panic("Late export id fixture required");
+        try {
+          await client.db.insert(user).values({
+            id: userId,
+            name: "Export requester",
+            email: `${userId}@example.test`,
+          });
+          await client.db.insert(organization).values(organizations);
+          await client.db.insert(organizationDataExports).values(
+            organizations.map(({ id: organizationId }, index) => ({
+              id: exportIds[index] ?? panic("Export id fixture required"),
+              organizationId,
+              requestedBy: userId,
+              versionScope: "all" as const,
+              status: "queued" as const,
+              createdAt: new Date(now.getTime() - 10 * 60_000 + index),
+            })),
+          );
+          await client.db.insert(schedulerJobs).values({
+            id: jobId,
+            task: "dataExports.maintain",
+            schedule: { type: "interval", everyMs: 60_000 },
+            nextRunAt: now,
+            lockedBy: "continuation-test",
+          });
+
+          const enqueued: string[] = [];
+          const continuations: Date[] = [];
+          const task = createMaintainDataExportsTask({
+            handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+            enqueue: async ({ exportId }) => {
+              enqueued.push(exportId);
+              return "requeued";
+            },
+          });
+          const run = async () => {
+            const [job] = await client.db
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId));
+            if (job === undefined) {
+              panic("Scheduler job fixture required");
+            }
+            return await task(
+              asTestRaw<SchedulerTaskContext>({
+                db: client.db,
+                dueAt: DueSlot.of({ nextRunAt: now }),
+                job,
+                logger,
+                signal: new AbortController().signal,
+                scheduleContinuation: (at: Date) => continuations.push(at),
+              }),
+            );
+          };
+
+          expect(await run()).toEqual(Result.ok(undefined));
+          expect(enqueued).toHaveLength(512);
+          expect(continuations).toHaveLength(1);
+          expect(await run()).toEqual(Result.ok(undefined));
+          expect(enqueued).toContain(lateExportId);
+        } finally {
+          await client.db.delete(organization).where(
+            inArray(
+              organization.id,
+              organizations.map(({ id }) => id),
+            ),
+          );
+          await client.db.delete(user).where(eq(user.id, userId));
+          await client.db
+            .delete(schedulerJobs)
+            .where(eq(schedulerJobs.id, jobId));
+        }
+      });
+    });
   },
 );
