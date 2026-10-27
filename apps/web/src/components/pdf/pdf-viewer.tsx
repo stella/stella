@@ -3,6 +3,7 @@ import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
 import { CreatingBBoxes } from "@/components/pdf/creating-citations";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
@@ -114,6 +115,8 @@ const FullscreenPdfViewer = () => {
       <CreatingBBoxes />
       <PdfSelectionActions
         chat={entityId ? PDF_SELECTION_CHAT.fileChat : PDF_SELECTION_CHAT.none}
+        entityId={entityId}
+        file={file}
         fileFieldId={fieldId}
         fileName={file.fileName}
         workspaceId={workspaceId}
@@ -171,6 +174,7 @@ const PageOverlays = ({ pageId }: { pageId: string }) => {
         pageNumber={page.proxy.pageNumber}
         scale={page.viewport.scale}
       />
+      <DocumentMarkPageLayer pageId={pageId} />
     </>
   );
 };

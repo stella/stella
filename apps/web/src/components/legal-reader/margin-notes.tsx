@@ -12,6 +12,7 @@ import type { RefObject } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 import type { CitedProvisionTarget } from "@stll/decision-reader/reader-types";
 import { Button } from "@stll/ui/button";
 import { Building2Icon, PenIcon, Trash2Icon } from "@stll/ui/icons";
@@ -25,7 +26,10 @@ import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use
 import { CitedProvisionExpansion } from "@/components/legal-reader/cited-provision-link";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
-import { AnnotationVisibilityToggle } from "@/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle";
+import {
+  AnnotationVisibilityToggle,
+  SHARED_LABEL_KEY,
+} from "@/features/case-law/components/case-viewer/analysis/annotation-visibility-toggle";
 import { ReaderAnswerCard } from "@/features/case-law/components/case-viewer/reader-answer-card";
 import type { ReaderAnswerCardProps } from "@/features/case-law/components/case-viewer/reader-answer-card";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -77,6 +81,8 @@ export type CommentMarginItem = {
   updatedAt: string;
   /** The current reader wrote it, so they may change or remove it. */
   mine: boolean;
+  /** What it sits on, which decides who a shared comment reaches. */
+  targetType: ReaderAnnotationTargetType;
   visibility: "private" | "shared";
   onDelete: () => void;
   /**
@@ -92,6 +98,8 @@ export type ComposerMarginItem = {
   kind: "composer";
   id: string;
   startAnchorId: string;
+  /** What the comment will sit on, which decides who sharing reaches. */
+  targetType: ReaderAnnotationTargetType;
   onCancel: () => void;
   onSubmit: (body: string, visibility: "private" | "shared") => void;
 };
@@ -164,6 +172,23 @@ const InlineNotes = ({ items }: { items: MarginItem[] }) => (
     {items.map((item) => (
       <MarginNote item={item} key={item.id} placement={{ type: "inline" }} />
     ))}
+  </div>
+);
+
+/**
+ * One comment card in the text's flow, for a surface that lists comments and
+ * no other note kind (a document's comment panel): it draws the comment card
+ * alone, without the dispatch over every note kind.
+ */
+export const InlineCommentNote = ({ item }: { item: CommentMarginItem }) => (
+  <div className="reader-chrome" data-reader-chrome="">
+    <div className="contents" data-margin-note={item.kind}>
+      <CommentNote
+        item={item}
+        placement={{ type: "inline" }}
+        presence="normal"
+      />
+    </div>
   </div>
 );
 
@@ -761,6 +786,7 @@ const ComposerNote = ({
       />
       <div className="flex items-center justify-between gap-1">
         <AnnotationVisibilityToggle
+          targetType={item.targetType}
           visibility={visibility}
           onToggle={() =>
             setVisibility(visibility === "private" ? "shared" : "private")
@@ -857,6 +883,7 @@ const CommentNote = ({
           id: item.id,
           kind: "composer",
           startAnchorId: item.startAnchorId,
+          targetType: item.targetType,
           onCancel: stopEditing,
           onSubmit: (body, visibility) => {
             if (body !== item.text || visibility !== item.visibility) {
@@ -903,10 +930,10 @@ const CommentNote = ({
         />
         {shared && (
           <Tooltip
-            content={t("legalReader.annotations.visibilityShared")}
+            content={t(SHARED_LABEL_KEY[item.targetType])}
             render={
               <span
-                aria-label={t("legalReader.annotations.visibilityShared")}
+                aria-label={t(SHARED_LABEL_KEY[item.targetType])}
                 className="text-foreground-disabled"
               />
             }
@@ -942,6 +969,7 @@ const CommentNote = ({
           )}
         >
           <AnnotationVisibilityToggle
+            targetType={item.targetType}
             visibility={item.visibility}
             onToggle={item.onToggleVisibility}
           />
