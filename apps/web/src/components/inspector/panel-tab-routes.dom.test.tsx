@@ -50,6 +50,8 @@ const { BUILT_IN_KINDS } = await import("./view-registry-builtins");
 const { getInspectorViews } = await import("./view-registry");
 const { genericPanelFixtures, warmPanelViewRenderers } =
   await import("@/__fixtures__/panel-tab-view-fixtures");
+const { knowledgePanelFixtures, warmKnowledgePanelViewRenderers } =
+  await import("@/routes/knowledge/-components/__fixtures__/panel-tab-view-fixtures");
 const { useInspectorTabsStore } = await import("./inspector-tabs-store");
 const { toChatThreadId } = await import("@/lib/chat-thread-ref");
 
@@ -123,7 +125,10 @@ const builtinFixtures = {
   >;
 };
 
-await warmPanelViewRenderers();
+await Promise.all([
+  warmPanelViewRenderers(),
+  warmKnowledgePanelViewRenderers(),
+]);
 
 const originalOnline = onlineManager.isOnline();
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -180,7 +185,7 @@ const registrationPaths = [
 ].filter(
   (path) =>
     !path.includes(".test.") &&
-    !path.startsWith("__fixtures__/") &&
+    !path.split("/").includes("__fixtures__") &&
     path !== "components/inspector/view-registry.ts",
 );
 const registrationSources = await Promise.all(
@@ -198,6 +203,7 @@ await Promise.all(
 const panelFixtures = [
   ...BUILT_IN_KINDS.map((kind) => builtinFixtures[kind]),
   ...genericPanelFixtures,
+  ...knowledgePanelFixtures,
 ];
 expect(
   getInspectorViews()
@@ -207,9 +213,10 @@ expect(
   [
     ...BUILT_IN_KINDS,
     ...genericPanelFixtures.map(({ viewType }) => viewType),
+    ...knowledgePanelFixtures.map(({ viewType }) => viewType),
   ].toSorted(),
 );
-for (const tab of genericPanelFixtures) {
+for (const tab of [...genericPanelFixtures, ...knowledgePanelFixtures]) {
   expect(
     getInspectorViews()
       .find(({ type }) => type === tab.viewType)

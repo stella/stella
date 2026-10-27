@@ -5,8 +5,6 @@ import "@/features/inbox/signal-inspector-registration";
 import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import "@/routes/knowledge/-components/template-studio-inspector";
-import "@/routes/knowledge/tools";
 
 import {
   buildCreateDocumentDraftPayload,
@@ -35,9 +33,6 @@ import {
   PLAYBOOK_DRAFT_VIEW,
   type PlaybookDraftViewPayload,
 } from "@/lib/knowledge/playbook-draft-view";
-import type { ToolDetailPayload } from "@/routes/knowledge/-components/catalogue/tool-detail-view";
-import { TEMPLATE_STUDIO_VIEW } from "@/routes/knowledge/-components/template-studio-constants";
-import type { TemplateStudioPayload } from "@/routes/knowledge/-components/template-studio-inspector";
 
 const FIXTURE_ID = "00000000-0000-4000-8000-000000000001";
 const caseDecisionPayload = {
@@ -56,7 +51,6 @@ export const warmPanelViewRenderers = async () => {
     import("@/features/statutes/components/provision-inspector-view"),
     import("@/features/inbox/components/signal-inspector-view"),
     import("@/features/knowledge/playbook-editor/playbook-draft-view"),
-    import("@/routes/knowledge/-components/catalogue/tool-detail-view"),
   ]);
 };
 
@@ -138,24 +132,5 @@ export const genericPanelFixtures = [
         status: "ready",
       },
     }),
-  },
-  {
-    type: "view",
-    viewType: TEMPLATE_STUDIO_VIEW,
-    id: `template:${FIXTURE_ID}`,
-    label: "Engagement template",
-    payload: { templateId: FIXTURE_ID } satisfies TemplateStudioPayload,
-  },
-  {
-    type: "view",
-    viewType: "tool-detail",
-    id: `tool:${FIXTURE_ID}`,
-    label: "Legal research",
-    payload: {
-      kind: "skill",
-      slug: "legal-research",
-      organizationId: FIXTURE_ID,
-      iconHint: { icon: null, iconUrl: null },
-    } satisfies ToolDetailPayload,
   },
 ] as const satisfies readonly GenericTab[];
