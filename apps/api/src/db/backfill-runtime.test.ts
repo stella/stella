@@ -520,3 +520,69 @@ for (const mode of ["database", "script"] as const) {
     },
   );
 }
+
+test("operator pause holds the next batch and resume preserves its checkpoint", async () => {
+  const config = { ...defaultConfig, minSize: 1, maxSize: 2, busyWindows: [] };
+  let checkpoint = decodeCheckpoint({
+    cursor: null,
+    batch: initialBatchState(config),
+  });
+  let now = 0;
+  let paused = false;
+  let batches = 0;
+  const runtime = createBackfillRuntime({
+    name: "pause-between-batches",
+    tableName: "rows",
+    initialSize: 1,
+    config,
+    clock: () => now,
+    readVerdict: async () => ({ kind: "normal", signals: [] }),
+    isPaused: async () => paused,
+    log: () => undefined,
+    connection: {
+      execute: async () => undefined,
+      query: async (statement, parameters = []) => {
+        if (statement.startsWith("SELECT cursor, batch")) {
+          return [checkpoint];
+        }
+        if (statement.startsWith("UPDATE database_backfill_states")) {
+          checkpoint = decodeCheckpoint({
+            cursor: parameters.at(1),
+            batch: JSON.parse(String(parameters.at(2))),
+          });
+        }
+        return [{ acquired: true }];
+      },
+    },
+  });
+  const work = async ({ cursor }: { cursor: string | null }) => {
+    batches += 1;
+    return {
+      cursor: cursor === null ? "first" : "second",
+      done: false,
+      value: batches,
+    };
+  };
+  try {
+    expect((await runtime.step(work)).cursor).toBe("first");
+    paused = true;
+    const held = await Result.tryPromise({
+      try: async () => await runtime.step(work),
+      catch: (cause: unknown) => cause,
+    });
+    expect(held.isErr()).toBe(true);
+    if (held.isErr()) {
+      expect(held.error).toBeInstanceOf(BackfillHeldError);
+    }
+    expect(batches).toBe(1);
+    expect(checkpoint.cursor).toBe("first");
+    expect(checkpoint.batch.heldSince).toBe(0);
+    paused = false;
+    now = config.holdBackoffMs + 1;
+    expect((await runtime.step(work)).cursor).toBe("second");
+    expect(batches).toBe(2);
+    expect(checkpoint.batch.heldSince).toBeNull();
+  } finally {
+    await runtime.close();
+  }
+});

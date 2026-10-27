@@ -96,6 +96,7 @@ const backfillRelation = async (
   }
   const runtime = createBackfillRuntime({
     name: `${REPAIR_NAME}:${tableName}`,
+    ...(tables.isPaused === undefined ? {} : { isPaused: tables.isPaused }),
     tableName,
     initialSize: BATCH_SIZE,
     config: { ...defaultConfig, maxSize: MAX_BATCH_SIZE },

@@ -9,6 +9,7 @@ import {
   backfillHeartbeat,
   combine,
   defaultConfig,
+  defaultPressureThresholds,
   initialBatchState,
 } from "@stll/db-load-gate/health";
 import type {
@@ -23,6 +24,7 @@ import {
   busyWindow,
   LONG_TRANSACTION_SQL,
   longTransaction,
+  operatorPauseSignal,
 } from "@stll/db-load-gate/indicators";
 import {
   createHeavyWorkSlot,
@@ -30,6 +32,7 @@ import {
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
+import { createPressureReader } from "@/api/lib/db/pressure-reader";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 
 import {
@@ -63,6 +66,7 @@ type RuntimeOptions = {
   name: string;
   tableName: string;
   initialSize: number;
+  isPaused?: (() => Promise<boolean>) | undefined;
   initialCursor?: string | null;
   config?: HealthConfig | undefined;
   clock?: (() => number) | undefined;
@@ -149,24 +153,65 @@ const createCachedEbsSignalReader = ({ clock, config }: EbsSignalOptions) => {
   };
 };
 
+const createRuntimePressureReader = ({
+  query,
+  clock,
+  config,
+}: {
+  query: Query;
+  clock: () => number;
+  config: HealthConfig;
+}) => {
+  const initializeReader = async () => {
+    const [{ envDbLoadGate }, { readOnlineIndexConfig }] = await Promise.all([
+      import("../env-db-load-gate"),
+      import("../env-online-index"),
+    ]);
+    return createPressureReader({
+      query,
+      clock,
+      config: {
+        ...config,
+        pressure:
+          config.pressure ??
+          readOnlineIndexConfig().health.pressure ??
+          defaultPressureThresholds,
+      },
+      configuration: resolveEbsConfiguration(envDbLoadGate),
+    });
+  };
+  let initialized: ReturnType<typeof initializeReader> | undefined;
+  return async () => {
+    initialized ??= initializeReader();
+    return await (
+      await initialized
+    )();
+  };
+};
+
 const createVerdictReader = ({
   query,
   tableName,
   clock,
   config,
   sharedReadEbsSignal,
+  sharedReadPressure,
 }: {
   query: Query;
   tableName: string;
   clock: () => number;
   config: HealthConfig;
   sharedReadEbsSignal?: () => Promise<Signal>;
+  sharedReadPressure?: () => Promise<Signal[]>;
 }) => {
   const readEbsSignal =
     sharedReadEbsSignal ?? createCachedEbsSignalReader({ clock, config });
-  return async () =>
-    combine(
-      await Promise.all([
+  const readPressure =
+    sharedReadPressure ?? createRuntimePressureReader({ query, clock, config });
+  return async () => {
+    const [pressure, signals] = await Promise.all([
+      readPressure(),
+      Promise.all([
         readEbsSignal(),
         longTransaction({
           read: async () => {
@@ -197,7 +242,9 @@ const createVerdictReader = ({
         }),
         Promise.resolve(busyWindow({ now: clock, config })),
       ]),
-    );
+    ]);
+    return combine([...signals, ...pressure]);
+  };
 };
 
 type RuntimeReportingOptions = {
@@ -320,6 +367,7 @@ const createRuntime = <BatchTransaction>({
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readVerdict,
+  isPaused = async () => false,
   observeStatus,
   reporting = "detailed",
   statementTimeoutPolicy = "defer",
@@ -343,7 +391,10 @@ const createRuntime = <BatchTransaction>({
     });
   const readSettledVerdict = async () => {
     try {
-      return await readHealth();
+      const [verdict, paused] = await Promise.all([readHealth(), isPaused()]);
+      return paused
+        ? combine([...verdict.signals, operatorPauseSignal(true)])
+        : verdict;
     } finally {
       await indicatorQueries.settle();
     }
@@ -638,6 +689,7 @@ type DatabaseLoadVerdictReaderOptions = {
   config?: HealthConfig;
   clock?: () => number;
   readEbsSignal?: () => Promise<Signal>;
+  readPressure?: () => Promise<Signal[]>;
   warn?: IndicatorWarningReporter;
 };
 
@@ -648,6 +700,7 @@ export const createDatabaseLoadVerdictReader = ({
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readEbsSignal,
+  readPressure,
   warn,
 }: DatabaseLoadVerdictReaderOptions) => {
   const sharedReadEbsSignal =
@@ -700,6 +753,13 @@ export const createDatabaseLoadVerdictReader = ({
         clock,
         config,
         sharedReadEbsSignal,
+        sharedReadPressure:
+          readPressure ??
+          createRuntimePressureReader({
+            query: indicators.query,
+            clock,
+            config,
+          }),
       });
       const verdict = await read();
       const { envDbLoadGate } = await import("../env-db-load-gate");

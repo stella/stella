@@ -12,6 +12,7 @@ import {
   euCompletionReceipts,
   folioCollabRooms,
   legalReaderAnswerMessages,
+  ONLINE_WORK_LEGACY_STATES,
   onlineWorkState,
   pdfSigningSessions,
   sanctionsEditionFanouts,
@@ -156,15 +157,18 @@ const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
 
 export const ONLINE_WORK_STATE_TRANSITIONS = defineScopedTransitions({
   table: onlineWorkState,
+  legacyStateAliases: ONLINE_WORK_LEGACY_STATES,
   key: "name",
   scope: [],
   stateColumn: "state",
   edges: {
-    building: ["building", "finalized", "failed"],
-    finalized: [],
-    failed: ["building"],
+    pending: ["running", "paused"],
+    running: ["running", "pending", "paused", "done", "failed"],
+    paused: ["pending", "paused"],
+    done: [],
+    failed: ["running", "paused"],
   },
-  initial: ["building"],
+  initial: ["pending", "running", "done"],
   sameStateUpsert: "update",
 });
 

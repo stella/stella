@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -90,6 +90,10 @@ import {
   ONLINE_WORK_LIFECYCLE,
   type OnlineWorkLifecycle,
 } from "./online-work-lifecycle";
+import {
+  type OnlineWorkStartupReport,
+  readOnlineWorkStartupReport,
+} from "./online-work-startup-report";
 import {
   ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATION,
   ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
@@ -1043,7 +1047,7 @@ export const runOnlineMigrations = async (
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
-): Promise<void> => {
+): Promise<OnlineWorkStartupReport> => {
   const connection = await pool.reserve();
   try {
     const sessionTimeout = await readStatementTimeout(connection);
@@ -1058,6 +1062,10 @@ export const assertOnlineMigrationsApplied = async (
       if (outcome.type !== "complete") {
         panic("Online migration validation cannot defer");
       }
+      return await readOnlineWorkStartupReport(connection, {
+        names: ONLINE_WORK_NAMES,
+        lifecycle: options.lifecycle ?? ONLINE_WORK_LIFECYCLE,
+      });
     } finally {
       await connection.query(RESTORE_STATEMENT_TIMEOUT_SQL, [sessionTimeout]);
     }
@@ -1123,6 +1131,7 @@ type OnlineWorkRunResult = Result<OnlineMigrationOutcome, unknown>;
 
 export type OnlineWorkUnitClaim =
   | { type: "lock_held" }
+  | { type: "paused" }
   | {
       type: "claimed";
       /**
@@ -1140,6 +1149,7 @@ export type OnlineWorkUnitClaim =
 
 export type ClaimOnlineWorkUnitOptions = Omit<OnlineRepairOptions, "scope"> & {
   name: OnlineWorkName;
+  isPaused?: () => Promise<boolean>;
 };
 
 const LOCK_HELD = { type: "lock_held" } as const satisfies OnlineWorkUnitClaim;
@@ -1158,9 +1168,13 @@ export const claimOnlineWorkUnit = async (
     indexGate,
     reserveObserver,
     timing = DEFAULT_MIGRATION_TIMING,
+    isPaused,
     ...options
   }: ClaimOnlineWorkUnitOptions,
 ): Promise<OnlineWorkUnitClaim> => {
+  if (await isPaused?.()) {
+    return { type: "paused" };
+  }
   const entry = lifecycleOf(options.lifecycle ?? ONLINE_WORK_LIFECYCLE, name);
   switch (entry.state) {
     case "pending":
@@ -1205,11 +1219,26 @@ export const claimOnlineWorkUnit = async (
       try {
         const result = await Result.tryPromise({
           try: async () => {
+            if (await isPaused?.()) {
+              return {
+                type: "deferred",
+                step: name,
+                retryAfterMs: 1000,
+              } as const;
+            }
             await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
             await connection.execute("SET statement_timeout = '0'");
             return await walkOnlineMigrations({
               connection,
-              mode: { operation: "repair", indexGate, reserveObserver, timing },
+              mode: {
+                operation: "repair",
+                indexGate: {
+                  ...indexGate,
+                  ...(isPaused === undefined ? {} : { isPaused }),
+                },
+                reserveObserver,
+                timing,
+              },
               scope: { type: "unit", name },
               options,
             });
@@ -1484,6 +1513,11 @@ const processOnlineRepairAt = async ({
       });
     }
   } else {
+    if (mode.operation === "validate" && completion.type === "pending") {
+      panic(
+        `Online repair ${repair.name} is finalized but not complete: ${completion.reason}`,
+      );
+    }
     assertRepairDeployable(repair, completion);
     if (completion.type === "pending") {
       log({ event: "online_repair_pending", repair: repair.name, completion });
@@ -1811,6 +1845,40 @@ type EnsureOnlineIndexOptions = {
   reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
 
+class OnlineIndexCleanupError extends TaggedError("OnlineIndexCleanupError")<{
+  message: string;
+  cause: unknown;
+  cleanupCause: unknown;
+}> {}
+
+/** A ready unique index still enforces uniqueness, even when INVALID. */
+const cleanupFailedIndexBuild = async ({
+  connection,
+  index,
+  gate,
+  reserveObserver,
+}: EnsureOnlineIndexOptions): Promise<void> => {
+  await runGatedTableWork({
+    connection,
+    gate,
+    reserveObserver,
+    target: index,
+    kind: "index_repair",
+    work: async (session) => {
+      await cleanupFailedReindexArtifacts(session, index);
+      const state = await readIndexState(session, index);
+      if (state.type === "missing" || state.isValid) {
+        return;
+      }
+      assertIndexDefinition(index, state);
+      if (state.isUnique && state.isReady) {
+        return;
+      }
+      await session.run(dropIndexConcurrently(index, { ifExists: true }));
+    },
+  });
+};
+
 export const ensureOnlineIndexValid = async ({
   connection,
   index,
@@ -1830,34 +1898,60 @@ export const ensureOnlineIndexValid = async ({
   } else if (!declaresOnlineBuild(index)) {
     panic(`Required migration index ${index.name} is missing`);
   }
-  const outcome = await runGatedTableWork({
-    connection,
-    gate,
-    reserveObserver,
-    target: index,
-    kind: initialState.type === "present" ? "index_repair" : "index_build",
-    work: async (session) => {
-      await cleanupFailedReindexArtifacts(session, index);
-      const state = await readIndexState(session, index);
-      if (state.type === "present") {
-        assertIndexDefinition(index, state);
-        if (state.isValid && state.isReady) {
-          return;
-        }
-        // An interrupted concurrent build can leave the index ready but
-        // invalid: PostgreSQL still maintains it, and a unique one still
-        // rejects duplicates. REINDEX builds the copy beside it and swaps
-        // only once the copy is valid, so enforcement never lapses; a
-        // DROP before CREATE would let a duplicate commit in between.
-        await session.run(reindexIndexConcurrently(index));
-        return;
+  const sessionIsActive = trackTermination(connection);
+  const attempt = await Result.tryPromise(
+    async () =>
+      await runGatedTableWork({
+        connection,
+        gate,
+        reserveObserver,
+        target: index,
+        kind: initialState.type === "present" ? "index_repair" : "index_build",
+        work: async (session) => {
+          await cleanupFailedReindexArtifacts(session, index);
+          const state = await readIndexState(session, index);
+          if (state.type === "present") {
+            assertIndexDefinition(index, state);
+            if (state.isValid && state.isReady) {
+              return;
+            }
+            // An interrupted concurrent build can leave the index ready but
+            // invalid: PostgreSQL still maintains it, and a unique one still
+            // rejects duplicates. REINDEX builds the copy beside it and swaps
+            // only once the copy is valid, so enforcement never lapses; a
+            // DROP before CREATE would let a duplicate commit in between.
+            await session.run(reindexIndexConcurrently(index));
+            return;
+          }
+          if (!declaresOnlineBuild(index)) {
+            panic(`Required migration index ${index.name} is missing`);
+          }
+          await session.run(createIndexConcurrently(index));
+        },
+      }),
+  );
+  if (attempt.isErr()) {
+    if (sessionIsActive()) {
+      const cleanup = await Result.tryPromise(
+        async () =>
+          await cleanupFailedIndexBuild({
+            connection,
+            index,
+            gate,
+            reserveObserver,
+          }),
+      );
+      if (cleanup.isErr()) {
+        throw new OnlineIndexCleanupError({
+          message: `Online index ${index.name} failed and immediate cleanup failed`,
+          cause: attempt.error,
+          cleanupCause: cleanup.error,
+        });
       }
-      if (!declaresOnlineBuild(index)) {
-        panic(`Required migration index ${index.name} is missing`);
-      }
-      await session.run(createIndexConcurrently(index));
-    },
-  });
+    }
+    throw attempt.error;
+  }
+  const outcome = attempt.value;
   if (outcome.type === "complete") {
     await assertIndexReady(connection, index);
   }

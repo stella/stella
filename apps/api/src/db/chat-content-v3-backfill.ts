@@ -335,6 +335,9 @@ export const createChatContentV3Repair = (options: RepairOptions = {}) =>
             maxSize: CHAT_CONTENT_V3_BATCH_SIZE,
           },
           readVerdict: options.readVerdict,
+          ...(tables.isPaused === undefined
+            ? {}
+            : { isPaused: tables.isPaused }),
           log: options.log,
         });
         try {

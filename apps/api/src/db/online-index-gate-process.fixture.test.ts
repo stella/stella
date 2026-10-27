@@ -48,6 +48,7 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
         }
         process.stdout.write(`runner-pid:${String(pid)}\n`);
         const gate = createOnlineIndexGate({
+          readPressure: async () => [],
           connection: adapt(builder),
           observer: adapt(observer),
           tableName: table,

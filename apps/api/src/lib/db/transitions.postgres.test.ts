@@ -165,6 +165,7 @@ if (!databaseUrl || !enabled) {
           const upsert = async (
             status: "queued" | "running" | "done",
             failAudit = false,
+            onExisting: "transition" | "preserve" = "transition",
           ) =>
             await tx.transaction(
               async (nested) =>
@@ -172,6 +173,7 @@ if (!databaseUrl || !enabled) {
                   tx: nested,
                   spec,
                   values: [{ id: "job", status, attempt: 1 }],
+                  onExisting,
                   recordTransitionAuditEvent: async (auditTx, rows) => {
                     for (const row of rows) {
                       await auditTx.execute(
@@ -210,6 +212,8 @@ if (!databaseUrl || !enabled) {
           expect(await upsert("running")).toHaveLength(1);
           const running = await census();
           expect(running.audit).toHaveLength(2);
+          expect(await upsert("queued", false, "preserve")).toHaveLength(0);
+          expect(await census()).toEqual(running);
           expect(
             (
               await Result.tryPromise(async () => await upsert("queued"))

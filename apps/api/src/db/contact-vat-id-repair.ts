@@ -95,6 +95,7 @@ const readCompletion = async (
 };
 
 type RepairRuntimeOptions = {
+  isPaused?: (() => Promise<boolean>) | undefined;
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
   clock?: () => number;
@@ -103,7 +104,13 @@ type RepairRuntimeOptions = {
 
 const moveUntilEmpty = async (
   connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
+  {
+    readVerdict,
+    isPaused,
+    sleep = Bun.sleep,
+    clock,
+    log,
+  }: RepairRuntimeOptions,
 ) => {
   const runtime = createBackfillRuntime({
     name: CONTACT_VAT_ID_REPAIR_NAME,
@@ -112,6 +119,7 @@ const moveUntilEmpty = async (
     config: defaultConfig,
     connection,
     readVerdict,
+    ...(isPaused === undefined ? {} : { isPaused }),
     clock,
     log,
   });
@@ -138,12 +146,15 @@ export const createContactVatIdRepair = (
 } => ({
   name: CONTACT_VAT_ID_REPAIR_NAME,
   readCompletion,
-  repair: async (connection) => {
+  repair: async (connection, tables) => {
     // Fresh databases and repaired ones have no data work or metric source.
     if (!(await hasMovableContact(connection))) {
       return { type: "complete" };
     }
-    const pass = await moveUntilEmpty(connection, options);
+    const pass = await moveUntilEmpty(connection, {
+      ...options,
+      isPaused: tables.isPaused,
+    });
     if (pass.isErr()) {
       throw pass.error;
     }

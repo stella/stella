@@ -8,7 +8,12 @@ export type HealthSignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
 export type Signal = {
   indicator:
-    "ebs_balance" | "long_transaction" | "autovacuum_on_target" | "busy_window";
+    | "ebs_balance"
+    | "long_transaction"
+    | "autovacuum_on_target"
+    | "busy_window"
+    | PressureIndicator
+    | "operator_pause";
   kind: HealthSignalKind;
   value: number | null;
   threshold: number | null;
@@ -39,7 +44,35 @@ export const isFreshReading = (
 };
 export type Verdict = { kind: VerdictKind; signals: Signal[] };
 export type BusyWindow = { start: string; end: string; timeZone: string };
+export const PRESSURE_INDICATORS = [
+  "active_sessions",
+  "replication_lag_ms",
+  "cpu_percent",
+  "read_iops",
+  "write_iops",
+  "read_bytes_per_second",
+  "write_bytes_per_second",
+] as const;
+export type PressureIndicator = (typeof PRESSURE_INDICATORS)[number];
+export type PressureThreshold = { throttle: number; pause: number };
+export const defaultPressureThresholds = {
+  active_sessions: { throttle: 40, pause: 80 },
+  replication_lag_ms: { throttle: 5000, pause: 30_000 },
+  cpu_percent: { throttle: 65, pause: 85 },
+  read_iops: { throttle: 2000, pause: 2800 },
+  write_iops: { throttle: 2000, pause: 2800 },
+  read_bytes_per_second: {
+    throttle: 80 * 1024 * 1024,
+    pause: 110 * 1024 * 1024,
+  },
+  write_bytes_per_second: {
+    throttle: 80 * 1024 * 1024,
+    pause: 110 * 1024 * 1024,
+  },
+} as const satisfies Record<PressureIndicator, PressureThreshold>;
+
 export type HealthConfig = {
+  pressure?: Readonly<Record<PressureIndicator, PressureThreshold>>;
   startFloor: number;
   hardFloor: number;
   resumeFloor?: number;
@@ -79,7 +112,23 @@ export const defaultConfig = {
   maxHeldMs: 6 * 60 * 60_000,
 } as const satisfies HealthConfig;
 
+const validatePressureThresholds = (config: HealthConfig) => {
+  for (const threshold of Object.values(
+    config.pressure ?? defaultPressureThresholds,
+  )) {
+    if (
+      !Number.isFinite(threshold.throttle) ||
+      !Number.isFinite(threshold.pause) ||
+      threshold.throttle < 0 ||
+      threshold.pause <= threshold.throttle
+    ) {
+      panic("Pressure thresholds must be finite, nonnegative and ordered");
+    }
+  }
+};
+
 export const validateConfig = (config: HealthConfig) => {
+  validatePressureThresholds(config);
   const positiveFields = [
     config.maxStalenessMs,
     config.readTimeoutMs,
@@ -198,7 +247,7 @@ export type BuildProgress = {
   blocksTotal: number;
 };
 export const decideWhileRunning = (
-  history: Signal[],
+  history: Verdict[],
   config: HealthConfig = defaultConfig,
   progress?: BuildProgress,
 ) => {
@@ -206,17 +255,10 @@ export const decideWhileRunning = (
   const recent = history.slice(-2);
   const cancel =
     recent.length === 2 &&
-    recent.every(
-      (signal) =>
-        signal.indicator === "ebs_balance" &&
-        signal.kind !== "unknown" &&
-        signal.value !== null &&
-        Number.isFinite(signal.value) &&
-        signal.value < config.hardFloor,
-    );
+    recent.every(({ kind }) => kind === "stop" || kind === "unknown");
   return {
     decision: cancel ? ("cancel" as const) : ("continue" as const),
-    verdict: combine(recent),
+    verdict: combine(recent.flatMap(({ signals }) => signals)),
     config,
     ...(progress === undefined ? {} : { progress }),
   };

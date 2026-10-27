@@ -15,6 +15,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { isRecord } from "@/api/lib/type-guards";
 
 const TRANSITION_INSERT_BATCH_SIZE = 128;
@@ -67,6 +68,7 @@ export type ScopedTransitionSpec<
   readonly edges: TEdges;
   readonly initial: readonly StateValue<TTable, TState>[];
   readonly sameStateUpsert: "ignore" | "update" | undefined;
+  readonly legacyStateAliases?: Readonly<Record<string, string>>;
 };
 
 export type ScopedTransitionDeclaration = {
@@ -77,6 +79,7 @@ export type ScopedTransitionDeclaration = {
   readonly edges: Readonly<Record<string, readonly string[]>>;
   readonly initial: readonly string[];
   readonly sameStateUpsert: "ignore" | "update" | undefined;
+  readonly legacyStateAliases?: Readonly<Record<string, string>>;
 };
 
 /** Declares a lifecycle over a non-null primary or unique identity. */
@@ -96,6 +99,7 @@ export const defineScopedTransitions = <
   edges,
   initial,
   sameStateUpsert,
+  legacyStateAliases,
 }: {
   table: TTable;
   key: TKey;
@@ -104,6 +108,7 @@ export const defineScopedTransitions = <
   edges: TEdges;
   initial: readonly StateValue<TTable, TState>[];
   sameStateUpsert?: "ignore" | "update";
+  legacyStateAliases?: Readonly<Record<string, StateValue<TTable, TState>>>;
 }): ScopedTransitionSpec<TTable, TKey, TScope, TState, TEdges> => {
   const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(table);
   const state = columns[stateColumn];
@@ -159,7 +164,16 @@ export const defineScopedTransitions = <
       panic(`Unknown scoped transition target from ${from}`);
     }
   }
+  if (
+    Object.entries(legacyStateAliases ?? {}).some(
+      ([legacy, canonical]) =>
+        stateValues.includes(legacy) || !stateValues.includes(canonical),
+    )
+  ) {
+    panic("Legacy state aliases must map old spellings to the closed domain");
+  }
   return Object.freeze({
+    ...(legacyStateAliases === undefined ? {} : { legacyStateAliases }),
     table,
     key,
     scope,
@@ -239,10 +253,120 @@ type ScopedUpsertWriteArgs<
   identityKeys: readonly (TKey | TScope[number])[];
   identityColumns: readonly AnyPgColumn[];
   incomingRows: SQL;
+  onExisting: "transition" | "preserve";
   recordTransitionAuditEvent: (
     tx: TTx,
     rows: readonly ScopedChangedRow<TTable, TState>[],
   ) => void | Promise<void>;
+};
+
+const normalizeScopedStateAliases = async <
+  TTx extends TransitionTransaction,
+  TTable extends ScopedStateTable,
+  TKey extends ColumnKey<TTable>,
+  TScope extends readonly ColumnKey<TTable>[],
+  TState extends ColumnKey<TTable>,
+  const TEdges extends Readonly<
+    Record<StateValue<TTable, TState>, readonly StateValue<TTable, TState>[]>
+  >,
+>({
+  tx,
+  spec,
+  where,
+  recordTransitionAuditEvent,
+}: {
+  tx: TTx;
+  spec: ScopedTransitionSpec<TTable, TKey, TScope, TState, TEdges>;
+  where: SQL;
+  recordTransitionAuditEvent: (
+    tx: TTx,
+    rows: readonly {
+      identity: Readonly<Record<string, unknown>>;
+      status: StateValue<TTable, TState>;
+    }[],
+  ) => void | Promise<void>;
+}) => {
+  const aliases = Object.entries(spec.legacyStateAliases ?? {});
+  if (aliases.length === 0) {
+    return;
+  }
+  const columns = getColumns(spec.table);
+  const state = columns[spec.stateColumn];
+  const keys = [spec.key, ...spec.scope];
+  const result = await tx.execute(sql`
+    UPDATE ${spec.table}
+    SET ${sql.identifier(state.name)} = ${sqlCaseFragment({ operand: sql`${state}`, branches: aliases.map(([legacy, canonical]) => sql`WHEN ${legacy} THEN ${canonical}`), fallback: sql`${state}` })}
+    WHERE (${where}) AND ${state} IN (${sql.join(
+      aliases.map(([legacy]) => sql`${legacy}`),
+      sql`, `,
+    )})
+    RETURNING ${sql.join(
+      keys.map((key) => sql`${columns[key]} AS ${sql.identifier(key)}`),
+      sql`, `,
+    )}, ${state} AS status
+  `);
+  const rows = returnedTransitionRows(result).map((row) => {
+    const status = row["status"];
+    if (!isScopedStateValue(spec.table, spec.stateColumn, status)) {
+      return panic("Alias normalization returned an unknown state");
+    }
+    return {
+      identity: Object.fromEntries(keys.map((key) => [key, row[key]])),
+      status,
+    };
+  });
+  if (rows.length > 0) {
+    await recordTransitionAuditEvent(tx, rows);
+  }
+};
+
+const scopedUpsertUpdateColumns = (
+  spec: ScopedTransitionDeclaration,
+  insertColumns: readonly AnyPgColumn[],
+) => {
+  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
+  const identityKeys = [spec.key, ...spec.scope];
+  const primaryColumns = new Set(
+    getTableConfig(spec.table).primaryKeys.flatMap(({ columns: primary }) =>
+      primary.map((column) => column.name),
+    ),
+  );
+  return insertColumns.filter(
+    (column) =>
+      !column.primary &&
+      !primaryColumns.has(column.name) &&
+      !identityKeys.some((key) => columns[key]?.name === column.name),
+  );
+};
+
+type ScopedUpsertReturningOptions = {
+  identityColumns: readonly AnyPgColumn[];
+  identityKeys: readonly string[];
+  state: AnyPgColumn;
+  alias?: "current";
+};
+
+const scopedUpsertReturning = ({
+  identityColumns,
+  identityKeys,
+  state,
+  alias,
+}: ScopedUpsertReturningOptions) => {
+  const reference = (column: AnyPgColumn) =>
+    alias === undefined
+      ? sql`${sql.identifier(column.name)}`
+      : sql`${sql.identifier(alias)}.${sql.identifier(column.name)}`;
+  return sql.join(
+    [
+      ...identityColumns.map((column, index) => {
+        const key =
+          identityKeys[index] ?? panic("Declared identity key is missing");
+        return sql`${reference(column)} AS ${sql.identifier(key)}`;
+      }),
+      sql`${reference(state)} AS "status"`,
+    ],
+    sql`, `,
+  );
 };
 
 const executeScopedUpsertWrites = async <
@@ -263,34 +387,20 @@ const executeScopedUpsertWrites = async <
   identityKeys,
   identityColumns,
   incomingRows,
+  onExisting,
   recordTransitionAuditEvent,
 }: ScopedUpsertWriteArgs<TTx, TTable, TKey, TScope, TState, TEdges>) => {
-  const returning = sql.join(
-    [
-      ...identityColumns.map((column, index) => {
-        const key = identityKeys[index];
-        if (key === undefined) {
-          panic("Declared identity key is missing");
-        }
-        return sql`${sql.identifier(column.name)} AS ${sql.identifier(key)}`;
-      }),
-      sql`${sql.identifier(state.name)} AS "status"`,
-    ],
-    sql`, `,
-  );
-  const returningUpdated = sql.join(
-    [
-      ...identityColumns.map((column, index) => {
-        const key = identityKeys[index];
-        if (key === undefined) {
-          panic("Declared identity key is missing");
-        }
-        return sql`current.${sql.identifier(column.name)} AS ${sql.identifier(key)}`;
-      }),
-      sql`current.${sql.identifier(state.name)} AS "status"`,
-    ],
-    sql`, `,
-  );
+  const returning = scopedUpsertReturning({
+    identityColumns,
+    identityKeys,
+    state,
+  });
+  const returningUpdated = scopedUpsertReturning({
+    identityColumns,
+    identityKeys,
+    state,
+    alias: "current",
+  });
   const insertRows =
     spec.initial.length === 0
       ? []
@@ -319,18 +429,22 @@ const executeScopedUpsertWrites = async <
           )}) DO NOTHING
           RETURNING ${returning}
         `);
-  const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
-  const primaryColumns = new Set(
-    getTableConfig(spec.table).primaryKeys.flatMap(({ columns: primary }) =>
-      primary.map((column) => column.name),
-    ),
-  );
-  const updateColumns = insertColumns.filter(
-    (column) =>
-      !column.primary &&
-      !primaryColumns.has(column.name) &&
-      !identityKeys.some((key) => columns[key]?.name === column.name),
-  );
+  if (onExisting === "preserve") {
+    const changed = returnedTransitionRows(insertRows).map((row) => {
+      const status = row["status"];
+      if (!isScopedStateValue(spec.table, spec.stateColumn, status)) {
+        return panic("Inserted transition returned an unknown state");
+      }
+      return {
+        identity: Object.fromEntries(
+          identityKeys.map((key) => [key, row[key]]),
+        ),
+        status,
+      };
+    });
+    return changed;
+  }
+  const updateColumns = scopedUpsertUpdateColumns(spec, insertColumns);
   const priorStates = Object.entries<readonly string[]>(spec.edges).flatMap(
     ([from, targets]) =>
       targets.some((target) =>
@@ -526,6 +640,13 @@ export const transitionScopedCount = async <
   recordTransitionAuditEvent: (tx: TTx, count: number) => void | Promise<void>;
 }) => {
   const { state, assignments } = scopedTransitionAssignments(spec, options);
+  await normalizeScopedStateAliases({
+    tx,
+    spec,
+    where,
+    recordTransitionAuditEvent: async (auditTx, rows) =>
+      await recordTransitionAuditEvent(auditTx, rows.length),
+  });
   const rows = await tx.execute(sql`
     WITH changed AS (
       UPDATE ${spec.table}
@@ -617,6 +738,12 @@ export const transitionScopedBatch = async <
         sql` AND `,
       )})`,
   );
+  await normalizeScopedStateAliases({
+    tx,
+    spec,
+    where: sql.join(identityPredicates, sql` OR `),
+    recordTransitionAuditEvent,
+  });
   const rows = await tx.execute(sql`
     UPDATE ${table}
     SET ${sql.join(assignments, sql`, `)}
@@ -669,11 +796,13 @@ export const transitionUpsertBatch = async <
   tx,
   spec,
   values,
+  onExisting = "transition",
   recordTransitionAuditEvent,
 }: {
   tx: TTx;
   spec: ScopedTransitionSpec<TTable, TKey, TScope, TState, TEdges>;
   values: readonly ScopedUpsertRow<TTable, TKey, TScope, TState>[];
+  onExisting?: "transition" | "preserve";
   recordTransitionAuditEvent: (
     tx: TTx,
     rows: readonly ScopedChangedRow<TTable, TState>[],
@@ -705,6 +834,7 @@ export const transitionUpsertBatch = async <
           tx,
           spec,
           values: itemBatch,
+          onExisting,
           recordTransitionAuditEvent: ignoreTransitionAudit,
         })),
       );
@@ -753,6 +883,15 @@ export const transitionUpsertBatch = async <
       panic("An upsert state must belong to the declared lifecycle domain");
     }
   }
+  if (
+    onExisting === "preserve" &&
+    values.some(
+      (row) =>
+        !spec.initial.some((initial) => initial === row[spec.stateColumn]),
+    )
+  ) {
+    panic("Insert-only transitions require a declared initial state");
+  }
   const incomingRows = sql.join(
     values.map(
       (row) =>
@@ -777,6 +916,24 @@ export const transitionUpsertBatch = async <
     }
     return column;
   });
+  const aliasColumns = getColumns(spec.table);
+  await normalizeScopedStateAliases({
+    tx,
+    spec,
+    where: sql.join(
+      values.map(
+        (value) =>
+          sql`(${sql.join(
+            identityKeys.map(
+              (key) => sql`${aliasColumns[key]} = ${value[key]}`,
+            ),
+            sql` AND `,
+          )})`,
+      ),
+      sql` OR `,
+    ),
+    recordTransitionAuditEvent,
+  });
   const changedRows = await executeScopedUpsertWrites({
     tx,
     spec,
@@ -786,6 +943,7 @@ export const transitionUpsertBatch = async <
     identityKeys,
     identityColumns,
     incomingRows,
+    onExisting,
     recordTransitionAuditEvent: ignoreTransitionAudit,
   });
   if (changedRows.length > 0) {

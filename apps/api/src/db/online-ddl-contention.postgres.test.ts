@@ -367,6 +367,7 @@ const untilDone = async (_milliseconds: number, signal: AbortSignal) => {
 const healthyGate = ({ clock }: Scratch): OnlineIndexGateOptions => ({
   config: gateConfig(600_000),
   clock,
+  readPressure: async () => [],
   ebs: healthyEbs(clock),
   wait: untilDone,
   log: () => undefined,
@@ -382,6 +383,7 @@ const contendedGate = (
 ): OnlineIndexGateOptions => ({
   config: gateConfig(0),
   clock,
+  readPressure: async () => [],
   ebs: healthyEbs(clock),
   wait: async (_milliseconds, signal) => {
     await waitForExternalState({

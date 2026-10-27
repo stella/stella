@@ -14,6 +14,7 @@ import {
   busyWindow,
   LONG_TRANSACTION_SQL,
   longTransaction,
+  operatorPauseSignal,
 } from "@stll/db-load-gate/indicators";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
@@ -23,6 +24,7 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineIndexConfig } from "../env-online-index";
 import { createEbsSignalReader } from "../lib/db/ebs-signal-reader";
 import type { EbsConfiguration } from "../lib/db/ebs-signal-reader";
+import { createPressureReader } from "../lib/db/pressure-reader";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import type { MigrationLockTelemetry } from "./migration-lock-observation";
@@ -55,6 +57,8 @@ export type OnlineIndexEbsSource =
   EbsConfiguration | { type: "reader"; read: () => Promise<Signal> };
 
 export type OnlineIndexGateOptions = {
+  isPaused?: (() => Promise<boolean>) | undefined;
+  readPressure?: () => Promise<Signal[]>;
   lockTelemetry?: MigrationLockTelemetry;
   ebs: OnlineIndexEbsSource;
   config?: OnlineIndexConfig;
@@ -132,6 +136,8 @@ type ObservedIndexWorkOptions = {
   config: OnlineIndexConfig;
   clock: () => number;
   readBalance: () => Promise<Signal>;
+  readPressure: () => Promise<Signal[]>;
+  isPaused: () => Promise<boolean>;
   initialVerdict: Verdict;
   wait: NonNullable<OnlineIndexGateOptions["wait"]>;
   emit: (record: unknown) => void;
@@ -147,6 +153,8 @@ const runObservedIndexWork = async ({
   config,
   clock,
   readBalance,
+  readPressure,
+  isPaused,
   initialVerdict,
   wait,
   emit,
@@ -165,11 +173,17 @@ const runObservedIndexWork = async ({
   // after DROP. A server cancellation acknowledgement alone cannot stop JS work.
   const guardedConnection: OnlineMigrationConnection = {
     execute: async (query, parameters) => {
+      if (await isPaused()) {
+        cancellation.abort();
+      }
       assertActive();
       await connection.execute(query, parameters);
       assertActive();
     },
     query: async (query, parameters) => {
+      if (await isPaused()) {
+        cancellation.abort();
+      }
       assertActive();
       const rows = await connection.query(query, parameters);
       assertActive();
@@ -193,6 +207,7 @@ const runObservedIndexWork = async ({
     catch: (cause: unknown) => cause,
   });
   const history: Signal[] = [];
+  const verdictHistory: Verdict[] = [];
   let waiting: { phase: string; since: number } | undefined;
   const hasCompleted = () => completed.signal.aborted;
   const monitoring = await Result.tryPromise({
@@ -217,11 +232,26 @@ const runObservedIndexWork = async ({
             )
           ).at(0),
         );
-        history.push(await readBalance());
-        if (history.length > 2) {
-          history.shift();
+        const [balance, pressure, paused] = await Promise.all([
+          readBalance(),
+          readPressure(),
+          isPaused(),
+        ]);
+        const verdict = combine([
+          balance,
+          ...pressure,
+          operatorPauseSignal(paused),
+        ]);
+        verdictHistory.push(verdict);
+        if (verdictHistory.length > 2) {
+          verdictHistory.shift();
         }
-        const running = decideWhileRunning(history, config.health, progress);
+        history.splice(0, history.length, ...verdict.signals);
+        const running = decideWhileRunning(
+          verdictHistory,
+          config.health,
+          progress,
+        );
         const now = clock();
         if (progress?.phase.startsWith("waiting for ")) {
           if (waiting?.phase !== progress.phase) {
@@ -244,7 +274,7 @@ const runObservedIndexWork = async ({
               }
             : running,
         );
-        if (running.decision === "cancel" || watchdog) {
+        if (running.decision === "cancel" || watchdog || paused) {
           cancellation.abort();
           await cancelIndexBackend(observer, pid);
           break;
@@ -317,21 +347,34 @@ const readIndexStartVerdict = async ({
   clock,
   config,
   readBalance,
+  readPressure,
+  isPaused,
 }: Pick<
   ObservedIndexWorkOptions,
-  "observer" | "clock" | "config" | "readBalance"
+  "observer" | "clock" | "config" | "readBalance" | "readPressure" | "isPaused"
 > & { tableName: string }): Promise<Verdict> => {
-  const ebs = await readBalance();
+  const [ebs, pressure, paused] = await Promise.all([
+    readBalance(),
+    readPressure(),
+    isPaused(),
+  ]);
   // While held on disk health, do not add database probes.
   if (
     ebs.kind === "unknown" ||
     ebs.kind === "stop" ||
     ebs.kind === "degraded"
   ) {
-    return combine([ebs, busyWindow({ now: clock, config: config.health })]);
+    return combine([
+      ebs,
+      ...pressure,
+      operatorPauseSignal(paused),
+      busyWindow({ now: clock, config: config.health }),
+    ]);
   }
   return combine([
     ebs,
+    ...pressure,
+    operatorPauseSignal(paused),
     busyWindow({ now: clock, config: config.health }),
     await longTransaction({
       read: async () => {
@@ -491,6 +534,8 @@ export const createOnlineIndexGate = ({
   hold = createOnlineIndexHold(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   ebs,
+  readPressure: injectedReadPressure,
+  isPaused = async () => false,
   cancelBackend = cancelWithIndependentObserver,
   wait = async (milliseconds, signal) =>
     await sleep(milliseconds, { signal }).catch((error: unknown) => {
@@ -509,6 +554,14 @@ export const createOnlineIndexGate = ({
           clock,
           config: config.health,
         });
+  const readPressure =
+    injectedReadPressure ??
+    createPressureReader({
+      query: (statement, parameters) => observer.query(statement, parameters),
+      configuration: ebs.type === "reader" ? { type: "disabled" } : ebs,
+      clock,
+      config: config.health,
+    });
   const emit = (record: unknown) =>
     log({ event: "online_index_decision", name, record });
   let lifecycle: "active" | "terminated" = "active";
@@ -566,6 +619,8 @@ export const createOnlineIndexGate = ({
         clock,
         config,
         readBalance,
+        readPressure,
+        isPaused,
       }),
       "index_build",
       config.health,
@@ -635,6 +690,8 @@ export const createOnlineIndexGate = ({
         config,
         clock,
         readBalance,
+        readPressure,
+        isPaused,
         initialVerdict: start.verdict,
         wait,
         emit,

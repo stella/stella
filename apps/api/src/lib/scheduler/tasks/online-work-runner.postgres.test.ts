@@ -70,6 +70,7 @@ const healthyGate = (): OnlineIndexGateOptions => ({
     parallelWorkers: 1,
     maintenanceWorkMemMb: 16,
   },
+  readPressure: async () => [],
   ebs: {
     type: "reader",
     read: async () => ({
@@ -152,7 +153,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             [index.name],
           );
           expect([...row]).toEqual([
-            { state: "finalized", attempts: 1, last_error: null },
+            { state: "done", attempts: 1, last_error: null },
           ]);
           expect((await runner(TICK)).unwrap()).toEqual({ type: "idle" });
         } finally {
@@ -211,7 +212,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
         >("SELECT state, attempts FROM online_work_state WHERE name = $1", [
           index.name,
         ]);
-        expect([...row]).toEqual([]);
+        expect([...row]).toEqual([{ state: "pending", attempts: 0 }]);
       } finally {
         if (held.type === "claimed") {
           await held.release();

@@ -219,6 +219,7 @@ describe.skipIf(!enabled)(
           }
           expect(holderAge).toBeGreaterThan(0);
           const read = createDatabaseLoadVerdictReader({
+            readPressure: async () => [],
             db: restrictedRunner(db, "stella_ingestion", schema),
             tableName: target,
             config,
@@ -265,6 +266,7 @@ describe.skipIf(!enabled)(
       ).at(0);
       expect(rights?.["executable"]).toBe(false);
       const verdict = await createDatabaseLoadVerdictReader({
+        readPressure: async () => [],
         db: restrictedRunner(db, role, schema),
         tableName: target,
         config,
@@ -305,6 +307,7 @@ describe.skipIf(!enabled)(
         warnings.push(record);
       };
       const read = createDatabaseLoadVerdictReader({
+        readPressure: async () => [],
         db: restrictedRunner(db, "stella_ingestion", schema),
         tableName: deniedTarget,
         config,
@@ -366,6 +369,7 @@ describe.skipIf(!enabled)(
                 );
               }
               const verdict = await createDatabaseLoadVerdictReader({
+                readPressure: async () => [],
                 db: {
                   transaction: async (fn) =>
                     await fn(asTestRaw<Transaction>(tx)),
@@ -475,6 +479,7 @@ describe.skipIf(!enabled)(
           }
           expect(running).toBe(true);
           const read = createDatabaseLoadVerdictReader({
+            readPressure: async () => [],
             db: restrictedRunner(db, "stella_ingestion", schema),
             tableName: target,
             config,
@@ -622,6 +627,7 @@ describe.skipIf(!enabled)(
             }) as const;
           const reader = (tableName: string) =>
             createDatabaseLoadVerdictReader({
+              readPressure: async () => [],
               db: restrictedRunner(db, "stella_ingestion", "public"),
               tableName,
               config,

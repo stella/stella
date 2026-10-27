@@ -276,6 +276,7 @@ test("a held table gate emits one deferred attempt without starting work", async
     target: INDEX,
     kind: "index_build",
     gate: {
+      readPressure: async () => [],
       lockTelemetry,
       log: () => undefined,
       ebs: {
@@ -380,6 +381,7 @@ test("exhausted statement retries report the same deferred outcome as the gate",
       runtime: { now: () => 0, sleep: async () => undefined, random: () => 0 },
     },
     gate: {
+      readPressure: async () => [],
       config: readOnlineIndexConfig({ DB_LOAD_GATE_BUSY_WINDOWS: "[]" }),
       clock: () => Date.parse(observedAt),
       lockTelemetry,

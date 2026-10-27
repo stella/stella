@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 import nodePath from "node:path";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import {
@@ -15,8 +17,10 @@ import {
   ingestionRolePostureViolation,
 } from "@/api/lib/db/rls-role-posture";
 import { logger } from "@/api/lib/observability/logger";
+import { writeMetricLine } from "@/api/lib/observability/request-metrics";
 
 import { assertOnlineMigrationsApplied } from "../../db/online-migrations";
+import { onlineWorkStartupMetric } from "../../db/online-work-startup-report";
 import {
   APPLICATION_RLS_ROLE_NAME,
   INGESTION_ROLE_NAME,
@@ -88,7 +92,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
       "to bypass the check (emergency only).",
   });
-  await assertOnlineMigrationsApplied({
+  const report = await assertOnlineMigrationsApplied({
     reserve: async () => {
       const connection = await rootDb.$client.reserve();
       return {
@@ -103,4 +107,11 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       };
     },
   });
+  logger.info("startup.online_migrations_pending", {
+    pending: report.pending,
+    units: report.units,
+  });
+  writeMetricLine(
+    onlineWorkStartupMetric(report, Temporal.Now.instant().epochMilliseconds),
+  );
 };

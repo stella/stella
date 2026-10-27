@@ -2,12 +2,19 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { openMaintenanceSql } from "@/api/db/long-running-connection";
+import {
+  decodeOnlineWorkState,
+  readOnlineWorkPause,
+} from "@/api/db/online-work-pause";
 import { type ONLINE_WORK_STATES, onlineWorkState } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { envDbLoadGate } from "@/api/env-db-load-gate";
 import { detached } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  lockOnlineWorkState,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { resolveEbsConfiguration } from "@/api/lib/db/ebs-signal-reader";
 import { ONLINE_WORK_STATE_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
@@ -55,6 +62,7 @@ export type OnlineWorkStateSnapshot = {
   state: (typeof ONLINE_WORK_STATES)[number];
   attempts: number;
   finishedAt: Date | null;
+  pausedUntil: Date | null;
 };
 
 const RETRY_BASE_MS = 60_000;
@@ -67,13 +75,17 @@ const retryDelayMs = (attempts: number) =>
  * after the tick that claimed it, so finish times are the database's clock.
  */
 export type OnlineWorkStateStore = {
+  initialize: (
+    units: readonly { name: OnlineWorkName; state: "pending" | "done" }[],
+  ) => Promise<void>;
   readStates: () => Promise<readonly OnlineWorkStateSnapshot[]>;
-  markBuilding: (options: {
+  markRunning: (options: {
     name: OnlineWorkName;
     attempts: number;
     at: Date;
-  }) => Promise<void>;
-  markFinalized: (name: OnlineWorkName) => Promise<void>;
+  }) => Promise<boolean>;
+  markDone: (name: OnlineWorkName) => Promise<void>;
+  markPending: (name: OnlineWorkName) => Promise<void>;
   markFailed: (options: {
     name: OnlineWorkName;
     error: string;
@@ -161,11 +173,10 @@ export const createOnlineWorkRunner = ({
         }
         switch (outcome.value.type) {
           case "complete":
-            await store.markFinalized(name);
+            await store.markDone(name);
             return Result.ok(undefined);
           case "deferred":
-            // The gate held the unit; it stays building and the next tick
-            // claims it again.
+            await store.markPending(name);
             return Result.ok(undefined);
           default:
             outcome.value satisfies never;
@@ -182,6 +193,12 @@ export const createOnlineWorkRunner = ({
     if (build.type === "building") {
       return Result.ok({ type: "building", name: build.name });
     }
+    await store.initialize(
+      names.map((name) => ({
+        name,
+        state: lifecycle[name].state === "finalized" ? "done" : "pending",
+      })),
+    );
     if (pending.length === 0) {
       return Result.ok(IDLE);
     }
@@ -192,7 +209,10 @@ export const createOnlineWorkRunner = ({
       if (state === undefined) {
         return true;
       }
-      if (state.state === "finalized") {
+      if (
+        state.state === "done" ||
+        (state.pausedUntil !== null && state.pausedUntil > now)
+      ) {
         return false;
       }
       return !(
@@ -207,6 +227,7 @@ export const createOnlineWorkRunner = ({
     }
     const claimed = await claim({ name, lifecycle });
     switch (claimed.type) {
+      case "paused":
       case "lock_held":
         return Result.ok(SKIPPED);
       case "claimed":
@@ -223,15 +244,15 @@ export const createOnlineWorkRunner = ({
         const current = (await store.readStates()).find(
           (state) => state.name === name,
         );
-        if (current?.state === "finalized") {
+        if (current?.state === "done") {
           return "finished-elsewhere" as const;
         }
-        await store.markBuilding({
+        const started = await store.markRunning({
           name,
           attempts: (current?.attempts ?? 0) + 1,
           at: now,
         });
-        return "building" as const;
+        return started ? ("building" as const) : ("paused" as const);
       },
       catch: (cause: unknown) => cause,
     });
@@ -244,7 +265,7 @@ export const createOnlineWorkRunner = ({
         }),
       );
     }
-    if (marked.value === "finished-elsewhere") {
+    if (marked.value !== "building") {
       await claimed.release();
       return Result.ok(IDLE);
     }
@@ -261,29 +282,13 @@ export const createDrizzleOnlineWorkStateStore = (
     | SafeId<"schedulerJobRun">
     | SafeId<"systemScriptRun"> = createSafeId<"systemScriptRun">(),
 ): OnlineWorkStateStore => ({
-  readStates: async () =>
-    await db
-      .select({
-        name: onlineWorkState.name,
-        state: onlineWorkState.state,
-        attempts: onlineWorkState.attempts,
-        finishedAt: onlineWorkState.finishedAt,
-      })
-      .from(onlineWorkState),
-  markBuilding: async ({ name, attempts, at }) => {
-    const building = {
-      state: "building",
-      attempts,
-      lastError: null,
-      startedAt: at,
-      finishedAt: null,
-      updatedAt: at,
-    } as const;
+  initialize: async (units) => {
     await withAggregateTransaction(db, async (tx) => {
       await transitionUpsertBatch({
         tx,
         spec: ONLINE_WORK_STATE_TRANSITIONS,
-        values: [{ name, ...building }],
+        values: units,
+        onExisting: "preserve",
         recordTransitionAuditEvent: async (auditTx, rows) => {
           await recordSystemAudit(auditTx, "system:online-work", {
             subject: auditSubject,
@@ -293,25 +298,90 @@ export const createDrizzleOnlineWorkStateStore = (
       });
     });
   },
-  markFinalized: async (name) => {
+  readStates: async () => {
+    const rows = await db
+      .select({
+        name: onlineWorkState.name,
+        state: onlineWorkState.state,
+        attempts: onlineWorkState.attempts,
+        finishedAt: onlineWorkState.finishedAt,
+        pausedUntil: onlineWorkState.pausedUntil,
+      })
+      .from(onlineWorkState);
+    return rows.map((row) => ({
+      ...row,
+      state: decodeOnlineWorkState(row.state),
+    }));
+  },
+  markRunning: async ({ name, attempts, at }) =>
+    await withAggregateTransaction(db, async (tx) => {
+      const row = await lockOnlineWorkState({ tx, name });
+      if (row?.state === "done" || row?.paused === true) {
+        return false;
+      }
+      const audit = async (auditTx: typeof tx, changed: readonly unknown[]) => {
+        await recordSystemAudit(auditTx, "system:online-work", {
+          subject: auditSubject,
+          counts: { transitions: changed.length },
+        });
+      };
+      if (row?.state === "paused") {
+        await transitionScopedBatch({
+          tx,
+          spec: ONLINE_WORK_STATE_TRANSITIONS,
+          identities: [{ name }],
+          options: {
+            from: ["paused"],
+            to: "pending",
+            set: { pausedUntil: null, updatedAt: sql`now()` },
+          },
+          recordTransitionAuditEvent: audit,
+        });
+      }
+      await transitionUpsertBatch({
+        tx,
+        spec: ONLINE_WORK_STATE_TRANSITIONS,
+        values: [
+          {
+            name,
+            state: "running",
+            attempts,
+            lastError: null,
+            startedAt: at,
+            finishedAt: null,
+            updatedAt: at,
+          },
+        ],
+        recordTransitionAuditEvent: audit,
+      });
+      return true;
+    }),
+  markDone: async (name) =>
     await finishOnlineWork(db, auditSubject, {
       name,
-      state: "finalized",
+      state: "done",
       lastError: null,
-    });
-  },
-  markFailed: async ({ name, error }) => {
+    }),
+  markPending: async (name) =>
+    await finishOnlineWork(db, auditSubject, {
+      name,
+      state: "pending",
+      lastError: null,
+    }),
+  markFailed: async ({ name, error }) =>
     await finishOnlineWork(db, auditSubject, {
       name,
       state: "failed",
       lastError: error,
-    });
-  },
+    }),
 });
 
 type FinishOnlineWorkOptions = {
   name: OnlineWorkName;
-  state: Extract<(typeof ONLINE_WORK_STATES)[number], "finalized" | "failed">;
+  state: Extract<
+    (typeof ONLINE_WORK_STATES)[number],
+    "done" | "failed" | "pending"
+  >;
   lastError: string | null;
 };
 
@@ -327,7 +397,7 @@ const finishOnlineWork = async (
       spec: ONLINE_WORK_STATE_TRANSITIONS,
       identities: [{ name }],
       options: {
-        from: ["building"],
+        from: ["running"],
         to: state,
         set: { lastError, finishedAt: sql`now()`, updatedAt: sql`now()` },
       },
@@ -386,6 +456,7 @@ const processRunner = (): RunnerByDb => {
         await claimOnlineWorkUnit(maintenancePool(), {
           name,
           lifecycle,
+          isPaused: async () => await readOnlineWorkPause(db, name),
           indexGate: {
             // Background work waits on a missing setting instead of failing
             // every tick; the gate reports it and holds the build.

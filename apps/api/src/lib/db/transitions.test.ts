@@ -774,6 +774,21 @@ test.each(["array", "rows"] as const)(
     expect(queries.at(0)?.sql).toContain('incoming."state" IN');
     expect(queries.at(1)?.sql).toContain('current."state" <> incoming."state"');
     expect(queries.at(2)?.sql).toContain('current."state" = incoming."state"');
+    queries.length = 0;
+    let insertedAudit = 0;
+    const preserved = await transitionUpsertBatch({
+      tx,
+      spec: scoped,
+      onExisting: "preserve",
+      values: [{ organizationId: "org-1", sourceId: "old", state: "active" }],
+      recordTransitionAuditEvent: async (_tx, rows) => {
+        insertedAudit += rows.length;
+      },
+    });
+    expect(queries).toHaveLength(1);
+    expect(queries.at(0)?.sql).toContain("DO NOTHING");
+    expect(preserved).toHaveLength(1);
+    expect(insertedAudit).toBe(1);
   },
 );
 

@@ -1,0 +1,4 @@
+{
+  "row-level-security": "RLS is enabled on the empty pressure cache created in the same migration, before any reader, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "Owner-only access is catalog metadata on the empty pressure cache created in this migration; it scans no rows, under 1s lock_timeout and 5s statement_timeout."
+}
