@@ -288,6 +288,7 @@ describe("capability flow action declarations", () => {
         " {...capabilityProps} onClick={unrecognizedFlow}",
       ),
       good.replace(" {...capabilityProps}", " {...otherProps}"),
+      good.replace("(capabilityProps)", "(...capabilityProps)"),
     ]) {
       expect(inspect(bad, "fixture.tsx")).toEqual(["fixture.tsx:1"]);
     }
