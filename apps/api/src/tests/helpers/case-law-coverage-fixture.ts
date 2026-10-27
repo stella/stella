@@ -27,6 +27,8 @@ const base = {
       decisionYearTo: 2026,
       pendingTextCount: 3,
       storedDecisions: 150,
+      publishedDecisions: 100,
+      courts: [{ court: "Nejvyšší soud", decisions: 100 }],
       knownGaps: {
         type: "not_reconciled",
         reason: "The source listing is not date-sliced.",

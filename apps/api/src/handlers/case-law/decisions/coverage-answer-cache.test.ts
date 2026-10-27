@@ -32,6 +32,8 @@ const answeringReaders = (): Assembly => ({
         decisionYearFrom: 1993,
         decisionYearTo: 2026,
         pendingTextCount: 0,
+        courts: [],
+        publishedDecisions: 0,
       },
     ],
     readArrivals: async () => new Map(),
