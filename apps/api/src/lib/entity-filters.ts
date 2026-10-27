@@ -775,10 +775,9 @@ export const FIELD_FIND_SUPPORT = {
 } as const satisfies Record<FieldContent["type"], "searchable" | "excluded">;
 
 /**
- * The cell types a find reaches, in declaration order. The partial indexes
- * `fields_find_text_trgm_idx` and `fields_find_text_fold_trgm_idx` and the
- * `field_find_text` function name the same list by hand;
- * `fields-find-text-index.test.ts` holds them together.
+ * The cell types a find reaches, in declaration order. The partial index
+ * `fields_find_text_trgm_idx` and the `field_find_text` function name the same
+ * list by hand; `fields-find-text-index.test.ts` holds the three together.
  */
 export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
   FIELD_FIND_SUPPORT,
@@ -787,12 +786,10 @@ export const FINDABLE_FIELD_TYPES: readonly string[] = Object.entries(
   .map(([type]) => type);
 
 /**
- * The type gate as the partial index `fields_find_text_fold_trgm_idx` spells it:
- * inline literals, not a bound array. The planner proves a query clause
- * implies an index predicate only when it can see both, and a parameter it
- * cannot see would leave the index unusable for every find. The literals are
- * content-type names from a const map, checked here so a name that needed
- * quoting could not reach `sql.raw`.
+ * The type gate as the partial index `fields_find_text_trgm_idx` spells it:
+ * inline literals, not a bound array, so the planner can see the gate. The
+ * literals are content-type names from a const map, checked here so a name
+ * that needed quoting could not reach `sql.raw`.
  */
 const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
   const unquotable = FINDABLE_FIELD_TYPES.find(
@@ -809,8 +806,7 @@ const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
 /**
  * Whether `value` contains `term` as a find compares them: both folded
  * through `search_fold`, the term as literal text. Every half of the find
- * predicate (the index condition, the recheck, the name) is this expression,
- * so the trigram indexes over `search_fold(...)` can answer each of them.
+ * predicate (the cell prefilter, the recheck, the name) is this expression.
  */
 export const findTermMatches = (value: SQL, term: string): SQL =>
   sql`${searchFold(value)} LIKE ('%' || ${escapeLikeSql(searchFold(term))} || '%')`;
@@ -834,20 +830,20 @@ type BuildFindConditionsOptions = {
  * is why it is `search_fold` and not a broader client-side fold.
  *
  * The column half is an uncorrelated subquery over `fields`, not an EXISTS
- * per entity: the planner runs it once, reading candidates off the trigram
- * index `fields_find_text_fold_trgm_idx` through the same
- * `search_fold(field_find_text(...))` expression and the same type gate the
- * index is built over. A correlated form would probe the index once per
- * candidate row instead. The index only proposes: `fieldValueMatches` stays
- * inside as the recheck, so a multi-select whose joined text matches across
- * an element boundary is still rejected, and what a find returns is defined
- * by the recheck alone.
+ * per entity: the planner runs it once over the matter's cells, which the
+ * workspace scope bounds. The find runs under row policies, and a trigram
+ * operator is not leakproof, so Postgres applies the policy before the find
+ * and no trigram index can answer it; the workspace bound is what keeps the
+ * read to one matter. A correlated form would rescan those cells once per
+ * candidate row instead. `search_fold(field_find_text(...))` only proposes:
+ * `fieldValueMatches` stays inside as the recheck, so a multi-select whose
+ * joined text matches across an element boundary is still rejected, and what
+ * a find returns is defined by the recheck alone.
  *
  * The name half reads `entities.name`, the string the grid's name column
  * renders, not `display_name`: its fallbacks (a file name, a text value, an
  * English "Untitled") would return rows the highlighter has nothing to mark
  * in, and a reader typing their own locale's placeholder would find nothing.
- * Alone (no columns searched) it reads `entities_name_fold_trgm_idx`.
  *
  * A find term is literal text, not a pattern: a typed `%` or `_` has to match
  * itself, or the server would return rows the highlighter cannot mark. The
@@ -867,10 +863,9 @@ export const buildFindConditions = ({
     return [];
   }
   // The floor over the string the pattern is built from, not the one that
-  // arrived: the wire schema rejects a short term padded or bare, and this is
-  // what makes a LIKE the trigram index cannot answer unreachable for every
-  // caller, wire or not. The fold deletes combining marks, so the floor reads
-  // the folded length.
+  // arrived: the wire schema rejects a short term padded or bare, and this
+  // holds every caller, wire or not, to the same floor. The fold deletes
+  // combining marks, so the floor reads the folded length.
   const term = find.term.trim();
   if (foldLikePostgresSearch(term).length < ENTITY_FIND_TERM_MIN_LENGTH) {
     return [];

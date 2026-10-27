@@ -8,10 +8,6 @@ import {
   publishedCaseLawDecisionIndexPredicateSql,
 } from "@/api/lib/case-law/published-decisions-sql";
 import {
-  ENTITIES_NAME_FOLD_INDEX,
-  FIELDS_FIND_TEXT_FOLD_INDEX,
-} from "@/api/lib/entities/find-fold-indexes";
-import {
   DOCUMENT_OUTSTANDING_DATE_INDEX,
   DOCUMENT_OUTSTANDING_INDEX,
 } from "@/api/lib/legal-search/sk-document-outstanding-index";
@@ -725,8 +721,6 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "search_history_entries_owner_country_recent_idx",
     tableName: "search_history_entries",
   },
-  FIELDS_FIND_TEXT_FOLD_INDEX,
-  ENTITIES_NAME_FOLD_INDEX,
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 

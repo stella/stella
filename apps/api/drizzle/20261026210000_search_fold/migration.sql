@@ -9,12 +9,6 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- matter-table find folds cell text and entity names through it, and the
 -- browser's `foldLikePostgresSearch` (@stll/text-normalize) reproduces it
 -- code point for code point so highlights mark what this matched.
---
--- The trigram indexes over it (`fields_find_text_fold_trgm_idx`,
--- `entities_name_fold_trgm_idx`) are built online after deploy, from
--- ONLINE_MIGRATION_INDEXES. `fields_find_text_trgm_idx` stays until the
--- folded find has shipped and production plans read the new index; a later
--- migration drops it then, since no query reads `field_find_text` unfolded.
 CREATE OR REPLACE FUNCTION search_fold(input text)
 RETURNS text
 LANGUAGE sql

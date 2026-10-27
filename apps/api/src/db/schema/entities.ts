@@ -12,7 +12,6 @@ import {
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
 import type { FolioCollabSavedSnapshotCut } from "@/api/lib/folio-collab-room-contract";
-import { searchFold } from "@/api/lib/search/search-fold";
 import type { SkippedSkillFile } from "@/api/lib/skills/skill-package";
 
 import { session as authSession } from "../auth-schema";
@@ -175,11 +174,6 @@ export const entities = p.pgTable(
       .on(table.workspaceId, table.lastEditedBy, table.updatedAt)
       .where(sql`${table.kind} = 'document'`),
     p.index("entities_workspace_name_idx").on(table.workspaceId, table.name),
-    // A find that searches no columns matches the name alone, through
-    // `search_fold`; built online (`ONLINE_MIGRATION_INDEXES`).
-    p
-      .index("entities_name_fold_trgm_idx")
-      .using("gin", sql`${searchFold(table.name)} gin_trgm_ops`),
     p
       .uniqueIndex("entities_ws_doc_seq_uidx")
       .on(table.workspaceId, table.docSequence)
@@ -1561,22 +1555,11 @@ export const fields = p.pgTable(
     // immutable projection of the text a cell displays. Partial on the
     // findable types so pending and error placeholders stay out of the GIN
     // pending list; `fields-find-text-index.test.ts` binds that list to
-    // `FIELD_FIND_SUPPORT` and to the migration.
+    // `FIELD_FIND_SUPPORT` and to the migration. No query reads it once the
+    // find folds through `search_fold`.
     p
       .index("fields_find_text_trgm_idx")
       .using("gin", sql`field_find_text(${table.content}) gin_trgm_ops`)
-      .where(
-        sql`${table.content}->>'type' IN ('file', 'text', 'single-select', 'multi-select', 'person')`,
-      ),
-    // The same cells folded through `search_fold`, which is what the find
-    // reads now; built online (`ONLINE_MIGRATION_INDEXES`). The unfolded one
-    // above stays until the folded find has shipped.
-    p
-      .index("fields_find_text_fold_trgm_idx")
-      .using(
-        "gin",
-        sql`${searchFold(sql`field_find_text(${table.content})`)} gin_trgm_ops`,
-      )
       .where(
         sql`${table.content}->>'type' IN ('file', 'text', 'single-select', 'multi-select', 'person')`,
       ),

@@ -8,21 +8,17 @@ import { entities } from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { executedRows } from "@/api/lib/db/executed-rows";
 import { buildFindConditions } from "@/api/lib/entity-filters";
 import { typedPgArray } from "@/api/lib/search/sql";
-import { isRecord } from "@/api/lib/type-guards";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 /**
- * The matter-table find against the real `unaccent` extension and the
- * indexes the online migration phase built, which PGlite's stand-in fold
- * cannot prove: what a find returns in Czech, German and French whatever the
- * case and accents typed, and that the query spells the expressions the
- * folded trigram indexes are built over, so the planner answers it from them
- * rather than from a scan.
+ * The matter-table find against the real `unaccent` extension, which PGlite's
+ * stand-in fold cannot prove: what a find returns in Czech, German and French
+ * whatever the case and accents typed. The plan production runs under row
+ * policies is pinned in `find-plan.db.test.ts`.
  */
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -37,12 +33,6 @@ setDefaultTimeout(60_000);
  * each seeded cell cost about a millisecond, which bounds the fixture.
  */
 const CELL_ROWS = 2000;
-/**
- * Rows without cells, for the name half: inside one matter the workspace
- * index already narrows a find to the matter's rows, so the name index wins
- * only once a matter holds several thousand (2,000 is not enough).
- */
-const NAME_ROWS = 6000;
 const ROLLBACK = new Error("Roll back the find fixture");
 
 type TestTransaction = TransactionOf<GatedTestDb>;
@@ -69,8 +59,6 @@ type FindFixture = {
 
 type FindFixtureOptions = {
   database: GatedTestDb;
-  /** Rows with a name and no cell, on top of the rows with one. */
-  nameRows: number;
   run: (fixture: FindFixture) => Promise<void>;
 };
 
@@ -80,7 +68,6 @@ type FindFixtureOptions = {
  */
 const withFindFixture = async ({
   database,
-  nameRows,
   run,
 }: FindFixtureOptions): Promise<void> => {
   const outcome = await Result.tryPromise({
@@ -115,9 +102,6 @@ const withFindFixture = async ({
             UNION ALL
             SELECT 'Plain row ' || n, 'plain memo ' || n
             FROM generate_series(1, ${CELL_ROWS}::int) AS series(n)
-            UNION ALL
-            SELECT 'Plain name ' || n, NULL
-            FROM generate_series(1, ${nameRows}::int) AS series(n)
           ),
           seeded AS (
             SELECT gen_random_uuid() AS entity_id, gen_random_uuid() AS version_id,
@@ -190,59 +174,6 @@ const foundNames = async (
   return rows.map(({ name }) => name).toSorted();
 };
 
-type PlanNode = {
-  indexName: string | undefined;
-  nodeType: string;
-  relationName: string | undefined;
-};
-
-const planNodes = (node: unknown): PlanNode[] => {
-  if (!isRecord(node)) {
-    return [];
-  }
-  const children = Array.isArray(node["Plans"]) ? node["Plans"] : [];
-  const indexName = node["Index Name"];
-  const relationName = node["Relation Name"];
-  return [
-    {
-      indexName: typeof indexName === "string" ? indexName : undefined,
-      nodeType: String(node["Node Type"]),
-      relationName: typeof relationName === "string" ? relationName : undefined,
-    },
-    ...children.flatMap(planNodes),
-  ];
-};
-
-/**
- * The find's plan as the table owner. Every clause the index can answer must
- * match its expression exactly, which is what this pins; the application
- * role's row policies only add clauses on top.
- */
-const explainFind = async (
-  fixture: FindFixture,
-  find: EntityFind,
-): Promise<PlanNode[]> => {
-  const query = fixture.tx
-    .select({ id: entities.id })
-    .from(entities)
-    .where(findWhere(fixture, find));
-  const row = executedRows(
-    await fixture.tx.execute(sql`EXPLAIN (ANALYZE, FORMAT JSON) ${query}`),
-  ).at(0);
-  const plan = isRecord(row) ? row["QUERY PLAN"] : undefined;
-  const document = Array.isArray(plan) ? plan.at(0) : undefined;
-  if (!isRecord(document)) {
-    return panic("Find EXPLAIN returned no plan");
-  }
-  return planNodes(document["Plan"]);
-};
-
-const seqScansOn = (nodes: PlanNode[], relation: string): PlanNode[] =>
-  nodes.filter(
-    ({ nodeType, relationName }) =>
-      nodeType === "Seq Scan" && relationName === relation,
-  );
-
 const named = (...names: NamedRow[]): string[] => names.toSorted();
 
 describe.skipIf(!enabled)("accent-insensitive find (postgres)", () => {
@@ -256,7 +187,6 @@ describe.skipIf(!enabled)("accent-insensitive find (postgres)", () => {
   test("a find ignores accents and case in Czech, German and French", async () => {
     await withFindFixture({
       database: database(),
-      nameRows: 0,
       run: async (seeded) => {
         for (const term of ["dvorak", "DVORAK", "Dvořák", "dvořak"]) {
           expect(await foundNames(seeded, inMemo(seeded, term))).toEqual(
@@ -283,7 +213,6 @@ describe.skipIf(!enabled)("accent-insensitive find (postgres)", () => {
   test("LIKE metacharacters in a term still match only themselves", async () => {
     await withFindFixture({
       database: database(),
-      nameRows: 0,
       run: async (seeded) => {
         // `％` folds to `%`: a term escaped before the fold would match `50x`.
         for (const term of ["50%", "50％", "５０％"]) {
@@ -293,28 +222,6 @@ describe.skipIf(!enabled)("accent-insensitive find (postgres)", () => {
         }
         expect(await foundNames(seeded, inMemo(seeded, "e_e"))).toEqual(
           named("Underscore term"),
-        );
-      },
-    });
-  });
-
-  test("a find reads the folded trigram indexes, not every row", async () => {
-    await withFindFixture({
-      database: database(),
-      nameRows: NAME_ROWS,
-      run: async (seeded) => {
-        // Every row of the matter is a candidate for the outer read, so only
-        // the relation the find narrows is held to its index.
-        const columns = await explainFind(seeded, inMemo(seeded, "dvorak"));
-        expect(seqScansOn(columns, "fields")).toEqual([]);
-        expect(columns.map(({ indexName }) => indexName)).toContain(
-          "fields_find_text_fold_trgm_idx",
-        );
-
-        const nameOnly = await explainFind(seeded, inName("dvorak"));
-        expect(seqScansOn(nameOnly, "entities")).toEqual([]);
-        expect(nameOnly.map(({ indexName }) => indexName)).toContain(
-          "entities_name_fold_trgm_idx",
         );
       },
     });

@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import { fields } from "@/api/db/schema";
-import { FIELDS_FIND_TEXT_FOLD_INDEX } from "@/api/lib/entities/find-fold-indexes";
 import { FINDABLE_FIELD_TYPES } from "@/api/lib/entity-filters";
 
 const INDEX_NAME = "fields_find_text_trgm_idx";
@@ -77,35 +76,4 @@ test("the function has one branch per findable cell type and no other", () => {
   );
 
   expect(new Set(branches)).toEqual(new Set(FINDABLE_FIELD_TYPES));
-});
-
-const foldIndex = getTableConfig(fields).indexes.find(
-  ({ config }) => config.name === FIELDS_FIND_TEXT_FOLD_INDEX.name,
-);
-
-// The folded index is built online, so its predicate is spelled twice more:
-// the online build, and the definition the boot check compares against.
-test("the folded index gates the same cell types in all three spellings", () => {
-  const where = foldIndex?.config.where;
-  if (where === undefined) {
-    throw new Error(
-      `fields declares no partial ${FIELDS_FIND_TEXT_FOLD_INDEX.name}`,
-    );
-  }
-  const { createSql, definitionBody } = FIELDS_FIND_TEXT_FOLD_INDEX;
-
-  expect(quotedLiterals(new PgDialect().sqlToQuery(where).sql)).toEqual([
-    "type",
-    ...FINDABLE_FIELD_TYPES,
-  ]);
-  expect(quotedLiterals(createSql.slice(createSql.indexOf("WHERE")))).toEqual([
-    "type",
-    ...FINDABLE_FIELD_TYPES,
-  ]);
-  expect(
-    quotedLiterals(definitionBody.slice(definitionBody.indexOf("WHERE"))),
-  ).toEqual(["type", ...FINDABLE_FIELD_TYPES]);
-  expect(createSql).toContain(
-    'USING gin (search_fold(field_find_text("content")) gin_trgm_ops)',
-  );
 });
