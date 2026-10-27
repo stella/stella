@@ -4,7 +4,7 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
@@ -159,16 +159,21 @@ export const MyWeek = ({
 
   const submitDialog = async (values: ManualTimeEntryValues) => {
     await submitGuard.run(async () => {
-      try {
-        if (dialog.type === "accept") {
-          await actions.accept(dialog.target, values);
-        } else if (dialog.type === "edit") {
-          await actions.editEntry(dialog.entry, values);
-        }
-        setDialog({ type: "closed" });
-      } catch (error) {
-        actions.reportFailure(error);
+      const saved = await Result.tryPromise({
+        try: async () => {
+          if (dialog.type === "accept") {
+            await actions.accept(dialog.target, values);
+          } else if (dialog.type === "edit") {
+            await actions.editEntry(dialog.entry, values);
+          }
+        },
+        catch: (cause: unknown): unknown => cause,
+      });
+      if (Result.isError(saved)) {
+        actions.reportFailure(saved.error);
+        return;
       }
+      setDialog({ type: "closed" });
     });
   };
 
