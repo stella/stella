@@ -19,6 +19,7 @@ const OWNER_ERASURE_TABLES = [
   "correspondence_allowed_sender_matters",
   "correspondence_drop_logs",
   "invoice_lines",
+  "invoice_payments",
   "number_series",
   "number_series_allocations",
   "number_series_counters",

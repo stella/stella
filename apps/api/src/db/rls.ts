@@ -1946,15 +1946,33 @@ export const invoicePolicies = (table: InvoicePolicyColumns) => {
   ];
 };
 
-export const invoiceLineVisibilityPolicy = (table: {
-  invoiceId: p.AnyPgColumn;
-}) =>
-  p.pgPolicy("invoice_lines_complete_invoice", {
+/**
+ * A row that belongs to one invoice (a line, a payment) is visible and
+ * writable only while its invoice is: the invoice's own policy decides
+ * whole-invoice access, so a caller never sees part of an invoice it cannot open.
+ */
+export const completeInvoiceVisibilityPolicy = (
+  tableName: "invoice_lines" | "invoice_payments",
+  table: { invoiceId: p.AnyPgColumn },
+) =>
+  p.pgPolicy(`${tableName}_complete_invoice`, {
     as: "restrictive",
     for: "all",
     to: stella,
     using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
     withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+  });
+
+/**
+ * Payments are reversed by voiding, never removed: the request role cannot
+ * delete one. The organization's own deletion still cascades.
+ */
+export const invoicePaymentNoDeletePolicy = () =>
+  p.pgPolicy("invoice_payments_no_delete", {
+    as: "restrictive",
+    for: "delete",
+    to: stella,
+    using: sql`false`,
   });
 
 // FORCE RLS applies to the table owner, which runs the SECURITY DEFINER

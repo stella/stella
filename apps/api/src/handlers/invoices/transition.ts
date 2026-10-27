@@ -34,6 +34,7 @@ import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
 } from "@/api/lib/billing/invoice-lines";
+import { hasActiveInvoicePayments } from "@/api/lib/billing/invoice-payments";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import {
   allocateNumber,
@@ -60,8 +61,9 @@ import { cents } from "@/api/lib/money";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import type { AssertNoExtraFields } from "@/api/lib/projection-totality";
 
-type TransitionAction =
-  "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+// Paid is not a transition: recording payments that reach the total marks an
+// invoice paid (`lib/billing/invoice-payments`), the only path to it.
+type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
 const TRANSITIONS = {
   finalize: {
@@ -71,10 +73,6 @@ const TRANSITIONS = {
   send: {
     from: [INVOICE_STATUS.FINALIZED],
     to: INVOICE_STATUS.SENT,
-  },
-  mark_paid: {
-    from: [INVOICE_STATUS.SENT],
-    to: INVOICE_STATUS.PAID,
   },
   void: {
     from: [INVOICE_STATUS.FINALIZED, INVOICE_STATUS.SENT, INVOICE_STATUS.PAID],
@@ -90,13 +88,7 @@ const TRANSITIONS = {
 >;
 
 const transitionInvoiceBodySchema = v.object({
-  action: v.picklist([
-    "finalize",
-    "send",
-    "mark_paid",
-    "void",
-    "revert_to_draft",
-  ]),
+  action: v.picklist(["finalize", "send", "void", "revert_to_draft"]),
 });
 
 const invoiceParamsSchema = workspaceParams({
@@ -665,13 +657,21 @@ const applyTransition = async (
       );
     }
   }
+  if (
+    options.action === "void" &&
+    (await hasActiveInvoicePayments(tx, existing.id))
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        message: "Void the invoice's payments before voiding the invoice",
+      }),
+    );
+  }
   const set: Partial<typeof invoices.$inferInsert> = {
     status: options.transition.to,
     updatedAt: options.now,
   };
-  if (options.action === "mark_paid") {
-    set.paidAt = options.now;
-  }
   if (options.action === "void") {
     set.paidAt = null;
   }
@@ -810,12 +810,13 @@ const transitionInvoiceHandler = (rateSource: VatRateSource) =>
     {
       contract: "patch",
       description:
-        "Move an invoice through finalize, send, mark_paid, void, or revert_to_draft. " +
+        "Move an invoice through finalize, send, void, or revert_to_draft; " +
+        "recording payments that reach its total marks it paid. " +
         "Finalize assigns an omitted number from the document type's default series, " +
         "using the issue date; configure a default number series first. Manual numbers " +
         "and numbers kept after reverting to draft are preserved. A credit note must " +
         "reference an eligible original and cannot exceed its total. Voiding releases " +
-        "attached entries and clears the paid timestamp. Finalizing a VAT invoice in a " +
+        "attached entries and is refused while unvoided payments remain. Finalizing a VAT invoice in a " +
         "currency other than its seller country's VAT currency (EUR for Slovakia, CZK " +
         "for Czechia, PLN for Poland) records the official exchange rate for its tax " +
         "point and states the VAT in that currency; it is refused when the rate cannot " +

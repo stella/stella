@@ -11,6 +11,7 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   folioCollabRooms,
+  invoices,
   legalReaderAnswerMessages,
   pdfSigningSessions,
   sanctionsEditionFanouts,
@@ -99,6 +100,22 @@ const TIME_ENTRY_TRANSITIONS = defineTransitions(
     written_off: ["draft"],
   },
   { terminal: [] },
+);
+
+// An invoice's lifecycle. Recorded payments move it between sent and paid
+// (`lib/billing/invoice-payments`) through this spec; finalize, send, revert
+// and void are still direct writes of the transition handler in the shrinking
+// ledger.
+const INVOICE_TRANSITIONS = defineTransitions(
+  invoices,
+  {
+    draft: ["finalized"],
+    finalized: ["draft", "sent", "void"],
+    sent: ["paid", "void"],
+    paid: ["sent", "void"],
+    void: [],
+  },
+  { terminal: ["void"] },
 );
 
 // A failed attempt retries until its budget is spent; a ready archive expires.
@@ -407,7 +424,7 @@ export const TRANSITIONS = {
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

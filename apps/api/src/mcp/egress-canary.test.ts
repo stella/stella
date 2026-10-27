@@ -1597,6 +1597,7 @@ describe("MCP anonymization canary corpus", () => {
               paidAt: null,
               createdAt: new Date("2026-01-01"),
               updatedAt: new Date("2026-01-01"),
+              payments: [],
               timeEntries: [
                 {
                   id: "te_1",

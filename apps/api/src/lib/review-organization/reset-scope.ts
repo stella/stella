@@ -102,6 +102,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "clause_variants",
   "clause_versions",
   "clauses",
+  "invoice_payments",
   "invoice_lines",
   "invoices",
   "contact_extraction_uploads",

@@ -103,7 +103,7 @@ describe("review organization reset scope", () => {
   });
 
   test("invoice records admit the owner-fenced reset independently of matter visibility", () => {
-    for (const name of ["invoices", "invoice_lines"]) {
+    for (const name of ["invoices", "invoice_lines", "invoice_payments"]) {
       const table = tables.get(name);
       expect(table, name).toBeDefined();
       const policyNames = new Set(

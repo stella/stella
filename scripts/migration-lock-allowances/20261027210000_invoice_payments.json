@@ -1,0 +1,5 @@
+{
+  "create-policy": "Every policy is installed on the new, empty payments table under a 1s lock_timeout; the expressions read only settings, table ownership, or the invoice row a payment names, and no existing rows.",
+  "create-table-references": "The foreign keys are installed with a new empty table, so no existing rows are scanned; the 1s lock_timeout bounds the brief locks on organization and invoices.",
+  "row-level-security": "ENABLE and FORCE RLS apply only to the new empty payments table before application traffic can reach it, under a 1s lock_timeout."
+}

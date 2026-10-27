@@ -215,15 +215,21 @@ const isInvoiceAccessPredicate = (expression: string | null): boolean =>
     .replaceAll("invoices.", "") ===
   "stella_invoice_accessid,organization_id,workspace_id,client_id,original_invoice_id";
 
+// Rows that belong to one invoice are fenced by that invoice's visibility.
+const INVOICE_CHILD_TABLES: ReadonlySet<string> = new Set([
+  "invoice_lines",
+  "invoice_payments",
+]);
+
 const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
-  policy.table_name === "invoice_lines" &&
-  policy.policy_name === "invoice_lines_complete_invoice" &&
+  INVOICE_CHILD_TABLES.has(policy.table_name) &&
+  policy.policy_name === `${policy.table_name}_complete_invoice` &&
   policy.using_expr === policy.check_expr &&
   policy.using_expr
     ?.replaceAll(/["()\s]/gu, "")
     .replaceAll("public.", "")
     .toLowerCase() ===
-    "existsselect1frominvoicesiwherei.id=invoice_lines.invoice_id";
+    `existsselect1frominvoicesiwherei.id=${policy.table_name}.invoice_id`;
 
 /** Other restrictive policies deny rows unless their canonical fence is exact. */
 const restrictivePolicyViolation = (
@@ -284,6 +290,25 @@ describe("policy coverage", () => {
         "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_lines.invoice_id)",
     };
     expect(restrictivePolicyViolation(invoiceFence)).toBeUndefined();
+    const paymentFence =
+      "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_payments.invoice_id)";
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        table_name: "invoice_payments",
+        policy_name: "invoice_payments_complete_invoice",
+        using_expr: paymentFence,
+        check_expr: paymentFence,
+      }),
+    ).toBeUndefined();
+    // A fence over another table's invoice column admits nothing it names.
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        table_name: "invoice_payments",
+        policy_name: "invoice_payments_complete_invoice",
+      }),
+    ).toBeDefined();
     expect(
       restrictivePolicyViolation({
         ...invoiceFence,
@@ -946,7 +971,7 @@ describe("policy coverage", () => {
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
-          expect(expr).toBe("false");
+          expect(restrictivePolicyViolation(pol)).toBeUndefined();
           continue;
         }
         expect(expr).toContain("organization_id");
