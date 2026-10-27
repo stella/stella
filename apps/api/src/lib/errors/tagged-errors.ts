@@ -193,7 +193,14 @@ type HandlerErrorBaseProps<
 
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
-> = HandlerErrorBaseProps<TStatus> & HandlerErrorRetryAdvice;
+> = HandlerErrorBaseProps<TStatus> &
+  HandlerErrorRetryAdvice &
+  // Gateway/availability statuses must state their semantics; the status alone
+  // cannot distinguish an upstream outage from configuration or output defects.
+  (
+    | { status: Exclude<HandlerErrorStatusCode, 502 | 503> }
+    | { code: HandlerErrorCode }
+  );
 
 // TaggedError(...) cannot reference the class type parameter in the base
 // expression, so the base uses the wide props type and the subclass narrows

@@ -7,10 +7,10 @@ import type { ModelTask } from "@stll/ai-catalog";
 import {
   parseResourceMutationId,
   RESOURCE_MUTATION_ID_HEADER,
-  resourceMutationDigest,
 } from "@stll/api-contract";
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";

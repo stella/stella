@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# akcia} few {# akcie} other {# akcií}}",
       "activeVsLogged": "Aktivita {active} · Vykázané {logged}",
+      "alreadyCovered": "Už pokryté zaznamenaným časom",
       "chatEvidence": "{count, plural, one {# správa} few {# správy} other {# správ}} v konverzácii „{title}“",
+      "engagedTime": "{duration} skutočnej aktivity",
       "keyboardHint": "Enter prijme, E upraví pred prijatím, Delete zamietne",
       "privacyNote": "Vidíte ich len vy. Nič sa nezaznamená, kým návrh neprijmete.",
       "title": "Návrhy z vašej aktivity",
@@ -5870,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Interná práca"
+    },
+    "week": {
+      "allLogged": "Všetko je vykázané. Nová aktivita sa tu zobrazí počas práce.",
+      "days": "Dni v týždni",
+      "entriesTitle": "Vykázaný čas",
+      "nextWeek": "Nasledujúci týždeň",
+      "noActivity": "Zatiaľ nie je čo vykázať. Pracujte v spise a vaša aktivita sa tu zobrazí na prijatie.",
+      "pendingCount": "{count, plural, one {# návrh} few {# návrhy} many {# návrhu} other {# návrhov}}",
+      "previousWeek": "Predchádzajúci týždeň",
+      "range": "{start} – {end}",
+      "title": "Môj týždeň",
+      "totals": "Vykázané {logged} · fakturovateľné {billable}"
     }
   },
   "translate": {
@@ -6494,6 +6508,36 @@
       "pageEditor": {
         "addPDF": "Pridať PDF",
         "applyCrop": "Použiť orezanie",
+        "cleanScan": {
+          "applied": "Použitá vyčistená verzia",
+          "apply": "Použiť",
+          "applyAll": "Použiť všetko",
+          "applyPage": "Použiť vyčistenú stranu {number}",
+          "cleaned": "Vyčistené",
+          "cleaning": "Čistenie strany",
+          "contentCrop": "Orezať na obsah",
+          "description": "{count, plural, one {Skôr než vyčistenú stranu použijete, skontrolujte ju. Dokument sa zmení až potom.} few {Skôr než # vyčistené strany použijete, skontrolujte ich. Dokument sa zmení až potom.} other {Skôr než # vyčistených strán použijete, skontrolujte ich. Dokument sa zmení až potom.}}",
+          "deskew": "Narovnať",
+          "failedEngine": "Čistenie zlyhalo. Strana zostane bez zmeny.",
+          "failedRender": "Stranu sa nepodarilo pripraviť na čistenie. Zostane bez zmeny.",
+          "failedTimeout": "Čistenie trvalo príliš dlho. Strana zostane bez zmeny.",
+          "heading": "Vyčistiť sken",
+          "output": "Farebný režim",
+          "outputBinary": "Čiernobiely",
+          "outputGrayscale": "Odtiene sivej",
+          "pageLimit": "Naraz možno vyčistiť najviac {max} strán. Vyberte ich menej.",
+          "preview": "Vyčistená strana {number}",
+          "progress": "Spracované {done} z {total} strán",
+          "reject": "Ponechať originál",
+          "rejectPage": "Ponechať pôvodnú stranu {number}",
+          "rejected": "Originál ponechaný",
+          "scope": "{count, plural, =0 {Narovnať a vyčistiť všetky strany} one {Narovnať a vyčistiť vybranú stranu} few {Narovnať a vyčistiť # vybrané strany} other {Narovnať a vyčistiť # vybraných strán}}",
+          "unrecognized": "Strana nebola rozpoznaná ako sken. Zostane bez zmeny.",
+          "unrecognizedNoContent": "Na strane sa nenašiel žiadny obsah. Zostane bez zmeny.",
+          "unrecognizedNoPage": "Okraje strany sa nepodarilo nájsť. Strana zostane bez zmeny.",
+          "unrecognizedTooLarge": "Strana je príliš veľká na vyčistenie. Zostane bez zmeny.",
+          "use": "{count, plural, =0 {Použiť vyčistené strany} one {Použiť # vyčistenú stranu} few {Použiť # vyčistené strany} other {Použiť # vyčistených strán}}"
+        },
         "crop": "Orezať",
         "cropAdvanced": "Rozšírené nastavenia",
         "cropBottom": "Dole (mm)",
@@ -6541,7 +6585,10 @@
         "saveVersion": "Uložiť verziu",
         "selectAll": "Vybrať všetko",
         "selectPage": "Vybrať stranu {number}",
+        "signAfterSave": "Uloží úpravy strán ako novú verziu a potom ju podpíše",
+        "signSavedVersionMissing": "Nová verzia sa uložila, ale nepodarilo sa ju otvoriť na podpis. Podpíšte ju z prehliadača dokumentu.",
         "signatureWarning": "Úpravou tohto PDF sa digitálne podpisy stanú neplatnými.",
+        "signatureWarningWithSign": "Úpravami sa existujúce digitálne podpisy stanú neplatnými. Podpísanie odtiaľto najprv uloží vaše úpravy a podpíše novú verziu.",
         "sourceLimit": "Celková veľkosť súborov PDF nesmie prekročiť 100 MB.",
         "title": "Upraviť stránky",
         "undo": "Vrátiť úpravu strany",

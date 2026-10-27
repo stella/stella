@@ -3,11 +3,8 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import {
-  REALTIME_EVENT_TYPE,
-  RESOURCE_TYPE,
-  resourceMutationDigest,
-} from "@stll/api-contract";
+import { REALTIME_EVENT_TYPE, RESOURCE_TYPE } from "@stll/api-contract";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -21,7 +18,7 @@ const { useCreateTask } = await import("@/lib/workspaces/mutations/tasks");
 const { getWorkspaceRealtimeQueryActions } =
   await import("@/lib/workspace-realtime");
 const { handleWorkspaceMutationEvent } =
-  await import("@/lib/workspace-mutation");
+  await import("@/lib/workspaces/workspace-mutation");
 const { workspacesKeys } = await import("@/lib/workspaces/queries.logic");
 const { taskKeys } = await import("@/lib/workspaces/queries/tasks.logic");
 const workspaceId = "00000000-0000-4000-8000-000000000001";

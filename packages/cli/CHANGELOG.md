@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 6.0.2
+
+### Patch Changes
+
+- [#7041](https://github.com/stella/stella/pull/7041) [`38a1dc9`](https://github.com/stella/stella/commit/38a1dc9c439f037dee25d10112da9f26d6cfa2d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose explicit case-law facet selection; searches omit facets unless requested.
+
+## 6.0.1
+
+### Patch Changes
+
+- [#7018](https://github.com/stella/stella/pull/7018) [`16d1f58`](https://github.com/stella/stella/commit/16d1f58e9f0670401d13294d3199afedd92a4b9d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search `sort` option's description now says that `newest` lists undated decisions last instead of leaving them out.
+
 ## 6.0.0
 
 ### Major Changes

@@ -1,7 +1,5 @@
 import * as v from "valibot";
 
-import { sha256Hex } from "@stll/sha256/browser";
-
 import { apiDateTimeSchema } from "./api-date";
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "./flow-status";
 import {
@@ -49,14 +47,6 @@ const resourceMutationDigestSchema = v.pipe(
   v.string(),
   v.regex(/^[0-9a-f]{64}$/u),
 );
-
-/** Both runtimes hash the validated request UUID before correlating events. */
-export const resourceMutationDigest = async (
-  mutationId: string,
-): Promise<string> => {
-  const id = v.parse(resourceMutationIdSchema, mutationId);
-  return await sha256Hex(id);
-};
 
 const resourceUpdatedEventSchema = v.object({
   mutationDigest: v.optional(resourceMutationDigestSchema),

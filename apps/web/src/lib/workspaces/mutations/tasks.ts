@@ -13,11 +13,11 @@ import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { legalListsQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { runWorkspaceMutation } from "@/lib/workspace-mutation";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { myWorkKeys } from "@/lib/workspaces/queries/my-work";
 import { taskKeys } from "@/lib/workspaces/queries/tasks";
+import { runWorkspaceMutation } from "@/lib/workspaces/workspace-mutation";
 
 /** Create an untitled task and open it in the inspector for naming. */
 export const useCreateTask = () => {

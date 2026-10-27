@@ -1,6 +1,6 @@
 {
   "route": "/workspaces/$workspaceId/timesheets",
-  "reason": "Load professional-use acceptance before protected route data is requested.",
+  "reason": "Load professional-use acceptance before protected route data is requested. Time suggestions read decided activity, recorded timer windows and the matter's billing defaults once per request, so the suggestions read issues a fixed 15 statements.",
   "budget": {
     "depth": 7,
     "requests": [
@@ -78,7 +78,7 @@
       "GET /v1/properties/:id": 6,
       "GET /v1/signals/count": 4,
       "GET /v1/time-entries/:id": 7,
-      "GET /v1/time-entries/:id/suggestions": 10,
+      "GET /v1/time-entries/:id/suggestions": 15,
       "GET /v1/time-entries/:id/summary": 7,
       "GET /v1/time-timers": 7,
       "GET /v1/views/:id": 9,

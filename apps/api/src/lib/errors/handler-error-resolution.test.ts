@@ -44,6 +44,7 @@ test("archive errors keep their client status through handler wrappers", () => {
   expect(resolveHandlerError(generic)).toBe(generic);
   const explicit = new HandlerError({
     status: 503,
+    code: "internal_error",
     message: "Retry later",
     cause: archive,
   });

@@ -1,0 +1,74 @@
+{
+  "tabs": {
+    "chat": "Chat",
+    "tasks": "Tarefas",
+    "matters": "Casos",
+    "settings": "Configurações"
+  },
+  "chat": {
+    "description": "Mantenha o trabalho em andamento por perto e continue de qualquer dispositivo.",
+    "emptyTitle": "Ainda não há conversas",
+    "emptyDescription": "Novas conversas e tópicos recentes aparecerão aqui."
+  },
+  "tasks": {
+    "description": "Veja o que precisa de atenção sem abrir todo o espaço de trabalho.",
+    "emptyTitle": "Nenhuma tarefa em aberto",
+    "emptyDescription": "Tarefas atribuídas e futuras aparecerão aqui."
+  },
+  "matters": {
+    "description": "Encontre um caso e obtenha rapidamente o contexto essencial.",
+    "emptyTitle": "Ainda não há casos",
+    "emptyDescription": "Seus casos recentes aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar seus casos.",
+    "retry": "Tente novamente"
+  },
+  "matter": {
+    "documents": "Documentos",
+    "tasks": "Tarefas",
+    "emptyTitle": "Nada por aqui ainda",
+    "emptyDescription": "Os documentos e tarefas deste caso aparecerão aqui.",
+    "loadFailed": "Não foi possível carregar este caso.",
+    "loadMoreFailed": "Não foi possível carregar mais itens.",
+    "loadMore": "Carregar mais",
+    "retry": "Tentar novamente",
+    "untitled": "Sem título",
+    "updated": "Atualizado {time}",
+    "kind": {
+      "folder": "Pasta",
+      "document": "Documento",
+      "task": "Tarefa"
+    },
+    "status": {
+      "open": "Aberta",
+      "in_progress": "Em andamento",
+      "in_review": "Em revisão",
+      "done": "Concluída",
+      "cancelled": "Cancelada"
+    }
+  },
+  "entity": {
+    "type": "Tipo",
+    "reference": "Referência",
+    "currentVersion": "Versão atual",
+    "loadFailed": "Não foi possível carregar este item."
+  },
+  "signIn": {
+    "title": "Entre no stella",
+    "description": "Informe o endereço do seu servidor stella. Você aprova o login no navegador.",
+    "serverLabel": "Endereço do servidor",
+    "serverPlaceholder": "stella.example.com",
+    "submit": "Continuar",
+    "sessionEnded": "Sua sessão terminou. Entre novamente.",
+    "errors": {
+      "address": "Informe um endereço https, como stella.example.com.",
+      "unreachable": "Nenhum servidor stella respondeu neste endereço.",
+      "denied": "O login não foi aprovado.",
+      "failed": "O login não foi concluído. Tente novamente."
+    }
+  },
+  "settings": {
+    "accountTitle": "Conta",
+    "server": "Servidor",
+    "signOut": "Sair"
+  }
+}

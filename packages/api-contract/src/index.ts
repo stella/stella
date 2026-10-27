@@ -464,7 +464,6 @@ export {
   MAX_RESOURCE_CHANGES_PER_EVENT,
   RESOURCE_MUTATION_ID_HEADER,
   parseResourceMutationId,
-  resourceMutationDigest,
   newNotificationRealtimeEvent,
   parseDesktopEditSessionRealtimeEvent,
   parseOrganizationRealtimeEvent,

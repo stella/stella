@@ -31,7 +31,7 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
@@ -287,7 +287,7 @@ export const AnonymizationDenyListCard = () => {
       organizationId: activeOrganizationId,
     }),
   );
-  const blacklistView = useQueryView(blacklistQuery);
+  const blacklistView = queryView(blacklistQuery);
   // Replace the org-wide deny list. Endpoint performs a full
   // upsert: rows missing from the request are deleted, present
   // rows are upserted (keyed on lowercased canonical). Callers

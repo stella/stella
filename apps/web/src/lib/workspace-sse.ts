@@ -12,7 +12,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { handleWorkspaceMutationEvent } from "@/lib/workspace-mutation";
 import {
   coalesceWorkspaceQueryActions,
   getWorkspaceRealtimeQueryActions,
@@ -29,6 +28,7 @@ import {
 } from "@/lib/workspace-sse-connection.logic";
 import type { WorkspaceStreamAccess } from "@/lib/workspace-sse-connection.logic";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
+import { handleWorkspaceMutationEvent } from "@/lib/workspaces/workspace-mutation";
 
 const WORKSPACE_SSE_EVENT_SOURCE_INIT = {
   withCredentials: true,

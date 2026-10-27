@@ -5,9 +5,9 @@ import {
   REALTIME_EVENT_TYPE,
   RESOURCE_MUTATION_ID_HEADER,
   RESOURCE_TYPE,
-  resourceMutationDigest,
   type ResourceType,
 } from "@stll/api-contract";
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { status } from "@/api/http/status";

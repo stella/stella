@@ -817,7 +817,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# ação} many {# ações} other {# ações}}",
       "activeVsLogged": "{active} de atividade · {logged} lançados",
+      "alreadyCovered": "Já coberto pelo tempo registrado",
       "chatEvidence": "{count, plural, one {# mensagem} many {# mensagens} other {# mensagens}} em “{title}”",
+      "engagedTime": "{duration} de atividade",
       "keyboardHint": "Enter aceita, E edita antes de aceitar, Delete descarta",
       "privacyNote": "Só você vê estas sugestões. Nada é registrado até você aceitar.",
       "title": "Sugestões a partir da sua atividade",
@@ -5870,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Trabalho interno"
+    },
+    "week": {
+      "allLogged": "Tudo está lançado. Novas atividades aparecem aqui conforme você trabalha.",
+      "days": "Dias da semana",
+      "entriesTitle": "Tempo lançado",
+      "nextWeek": "Próxima semana",
+      "noActivity": "Ainda não há nada para lançar. Trabalhe em um caso e sua atividade aparecerá aqui para você aceitar.",
+      "pendingCount": "{count, plural, one {# sugestão} other {# sugestões}}",
+      "previousWeek": "Semana anterior",
+      "range": "{start} – {end}",
+      "title": "Minha semana",
+      "totals": "{logged} lançados · {billable} faturáveis"
     }
   },
   "translate": {
@@ -6494,6 +6508,36 @@
       "pageEditor": {
         "addPDF": "Adicionar PDF",
         "applyCrop": "Aplicar recorte",
+        "cleanScan": {
+          "applied": "Versão limpa aplicada",
+          "apply": "Aplicar",
+          "applyAll": "Aplicar todas",
+          "applyPage": "Aplicar a página limpa {number}",
+          "cleaned": "Limpa",
+          "cleaning": "Limpando a página",
+          "contentCrop": "Recortar ao conteúdo",
+          "description": "{count, plural, one {Revise a página limpa antes de usá-la. O documento só muda quando você fizer isso.} other {Revise cada uma das # páginas limpas antes de usá-las. O documento só muda quando você fizer isso.}}",
+          "deskew": "Endireitar",
+          "failedEngine": "Não foi possível limpar. A página continua como está.",
+          "failedRender": "Não foi possível preparar a página para limpeza. Ela continua como está.",
+          "failedTimeout": "A limpeza demorou demais. A página continua como está.",
+          "heading": "Limpar digitalização",
+          "output": "Modo de cor",
+          "outputBinary": "Preto e branco",
+          "outputGrayscale": "Tons de cinza",
+          "pageLimit": "É possível limpar até {max} páginas por vez. Selecione menos páginas.",
+          "preview": "Página limpa {number}",
+          "progress": "{done} de {total} páginas processadas",
+          "reject": "Manter original",
+          "rejectPage": "Manter a página original {number}",
+          "rejected": "Original mantido",
+          "scope": "{count, plural, =0 {Endireitar e limpar todas as páginas} one {Endireitar e limpar a página selecionada} other {Endireitar e limpar as # páginas selecionadas}}",
+          "unrecognized": "A página não foi reconhecida como uma digitalização. Ela continua como está.",
+          "unrecognizedNoContent": "Nenhum conteúdo foi encontrado nesta página. Ela continua como está.",
+          "unrecognizedNoPage": "Não foi possível encontrar as bordas da página. Ela continua como está.",
+          "unrecognizedTooLarge": "A página é grande demais para ser limpa. Ela continua como está.",
+          "use": "{count, plural, =0 {Usar páginas limpas} one {Usar # página limpa} other {Usar # páginas limpas}}"
+        },
         "crop": "Recortar",
         "cropAdvanced": "Opções avançadas",
         "cropBottom": "Inferior (mm)",
@@ -6541,7 +6585,10 @@
         "saveVersion": "Salvar versão",
         "selectAll": "Selecionar tudo",
         "selectPage": "Selecionar página {number}",
+        "signAfterSave": "Salva suas edições de páginas como uma nova versão e depois a assina",
+        "signSavedVersionMissing": "A nova versão foi salva, mas não foi possível abri-la para assinatura. Assine-a pelo visualizador do documento.",
         "signatureWarning": "Editar este PDF invalidará as assinaturas digitais.",
+        "signatureWarningWithSign": "Editar invalida as assinaturas digitais existentes. Assinar por aqui salva primeiro suas edições e assina a nova versão.",
         "sourceLimit": "O tamanho total dos arquivos PDF não pode exceder 100 MB.",
         "title": "Editar páginas",
         "undo": "Desfazer edição da página",

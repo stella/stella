@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { resourceMutationDigest } from "@stll/api-contract/realtime-mutation-digest";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
@@ -12,7 +13,6 @@ import {
   parseWorkspaceRealtimeEvent,
   REALTIME_EVENT_TYPE,
   resourceDeletedRealtimeEvent,
-  resourceMutationDigest,
   resourcesChangedRealtimeEvent,
   resourceSetUpdatedRealtimeEvent,
   resourceUpdatedChange,

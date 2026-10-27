@@ -120,6 +120,7 @@ export const createDesktopLinkGrant = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Could not connect desktop account",
         cause,
       }),
@@ -176,6 +177,7 @@ export const consumeDesktopLinkGrant = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop connection is unavailable",
         cause,
       }),

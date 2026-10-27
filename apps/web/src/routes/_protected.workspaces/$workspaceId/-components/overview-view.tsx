@@ -73,13 +73,13 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { queryView } from "@/lib/query-view.logic";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
   DAY_AND_MONTH_FORMAT,
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateTask } from "@/lib/workspaces/mutations/tasks";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
@@ -186,7 +186,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     });
   // Views — find view IDs by layout type for stat card navigation
   const viewsQuery = useQuery(viewsOptions(workspaceId));
-  const viewsView = useQueryView(viewsQuery);
+  const viewsView = queryView(viewsQuery);
   const views = viewsView.type === "items" ? viewsView.items : undefined;
   // The Workflows tab owns the runs fetch; this matter-overview entry point only
   // reads that cache (`enabled: false`) so the general matter shell never fires
@@ -197,7 +197,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     ...flowRunsOptions({ workspaceId }),
     enabled: false,
   });
-  const flowRunsDataView = useQueryView(flowRunsDataQuery);
+  const flowRunsDataView = queryView(flowRunsDataQuery);
   const flowRunsData =
     flowRunsDataView.type === "items" ? flowRunsDataView.items : undefined;
   const activeFlowRunCount =
@@ -326,7 +326,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
-  const timeSummaryView = useQueryView(
+  const timeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntrySummaryOptions(
@@ -340,7 +340,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     }),
   );
 
-  const teamTimeSummaryView = useQueryView(
+  const teamTimeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntryTeamSummaryOptions(
@@ -364,7 +364,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     [weekStart],
   );
 
-  const previousTimeSummaryView = useQueryView(
+  const previousTimeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntrySummaryOptions(

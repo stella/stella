@@ -31,6 +31,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { lockAccountRow, shareAccountRow } from "@/api/lib/db/account-row";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import { machineApiKeyOrganizationScope } from "@/api/lib/machine-api-key-scope";
 import {
@@ -584,6 +585,8 @@ type HoldLiveSessionCredentialFenceOptions = {
 type HoldGrantCredentialFenceOptions = HoldLiveSessionCredentialFenceOptions & {
   /** The provider grant a token continues; its earlier tokens prove it. */
   grantId: string | null;
+  /** The organization an organization-scoped token acts in. */
+  organizationId: SafeId<"organization"> | null;
 };
 
 const isSessionLive = async (
@@ -653,11 +656,18 @@ export class CredentialIssuanceFence {
    * The fence for a token a provider grant issues: the grant's session is
    * live, or an earlier token of the same grant survives. Account-wide
    * revocation deletes both under this fence, so a refresh that rotated before
-   * a reset cannot insert its successor after it.
+   * a reset cannot insert its successor after it. An organization-scoped
+   * token also needs the membership, held against removal, which deletes the
+   * membership before the organization's tokens.
    */
   static async holdForGrant(
     tx: Transaction,
-    { userId, sessionId, grantId }: HoldGrantCredentialFenceOptions,
+    {
+      userId,
+      sessionId,
+      grantId,
+      organizationId,
+    }: HoldGrantCredentialFenceOptions,
   ): Promise<CredentialIssuanceFence | null> {
     if (sessionId === null && grantId === null) {
       return null;
@@ -667,7 +677,22 @@ export class CredentialIssuanceFence {
       (sessionId !== null &&
         (await isSessionLive(tx, { userId, sessionId }))) ||
       (grantId !== null && (await hasGrantToken(tx, { userId, grantId })));
-    return authorized ? new CredentialIssuanceFence(tx, userId) : null;
+    if (!authorized) {
+      return null;
+    }
+    if (organizationId !== null) {
+      // The member row, keyed by person and organization.
+      const membership = await withAggregateLock({
+        aggregate: "desktopMembership",
+        id: { organizationId, userId },
+        mode: "key share",
+        tx,
+      });
+      if (membership.status === "missing") {
+        return null;
+      }
+    }
+    return new CredentialIssuanceFence(tx, userId);
   }
 }
 

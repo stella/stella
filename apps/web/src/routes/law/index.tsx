@@ -69,10 +69,11 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 import {
   lawHomeDescriptor,
@@ -315,7 +316,7 @@ function LawHome() {
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const shelfView = useQueryView(shelfQuery);
+  const shelfView = queryView(shelfQuery);
   useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
