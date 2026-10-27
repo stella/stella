@@ -175,6 +175,8 @@ describe("which routes an API access token opens", () => {
             "/v1/tasks/",
             "/v1/tasks/:workspaceId",
             "/v1/tasks/:workspaceId/:taskId",
+            "/v1/time-timers/admin",
+            "/v1/time-timers/admin/:id/stop",
             "/v1/me/oauth-connections/:consentId",
             "/v1/contacts",
           ),
@@ -183,6 +185,7 @@ describe("which routes an API access token opens", () => {
           fc.constantFrom(
             "stella:read",
             "stella:matters_write",
+            "stella:billing_write",
             "stella:admin_write",
             "openid",
           ),
