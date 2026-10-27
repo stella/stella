@@ -4,6 +4,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 import {
   type ImportDeclaration,
+  isObjectLiteralProperty,
   type JSXOpeningElement,
   type ModuleExportName,
   type Node,
@@ -39,15 +40,6 @@ const isStringLiteral = (
 ): node is StringLiteral =>
   node?.type === "Literal" && typeof node.value === "string";
 
-/** `name: value` in an object literal: no shorthand, method or accessor. */
-const isPropertyAssignment = (
-  node: Node | null | undefined,
-): node is ObjectProperty =>
-  node?.type === "Property" &&
-  node.kind === "init" &&
-  !node.method &&
-  !node.shorthand;
-
 /** The property name as written; a computed `[key]` never matches a name. */
 const propertyName = (
   property: ObjectProperty,
@@ -78,16 +70,13 @@ const topLevelDeclarations = (source: ParsedSource): Node[] =>
     return [statement];
   });
 
-/** Visits every object literal property that assigns a value. */
-const visitPropertyAssignments = (
+/** Visits properties at their object-literal owner; readers judge the values. */
+const visitObjectProperties = (
   root: Node,
   visit: (property: ObjectProperty) => void,
 ): void => {
   walk(root, (node, ancestors) => {
-    if (
-      ancestors.at(-1)?.type === "ObjectExpression" &&
-      isPropertyAssignment(node)
-    ) {
+    if (isObjectLiteralProperty(node, ancestors.at(-1))) {
       visit(node);
     }
   });
@@ -138,7 +127,7 @@ export const declaredAppFrameScope = (
     }
   }
   let scope: AppFrameScope | undefined;
-  visitPropertyAssignments(source.program, (node) => {
+  visitObjectProperties(source.program, (node) => {
     if (
       propertyName(node, source) !== "staticData" ||
       node.value.type !== "ObjectExpression"
@@ -147,7 +136,7 @@ export const declaredAppFrameScope = (
     }
     for (const property of node.value.properties) {
       if (
-        !isPropertyAssignment(property) ||
+        property.type !== "Property" ||
         propertyName(property, source) !== "appFrame"
       ) {
         continue;
@@ -206,8 +195,7 @@ export const renderedImports = (source: ParsedSource): string[] => {
       rendered.add(textOf(node.name, source).split(".").at(0) ?? "");
     }
     if (
-      ancestors.at(-1)?.type === "ObjectExpression" &&
-      isPropertyAssignment(node) &&
+      isObjectLiteralProperty(node, ancestors.at(-1)) &&
       propertyName(node, source) === "component" &&
       node.value.type === "Identifier"
     ) {
@@ -301,14 +289,14 @@ const mountsDockedChatProvider = (file: string): boolean => {
 
 export const isServerEndpoint = (source: ParsedSource): boolean => {
   let serverHandlers = false;
-  visitPropertyAssignments(source.program, (node) => {
+  visitObjectProperties(source.program, (node) => {
     if (
       propertyName(node, source) === "server" &&
       node.value.type === "ObjectExpression"
     ) {
       serverHandlers = node.value.properties.some(
         (property) =>
-          isPropertyAssignment(property) &&
+          property.type === "Property" &&
           propertyName(property, source) === "handlers",
       );
     }
@@ -396,7 +384,7 @@ export const readDockedChatHosts = (): {
       }
       for (const property of options.properties) {
         if (
-          isPropertyAssignment(property) &&
+          property.type === "Property" &&
           propertyName(property, tree) === "getParentRoute" &&
           property.value.type === "ArrowFunctionExpression" &&
           property.value.body.type === "Identifier"
