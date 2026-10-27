@@ -29,6 +29,7 @@ import {
   transportAlternative,
   transportFileInput,
 } from "../../src/lib/capability-transport";
+import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 
@@ -539,6 +540,43 @@ export type CapabilityDispatchRecord = {
   exportName: string | undefined;
   featureAccess?:
     { featureId: string; type: "required" | "conditional" } | undefined;
+};
+
+/** Required feature access hides the entire capability; conditional access only narrows its input. */
+export const requiredDeploymentFeature = (
+  registry: FeatureRegistry,
+  requirement: CapabilityDispatchRecord["featureAccess"],
+) => {
+  if (requirement?.type !== "required") {
+    return undefined;
+  }
+  const definition = Object.hasOwn(registry, requirement.featureId)
+    ? registry[requirement.featureId]
+    : undefined;
+  if (definition === undefined) {
+    return panic("Required capability feature must be registered", {
+      featureId: requirement.featureId,
+    });
+  }
+  return definition.deploymentFeature;
+};
+
+type CapabilityDeploymentFeatureOptions = {
+  registry: FeatureRegistry;
+  requirement: CapabilityDispatchRecord["featureAccess"];
+  inheritedFeature: string | undefined;
+  domainFeature: string | undefined;
+};
+
+/** Existing tool and domain classifications retain precedence over a handler's derived flag. */
+export const resolveCapabilityDeploymentFeature = ({
+  registry,
+  requirement,
+  inheritedFeature,
+  domainFeature,
+}: CapabilityDeploymentFeatureOptions) => {
+  const requiredFeature = requiredDeploymentFeature(registry, requirement);
+  return inheritedFeature ?? domainFeature ?? requiredFeature;
 };
 
 /**

@@ -2,6 +2,9 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
+
 import type { Transaction } from "@/api/db/root";
 import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import {
@@ -29,6 +32,8 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
+import { projectionPayload } from "@/api/lib/projection-totality";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { enforceWritePrecondition } from "@/api/lib/write-contract/write-contract";
 
 const permissions = {
@@ -193,6 +198,16 @@ const billingDraftAuditChanges = ({
     : {}),
 });
 
+const responseSchema = v.strictObject({
+  updated: v.literal(true),
+  updatedAt: v.pipe(
+    v.string(),
+    v.maxLength(30),
+    v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
+  ),
+});
+
 const config = {
   // Each field sent replaces only its own value (the mode, one client's
   // guideline set, that client's format); absent fields stay unchanged.
@@ -204,6 +219,12 @@ const config = {
     "firm guideline when clientId is omitted, or that client's guideline set " +
     "when supplied. TimeBillingFormat requires clientId. Omitted fields stay unchanged.",
   permissions,
+  featureAccess: { featureId: "time-billing", type: "required" },
+  realtime: organizationResourceSetUpdates([
+    RESOURCE_TYPE.ORGANIZATION,
+    RESOURCE_TYPE.CONTACT,
+  ]),
+  response: { 200: responseSchema },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: {
     type: "capability",
@@ -406,13 +427,14 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
       }),
     );
     if (result.type === "updated") {
-      return Result.ok({
-        updated: true,
-        updatedAt: result.updatedAt.toISOString(),
-      });
+      return Result.ok(
+        projectionPayload(responseSchema, {
+          updated: true,
+          updatedAt: result.updatedAt.toISOString(),
+        }),
+      );
     }
-    const failure = CONFIGURATION_FAILURES[result.type];
-    return Result.err(new HandlerError(failure));
+    return Result.err(new HandlerError(CONFIGURATION_FAILURES[result.type]));
   },
 );
 

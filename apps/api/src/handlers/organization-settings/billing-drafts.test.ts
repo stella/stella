@@ -4,6 +4,9 @@ import { eq, inArray } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+import type { ResourceType } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   billingDraftUserSettings,
@@ -13,19 +16,31 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { requireSkillManager } from "@/api/handlers/skills/managed-skill";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { deploymentFeatureGateFlag } from "@/api/lib/deployment-feature-route";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
+import { toRouteJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
+import { LIMITS } from "@/api/lib/limits";
 import {
   hasMemberPermission,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import { announceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { executeRowsSafeDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
+import { responseSchemaByteBound } from "@/api/tests/helpers/response-schema-byte-bound";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
+import {
+  listBillingKnowledgeFiles,
+  readBillingKnowledgeFile,
+} from "./billing-drafts";
 import readBillingDraftConfiguration from "./billing-drafts/get";
 import updateBillingDraftConfiguration from "./billing-drafts/update";
+import { organizationSettingsRoute } from "./routes";
 
 const dialect = new PgDialect();
 
@@ -48,6 +63,12 @@ test("billing configuration refuses missing and foreign clients while retaining 
         user: { id: userId },
         session: { activeOrganizationId: organizationId },
         memberRole: sessionMemberRole("owner"),
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          userId,
+          organizationId,
+          identity: { email: `${userId}@example.test`, emailVerified: true },
+          enrolments: [{ userId, organizationId, featureId: "time-billing" }],
+        }),
         query: clientId === undefined ? {} : { clientId },
         request: new Request(
           "https://example.test/v1/organization-settings/billing-drafts",
@@ -135,6 +156,8 @@ describe("billing draft configuration authorization", () => {
       for (const handler of [
         readBillingDraftConfiguration,
         updateBillingDraftConfiguration,
+        listBillingKnowledgeFiles,
+        readBillingKnowledgeFile,
       ]) {
         expect(
           hasMemberPermission(memberRole, handler.config.permissions),
@@ -215,4 +238,121 @@ describe("billing draft configuration authorization", () => {
     ).toBe(false);
     expect(updateBillingDraftConfiguration.config.contract).toBe("patch");
   });
+});
+
+test("billing read response contracts reject oversized guideline content without truncation", () => {
+  const content = "x".repeat(LIMITS.agentSkillResourceMaxChars);
+  const schema = readBillingKnowledgeFile.config.response[200];
+  const accepted = v.parse(schema, { content });
+  expect(accepted.content).toBe(content);
+  expect(v.safeParse(schema, { content: `${content}x` }).success).toBe(false);
+  const file = {
+    fileId: createSafeId<"agentSkillResource">(),
+    fileName: "references/billing.md",
+    content,
+    clientId: null,
+  };
+  const configuration = {
+    mode: "enabled",
+    updatedAt: new Date(0).toISOString(),
+    files: [file],
+    timeBillingFormat: "categories",
+  };
+  const configurationSchema =
+    readBillingDraftConfiguration.config.response[200];
+  expect(v.parse(configurationSchema, configuration).files.at(0)?.content).toBe(
+    content,
+  );
+  expect(
+    v.safeParse(configurationSchema, {
+      ...configuration,
+      files: [{ ...file, content: `${content}x` }],
+    }).success,
+  ).toBe(false);
+  expect(
+    v.safeParse(configurationSchema, {
+      ...configuration,
+      files: Array.from({ length: 12 }, () => file),
+    }).success,
+  ).toBe(false);
+  expect(
+    v.safeParse(listBillingKnowledgeFiles.config.response[200], {
+      items: [],
+      nextCursor: null,
+      limit: 21,
+    }).success,
+  ).toBe(false);
+});
+
+test("billing configuration announces organization and contact sets only after committed success", () => {
+  const announced: ResourceType[] = [];
+  const organizationId = mintAuthProviderId<"organization">();
+  const notify = (result: unknown) =>
+    announceResourceSetUpdates({
+      realtime: updateBillingDraftConfiguration.config.realtime,
+      result,
+      organizationId,
+      workspaceId: undefined,
+      broadcasts: {
+        organization: (_organizationId, resourceType) => {
+          announced.push(resourceType);
+        },
+        workspace: () => panic("Root settings must not announce a matter"),
+      },
+    });
+  notify(new HttpStatusResponse(409, { message: "stale" }));
+  expect(announced).toEqual([]);
+  notify({ updated: true });
+  expect(announced).toEqual([
+    RESOURCE_TYPE.ORGANIZATION,
+    RESOURCE_TYPE.CONTACT,
+  ]);
+});
+
+test("time billing deployment gate scopes billing administration without hiding general settings", () => {
+  const billing = organizationSettingsRoute.filter(({ path }) =>
+    path.startsWith("/organization-settings/billing-drafts"),
+  );
+  expect(billing).toHaveLength(4);
+  for (const route of billing) {
+    expect(
+      route.middleware.some(
+        (stage) => deploymentFeatureGateFlag(stage) === "FEATURE_TIME_BILLING",
+      ),
+    ).toBe(true);
+  }
+  const general = organizationSettingsRoute.filter(
+    ({ path }) => path === "/organization-settings",
+  );
+  expect(general).toHaveLength(2);
+  for (const route of general) {
+    expect(
+      route.middleware.some(
+        (stage) => deploymentFeatureGateFlag(stage) === "FEATURE_TIME_BILLING",
+      ),
+    ).toBe(false);
+  }
+});
+
+test("billing administration wire responses have finite text bounds and valid instants", () => {
+  for (const endpoint of [
+    readBillingDraftConfiguration,
+    updateBillingDraftConfiguration,
+    listBillingKnowledgeFiles,
+    readBillingKnowledgeFile,
+  ]) {
+    expect(
+      Number.isFinite(
+        responseSchemaByteBound(
+          toRouteJsonSchema(endpoint.config.response[200]),
+        ),
+      ),
+    ).toBe(true);
+  }
+  expect(
+    v.safeParse(updateBillingDraftConfiguration.config.response[200], {
+      updated: true,
+      updatedAt: "0000-01-01T00:00:00Z",
+    }).success,
+  ).toBe(false);
 });

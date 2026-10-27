@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
@@ -11,6 +11,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteEntry } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
@@ -20,7 +21,6 @@ import {
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createTestState } from "@/api/tests/helpers/test-state";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopFeatureAccessReadEndpoint } from "./read";
 import { desktopFeatureAccessRoute } from "./routes";
@@ -35,10 +35,6 @@ const serve = (table: readonly RouteEntry[]) =>
   serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
 
 const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
-  const { scopedDb } = createScopedDbMock(
-    {},
-    { featureAccess: { identity: caller } },
-  );
   const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopFeatureAccessReadEndpoint({
     authorizeAccount: async (request) =>
@@ -56,7 +52,16 @@ const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
         userId: toSafeId<"user">("user_test"),
         keyId: "key_test",
         memberRole: sessionMemberRole("member"),
-        scopedDb,
+        featureAccessSnapshot: buildFeatureAccessSnapshot({
+          organizationId,
+          userId: "user_test",
+          identity: caller,
+          enrolments: [],
+        }),
+        scopedDb: async () =>
+          panic(
+            "Feature access must reuse authorized identity without querying scopedDb",
+          ),
       }),
   });
   await using server = serve(
@@ -97,7 +102,7 @@ test("feature access requires the desktop account credential", async () => {
   }
 });
 
-test("a granted member sees the feature enabled", async () => {
+test("a granted member sees the feature enabled without reading identity again", async () => {
   const body = await readAs({ email: GRANTED_EMAIL, emailVerified: true });
   expect(body).toStrictEqual({
     features: {

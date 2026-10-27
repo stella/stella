@@ -248,6 +248,30 @@ test("selected entry inputs and guideline citations have finite validated bounds
   }
 });
 
+test("billing draft request and review dates are real calendar days in CE years", () => {
+  for (const date of ["2026-02-30", "0000-01-01"]) {
+    expect(
+      v.safeParse(desktopBillingDraftRequestSchema, {
+        entries: [{ ...entry, date }],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      v.safeParse(desktopBillingDraftReviewSchema, {
+        result: response,
+        earlierEntries: [
+          {
+            id: "earlier-entry",
+            dateWorked: date,
+            durationMinutes: 30,
+            narrative: "Reviewed agreement",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+  }
+});
+
 test("draft operations carry reviewable payloads and classification branches remain exclusive", () => {
   const classification = {
     type: "activity_group",
@@ -451,6 +475,22 @@ test("model grammar preserves shape while canonical validation enforces every re
     },
     { ...draft, unexpected: true },
     { ...draft, operations: [{ type: "execute" }] },
+    {
+      ...draft,
+      operations: [
+        {
+          type: "move",
+          targetMatterId: "x".repeat(
+            DESKTOP_BILLING_DRAFT_LIMITS.matterIdLength + 1,
+          ),
+          targetMatterName: "Matter",
+          durationMinutes: 1,
+          narrative: "Move",
+          classification: draft.classification,
+          billable: true,
+        },
+      ],
+    },
   ]) {
     const value = { ...response, drafts: [invalidDraft] };
     expect(
