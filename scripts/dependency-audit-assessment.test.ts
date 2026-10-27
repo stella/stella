@@ -245,3 +245,51 @@ test("safe releases below the affected range never count as patched upgrades", (
     expect(result?.action).not.toContain("1.9.0");
   }
 });
+
+const multiLineAssessment = ({
+  locked,
+  requirement,
+  published,
+}: {
+  locked: string;
+  requirement: string;
+  published: string[];
+}) =>
+  assessAdvisories({
+    advisories: [
+      {
+        ...sdk,
+        package: "example",
+        vulnerableVersions: ">=1.0.0 <1.2.3 || >=2.0.0 <2.1.1",
+      },
+    ],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        app: ["app@1.0.0", "", { dependencies: { example: requirement } }],
+        example: [`example@${locked}`, "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", published]]),
+  }).at(0)?.disposition;
+
+test("an advisory spanning release lines keeps each line's forward patch", () => {
+  expect(
+    multiLineAssessment({
+      locked: "1.2.2",
+      requirement: "^1.0.0",
+      published: ["1.2.2", "1.2.3", "2.1.0", "2.1.1"],
+    }),
+  ).toEqual({ status: "fix_available", patchedVersions: ["1.2.3", "2.1.1"] });
+});
+
+test("a patch on an older release line is no upgrade for a newer locked copy", () => {
+  expect(
+    multiLineAssessment({
+      locked: "2.1.0",
+      requirement: ">=1.0.0",
+      published: ["1.2.3", "2.1.0"],
+    })?.status,
+  ).toBe("upstream_blocked");
+});

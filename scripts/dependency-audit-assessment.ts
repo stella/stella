@@ -162,23 +162,23 @@ export const assessAdvisories = ({
         `Cannot assess ${advisory.id}: no vulnerable ${advisory.package} resolution in bun.lock`,
       );
     }
-    // Recommend forward upgrades only. A safe older release is a downgrade,
-    // not a patch; use every published and locked affected release as evidence
-    // so it cannot satisfy a parent requirement or hide a manifest pin.
-    const newestAffected =
-      [...published, ...vulnerable.map(({ version }) => version)]
-        .filter((version) =>
-          Bun.semver.satisfies(version, advisory.vulnerableVersions),
-        )
-        .toSorted(Bun.semver.order)
-        .at(-1) ??
-      invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
-    const patchedVersions = published.filter(
+    // Recommend forward upgrades only: a safe older release is a downgrade,
+    // not a patch. Each locked copy is judged against releases newer than it,
+    // so an advisory spanning several release lines keeps each line's patch.
+    const safeVersions = published.filter(
       (version) =>
         Bun.semver.satisfies(version, "*") &&
-        !Bun.semver.satisfies(version, advisory.vulnerableVersions) &&
-        Bun.semver.order(version, newestAffected) > 0,
+        !Bun.semver.satisfies(version, advisory.vulnerableVersions),
     );
+    const upgradesFrom = (locked: string): string[] =>
+      safeVersions.filter((version) => Bun.semver.order(version, locked) > 0);
+    const oldestLocked =
+      vulnerable
+        .map(({ version }) => version)
+        .toSorted(Bun.semver.order)
+        .at(0) ??
+      invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
+    const patchedVersions = upgradesFrom(oldestLocked);
     const acceptances = accepted.filter(
       ({ id, package: name }) =>
         id === advisory.id && name === advisory.package,
@@ -211,6 +211,7 @@ export const assessAdvisories = ({
     });
     const blockers: string[] = [];
     for (const node of vulnerable) {
+      const nodePatches = upgradesFrom(node.version);
       const parents: string[] = [];
       for (const parent of packages) {
         for (const field of [
@@ -236,7 +237,7 @@ export const assessAdvisories = ({
             `${parent.key} requires ${advisory.package} ${requirement}`,
           );
           if (
-            !patchedVersions.some((version) =>
+            !nodePatches.some((version) =>
               Bun.semver.satisfies(version, requirement),
             )
           ) {
@@ -249,7 +250,7 @@ export const assessAdvisories = ({
       if (
         parents.length === 0 &&
         manifestRequirements.length === 0 &&
-        !patchedVersions.some(
+        !nodePatches.some(
           (version) =>
             version.split(".").at(0) === node.version.split(".").at(0),
         )
