@@ -596,7 +596,8 @@ const pathDirectoryAnnotation = (line: string): string | undefined => {
   const last = descriptor.at(-1);
   return descriptor.endsWith("AT_FDCWD") ||
     (last !== undefined && last >= "0" && last <= "9")
-    ? beforePath.slice(open + 1, close)
+    ? // strace escapes the annotation like any other traced string.
+      decodeTraceString(beforePath.slice(open + 1, close))
     : undefined;
 };
 

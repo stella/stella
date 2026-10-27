@@ -668,6 +668,20 @@ describe("directory scan coverage", () => {
     ).toThrow("Truncated trace record");
   });
 
+  test("a relative read resolves against an escaped directory annotation", () => {
+    const directory = path
+      .resolve("café")
+      .replace("é", () => String.raw`\303\251`);
+    expect(
+      undeclaredTracedFiles({
+        trace: `1 openat(AT_FDCWD<${directory}>, "data.txt", O_RDONLY) = 3`,
+        closure: new Set(),
+        declared: [],
+        tracked: new Set(["café/data.txt"]),
+      }),
+    ).toEqual(["café/data.txt"]);
+  });
+
   test("reads of files whose change selects every test need no declaration", () => {
     const shared = [
       "package.json",
