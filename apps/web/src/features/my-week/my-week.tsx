@@ -191,12 +191,12 @@ export const MyWeek = ({
       <MyWeekHeader
         actions={
           <>
-            {canApprove && (
-              <PendingApprovalsLink
-                organizationId={organizationId}
-                userId={userId}
-              />
-            )}
+            {/* Members approve what is assigned to them, so the link follows
+                the queue, not the role; it shows nothing while none waits. */}
+            <PendingApprovalsLink
+              organizationId={organizationId}
+              userId={userId}
+            />
             <SubmitWeekActions
               canApproveOwn={canApprove}
               canSubmit={canSubmitWeek}

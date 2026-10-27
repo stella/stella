@@ -7,6 +7,7 @@ import {
 import { useAnalytics } from "@/lib/analytics/provider";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { invoicesKeys } from "@/lib/workspaces/queries/invoices";
+import { myTimeEntriesKeys } from "@/lib/workspaces/queries/my-time-entries";
 import { timeApprovalsKeys } from "@/lib/workspaces/queries/time-approvals";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import {
@@ -31,6 +32,8 @@ const refreshReviewedTime = async (
       }),
     ]),
     queryClient.invalidateQueries({ queryKey: timeApprovalsKeys.root }),
+    // A reviewed entry can be the reviewer's own, shown in their week.
+    queryClient.invalidateQueries({ queryKey: myTimeEntriesKeys.root() }),
   ]);
 };
 

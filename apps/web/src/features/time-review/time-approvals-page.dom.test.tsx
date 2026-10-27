@@ -16,6 +16,8 @@ const { cleanup, fireEvent, render, screen, waitFor, within } =
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
+const { myTimeEntriesKeys } =
+  await import("@/lib/workspaces/queries/my-time-entries");
 const { stellaToast } = await import("@stll/ui/toast");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { TimeApprovalsPage } =
@@ -166,6 +168,7 @@ const mount = () => {
       </IntlProvider>
     </QueryClientProvider>,
   );
+  return client;
 };
 
 const personSection = async (name: string) =>
@@ -257,7 +260,11 @@ describe("approving time by person", () => {
 
   test("returning an entry sends the reason and takes it off the page", async () => {
     const calls = serveQueue([submitted("adam-1"), submitted("adam-2")]);
-    mount();
+    const client = mount();
+    // The reviewer's own week, cached from My week: a returned entry of
+    // theirs must come back editable there.
+    const ownWeek = myTimeEntriesKeys.all("organization-1");
+    client.setQueryData(ownWeek, { pages: [], pageParams: [] });
 
     const row = (await screen.findByText("Narrative adam-1")).closest("li");
     if (!(row instanceof HTMLElement)) {
@@ -287,6 +294,7 @@ describe("approving time by person", () => {
         ?.body,
     ).toEqual({ id: "adam-1", comment: "Split the call from the drafting" });
     expect(screen.getByText("Narrative adam-2")).toBeTruthy();
+    expect(client.getQueryState(ownWeek)?.isInvalidated).toBe(true);
   });
 
   test("a later page that fails to load says so and keeps the loaded entries", async () => {

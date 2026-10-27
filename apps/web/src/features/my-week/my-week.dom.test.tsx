@@ -412,11 +412,11 @@ const Harness = ({ initialDate }: { initialDate: string }) => {
   );
 };
 
-const mount = (initialDate = MONDAY) => {
+const mount = (initialDate = MONDAY, role = "owner") => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
-  client.setQueryData(roleOptions.queryKey, "owner");
+  client.setQueryData(roleOptions.queryKey, role);
   const root = createRootRoute({
     component: () => <Harness initialDate={initialDate} />,
   });
@@ -739,6 +739,19 @@ describe("my week", () => {
       expect(client.getQueryState(matterTime)?.isInvalidated).toBe(true);
       expect(client.getQueryState(matterInvoices)?.isInvalidated).toBe(true);
     });
+  });
+
+  test("a member approving entries assigned to them sees what waits", async () => {
+    serveWeek({ entries: [draftEntry()], suggestions: [], pendingCount: 2 });
+    mount(MONDAY, "member");
+
+    expect(await screen.findByText("2 entries to approve")).toBeTruthy();
+    // Own approval stays with roles that may approve.
+    expect(
+      screen.queryByRole("button", {
+        name: messages.timesheets.week.submitAndApprove,
+      }),
+    ).toBeNull();
   });
 
   test("a week with more drafts than one batch is submitted day by day", async () => {
