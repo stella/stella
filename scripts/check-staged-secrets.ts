@@ -30,6 +30,11 @@ import * as v from "valibot";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 const SCANNER = "gitleaks";
+const SCANNER_SETUP = "scripts/cloud-env-secret-scanner-setup.sh";
+export const CLAUDE_CODE_REMOTE_ENV = "CLAUDE_CODE_REMOTE";
+export const CODEX_CLOUD_TASK_ENV = "CODEX_CI";
+const HOSTED_ENV_VALUE = "true";
+const CODEX_CLOUD_TASK_VALUE = "1";
 const STAGED_SCAN = [
   "git",
   "--staged",
@@ -39,6 +44,10 @@ const STAGED_SCAN = [
 ];
 /** Exit status the scanner uses for findings; anything else but 0 is an error. */
 const FINDINGS_EXIT = 42;
+
+export const isHostedAgentEnvironment = (): boolean =>
+  process.env[CLAUDE_CODE_REMOTE_ENV] === HOSTED_ENV_VALUE ||
+  process.env[CODEX_CLOUD_TASK_ENV] === CODEX_CLOUD_TASK_VALUE;
 
 const LINE = v.pipe(v.number(), v.integer(), v.minValue(1));
 // Only the fields the merge check reads; the redacted match and secret are
@@ -131,9 +140,10 @@ const stagedLines = (commit: string, file: string): LineRange[] => {
 };
 
 const runStagedScan = (report: string): Finding[] => {
+  const scanner = Bun.which(SCANNER) ?? "/usr/local/bin/gitleaks";
   const result = Bun.spawnSync(
     [
-      SCANNER,
+      scanner,
       ...STAGED_SCAN,
       `--exit-code=${FINDINGS_EXIT}`,
       "--report-format=json",
@@ -203,7 +213,30 @@ const scanMerge = (heads: string[]): number => {
   return 1;
 };
 
-if (Bun.which(SCANNER) === null) {
+let scanner = Bun.which(SCANNER);
+if (scanner === null && isHostedAgentEnvironment()) {
+  const setup = Bun.spawnSync(["bash", SCANNER_SETUP], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  process.stdout.write(setup.stdout);
+  process.stderr.write(setup.stderr);
+  scanner = Bun.which(SCANNER);
+  const setupFailed = setup.stderr
+    .toString()
+    .split("\n")
+    .some((line) => line.startsWith("gitleaks NOT installed: "));
+  if (
+    scanner === null &&
+    !setupFailed &&
+    existsSync("/usr/local/bin/gitleaks")
+  ) {
+    scanner = "/usr/local/bin/gitleaks";
+  }
+}
+
+if (scanner === null) {
   console.error(
     `error: ${SCANNER} is required for pre-commit secret scanning.`,
   );
@@ -217,7 +250,7 @@ if (Bun.which(SCANNER) === null) {
 
 const heads = mergeHeads();
 if (heads === undefined) {
-  const scan = Bun.spawnSync([SCANNER, ...STAGED_SCAN, "."], {
+  const scan = Bun.spawnSync([scanner, ...STAGED_SCAN, "."], {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
