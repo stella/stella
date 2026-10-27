@@ -960,6 +960,18 @@
       "fr",
       "pl"
     ],
+    "workspaces.properties.sortAscendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
+    "workspaces.properties.sortDescendingText": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
+    ],
     "workspaces.properties.text": [
       "cs",
       "de",
