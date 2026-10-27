@@ -1,6 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
 import { Temporal } from "@stll/time";
@@ -276,26 +277,37 @@ const serveWeek = ({
 
   // Every draft in the range moves unless the fixture refuses it.
   const submit = (body: Record<string, unknown>) => {
-    const start = String(body["startDate"]);
-    const end = String(body["endDate"]);
-    const results = entries
+    const start =
+      typeof body["startDate"] === "string" ? body["startDate"] : "";
+    const end = typeof body["endDate"] === "string" ? body["endDate"] : "";
+    const drafts = entries
       .map((entry, index) => ({ entry, index }))
       .filter(
         ({ entry }) =>
           entry.status === "draft" && inRange(entry.dateWorked, start, end),
-      )
-      .map(({ entry, index }) => {
-        const reason = refusals[entry.id];
-        if (reason !== undefined) {
-          return { id: entry.id, status: "refused" as const, reason };
-        }
-        const status =
-          body["approve"] === true
-            ? ("approved" as const)
-            : ("submitted" as const);
-        entries[index] = { ...entry, status };
-        return { id: entry.id, status };
-      });
+      );
+    // The API refuses a range with more drafts than one batch moves.
+    if (drafts.length > TIME_ENTRIES_APPROVAL_BATCH_MAX) {
+      return new Response(
+        JSON.stringify({
+          code: "too_many_entries",
+          message: "Too many drafts in these dates",
+        }),
+        { status: 409, headers: { "content-type": "application/json" } },
+      );
+    }
+    const results = drafts.map(({ entry, index }) => {
+      const reason = refusals[entry.id];
+      if (reason !== undefined) {
+        return { id: entry.id, status: "refused" as const, reason };
+      }
+      const status =
+        body["approve"] === true
+          ? ("approved" as const)
+          : ("submitted" as const);
+      entries[index] = { ...entry, status };
+      return { id: entry.id, status };
+    });
     return json({ results });
   };
 
@@ -365,9 +377,10 @@ const serveWeek = ({
       }
       if (
         request.method === "POST" &&
-        path === "/time-entries/me/submissions"
+        path === "/time-entries/me/submissions" &&
+        isRecord(body)
       ) {
-        return submit(body as Record<string, unknown>);
+        return submit(body);
       }
       if (request.method === "GET" && path === "/time-entries/approval-queue") {
         return json({ items: [], nextCursor: null, limit: 1, pendingCount });
@@ -569,7 +582,7 @@ describe("my week", () => {
     );
     // Changing only the duration keeps the narrative's stored language.
     expect(patch?.body).toMatchObject({
-      id: "entry-1",
+      id: toSafeId<"timeEntry">("entry-1"),
       durationMinutes: 45,
       narrativeLanguage: "cs",
     });
@@ -677,11 +690,58 @@ describe("my week", () => {
       }) === null,
     ).toBe(true);
   });
+  test("a week with more drafts than one batch is submitted day by day", async () => {
+    const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
+    const drafts = Array.from(
+      { length: TIME_ENTRIES_APPROVAL_BATCH_MAX + 1 },
+      (_, index) =>
+        draftEntry({
+          id: toSafeId<"timeEntry">(`entry-bulk-${index}`),
+          narrative: `Bulk entry ${index}`,
+          dateWorked: index % 2 === 0 ? MONDAY : tuesday,
+        }),
+    );
+    const calls = serveWeek({ entries: drafts, suggestions: [] });
+    mount();
+
+    expect(await screen.findByText("Bulk entry 0")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: messages.timesheets.week.submitWeek,
+        }),
+      );
+    });
+
+    const submissionStarts = () =>
+      calls
+        .filter(
+          ({ method, path }) =>
+            method === "POST" && path === "/time-entries/me/submissions",
+        )
+        .map(({ body }) => (isRecord(body) ? body["startDate"] : null));
+    // The whole week first, refused for size, then each day of it.
+    await waitFor(() => {
+      expect(submissionStarts()).toEqual([WEEK.start, ...WEEK.days]);
+    });
+    // Every draft moved, so none of the day's entries is editable any more.
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", {
+          name: `${messages.common.edit}: Bulk entry 0`,
+        }) === null,
+      ).toBe(true);
+    });
+  });
+
   test("submitting the week moves its drafts, keeps refused ones editable with the reason, and locks submitted ones", async () => {
     const calls = serveWeek({
       entries: [
         draftEntry(),
-        draftEntry({ id: "entry-2", narrative: "Unpriced call" }),
+        draftEntry({
+          id: toSafeId<"timeEntry">("entry-2"),
+          narrative: "Unpriced call",
+        }),
       ],
       suggestions: [],
       refusals: { "entry-2": "unpriced" },

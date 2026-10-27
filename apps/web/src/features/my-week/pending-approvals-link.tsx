@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { timeApprovalPendingOptions } from "@/lib/workspaces/queries/time-approvals";
 
 /**
@@ -17,7 +17,7 @@ export const PendingApprovalsLink = ({
   userId: string;
 }) => {
   const t = useTranslations("billing.approval");
-  const pending = useQueryView(
+  const pending = queryView(
     useQuery(timeApprovalPendingOptions(organizationId, userId)),
     { isEmpty: (count) => count === 0 },
   );

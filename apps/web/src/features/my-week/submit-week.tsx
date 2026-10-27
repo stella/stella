@@ -9,6 +9,7 @@ import type { Week } from "@/features/my-week/my-week.logic";
 import type { SubmitWeekRequest } from "@/features/my-week/use-my-week-actions";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 
 export const SUBMIT_REFUSAL_KEYS = {
@@ -38,6 +39,54 @@ type SubmitWeekActionsProps = {
   onRefusals: (refusals: ReadonlyMap<string, TimeSubmitRefusal>) => void;
 };
 
+const submitRange = async (
+  submit: SubmitWeekActionsProps["submit"],
+  request: SubmitWeekRequest,
+) =>
+  await Result.tryPromise({
+    try: async () => await submit(request),
+    catch: (cause: unknown): unknown => cause,
+  });
+
+const isTooManyEntries = (error: unknown) =>
+  error instanceof APIError && error.code === "too_many_entries";
+
+/**
+ * The whole week in one request, or, when it holds more drafts than one batch
+ * moves, one day at a time, so a busy week can still be submitted.
+ */
+const submitWeekInParts = async ({
+  week,
+  approve,
+  submit,
+}: {
+  week: Week;
+  approve: boolean;
+  submit: SubmitWeekActionsProps["submit"];
+}) => {
+  const whole = await submitRange(submit, {
+    startDate: week.start,
+    endDate: week.end,
+    approve,
+  });
+  if (!Result.isError(whole) || !isTooManyEntries(whole.error)) {
+    return whole;
+  }
+  const results: SubmitOutcome["results"] = [];
+  for (const date of week.days) {
+    const day = await submitRange(submit, {
+      startDate: date,
+      endDate: date,
+      approve,
+    });
+    if (Result.isError(day)) {
+      return day;
+    }
+    results.push(...day.value.results);
+  }
+  return Result.ok({ results });
+};
+
 /**
  * Sends the week's drafts to their approvers in one step. Each draft moves or
  * is refused on its own; refusals are shown on their entries, and the rest
@@ -53,15 +102,7 @@ export const SubmitWeekActions = ({
 }: SubmitWeekActionsProps) => {
   const t = useTranslations();
   const run = async (approve: boolean) => {
-    const response = await Result.tryPromise({
-      try: async () =>
-        await submit({
-          startDate: week.start,
-          endDate: week.end,
-          approve,
-        }),
-      catch: (cause: unknown): unknown => cause,
-    });
+    const response = await submitWeekInParts({ week, approve, submit });
     if (Result.isError(response)) {
       notifyUserError(response.error, t("errors.actionFailed"));
       return;
