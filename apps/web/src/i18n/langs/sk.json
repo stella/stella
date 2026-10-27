@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Necitované} one {Citované raz} few {Citované #-krát} other {Citované #-krát}}",
       "dateUnavailable": "Dátum neuvedený",
       "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}}",
+      "goToMention": "Prejsť na {number}. zmienku",
+      "goToParagraph": "Prejsť na bod {paragraph}",
       "lastNegative": "posledná negatívna citácia v roku {year}",
+      "mentionMark": "{number}. zmienka",
+      "mentionsInDecision": "{count, plural, one {V tomto rozhodnutí citované raz} few {V tomto rozhodnutí citované #-krát} other {V tomto rozhodnutí citované #-krát}}",
       "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnych} other {# negatívnych}}",
       "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
+      "notInStella": "Zatiaľ nie je v stelle",
       "openAtCitation": "Otvoriť na mieste citácie",
       "openDecision": "Otvoriť rozhodnutie",
       "paragraphLabel": "Bod {paragraph}",
@@ -1043,8 +1048,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ľudské"
+      "human": "Ľudské",
+      "toggleState": "{label}: {state, select, on {zapnuté} other {vypnuté}}"
     },
+    "oldestDecisions": "Najstaršie rozhodnutia",
     "pagination": {
       "goToPage": "Prejsť na stránku {page}",
       "label": "Stránky výsledkov",
@@ -1106,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí}}.",
       "runTitle": "Odpovedať na tejto stránke",
       "savedQuestions": "Uložené otázky",
-      "title": "Rešeršné tabuľky",
-      "updated": "Naposledy upravené {date}"
+      "title": "Rešeršné tabuľky"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1157,8 @@
     "showWholeHeadnote": "Zobraziť celú právnu vetu",
     "sort": {
       "newest": "Najnovšie",
+      "oldest": "Najstaršie",
+      "oldestUnavailable": "Vyhľadávanie radí výsledky podľa relevantnosti alebo od najnovších. Ak chcete zobraziť najskôr najstaršie rozhodnutia, vymažte vyhľadávanie.",
       "relevance": "Najrelevantnejšie"
     },
     "viewer": {
@@ -1166,6 +1174,7 @@
       "citedDecisionPassage": "Pasáž v rozhodnutí",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Prejsť na odsek} few {Prejsť na odseky} other {Prejsť na odseky}}",
       "judgeRole": {
         "advocateGeneral": "Generálny advokát",
         "dissenting": "Odlišné stanovisko",
@@ -2228,6 +2237,7 @@
     "selectARole": "Vyberte rolu",
     "selectAll": "Vybrať všetko",
     "selectDate": "Vybrať dátum…",
+    "selected": "Vybrané",
     "sessions": "Relácie",
     "settings": "Nastavenia",
     "showAll": "Zobraziť všetko",
@@ -4272,6 +4282,8 @@
       "commentPlaceholder": "Napíšte komentár…",
       "commentText": "Text komentára",
       "commentedPassage": "Komentovaná pasáž",
+      "editComment": "Upraviť komentár",
+      "editedAt": "Upravené {time}",
       "guestAuthor": "Vy",
       "guestLimitReached": "Táto karta môže obsahovať najviac {count} zvýraznení a poznámok. Ak chcete uložiť viac, vytvorte si účet.",
       "guestMigrationComplete": "Zvýraznenia a poznámky boli uložené.",
@@ -6291,6 +6303,7 @@
       "deleteAll": "Odstrániť všetko",
       "deleteAllConfirm": "Odstrániť všetkých {count} položiek v „{column}“?",
       "hideColumn": "Skryť stĺpec",
+      "moveFailed": "{failed, plural, one {# z {total} položiek sa nepodarilo presunúť.} few {# z {total} položiek sa nepodarilo presunúť.} other {# z {total} položiek sa nepodarilo presunúť.}}",
       "readOnlyGrouping": "Toto zoskupenie je iba na čítanie",
       "selectPropertyHint": "Vyberte vlastnosť na zoskupenie v paneli nástrojov",
       "uploadDocument": "Nahrať dokument",
@@ -6350,7 +6363,6 @@
           "approvedBy": "Schválil(a)",
           "channel": "Kanál",
           "dateTime": "Dátum a čas",
-          "eventId": "ID udalosti",
           "notAvailable": "Nie je k dispozícii",
           "openTarget": "Otvoriť položku",
           "runId": "ID behu",
@@ -6533,6 +6545,11 @@
       },
       "passwordLabel": "Zadajte heslo k PDF",
       "previousPage": "Predchádzajúca strana",
+      "selection": {
+        "explainPassagePrompt": "Vysvetli túto pasáž z {citation}:\n\n„{quote}“",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Zobraziť pôvodné stránky",
       "unlock": "Odomknúť"
     },
@@ -6646,10 +6663,12 @@
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt na extrakciu informácií",
       "singleSelect": "Jednoduchý výber",
-      "sortAscending": "Radiť vzostupne",
       "sortAscendingDate": "Od najstarších",
-      "sortDescending": "Radiť zostupne",
+      "sortAscendingNumber": "Od najnižšej hodnoty",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Od najnovších",
+      "sortDescendingNumber": "Od najvyššej hodnoty",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností}}",
       "suggestWithAI": "Navrhnúť pomocou AI",
       "text": "Text",

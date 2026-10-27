@@ -228,8 +228,7 @@ describe("stella CLI client document", () => {
     expect(details.status).toBe(200);
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      unverified: false,
-      verifiedBrand: "stella",
+      client: { type: "verified", brand: "stella" },
     });
   });
 

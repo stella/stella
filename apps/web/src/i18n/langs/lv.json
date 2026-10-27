@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Nav citēts} zero {Citēts # reižu} one {Citēts vienu reizi} other {Citēts # reizes}}",
       "dateUnavailable": "Datums nav norādīts",
       "decisionCount": "{count, plural, =0 {Nav nolēmumu} zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}}",
+      "goToMention": "Pāriet uz {number}. pieminējumu",
+      "goToParagraph": "Pāriet uz {paragraph}. punktu",
       "lastNegative": "pēdējā negatīvā atsauce {year}. gadā",
+      "mentionMark": "{number}. pieminējums",
+      "mentionsInDecision": "{count, plural, zero {Šajā nolēmumā citēts # reižu} one {Šajā nolēmumā citēts # reizi} other {Šajā nolēmumā citēts # reizes}}",
       "negativeCount": "{count, plural, zero {# negatīvu} one {# negatīva} other {# negatīvas}}",
       "none": "Citējumi vēl nav reģistrēti.",
+      "notInStella": "Lietotnē stella vēl nav",
       "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
       "paragraphLabel": "{paragraph}. punkts",
@@ -1043,8 +1048,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Cilvēku"
+      "human": "Cilvēku",
+      "toggleState": "{label}: {state, select, on {ieslēgts} other {izslēgts}}"
     },
+    "oldestDecisions": "Vecākie nolēmumi",
     "pagination": {
       "goToPage": "Pāriet uz {page}. lapu",
       "label": "Rezultātu lapas",
@@ -1106,8 +1113,7 @@
       "runEstimate": "{rows, plural, zero {# nolēmumu} one {# nolēmums} other {# nolēmumi}} × {columns, plural, zero {# jautājumu} one {# jautājums} other {# jautājumi}} šajā lapā: {cells, plural, zero {tiks izveidotas # atbilžu} one {tiks izveidota # atbilde} other {tiks izveidotas # atbildes}}.",
       "runTitle": "Atbildēt šajā lapā",
       "savedQuestions": "Saglabātie jautājumi",
-      "title": "Pētījumu tabulas",
-      "updated": "Pēdējo reizi labota {date}"
+      "title": "Pētījumu tabulas"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1157,8 @@
     "showWholeHeadnote": "Rādīt visu kopsavilkumu",
     "sort": {
       "newest": "Jaunākie",
+      "oldest": "Vecākie",
+      "oldestUnavailable": "Meklēšanas rezultāti tiek kārtoti pēc atbilstības vai no jaunākajiem. Lai vispirms redzētu vecākos nolēmumus, notīriet meklēšanu.",
       "relevance": "Atbilstošākie"
     },
     "viewer": {
@@ -1166,6 +1174,7 @@
       "citedDecisionPassage": "Fragments nolēmumā",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, zero {Pāriet uz rindkopām} one {Pāriet uz rindkopu} other {Pāriet uz rindkopām}}",
       "judgeRole": {
         "advocateGeneral": "Ģenerāladvokāts",
         "dissenting": "Atsevišķās domas",
@@ -2228,6 +2237,7 @@
     "selectARole": "Izvēlieties lomu",
     "selectAll": "Atlasīt visus",
     "selectDate": "Izvēlēties datumu…",
+    "selected": "Atlasīts",
     "sessions": "Sesijas",
     "settings": "Iestatījumi",
     "showAll": "Rādīt visu",
@@ -4272,6 +4282,8 @@
       "commentPlaceholder": "Rakstiet komentāru…",
       "commentText": "Komentāra teksts",
       "commentedPassage": "Komentētais fragments",
+      "editComment": "Rediģēt komentāru",
+      "editedAt": "Rediģēts {time}",
       "guestAuthor": "Jūs",
       "guestLimitReached": "Šajā cilnē var saglabāt līdz {count} izcēlumiem un piezīmēm. Lai saglabātu vairāk, izveidojiet kontu.",
       "guestMigrationComplete": "Izcēlumi un piezīmes saglabāti.",
@@ -6291,6 +6303,7 @@
       "deleteAll": "Dzēst visus",
       "deleteAllConfirm": "Dzēst visus {count} vienumus kolonnā \"{column}\"?",
       "hideColumn": "Paslēpt kolonnu",
+      "moveFailed": "{failed, plural, zero {Neizdevās pārvietot # no {total} vienumiem.} one {Neizdevās pārvietot # no {total} vienumiem.} other {Neizdevās pārvietot # no {total} vienumiem.}}",
       "readOnlyGrouping": "Šis grupējums ir tikai lasāms",
       "selectPropertyHint": "Rīkjoslā izvēlieties rekvizītu grupēšanai",
       "uploadDocument": "Augšupielādēt dokumentu",
@@ -6350,7 +6363,6 @@
           "approvedBy": "Apstiprināja",
           "channel": "Kanāls",
           "dateTime": "Datums un laiks",
-          "eventId": "Notikuma ID",
           "notAvailable": "Nav pieejams",
           "openTarget": "Atvērt vienumu",
           "runId": "Izpildes ID",
@@ -6533,6 +6545,11 @@
       },
       "passwordLabel": "Ievadiet PDF paroli",
       "previousPage": "Iepriekšējā lappuse",
+      "selection": {
+        "explainPassagePrompt": "Izskaidro šo {citation} fragmentu:\n\n„{quote}”",
+        "pageLocator": "{page}. lpp.",
+        "pageRangeLocator": "{start}.–{end}. lpp."
+      },
       "showOriginal": "Rādīt oriģinālās lapas",
       "unlock": "Atbloķēt"
     },
@@ -6646,10 +6663,12 @@
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
-      "sortAscending": "Kārtot augošā secībā",
       "sortAscendingDate": "Vecākie vispirms",
-      "sortDescending": "Kārtot dilstošā secībā",
+      "sortAscendingNumber": "Mazākie vispirms",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Jaunākie vispirms",
+      "sortDescendingNumber": "Lielākie vispirms",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, zero {Sadalīt # iespējās} one {Sadalīt # iespējā} other {Sadalīt # iespējās}}",
       "suggestWithAI": "Ieteikt ar AI",
       "text": "Teksts",

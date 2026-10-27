@@ -54,6 +54,7 @@ import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { slugify } from "@stll/text-normalize";
 
 import {
   entities,
@@ -89,6 +90,7 @@ import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
+import { activeStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { readPresent } from "@/api/lib/errors/read-outcome";
 import { DatabaseError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
@@ -575,7 +577,7 @@ const createRelatedDecision = (
   ecli: null,
   language: "cs",
   languageAlternates: [],
-  slug: `ns-${caseNumber.toLowerCase().replaceAll(/[^\da-z]+/gu, "-")}`,
+  slug: `ns-${slugify(caseNumber, { charset: "ascii", fallback: "", maxLength: Number.MAX_SAFE_INTEGER, separator: "-" })}`,
   ...overrides,
 });
 
@@ -1923,11 +1925,17 @@ describe("OpenAI-compatible MCP tools", () => {
     test("allows a manual lookup outside the advertised home jurisdictions", async () => {
       const baseContext = createContext();
       const executeRegistryLookupMock = mock(
-        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => ({
-          type: "lookup" as const,
-          registry: handler.slug,
-          hit: null,
-        }),
+        async ({ handler }: Parameters<typeof executeRegistryLookup>[0]) => {
+          expect(activeStatementCeiling()).toEqual({
+            kind: "mcp",
+            key: "lookup_business_registry",
+          });
+          return {
+            type: "lookup" as const,
+            registry: handler.slug,
+            hit: null,
+          };
+        },
       );
       const result = await handleMcpToolCall({
         args: { registry: "krs", query: "0000123456" },
