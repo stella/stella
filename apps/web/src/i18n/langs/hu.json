@@ -5872,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Belső munka"
+    },
+    "week": {
+      "allLogged": "Minden rögzítve van. Az új tevékenység munka közben itt jelenik meg.",
+      "days": "A hét napjai",
+      "entriesTitle": "Rögzített idő",
+      "nextWeek": "Következő hét",
+      "noActivity": "Még nincs mit rögzíteni. Dolgozzon egy ügyben, és a tevékenysége itt jelenik meg elfogadásra.",
+      "pendingCount": "{count, plural, one {# javaslat} other {# javaslat}}",
+      "previousWeek": "Előző hét",
+      "range": "{start} – {end}",
+      "title": "A hetem",
+      "totals": "Rögzítve: {logged} · számlázható: {billable}"
     }
   },
   "translate": {

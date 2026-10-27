@@ -5872,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Praca wewnętrzna"
+    },
+    "week": {
+      "allLogged": "Wszystko jest zarejestrowane. Nowa aktywność pojawi się tutaj w trakcie pracy.",
+      "days": "Dni tygodnia",
+      "entriesTitle": "Zarejestrowany czas",
+      "nextWeek": "Następny tydzień",
+      "noActivity": "Na razie nie ma nic do zarejestrowania. Pracuj w sprawie, a Twoja aktywność pojawi się tutaj do zaakceptowania.",
+      "pendingCount": "{count, plural, one {# sugestia} few {# sugestie} many {# sugestii} other {# sugestii}}",
+      "previousWeek": "Poprzedni tydzień",
+      "range": "{start} – {end}",
+      "title": "Mój tydzień",
+      "totals": "Zarejestrowano: {logged} · rozliczalne: {billable}"
     }
   },
   "translate": {

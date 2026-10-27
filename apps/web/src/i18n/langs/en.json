@@ -5872,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Internal work"
+    },
+    "week": {
+      "allLogged": "Everything here is logged. New activity shows up as you work.",
+      "days": "Days of the week",
+      "entriesTitle": "Logged time",
+      "nextWeek": "Next week",
+      "noActivity": "Nothing to log yet. Work in a matter and your activity shows up here to accept.",
+      "pendingCount": "{count, plural, one {# suggestion} other {# suggestions}}",
+      "previousWeek": "Previous week",
+      "range": "{start} – {end}",
+      "title": "My week",
+      "totals": "{logged} logged · {billable} billable"
     }
   },
   "translate": {

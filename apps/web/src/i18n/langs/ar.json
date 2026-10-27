@@ -5872,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "العمل الداخلي"
+    },
+    "week": {
+      "allLogged": "كل شيء مُسجَّل. سيظهر النشاط الجديد هنا أثناء عملك.",
+      "days": "أيام الأسبوع",
+      "entriesTitle": "الوقت المُسجَّل",
+      "nextWeek": "الأسبوع التالي",
+      "noActivity": "لا شيء لتسجيله بعد. اعمل في ملف قانوني وسيظهر نشاطك هنا لقبوله.",
+      "pendingCount": "{count, plural, zero {لا مقترحات} one {مقترح واحد} two {مقترحان} few {# مقترحات} many {# مقترحًا} other {# مقترح}}",
+      "previousWeek": "الأسبوع السابق",
+      "range": "{start} – {end}",
+      "title": "أسبوعي",
+      "totals": "{logged} مُسجَّلة · {billable} قابلة للفوترة"
     }
   },
   "translate": {

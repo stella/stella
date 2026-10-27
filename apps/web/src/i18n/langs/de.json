@@ -5872,6 +5872,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Interne Arbeit"
+    },
+    "week": {
+      "allLogged": "Alles ist erfasst. Neue Aktivität erscheint hier, während Sie arbeiten.",
+      "days": "Wochentage",
+      "entriesTitle": "Erfasste Zeit",
+      "nextWeek": "Nächste Woche",
+      "noActivity": "Noch nichts zu erfassen. Arbeiten Sie in einer Akte, dann erscheint Ihre Aktivität hier zum Übernehmen.",
+      "pendingCount": "{count, plural, one {# Vorschlag} other {# Vorschläge}}",
+      "previousWeek": "Vorherige Woche",
+      "range": "{start} – {end}",
+      "title": "Meine Woche",
+      "totals": "{logged} erfasst · {billable} abrechenbar"
     }
   },
   "translate": {

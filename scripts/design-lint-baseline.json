@@ -317,7 +317,6 @@
     "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx": 1,
-    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx": 1,
