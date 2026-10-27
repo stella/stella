@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
 import { mountBrowserExtensionBridge } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import type { ClientAuthStatus } from "@/hooks/use-client-auth-status";
@@ -172,23 +173,21 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
       return memberUser === undefined ? (
         <ProtectedPendingSkeleton />
       ) : (
-        <Suspense
-          fallback={
-            <ProtectedPendingSkeleton
-              inspectorScope={{
-                userId: memberUser.id,
-                organizationId: memberUser.activeOrganizationId,
-              }}
-            />
-          }
+        <ProtectedPendingInspectorScopeContext.Provider
+          value={{
+            userId: memberUser.id,
+            organizationId: memberUser.activeOrganizationId,
+          }}
         >
-          <MemberFrame
-            key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
-            user={memberUser}
-          >
-            {children}
-          </MemberFrame>
-        </Suspense>
+          <Suspense fallback={<ProtectedPendingSkeleton />}>
+            <MemberFrame
+              key={`${memberUser.activeOrganizationId}:${memberUser.id}`}
+              user={memberUser}
+            >
+              {children}
+            </MemberFrame>
+          </Suspense>
+        </ProtectedPendingInspectorScopeContext.Provider>
       );
     case "public":
       return (

@@ -22,6 +22,7 @@ import {
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { ProtectedPendingInspectorScopeContext } from "@/components/inspector/protected-pending-inspector-scope";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
@@ -61,6 +62,33 @@ export function ProtectedPendingSkeleton({
 }: {
   content?: ReactElement | undefined;
   inspectorScope?: InspectorStorageScope;
+}) {
+  if (inspectorScope !== undefined) {
+    return (
+      <ProtectedPendingSkeletonContent
+        content={content}
+        inspectorScope={inspectorScope}
+      />
+    );
+  }
+  return (
+    <ProtectedPendingInspectorScopeContext.Consumer>
+      {(contextScope) => (
+        <ProtectedPendingSkeletonContent
+          content={content}
+          inspectorScope={contextScope}
+        />
+      )}
+    </ProtectedPendingInspectorScopeContext.Consumer>
+  );
+}
+
+function ProtectedPendingSkeletonContent({
+  content,
+  inspectorScope,
+}: {
+  content: ReactElement | undefined;
+  inspectorScope: InspectorStorageScope | undefined;
 }) {
   const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
   const paneRequested =
