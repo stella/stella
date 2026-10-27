@@ -1,5 +1,9 @@
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
+import { parseSuggestChangesInput } from "@stll/folio-agents";
+import { FOLIO_DOCUMENT_OPERATION_TYPES } from "@stll/folio-core";
 
+import { describeSuggestionChange } from "@/components/ai-suggestions/review-operation-labels";
+import { summarizeOperation } from "@/components/ai-suggestions/review-suggestion-builder";
 import {
   isApprovalOnceChatToolName,
   isToolApprovedByGrant,
@@ -85,3 +89,43 @@ export const describeSuggestChangesApplyOutcome = (
 
   return { kind: "author-name-required", message: output.message };
 };
+
+/** One proposed DOCX edit, as the approval card words it. */
+export type ProposedDocxEdit = {
+  /** The kind of change, worded by the review panel's own summary. */
+  summary: string;
+  /** The wording the edit puts in the document, when the summary does not quote it. */
+  text: string | null;
+};
+
+// Every type, whatever the surface allowed: the card only words the call.
+const DESCRIBABLE_OPERATIONS = {
+  operationTypes: FOLIO_DOCUMENT_OPERATION_TYPES,
+};
+
+/**
+ * Word the operations a `suggest_changes` call proposes, so the user approves
+ * what will change rather than where folio stores it. Each operation is read
+ * with folio's own parser, one at a time so a malformed one does not hide the
+ * rest; one it cannot read is left out (the card's count still includes it).
+ */
+export const describeProposedDocxEdits = (
+  operations: readonly unknown[],
+): ProposedDocxEdit[] =>
+  operations.flatMap((raw) => {
+    const parsed = parseSuggestChangesInput(
+      { operations: [raw] },
+      DESCRIBABLE_OPERATIONS,
+    );
+    const operation = parsed.ok ? parsed.operations.at(0) : undefined;
+    if (operation === undefined) {
+      return [];
+    }
+    const change = describeSuggestionChange(operation);
+    // A range replacement already quotes its new text in the summary.
+    const text =
+      change?.type === "text" && operation.type !== "replaceRange"
+        ? change.text
+        : null;
+    return [{ summary: summarizeOperation(operation), text }];
+  });

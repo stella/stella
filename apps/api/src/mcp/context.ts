@@ -75,7 +75,10 @@ import type {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
-import type { readCaseLawProvisionScope } from "@/api/lib/case-law/provision-filter";
+import type {
+  readCaseLawProvisionScope,
+  readProvisionWorkLinked,
+} from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
@@ -190,6 +193,10 @@ export type McpRequestContext = {
     readCaseLawProvisionScope?: (
       scope: Omit<Parameters<typeof readCaseLawProvisionScope>[1], "idSetMax">,
     ) => ReturnType<typeof readCaseLawProvisionScope>;
+    /** Whether any recorded link names the provision's act. */
+    readProvisionWorkLinked?: (
+      scope: Parameters<typeof readProvisionWorkLinked>[1],
+    ) => ReturnType<typeof readProvisionWorkLinked>;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */

@@ -17,6 +17,7 @@ import {
   CLAUSE_DIRECTIVES_INVALID_CODE,
   CLAUSE_VERSION_LIMIT_ERROR_CODE,
 } from "@stll/api-contract";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import arabicMessages from "@/i18n/langs/ar.json";
@@ -116,7 +117,6 @@ beforeEach(() => {
 afterEach(() => {
   mock.restore();
   cleanup();
-  jest.useRealTimers();
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
@@ -325,7 +325,7 @@ const mountDetail = (locale: "en" | "ar" = "en") => {
 
 describe("clause detail with the real editor", () => {
   test("publishing the real editor invalidates mounted template discovery", async () => {
-    jest.useRealTimers();
+    restoreRealTimers();
     const save = mountDetail();
     let reads = 0;
     const schema = renderHook(

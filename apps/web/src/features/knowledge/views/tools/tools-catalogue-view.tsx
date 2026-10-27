@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -243,11 +244,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                   </>
                 )}
                 {(() => {
-                  const matches = allJurisdictionCodes.filter((code) =>
-                    code
-                      .toLowerCase()
-                      .includes(jurisdictionQuery.trim().toLowerCase()),
-                  );
+                  const matches = filterBySearchQuery({
+                    items: allJurisdictionCodes,
+                    query: jurisdictionQuery,
+                    fields: (code) => [code],
+                  });
                   if (matches.length === 0) {
                     return (
                       <p className="text-muted-foreground px-2 py-3 text-center text-xs">
