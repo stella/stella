@@ -46,6 +46,8 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
+import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
+import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
@@ -310,7 +312,14 @@ const PeekPdfViewerContent = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       workspaceId={workspaceId}
     >
-      {viewport}
+      <PdfSelectionActions
+        chat={PDF_SELECTION_CHAT.fileChat}
+        fileFieldId={fieldId}
+        fileName={file.fileName}
+        workspaceId={workspaceId}
+      >
+        {viewport}
+      </PdfSelectionActions>
     </FileViewerWithAI>
   );
 };

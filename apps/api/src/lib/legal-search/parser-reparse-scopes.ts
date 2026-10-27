@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 17,
+    version: 18,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph text and block boundaries are recomputed from the stored PDF: a line the layout wrapped inside a sentence no longer opens a numbered point or a signature, and paragraphs have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
@@ -157,7 +157,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_COURTS]: {
-    version: 14,
+    version: 15,
     scope: {
       type: "all",
       reason:
@@ -173,7 +173,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIO]: {
-    version: 8,
+    version: 9,
     scope: {
       type: "all",
       reason:
@@ -197,7 +197,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_NCOURT]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:
@@ -290,11 +290,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.EU_ECJ]: {
-    version: 16,
+    version: 17,
     scope: {
       type: "all",
       reason:
-        "Revalidate document AST identities across the complete parser output.",
+        "paragraph numbers, headings, roles and page anchors of the oldest layout, the operative-part heading, the case number and the court all change together in the document AST and the row, which have no feature storage of their own",
     },
   },
   [ADAPTER_KEYS.HU_BHGY]: {
@@ -306,7 +306,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_KIS]: {
-    version: 9,
+    version: 10,
     scope: {
       type: "all",
       reason:
@@ -314,7 +314,7 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.PL_UODO]: {
-    version: 13,
+    version: 14,
     scope: {
       type: "all",
       reason:

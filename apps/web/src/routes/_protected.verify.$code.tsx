@@ -139,7 +139,10 @@ const ReferenceOpener = ({ match }: ReferenceOpenerProps) => {
   const navigate = useNavigate();
   const isSuperseded = match.versionNumber < match.currentVersionNumber;
   const refiledReference = refiledStamp(match);
+  // The verification page sits outside every matter view, so the document
+  // opens under its matter's default view.
   const documentRoute = getEntityDocumentRoute({
+    currentView: undefined,
     entityId: match.entityId,
     fileFieldId: match.fileFieldId,
     workspaceId: match.workspaceId,
@@ -156,7 +159,7 @@ const ReferenceOpener = ({ match }: ReferenceOpenerProps) => {
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId: match.workspaceId, viewId: "all" },
+        params: documentRoute.params,
         search: {
           entity: match.entityId,
           field: fileFieldId,

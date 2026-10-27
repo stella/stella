@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, getColumns, inArray, ne, or } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import type { TimeApprovalRefusal } from "@stll/api-contract/time-entries";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
@@ -19,16 +20,6 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
-
-const TIME_APPROVAL_REFUSALS = [
-  "not_found",
-  "not_approver",
-  "wrong_status",
-  "running_timer",
-  "unpriced",
-  "time_period_locked",
-  "invalid_entry",
-] as const;
 
 type ApprovalEntry = typeof timeEntries.$inferSelect & { running: boolean };
 type ApprovalActor = {
@@ -49,7 +40,7 @@ export const timeApprovalRefusal = ({
   policy,
   now,
   action,
-}: ApprovalRefusalOptions): (typeof TIME_APPROVAL_REFUSALS)[number] | null => {
+}: ApprovalRefusalOptions): TimeApprovalRefusal | null => {
   if (
     !canApproveAssignedTimeEntry({
       memberRole,
@@ -106,7 +97,7 @@ type TimeApprovalOutcome =
   | {
       id: SafeId<"timeEntry">;
       status: "refused";
-      reason: (typeof TIME_APPROVAL_REFUSALS)[number];
+      reason: TimeApprovalRefusal;
     };
 
 export const approveTimeEntryBatch = async ({

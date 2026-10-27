@@ -291,6 +291,13 @@
       "scripts/**",
       "bunfig.toml"
     ],
+    "Icon module imports": [
+      "apps/*/src/**",
+      "packages/*/src/**",
+      "scripts/codemod-icons.ts",
+      "scripts/codemod-icons.test.ts",
+      "bunfig.toml"
+    ],
     "Suppression waiver ledger": [
       "apps/*/src/**",
       "apps/*/scripts/**",
