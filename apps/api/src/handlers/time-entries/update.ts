@@ -95,7 +95,7 @@ const editRefusal = ({
   actor,
   moving,
 }: {
-  existing: { status: string; userId: SafeId<"user"> | null };
+  existing: { status: string; userId: string | null };
   actor: UpdateTimeEntryHandlerProps["actor"];
   moving: boolean;
 }): HandlerError | null => {
