@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, mock } from "bun:test";
+import { afterAll, afterEach, beforeEach, mock } from "bun:test";
 
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { DEFAULT_WAIT_TIMEOUT_MS } from "@stll/test-kit";
@@ -16,12 +16,19 @@ import {
   reportLeakedTimers,
 } from "@/testing/timer-guard";
 
-beforeAll(async () => {
-  // This is a hang guard, not a speed assertion. DOM test files install their
-  // document at module scope, before hooks run and Testing Library is loaded.
+// This is a hang guard, not a speed assertion. Testing Library binds `screen`
+// to the document present when it is first loaded, so it is loaded only once
+// a DOM test file has installed its document; a test without one never loads
+// it here.
+let waitTimeoutConfigured = false;
+const configureWaitTimeout = async () => {
+  if (waitTimeoutConfigured || typeof document === "undefined") {
+    return;
+  }
+  waitTimeoutConfigured = true;
   const { configure } = await import("@testing-library/dom");
   configure({ asyncUtilTimeout: DEFAULT_WAIT_TIMEOUT_MS });
-});
+};
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.
@@ -61,9 +68,10 @@ await mock.module("@tanstack/start-fn-stubs", () => ({
 // A timer a test starts never outlives it (see `installTimerGuard`).
 installTimerGuard();
 
-beforeEach(() => {
+beforeEach(async () => {
   markTestStarted();
   markTimerTestStarted();
+  await configureWaitTimeout();
 });
 
 afterEach(() => {
