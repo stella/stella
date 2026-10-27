@@ -465,8 +465,10 @@ export const countUndeclaredApiClientWrites = (
       : null;
   };
   walk(program, (node, ancestors) => {
-    const target =
-      node.type === "CallExpression" ? writeTarget(node.callee) : null;
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const target = writeTarget(node.callee);
     if (target === null) {
       return;
     }
