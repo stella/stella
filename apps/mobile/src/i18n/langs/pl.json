@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Czat",
+    "close": "Zamknij",
     "law": "Orzecznictwo",
     "matters": "Sprawy",
     "more": "Więcej",
@@ -8,7 +9,6 @@
     "tasks": "Zadania"
   },
   "chat": {
-    "description": "Miej bieżącą pracę pod ręką i kontynuuj na dowolnym urządzeniu.",
     "emptyTitle": "Brak rozmów",
     "emptyDescription": "Tutaj pojawią się nowe rozmowy i ostatnie wątki.",
     "noMatchesTitle": "Brak pasujących czatów",
@@ -41,12 +41,10 @@
     "composerMenu": "Otwórz menu załączników i narzędzi"
   },
   "tasks": {
-    "description": "Sprawdź, co wymaga uwagi, bez otwierania całego obszaru roboczego.",
     "emptyTitle": "Brak otwartych zadań",
     "emptyDescription": "Tutaj pojawią się przypisane i nadchodzące zadania."
   },
   "matters": {
-    "description": "Znajdź sprawę i szybko poznaj najważniejszy kontekst.",
     "emptyTitle": "Nie ma jeszcze spraw",
     "emptyDescription": "Tutaj pojawią się Twoje ostatnie sprawy.",
     "loadFailed": "Nie udało się wczytać Twoich spraw.",

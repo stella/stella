@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Pokalbis",
+    "close": "Uždaryti",
     "law": "Teismų praktika",
     "matters": "Bylos",
     "more": "Daugiau",
@@ -8,7 +9,6 @@
     "tasks": "Užduotys"
   },
   "chat": {
-    "description": "Turėkite vykdomą darbą po ranka ir tęskite bet kuriame įrenginyje.",
     "emptyTitle": "Pokalbių dar nėra",
     "emptyDescription": "Čia bus rodomi nauji pokalbiai ir naujausios gijos.",
     "noMatchesTitle": "Atitinkančių pokalbių nėra",
@@ -41,12 +41,10 @@
     "composerMenu": "Atverti priedų ir įrankių meniu"
   },
   "tasks": {
-    "description": "Matykite, kam reikia dėmesio, neatidarydami visos darbo erdvės.",
     "emptyTitle": "Atvirų užduočių nėra",
     "emptyDescription": "Čia bus rodomos priskirtos ir artėjančios užduotys."
   },
   "matters": {
-    "description": "Raskite bylą ir greitai susipažinkite su svarbiausiu kontekstu.",
     "emptyTitle": "Bylų dar nėra",
     "emptyDescription": "Čia bus rodomos jūsų naujausios bylos.",
     "loadFailed": "Nepavyko įkelti jūsų bylų.",

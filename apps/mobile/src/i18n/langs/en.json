@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Chat",
+    "close": "Close",
     "law": "Case Law",
     "matters": "Matters",
     "more": "More",
@@ -8,7 +9,6 @@
     "tasks": "Tasks"
   },
   "chat": {
-    "description": "Keep ongoing work close and continue from any device.",
     "emptyTitle": "No conversations yet",
     "emptyDescription": "New conversations and recent threads will appear here.",
     "noMatchesTitle": "No matching chats",
@@ -41,12 +41,10 @@
     "composerMenu": "Open attachments and tools menu"
   },
   "tasks": {
-    "description": "See what needs attention without opening the full workspace.",
     "emptyTitle": "No open tasks",
     "emptyDescription": "Assigned and upcoming work will appear here."
   },
   "matters": {
-    "description": "Find a matter and get the essential context quickly.",
     "emptyTitle": "No matters yet",
     "emptyDescription": "Your recent matters will appear here.",
     "loadFailed": "Your matters could not be loaded.",

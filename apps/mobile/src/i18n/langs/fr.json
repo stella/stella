@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Conversation",
+    "close": "Fermer",
     "law": "Jurisprudence",
     "matters": "Dossiers",
     "more": "Plus",
@@ -8,7 +9,6 @@
     "tasks": "Tâches"
   },
   "chat": {
-    "description": "Gardez votre travail en cours à portée de main et reprenez-le depuis n’importe quel appareil.",
     "emptyTitle": "Aucune conversation",
     "emptyDescription": "Les nouvelles conversations et les fils récents apparaîtront ici.",
     "noMatchesTitle": "Aucune conversation correspondante",
@@ -41,12 +41,10 @@
     "composerMenu": "Ouvrir le menu des pièces jointes et des outils"
   },
   "tasks": {
-    "description": "Voyez ce qui demande votre attention sans ouvrir tout l’espace de travail.",
     "emptyTitle": "Aucune tâche en cours",
     "emptyDescription": "Les tâches assignées et à venir apparaîtront ici."
   },
   "matters": {
-    "description": "Trouvez un dossier et saisissez rapidement l’essentiel de son contexte.",
     "emptyTitle": "Aucun dossier pour le moment",
     "emptyDescription": "Vos dossiers récents apparaîtront ici.",
     "loadFailed": "Impossible de charger vos dossiers.",

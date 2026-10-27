@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Chat",
+    "close": "Cerrar",
     "law": "Jurisprudencia",
     "matters": "Asuntos",
     "more": "Más",
@@ -8,7 +9,6 @@
     "tasks": "Tareas"
   },
   "chat": {
-    "description": "Ten a mano el trabajo en curso y continúa desde cualquier dispositivo.",
     "emptyTitle": "Aún no hay conversaciones",
     "emptyDescription": "Aquí aparecerán las conversaciones nuevas y los hilos recientes.",
     "noMatchesTitle": "No hay chats coincidentes",
@@ -41,12 +41,10 @@
     "composerMenu": "Abrir el menú de archivos adjuntos y herramientas"
   },
   "tasks": {
-    "description": "Consulta lo que requiere atención sin abrir todo el espacio de trabajo.",
     "emptyTitle": "No hay tareas abiertas",
     "emptyDescription": "Aquí aparecerán las tareas asignadas y próximas."
   },
   "matters": {
-    "description": "Encuentra un asunto y obtén rápidamente el contexto esencial.",
     "emptyTitle": "Aún no hay asuntos",
     "emptyDescription": "Aquí aparecerán tus asuntos recientes.",
     "loadFailed": "No se pudieron cargar tus asuntos.",

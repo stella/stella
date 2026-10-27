@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Csevegés",
+    "close": "Bezárás",
     "law": "Ítélkezési gyakorlat",
     "matters": "Ügyek",
     "more": "Továbbiak",
@@ -8,7 +9,6 @@
     "tasks": "Feladatok"
   },
   "chat": {
-    "description": "Tartsa kéznél a folyamatban lévő munkát, és folytassa bármely eszközről.",
     "emptyTitle": "Még nincsenek beszélgetések",
     "emptyDescription": "Az új beszélgetések és a legutóbbi szálak itt jelennek meg.",
     "noMatchesTitle": "Nincs egyező csevegés",
@@ -41,12 +41,10 @@
     "composerMenu": "Mellékletek és eszközök menüjének megnyitása"
   },
   "tasks": {
-    "description": "Lássa, mi igényel figyelmet, anélkül hogy a teljes munkaterületet megnyitná.",
     "emptyTitle": "Nincsenek nyitott feladatok",
     "emptyDescription": "A hozzárendelt és a közelgő feladatok itt jelennek meg."
   },
   "matters": {
-    "description": "Keressen meg egy ügyet, és gyorsan tekintse át a lényeges összefüggéseit.",
     "emptyTitle": "Még nincsenek ügyek",
     "emptyDescription": "A legutóbbi ügyei itt jelennek meg.",
     "loadFailed": "Az ügyeit nem sikerült betölteni.",

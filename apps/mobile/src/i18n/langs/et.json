@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Vestlus",
+    "close": "Sulge",
     "law": "Kohtupraktika",
     "matters": "Toimikud",
     "more": "Veel",
@@ -8,7 +9,6 @@
     "tasks": "Ülesanded"
   },
   "chat": {
-    "description": "Hoidke pooleliolev töö käepärast ja jätkake mis tahes seadmest.",
     "emptyTitle": "Vestlusi pole veel",
     "emptyDescription": "Uued vestlused ja hiljutised lõimed ilmuvad siia.",
     "noMatchesTitle": "Sobivaid vestlusi pole",
@@ -41,12 +41,10 @@
     "composerMenu": "Ava manuste ja tööriistade menüü"
   },
   "tasks": {
-    "description": "Vaadake, mis vajab tähelepanu, ilma kogu tööruumi avamata.",
     "emptyTitle": "Avatud ülesandeid pole",
     "emptyDescription": "Määratud ja eelseisvad ülesanded ilmuvad siia."
   },
   "matters": {
-    "description": "Leidke toimik ja saage kiiresti ülevaade olulisest kontekstist.",
     "emptyTitle": "Toimikuid veel pole",
     "emptyDescription": "Teie hiljutised toimikud ilmuvad siia.",
     "loadFailed": "Teie toimikuid ei õnnestunud laadida.",

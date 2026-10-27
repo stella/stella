@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Tērzēšana",
+    "close": "Aizvērt",
     "law": "Tiesu prakse",
     "matters": "Lietas",
     "more": "Vairāk",
@@ -8,7 +9,6 @@
     "tasks": "Uzdevumi"
   },
   "chat": {
-    "description": "Turiet iesākto darbu pa rokai un turpiniet no jebkuras ierīces.",
     "emptyTitle": "Sarunu vēl nav",
     "emptyDescription": "Šeit tiks parādītas jaunās sarunas un nesenie pavedieni.",
     "noMatchesTitle": "Nav atbilstošu tērzēšanu",
@@ -41,12 +41,10 @@
     "composerMenu": "Atvērt pielikumu un rīku izvēlni"
   },
   "tasks": {
-    "description": "Skatiet, kam nepieciešama uzmanība, neatverot visu darbvietu.",
     "emptyTitle": "Nav atvērtu uzdevumu",
     "emptyDescription": "Šeit tiks parādīti piešķirtie un gaidāmie uzdevumi."
   },
   "matters": {
-    "description": "Atrodiet lietu un ātri iegūstiet būtisko kontekstu.",
     "emptyTitle": "Lietu vēl nav",
     "emptyDescription": "Šeit tiks parādītas jūsu nesenās lietas.",
     "loadFailed": "Jūsu lietas neizdevās ielādēt.",

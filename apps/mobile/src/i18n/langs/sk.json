@@ -1,6 +1,7 @@
 {
   "tabs": {
     "chat": "Chat",
+    "close": "Zavrieť",
     "law": "Judikatúra",
     "matters": "Spisy",
     "more": "Ďalšie",
@@ -8,7 +9,6 @@
     "tasks": "Úlohy"
   },
   "chat": {
-    "description": "Majte rozpracovanú prácu poruke a pokračujte z akéhokoľvek zariadenia.",
     "emptyTitle": "Zatiaľ žiadne konverzácie",
     "emptyDescription": "Tu sa zobrazia nové konverzácie a nedávne vlákna.",
     "noMatchesTitle": "Žiadne zodpovedajúce konverzácie",
@@ -41,12 +41,10 @@
     "composerMenu": "Otvoriť ponuku príloh a nástrojov"
   },
   "tasks": {
-    "description": "Pozrite sa, čo si vyžaduje pozornosť, bez otvárania celého pracovného priestoru.",
     "emptyTitle": "Žiadne otvorené úlohy",
     "emptyDescription": "Tu sa zobrazí pridelená a nadchádzajúca práca."
   },
   "matters": {
-    "description": "Nájdite spis a rýchlo získajte potrebný kontext.",
     "emptyTitle": "Zatiaľ žiadne spisy",
     "emptyDescription": "Tu sa zobrazia vaše nedávne spisy.",
     "loadFailed": "Vaše spisy sa nepodarilo načítať.",

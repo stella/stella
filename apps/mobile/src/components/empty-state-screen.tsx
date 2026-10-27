@@ -6,18 +6,18 @@ import { Text } from "@/components/ui/text";
 
 type EmptyStateScreenProps = {
   children?: ReactNode;
-  description: string;
   emptyDescription: string;
   emptyTitle: string;
-  title: string;
 };
 
+/**
+ * A tab with nothing to list yet. Its name is the tab bar's to say, so the
+ * screen carries no heading of its own.
+ */
 export const EmptyStateScreen = ({
   children,
-  description,
   emptyDescription,
   emptyTitle,
-  title,
 }: EmptyStateScreenProps) => (
   <View className="bg-background flex-1">
     <ScrollView
@@ -25,28 +25,9 @@ export const EmptyStateScreen = ({
       contentContainerStyle={screenStyles.content}
       contentInsetAdjustmentBehavior="automatic"
     >
-      <ScreenHeading description={description} title={title} />
       {children}
       <EmptyCard description={emptyDescription} title={emptyTitle} />
     </ScrollView>
-  </View>
-);
-
-/** A screen's large title, as iOS sets one, with an optional line under it. */
-export const ScreenHeading = ({
-  description,
-  title,
-}: {
-  description?: string | undefined;
-  title: string;
-}) => (
-  <View className="gap-1">
-    <Text accessibilityRole="header" variant="largeTitle">
-      {title}
-    </Text>
-    {description === undefined ? null : (
-      <Text variant="caption">{description}</Text>
-    )}
   </View>
 );
 

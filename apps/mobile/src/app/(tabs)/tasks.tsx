@@ -3,14 +3,12 @@ import { useTranslations } from "use-intl";
 import { EmptyStateScreen } from "@/components/empty-state-screen";
 
 const TasksScreen = () => {
-  const t = useTranslations();
+  const t = useTranslations("tasks");
 
   return (
     <EmptyStateScreen
-      description={t("tasks.description")}
-      emptyDescription={t("tasks.emptyDescription")}
-      emptyTitle={t("tasks.emptyTitle")}
-      title={t("tabs.tasks")}
+      emptyDescription={t("emptyDescription")}
+      emptyTitle={t("emptyTitle")}
     />
   );
 };

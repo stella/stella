@@ -19,7 +19,6 @@ const TEXT_VARIANTS = {
   section: "text-xs uppercase text-muted-foreground",
   headline: "text-lg",
   title: "text-2xl",
-  largeTitle: "text-3xl tracking-tight",
   /** The sign-in's heading: the web auth panel's light 2rem title. */
   display: "text-[32px] leading-[37px] tracking-tight",
   /** A small bordered tag in capitals, as the web marks the beta. */
@@ -51,7 +50,6 @@ const FACES = {
   section: "DMSans-Medium",
   headline: "DMSans-SemiBold",
   title: "DMSans-SemiBold",
-  largeTitle: "DMSans-Bold",
   display: "DMSans-Light",
   badge: "DMSans-Medium",
   link: "DMSans-Regular",

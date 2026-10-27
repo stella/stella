@@ -45,6 +45,7 @@ const Screens = () => {
   const router = useRouter();
   const { searchBar, setQuery, setSearching, tab } = useHeaderSearch();
   const accountGlyph = useGlyphImage("circle-user-round");
+  const closeGlyph = useGlyphImage("x");
   const tabItems = useTabHeaderItems(tab);
 
   // A screen opened from a tab has GitHub's bar: the bare back chevron and a
@@ -108,7 +109,27 @@ const Screens = () => {
             unstable_headerRightItems: () => tabItems,
           }}
         />
-        <Stack.Screen name="settings" options={{ presentation: "modal" }} />
+        <Stack.Screen
+          name="settings"
+          options={{
+            ...pushedScreen,
+            presentation: "modal",
+            title: tabs("settings"),
+            unstable_headerRightItems: () =>
+              closeGlyph === null
+                ? []
+                : [
+                    {
+                      icon: { source: closeGlyph, type: "image" },
+                      label: tabs("close"),
+                      onPress: () => {
+                        router.back();
+                      },
+                      type: "button",
+                    },
+                  ],
+          }}
+        />
         <Stack.Screen name="thread/[threadId]" />
         <Stack.Screen
           name="law/index"
