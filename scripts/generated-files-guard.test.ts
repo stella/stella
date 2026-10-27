@@ -106,9 +106,13 @@ test("the census follows both a preload and the entry point of one Bun command",
     "scripts/offline-network-preload.ts",
     "scripts/check-mcp-generated-tracking.ts",
   ];
-  const failures = generatorInputCensus([
-    { ...skills, write: command, check: command, inputs: [], checkInputs: [] },
-  ]);
+  const preloaded = {
+    ...skills,
+    write: command,
+    inputs: [],
+    checkInputs: [],
+  } satisfies Generator;
+  const failures = generatorInputCensus([preloaded]);
   expect(failures).toContain(
     "skill-manifests: undeclared import scripts/check-mcp-generated-tracking.ts",
   );
