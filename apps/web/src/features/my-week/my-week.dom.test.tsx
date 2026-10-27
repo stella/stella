@@ -483,10 +483,11 @@ describe("my week", () => {
         type: "accept",
         durationMinutes: 15,
         narrative: "Indemnity cap",
+        // The billability the row showed is sent, so a later change to the
+        // matter's default cannot flip the logged entry.
+        billable: true,
       },
     });
-    // Billability left as suggested is the server's call, never sent.
-    expect(decision?.body).not.toHaveProperty("decision.billable");
   });
 
   test("editing a draft entry saves it in its matter and updates the totals", async () => {

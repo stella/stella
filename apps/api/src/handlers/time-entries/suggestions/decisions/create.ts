@@ -116,13 +116,10 @@ const acceptSuggestion = async function* ({
       return existing;
     }),
   );
-  // A repeated decision replays the stored one, except that a dismissed
-  // suggestion is never reported as accepted: that accept falls through to the
-  // pending check below and is refused.
-  if (
-    existingDecision &&
-    (body.decision.type === "dismiss" || existingDecision.status === "accepted")
-  ) {
+  // A repeated accept replays the stored acceptance. A dismissed suggestion is
+  // never reported as accepted: that accept falls through to the pending check
+  // below and is refused.
+  if (existingDecision?.status === "accepted") {
     return {
       fingerprint: body.fingerprint,
       status: existingDecision.status,
