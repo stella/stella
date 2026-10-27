@@ -878,9 +878,13 @@ test("landing diagnostics follow the browser configuration output directory", ()
     );
     writeFileSync(
       path.join(sdkDirectory, "config.js"),
-      'export const defineConfig = (value) => value; export const devices = { "Desktop Chrome": {} };',
+      'export const defineConfig = (...configs) => Object.assign({}, ...configs); export const devices = { "Desktop Chrome": {} };',
     );
-    for (const file of ["marketing-config.ts", "env.ts"]) {
+    for (const file of [
+      "marketing-config.ts",
+      "landing-marketing-config.ts",
+      "env.ts",
+    ]) {
       writeFileSync(
         path.join(configDirectory, file),
         readFileSync(
@@ -893,7 +897,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
       [
         process.execPath,
         "-e",
-        'import { marketingConfig } from "./packages/playwright-tools/src/marketing-config.ts"; console.log(JSON.stringify(marketingConfig({ testDir: ".", project: "landing" })));',
+        'import config from "./packages/playwright-tools/src/landing-marketing-config.ts"; console.log(JSON.stringify(config));',
       ],
       { cwd: directory },
     );
