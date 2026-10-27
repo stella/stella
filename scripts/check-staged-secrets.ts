@@ -45,9 +45,19 @@ const STAGED_SCAN = [
 /** Exit status the scanner uses for findings; anything else but 0 is an error. */
 const FINDINGS_EXIT = 42;
 
+// Hosted sessions run on Linux, and the setup script installs a Linux
+// binary. A marker alone is not enough: local agent tools can set the same
+// variables on a developer machine.
+export const hostedAgentEnvironment = (
+  env: Readonly<Record<string, string | undefined>>,
+  platform: string,
+): boolean =>
+  platform === "linux" &&
+  (env[CLAUDE_CODE_REMOTE_ENV] === HOSTED_ENV_VALUE ||
+    env[CODEX_CLOUD_TASK_ENV] === CODEX_CLOUD_TASK_VALUE);
+
 export const isHostedAgentEnvironment = (): boolean =>
-  process.env[CLAUDE_CODE_REMOTE_ENV] === HOSTED_ENV_VALUE ||
-  process.env[CODEX_CLOUD_TASK_ENV] === CODEX_CLOUD_TASK_VALUE;
+  hostedAgentEnvironment(process.env, process.platform);
 
 const LINE = v.pipe(v.number(), v.integer(), v.minValue(1));
 // Only the fields the merge check reads; the redacted match and secret are

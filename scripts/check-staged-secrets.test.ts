@@ -170,17 +170,23 @@ const initRepo = (): string => {
 };
 
 describe("hosted environment scanner setup", () => {
-  test("a hosted session installs a missing scanner once and scans", () => {
-    const repo = initRepo();
-    const result = scanWithoutGitleaks(
-      repo,
-      `cat > empty-bin/gitleaks <<'EOF'\n#!/bin/bash\necho scan >> "$TEST_SCAN_LOG"\nexit 0\nEOF\nchmod +x empty-bin/gitleaks`,
-      true,
-    );
-    expect(result.installerRuns).toBe(1);
-    expect(result.scanInvoked).toBe(true);
-    expect(result.exitCode).toBe(0);
-  });
+  // Hosted sessions are Linux only; on any other platform the marker alone never installs.
+  const onLinux = process.platform === "linux";
+
+  test.if(onLinux)(
+    "a hosted session installs a missing scanner once and scans",
+    () => {
+      const repo = initRepo();
+      const result = scanWithoutGitleaks(
+        repo,
+        `cat > empty-bin/gitleaks <<'EOF'\n#!/bin/bash\necho scan >> "$TEST_SCAN_LOG"\nexit 0\nEOF\nchmod +x empty-bin/gitleaks`,
+        true,
+      );
+      expect(result.installerRuns).toBe(1);
+      expect(result.scanInvoked).toBe(true);
+      expect(result.exitCode).toBe(0);
+    },
+  );
 
   test("a developer machine refuses without running the installer", () => {
     const repo = initRepo();
@@ -192,17 +198,35 @@ describe("hosted environment scanner setup", () => {
     expect(result.exitCode).toBe(1);
   });
 
-  test("a hosted session preserves the installer failure reason", () => {
-    const repo = initRepo();
-    const result = scanWithoutGitleaks(
-      repo,
-      'echo "gitleaks NOT installed: download failed" >&2',
-      true,
-    );
-    expect(result.installerRuns).toBe(1);
-    expect(result.output).toContain("gitleaks NOT installed: download failed");
-    expect(result.exitCode).toBe(1);
-  });
+  test.if(onLinux)(
+    "a hosted session preserves the installer failure reason",
+    () => {
+      const repo = initRepo();
+      const result = scanWithoutGitleaks(
+        repo,
+        'echo "gitleaks NOT installed: download failed" >&2',
+        true,
+      );
+      expect(result.installerRuns).toBe(1);
+      expect(result.output).toContain(
+        "gitleaks NOT installed: download failed",
+      );
+      expect(result.exitCode).toBe(1);
+    },
+  );
+
+  test.if(!onLinux)(
+    "a hosted marker off Linux refuses without running the installer",
+    () => {
+      const repo = initRepo();
+      const result = scanWithoutGitleaks(repo, "exit 0", true);
+      expect(result.installerRuns).toBe(0);
+      expect(result.output).toContain(
+        "error: gitleaks is required for pre-commit secret scanning.",
+      );
+      expect(result.exitCode).toBe(1);
+    },
+  );
 });
 
 /**
