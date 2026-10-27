@@ -84,7 +84,11 @@ const runActionScript = async (
 };
 
 const runGit = (cwd: string, ...args: string[]) =>
-  execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+  execFileSync("git", args, {
+    maxBuffer: 2 ** 30,
+    cwd,
+    encoding: "utf-8",
+  }).trim();
 
 const runStep = (
   script: string,
@@ -215,9 +219,32 @@ esac
   }
 }, 30_000);
 
+// Checkouts other than the network retry helper, which is pinned to the
+// workflow's own revision and holds only scripts/retry.sh.
+const trustedCheckouts = (
+  steps: readonly {
+    readonly uses?: string | undefined;
+    readonly with?: Record<string, unknown> | undefined;
+  }[],
+) =>
+  steps.filter((step) => {
+    if (!step.uses?.startsWith("actions/checkout@")) {
+      return false;
+    }
+    if (step.with?.["path"] !== ".network-retry") {
+      return true;
+    }
+    expect(step.with["ref"]).toBe(`\${{ github.workflow_sha }}`);
+    expect(step.with["sparse-checkout"]).toBe("scripts/retry.sh");
+    expect(step.with["persist-credentials"]).toBe(false);
+    return false;
+  });
+
 test("only trusted main tooling is checked out before target verification", () => {
   const names = validationSteps.map(({ name }) => name);
   expect(names).toEqual([
+    "Checkout network retry helper",
+    "Stage network retry helper",
     "Check release candidate",
     "Validate merge queue depth",
     "Checkout trusted release proof tooling",
@@ -232,9 +259,7 @@ test("only trusted main tooling is checked out before target verification", () =
     "Fetch main history",
     "Verify main ancestry",
   ]);
-  const checkouts = validationSteps.filter(({ uses }) =>
-    uses?.startsWith("actions/checkout@"),
-  );
+  const checkouts = trustedCheckouts(validationSteps);
   expect(checkouts).toHaveLength(1);
   expect(checkouts.at(0)?.with?.["ref"]).toBe("main");
   expect(checkouts.at(0)?.with?.["path"]).toBe(".release-proof");
@@ -394,9 +419,7 @@ test("scheduled main validation delegates ancestry to trusted main tooling befor
     expect(names.indexOf("Fetch main history"), name).toBeLessThan(
       names.indexOf("Verify main ancestry"),
     );
-    const checkouts = steps.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
-    );
+    const checkouts = trustedCheckouts(steps);
     expect(checkouts).toHaveLength(1);
     expect(checkouts.at(0)?.with?.["ref"], name).toBe("main");
     const fetch = steps.find(

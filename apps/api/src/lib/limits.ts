@@ -24,6 +24,7 @@ import {
   SEARCH_HISTORY_IMPORT_MAX,
   SEARCH_HISTORY_TITLE_MAX_LENGTH,
   SEARCH_QUERY_MAX_LENGTH,
+  TIME_ENTRIES_APPROVAL_BATCH_MAX,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
@@ -327,7 +328,7 @@ export const LIMITS = {
   internalTimeEntriesPerUser: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
-  timeEntriesApprovalBatchMax: 200,
+  timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
@@ -351,6 +352,8 @@ export const LIMITS = {
   timeSuggestionTailMinutes: 5,
   /** Per-source cap on activity rows read for one day of suggestions. */
   timeSuggestionSignalsPerSourceMax: 1000,
+  /** Longest span of work dates one personal time read covers: a week. */
+  timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,

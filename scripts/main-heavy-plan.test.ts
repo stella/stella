@@ -266,16 +266,14 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
     ),
   ).toBe(postgres.source);
   const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
-  const recording =
-    steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_BASELINE_MODE"
-    ] ?? panic("Missing recording mode");
+  // Budgets are absolute: nothing is recorded or compared with a base.
+  expect(
+    steps
+      .map(({ name }) => name)
+      .filter((name) => /baseline|allowance/iu.test(name ?? "")),
+  ).toEqual([]);
   const value = {
     cancelled: () => false,
-    steps: {
-      measurements: { outputs: { baseline_recorded: "true" } },
-      validation: { outcome: "success" },
-    },
     github: {
       event_name: "workflow_dispatch",
       ref: "refs/heads/main",
@@ -284,9 +282,6 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
         "stella/stella/.github/workflows/query-perf.yml@refs/heads/test",
     },
   };
-  expect(evaluateExpression(recording, contextFromNested(value))).toBe(
-    "record",
-  );
   expect(selected(queryWorkflow.jobs["query-perf"]?.if ?? "true", value)).toBe(
     true,
   );
@@ -296,29 +291,11 @@ test("dedicated query recording dispatch schedules one measurement job", () => {
       github: { ...value.github, ref: "refs/heads/feature/test" },
     }),
   ).toBe(false);
-  for (const step of steps.filter(
-    ({ name }) =>
-      name === "Validate recorded baseline" ||
-      name === "Upload recorded baseline",
-  )) {
-    expect(selected(step.if ?? "true", value)).toBe(true);
-  }
 });
 
-test("query budgets select affected changes and explicit recordings", () => {
+test("query budgets select affected pull request and merge group changes", () => {
   const condition =
     workflow.jobs["query-perf"]?.if ?? panic("Missing query performance job");
-  const steps =
-    queryWorkflow.jobs["query-perf"]?.steps ??
-    panic("Missing query performance steps");
-  const recording =
-    steps.find(({ name }) => name === "Run query performance suite")?.env?.[
-      "QUERY_PERF_BASELINE_MODE"
-    ] ?? panic("Missing query recording mode");
-  const validation =
-    steps.find(({ name }) => name === "Validate recorded baseline") ??
-    panic("Missing recording validation");
-  expect(validation.run).toBe("bun scripts/query-perf-baseline.ts --validate");
   for (const event of [
     "pull_request",
     "merge_group",
@@ -327,81 +304,26 @@ test("query budgets select affected changes and explicit recordings", () => {
     "workflow_dispatch",
   ]) {
     for (const required of ["true", "false"]) {
-      for (const mode of ["compare", "record"]) {
-        const value = {
-          ...context(event, false, {
-            ...heavyPlan,
-            query_perf_required: required,
-          }),
-          inputs: {
-            heavy_only: false,
-            pr_depth_only: false,
-            query_perf_mode: mode,
-          },
-        };
-        expect(selected(condition, value), `${event}/${required}/${mode}`).toBe(
-          (event === "pull_request" || event === "merge_group") &&
-            required === "true",
-        );
-        const called = {
-          ...value,
-          steps: {
-            ...value.steps,
-            measurements: { outputs: { baseline_recorded: "false" } },
-          },
-          github: {
-            ...value.github,
-            repository: "stella/stella",
-            workflow_ref:
-              "stella/stella/.github/workflows/ci.yml@refs/heads/test",
-          },
-        };
-        expect(evaluateExpression(recording, contextFromNested(called))).toBe(
-          "compare",
-        );
-        expect(selected(validation.if ?? "true", called)).toBe(false);
-        const reused = {
-          ...context(event, false, {
-            ...heavyPlan,
-            run_required: "false",
-            query_perf_required: required,
-          }),
-          inputs: value.inputs,
-        };
-        expect(selected(condition, reused)).toBe(false);
-      }
-    }
-  }
-});
-
-test("missing-baseline artifacts survive failed measurements only after validation", () => {
-  const steps = queryWorkflow.jobs["query-perf"]?.steps ?? [];
-  const validation =
-    steps.find(({ name }) => name === "Validate recorded baseline") ??
-    panic("Missing recording validator");
-  const upload =
-    steps.find(({ name }) => name === "Upload recorded baseline") ??
-    panic("Missing recording upload");
-  for (const recorded of ["true", "false"]) {
-    for (const validationOutcome of ["success", "failure", "skipped"]) {
       const value = {
-        cancelled: () => false,
-        success: () => false,
-        failure: () => true,
-        steps: {
-          measurements: {
-            outcome: "failure",
-            outputs: { baseline_recorded: recorded },
-          },
-          validation: { outcome: validationOutcome },
-        },
+        ...context(event, false, {
+          ...heavyPlan,
+          query_perf_required: required,
+        }),
+        inputs: { heavy_only: false, pr_depth_only: false },
       };
-      expect(selected(validation.if ?? "true", value)).toBe(
-        recorded === "true",
+      expect(selected(condition, value), `${event}/${required}`).toBe(
+        (event === "pull_request" || event === "merge_group") &&
+          required === "true",
       );
-      expect(selected(upload.if ?? "true", value)).toBe(
-        recorded === "true" && validationOutcome === "success",
-      );
+      const reused = {
+        ...context(event, false, {
+          ...heavyPlan,
+          run_required: "false",
+          query_perf_required: required,
+        }),
+        inputs: value.inputs,
+      };
+      expect(selected(condition, reused)).toBe(false);
     }
   }
 });
@@ -644,6 +566,11 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
+  // The pull request quick-check carrier is the only fast-tier route into
+  // the heavy gate; the standalone quick checks keep their queue policy, so
+  // the queue exclusion below still removes them from pull requests.
+  expect(eventPolicies.jobs["ci.yml/pr-heavy-gate"]).toBe("pr-fast");
+  expect(eventPolicies.jobs["ci.yml/ci-quick-checks"]).toBe("queue");
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {

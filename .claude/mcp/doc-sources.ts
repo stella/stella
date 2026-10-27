@@ -148,12 +148,16 @@ export const DOC_SOURCES = {
     dependencies: [
       "expo",
       "expo-constants",
+      "expo-crypto",
+      "expo-dev-client",
       "expo-doctor",
       "expo-linking",
       "expo-router",
+      "expo-secure-store",
       "expo-status-bar",
       "expo-system-ui",
       "expo-updates",
+      "expo-web-browser",
       "react-native-safe-area-context",
       "react-native-screens",
     ],
@@ -215,6 +219,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "oxlint",
       "@oxlint/plugins",
+      "oxc-parser",
       "oxc-transform-react",
       "oxlint-tsgolint",
     ],
@@ -865,11 +870,11 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "mailauth",
     explanation:
       "https://raw.githubusercontent.com/postalsys/mailauth/HEAD/llms.txt returns no llms.txt. The canonical repository has no llms.txt (raw endpoint returns 404). Use the authentication API documentation at https://github.com/postalsys/mailauth directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
@@ -881,59 +886,59 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "tldts",
     explanation:
       "https://raw.githubusercontent.com/remusao/tldts/HEAD/llms.txt returns no llms.txt. The canonical repository has no llms.txt (raw endpoint returns 404). Use the domain parsing API documentation at https://github.com/remusao/tldts directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-27T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "ajv",
     explanation:
       "https://ajv.js.org/llms.txt returns 404. Use the API reference at https://ajv.js.org/api.html and the strict-mode rules at https://ajv.js.org/strict-mode.html directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "ajv-formats",
     explanation:
       "https://ajv.js.org/llms.txt returns no llms.txt. The Ajv project publishes no llms.txt. Use the format list in the README at https://github.com/ajv-validator/ajv-formats directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-27T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "fast-xml-parser",
     explanation:
       "The project publishes no llms.txt (https://naturalintelligence.github.io/fast-xml-parser/llms.txt returns 404). Use the docs at https://github.com/NaturalIntelligence/fast-xml-parser/tree/master/docs and the typed API in its package (src/fxp.d.ts) directly.",
-    expiresAt: "2026-10-27T00:00:00.000Z",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-10-25T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "cldr-misc-full",
     explanation:
-      "https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt returns no llms.txt. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
-    expiresAt: "2026-10-26T00:00:00.000Z",
+      "https://cldr.unicode.org/llms.txt, https://www.unicode.org/llms.txt and the repository llms.txt at https://raw.githubusercontent.com/unicode-org/cldr-json/HEAD/llms.txt return 404. A CLDR JSON data package with no API; the Unicode CLDR project publishes no llms.txt. Use the data layout at https://github.com/unicode-org/cldr-json and the exemplar-character specification at https://unicode.org/reports/tr35/tr35-general.html#Character_Elements directly.",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-26T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "asn1js",
     explanation:
-      "https://asn1js.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the README at https://github.com/PeculiarVentures/asn1.js and the typed API in its package directly.",
-    expiresAt: "2026-10-26T00:00:00.000Z",
+      "https://asn1js.org/llms.txt, https://asn1js.org/llms-full.txt, https://asn1js.org/docs/llms.txt and the repository llms.txt return 404; the project publishes no llms.txt. Use the documentation at https://asn1js.org/docs/api/, the README at https://github.com/PeculiarVentures/ASN1.js and the typed API in its package directly.",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-26T00:00:00.000Z",
+    checkedAt: "2026-10-26T00:00:00.000Z",
     dependency: "pkijs",
     explanation:
-      "https://pkijs.org/llms.txt returns 404 and the project publishes no other llms.txt. Use the documentation at https://pkijs.org/docs/ and the typed API in its package directly.",
-    expiresAt: "2026-10-26T00:00:00.000Z",
+      "https://pkijs.org/llms.txt, https://pkijs.org/llms-full.txt, https://pkijs.org/docs/llms.txt and the repository llms.txt return 404; the project publishes no llms.txt. Use the documentation at https://pkijs.org/docs/installation and https://pkijs.org/docs/api/ and the typed API in its package directly.",
+    expiresAt: "2026-11-25T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

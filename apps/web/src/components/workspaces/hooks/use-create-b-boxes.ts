@@ -13,9 +13,10 @@ import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 type UseCreateBBoxesProps = {
@@ -38,7 +39,7 @@ export const useCreateBBoxes = ({
   const aiAvailabilityQuery = useQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
+  const aiAvailabilityView = queryView(aiAvailabilityQuery);
   useQueryViewError(aiAvailabilityView, "useCreateBBoxes:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&

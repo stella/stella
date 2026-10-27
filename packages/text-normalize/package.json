@@ -1,6 +1,6 @@
 {
   "name": "@stll/text-normalize",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Search match-key text normalization — Arabic orthographic variant folding (alef/hamza/teh-marbuta/yeh, tashkeel, tatweel, digits) with per-language fold tables",
   "keywords": [
     "arabic",
@@ -31,7 +31,10 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./search-match-key": "./src/search-match-key.ts"
+    "./postgres-search-fold": "./src/postgres-search-fold.ts",
+    "./search-match-key": "./src/search-match-key.ts",
+    "./search-query-matcher": "./src/search-query-matcher.ts",
+    "./unaccent-rules": "./src/unaccent-rules.ts"
   },
   "publishConfig": {
     "access": "public"

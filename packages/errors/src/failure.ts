@@ -1,3 +1,14 @@
+// parser-output-unchanged: [us-courtlistener] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [cz-ns] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [cz-uohs] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-courts] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-sn] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-kio] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-tk] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-ncourt] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [eu-ecj] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-kis] failure grading for public-read timeouts only; parser output unchanged
+// parser-output-unchanged: [pl-uokik] failure grading for public-read timeouts only; parser output unchanged
 // parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.

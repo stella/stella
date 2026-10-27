@@ -295,7 +295,11 @@ describe("upstream token revocation on disconnect", () => {
   });
 
   test("discovery failure is reported, not thrown", async () => {
-    const failure = new HandlerError({ status: 502, message: "unreachable" });
+    const failure = new HandlerError({
+      status: 502,
+      code: "internal_error",
+      message: "unreachable",
+    });
     const fixture = fakeDependencies({ metadata: failure });
 
     expect(await run(oauthConnection(), fixture.dependencies)).toEqual({

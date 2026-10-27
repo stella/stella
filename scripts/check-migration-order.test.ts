@@ -18,6 +18,7 @@ import { createSha256 } from "@stll/sha256/node";
 import {
   findMigrationIdentityViolation,
   findMigrationImmutabilityViolation,
+  findMigrationTimestampViolations,
   formatAliasSummary,
   readMigrationBaseSnapshot,
   readMigrationChanges,
@@ -59,15 +60,6 @@ const immutabilityViolation = ({
   });
 
 describe("migration identity", () => {
-  test("accepts a migration stamped before one already on the base branch", () => {
-    expect(
-      findMigrationIdentityViolation({
-        addedDirectories: [migrationDirectory("20260801110000_late_arrival")],
-        removedDirectories: [],
-      }),
-    ).toBeNull();
-  });
-
   test("accepts two new migrations with the same timestamp", () => {
     expect(
       findMigrationIdentityViolation({
@@ -201,6 +193,75 @@ describe("migration identity", () => {
     } finally {
       rmSync(cwd, { recursive: true, force: true });
     }
+  });
+});
+
+describe("new migration timestamp ordering", () => {
+  const newestBaseDirectory = migrationDirectory(FILE_NAME);
+  const baseDirectories = [
+    newestBaseDirectory,
+    migrationDirectory("20260701120000_older"),
+  ];
+
+  test.each([
+    ["equal to", "20260801120000_equal"],
+    ["older than", "20260801110000_older"],
+  ])("rejects a timestamp %s the newest base migration", (_relation, name) => {
+    const directory = migrationDirectory(name);
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [directory],
+        baseDirectories,
+      }),
+    ).toEqual([{ type: "stale-timestamp", directory, newestBaseDirectory }]);
+  });
+
+  test("accepts a timestamp newer than the newest base migration", () => {
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [migrationDirectory("20260801130000_newer")],
+        baseDirectories,
+      }),
+    ).toEqual([]);
+  });
+
+  test("names the stale migration among several additions", () => {
+    const directory = migrationDirectory("20260801110000_stale");
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [
+          migrationDirectory("20260801130000_newer"),
+          directory,
+          migrationDirectory("20260801140000_latest"),
+        ],
+        baseDirectories,
+      }),
+    ).toEqual([{ type: "stale-timestamp", directory, newestBaseDirectory }]);
+  });
+
+  test("accepts additions when the base has no migrations", () => {
+    expect(
+      findMigrationTimestampViolations({
+        addedDirectories: [migrationDirectory("20260801110000_first")],
+        baseDirectories: [],
+      }),
+    ).toEqual([]);
+  });
+
+  test("reports every stale addition", () => {
+    const addedDirectories = [
+      migrationDirectory("20260801110000_older"),
+      migrationDirectory("20260801120000_equal"),
+    ];
+    expect(
+      findMigrationTimestampViolations({ addedDirectories, baseDirectories }),
+    ).toEqual(
+      addedDirectories.map((directory) => ({
+        type: "stale-timestamp",
+        directory,
+        newestBaseDirectory,
+      })),
+    );
   });
 });
 
@@ -445,6 +506,10 @@ describe("migration immutability", () => {
         `${JSON.stringify([mainAlias])}\n`,
       );
       runGit("add", ".");
+      const newestMain = migrationDirectory("20260801150000_main_tip");
+      mkdirSync(path.join(cwd, newestMain), { recursive: true });
+      writeFileSync(path.join(cwd, newestMain, "migration.sql"), "SELECT 5;\n");
+      runGit("add", ".");
       runGit("commit", "-m", "Append unrelated alias");
       expect(runGit("show", `main:${inventoryPath}`)).toContain(
         mainAlias.fileName,
@@ -453,6 +518,7 @@ describe("migration immutability", () => {
 
       const unchanged = readMigrationBaseSnapshot({ baseRef: "main", cwd });
       expect(unchanged.mergeBase).toBe(branchPoint);
+      expect(unchanged.baseDirectories).toContain(newestMain);
       expect(unchanged.changes.modifiedFiles).toEqual([]);
       expect(unchanged.baseInventory).toEqual([]);
       expect(
@@ -571,6 +637,24 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
       path.join(cwd, "node_modules"),
       "dir",
     );
+
+    const staleDirectory = migrationDirectory("20260801110000_stale");
+    runGit("switch", "-c", "stale");
+    mkdirSync(path.join(cwd, staleDirectory), { recursive: true });
+    writeFileSync(
+      path.join(cwd, staleDirectory, "migration.sql"),
+      "SELECT 2;\n",
+    );
+    runGit("add", "apps/api/drizzle");
+    runGit("commit", "-m", "Add stale migration");
+    const stale = runGate();
+    expect(stale.exitCode).not.toBe(0);
+    expect(stale.stderr.toString()).toContain(staleDirectory);
+    expect(stale.stderr.toString()).toContain(migrationDirectory(FILE_NAME));
+    expect(stale.stderr.toString()).toContain(
+      "Re-stamp the unmerged migration",
+    );
+    runGit("switch", "main");
 
     const added = migrationDirectory("20260801130000_added");
     runGit("switch", "-c", "malformed");

@@ -47,8 +47,14 @@ import {
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+  SHORT_DATE,
+} from "@/components/billing/format-plain-date";
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -62,11 +68,6 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoicePrefill } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import {
-  MEDIUM_DATE,
-  plainDateEpoch,
-  SHORT_DATE,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 
 import {
@@ -165,6 +166,11 @@ const RowText = ({
 type InvoiceComposerProps = {
   workspaceId: string;
   prefill: InvoicePrefill;
+  /**
+   * Draft time entries and expenses on the matter the viewer may approve;
+   * zero for someone who cannot approve them.
+   */
+  pendingApprovalCount: number;
 };
 
 /**
@@ -176,6 +182,7 @@ type InvoiceComposerProps = {
 export const InvoiceComposer = ({
   workspaceId,
   prefill,
+  pendingApprovalCount,
 }: InvoiceComposerProps) => {
   const t = useTranslations();
   const currency = prefill.currency;
@@ -242,13 +249,26 @@ export const InvoiceComposer = ({
     return (
       <div className="text-muted-foreground flex flex-col items-start gap-2 p-6 text-sm">
         <p>{t("billing.invoiceComposer.nothingToBill")}</p>
-        <Link
-          className="text-foreground underline underline-offset-4"
-          params={{ workspaceId }}
-          to="/workspaces/$workspaceId/timesheets"
-        >
-          {t("billing.timesheets")}
-        </Link>
+        {pendingApprovalCount > 0 ? (
+          <Link
+            className="text-foreground underline underline-offset-4"
+            params={{ workspaceId }}
+            search={{ view: "approvals" }}
+            to="/workspaces/$workspaceId/timesheets"
+          >
+            {t("billing.invoiceComposer.pendingApprovals", {
+              count: pendingApprovalCount,
+            })}
+          </Link>
+        ) : (
+          <Link
+            className="text-foreground underline underline-offset-4"
+            params={{ workspaceId }}
+            to="/workspaces/$workspaceId/timesheets"
+          >
+            {t("billing.timesheets")}
+          </Link>
+        )}
       </div>
     );
   }
@@ -801,7 +821,7 @@ const DetailsStep = ({
 }: DetailsStepProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const messageLocale = useMessageLocale();
   const dueChoices = [
     ...new Set([...INVOICE_DUE_DAY_PRESETS, prefill.dueDays]),
   ].toSorted((left, right) => left - right);
@@ -938,7 +958,9 @@ const DetailsStep = ({
               <SelectPopup>
                 {INVOICE_LANGUAGES.map((value) => (
                   <SelectItem key={value} value={value}>
-                    {displayLanguageName(value, { displayLocale: locale })}
+                    {displayLanguageName(value, {
+                      displayLocale: messageLocale,
+                    })}
                   </SelectItem>
                 ))}
               </SelectPopup>
@@ -1122,7 +1144,7 @@ const BilledHoursInput = ({
 }: BilledHoursInputProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const shown = editableHoursText(minutes, useLocale());
+  const shown = editableHoursText(minutes, useFormattingLocale());
   const [text, setText] = useState(shown);
   return (
     <span className="flex flex-col items-end gap-0.5">

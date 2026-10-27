@@ -4,35 +4,59 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 
-const MY_TIME_ENTRIES_PAGE_SIZE = 50;
+/** The API's largest page: a week of one person's entries usually fits in one. */
+const MY_TIME_ENTRIES_PAGE_SIZE = 200;
+
+type MyTimeEntriesRange = { startDate: string; endDate: string };
 
 export const myTimeEntriesKeys = {
   all: (organizationId: string) => ["myTimeEntries", organizationId],
-  day: (organizationId: string, userId: string, date: string) => [
+  range: (
+    organizationId: string,
+    userId: string,
+    { startDate, endDate }: MyTimeEntriesRange,
+  ) => [
     ...myTimeEntriesKeys.all(organizationId),
     userId,
-    { date },
+    { startDate, endDate },
   ],
 };
 
+const fetchMyTimeEntriesPage = async ({
+  range,
+  cursor,
+  signal,
+}: {
+  range: MyTimeEntriesRange;
+  cursor: string | undefined;
+  signal: AbortSignal;
+}) =>
+  unwrapApiResponse(
+    await api["time-entries"].me.get({
+      query: {
+        date: range.startDate,
+        endDate: range.endDate,
+        limit: MY_TIME_ENTRIES_PAGE_SIZE,
+        ...(cursor === undefined ? {} : { cursor }),
+      },
+      fetch: { signal },
+    }),
+  );
+
+export type MyTimeEntriesPage = Awaited<
+  ReturnType<typeof fetchMyTimeEntriesPage>
+>;
+
+/** The signed-in person's entries across matters for one to seven work dates. */
 export const myTimeEntriesInfiniteOptions = (
   organizationId: string,
   userId: string,
-  date: string,
+  range: MyTimeEntriesRange,
 ) =>
   infiniteQueryOptions({
-    queryKey: myTimeEntriesKeys.day(organizationId, userId, date),
+    queryKey: myTimeEntriesKeys.range(organizationId, userId, range),
     initialPageParam: stringCursorSeed(),
     queryFn: async ({ pageParam, signal }) =>
-      unwrapApiResponse(
-        await api["time-entries"].me.get({
-          query: {
-            date,
-            limit: MY_TIME_ENTRIES_PAGE_SIZE,
-            ...(pageParam === undefined ? {} : { cursor: pageParam }),
-          },
-          fetch: { signal },
-        }),
-      ),
+      await fetchMyTimeEntriesPage({ range, cursor: pageParam, signal }),
     getNextPageParam: (page) => page.nextCursor ?? undefined,
   });

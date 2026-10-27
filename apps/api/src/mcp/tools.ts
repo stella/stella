@@ -9,6 +9,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import { captureError } from "@/api/lib/analytics/capture";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { publicReadTimeoutError } from "@/api/lib/legal-search/public-read-timeout";
 import { runWithPublicReadStatementTimeout } from "@/api/lib/legal-search/public-read-timeout-context";
@@ -734,17 +735,22 @@ export const handleMcpToolCall = async ({
   dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> => {
   const run = async () =>
-    await observeMcpToolCall({
-      context,
-      mode,
-      toolName,
+    await runWithStatementCeiling({
+      kind: "mcp",
+      key: toolName,
       run: async () =>
-        await dispatchMcpToolCall({
-          args,
+        observeMcpToolCall({
           context,
           mode,
           toolName,
-          ...(dependencies === undefined ? {} : { dependencies }),
+          run: async () =>
+            await dispatchMcpToolCall({
+              args,
+              context,
+              mode,
+              toolName,
+              ...(dependencies === undefined ? {} : { dependencies }),
+            }),
         }),
     });
   const budgetMs = corpusBudgetByTool.get(toolName);

@@ -4,7 +4,8 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { toEditorMarkdown } from "@/components/skill-body-markdown";
 import { detached } from "@/lib/detached";
 import { skillProposalOptions } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 import { ProposalBodyEditor } from "./proposal-body-editor";
 import { ProposalActionBar } from "./proposal-panel";
@@ -41,7 +42,7 @@ export const ProposalReview = ({
   const proposalQuery = useQuery(
     skillProposalOptions(organizationId, userId, skillId, proposalId),
   );
-  const proposalView = useQueryView(proposalQuery);
+  const proposalView = queryView(proposalQuery);
   useQueryViewError(proposalView, "ProposalReview:query");
   const proposal =
     proposalView.type === "items" ? proposalView.items : undefined;

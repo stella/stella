@@ -464,6 +464,9 @@ test("route tree freshness follows route inputs and full-depth runs", () => {
 test("dependency jobs follow dependency inputs and skip unrelated changes", () => {
   const dependencyInputs = [
     "scripts/dependency-audit.ts",
+    "scripts/dependency-audit-baseline.json",
+    "scripts/dependency-audit-assessment.ts",
+    "scripts/dependency-audit-acceptance.ts",
     "scripts/check-trusted-dependencies.ts",
     "scripts/retry.sh",
     "bun.lock",

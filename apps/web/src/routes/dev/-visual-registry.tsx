@@ -77,6 +77,13 @@ const visualLoaders = {
       return { default: ChatLongPastePlayground };
     },
   },
+  "chat-composer-reference": {
+    load: async () => {
+      const { ChatComposerReferencePlayground } =
+        await import("./-components/chat-composer-reference-playground");
+      return { default: ChatComposerReferencePlayground };
+    },
+  },
   "chat-continuation-error": {
     load: async () => {
       const { ChatContinuationErrorPlayground } =

@@ -8,6 +8,7 @@ import { repoRelativePath } from "@stll/portable-path";
 import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
+import { documentAnnotationKeys } from "@/components/pdf/annotations/document-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { claimCommentKeys } from "@/features/avt/claim-comments-query";
 import { readerAnswersOptions } from "@/features/case-law/components/case-viewer/reader-answers-query";
@@ -52,6 +53,7 @@ import {
   legalListSourcesOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-entries";
+import { myTimeSuggestionsOptions } from "@/lib/workspaces/queries/my-time-suggestions";
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
@@ -132,10 +134,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       lawHistoryKeys.list({
         scope: { organizationId: ORG, userId: USER },
         filter: "all",
+        country: "CZE",
       }),
     ],
     opaqueKeys: {
-      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter })":
+      "lawHistoryKeys.list({ scope: scope ?? keyScope, filter, country, })":
         KEY_TYPE_HAS_USER,
     },
   },
@@ -422,6 +425,20 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     ],
     opaqueKeys: { "claimCommentKeys.forClaim(key)": KEY_TYPE_HAS_USER },
   },
+  "entities/annotations/list.ts": {
+    kind: "keyed",
+    calls: ["api.entities().entity().field().annotations.get"],
+    files: ["components/pdf/annotations/document-annotations-query.ts"],
+    keys: () => [
+      documentAnnotationKeys.forFile({
+        entityId: "entity-probe",
+        fieldId: "field-probe",
+        viewer: { organizationId: ORG, userId: USER },
+        workspaceId: WORKSPACE,
+      }),
+    ],
+    opaqueKeys: { "documentAnnotationKeys.forFile(key)": KEY_TYPE_HAS_USER },
+  },
   "lists/items/list.ts": {
     kind: "keyed",
     calls: ["api.lists()().items.get"],
@@ -645,7 +662,22 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api["time-entries"].me.get'],
     files: ["lib/workspaces/queries/my-time-entries.ts"],
     keys: () => [
-      myTimeEntriesInfiniteOptions(ORG, USER, "2026-01-01").queryKey,
+      myTimeEntriesInfiniteOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+      }).queryKey,
+    ],
+  },
+  "time-entries/me/suggestions/list.ts": {
+    kind: "keyed",
+    calls: ['api["time-entries"].me.suggestions.get'],
+    files: ["lib/workspaces/queries/my-time-suggestions.ts"],
+    keys: () => [
+      myTimeSuggestionsOptions(ORG, USER, {
+        startDate: "2026-01-05",
+        endDate: "2026-01-11",
+        timezoneId: "UTC",
+      }).queryKey,
     ],
   },
   "time-entries/suggestions/list.ts": {
