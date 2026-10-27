@@ -691,6 +691,110 @@ const returnedExpression = (
 
 type ConfigTarget = { object: ObjectExpression; source: Source };
 
+const bindingIncludes = (pattern: Node, name: string): boolean => {
+  switch (pattern.type) {
+    case "Identifier":
+      return pattern.name === name;
+    case "RestElement":
+      return bindingIncludes(pattern.argument, name);
+    case "AssignmentPattern":
+      return bindingIncludes(pattern.left, name);
+    case "ArrayPattern":
+      return pattern.elements.some(
+        (element) => element !== null && bindingIncludes(element, name),
+      );
+    case "ObjectPattern":
+      return pattern.properties.some((property) =>
+        bindingIncludes(
+          property.type === "RestElement" ? property.argument : property.value,
+          name,
+        ),
+      );
+    default:
+      return false;
+  }
+};
+
+const helperShadows = (
+  helper: SyntaxFunction | ArrowFunctionExpression,
+  name: string,
+): boolean => {
+  let shadowed = helper.params.some((parameter) =>
+    bindingIncludes(parameter, name),
+  );
+  walk(helper, (node) => {
+    switch (node.type) {
+      case "FunctionDeclaration":
+        if (node !== helper) {
+          shadowed ||= node.id?.name === name;
+          return "skip-children";
+        }
+        break;
+      case "FunctionExpression":
+      case "ArrowFunctionExpression":
+        if (node !== helper) {
+          return "skip-children";
+        }
+        break;
+      case "VariableDeclarator":
+        shadowed ||= bindingIncludes(node.id, name);
+        break;
+      case "ClassDeclaration":
+        shadowed ||= node.id?.name === name;
+        break;
+      case "CatchClause":
+        shadowed ||= node.param !== null && bindingIncludes(node.param, name);
+        break;
+      default:
+        break;
+    }
+    return undefined;
+  });
+  return shadowed;
+};
+
+const playwrightFactoryLocal = (
+  callee: Node,
+  source: Source,
+): string | undefined => {
+  const value = unwrap(callee, [
+    "ParenthesizedExpression",
+    "TSAsExpression",
+    "TSSatisfiesExpression",
+  ]);
+  if (value.type === "Identifier") {
+    const binding = importedBinding(source, value.name);
+    return binding?.module === "@playwright/test" &&
+      binding.name === "defineConfig"
+      ? value.name
+      : undefined;
+  }
+  if (value.type !== "MemberExpression" || value.object.type !== "Identifier") {
+    return undefined;
+  }
+  const member =
+    !value.computed && value.property.type === "Identifier"
+      ? value.property.name
+      : literalText(value.property);
+  if (member !== "defineConfig") {
+    return undefined;
+  }
+  const local = value.object.name;
+  return source.program.body.some(
+    (statement) =>
+      statement.type === "ImportDeclaration" &&
+      statement.importKind !== "type" &&
+      statement.source.value === "@playwright/test" &&
+      statement.specifiers.some(
+        (specifier) =>
+          specifier.type === "ImportNamespaceSpecifier" &&
+          specifier.local.name === local,
+      ),
+  )
+    ? local
+    : undefined;
+};
+
 const helperConfig = (
   helper: SyntaxFunction | ArrowFunctionExpression,
   source: Source,
@@ -704,8 +808,16 @@ const helperConfig = (
           "TSAsExpression",
           "TSSatisfiesExpression",
         ]);
-  const object =
-    expression === undefined ? undefined : configObjectOf(expression);
+  if (expression === undefined) {
+    return undefined;
+  }
+  if (expression.type === "CallExpression") {
+    const local = playwrightFactoryLocal(expression.callee, source);
+    if (local === undefined || helperShadows(helper, local)) {
+      return undefined;
+    }
+  }
+  const object = configObjectOf(expression);
   return object === undefined ? undefined : { object, source };
 };
 
