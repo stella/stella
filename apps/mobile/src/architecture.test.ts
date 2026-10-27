@@ -122,12 +122,6 @@ describe("the app's builds", () => {
   });
 });
 
-/** Every module the app bundles: tests run under Bun, never on the phone. */
-const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
-  .map(String)
-  .filter((name) => /\.tsx?$/u.test(name) && !name.includes(".test."))
-  .toSorted();
-
 describe("the app's JavaScript engine", () => {
   test("finds the app's modules to scan", () => {
     expect(appModules).toContain(path.join("state", "chat-threads.ts"));
