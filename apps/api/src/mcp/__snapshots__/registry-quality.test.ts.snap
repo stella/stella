@@ -341,7 +341,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, newest first, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -6985,7 +6985,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, newest first, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -14405,7 +14405,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, newest first, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
@@ -16425,7 +16425,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
             "newest"
           ],
           "type": "string",
-          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, newest first, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
+          "description": "Result order; defaults to 'relevance'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option."
         },
         "strict": {
           "type": "boolean",
