@@ -427,6 +427,29 @@ describe("pl-courts replays a stored row", () => {
   });
 });
 
+test("bench whitespace cannot change an id-less listing's quarantine identity", () => {
+  const listing = {
+    id: null,
+    courtCases: [{ caseNumber: `II Co ${"1".repeat(300)}/15` }],
+    judges: [{ name: "Anna Nowak" }, { name: "Jan Kowalski" }],
+  };
+  const withLeadingWhitespace = decisionFrom({
+    listingRow: {
+      ...listing,
+      judges: [{ name: "Anna Nowak" }, { name: " Jan Kowalski" }],
+    },
+    detail: null,
+  });
+  const normalized = decisionFrom({ listingRow: listing, detail: null });
+
+  expect(withLeadingWhitespace.sourceDocumentId).toMatch(
+    /^pl-courts-quarantine:[0-9a-f]{64}$/u,
+  );
+  expect(withLeadingWhitespace.sourceDocumentId).toBe(
+    normalized.sourceDocumentId,
+  );
+});
+
 describe("declared metadata URLs remain scalar across projection and reload", () => {
   for (const entry of [
     { input: null, expected: null },

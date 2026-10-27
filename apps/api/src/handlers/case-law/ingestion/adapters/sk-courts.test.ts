@@ -718,6 +718,42 @@ test("a successful detail without a URL states publisher absence", () => {
   ).toBe(true);
 });
 
+test("a recovered court cannot adopt another court's undiscriminated quarantine", () => {
+  const sharedFields = {
+    spisovaZnacka: "1C/1/2024",
+    datumVydania: "14.05.2024",
+    formaRozhodnutia: "Rozsudok",
+  };
+  const degraded =
+    assembleSkCourtsDecision({
+      item: {
+        ...sharedFields,
+        guid: null,
+        identifikacneCislo: null,
+        sud: null,
+      },
+      detail: null,
+    }) ?? panic("the degraded listing must be quarantined");
+  const recovered =
+    assembleSkCourtsDecision({
+      item: {
+        ...sharedFields,
+        guid: "healthy-court-decision",
+        identifikacneCislo: "healthy-case-file",
+        sud: {
+          nazov: "Okresny sud Healthy",
+          registreGuid: "healthy-court",
+        },
+      },
+      detail: null,
+    }) ?? panic("the healthy listing must build");
+
+  expect(degraded.sourceDocumentId).not.toBe(recovered.sourceDocumentId);
+  expect(recovered.sourceDocumentIdRepairAliases).not.toContain(
+    degraded.sourceDocumentId,
+  );
+});
+
 describe("declared metadata URLs remain scalar across projection and reload", () => {
   for (const entry of [
     { input: null, expected: null },

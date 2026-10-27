@@ -1223,6 +1223,13 @@ const skCourtsRepairAliases = (
   );
   const aliases = new Set<string>();
   for (const form of forms) {
+    if (
+      form.identifikacneCislo === undefined &&
+      form.sud.nazov === undefined &&
+      form.sud.registreGuid === undefined
+    ) {
+      continue;
+    }
     const quarantine = skCourtsQuarantineIdentity(form);
     if (quarantine !== null) {
       aliases.add(quarantine.sourceDocumentId);

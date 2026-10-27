@@ -1337,7 +1337,7 @@ const plCourtsQuarantineId = (
   const bench = item.judges
     ?.flatMap((judge) => {
       const name = presentValue(judge.name);
-      return name === undefined ? [] : [name];
+      return name === undefined ? [] : [name.trim()];
     })
     .toSorted(compareCodeUnit);
   const divisionId = item.division?.id;
