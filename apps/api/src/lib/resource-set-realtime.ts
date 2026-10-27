@@ -112,6 +112,7 @@ export const announceResourceSetUpdates = ({
     return;
   }
   const resourceTypes = resourceTypesOf(realtime.resourceTypes);
+  const options = mutationId === undefined ? {} : { mutationId };
   if (realtime.scope === "workspace") {
     // Root handlers cannot declare a workspace scope (see the factory types);
     // a missing matter here means there is no audience to announce to.
@@ -119,11 +120,11 @@ export const announceResourceSetUpdates = ({
       return;
     }
     for (const resourceType of resourceTypes) {
-      broadcasts.workspace(workspaceId, resourceType, { mutationId });
+      broadcasts.workspace(workspaceId, resourceType, options);
     }
     return;
   }
   for (const resourceType of resourceTypes) {
-    broadcasts.organization(organizationId, resourceType, { mutationId });
+    broadcasts.organization(organizationId, resourceType, options);
   }
 };

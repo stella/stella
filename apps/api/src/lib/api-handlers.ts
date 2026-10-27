@@ -1645,12 +1645,13 @@ const createSafeScopedHandler = <
           config.realtime.scope !== "none" &&
           isSuccessfulHandlerResult(result)
         ) {
+          const mutationId = parseResourceMutationId(
+            ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
+          );
           const announcement = Result.try(() =>
             announce({
               realtime: config.realtime,
-              mutationId: parseResourceMutationId(
-                ctx.request.headers.get(RESOURCE_MUTATION_ID_HEADER),
-              ),
+              ...(mutationId === undefined ? {} : { mutationId }),
               result,
               organizationId: ctx.session.activeOrganizationId,
               workspaceId: hasWorkspaceId(ctx) ? ctx.workspaceId : undefined,
