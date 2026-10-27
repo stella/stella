@@ -97,7 +97,7 @@
     "apps/web/src/components/workspaces/properties/property-input/input.tsx": 1,
     "apps/web/src/components/workspaces/properties/property-input/mention-list.tsx": 4,
     "apps/web/src/components/workspaces/properties/select-fallback.tsx": 5,
-    "apps/web/src/components/workspaces/properties/sort-property.tsx": 2,
+    "apps/web/src/components/workspaces/properties/sort-property.tsx": 1,
     "apps/web/src/components/workspaces/table/metadata-popover.tsx": 1,
     "apps/web/src/components/workspaces/table/table-find-bar.tsx": 2,
     "apps/web/src/components/workspaces/tasks/task-metadata.tsx": 19,
