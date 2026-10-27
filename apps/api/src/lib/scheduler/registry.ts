@@ -29,6 +29,10 @@ import {
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
 import {
+  REFRESH_CASE_LAW_COVERAGE_TASK,
+  refreshCaseLawCoverageTask,
+} from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
 } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
@@ -232,6 +236,7 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverageTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,

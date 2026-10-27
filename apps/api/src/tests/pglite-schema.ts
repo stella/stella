@@ -929,6 +929,30 @@ export const installPgliteServiceClientCredentialCascade = async (
   }
 };
 
+/** Install the summary reader and its privileges from the committed migration. */
+export const installPgliteCaseLawCoverageSummary = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261027160000_case_law_coverage_summary",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("REVOKE ALL ON FUNCTION") ||
+      source.startsWith("GRANT EXECUTE ON FUNCTION") ||
+      source.startsWith('ALTER TABLE "case_law_coverage_summaries" FORCE')
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install the country invariant directly from its committed migration. */
 export const installPgliteCaseLawCountryShape = async (
   db: PgliteSchemaDb,

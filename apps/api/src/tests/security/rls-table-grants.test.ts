@@ -284,6 +284,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "case_law_sitemap_shards",
   "case_law_browse_facet_counts",
   "case_law_source_arrivals",
+  "case_law_coverage_summaries",
   "legislation_facet_counts",
   "legislation_facet_refreshes",
   "statute_sitemap_shards",
