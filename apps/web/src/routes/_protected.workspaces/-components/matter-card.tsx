@@ -121,6 +121,7 @@ export const MatterCard = ({
         name: workspace.name,
         color: workspace.color,
         client: workspace.client,
+        isArchived: workspace.status === "archived",
       }}
     >
       {({ rename, menuOpen }) => (

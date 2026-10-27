@@ -106,6 +106,7 @@ import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { getDisplayName } from "@/lib/get-display-name";
 import { skillsOptions } from "@/lib/knowledge/queries";
+import type { fetchWorkspaceNavigationPage } from "@/lib/memory-api";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
@@ -375,6 +376,7 @@ function ChatIndex() {
     if (workspaces) {
       for (const workspace of workspaces) {
         workspaceById.set(workspace.id, {
+          status: workspace.status,
           color: workspace.color,
           id: workspace.id,
           lastActivityAt: workspace.lastActivityAt,
@@ -405,6 +407,7 @@ function ChatIndex() {
       )
       .slice(0, 5)
       .map((workspace) => ({
+        status: workspace.status,
         color: workspace.color,
         id: workspace.id,
         lastActivityAt: workspace.lastActivityAt,
@@ -729,6 +732,7 @@ function ChatIndex() {
                   name: matter.name,
                   color: matter.color,
                   client: matter.client,
+                  isArchived: matter.status === "archived",
                 }}
               >
                 <Link
@@ -1023,6 +1027,9 @@ const SkillAuthorAvatar = ({ author }: { author: SkillAuthor }) => {
 };
 
 type PinnedMatter = {
+  status: Awaited<
+    ReturnType<typeof fetchWorkspaceNavigationPage>
+  >["workspaces"][number]["status"];
   color: string | null;
   id: string;
   lastActivityAt: Date;

@@ -5954,6 +5954,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Ši byla archyvuota ir yra tik skaitoma.",
     "calculations": {
       "choose": "Apskaičiuoti",
       "kinds": {
@@ -6782,6 +6783,7 @@
       "aiModel": "DI modelis",
       "manualInput": "Rankiniu būdu"
     },
+    "unarchiveBeforeDelete": "Prieš ištrindami šią bylą, panaikinkite jos archyvavimą.",
     "unarchiveMatter": "Išarchyvuoti",
     "uploadDocuments": "Įkelti dokumentus",
     "views": {

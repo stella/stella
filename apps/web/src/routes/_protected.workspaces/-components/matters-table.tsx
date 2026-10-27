@@ -303,6 +303,7 @@ const MattersTableRow = ({
     name: workspace.name,
     color: workspace.color,
     client: workspace.client,
+    isArchived: workspace.status === "archived",
   });
   const isEditing = ctx.rename.status === "editing";
 

@@ -5954,6 +5954,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Este asunto está archivado y es de solo lectura.",
     "calculations": {
       "choose": "Calcular",
       "kinds": {
@@ -6782,6 +6783,7 @@
       "aiModel": "Modelo de IA",
       "manualInput": "Manualmente"
     },
+    "unarchiveBeforeDelete": "Desarchiva este asunto antes de eliminarlo.",
     "unarchiveMatter": "Desarchivar",
     "uploadDocuments": "Subir documentos",
     "views": {

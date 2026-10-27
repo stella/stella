@@ -5954,6 +5954,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "This matter is archived and read-only.",
     "calculations": {
       "choose": "Calculate",
       "kinds": {
@@ -6782,6 +6783,7 @@
       "aiModel": "AI Model",
       "manualInput": "Manually"
     },
+    "unarchiveBeforeDelete": "Unarchive this matter before deleting it.",
     "unarchiveMatter": "Unarchive",
     "uploadDocuments": "Upload documents",
     "views": {

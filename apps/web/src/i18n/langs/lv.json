@@ -5954,6 +5954,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Šī lieta ir arhivēta un ir tikai lasāma.",
     "calculations": {
       "choose": "Aprēķināt",
       "kinds": {
@@ -6782,6 +6783,7 @@
       "aiModel": "AI modelis",
       "manualInput": "Manuāli"
     },
+    "unarchiveBeforeDelete": "Pirms šīs lietas dzēšanas atarhivējiet to.",
     "unarchiveMatter": "Atarhivēt",
     "uploadDocuments": "Augšupielādēt dokumentus",
     "views": {

@@ -9,6 +9,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import * as v from "valibot";
 
 import { member, user } from "@/api/db/auth-schema";
 import { entities, workspaceMembers } from "@/api/db/schema";
@@ -29,17 +30,21 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "tool", name: "list_matters" },
   access: "read",
+  query: v.object({
+    status: v.optional(v.picklist(["active", "archived"])),
+  }),
 } satisfies HandlerConfig;
 
 const readWorkspaces = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
+  async function* ({ safeDb, session, query }) {
     const organizationId = session.activeOrganizationId;
     const { result, entityAggregates, memberRows } = yield* Result.await(
       safeDb(async (tx) => {
         const workspaceRows = await readWorkspaceListRows({
           tx,
           organizationId,
+          status: query.status ?? "active",
           limit: LIMITS.workspacesCount,
         });
 
@@ -166,6 +171,7 @@ const readWorkspaces = createSafeRootHandler(
       return {
         id: workspace.id,
         name: workspace.name,
+        status: workspace.status,
         reference: workspace.reference,
         clientId: workspace.clientId,
         color: workspace.color,

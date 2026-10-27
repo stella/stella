@@ -190,6 +190,31 @@ type ArchiveWorkspaceVars = {
   workspaceId: string;
 };
 
+export const useArchiveWorkspace = () => {
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ workspaceId }: ArchiveWorkspaceVars) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .archive.post({});
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: workspacesKeys.all,
+      });
+    },
+    onError: (error) => {
+      analytics.captureError(error);
+    },
+  });
+};
+
 export const useUnarchiveWorkspace = () => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();

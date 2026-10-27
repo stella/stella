@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
+import {
+  type QueryClient,
+  useQueryClient,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 import {
   createFileRoute,
   Navigate,
@@ -10,16 +14,20 @@ import {
 } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
 
 import {
   REALTIME_EVENT_TYPE,
   type WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
+import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 
 import { WorkflowServiceTierPromptProvider } from "@/components/workspaces/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useWorkspaceChatMentionRegistration } from "@/features/chat/hooks/use-workspace-chat-mention-registration";
 import { useMountEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
@@ -28,6 +36,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/workspace-sse";
+import { matterRouteView } from "@/lib/workspaces/archived-matters.logic";
+import { useUnarchiveWorkspace } from "@/lib/workspaces/mutations";
 import { overviewOptions, workspaceOptions } from "@/lib/workspaces/queries";
 import { workspacesKeys } from "@/lib/workspaces/queries.logic";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
@@ -79,7 +89,8 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
     // Only the workspace name blocks the breadcrumb. Start every independent
     // metadata request before awaiting it so they share the first network round.
     return await loadWorkspaceRouteQueries({
-      loadWorkspace: async () => await loadWorkspaceOrRedirect(qc, wsId),
+      loadWorkspace: async () =>
+        await loadWorkspaceOrRedirect(qc, workspaceOptions(wsId)),
       startPrefetches: [
         () =>
           detached(
@@ -121,13 +132,10 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
 
 const loadWorkspaceOrRedirect = async (
   queryClient: QueryClient,
-  workspaceId: string,
+  options: ReturnType<typeof workspaceOptions>,
 ) => {
   try {
-    return await ensureRouteQueryData(
-      queryClient,
-      workspaceOptions(workspaceId),
-    );
+    return await ensureRouteQueryData(queryClient, options);
   } catch (error) {
     if (APIError.is(error) && error.status === 404) {
       // The redirect swallows this branch, so capture here; the rethrow
@@ -149,6 +157,58 @@ const loadWorkspaceOrRedirect = async (
 };
 
 function RouteComponent() {
+  const workspaceId = Route.useParams({
+    select: (params) => params.workspaceId,
+  });
+  const { data: workspace } = useSuspenseQuery(workspaceOptions(workspaceId));
+  if (matterRouteView(workspace.status) === "archived-read-only") {
+    return <ArchivedMatterView workspace={workspace} />;
+  }
+  return <ActiveMatterRoute />;
+}
+
+const ArchivedMatterView = ({
+  workspace,
+}: {
+  workspace: Awaited<ReturnType<typeof loadWorkspaceOrRedirect>>;
+}) => {
+  const t = useTranslations();
+  const canUpdate = usePermissions({ workspace: ["update"] });
+  const unarchive = useUnarchiveWorkspace();
+  return (
+    <div className="flex flex-col gap-4 p-6">
+      <h1 className="text-xl font-semibold">
+        <BidiText>{workspace.name}</BidiText>
+      </h1>
+      <p className="text-muted-foreground text-sm">
+        {t("workspaces.archivedReadOnly")}
+      </p>
+      <BidiText>{workspace.reference}</BidiText>
+      <BidiText>
+        {workspace.client?.displayName ?? t("workspaces.parties.personalLabel")}
+      </BidiText>
+      {canUpdate && (
+        <Button
+          className="self-start"
+          disabled={unarchive.isPending}
+          onClick={() =>
+            unarchive.mutate(
+              { workspaceId: workspace.id },
+              {
+                onError: (error) =>
+                  notifyUserError(error, t("errors.actionFailed")),
+              },
+            )
+          }
+        >
+          {t("workspaces.unarchiveMatter")}
+        </Button>
+      )}
+    </div>
+  );
+};
+
+function ActiveMatterRoute() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });

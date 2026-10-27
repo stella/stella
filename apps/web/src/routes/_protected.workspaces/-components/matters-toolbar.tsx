@@ -41,12 +41,16 @@ import { useConfigStore } from "@/stores/config-store";
 const routeApi = getRouteApi("/_protected");
 
 type MattersToolbarProps = {
+  status: "active" | "archived";
+  onStatusChange: (status: "active" | "archived") => void;
   search: string;
   onSearchChange: (value: string) => void;
   searchRef: React.RefObject<HTMLInputElement | null>;
 };
 
 export const MattersToolbar = ({
+  status,
+  onStatusChange,
   search,
   onSearchChange,
   searchRef,
@@ -72,6 +76,23 @@ export const MattersToolbar = ({
         value={search}
       />
 
+      <Menu>
+        <MenuTrigger render={<Button size="xs" variant="ghost" />}>
+          {status === "archived"
+            ? t("memory.views.archived")
+            : t("common.active")}
+        </MenuTrigger>
+        <MenuPopup>
+          <MenuItem onClick={() => onStatusChange("active")}>
+            {t("common.active")}
+            {status === "active" && <CheckIcon />}
+          </MenuItem>
+          <MenuItem onClick={() => onStatusChange("archived")}>
+            {t("memory.views.archived")}
+            {status === "archived" && <CheckIcon />}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
       <ToolbarSeparator />
 
       <Menu>

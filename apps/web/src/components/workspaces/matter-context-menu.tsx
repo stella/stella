@@ -16,6 +16,7 @@ import { copyToClipboard } from "@stll/clipboard";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import {
+  ArchiveIcon,
   ArchiveRestoreIcon,
   ClipboardCopyIcon,
   ExternalLinkIcon,
@@ -43,11 +44,14 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { usePinnedStore } from "@/lib/pinned-store";
 import {
+  useArchiveWorkspace,
   useDeleteWorkspace,
   useUnarchiveWorkspace,
   useUpdateWorkspace,
 } from "@/lib/workspaces/mutations";
 import { workspacesKeys } from "@/lib/workspaces/queries";
+
+import { matterMenuLifecycle } from "./matter-context-menu.logic";
 
 // ── Shared menu items ────────────────────────────────────────
 
@@ -59,6 +63,7 @@ type MatterMenuBaseCallbacks = {
   onCopyLink: () => void;
   onTogglePin: () => void;
   onDelete: () => void;
+  onArchive: () => void;
   isPinned: boolean;
   // Personal matters are creator-only until promoted; the backend
   // rejects member adds with 400, so hide the affordance here.
@@ -82,6 +87,7 @@ export type MatterMenuCallbacks =
  */
 export const MatterMenuItems = (props: MatterMenuCallbacks) => {
   const t = useTranslations();
+  const lifecycle = matterMenuLifecycle(props.isArchived);
 
   return (
     <>
@@ -98,11 +104,14 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
         <ExternalLinkIcon />
         {t("common.openInNewTab")}
       </MenuItem>
-      <MenuItem onClick={props.onRename}>
+      <MenuItem
+        disabled={lifecycle.editing === "read-only"}
+        onClick={props.onRename}
+      >
         <PenLineIcon />
         {t("common.rename")}
       </MenuItem>
-      {!props.isPersonal && (
+      {!props.isPersonal && lifecycle.editing === "editable" && (
         <MenuItem onClick={props.onAddMember}>
           <UserPlusIcon />
           {t("workspaces.members.addMember")}
@@ -123,7 +132,22 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
           {t("workspaces.unarchiveMatter")}
         </MenuItem>
       )}
-      <MenuItem onClick={props.onDelete} variant="destructive">
+      {lifecycle.action === "archive" && (
+        <MenuItem onClick={props.onArchive}>
+          <ArchiveIcon />
+          {t("common.archive")}
+        </MenuItem>
+      )}
+      {lifecycle.deletion === "unarchive-first" && (
+        <div className="text-muted-foreground max-w-64 px-2 py-1 text-xs">
+          {t("workspaces.unarchiveBeforeDelete")}
+        </div>
+      )}
+      <MenuItem
+        disabled={lifecycle.deletion === "unarchive-first"}
+        onClick={props.onDelete}
+        variant="destructive"
+      >
         <Trash2Icon />
         {t("common.delete")}
       </MenuItem>
@@ -177,7 +201,7 @@ export type MatterTarget = {
   name: string;
   color: string | null;
   client: { displayName: string } | null;
-  isArchived?: boolean;
+  isArchived: boolean;
 };
 
 type UseMatterActionsOptions = {
@@ -209,6 +233,7 @@ export const useMatterActions = (
   const togglePin = usePinnedStore((s) => s.togglePin);
   const isPinned = usePinnedStore((s) => s.pinnedIds.has(target.id));
   const unarchiveWorkspace = useUnarchiveWorkspace();
+  const archiveWorkspace = useArchiveWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
 
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -283,6 +308,13 @@ export const useMatterActions = (
     onCopyLink: () => {
       detached(handleCopyLink(), "matter-context-menu.copy-link");
     },
+    onArchive: () =>
+      archiveWorkspace.mutate(
+        { workspaceId: target.id },
+        {
+          onError: (error) => notifyUserError(error, t("errors.actionFailed")),
+        },
+      ),
     onDelete: () => setDeleteOpen(true),
     onOpenInNewTab: () => {
       openIsolatedWindow(`/workspaces/${target.id}`);

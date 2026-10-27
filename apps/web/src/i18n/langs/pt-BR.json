@@ -5954,6 +5954,7 @@
     }
   },
   "workspaces": {
+    "archivedReadOnly": "Este caso está arquivado e é somente leitura.",
     "calculations": {
       "choose": "Calcular",
       "kinds": {
@@ -6782,6 +6783,7 @@
       "aiModel": "Modelo de IA",
       "manualInput": "Manualmente"
     },
+    "unarchiveBeforeDelete": "Desarquive este caso antes de excluí-lo.",
     "unarchiveMatter": "Desarquivar",
     "uploadDocuments": "Carregar documentos",
     "views": {
