@@ -1,8 +1,9 @@
 import { panic } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
@@ -327,4 +328,52 @@ export const advanceCorpusProjectionErasuresTx = async <
     ),
     appliedEntityIds: applied.map(({ entityId }) => entityId),
   };
+};
+
+/** Removal is complete only after every registered generation has settled its erasure. */
+export const corpusProjectionRemovalIsPendingTx = async (
+  tx: Transaction,
+  decisionId: SafeId<"caseLawDecision">,
+): Promise<boolean> => {
+  const generations = tx
+    .select({ generation: corpusIndexGenerations.generation })
+    .from(corpusIndexGenerations)
+    .where(eq(corpusIndexGenerations.family, "case_law"));
+  const state = (
+    await tx
+      .select({ id: corpusIndexProjectionStates.entityId })
+      .from(corpusIndexProjectionStates)
+      .where(
+        and(
+          eq(corpusIndexProjectionStates.family, "case_law"),
+          inArray(corpusIndexProjectionStates.generation, generations),
+          eq(corpusIndexProjectionStates.entityId, decisionId),
+          or(
+            ne(corpusIndexProjectionStates.desiredAction, "erase"),
+            corpusIndexProjectionErasureIsPending(corpusIndexProjectionStates),
+          ),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (state !== undefined) {
+    return true;
+  }
+  const intent = (
+    await tx
+      .select({ id: corpusIndexProjectionIntents.id })
+      .from(corpusIndexProjectionIntents)
+      .where(
+        and(
+          eq(corpusIndexProjectionIntents.family, "case_law"),
+          inArray(corpusIndexProjectionIntents.generation, generations),
+          eq(corpusIndexProjectionIntents.entityId, decisionId),
+          corpusIndexProjectionIntentIsOutstanding(
+            corpusIndexProjectionIntents.status,
+          ),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return intent !== undefined;
 };

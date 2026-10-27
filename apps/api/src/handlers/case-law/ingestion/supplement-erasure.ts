@@ -80,6 +80,8 @@ type RedactWithSupplementHoldersOptions = {
   leaseWaitMs?: number;
   /** Test seam; production rebuilds through the source's own adapter. */
   reparseStoredRaw?: NonNullable<SourceAdapter["reparseStoredRaw"]>;
+  /** Storage boundary injection for synthetic erasure runs. */
+  redactDecision?: typeof redactCaseLawDecision;
 };
 
 /** Live judgments whose composed document still holds the given row. */
@@ -293,10 +295,11 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
   readStoredRaw = readStoredRawFromS3,
   leaseWaitMs = HOLDER_LEASE_WAIT_MS,
   reparseStoredRaw,
+  redactDecision = redactCaseLawDecision,
 }: RedactWithSupplementHoldersOptions): Promise<
   Result<RedactWithSupplementHoldersOutcome, DatabaseError>
 > => {
-  const redaction = await redactCaseLawDecision({ decisionId, scopedDb });
+  const redaction = await redactDecision({ decisionId, scopedDb });
   if (Result.isError(redaction)) {
     return redaction;
   }

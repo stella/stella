@@ -94,6 +94,7 @@ import {
   storedObservationHasDetail,
   storedObservationIsListingOnly,
 } from "@/api/lib/legal-search/partial-observation-sql";
+import type { RemovalCheckpoint } from "@/api/lib/legal-search/removal-reconciliation-state";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 import { pendingDeferredDocumentSql } from "@/api/lib/legal-search/sk-document-pending-sql";
 
@@ -374,6 +375,8 @@ export const caseLawSources = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     enabled: p.boolean().default(true).notNull(),
     syncCursor: p.text("sync_cursor"),
+    /** Weekly publisher-removal checkpoint; null begins the next bounded cycle. */
+    removalCheckpoint: jsonb("removal_checkpoint").$type<RemovalCheckpoint>(),
     lastSyncAt: timestamptz("last_sync_at"),
     observationOrder: p
       .bigint("observation_order", { mode: "bigint" })
@@ -2493,6 +2496,19 @@ export const caseLawStatuteCitationCountState = p.pgTable(
  * Row security is forced (migration `20260927230000_case_law_sitemap_shards`)
  * so the owner-run refresh needs a policy; table privileges decide access.
  */
+const removalSnapshotPolicies = () => [
+  p.pgPolicy("case_law_removal_ingestion_select", {
+    for: "select",
+    to: "stella_ingestion",
+    using: sql`true`,
+  }),
+  p.pgPolicy("case_law_removal_ingestion_delete", {
+    for: "delete",
+    to: "stella_ingestion",
+    using: sql`true`,
+  }),
+];
+
 export const caseLawSitemapShards = p.pgTable(
   "case_law_sitemap_shards",
   {
@@ -2509,6 +2525,7 @@ export const caseLawSitemapShards = p.pgTable(
       columns: [t.country, t.year, t.month, t.bucket],
     }),
     p.check("case_law_sitemap_shards_total_positive", sql`${t.total} > 0`),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_sitemap_shard_owner_access", {
       for: "all",
       to: "public",
@@ -2536,6 +2553,7 @@ export const caseLawSitemapShardCounts = p.pgTable(
       "case_law_sitemap_shard_counts_pages_positive",
       sql`${t.pages} > 0`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_sitemap_shard_count_owner_access", {
       for: "all",
       to: "public",
@@ -2576,6 +2594,7 @@ export const caseLawBrowseFacetCounts = p.pgTable(
       "case_law_browse_facet_counts_kind_valid",
       sql`${t.kind} IN (${sql.join(CASE_LAW_BROWSE_FACET_KIND_SQL_VALUES, sql`, `)})`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_browse_facet_count_owner_access", {
       for: "all",
       to: "public",
@@ -2614,6 +2633,7 @@ export const caseLawSourceArrivals = p.pgTable(
       "case_law_source_arrivals_added_nonnegative",
       sql`${t.addedLastWeek} >= 0`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_source_arrival_owner_access", {
       for: "all",
       to: "public",
@@ -2648,6 +2668,7 @@ export const caseLawCoverageSummaries = p.pgTable(
       "case_law_coverage_summaries_policy_array",
       sql`jsonb_typeof(${t.sourcePolicy}::text::jsonb) = 'array'`,
     ),
+    ...removalSnapshotPolicies(),
     p.pgPolicy("case_law_coverage_summary_owner_access", {
       for: "all",
       to: "public",

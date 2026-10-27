@@ -29,6 +29,7 @@ import type { ReconciliationItemStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import type { ReconciliationBuildOutcome } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -926,3 +927,31 @@ export const resetTerminalReconciliationItems = async (
       .returning({ id: caseLawReconciliationItems.id });
     return reset.length;
   });
+
+type EraseDecisionReconciliationPayloadsOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  sourceDocumentId: string;
+};
+
+/** Retire the stored listing payload when its exact publisher identity is erased. */
+export const eraseDecisionReconciliationPayloadsTx = async (
+  tx: Transaction,
+  { sourceId, sourceDocumentId }: EraseDecisionReconciliationPayloadsOptions,
+): Promise<void> => {
+  // audit: skip — stored listing cleanup belongs to the canonical decision erasure.
+  const identityKey = listingIdentityKey({
+    type: "document",
+    sourceDocumentId,
+  });
+  if (identityKey === null) {
+    return panic("Erasure requires a keyable publisher identity");
+  }
+  await tx
+    .delete(caseLawReconciliationItems)
+    .where(
+      and(
+        eq(caseLawReconciliationItems.sourceId, sourceId),
+        eq(caseLawReconciliationItems.identityKey, identityKey),
+      ),
+    );
+};

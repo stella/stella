@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -681,4 +681,18 @@ export const refreshCaseLawSitemapShards = async (
     });
   }
   return outcome;
+};
+
+/** Retire both staged counts and published shards for the changed country. */
+export const invalidateCaseLawSitemapShardsTx = async (
+  tx: RefreshTransaction,
+  country: string,
+): Promise<void> => {
+  // audit: skip — sitemap invalidation belongs to the canonical removal audit.
+  await tx
+    .delete(caseLawSitemapShardCounts)
+    .where(eq(caseLawSitemapShardCounts.country, country));
+  await tx
+    .delete(caseLawSitemapShards)
+    .where(eq(caseLawSitemapShards.country, country));
 };
