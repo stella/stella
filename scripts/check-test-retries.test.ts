@@ -556,6 +556,46 @@ test("helper binding scopes preserve unshadowed module values", () => {
 });
 
 test.each([
+  ["assignment", "", "settings.retries = 2;"],
+  ["update", "", "settings.retries++;"],
+  ["object mutation", "", "Object.assign(settings, { retries: 2 });"],
+  ["opaque call", "", "enableRetries(settings);"],
+  ["initializer call", "", "const ignored = enableRetries(settings);"],
+  ["parameter call", "ignored = enableRetries(settings)", ""],
+  ["inline function mutation", "", "(() => { settings.retries = 2; })();"],
+])(
+  "helper effects cannot change an inspected policy: %s",
+  (_name, parameters, body) => {
+    expect(
+      config(`
+      import { defineConfig } from "@playwright/test";
+      const settings = { retries: 0 };
+      const enableRetries = value => { value.retries = 2; };
+      function sharedConfig(${parameters}) {
+        ${body}
+        return defineConfig(settings);
+      }
+      export default sharedConfig();
+    `),
+    ).toEqual([UNREADABLE_HELPER]);
+  },
+);
+
+test("unexecuted nested functions do not change the helper's policy", () => {
+  expect(
+    config(`
+      import { defineConfig } from "@playwright/test";
+      const settings = { retries: 0 };
+      function sharedConfig() {
+        function unused() { settings.retries = 2; }
+        return defineConfig(settings);
+      }
+      export default sharedConfig();
+    `),
+  ).toEqual([]);
+});
+
+test.each([
   [
     "transforming wrapper",
     `${RETRY_WRAPPER}
