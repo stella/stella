@@ -80,6 +80,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { entityReferenceHref } from "@/components/references/reference.logic";
@@ -158,7 +159,7 @@ import {
 } from "@/lib/knowledge/playbook-draft-view";
 import { knowledgeKeys, playbookDetailOptions } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -351,7 +352,7 @@ export const useChatSession = ({
       userId,
     }),
   );
-  const chatToolGrantsView = useQueryView(chatToolGrantsQuery);
+  const chatToolGrantsView = queryView(chatToolGrantsQuery);
   useQueryViewError(chatToolGrantsView, "useChatSession:query");
   const storedChatToolGrants =
     chatToolGrantsView.type === "items"
@@ -1142,7 +1143,7 @@ export const useChatSession = ({
     [addToolResult, getSendMode, messages, setMessages],
   );
 
-  const createDocumentMattersView = useQueryView(
+  const createDocumentMattersView = queryView(
     useQuery({
       ...workspacesNavigationOptions({ organizationId, userId }),
       select: (navigation) =>

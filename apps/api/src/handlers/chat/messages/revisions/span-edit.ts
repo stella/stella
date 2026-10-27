@@ -223,6 +223,7 @@ export const createProposeMessageSpanEdit = ({
         return Result.err(
           new HandlerError({
             status: 502,
+            code: "internal_error",
             message:
               "Answer rewrite returned unbalanced Markdown; try another instruction",
           }),

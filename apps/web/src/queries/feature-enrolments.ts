@@ -11,7 +11,7 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 const TIME_BILLING_FEATURE_ID = "time-billing";
@@ -50,7 +50,7 @@ export const useTimeBillingEnrolment = () => {
     userId: user.id,
     organizationId: user.activeOrganizationId,
   });
-  const view = useQueryView(useQuery(options));
+  const view = queryView(useQuery(options));
   const mutation = useMutation({
     mutationFn: async (enrolled: boolean) => {
       const endpoint = api["organization-settings"]["feature-enrolments"]({

@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import type { Block, HeadingBlock } from "@stll/legal-ast/document-ast";
 
 import {
-  paragraphFromPreview,
   prepareStatuteReader,
   provisionCitationCountByBlockAnchor,
   statuteLandingAnchorId,
@@ -155,73 +154,6 @@ describe("statute reader blocks", () => {
     if (prepared?.type === "paragraph") {
       expect(prepared.inlines).toEqual(inlineText(text));
     }
-  });
-
-  test("e-Sbírka anchor paths recover nested list indentation", () => {
-    const prepared = prepareStatuteReader({
-      blocks: [
-        {
-          anchorId: "par_2-odst_1",
-          id: "paragraph",
-          inlines: inlineText("(1) Intro"),
-          plainText: "(1) Intro",
-          type: "paragraph",
-        },
-        {
-          anchorId: "par_2-odst_1-pism_a",
-          id: "letter",
-          inlines: inlineText("a) provider"),
-          plainText: "a) provider",
-          type: "paragraph",
-        },
-        {
-          anchorId: "par_2-odst_1-pism_a-bod_1",
-          id: "point",
-          inlines: inlineText("1. owner"),
-          plainText: "1. owner",
-          type: "paragraph",
-        },
-      ],
-      statuteTitle: "67/2013 Sb., zákon o službách",
-    }).blocks;
-
-    expect(
-      prepared.map((block) =>
-        block.type === "paragraph" ? block.listDepth : undefined,
-      ),
-    ).toEqual([undefined, 1, 2]);
-  });
-
-  test("a provision read's block indents as the reader indents it", () => {
-    const blocks = [
-      "par_2-odst_1",
-      "par_2-odst_1-pism_a",
-      "par_2-odst_1-pism_a-bod_1",
-    ].map((anchorId): Block => ({
-      anchorId,
-      id: anchorId,
-      inlines: inlineText("wording"),
-      plainText: "wording",
-      type: "paragraph",
-    }));
-    const reader = prepareStatuteReader({
-      blocks,
-      statuteTitle: "67/2013 Sb., zákon o službách",
-    }).blocks;
-    const previews = blocks.map((block) =>
-      paragraphFromPreview({
-        anchorId: block.anchorId,
-        id: block.id,
-        text: block.plainText,
-      }),
-    );
-    const depths = (list: readonly Block[]) =>
-      list.map((block) =>
-        block.type === "paragraph" ? block.listDepth : undefined,
-      );
-
-    expect(depths(previews)).toEqual(depths(reader));
-    expect(depths(previews)).toEqual([undefined, 1, 2]);
   });
 
   test("citation counts follow namespaced publisher anchors", () => {

@@ -165,6 +165,7 @@ const rewriteSkillResource = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not rewrite file. Please try again.",
           cause,
         });
@@ -179,6 +180,7 @@ const rewriteSkillResource = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Rewrite was empty. Please try again.",
         }),
       );

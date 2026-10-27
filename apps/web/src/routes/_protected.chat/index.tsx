@@ -110,6 +110,7 @@ import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import type { SuggestedSkill } from "@/lib/prompts/use-suggested-skills";
+import { queryView } from "@/lib/query-view.logic";
 import {
   prefetchNonCriticalInfiniteQuery,
   prefetchRouteQuery,
@@ -117,7 +118,7 @@ import {
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
@@ -250,14 +251,14 @@ function ChatIndex() {
       userId,
     }),
   );
-  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesDataView = queryView(workspacesDataQuery);
   const workspacesData =
     workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
   const workspaces = workspacesData?.workspaces;
   const groupedThreadPagesQuery = useInfiniteQuery(
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
-  const groupedThreadPagesView = useQueryView(groupedThreadPagesQuery);
+  const groupedThreadPagesView = queryView(groupedThreadPagesQuery);
   const groupedThreadPages =
     groupedThreadPagesView.type === "items"
       ? groupedThreadPagesView.items
@@ -421,7 +422,7 @@ function ChatIndex() {
       workspaceIds: visibleMatters.map((matter) => matter.id),
     }),
   );
-  const memberPreviewsView = useQueryView(memberPreviewsQuery);
+  const memberPreviewsView = queryView(memberPreviewsQuery);
   useQueryViewError(memberPreviewsView, "ChatIndex:query");
   const memberPreviews =
     memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;

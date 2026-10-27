@@ -58,6 +58,7 @@ const invoiceRenderRejection = ({
   return classifyFailure(
     new HandlerError({
       status: infrastructureFailure ? 503 : 409,
+      code: "internal_error",
       message: infrastructureFailure
         ? "The invoice PDF renderer is temporarily unavailable."
         : diagnostics.join("\n") || `Invoice rendering was rejected: ${reason}`,
@@ -245,6 +246,7 @@ export const createInvoicePdfExport = (
           catch: (cause) =>
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "The invoice PDF could not be stored.",
               cause,
             }),

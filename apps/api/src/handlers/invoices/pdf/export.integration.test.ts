@@ -361,7 +361,11 @@ describe("invoice document export", () => {
   test("refuses delivery without a download audit when storage fails", async () => {
     const events: AuditEvent[] = [];
     const handler = createInvoicePdfExport(async () => {
-      throw new HandlerError({ status: 502, message: "Storage unavailable" });
+      throw new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "Storage unavailable",
+      });
     });
     const response = await handler.handler(context("own", events));
     expect(response).toMatchObject({ code: 502 });
