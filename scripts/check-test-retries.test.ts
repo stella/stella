@@ -70,6 +70,40 @@ test("all root factory arguments contribute to the effective retry policy", () =
   ]);
 });
 
+test("imported configuration arguments are verified before composition", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "test-retries-import-"));
+  const file = "apps/example/playwright.config.ts";
+  const source = `import { defineConfig } from "@playwright/test";
+    import base from "./base-config";
+    export default defineConfig(base, { retries: 0 });`;
+  try {
+    mkdirSync(path.join(root, "apps/example"), { recursive: true });
+    writeFileSync(path.join(root, file), source);
+    const base = (configuration: string) =>
+      writeFileSync(
+        path.join(root, "apps/example/base-config.ts"),
+        configuration,
+      );
+    const scan = () => findTestRetryViolations(new Map([[file, source]]), root);
+    base(
+      'export default { retries: 0, projects: [{ name: "browser", retries: 0 }] };',
+    );
+    expect(scan()).toEqual([]);
+    base("export default { retries: 2 };");
+    expect(scan()).toEqual([UNREADABLE_HELPER]);
+    base(
+      'export default { retries: 0, projects: [{ name: "browser", retries: 2 }] };',
+    );
+    expect(scan()).toEqual([UNREADABLE_HELPER]);
+    base(
+      'import original from "./playwright.config"; export default original;',
+    );
+    expect(scan()).toEqual([UNREADABLE_HELPER]);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test("follows literal config spreads and rejects a later override", () => {
   expect(
     config(`
