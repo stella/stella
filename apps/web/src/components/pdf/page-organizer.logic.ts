@@ -81,8 +81,7 @@ export type PageOrganizerState = {
   history: PageOrganizerHistory;
   ui: PageOrganizerUI;
   /**
-   * Committed cleaned scans by id. Entries are never removed, so undo and
-   * redo can restore a page that refers to one.
+   * Committed cleaned scans retained by the present plan or undo/redo history.
    */
   cleanScans: ReadonlyMap<string, PageCleanScan>;
   cleanScan: CleanScanSession | null;
@@ -533,7 +532,7 @@ const isCleanScanAction = (
 ): action is CleanScanAction =>
   Object.hasOwn(CLEAN_SCAN_ACTION_TYPES, action.type);
 
-export const reducePageOrganizer = (
+const reducePageOrganizerAction = (
   state: PageOrganizerState,
   action: PageOrganizerAction,
 ): PageOrganizerState => {
@@ -730,4 +729,47 @@ export const reducePageOrganizer = (
       return panic(`Unhandled action: ${String(action)}`);
     }
   }
+};
+
+const retainRestorableCleanScans = (
+  state: PageOrganizerState,
+): PageOrganizerState => {
+  const retainedIds = new Set<string>();
+  // `initial` is a dirty-check baseline, never an undo/redo destination.
+  for (const plan of [
+    state.history.present,
+    ...state.history.past,
+    ...state.history.future,
+  ]) {
+    for (const page of plan.pages) {
+      if (page.cleanScanId !== undefined) {
+        retainedIds.add(page.cleanScanId);
+      }
+    }
+  }
+  if (
+    retainedIds.size === state.cleanScans.size &&
+    [...retainedIds].every((id) => state.cleanScans.has(id))
+  ) {
+    return state;
+  }
+  const cleanScans = new Map<string, PageCleanScan>();
+  for (const id of retainedIds) {
+    cleanScans.set(
+      id,
+      state.cleanScans.get(id) ?? panic(`Unknown clean scan: ${id}`),
+    );
+  }
+  return { ...state, cleanScans };
+};
+
+export const reducePageOrganizer = (
+  state: PageOrganizerState,
+  action: PageOrganizerAction,
+): PageOrganizerState => {
+  const next = reducePageOrganizerAction(state, action);
+  if (next.history === state.history && next.cleanScans === state.cleanScans) {
+    return next;
+  }
+  return retainRestorableCleanScans(next);
 };
