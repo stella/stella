@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 
+import { DEFAULT_DECISION_LIST_SORT } from "@stll/api-contract/search";
+
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { listDecisionsPageQuery } from "@/api/handlers/case-law/decisions/list";
 import { readCourtNames } from "@/api/handlers/case-law/decisions/shelf-courts";
@@ -166,6 +168,7 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
           const rows = await listDecisionsPageQuery({
             tx,
             query: { country: "CZE", court: "Court 00" },
+            sort: DEFAULT_DECISION_LIST_SORT,
             limit: PAGE_SIZE,
             cursor: undefined,
           });
