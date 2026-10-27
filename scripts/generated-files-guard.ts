@@ -232,8 +232,10 @@ const commandModules = (command: readonly string[], base = "."): string[] => {
   const joined = command.join(" ");
   const cwdMatch = /\bbun\s+--cwd(?:=|\s+)([^\s]+)\s+(?:run\s+)?([^\s;&|]+)/gu;
   const rootRunMatch = /\bbun\s+run\s+([^\s;&|]+)/gu;
+  // Options may take a module value (`--preload <file>`); the entry point is
+  // the first module after them, and each preload runs as well.
   const fileMatch =
-    /\bbun\s+(?!run\b|--cwd\b)(?:--[^\s]+\s+)*([^\s;&|]+\.[cm]?[jt]sx?)/gu;
+    /\bbun\s+(?!run\b|--cwd\b)((?:--[^\s]+\s+(?:[^\s;&|-][^\s;&|]*\.[cm]?[jt]sx?\s+)?)*)([^\s;&|]+\.[cm]?[jt]sx?)/gu;
   const modules: string[] = [];
   const cwdRanges: (readonly [number, number])[] = [];
   const cwdAt = (index: number) => {
@@ -289,11 +291,15 @@ const commandModules = (command: readonly string[], base = "."): string[] => {
     ) {
       continue;
     }
-    const file = match[1];
-    if (file !== undefined && !file.startsWith("-")) {
-      modules.push(
-        path.posix.normalize(path.posix.join(cwdAt(match.index), file)),
-      );
+    const preloads = [
+      ...(match[1] ?? "").matchAll(/--preload(?:=|\s+)([^\s;&|]+)/gu),
+    ].map((preload) => preload[1]);
+    for (const file of [...preloads, match[2]]) {
+      if (file !== undefined && !file.startsWith("-")) {
+        modules.push(
+          path.posix.normalize(path.posix.join(cwdAt(match.index), file)),
+        );
+      }
     }
   }
   // Every `bun` invocation must resolve to modules: `--filter <package>

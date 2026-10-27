@@ -96,6 +96,27 @@ test("the census resolves a filtered workspace script and fails on an unknown co
   ).toThrow("Census cannot resolve the command");
 });
 
+test("the census follows both a preload and the entry point of one Bun command", () => {
+  const skills =
+    GENERATORS.find(({ id }) => id === "skill-manifests") ??
+    panic("Missing skill-manifests");
+  const command = [
+    "bun",
+    "--preload",
+    "scripts/offline-network-preload.ts",
+    "scripts/check-mcp-generated-tracking.ts",
+  ];
+  const failures = generatorInputCensus([
+    { ...skills, write: command, check: command, inputs: [], checkInputs: [] },
+  ]);
+  expect(failures).toContain(
+    "skill-manifests: undeclared import scripts/check-mcp-generated-tracking.ts",
+  );
+  expect(failures).toContain(
+    "skill-manifests: undeclared import scripts/offline-network-preload.ts",
+  );
+});
+
 test("selects direct, output, and transitive changes while unrelated files select none", () => {
   const direct = affectedGeneratorIds(GENERATORS, [
     "apps/web/src/components/example.tsx",
