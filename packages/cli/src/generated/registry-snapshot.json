@@ -3003,7 +3003,7 @@
       "scope": "matters_write"
     },
     "name": "delete_matter",
-    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible. A matter with time entries, expenses or invoices is refused with 409; archive it instead to keep its billing records.",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id"],
