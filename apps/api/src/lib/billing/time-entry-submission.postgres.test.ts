@@ -37,7 +37,10 @@ import {
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
-import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
+import {
+  type InterleavingResult,
+  withInterleaving,
+} from "@/api/tests/helpers/transaction-interleaving";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -159,7 +162,10 @@ const submitStep = (fixture: Fixture, approve: boolean) => ({
   },
 });
 
-const COMMITTED = { a: { status: "committed" }, b: { status: "committed" } };
+const COMMITTED: InterleavingResult<unknown>["outcomes"] = {
+  a: { status: "committed" },
+  b: { status: "committed" },
+};
 
 if (!databaseUrl || !runPostgres) {
   describe.skip("submitting and approving a week (postgres)", () => {
