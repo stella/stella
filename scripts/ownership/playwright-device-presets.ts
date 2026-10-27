@@ -6,10 +6,11 @@ export default {
   owner: [
     "packages/playwright-tools/src/devices.ts",
     "packages/playwright-tools/src/devices.gen.ts",
+    "packages/playwright-tools/src/device-preset-generator.ts",
     "scripts/generate-playwright-devices.ts",
   ],
   summary:
-    "Runtime configurations and the retry-policy reader share generated, recursively frozen descriptors. The generator reads the public SDK export and retains exactly the configured presets.",
+    "Runtime configurations and the retry-policy reader share generated, recursively frozen descriptors. The package generator helper reads the public SDK export, and the root generator retains exactly the configured presets.",
   enforcement: {
     kind: "import",
     specifiers: ["@playwright/test"],

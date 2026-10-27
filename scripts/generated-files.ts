@@ -1945,6 +1945,7 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "scripts/generate-playwright-devices.ts",
       "packages/playwright-tools/package.json",
+      "packages/playwright-tools/src/device-preset-generator.ts",
       "packages/playwright-tools/src/marketing-config.ts",
       "apps/**/playwright*.config.*",
       "packages/**/playwright*.config.*",

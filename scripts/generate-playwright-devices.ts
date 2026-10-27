@@ -1,10 +1,9 @@
 import { panic } from "better-result";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
-import * as v from "valibot";
 
+import { playwrightDevicePreset } from "../packages/playwright-tools/src/device-preset-generator";
 import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
 import {
   formattedLikeRepository,
@@ -117,29 +116,16 @@ const frozenDataExpression = (value: unknown): string => {
   return `Object.freeze({${properties.join(",")}} as const)`;
 };
 
-export const configuredPlaywrightDevices = (root = ROOT) => {
-  // Resolve the SDK declared by the package that owns the generated data.
-  const require = createRequire(
-    path.join(root, "packages/playwright-tools/package.json"),
-  );
-  const sdk: unknown = require("@playwright/test");
-  if ((typeof sdk !== "object" || sdk === null) && typeof sdk !== "function") {
-    panic("Cannot read Playwright's public device export");
-  }
-  const presets = v.parse(
-    v.record(v.string(), v.unknown()),
-    Reflect.get(sdk, "devices"),
-  );
-  return Object.fromEntries(
+export const configuredPlaywrightDevices = (root = ROOT) =>
+  Object.fromEntries(
     usedPlaywrightDevices(root).map((name) => {
-      const preset = presets[name];
+      const preset = playwrightDevicePreset(name);
       if (preset === undefined) {
         panic(`Unknown Playwright device preset: ${name}`);
       }
       return [name, preset];
     }),
   );
-};
 
 export const renderPlaywrightDevices = async (root = ROOT) =>
   formattedLikeRepository(

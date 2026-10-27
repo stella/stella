@@ -21,6 +21,37 @@ test("configured presets match the pinned SDK and generated runtime data", async
   ).toBe(await renderPlaywrightDevices());
 });
 
+test("only the generator-only package owner imports the Playwright SDK", () => {
+  const root = path.resolve(import.meta.dirname, "..");
+  const generator = readFileSync(
+    path.join(root, "scripts/generate-playwright-devices.ts"),
+    "utf-8",
+  );
+  const owner = readFileSync(
+    path.join(root, "packages/playwright-tools/src/device-preset-generator.ts"),
+    "utf-8",
+  );
+  const runtimeOwner = readFileSync(
+    path.join(root, "packages/playwright-tools/src/devices.ts"),
+    "utf-8",
+  );
+  const retryCheck = readFileSync(
+    path.join(root, "scripts/check-test-retries.ts"),
+    "utf-8",
+  );
+
+  expect(owner).toContain('from "@playwright/test"');
+  for (const source of [generator, runtimeOwner, retryCheck]) {
+    expect(source).not.toContain('from "@playwright/test"');
+  }
+  for (const source of [runtimeOwner, retryCheck]) {
+    expect(source).not.toContain("device-preset-generator");
+  }
+  expect(generator).toContain(
+    'from "../packages/playwright-tools/src/device-preset-generator"',
+  );
+});
+
 const expectFrozenData = (value: unknown): void => {
   if (typeof value !== "object" || value === null) {
     return;
