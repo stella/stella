@@ -419,6 +419,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "apps/api/src/lib/case-law/citation-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
+      "apps/api/src/lib/files/converter-settings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",
       "packages/mcp-apps/src/manifest.ts",
