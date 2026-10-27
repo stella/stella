@@ -261,7 +261,7 @@ describe("shell detection", () => {
   });
 
   test("git commands without network access are not fetches", () => {
-    expect(scanShell("git status\ngit log -1", "git")).toEqual([]);
+    expect(scanShell("git status\ngit rev-parse HEAD", "git")).toEqual([]);
   });
 
   test("loopback readiness probes are not fetches", () => {
