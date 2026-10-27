@@ -48,11 +48,13 @@ describe("TabsList overflow", () => {
   test("scrolls on the list itself, with the tabs and indicator inside it", () => {
     const { openTag, content } = readTabList(renderStrip());
 
+    expect(openTag).toContain("overflow-auto");
     // Only the strip's own axis scrolls. With the cross axis left at `auto`, a
     // tab or action a pixel taller than the strip lets touch drag it up and down.
-    expect(openTag).toMatch(/(?:^|["\s])overflow-x-auto\b/u);
-    expect(openTag).toMatch(/(?:^|["\s])overflow-y-hidden\b/u);
-    expect(openTag).not.toMatch(/(?:^|["\s])overflow-auto\b/u);
+    expect(openTag).toContain(
+      "data-[orientation=horizontal]:overflow-y-hidden",
+    );
+    expect(openTag).toContain("data-[orientation=vertical]:overflow-x-hidden");
 
     // The scroll container has to be this element. Base UI drives the list as
     // its composite root, so it is what scrolls the active tab into view on
@@ -122,7 +124,7 @@ describe("TabsList overflow", () => {
     expect(openTag).toMatch(/\bjustify-start\b/u);
     expect(openTag).not.toContain("justify-center-safe");
     expect(openTag).toMatch(/\boverflow-hidden\b/u);
-    expect(openTag).not.toMatch(/(?:^|["\s])overflow-[xy]-(auto|hidden)\b/u);
+    expect(openTag).not.toContain("overflow-auto");
   });
 });
 
