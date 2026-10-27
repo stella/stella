@@ -185,6 +185,62 @@ export const playwrightDevices = (
   }
 };
 
+// Preset data may only enter configuration through a direct spread. Keeping
+// the imported binding inside that read boundary excludes aliases and writes
+// whose runtime values would differ from the installed preset descriptor.
+const readOnlyDeviceBinding = (source: Source, binding: string): boolean => {
+  let readOnly = true;
+  walk(source.program, (node, ancestors) => {
+    if (node.type !== "Identifier" || node.name !== binding) {
+      return;
+    }
+    const parent = ancestors.at(-1);
+    if (parent === undefined) {
+      readOnly = false;
+      return;
+    }
+    if (
+      parent.type === "ImportSpecifier" ||
+      (parent.type === "Property" &&
+        parent.key === node &&
+        !parent.computed &&
+        !parent.shorthand) ||
+      (parent.type === "MemberExpression" &&
+        parent.property === node &&
+        !parent.computed)
+    ) {
+      return;
+    }
+    if (
+      parent.type !== "MemberExpression" ||
+      parent.object !== node ||
+      !parent.computed ||
+      parent.property.type !== "Literal" ||
+      typeof parent.property.value !== "string"
+    ) {
+      readOnly = false;
+      return;
+    }
+    let access: Node = parent;
+    let index = ancestors.length - 2;
+    let container = ancestors.at(index);
+    while (
+      (container?.type === "ParenthesizedExpression" ||
+        container?.type === "TSAsExpression" ||
+        container?.type === "TSSatisfiesExpression") &&
+      container.expression === access
+    ) {
+      access = container;
+      index -= 1;
+      container = index < 0 ? undefined : ancestors.at(index);
+    }
+    if (container?.type !== "SpreadElement" || container.argument !== access) {
+      readOnly = false;
+    }
+  });
+  return readOnly;
+};
+
 // Resolve imported device presets from the pinned package's literal data,
 // rather than exempting spreads by identifier or trusting arbitrary imports.
 const resolveDevicePreset = (
@@ -210,6 +266,9 @@ const resolveDevicePreset = (
     imported.module !== "@playwright/test" ||
     imported.name !== "devices"
   ) {
+    return undefined;
+  }
+  if (!readOnlyDeviceBinding(source, binding)) {
     return undefined;
   }
   const descriptor = playwrightDevices(source)?.[presetName];
