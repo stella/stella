@@ -119,6 +119,8 @@ describe("the app's builds", () => {
     ]) {
       expect(new Set(configs.map(read)).size).toBe(configs.length);
     }
+  });
+});
 
 /** Every module the app bundles: tests run under Bun, never on the phone. */
 const appModules = readdirSync(SOURCE_ROOT, { recursive: true })
@@ -140,6 +142,4 @@ describe("the app's JavaScript engine", () => {
       ).toEqual([]);
     },
   );
-});
-  });
 });
