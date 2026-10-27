@@ -192,7 +192,6 @@ const LoadedEntities = ({
       renderItem={({ item }) => (
         <EntityRow
           entity={item}
-          loadedAt={current.loadedAt}
           onPress={() => {
             router.push({
               pathname: "/matter/[workspaceId]/[entityId]",
