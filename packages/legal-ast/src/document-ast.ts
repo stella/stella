@@ -1,4 +1,5 @@
 // parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
+// parser-output-unchanged: Statute anchor resolution (`resolveDocumentAnchor`, `resolveDocumentHeadingAnchor`) now reads the publisher's scheme; no decision parser or adapter calls either.
 import { panic } from "better-result";
 /**
  * Canonical legal-document AST shared by legal corpus readers and parsers.
