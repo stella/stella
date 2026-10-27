@@ -77,6 +77,15 @@ const nonAnonymousHandlerFactories = factoriesWhere(
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
   "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
+const IDLE_SCHEDULER_MESSAGE =
+  "Use scheduleIdle from '@/lib/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
+const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
+  (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
+);
+const idleCallbackProperties = idleCallbackGlobals.map(({ name, message }) => ({
+  property: name,
+  message,
+}));
 const publicSsrBrowserGlobals = [
   "devicePixelRatio",
   "document",
@@ -153,12 +162,16 @@ const publicSsrAmbientProperties = [
 const publicSsrAmbientStateRules = {
   "no-restricted-globals": [
     "error",
-    { globals: publicSsrBrowserGlobals, checkGlobalObject: true },
+    {
+      globals: [...publicSsrBrowserGlobals, ...idleCallbackGlobals],
+      checkGlobalObject: true,
+    },
   ],
   "no-restricted-properties": [
     "error",
     publicSsrDateNowRestriction,
     ...publicSsrAmbientProperties,
+    ...idleCallbackProperties,
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
@@ -2267,6 +2280,17 @@ const config = defineConfig({
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
     ...libraryOverrides,
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/web/src/lib/schedule-idle.ts"],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          { globals: idleCallbackGlobals, checkGlobalObject: true },
+        ],
+        "no-restricted-properties": ["error", ...idleCallbackProperties],
+      },
+    },
     {
       // The built-in jest/vitest rules do not recognise `bun:test`; these
       // resolve test functions through their `bun:test` import.

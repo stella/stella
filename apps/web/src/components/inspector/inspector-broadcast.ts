@@ -30,6 +30,7 @@ import {
   getInspectorPersistenceReference,
   getInspectorView,
 } from "@/components/inspector/view-registry";
+import { scheduleIdle } from "@/lib/schedule-idle";
 import "@/components/inspector/inspector-persistence-references";
 import {
   decisionChatKey,
@@ -209,11 +210,7 @@ const scheduleRestoreSettle = (load: PageLoad): void => {
         settleRestore(load, scope);
       }
     };
-    if (typeof globalThis.requestIdleCallback === "function") {
-      globalThis.requestIdleCallback(clear);
-    } else {
-      clear();
-    }
+    scheduleIdle(clear);
   }, RESTORE_SETTLE_DELAY_MS);
 };
 

@@ -13,6 +13,7 @@ import {
   resetPersistedUiState,
 } from "@/lib/analytics/web-hang/persisted-ui-state";
 import { resolveWebRouteTemplate } from "@/lib/analytics/web-hang/web-route-template";
+import { scheduleIdle } from "@/lib/schedule-idle";
 import { createEphemeralId } from "@/lib/uuid";
 
 export const HANG_HEARTBEAT_MS = 3000;
@@ -339,13 +340,7 @@ export const createWebHangDetector = ({
         retirementDelay,
       );
     };
-    if (typeof browser.requestIdleCallback === "function") {
-      browser.requestIdleCallback(interactive);
-    } else {
-      browser.requestAnimationFrame(() => {
-        browser.setTimeout(interactive, 0);
-      });
-    }
+    scheduleIdle(interactive, { browser });
   };
   const onShow = () => {
     stopped = false;

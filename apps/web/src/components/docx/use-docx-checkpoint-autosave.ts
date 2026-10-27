@@ -11,6 +11,7 @@ import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import { getAnalytics } from "@/lib/analytics/provider";
 import type { DocumentTimingSurface } from "@/lib/analytics/types";
 import { detached } from "@/lib/detached";
+import { scheduleIdle } from "@/lib/schedule-idle";
 
 import {
   createTrailingSingleFlight,
@@ -22,7 +23,7 @@ import type { EditSession } from "./use-edit-session";
 const CHANGE_CHECKPOINT_DELAY = 2000;
 
 type UseDocxCheckpointAutosaveOptions = {
-  editorRef: RefObject<DocxEditorRef | null>;
+  editorRef: RefObject<Pick<DocxEditorRef, "save"> | null>;
   hasSessionChangesRef: RefObject<boolean>;
   isCollaborativeEditing: boolean;
   isUnlocked: boolean;
@@ -47,7 +48,7 @@ export const useDocxCheckpointAutosave = ({
   setAutosaveStatus,
   timingSurface,
 }: UseDocxCheckpointAutosaveOptions) => {
-  const changeCheckpointIdleCallbackRef = useRef<number | null>(null);
+  const cancelChangeCheckpointRef = useRef<(() => void) | null>(null);
 
   // The debounced autosave, the awaitable flush, and the Cmd/Ctrl+S
   // handler all serialize the live editor and persist the buffer.
@@ -129,9 +130,9 @@ export const useDocxCheckpointAutosave = ({
   // be idle. `useDebouncedCallback` owns the first wait; the idle handle is
   // not a debounce and stays a ref, because the cancel path has to reach it.
   const queueChangeCheckpointSave = useDebouncedCallback(() => {
-    changeCheckpointIdleCallbackRef.current = window.requestIdleCallback(
+    cancelChangeCheckpointRef.current = scheduleIdle(
       () => {
-        changeCheckpointIdleCallbackRef.current = null;
+        cancelChangeCheckpointRef.current = null;
         saveChangeCheckpoint();
       },
       { timeout: 2000 },
@@ -140,10 +141,8 @@ export const useDocxCheckpointAutosave = ({
 
   const clearQueuedChangeCheckpoint = useCallback(() => {
     queueChangeCheckpointSave.cancel();
-    if (changeCheckpointIdleCallbackRef.current !== null) {
-      window.cancelIdleCallback(changeCheckpointIdleCallbackRef.current);
-      changeCheckpointIdleCallbackRef.current = null;
-    }
+    cancelChangeCheckpointRef.current?.();
+    cancelChangeCheckpointRef.current = null;
   }, [queueChangeCheckpointSave]);
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that
