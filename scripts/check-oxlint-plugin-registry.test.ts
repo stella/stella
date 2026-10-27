@@ -94,6 +94,7 @@ describe("plugin rule census", () => {
       const rules = `rules: {\n${indentation}"literal-rule": {},\n${indentation}[RULE_NAME]: {}\n}`;
       for (const source of [
         `const RULE_NAME = "computed-rule"; export default { ${rules} };`,
+        `export const RULE_NAME = "computed-rule"; export default { ${rules} };`,
         `const RULE_NAME = "computed-rule"; const createPlugin = () => ({ ${rules} }); export default createPlugin();`,
       ]) {
         expect(ruleNamesFromSource(source)).toEqual([

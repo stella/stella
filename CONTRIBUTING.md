@@ -52,15 +52,15 @@ Run `bun run typecheck` for workspace checks or `bun run typecheck:repo` for
 repository tooling. These commands use Bun’s native checker locally and in
 CI. For a direct project check, use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for a
-solution config with project references. `bun run check:typecheck-parity` compares
-TypeScript and Bun diagnostics on repository code and seeded cases. CI runs full
-parity when the Bun pin or resolved TypeScript compiler versions change, and
-nightly or on manual dispatch. Every PR retains Bun checks and a seeded-error
-probe.
+solution config with project references. Bun's checker is the only type
+checker. The seeded-error probe, which verifies that the checker rejects known
+errors, runs on manual dispatch.
 
 Editors continue to use the TypeScript language service: Bun provides no LSP.
-Keep the TypeScript dependency and its compatibility alias for compiler-API tools
-such as dependency-cruiser and for declaration generation.
+`typescript6` stays only for the compiler-API tools that still import it, and
+`apps/landing` keeps `typescript` because `astro check` needs it. Package
+declarations come from Oxc (`dts: { generator: "oxc" }`), which needs explicit
+types on exports, or from tsrs where a package cannot provide them.
 
 ### Claude Code LSP (experimental)
 
@@ -250,8 +250,10 @@ it:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
+- `@stll/fetch`
 - `@stll/mcp-kit`
 - `@stll/money`
+- `@stll/scan-engine`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`
 - `@stll/stable-stringify`

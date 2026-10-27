@@ -2,6 +2,7 @@
   "version": 1,
   "globs": [
     ".github/ci-checks/*.yml",
+    ".github/ci-checks/budgets.json",
     ".github/ci-event-policy.json",
     ".oxlint-plugins/**",
     "apps/api/scripts/*.test.ts",
@@ -152,6 +153,8 @@
     "scripts/cli-runtime-pack.test.ts",
     "scripts/code-check-affected.test.ts",
     "scripts/code-check-affected.ts",
+    "scripts/codemod-icons.test.ts",
+    "scripts/codemod-icons.ts",
     "scripts/crawl-posture.ts",
     "scripts/create-release-manifest.test.sh",
     "scripts/dated-waiver-healing-workflow.test.ts",
