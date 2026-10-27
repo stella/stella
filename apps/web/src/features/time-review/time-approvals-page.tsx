@@ -16,7 +16,7 @@ import {
   shiftWeeks,
   type Week,
   weekOf,
-} from "@/features/my-week/my-week.logic";
+} from "@/components/billing/work-week.logic";
 import {
   groupForReview,
   type PersonReview,

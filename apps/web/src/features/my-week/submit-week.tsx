@@ -5,7 +5,7 @@ import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
-import type { Week } from "@/features/my-week/my-week.logic";
+import type { Week } from "@/components/billing/work-week.logic";
 import type { SubmitWeekRequest } from "@/features/my-week/use-my-week-actions";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";

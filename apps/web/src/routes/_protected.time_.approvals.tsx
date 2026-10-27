@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Temporal } from "@stll/time";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { weekOf } from "@/features/my-week/my-week.logic";
+import { weekOf } from "@/components/billing/work-week.logic";
 import {
   TimeApprovalsPage,
   timeApprovalsQuery,

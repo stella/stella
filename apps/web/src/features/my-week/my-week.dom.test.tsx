@@ -30,7 +30,7 @@ const { timeEntriesKeys } =
 const { invoicesKeys } = await import("@/lib/workspaces/queries/invoices");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { weekOf } = await import("@/features/my-week/my-week.logic");
+const { weekOf } = await import("@/components/billing/work-week.logic");
 const { MyWeek } = await import("@/features/my-week/my-week");
 
 const ORGANIZATION_ID = "organization-1";

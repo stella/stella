@@ -10,6 +10,7 @@ import type {
   MyTimeEntry,
 } from "@/features/my-week/my-week-day";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { allInvoicesQueryRoot } from "@/lib/resource-query-roots.logic";
@@ -72,8 +73,14 @@ export const useMyWeekActions = ({
   };
 
   const submitWeek = useMutation({
-    mutationFn: async (request: SubmitWeekRequest) =>
-      unwrapApiResponse(await api["time-entries"].me.submissions.post(request)),
+    mutationFn: async (body: SubmitWeekRequest) =>
+      await invokeCapability(
+        "time-entries.me.submissions.create",
+        async (request) =>
+          unwrapApiResponse(
+            await api["time-entries"].me.submissions.post(body, request),
+          ),
+      ),
     // A submission spans matters: their time lists change, and with approval
     // so does what they can invoice.
     onSuccess: async () => {

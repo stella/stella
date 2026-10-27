@@ -16,12 +16,11 @@ import {
   ManualTimeEntryForm,
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
+import { shiftWeeks, weekOf } from "@/components/billing/work-week.logic";
 import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
 import { MyWeekHeader } from "@/features/my-week/my-week-header";
 import {
   pendingCountByDay,
-  shiftWeeks,
-  weekOf,
   weekTotals,
 } from "@/features/my-week/my-week.logic";
 import { PendingApprovalsLink } from "@/features/my-week/pending-approvals-link";
