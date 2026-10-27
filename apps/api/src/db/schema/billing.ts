@@ -117,6 +117,7 @@ const TIME_ENTRY_APPROVAL_PROVENANCE_STATUSES = [
 ] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
 const INTERNAL_TIME_ENTRY_STATUSES = [
   "draft",
+  "submitted",
   "approved",
 ] as const satisfies readonly (typeof TIME_ENTRY_STATUSES)[number][];
 
@@ -254,6 +255,16 @@ export const timeEntries = p.pgTable(
         table.id,
       )
       .where(sql`${table.status} = 'draft'`),
+    // The approval queue reads submitted entries only, per approver and date.
+    p
+      .index("time_entries_submitted_queue_idx")
+      .on(
+        table.organizationId,
+        table.approverUserId,
+        table.dateWorked,
+        table.id,
+      )
+      .where(sql`${table.status} = 'submitted'`),
     p
       .uniqueIndex(ACTIVE_TIMER_INDEX_NAME)
       .on(table.userId)

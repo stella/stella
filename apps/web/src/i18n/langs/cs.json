@@ -508,14 +508,20 @@
     "amount": "Částka",
     "amountMustBePositive": "Částka musí být vyšší než nula",
     "approval": {
+      "approveAll": "{count, plural, one {Schválit # záznam} few {Schválit # záznamy} many {Schválit # záznamu} other {Schválit všech # záznamů}}",
       "approveSelected": "Schválit {count, plural, one {# vybraný záznam} few {# vybrané záznamy} many {# vybraného záznamu} other {# vybraných záznamů}}",
+      "billedTotal": "Účtováno {duration}",
       "empty": "Ve spisu nic nečeká na schválení.",
+      "emptyWeek": "Tento týden nečeká nic na schválení. Odeslaný čas se zobrazí zde.",
+      "everyone": "Všichni",
       "failed": "Změnu se nepodařilo uložit. Zkuste to znovu.",
       "myTime": "Můj čas",
+      "pending": "{count, plural, one {# záznam ke schválení} few {# záznamy ke schválení} many {# záznamu ke schválení} other {# záznamů ke schválení}}",
       "refusals": {
         "invalidEntry": "Doplňte popis a zkontrolujte datum práce, pak záznam schvalte.",
         "notApprover": "Záznam může schválit jen jeho přiřazený schvalovatel nebo správce.",
         "notFound": "Tento záznam už neexistuje. Obnovte seznam.",
+        "notSubmitted": "Záznam ještě nebyl odeslán ke schválení. Nejdřív ho musí odeslat jeho autor.",
         "runningTimer": "Před schválením záznamu zastavte běžící časovač.",
         "unpriced": "Záznam nemá sazbu. Nastavte pro tento spis sazbu a pak záznam schvalte.",
         "wrongStatus": "Tento záznam už není koncept. Obnovte seznam."
@@ -827,6 +833,7 @@
       "approved": "Schváleno",
       "billed": "Vyfakturováno",
       "draft": "Návrh",
+      "submitted": "Odesláno",
       "written_off": "Odepsáno"
     },
     "stopTimer": "Zastavit",
@@ -5898,6 +5905,16 @@
       "pendingCount": "{count, plural, one {# návrh} few {# návrhy} many {# návrhu} other {# návrhů}}",
       "previousWeek": "Předchozí týden",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Zkontrolujte datum práce a záznam pak odešlete.",
+        "narrativeRequired": "Doplňte popis a záznam pak odešlete.",
+        "runningTimer": "Zastavte běžící časovač a záznam pak odešlete.",
+        "unpriced": "Záznam nemá sazbu. Požádejte o sazbu pro spis a pak ho odešlete."
+      },
+      "returned": "Vráceno: {comment}",
+      "submitAndApprove": "Odeslat a schválit",
+      "submitResult": "Odesláno {submitted} · schváleno {approved} · k opravě {refused}",
+      "submitWeek": "Odeslat týden",
       "title": "Můj týden",
       "totals": "Vykázáno {logged} · fakturovatelné {billable}"
     }

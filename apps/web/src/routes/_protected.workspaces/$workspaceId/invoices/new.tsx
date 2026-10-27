@@ -101,13 +101,13 @@ function NewInvoicePage() {
     select: (context) => context.user.id,
   });
   // Only someone who can approve is sent to the approval queue; the API
-  // lists every timekeeper's drafts to them alone.
+  // lists every timekeeper's submitted time to them alone.
   const canApprove = usePermissions({ timeEntry: ["approve"] });
   const canApproveExpenses = usePermissions({ expense: ["update"] });
   // The count is a hint; a failed read reports itself and shows no count.
   const pendingTime = queryView(
     useQuery({
-      ...timeEntriesOptions(workspaceId, userId, { status: "draft" }),
+      ...timeEntriesOptions(workspaceId, userId, { status: "submitted" }),
       enabled: canApprove,
     }),
   );

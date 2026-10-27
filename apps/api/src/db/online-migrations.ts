@@ -104,6 +104,10 @@ import {
   SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   SANCTIONS_MONITORING_CONSTRAINTS,
 } from "./sanctions-monitoring-constraint-validation";
+import {
+  TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
+  TIME_ENTRY_SUBMITTED_CONSTRAINTS,
+} from "./time-entry-submitted-constraint-validation";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -442,6 +446,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
       "ON public.time_entries USING btree (organization_id, approver_user_id, status, date_worked, id) WHERE (status = 'draft'::text)",
     isUnique: false,
     name: "time_entries_approval_queue_idx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "time_entries_submitted_queue_idx" ON public."time_entries" USING btree ("organization_id", "approver_user_id", "date_worked", "id") WHERE "status" = \'submitted\'',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, approver_user_id, date_worked, id) WHERE (status = 'submitted'::text)",
+    isUnique: false,
+    name: "time_entries_submitted_queue_idx",
     tableName: "time_entries",
   },
   {
@@ -908,6 +921,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   ...INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
+  TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
@@ -938,6 +952,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...READER_ANNOTATION_CONSTRAINTS,
     ...INVOICE_LANGUAGE_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
+    ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
   ];
 

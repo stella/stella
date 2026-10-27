@@ -508,14 +508,20 @@
     "amount": "Summa",
     "amountMustBePositive": "Summai jābūt lielākai par nulli",
     "approval": {
+      "approveAll": "{count, plural, zero {Apstiprināt visus # ierakstus} one {Apstiprināt # ierakstu} other {Apstiprināt visus # ierakstus}}",
       "approveSelected": "Apstiprināt {count, plural, zero {# atlasītos ierakstus} one {# atlasīto ierakstu} other {# atlasītos ierakstus}}",
+      "billedTotal": "Rēķinā {duration}",
       "empty": "Šajā lietā nekas negaida apstiprinājumu.",
+      "emptyWeek": "Šonedēļ nekas negaida apstiprinājumu. Iesniegtais laiks parādās šeit.",
+      "everyone": "Visi",
       "failed": "Izmaiņas netika saglabātas. Mēģiniet vēlreiz.",
       "myTime": "Mans laiks",
+      "pending": "{count, plural, zero {# ierakstu apstiprināšanai} one {# ieraksts apstiprināšanai} other {# ieraksti apstiprināšanai}}",
       "refusals": {
         "invalidEntry": "Pievienojiet aprakstu un pārbaudiet darba datumu, pēc tam apstipriniet ierakstu.",
         "notApprover": "Šo ierakstu var apstiprināt tikai tam piešķirtais apstiprinātājs vai administrators.",
         "notFound": "Šis ieraksts vairs nepastāv. Atsvaidziniet sarakstu.",
+        "notSubmitted": "Šis ieraksts vēl nav iesniegts. Vispirms to iesniedz tā autors.",
         "runningTimer": "Pirms ieraksta apstiprināšanas apturiet aktīvo taimeri.",
         "unpriced": "Šim ierakstam nav likmes. Iestatiet likmi šai lietai un pēc tam apstipriniet ierakstu.",
         "wrongStatus": "Šis ieraksts vairs nav melnraksts. Atsvaidziniet sarakstu."
@@ -827,6 +833,7 @@
       "approved": "Apstiprināts",
       "billed": "Izrakstīts rēķins",
       "draft": "Melnraksts",
+      "submitted": "Iesniegts",
       "written_off": "Norakstīts"
     },
     "stopTimer": "Apturēt",
@@ -5898,6 +5905,16 @@
       "pendingCount": "{count, plural, zero {# ieteikumu} one {# ieteikums} other {# ieteikumi}}",
       "previousWeek": "Iepriekšējā nedēļa",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Pārbaudiet darba datumu un pēc tam iesniedziet šo ierakstu.",
+        "narrativeRequired": "Pievienojiet aprakstu un pēc tam iesniedziet šo ierakstu.",
+        "runningTimer": "Apturiet darbojošos taimeri un pēc tam iesniedziet šo ierakstu.",
+        "unpriced": "Šim ierakstam nav likmes. Palūdziet likmi lietai un pēc tam to iesniedziet."
+      },
+      "returned": "Atgriezts: {comment}",
+      "submitAndApprove": "Iesniegt un apstiprināt",
+      "submitResult": "Iesniegti: {submitted} · apstiprināti: {approved} · jālabo: {refused}",
+      "submitWeek": "Iesniegt nedēļu",
       "title": "Mana nedēļa",
       "totals": "Reģistrēts: {logged} · apmaksājams: {billable}"
     }

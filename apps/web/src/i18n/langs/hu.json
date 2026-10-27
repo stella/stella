@@ -508,14 +508,20 @@
     "amount": "Összeg",
     "amountMustBePositive": "Az összegnek nullánál nagyobbnak kell lennie",
     "approval": {
+      "approveAll": "{count, plural, one {# bejegyzés jóváhagyása} other {Mind a(z) # bejegyzés jóváhagyása}}",
       "approveSelected": "{count, plural, one {# kijelölt bejegyzés} other {# kijelölt bejegyzés}} jóváhagyása",
+      "billedTotal": "Számlázva: {duration}",
       "empty": "Ebben az ügyben semmi nem vár jóváhagyásra.",
+      "emptyWeek": "Ezen a héten semmi sem vár jóváhagyásra. A beküldött idő itt jelenik meg.",
+      "everyone": "Mindenki",
       "failed": "A módosítás nem lett mentve. Próbálja újra.",
       "myTime": "Saját idő",
+      "pending": "{count, plural, one {# jóváhagyandó bejegyzés} other {# jóváhagyandó bejegyzés}}",
       "refusals": {
         "invalidEntry": "Adjon meg leírást, ellenőrizze a munkavégzés dátumát, majd hagyja jóvá a bejegyzést.",
         "notApprover": "Ezt a bejegyzést csak a kijelölt jóváhagyó vagy egy rendszergazda hagyhatja jóvá.",
         "notFound": "Ez a bejegyzés már nem létezik. Frissítse a listát.",
+        "notSubmitted": "Ezt a bejegyzést még nem küldték be. Először a rögzítőjének kell beküldenie.",
         "runningTimer": "A jóváhagyás előtt állítsa le a futó időmérőt.",
         "unpriced": "Ehhez a bejegyzéshez nincs díjszabás. Állítson be díjszabást az ügyhöz, majd hagyja jóvá a bejegyzést.",
         "wrongStatus": "Ez a bejegyzés már nem piszkozat. Frissítse a listát."
@@ -827,6 +833,7 @@
       "approved": "Jóváhagyva",
       "billed": "Számlázva",
       "draft": "Piszkozat",
+      "submitted": "Beküldve",
       "written_off": "Leírva"
     },
     "stopTimer": "Leállítás",
@@ -5898,6 +5905,16 @@
       "pendingCount": "{count, plural, one {# javaslat} other {# javaslat}}",
       "previousWeek": "Előző hét",
       "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Ellenőrizze a munkavégzés dátumát, majd küldje be ezt a bejegyzést.",
+        "narrativeRequired": "Adjon meg leírást, majd küldje be ezt a bejegyzést.",
+        "runningTimer": "Állítsa le a futó időmérőt, majd küldje be ezt a bejegyzést.",
+        "unpriced": "Ennek a bejegyzésnek nincs díjtétele. Kérjen díjtételt az ügyhöz, majd küldje be."
+      },
+      "returned": "Visszaküldve: {comment}",
+      "submitAndApprove": "Beküldés és jóváhagyás",
+      "submitResult": "Beküldve: {submitted} · jóváhagyva: {approved} · javítandó: {refused}",
+      "submitWeek": "Hét beküldése",
       "title": "A hetem",
       "totals": "Rögzítve: {logged} · számlázható: {billable}"
     }
