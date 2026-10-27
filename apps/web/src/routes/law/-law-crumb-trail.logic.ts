@@ -5,6 +5,7 @@ import { toStatuteCountrySegment } from "@stll/api-contract/statute-route";
 
 import { yearDateRange } from "@/features/case-law/case-law-index-search.logic";
 import { decisionYear } from "@/features/case-law/citation-format";
+import { decisionCaseListLink } from "@/features/case-law/decision-case-list-link";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
@@ -32,6 +33,13 @@ export const statuteLawCrumbTrailOf = ({
   const year = identity.year === null ? null : Number(identity.year);
   return {
     kind: "statute",
+    country: {
+      code: country,
+      link: linkOptions({
+        to: "/law/$country/statutes",
+        params: { country: toStatuteCountrySegment(country) },
+      }),
+    },
     status,
     validFrom: versionValidFrom,
     expression: { expressionKind, windowDisposition },
@@ -55,12 +63,18 @@ export const statuteLawCrumbTrailOf = ({
 
 type DecisionLawCrumbTrailInput = Pick<
   PublicCaseLawDecision,
-  "court" | "courtAbbreviation" | "caseNumber" | "decisionDate" | "metadata"
+  | "country"
+  | "court"
+  | "courtAbbreviation"
+  | "caseNumber"
+  | "decisionDate"
+  | "metadata"
 > & {
   courtTier?: PublicCaseLawDecision["courtTier"] | undefined;
 };
 
 export const decisionLawCrumbTrailOf = ({
+  country,
   court,
   courtAbbreviation,
   courtTier,
@@ -71,11 +85,12 @@ export const decisionLawCrumbTrailOf = ({
   const year = decisionYear(decisionDate);
   return {
     kind: "decision",
+    country: { code: country, link: decisionCaseListLink({ country }) },
     court: {
       name: court,
       abbreviation: courtAbbreviation,
       tier: courtTier,
-      link: linkOptions({ to: "/law/cases", search: { court } }),
+      link: decisionCaseListLink({ country }, { court }),
     },
     // The year's span in the form the results page writes; `year` is only read
     // there, for links made before the range existed.
@@ -84,10 +99,10 @@ export const decisionLawCrumbTrailOf = ({
         ? null
         : {
             year,
-            link: linkOptions({
-              to: "/law/cases",
-              search: { court, ...yearDateRange(String(year)) },
-            }),
+            link: decisionCaseListLink(
+              { country },
+              { court, ...yearDateRange(String(year)) },
+            ),
           },
     caseNumber,
     legalArea:

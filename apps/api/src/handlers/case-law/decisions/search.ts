@@ -134,6 +134,7 @@ import {
   decisionTypeFilterSql,
   decisionTypeKindSql,
 } from "@/api/lib/case-law/decision-type-filter-sql";
+import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
@@ -414,6 +415,23 @@ export const searchDecisionsHandler = async ({
   if (pageRefusal !== null) {
     return status(400, { message: pageRefusal });
   }
+  const filterScope = await readCaseLawFilterScope({
+    country,
+    courts: body.courts,
+    filters: {
+      court: body.court,
+      lang: body.language,
+      type: body.decisionType,
+      sourceId: body.sourceId,
+    },
+    caseLawDb,
+  });
+  if (filterScope.removed.length > 0) {
+    return status(400, {
+      message: `Filters do not belong to ${country}: ${filterScope.removed.map((filter) => filter.field).join(", ")}`,
+    });
+  }
+
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
     const { provision } = scopedBody;

@@ -1022,7 +1022,9 @@
     },
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
-      "remove": "Pašalinti filtrą {filter}"
+      "countryMismatch": "Pašalinti filtrai, kurie netaikomi pasirinktai šaliai ({country}): {filters}.",
+      "remove": "Pašalinti filtrą {filter}",
+      "showInCountry": "Rodyti {filter} šalyje {country}"
     },
     "languages": {
       "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",

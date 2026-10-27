@@ -1022,7 +1022,9 @@
     },
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
     "filters": {
-      "remove": "Remove filter {filter}"
+      "countryMismatch": "Filters removed because they do not belong to {country}: {filters}.",
+      "remove": "Remove filter {filter}",
+      "showInCountry": "Show {filter} in {country}"
     },
     "languages": {
       "count": "{count, plural, one {# language} other {# languages}}",

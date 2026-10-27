@@ -37,7 +37,10 @@ import {
 } from "@/features/case-law/case-law-route-pages.logic";
 import type { Decision } from "@/features/case-law/components/decision-table";
 import { prefetchDecisionFacetsAfterSearch } from "@/features/case-law/decision-filter-facets";
-import { decisionsPageOptions } from "@/features/case-law/queries/decisions";
+import {
+  decisionFilterValidationOptions,
+  decisionsPageOptions,
+} from "@/features/case-law/queries/decisions";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
 import { readQueryResult } from "@/lib/errors/query-result";
@@ -54,6 +57,7 @@ import {
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
+import { correctedCaseLawFilterSearch } from "./-case-law-filter-scope.logic";
 import type { CaseLawIndexSearch } from "./-case-law-search-schema";
 import { searchSchema } from "./-case-law-search-schema";
 
@@ -121,8 +125,9 @@ export const Route = createFileRoute("/law/cases/")({
   validateSearch: searchSchema,
   // Which questions are drawn, and which words a rewrite replaced, do not
   // change the rows, so neither sends the loader after them again.
-  loaderDeps: ({ search: { questions, rewrite, rewrittenFrom, ...search } }) =>
-    search,
+  loaderDeps: ({
+    search: { questions, rewrite, rewrittenFrom, filterNotice, ...search },
+  }) => search,
   // This is a results screen, not an entry screen: with nothing to show
   // results for, the reader belongs on the home. A first visit also starts in
   // the jurisdiction the UI language points at, and the URL says so, so the
@@ -142,6 +147,36 @@ export const Route = createFileRoute("/law/cases/")({
       return;
     }
     const countryParam = toCaseLawCountryParam(country);
+
+    if (
+      search.court !== undefined ||
+      search.lang !== undefined ||
+      search.type !== undefined ||
+      search.sourceId !== undefined
+    ) {
+      const validation = await ensureRouteQueryData(
+        queryClient,
+        decisionFilterValidationOptions({
+          country,
+          court: search.court,
+          lang: search.lang,
+          type: search.type,
+          sourceId: search.sourceId,
+        }),
+      );
+      const correctedSearch = correctedCaseLawFilterSearch({
+        search,
+        country,
+        validation,
+      });
+      if (correctedSearch !== null) {
+        throw redirect({
+          to: "/law/cases",
+          search: correctedSearch,
+          replace: true,
+        });
+      }
+    }
 
     // Only a request that names nothing goes home; a jurisdiction alone is
     // the browse slice the home's country links and the crawler follow.

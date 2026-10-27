@@ -1022,7 +1022,9 @@
     },
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
-      "remove": "Eemalda filter {filter}"
+      "countryMismatch": "Eemaldati filtrid, mis ei kuulu valitud riigi ({country}) juurde: {filters}.",
+      "remove": "Eemalda filter {filter}",
+      "showInCountry": "Kuva {filter} riigis {country}"
     },
     "languages": {
       "count": "{count, plural, one {# keel} other {# keelt}}",

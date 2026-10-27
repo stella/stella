@@ -1022,7 +1022,9 @@
     },
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
-      "remove": "Odebrat filtr {filter}"
+      "countryMismatch": "Filtry byly odebrány, protože nepatří do země {country}: {filters}.",
+      "remove": "Odebrat filtr {filter}",
+      "showInCountry": "Zobrazit {filter} pro zemi {country}"
     },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazyků}}",

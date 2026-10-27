@@ -126,6 +126,9 @@ export function PublicLawBreadcrumbs() {
                 activeProps={CRUMB_ACTIVE_PROPS}
                 className={CRUMB_LINK_CLASS}
                 to="/law/cases"
+                search={
+                  trail?.kind === "decision" ? trail.country.link.search : {}
+                }
               >
                 {t("common.caseLaw")}
               </Link>

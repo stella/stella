@@ -1,12 +1,17 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { caseLawFilterValidationSchema } from "@stll/api-contract/case-law-filter-scope";
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
+import {
+  decisionFilterValidationHandler,
+  decisionFilterValidationQuerySchema,
+} from "@/api/handlers/case-law/decisions/filter-validation";
 import {
   readDecisionHandler,
   readDecisionQuerySchema,
@@ -154,6 +159,31 @@ const readStatuteCitationCounts = createSafeBoundedPublicHandler(
     );
     return Result.ok(
       projectResponseText(response, citationCountsSuccessResponseSchema),
+    );
+  },
+);
+
+const validateDecisionFilters = createSafeBoundedPublicHandler(
+  {
+    contract: "patch",
+    accountAccess: ACCOUNT_ACCESS.sandbox,
+    mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
+    response: withPublicCountryUnavailable(
+      safePublicHandlerResponseSchemasWithStatusText(
+        caseLawFilterValidationSchema,
+      ),
+    ),
+    query: decisionFilterValidationQuerySchema,
+  },
+  async function* ({ query }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await decisionFilterValidationHandler(query),
+      ),
+    );
+    return Result.ok(
+      projectResponseText(response, caseLawFilterValidationSchema),
     );
   },
 );
@@ -487,6 +517,7 @@ export const publicCaseLawRoute = routes(
     "/coverage": { GET: readCaseLawCoverage },
     "/decisions": { GET: listDecisions },
     "/decisions/facets": { GET: listDecisionFacets },
+    "/decisions/filter-validation": { GET: validateDecisionFilters },
     "/decisions/status": { GET: readCaseLawCorpusStatus },
     "/decisions/latest": { GET: listLatestDecisions },
     "/decisions/by-slug/:slug": { GET: readDecisionBySlug },

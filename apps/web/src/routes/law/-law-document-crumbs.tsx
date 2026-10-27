@@ -22,6 +22,7 @@ import {
   STATUTE_STATUS_LABEL_KEYS,
 } from "@/features/statutes/statute-status";
 import { useFormatter } from "@/i18n/formatting-context";
+import { caseLawCountryName } from "@/lib/case-law-route";
 
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 
@@ -41,6 +42,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
         statusLabelKey === null ? trail.status : t(statusLabelKey);
       return (
         <>
+          <BreadcrumbSeparator className="max-sm:hidden" />
+          <BreadcrumbItem className="max-sm:hidden">
+            <Link {...trail.country.link} activeOptions={{ exact: true }}>
+              {caseLawCountryName(format, trail.country.code)}
+            </Link>
+          </BreadcrumbItem>
           {trail.yearLink !== null && (
             <>
               <BreadcrumbSeparator className="max-sm:hidden" />
@@ -103,6 +110,12 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
     case "decision":
       return (
         <>
+          <BreadcrumbSeparator className="max-sm:hidden" />
+          <BreadcrumbItem className="max-sm:hidden">
+            <Link {...trail.country.link} activeOptions={{ exact: true }}>
+              {caseLawCountryName(format, trail.country.code)}
+            </Link>
+          </BreadcrumbItem>
           <BreadcrumbSeparator className="max-sm:hidden" />
           <BreadcrumbItem className="min-w-0 max-sm:hidden">
             <Link {...trail.court.link} className="min-w-0">

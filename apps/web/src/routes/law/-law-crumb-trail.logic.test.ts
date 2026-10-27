@@ -24,6 +24,13 @@ describe("statute breadcrumb identity and destinations", () => {
 
     expect(statuteLawCrumbTrailOf(statute)).toEqual({
       kind: "statute",
+      country: {
+        code: statute.country,
+        link: {
+          to: "/law/$country/statutes",
+          params: { country: statute.country.toLowerCase() },
+        },
+      },
       status: statute.status,
       validFrom: statute.versionValidFrom,
       expression: {
@@ -81,6 +88,13 @@ describe("statute breadcrumb identity and destinations", () => {
 
       expect(statuteLawCrumbTrailOf(statute)).toEqual({
         kind: "statute",
+        country: {
+          code: statute.country,
+          link: {
+            to: "/law/$country/statutes",
+            params: { country: statute.country.toLowerCase() },
+          },
+        },
         status: statute.status,
         validFrom: statute.versionValidFrom,
         expression: {
@@ -116,6 +130,13 @@ describe("statute breadcrumb identity and destinations", () => {
 
     expect(statuteLawCrumbTrailOf(statute)).toEqual({
       kind: "statute",
+      country: {
+        code: statute.country,
+        link: {
+          to: "/law/$country/statutes",
+          params: { country: statute.country.toLowerCase() },
+        },
+      },
       status: statute.status,
       validFrom: statute.versionValidFrom,
       expression: {
@@ -134,6 +155,7 @@ describe("statute breadcrumb identity and destinations", () => {
 describe("decision breadcrumb identity and destinations", () => {
   test("retains the court, case number and legal area and scopes the year to the court", () => {
     const decision = {
+      country: "CZE",
       court: "Nejvyšší soud",
       courtAbbreviation: "NS",
       courtTier: "supreme",
@@ -144,17 +166,25 @@ describe("decision breadcrumb identity and destinations", () => {
 
     expect(decisionLawCrumbTrailOf(decision)).toEqual({
       kind: "decision",
+      country: {
+        code: decision.country,
+        link: { to: "/law/cases", search: { country: "cze" } },
+      },
       court: {
         name: decision.court,
         abbreviation: "NS",
         tier: "supreme",
-        link: { to: "/law/cases", search: { court: decision.court } },
+        link: {
+          to: "/law/cases",
+          search: { country: "cze", court: decision.court },
+        },
       },
       yearLink: {
         year: 2024,
         link: {
           to: "/law/cases",
           search: {
+            country: "cze",
             court: decision.court,
             from: "2024-01-01",
             to: "2024-12-31",
@@ -168,6 +198,7 @@ describe("decision breadcrumb identity and destinations", () => {
 
   test("links the year to a search the results page reads as that whole year", () => {
     const trail = decisionLawCrumbTrailOf({
+      country: "CZE",
       court: "Ústavní soud",
       courtAbbreviation: "ÚS",
       caseNumber: "III.ÚS 290/26",
@@ -185,6 +216,7 @@ describe("decision breadcrumb identity and destinations", () => {
 
   test("keeps the court destination when the date, abbreviation, tier and legal area are absent", () => {
     const decision = {
+      country: "CZE",
       court: "Synthetic court",
       courtAbbreviation: null,
       caseNumber: "SYN 1/2026",
@@ -194,11 +226,18 @@ describe("decision breadcrumb identity and destinations", () => {
 
     expect(decisionLawCrumbTrailOf(decision)).toEqual({
       kind: "decision",
+      country: {
+        code: decision.country,
+        link: { to: "/law/cases", search: { country: "cze" } },
+      },
       court: {
         name: decision.court,
         abbreviation: null,
         tier: undefined,
-        link: { to: "/law/cases", search: { court: decision.court } },
+        link: {
+          to: "/law/cases",
+          search: { country: "cze", court: decision.court },
+        },
       },
       yearLink: null,
       caseNumber: decision.caseNumber,
@@ -214,6 +253,7 @@ describe("decision breadcrumb identity and destinations", () => {
     { legalArea: null },
   ])("omits a legal area that is not text: %j", ({ legalArea }) => {
     const decision = {
+      country: "CZE",
       court: "Synthetic court",
       courtAbbreviation: null,
       caseNumber: "SYN 1/2026",
@@ -256,3 +296,36 @@ test("every public law reader route has exactly one breadcrumb producer", () => 
     Object.keys(LAW_CRUMB_TRAIL_PRODUCERS).toSorted(),
   );
 });
+
+test.each([
+  { country: "CZE", court: "Ústavní soud" },
+  { country: "SVK", court: "Ústavný súd SR" },
+  { country: "POL", court: "Sąd Najwyższy" },
+  { country: "EU", court: "Court of Justice" },
+  { country: "HUN", court: "Kúria" },
+])(
+  "decision breadcrumb links retain $country for country, court and year",
+  ({ country, court }) => {
+    const trail = decisionLawCrumbTrailOf({
+      country,
+      court,
+      courtAbbreviation: null,
+      caseNumber: "1/2026",
+      decisionDate: "2026-01-01",
+      metadata: {},
+    });
+    expect(trail.country.link.search).toEqual({
+      country: country.toLowerCase(),
+    });
+    expect(trail.court.link.search).toEqual({
+      country: country.toLowerCase(),
+      court,
+    });
+    expect(trail.yearLink?.link.search).toEqual({
+      country: country.toLowerCase(),
+      court,
+      from: "2026-01-01",
+      to: "2026-12-31",
+    });
+  },
+);

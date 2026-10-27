@@ -1022,7 +1022,9 @@
     },
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
-      "remove": "Noņemt filtru {filter}"
+      "countryMismatch": "Noņemti filtri, kas neattiecas uz izvēlēto valsti ({country}): {filters}.",
+      "remove": "Noņemt filtru {filter}",
+      "showInCountry": "Rādīt {filter} valstī {country}"
     },
     "languages": {
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",

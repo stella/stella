@@ -66,9 +66,9 @@ import {
   caseLawPageNumber,
   caseLawPageRest,
 } from "@/features/case-law/case-law-pages.logic";
+import { caseLawResultsFeedback } from "@/features/case-law/components/case-law-filter-notice";
 import {
   CaseLawAutoRewrite,
-  CaseLawNoResults,
   RewrittenSearchLine,
 } from "@/features/case-law/components/case-law-no-results";
 import { CaseLawResultsSummary } from "@/features/case-law/components/case-law-results-summary";
@@ -124,7 +124,10 @@ import {
   searchTiming,
   useSearchResultsTiming,
 } from "@/lib/analytics/search-timing";
-import { resolveCaseLawRouteCountry } from "@/lib/case-law-route";
+import {
+  caseLawCountryName,
+  resolveCaseLawRouteCountry,
+} from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { isSearchUnavailableError } from "@/lib/public-law-api";
@@ -203,7 +206,10 @@ const formatIsoDate = (
 ): string =>
   format.dateTime(
     Temporal.PlainDate.from(value).toZonedDateTime("UTC").epochMilliseconds,
-    { dateStyle: "medium", timeZone: "UTC" },
+    {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    },
   );
 
 /**
@@ -449,7 +455,9 @@ export function PublicCaseLawIndex({
   const warnings = caseLawWarningSurfaces(firstPage?.answered ?? null);
   const facets: DecisionFilterFacets = decisionFilterFacets({
     browse: browseFacets ?? NO_BROWSE_FACETS,
-    search: firstPage?.facets ?? null,
+    search: firstPageQuery.isPlaceholderData
+      ? null
+      : (firstPage?.facets ?? null),
   });
 
   // A pending debounced query write holds text the URL has not seen yet.
@@ -469,7 +477,11 @@ export function PublicCaseLawIndex({
     await navigate({
       replace: true,
       search: (previous) =>
-        nextSearch({ ...withPendingQuery(previous, pending), page: undefined }),
+        nextSearch({
+          ...withPendingQuery(previous, pending),
+          page: undefined,
+          filterNotice: undefined,
+        }),
     });
   };
 
@@ -714,6 +726,36 @@ export function PublicCaseLawIndex({
     unavailableReason: t("caseLaw.sort.oldestUnavailable"),
   });
 
+  const feedback = caseLawResultsFeedback({
+    notice: {
+      country: scope,
+      search,
+      onDismiss: () => {
+        detached(
+          navigate({
+            replace: true,
+            search: { ...search, filterNotice: undefined },
+          }),
+          "cases.dismiss-filter-notice",
+        );
+      },
+    },
+    phase: rows,
+    resultCount: decisions.length,
+    unavailable: isSearchUnavailable,
+    isTextSearch: intent.type === "text",
+    noResults: {
+      askScope,
+      onSearchEveryWord:
+        warnings.resultsLine !== null && rowsAnswerRequestedSearch(rows)
+          ? searchEveryWord
+          : null,
+      query: search.q ?? "",
+      reason: warnings.emptyState,
+      refine,
+    },
+  });
+
   // The pane below claims the page's height, so on a normal viewport nothing
   // overflows here and the table owns the only scroll. The page scroller stays
   // as the fallback for a viewport too short to hold the table's own minimum:
@@ -810,20 +852,26 @@ export function PublicCaseLawIndex({
           }
         />
 
-        <PublicLawFilterChips
-          chips={chips}
-          onClearAll={() => {
-            // Clear the filters, not the query the reader typed into the box:
-            // the box is the search, and emptying it is its own gesture.
-            detached(
-              searchNavigation((previous) => ({
-                ...previous,
-                ...clearedCaseLawFilters(),
-              })),
-              "cases.clear-filters",
-            );
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="bg-muted rounded-md border px-2 py-1 text-xs">
+            {caseLawCountryName(format, scope)}
+          </span>
+          <PublicLawFilterChips
+            chips={chips}
+            onClearAll={() => {
+              // Clear the filters, not the query the reader typed into the box:
+              // the box is the search, and emptying it is its own gesture.
+              detached(
+                searchNavigation((previous) => ({
+                  ...previous,
+                  ...clearedCaseLawFilters(),
+                })),
+                "cases.clear-filters",
+              );
+            }}
+          />
+        </div>
+        {feedback.aboveResults}
 
         {isSearchUnavailable ? (
           <SearchUnavailable
@@ -839,22 +887,7 @@ export function PublicCaseLawIndex({
             <DecisionTable
               dateOrder={dateOrder}
               decisions={find.rows}
-              emptyState={
-                intent.type === "text" ? (
-                  <CaseLawNoResults
-                    askScope={askScope}
-                    onSearchEveryWord={
-                      warnings.resultsLine !== null &&
-                      rowsAnswerRequestedSearch(rows)
-                        ? searchEveryWord
-                        : null
-                    }
-                    query={search.q ?? ""}
-                    reason={warnings.emptyState}
-                    refine={refine}
-                  />
-                ) : undefined
-              }
+              emptyState={feedback.emptyState}
               expectedRowCount={pageSize}
               findHighlight={find.highlight}
               firstRowNumber={(pager.currentPage - 1) * pageSize + 1}

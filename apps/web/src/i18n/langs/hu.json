@@ -1022,7 +1022,9 @@
     },
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
     "filters": {
-      "remove": "A(z) {filter} szűrő eltávolítása"
+      "countryMismatch": "A következő szűrőket eltávolítottuk, mert nem ehhez az országhoz tartoznak ({country}): {filters}.",
+      "remove": "A(z) {filter} szűrő eltávolítása",
+      "showInCountry": "{filter} megjelenítése ebben az országban: {country}"
     },
     "languages": {
       "count": "{count, plural, one {# nyelv} other {# nyelv}}",

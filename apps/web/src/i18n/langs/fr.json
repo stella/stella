@@ -1022,7 +1022,9 @@
     },
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
     "filters": {
-      "remove": "Retirer le filtre {filter}"
+      "countryMismatch": "Filtres supprimés car ils ne correspondent pas à {country} : {filters}.",
+      "remove": "Retirer le filtre {filter}",
+      "showInCountry": "Afficher {filter} pour {country}"
     },
     "languages": {
       "count": "{count, plural, one {# langue} other {# langues}}",

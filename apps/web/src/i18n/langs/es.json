@@ -1022,7 +1022,9 @@
     },
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
-      "remove": "Quitar el filtro {filter}"
+      "countryMismatch": "Se han eliminado los filtros que no corresponden a {country}: {filters}.",
+      "remove": "Quitar el filtro {filter}",
+      "showInCountry": "Mostrar {filter} en {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",

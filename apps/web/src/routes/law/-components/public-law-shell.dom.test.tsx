@@ -38,6 +38,7 @@ const statute = {
   title: "178/2026 Sb., o portálu kritické infrastruktury",
 } satisfies Parameters<typeof statuteLawCrumbTrailOf>[0];
 const decision = {
+  country: "CZE",
   court: "Nejvyšší správní soud",
   courtAbbreviation: "NSS",
   courtTier: "supreme",
@@ -50,12 +51,14 @@ type MountOptions = {
   kind: "statute" | "versioned-statute" | "decision";
   locale?: string;
   document?: Parameters<typeof statuteLawCrumbTrailOf>[0];
+  caseDecision?: Parameters<typeof decisionLawCrumbTrailOf>[0];
 };
 
 const mount = async ({
   kind,
   locale = "en",
   document = statute,
+  caseDecision = decision,
 }: MountOptions) => {
   const root = createRootRoute();
   const route =
@@ -71,7 +74,7 @@ const mount = async ({
       : createRoute({
           getParentRoute: () => root,
           path: "/law/$country/cases/$court/$slug",
-          loader: () => decision,
+          loader: () => caseDecision,
         });
   const statuteUrl =
     kind === "versioned-statute"
@@ -114,6 +117,9 @@ test("statute shell shows linked hierarchy, identity, short title and the full t
   expect(
     screen.getByRole("link", { name: en.statutes.title }).getAttribute("href"),
   ).toBe("/law/cze/statutes");
+  expect(
+    screen.getByRole("link", { name: "Czechia" }).getAttribute("href"),
+  ).toBe("/law/cze/statutes");
   expect(screen.getByRole("link", { name: "2026" }).getAttribute("href")).toBe(
     "/law/cze/statutes?year=2026",
   );
@@ -140,7 +146,7 @@ test("decision shell links court and decision year before the current docket and
   const { container } = await mount({ kind: "decision" });
   expect(
     screen.getByRole("link", { name: en.common.caseLaw }).getAttribute("href"),
-  ).toBe("/law/cases");
+  ).toBe("/law/cases?country=cze");
   const court = screen.getByRole("link", { name: /Nejvyšší správní soud/u });
   expect(
     new URL(
@@ -148,11 +154,21 @@ test("decision shell links court and decision year before the current docket and
       "http://localhost:3000",
     ).searchParams.get("court"),
   ).toBe(decision.court);
+  expect(
+    new URL(
+      court.getAttribute("href") ?? "",
+      "http://localhost:3000",
+    ).searchParams.get("country"),
+  ).toBe("cze");
+  expect(
+    screen.getByRole("link", { name: "Czechia" }).getAttribute("href"),
+  ).toBe("/law/cases?country=cze");
   expect(court.querySelector('[data-kind="decision"]')).not.toBeNull();
   const yearUrl = new URL(
     screen.getByRole("link", { name: "2026" }).getAttribute("href") ?? "",
     "http://localhost:3000",
   );
+  expect(yearUrl.searchParams.get("country")).toBe("cze");
   expect(yearUrl.pathname).toBe("/law/cases");
   expect(yearUrl.searchParams.get("court")).toBe(decision.court);
   expect(yearUrl.searchParams.get("from")).toBe("2026-01-01");
@@ -209,4 +225,27 @@ test("versioned statute breadcrumb names an expression that never entered into f
   expect(
     screen.queryByRole("img", { name: en.statutes.status.current }),
   ).toBeNull();
+});
+
+test("Hungarian decision breadcrumb names its country and keeps court and year in Hungary", async () => {
+  await mount({
+    kind: "decision",
+    caseDecision: {
+      ...decision,
+      country: "HUN",
+      court: "Kúria",
+      courtAbbreviation: null,
+      caseNumber: "Pfv.20353/2026/4",
+    },
+  });
+  const country = screen.getByRole("link", { name: "Hungary" });
+  expect(country.getAttribute("href")).toBe("/law/cases?country=hun");
+  for (const name of [/Kúria/u, "2026"]) {
+    const url = new URL(
+      screen.getByRole("link", { name }).getAttribute("href") ?? "",
+      "http://localhost:3000",
+    );
+    expect(url.searchParams.get("country")).toBe("hun");
+    expect(url.searchParams.get("court")).toBe("Kúria");
+  }
 });

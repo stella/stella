@@ -1,4 +1,5 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -15,6 +16,7 @@ import {
 } from "@/api/handlers/case-law/court-weight-seed";
 import { readLatestDecisionsByCourt } from "@/api/handlers/case-law/decisions/latest";
 import { listDecisionsHandler } from "@/api/handlers/case-law/decisions/list";
+import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { readShelfCourts } from "@/api/handlers/case-law/decisions/shelf-courts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type {
@@ -583,3 +585,29 @@ test(
   },
   DB_TEST_TIMEOUT_MS,
 );
+
+test("browse and search refuse a court belonging to another country with a typed client error", async () => {
+  const court = seeds.find((seed) => seed.country === "SVK")?.court;
+  expect(court).toBeDefined();
+  if (court === undefined) {
+    panic("The test requires a Slovak court");
+  }
+  const browse = await listDecisionsHandler(
+    { country: "CZE", court },
+    caseLawDb,
+  );
+  expect(browse).toMatchObject({
+    code: 400,
+    response: { message: "Filters do not belong to CZE: court" },
+  });
+  for (const filter of [{ court }, { courts: [court] }]) {
+    const search = await searchDecisionsHandler({
+      body: { country: "CZE", query: "contract", ...filter },
+      caseLawDb,
+    });
+    expect(search).toMatchObject({
+      code: 400,
+      response: { message: "Filters do not belong to CZE: court" },
+    });
+  }
+});

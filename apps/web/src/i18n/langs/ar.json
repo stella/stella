@@ -1022,7 +1022,9 @@
     },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
-      "remove": "إزالة عامل التصفية {filter}"
+      "countryMismatch": "أُزيلت عوامل التصفية لأنها لا تخص البلد المحدد ({country}): {filters}.",
+      "remove": "إزالة عامل التصفية {filter}",
+      "showInCountry": "عرض {filter} في {country}"
     },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",

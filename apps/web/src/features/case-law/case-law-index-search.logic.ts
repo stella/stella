@@ -12,6 +12,7 @@
 
 import { Result } from "better-result";
 
+import { CASE_LAW_SCOPED_FILTER_FIELDS } from "@stll/api-contract/case-law-filter-scope";
 import type { DecisionSort } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
 
@@ -65,12 +66,7 @@ export type CaseLawIndexSearch = {
 };
 
 /** The single-select facet fields, so clearing cannot miss one added later. */
-export const CASE_LAW_FILTER_KEYS = [
-  "court",
-  "lang",
-  "sourceId",
-  "type",
-] as const;
+export const CASE_LAW_FILTER_KEYS = CASE_LAW_SCOPED_FILTER_FIELDS;
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
 
