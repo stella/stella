@@ -77,7 +77,7 @@ const selectAISettingsRow = async (
   db: OrgSettingsReader,
   organizationId: SafeId<"organization">,
 ) => {
-  const result = await Result.tryPromise(() =>
+  const result = await Result.tryPromise(async () =>
     queryAISettingsRow(db, organizationId),
   );
   if (Result.isOk(result)) {
