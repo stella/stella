@@ -65,6 +65,7 @@ const deploymentTemplates = async () => {
     "git",
     ["ls-files", "--cached", "--others", "--exclude-standard", "-z"],
     {
+      maxBuffer: 2 ** 30,
       cwd: new URL("..", import.meta.url),
       encoding: "utf-8",
     },

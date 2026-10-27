@@ -21,11 +21,21 @@ const FAILURE = "That did not work";
 const userVisibleReports = (capture: {
   mock: { calls: readonly (readonly unknown[])[] };
 }) =>
-  capture.mock.calls.filter(([, context]) => {
-    if (typeof context !== "object" || context === null) {
+  capture.mock.calls.filter(([, options]) => {
+    if (
+      typeof options !== "object" ||
+      options === null ||
+      !("context" in options)
+    ) {
       return false;
     }
-    return "type" in context && context.type === "user-visible";
+    const { context } = options;
+    return (
+      typeof context === "object" &&
+      context !== null &&
+      "type" in context &&
+      context.type === "user-visible"
+    );
   });
 
 /** Let the detached rejection handler run. */
@@ -53,9 +63,13 @@ describe("detachedUserAction", () => {
     await settle();
 
     expect(capture).toHaveBeenCalledWith(failure, {
-      feature: "web",
-      routeTemplate: "unknown",
-      type: "user-visible",
+      fingerprintKey: "reportUserVisibleError:failure",
+      scope: { type: "request", method: "GET", routeTemplate: "unknown" },
+      context: {
+        feature: "web",
+        routeTemplate: "unknown",
+        type: "user-visible",
+      },
     });
     expect(add).toHaveBeenCalledTimes(1);
     expect(add.mock.calls.at(0)?.[0]).toMatchObject({ type: "error" });
@@ -121,7 +135,11 @@ describe("notifyUserError", () => {
       () => undefined,
     );
     const failure = new Error("render failed");
-    const report = (error: unknown) => capture(error);
+    const report = (error: unknown) =>
+      capture(error, {
+        fingerprintKey: "notifyUserError:boundary",
+        scope: { type: "handler", handlerId: "notifyUserError:boundary" },
+      });
 
     reportErrorOnce(failure, report);
     reportErrorOnce(failure, report);
@@ -149,9 +167,13 @@ describe("notifyUserError", () => {
 
     expect(userVisibleReports(capture)).toHaveLength(1);
     expect(capture).toHaveBeenCalledWith(failure, {
-      feature: "auth",
-      routeTemplate: "/auth/error",
-      type: "user-visible",
+      fingerprintKey: "reportUserVisibleError:failure",
+      scope: { type: "request", method: "GET", routeTemplate: "/auth/error" },
+      context: {
+        feature: "auth",
+        routeTemplate: "/auth/error",
+        type: "user-visible",
+      },
     });
   });
 

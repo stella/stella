@@ -34,6 +34,8 @@ import {
   type JsonSchema,
 } from "@/api/lib/json-schema/valibot-to-json-schema";
 import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -152,8 +154,8 @@ type CatalogEntry = {
   scope: string;
   additionalScopes?: readonly string[];
   /**
-   * When true, this capability's REST route resolves workspace access through
-   * `validateWorkspaceAccessIncludingArchived` (e.g. `matters.unarchive`), so
+   * When true, this capability's REST route admits archived matters
+   * (`workspaceStatus: "active-or-archived"`, e.g. `matters.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
    */
   allowsArchivedWorkspace?: boolean;
@@ -1274,14 +1276,20 @@ const loadEndpointGuarded = async (
   try {
     endpoint = await loadCapabilityEndpoint(id);
   } catch (error) {
-    captureError(error, { source: "mcp", toolName });
+    captureError(
+      error,
+      handlerErrorContext("mcp.loadEndpoint", { source: "mcp", toolName }),
+    );
     endpoint = null;
   }
   if (!endpoint) {
-    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      source: "mcp",
-      toolName,
-    });
+    captureError(
+      new Error(`capability dispatch missing endpoint: ${id}`),
+      handlerErrorContext("mcp.missingEndpoint", {
+        source: "mcp",
+        toolName,
+      }),
+    );
     return {
       ok: false,
       result: structuredErrorResult({
@@ -1980,20 +1988,28 @@ const invokeCapabilityHandler = async ({
   }
 
   try {
-    return await executeInvoke({
-      context: requiresCapabilityConfirmation(entry)
-        ? bindApprovedMcpAuditContext(context)
-        : context,
-      entry,
-      id,
-      input,
-      validateOnly,
-      confirm,
-    });
+    return await withExceptionScope(
+      { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      async () =>
+        await executeInvoke({
+          context: requiresCapabilityConfirmation(entry)
+            ? bindApprovedMcpAuditContext(context)
+            : context,
+          entry,
+          id,
+          input,
+          validateOnly,
+          confirm,
+        }),
+    );
   } catch (error) {
     captureError(error, {
-      source: "mcp",
-      toolName: MCP_CAPABILITY_EXECUTORS[access],
+      fingerprintKey: "mcp.invokeCapabilityHandler",
+      scope: { type: "handler", handlerId: `mcp.capability.${entry.id}` },
+      context: {
+        source: "mcp",
+        toolName: MCP_CAPABILITY_EXECUTORS[access],
+      },
     });
     return structuredErrorResult({
       code: "internal_error",
@@ -2026,7 +2042,7 @@ const invokeCapabilityHandler = async ({
  * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
  *   per-capability `destructive` flag.
  * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
- *   mirrors `validateWorkspaceAccess`(-IncludingArchived per fix-4 flag).
+ *   mirrors the route's `workspaceStatus` (archived admitted per that flag).
  * - Member permissions + usage preflight: run inside the safe-handler wrapper
  *   (`endpoint.handler`), the same code path REST uses; validateOnly
  *   additionally mirrors the permission gate explicitly (the wrapper is not

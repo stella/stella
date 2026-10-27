@@ -107,6 +107,10 @@ const mountSettingsMutation = () => {
   const { result, unmount } = testing.renderHook(
     () =>
       useSettingsMutation({
+        exceptionScope: {
+          type: "handler",
+          handlerId: "mountSettingsMutation.useSettingsMutation",
+        },
         mutationFn: async (value: number) => {
           const settle = Promise.withResolvers<number>();
           sent.push(value);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -20,16 +20,10 @@ import { Form } from "@stll/ui/form";
 import { ArrowLeftIcon, PlusIcon, StarIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -130,7 +124,10 @@ const RateTablesView = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure",
+        scope: { type: "handler", handlerId: "RateTablesView:failure" },
+      });
     },
   });
   const deleteTable = useMutation({
@@ -150,7 +147,10 @@ const RateTablesView = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure-2",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-2" },
+      });
     },
   });
   type UpdateRateTableVars = {
@@ -174,7 +174,10 @@ const RateTablesView = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateTablesView:failure-3",
+        scope: { type: "handler", handlerId: "RateTablesView:failure-3" },
+      });
     },
   });
 
@@ -483,7 +486,10 @@ const RateEntriesView = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateEntriesView:failure",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure" },
+      });
     },
   });
   const deleteEntry = useMutation({
@@ -507,7 +513,10 @@ const RateEntriesView = ({
       return unwrapApiResponse(response);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "RateEntriesView:failure-2",
+        scope: { type: "handler", handlerId: "RateEntriesView:failure-2" },
+      });
     },
   });
 
@@ -675,6 +684,13 @@ const CreateRateEntryForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
+  const userFieldId = useId();
+  const memberOptions = members.map((member) => ({
+    email: member.user.email,
+    image: member.user.image ?? null,
+    name: member.user.name,
+    userId: member.userId,
+  }));
   const schema = v.strictObject({
     userId: v.pipe(
       v.string(),
@@ -736,57 +752,21 @@ const CreateRateEntryForm = ({
       }}
     >
       <div className="flex flex-col gap-1.5">
-        <Label>{t("common.user")}</Label>
+        <Label htmlFor={userFieldId}>{t("common.user")}</Label>
         <form.Field name="userId">
           {(field) => (
-            <Select
-              onValueChange={(val) => field.handleChange(val ?? "")}
-              value={field.state.value}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("billing.rates.defaultRate")}>
-                  {(current) => {
-                    if (typeof current !== "string" || current.length === 0) {
-                      return t("billing.rates.defaultRate");
-                    }
-
-                    const selectedMember = members.find(
-                      (member) => member.userId === current,
-                    );
-
-                    if (!selectedMember) {
-                      return t("billing.rates.defaultRate");
-                    }
-
-                    return (
-                      <UserIdentity
-                        avatarClassName="size-7 shrink-0 text-3xs"
-                        className="min-w-0"
-                        image={selectedMember.user.image}
-                        name={selectedMember.user.name}
-                        secondaryText={selectedMember.user.email}
-                      />
-                    );
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="">
-                  {t("billing.rates.defaultRate")}
-                </SelectItem>
-                {members.map((member) => (
-                  <SelectItem key={member.userId} value={member.userId}>
-                    <UserIdentity
-                      avatarClassName="size-7 shrink-0 text-3xs"
-                      className="min-w-0"
-                      image={member.user.image}
-                      name={member.user.name}
-                      secondaryText={member.user.email}
-                    />
-                  </SelectItem>
-                ))}
-              </SelectPopup>
-            </Select>
+            <MemberCombobox
+              choice={{
+                type: MEMBER_CHOICE.memberOrNone,
+                noneLabel: t("billing.rates.defaultRate"),
+              }}
+              id={userFieldId}
+              label={t("common.user")}
+              members={memberOptions}
+              onValueChange={(userId) => field.handleChange(userId ?? "")}
+              placeholder={t("billing.rates.defaultRate")}
+              value={field.state.value || null}
+            />
           )}
         </form.Field>
       </div>

@@ -49,7 +49,10 @@ export const useCreateTask = () => {
       ]);
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useCreateTask:failure",
+        scope: { type: "handler", handlerId: "useCreateTask:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -63,19 +66,22 @@ type TaskAssigneeVars = {
 type InvalidateTaskQueriesOptions = {
   queryClient: QueryClient;
   workspaceId: string;
-  taskId: string;
+  /** Every task that changed: one refresh covers a whole batch. */
+  taskIds: readonly string[];
 };
 
 /** Refresh every task projection, including open Inspector details. */
 export const invalidateTaskQueries = async ({
   queryClient,
   workspaceId,
-  taskId,
+  taskIds,
 }: InvalidateTaskQueriesOptions) => {
   await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: taskKeys.detail(workspaceId, taskId),
-    }),
+    ...taskIds.map(async (taskId) =>
+      queryClient.invalidateQueries({
+        queryKey: taskKeys.detail(workspaceId, taskId),
+      }),
+    ),
     queryClient.invalidateQueries({ queryKey: myWorkKeys.all }),
     queryClient.invalidateQueries({
       queryKey: entitiesKeys.all(workspaceId),
@@ -103,10 +109,17 @@ export const useAddTaskAssignee = (workspaceId: string) => {
       return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { taskId }) => {
-      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
+      await invalidateTaskQueries({
+        queryClient,
+        workspaceId,
+        taskIds: [taskId],
+      });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useAddTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useAddTaskAssignee:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
@@ -129,16 +142,24 @@ export const useRemoveTaskAssignee = (workspaceId: string) => {
       return unwrapApiResponse(response);
     },
     onSuccess: async (_data, { taskId }) => {
-      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
+      await invalidateTaskQueries({
+        queryClient,
+        workspaceId,
+        taskIds: [taskId],
+      });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "useRemoveTaskAssignee:failure",
+        scope: { type: "handler", handlerId: "useRemoveTaskAssignee:failure" },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
 };
 
 type MoveTaskAssigneeVars = {
+  workspaceId: string;
   taskId: string;
   fromUserId: string | null;
   toUserId: string | null;
@@ -148,34 +169,21 @@ type MoveTaskAssigneeVars = {
  * Reassign a task from one member to another in one atomic request (see
  * tasks.assignees-move): a kanban lane drag calls this once instead of
  * pairing useRemoveTaskAssignee and useAddTaskAssignee, so a failed add can
- * never leave the task with neither assignee.
+ * never leave the task with neither assignee. The caller settles it: a lane
+ * drag may move several cards and refreshes and reports them once.
  */
-export const useMoveTaskAssignee = (workspaceId: string) => {
-  const queryClient = useQueryClient();
-  const analytics = useAnalytics();
-  const t = useTranslations();
-
-  return useMutation({
-    mutationFn: async ({
-      taskId,
-      fromUserId,
-      toUserId,
-    }: MoveTaskAssigneeVars) => {
-      const response = await api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .assignees.move.post({
-          taskId: toSafeId<"entity">(taskId),
-          fromUserId: fromUserId === null ? null : toSafeId<"user">(fromUserId),
-          toUserId: toUserId === null ? null : toSafeId<"user">(toUserId),
-        });
-      return unwrapApiResponse(response);
-    },
-    onSuccess: async (_data, { taskId }) => {
-      await invalidateTaskQueries({ queryClient, workspaceId, taskId });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-  });
+export const moveTaskAssigneeRequest = async ({
+  workspaceId,
+  taskId,
+  fromUserId,
+  toUserId,
+}: MoveTaskAssigneeVars) => {
+  const response = await api
+    .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+    .assignees.move.post({
+      taskId: toSafeId<"entity">(taskId),
+      fromUserId: fromUserId === null ? null : toSafeId<"user">(fromUserId),
+      toUserId: toUserId === null ? null : toSafeId<"user">(toUserId),
+    });
+  return unwrapApiResponse(response);
 };

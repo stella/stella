@@ -20,6 +20,7 @@ import {
   createFileRoute,
   Navigate,
   stripSearchParams,
+  useRouter,
 } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -116,6 +117,7 @@ import {
 import { justificationsOptions } from "@/lib/workspaces/queries/workspace";
 import "@/components/pdf/peek/peek-docx.css";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 import { routeSearchSchema } from "@/route-search-params";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 
@@ -178,7 +180,16 @@ export const Route = createFileRoute(
     const entityPromise = loadDocumentEntityWithChatPrefetch({
       activeOrganizationId: context.user.activeOrganizationId,
       captureError: (error: unknown) => {
-        getAnalytics().captureError(error);
+        getAnalytics().captureError(error, {
+          fingerprintKey:
+            "workspaces.workspaceId.viewId.document.loader:failure",
+          scope: {
+            type: "request",
+            method: "GET",
+            routeTemplate:
+              "/_protected/workspaces/$workspaceId/$viewId/document",
+          },
+        });
       },
       loadEntity: async () =>
         await ensureRouteQueryData(
@@ -200,7 +211,16 @@ export const Route = createFileRoute(
           entityId: deps.entity,
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-2",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
+          });
         },
       ),
       "document.prefetch",
@@ -220,7 +240,16 @@ export const Route = createFileRoute(
           entityIds: [deps.entity],
         }),
         (error: unknown) => {
-          getAnalytics().captureError(error);
+          getAnalytics().captureError(error, {
+            fingerprintKey:
+              "workspaces.workspaceId.viewId.document.loader:failure-3",
+            scope: {
+              type: "request",
+              method: "GET",
+              routeTemplate:
+                "/_protected/workspaces/$workspaceId/$viewId/document",
+            },
+          });
         },
       ),
       "document.prefetch",
@@ -253,7 +282,16 @@ export const Route = createFileRoute(
             entityId: deps.entity,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-4",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -273,7 +311,16 @@ export const Route = createFileRoute(
             "cached",
           ),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-5",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -293,7 +340,16 @@ export const Route = createFileRoute(
             fieldId: deps.field,
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-6",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -314,7 +370,16 @@ export const Route = createFileRoute(
             purpose: "native-display",
           }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-7",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -334,7 +399,16 @@ export const Route = createFileRoute(
           context.queryClient,
           fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
           (error: unknown) => {
-            getAnalytics().captureError(error);
+            getAnalytics().captureError(error, {
+              fingerprintKey:
+                "workspaces.workspaceId.viewId.document.loader:failure-8",
+              scope: {
+                type: "request",
+                method: "GET",
+                routeTemplate:
+                  "/_protected/workspaces/$workspaceId/$viewId/document",
+              },
+            });
           },
         ),
         "document.prefetch",
@@ -640,7 +714,10 @@ function RouteComponentInner({
     const leaveResult = await Result.tryPromise(actions.leave);
     isLeavingDocxRef.current = false;
     if (Result.isError(leaveResult)) {
-      getAnalytics().captureError(leaveResult.error);
+      getAnalytics().captureError(leaveResult.error, {
+        fingerprintKey: "RouteComponentInner:failure",
+        scope: { type: "handler", handlerId: "RouteComponentInner:failure" },
+      });
       return true;
     }
     return !leaveResult.value;
@@ -1199,6 +1276,7 @@ function RouteComponentInner({
 /** Recovers by opening the file where every format renders, the side panel. */
 const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
   const t = useTranslations();
+  const router = useRouter();
   const navigate = Route.useNavigate();
   const { viewId, workspaceId } = Route.useParams({
     select: (p) => ({ viewId: p.viewId, workspaceId: p.workspaceId }),
@@ -1218,9 +1296,22 @@ const DocumentDisplayUnavailable = ({ entityId }: { entityId: string }) => {
                   to: "/workspaces/$workspaceId/$viewId",
                   params: { viewId, workspaceId },
                 });
-                await openEntityInInspector(entityId, "", workspaceId);
+                await openEntityInInspector({
+                  documentOnScreen: getCurrentWorkspaceDocument(
+                    router.state.matches,
+                  ),
+                  entityId,
+                  label: "",
+                  workspaceId,
+                });
               } catch (openError) {
-                getAnalytics().captureError(openError);
+                getAnalytics().captureError(openError, {
+                  fingerprintKey: "DocumentDisplayUnavailable:openError",
+                  scope: {
+                    type: "handler",
+                    handlerId: "DocumentDisplayUnavailable:openError",
+                  },
+                });
                 notifyUserError(openError, t("errors.actionFailed"));
               }
             })(),

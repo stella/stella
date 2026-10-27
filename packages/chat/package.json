@@ -73,7 +73,8 @@
     "bun-types": "catalog:",
     "fast-check": "catalog:",
     "react": "catalog:react19",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",

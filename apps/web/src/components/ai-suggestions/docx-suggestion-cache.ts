@@ -1,3 +1,4 @@
+import type { InferDataFromTag, QueryClient } from "@tanstack/react-query";
 /**
  * Keeps the persisted-suggestion list cache truthful to server pending state.
  *
@@ -7,11 +8,10 @@
  * as actionable after any reset. The persistence transport calls this after
  * every successful write that moves a row into or out of `pending`.
  */
-
-import type { InferDataFromTag, QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
@@ -137,9 +137,13 @@ type ServerSuggestionIdentity = {
   createdAt: Date;
 };
 
-const reportMissingRowField = (message: string) => {
+const reportMissingRowField = (
+  message: string,
+  fingerprintKey: ExceptionFingerprintKey,
+) => {
   getAnalytics().captureError(
     new ClientTelemetryError({ area: "docx-suggestion-cache", message }),
+    { fingerprintKey, scope: { type: "handler", handlerId: fingerprintKey } },
   );
 };
 
@@ -152,6 +156,7 @@ const pendingDocxSuggestionRow = (
   if (suggestion.pendingOperation === null) {
     reportMissingRowField(
       "A pending DOCX suggestion row was built without an operation.",
+      "pendingDocxSuggestionRow:missing-operation",
     );
     return null;
   }
@@ -205,6 +210,7 @@ export const revertedDocxSuggestionRow = (
   if (suggestion.createdAt === undefined) {
     reportMissingRowField(
       "A reverted DOCX suggestion has no server createdAt.",
+      "revertedDocxSuggestionRow:missing-created-at",
     );
     return null;
   }

@@ -16,7 +16,7 @@ import {
   type WorkObligationSource,
   workspaces,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -32,6 +32,7 @@ import {
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import {
@@ -497,7 +498,11 @@ export const createTaskEntityHandler = async function* ({
   // A caller-provided transaction has not committed yet. Its owner flushes
   // after commit so the repair worker cannot race an invisible entity.
   if (props.tx === undefined) {
-    flushEntitySearchRepairs([txResult.entityId]).catch(captureError);
+    flushEntitySearchRepairs([txResult.entityId]).catch(
+      createErrorCapture(
+        handlerErrorContext("createTaskEntityHandler.flushEntitySearchRepairs"),
+      ),
+    );
   }
 
   return Result.ok({ entityId: txResult.entityId });
