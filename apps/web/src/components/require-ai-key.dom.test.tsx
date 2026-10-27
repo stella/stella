@@ -367,7 +367,7 @@ test("a provider under another provider reuses the outer gate", async () => {
 });
 
 const { AIProviderSettingsBoundary } =
-  await import("./ai-provider-settings-boundary");
+  await import("@/routes/_protected.admin/-components/organization/ai-provider-settings-boundary");
 
 const surfaceBoundaries = {
   panel: ({ children }: PropsWithChildren) => (

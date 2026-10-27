@@ -18,7 +18,6 @@ import {
   getProviderValues,
   hasUsableOpenAIKey,
 } from "@/components/ai-config-role-models.logic";
-import { AIProviderSettingsBoundary } from "@/components/ai-provider-settings-boundary";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SettingsPageHeader } from "@/components/settings-page-header";
@@ -32,6 +31,7 @@ import { AIProviderRows } from "@/routes/_protected.admin/-components/organizati
 import { AIConfigAdvanced } from "./ai-config-advanced";
 import { hasCustomAIModels } from "./ai-config-form.logic";
 import type { AIConfigFeedback } from "./ai-config-form.logic";
+import { AIProviderSettingsBoundary } from "./ai-provider-settings-boundary";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import { DeepLKeyCard } from "./deepl-key-card";
 import { DocumentProcessingCard } from "./document-processing-card";
