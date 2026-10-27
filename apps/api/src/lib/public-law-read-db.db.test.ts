@@ -169,27 +169,30 @@ test("raw execution preserves getSQL and execute methods", async () => {
 test.each(["await", "execute", "catch", "finally"] as const)(
   "raw statement failures retain public provenance through %s",
   async (entry) => {
-    const outcome = await Result.tryPromise(() =>
-      db.transaction(async (transaction) => {
-        const query = observePublicLawReadTransaction(
-          asTestRaw<Transaction>(transaction),
-        ).execute(sql`SELECT missing_column FROM public_law_observation_probe`);
-        switch (entry) {
-          case "await":
-            return await query;
-          case "execute":
-            return await query.execute();
-          case "catch":
-            return await query.catch((error: unknown) =>
-              abortTransaction(error),
-            );
-          case "finally":
-            return await query.finally(() => undefined);
-          default:
-            entry satisfies never;
-            panic("Unexpected statement entry", entry);
-        }
-      }),
+    const outcome = await Result.tryPromise(
+      async () =>
+        await db.transaction(async (transaction) => {
+          const query = observePublicLawReadTransaction(
+            asTestRaw<Transaction>(transaction),
+          ).execute(
+            sql`SELECT missing_column FROM public_law_observation_probe`,
+          );
+          switch (entry) {
+            case "await":
+              return await query;
+            case "execute":
+              return await query.execute();
+            case "catch":
+              return await query.catch((error: unknown) =>
+                abortTransaction(error),
+              );
+            case "finally":
+              return await query.finally(() => undefined);
+            default:
+              entry satisfies never;
+              return panic("Unexpected statement entry", entry);
+          }
+        }),
     );
     expect(Result.isError(outcome)).toBe(true);
     if (Result.isError(outcome)) {

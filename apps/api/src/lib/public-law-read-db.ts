@@ -139,7 +139,7 @@ const observedQueryBuilder = <T extends object>(
         return (...args: unknown[]) => {
           const outcome = observePublicLawStatement(
             statementName,
-            async () => await target,
+            async () => await Promise.resolve(target),
           ).then((result) => {
             if (Result.isError(result)) {
               return abortTransaction(result.error);
