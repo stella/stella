@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/dm-sans": "0.4.2",
+    "@expo/vector-icons": "15.1.1",
     "@stll/api-contract": "workspace:*",
     "@stll/locales": "workspace:*",
     "better-result": "catalog:",
@@ -41,6 +42,7 @@
     "expo-updates": "~57.0.25",
     "expo-web-browser": "~57.0.3",
     "lucide-react-native": "catalog:",
+    "lucide-static": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "react-native": "0.86.3",

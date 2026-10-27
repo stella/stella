@@ -28,15 +28,6 @@ export const MatterIcon = ({
   );
 };
 
-/** The matters section's own glyph: the same layers, in the muted colour. */
-export const MattersNavIcon = ({
-  color,
-  size = 24,
-}: {
-  color: string;
-  size?: number;
-}) => <LayersIcon color={color} size={size} />;
-
 /**
  * A CSS colour from `resolveMatterColor` as React Native reads it: a hex
  * passes through; `var(--option-blue)` is the theme's `optionBlue`.

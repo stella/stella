@@ -1,64 +1,66 @@
-import { Tabs } from "expo-router";
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useTranslations } from "use-intl";
 
-import { MattersNavIcon } from "@/components/ui/matter-icon";
-import { CogIcon, ListTodoIcon, MessageSquareIcon } from "@/icons.gen";
+import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useAppColors } from "@/theme";
 
 /**
- * The app's sections, each drawn with the web navigation's glyph
- * (apps/web workspace-primary-nav.ts): chat's bubble, tasks' list, the
- * matters layers and settings' cog. `tab-icons.test.ts` holds them equal.
+ * The platform's own tab bar (iOS's, with its glass), each tab drawn with the
+ * web navigation's glyph (apps/web workspace-primary-nav.ts) from lucide:
+ * chat's bubble, tasks' list, the matters layers and settings' cog.
+ * `tab-icons.test.ts` holds them equal.
  */
 const TabLayout = () => {
   const colors = useAppColors();
   const t = useTranslations("tabs");
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        sceneStyle: { backgroundColor: colors.background },
-        tabBarActiveTintColor: colors.text,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: { fontFamily: "DMSans-Medium", fontSize: 11 },
-        tabBarStyle: {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-        },
-      }}
+    <NativeTabs
+      iconColor={{ default: colors.muted, selected: colors.text }}
+      tintColor={colors.text}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          tabBarIcon: ({ color }) => (
-            <MessageSquareIcon color={color} size={22} />
-          ),
-          title: t("chat"),
-        }}
-      />
-      <Tabs.Screen
-        name="tasks"
-        options={{
-          tabBarIcon: ({ color }) => <ListTodoIcon color={color} size={22} />,
-          title: t("tasks"),
-        }}
-      />
-      <Tabs.Screen
-        name="matters"
-        options={{
-          tabBarIcon: ({ color }) => <MattersNavIcon color={color} size={22} />,
-          title: t("matters"),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          tabBarIcon: ({ color }) => <CogIcon color={color} size={22} />,
-          title: t("settings"),
-        }}
-      />
-    </Tabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon
+              family={LucideGlyphs}
+              name="message-square"
+            />
+          }
+        />
+        <NativeTabs.Trigger.Label>{t("chat")}</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="tasks">
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon
+              family={LucideGlyphs}
+              name="list-todo"
+            />
+          }
+        />
+        <NativeTabs.Trigger.Label>{t("tasks")}</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="matters">
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon
+              family={LucideGlyphs}
+              name="layers"
+            />
+          }
+        />
+        <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <NativeTabs.Trigger.Icon
+          src={
+            <NativeTabs.Trigger.VectorIcon family={LucideGlyphs} name="cog" />
+          }
+        />
+        <NativeTabs.Trigger.Label>{t("settings")}</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 };
 
