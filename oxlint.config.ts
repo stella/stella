@@ -753,15 +753,11 @@ const uiStandaloneImports = [
   uiAppCodeImportBan,
 ];
 
-// Workspace packages that exist only to help tests. A ui test file may import
-// them: tsdown builds no test file (see packages/ui/tsdown.config.ts), so the
+// Workspace packages that exist only to help tests, each a devDependency of
+// @stll/ui. A ui test file may import them: tsdown builds no test file (see packages/ui/tsdown.config.ts), so the
 // dependency is a devDependency that never ships. Production src stays banned,
 // and so does every package not named here.
-const UI_TEST_HELPER_PACKAGES = [
-  "@stll/property-testing",
-  "@stll/render-probe",
-  "@stll/ssr-testkit",
-] as const;
+const UI_TEST_HELPER_PACKAGES = ["@stll/property-testing"] as const;
 
 const UI_TEST_FILES = [
   "packages/ui/src/**/*.test.{ts,tsx}",
