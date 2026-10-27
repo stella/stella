@@ -797,7 +797,7 @@ describe("validateMessage", () => {
               positions: [{ sources: [entityRef], text: entityId }],
             },
           },
-        ];
+        ] as const;
         for (const {
           name,
           canonicalInput,

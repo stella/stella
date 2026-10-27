@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/chat/chat-tool-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
+import { hasToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 
@@ -102,6 +103,9 @@ for (const definition of [searchTool, noDefaultsTool, saveMatterTool]) {
             })),
           }),
       });
+      if (!hasToolSchemaInputs(codeMode.tool)) {
+        panic("Code Mode must expose chat-compatible tool schemas");
+      }
       const executions: unknown[] = [];
       const tool = {
         ...definition,
