@@ -25,6 +25,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   invitation: "Membership: invitations belong to the organization's roster.",
   audit_logs: "Audit trail: append-only, and it records the reset itself.",
   organization_settings: "Organization settings, not reviewer content.",
+  billing_draft_user_settings:
+    "Per-user billing draft consent and preferences, not reviewer content.",
   organization_access_states: "Organization access state, set by operators.",
   organization_configured_access: "Organization access, set by operators.",
   feature_enrolments:

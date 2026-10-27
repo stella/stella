@@ -1402,18 +1402,18 @@ const cancelMemberDesktopSessions = async ({
   }
 };
 
-type ClearMemberPresenceOptions = Pick<
+type ClearMemberScopedDataOptions = Pick<
   RemoveOrganizationMemberOptions,
   "tx" | "organizationId" | "userId" | "memberId"
 > & { recordAuditEvent: AuditRecorder };
 
-const clearMemberPresence = async ({
+const clearMemberScopedData = async ({
   tx,
   organizationId,
   userId,
   memberId,
   recordAuditEvent,
-}: ClearMemberPresenceOptions) => {
+}: ClearMemberScopedDataOptions) => {
   await runScopedWorkInTransaction({
     tx,
     organizationId,
@@ -1428,6 +1428,24 @@ const clearMemberPresence = async ({
             eq(desktopPresence.userId, userId),
           ),
         );
+      await scopedTx
+        .delete(billingDraftUserSettings)
+        .where(
+          and(
+            eq(billingDraftUserSettings.organizationId, organizationId),
+            eq(billingDraftUserSettings.userId, userId),
+          ),
+        );
+      await recordAuditEvent(scopedTx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: organizationId,
+        metadata: {
+          change: "member-billing-draft-settings-cleared",
+          memberId,
+          userId,
+        },
+      });
       await recordAuditEvent(scopedTx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
@@ -1546,21 +1564,13 @@ export const removeOrganizationMemberInTransaction = async (
       trigger: { type: "system", source: "membership_removal" },
     },
   });
-  await clearMemberPresence({
+  await clearMemberScopedData({
     tx,
     organizationId,
     userId,
     memberId,
     recordAuditEvent,
   });
-  await tx
-    .delete(billingDraftUserSettings)
-    .where(
-      and(
-        eq(billingDraftUserSettings.organizationId, organizationId),
-        eq(billingDraftUserSettings.userId, userId),
-      ),
-    );
   await tx
     .delete(searchHistoryTombstones)
     .where(
