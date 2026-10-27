@@ -106,6 +106,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   ],
   ["/v1/sanctions", "Public sanctions search is available on every deployment"],
   [
+    "/v1/entities/:workspaceId/entity/:entityId/annotations",
+    "Highlights and comments on a matter document are available on every deployment",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/field/:fieldId/annotations",
+    "Highlights and comments on a matter document are available on every deployment",
+  ],
+  [
     "/synthetic",
     "Dedicated session creation is deployment-owned and refuses access when its credential is unset",
   ],

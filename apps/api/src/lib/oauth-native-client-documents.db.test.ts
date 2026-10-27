@@ -1,4 +1,14 @@
-import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -271,13 +281,10 @@ const signInWithOrganization = async (email: string) => {
   return { ...browser, organizationId: organization.id };
 };
 
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
 
 testState.beforeAll(async () => {
   await initAgentAuthTestDb();
-  fetchSpy.mockImplementation(
-    Object.assign(serveInProcess, { preconnect: fetch.preconnect }),
-  );
 });
 
 afterAll(async () => {
@@ -289,6 +296,16 @@ afterAll(async () => {
     }),
   );
   await releaseAgentAuthTestDb();
+});
+
+beforeEach(() => {
+  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(serveInProcess, { preconnect: fetch.preconnect }),
+  );
+});
+
+afterEach(() => {
+  mock.restore();
 });
 
 describe("stella CLI client document", () => {
@@ -319,8 +336,7 @@ describe("stella CLI client document", () => {
     expect(details.status).toBe(200);
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      unverified: false,
-      verifiedBrand: "stella",
+      client: { type: "verified", brand: "stella" },
     });
   });
 
@@ -393,8 +409,7 @@ describe("stella mobile client document", () => {
     );
     expect(await details.json()).toMatchObject({
       clientIdHost: "stella-api.example.com",
-      unverified: false,
-      verifiedBrand: "stella",
+      client: { type: "verified", brand: "stella" },
     });
   });
 

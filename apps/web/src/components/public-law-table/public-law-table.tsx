@@ -32,6 +32,7 @@ import type {
   TableColumnDef,
 } from "@/components/workspaces/table/types";
 import { useTableState } from "@/components/workspaces/table/use-table-state";
+import type { TableSortingLayout } from "@/components/workspaces/table/use-table-state";
 import { tableSkeletonRowCount } from "@/components/workspaces/table/workspace-table/skeleton-rows.logic";
 import { WorkspaceTable } from "@/components/workspaces/table/workspace-table/workspace-table";
 
@@ -79,6 +80,12 @@ type PublicLawTableProps<
   rowHost: TableRowHost<TRow>;
   rows: TRow[];
   selection?: PublicLawTableSelection | undefined;
+  /**
+   * The order the answer was read in, as a header states it, and how a header
+   * asks for another one. Null where no column states the order: the rows
+   * arrive ordered and the headers offer no order to choose.
+   */
+  sorting: TableSortingLayout | null;
 };
 
 const NO_SELECTION: RowSelectionState = {};
@@ -100,6 +107,7 @@ export const PublicLawTable = <
   rowHost,
   rows,
   selection,
+  sorting,
 }: PublicLawTableProps<TRow, TLayout>) => {
   const t = useTranslations();
   const selectedIds = selection?.selectedIds;
@@ -144,13 +152,14 @@ export const PublicLawTable = <
         selection.onSelectedIdsChange(Object.keys(next));
       },
     },
-    // The search decides the order; no column of this table does.
-    sorting: null,
+    sorting,
   });
 
   const table = useTable({
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
+    // The endpoint orders the rows; a header only asks it for another order.
+    manualSorting: true,
     data: rows,
     columns,
     defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },

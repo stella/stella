@@ -1443,8 +1443,6 @@ export const TOOLING_ENV_KEYS = new Set([
   // CI verification steps set it; workspace hygiene then requires prepared
   // API typecheck configs instead of skipping their install-time absence.
   "STELLA_VERIFY",
-  "QUERY_PERF_BASELINE_MODE",
-  "QUERY_PERF_BASE_REF",
   "QUERY_PERF_CHANGED_PATHS",
   "QUERY_PERF_SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
@@ -1697,6 +1695,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RETRY_DELAYS_SECONDS",
   // scripts/retry.sh: `warning` for callers that tolerate the failure.
   "RETRY_FAILURE_LEVEL",
+  // scripts/retry.sh: exit codes that are an answer, not a failure to retry.
+  "RETRY_PASSTHROUGH_EXIT_CODES",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
   "RUN_ID",
@@ -1754,6 +1754,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_CHECK_POOL_INPUTS",
   "CI_CHECK_POOL_TOKEN",
   "CI_CHECK_POOL_CONCURRENCY",
+  // The job's start (epoch ms) when a caller knows it; else the pool reads
+  // the runner's worker process.
+  "CI_CHECK_POOL_JOB_STARTED_AT",
+  // Comparison base supplied to every command launched by a CI check pool.
+  "CI_COMPARISON_BASE",
   // <index>/<count>: the share of the check registry one ci-checks-rest leg runs.
   "CI_CHECK_POOL_PARTITION",
   // Test-only: the commit ci-checks-partition.test.ts compares the head with.
@@ -1800,6 +1805,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
+  "TEST_LS_REMOTE_FAILS_ONCE",
   "WXT_STELLA_ORIGINS",
 ]);
 

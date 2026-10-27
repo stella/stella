@@ -54,7 +54,7 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLastTranslationTarget } from "@/hooks/use-last-translation-target";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useLocale } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { DeepLTargetLanguageCode } from "@/lib/deepl/languages";
@@ -109,7 +109,7 @@ export const TranslateDocumentDialog = (
     disabled = false,
   } = props;
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useMessageLocale();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

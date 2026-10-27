@@ -42,6 +42,28 @@ describe("createCaseLawDecisionSlug", () => {
     );
   });
 
+  // Segments of published decision URLs: slugs are persisted and links are
+  // shared, so the fold must keep producing exactly these. A letter NFKD
+  // cannot strip (`Ł`, `ł`) is dropped, not transliterated.
+  test.each([
+    ["Pl.ÚS 83/06", "pl-us-83-06"],
+    ["III.ÚS 2900/26", "iii-us-2900-26"],
+    ["26 Cdo 498/2022", "26-cdo-498-2022"],
+    ["22 As 40/2025", "22-as-40-2025"],
+    ["III SA/Łd 223/21", "iii-sa-d-223-21"],
+    ["III CZP 74/07", "iii-czp-74-07"],
+    ["C-106/89", "c-106-89"],
+    ["Ústavní soud", "ustavni-soud"],
+    ["Nejvyšší správní soud", "nejvyssi-spravni-soud"],
+    [
+      "Wojewódzki Sąd Administracyjny w Łodzi",
+      "wojewodzki-sad-administracyjny-w-odzi",
+    ],
+    ["Trybunał Konstytucyjny", "trybuna-konstytucyjny"],
+  ])("%s keeps its published segment %s", (value, segment) => {
+    expect(createCaseLawDecisionSlug(value)).toBe(segment);
+  });
+
   test("falls back to 'unknown' when nothing alphanumeric remains", () => {
     expect(createCaseLawDecisionSlug("!!!")).toBe("unknown");
     expect(createCaseLawDecisionSlug("")).toBe("unknown");

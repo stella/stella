@@ -13,7 +13,7 @@ import type { getSessionFromCtx } from "better-auth/api";
 import {
   APIError,
   createAuthMiddleware,
-  getAuthoritativeSessionFromCtx,
+  getAuthoritativeSessionFromCtx as resolveAuthoritativeSessionFromCtx,
   getOAuthState,
   isAPIError,
 } from "better-auth/api";
@@ -241,6 +241,7 @@ import type {
 } from "@/api/lib/business-registries/desktop/link-grant-store";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
+import { instrumentQueryOrigins } from "@/api/lib/db-query-counter";
 import {
   findAccountIdByEmail,
   hasAccountForProvider,
@@ -373,6 +374,13 @@ import {
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 
 export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
+
+const authoritativeSessionReader = {
+  getAuthoritativeSessionFromCtx: resolveAuthoritativeSessionFromCtx,
+};
+const { getAuthoritativeSessionFromCtx } = isLocalDevOpen()
+  ? instrumentQueryOrigins(authoritativeSessionReader)
+  : authoritativeSessionReader;
 
 /** Access token lifetime in seconds (15 minutes). */
 const syntheticSessionAuthorityReader =
@@ -2765,7 +2773,7 @@ export const createAuth = (
       }),
     },
   });
-  return auth;
+  return isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth;
 };
 
 let _auth: ReturnType<typeof createAuth> | undefined;

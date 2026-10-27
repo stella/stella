@@ -143,6 +143,8 @@ describe("provision cards of one paragraph", () => {
     expect(
       cards.at(0)?.citations.map(({ payload }) => payload.highlightAnchorId),
     ).toEqual(["par_226-odst_1"]);
+    // Both occurrences stay the card's, so either one in a selection finds it.
+    expect(cards.at(0)?.citationIds).toEqual(["a", "b"]);
   });
 
   test("parts of one provision share its card in citation order", () => {

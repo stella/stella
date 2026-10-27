@@ -439,6 +439,7 @@ export const TAGGED_FAILURE_REASON = {
   Unreachable: "tagged_failure",
   UnrecognizedDerivativeStateError: "tagged_failure",
   UnrecognizedProviderStopReasonError: "tagged_failure",
+  UnresolvedActCitationError: "tagged_failure",
   UnsupportedAnalysisLanguageError: "tagged_failure",
   UnsupportedCapabilityRefreshError: "tagged_failure",
   UnsupportedOAuthScopesError: "tagged_failure",
