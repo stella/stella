@@ -527,6 +527,16 @@
         "wrongStatus": "Šis įrašas nebėra juodraštis. Atnaujinkite sąrašą."
       },
       "returnComment": "Grąžinimo priežastis",
+      "returnRefusals": {
+        "invalidEntry": "Patikrinkite įrašo darbo datą ir tada jį grąžinkite.",
+        "notApprover": "Šį įrašą gali grąžinti tik jam priskirtas tvirtintojas arba administratorius.",
+        "notFound": "Šio įrašo nebėra, todėl jo grąžinti negalima. Atnaujinkite sąrašą.",
+        "notSubmitted": "Šis juodraštis niekada nebuvo pateiktas, todėl nėra ką grąžinti.",
+        "runningTimer": "Prieš grąžindami įrašą sustabdykite veikiantį laikmatį.",
+        "timePeriodLocked": "Šis mėnuo užrakintas, todėl įrašo grąžinti negalima. Paprašykite administratoriaus jį atrakinti.",
+        "wrongStatus": "Laiko, už kurį išrašyta sąskaita arba kuris nurašytas, grąžinti autoriui negalima."
+      },
+      "returnSelected": "Grąžinti {count, plural, one {# pasirinktą įrašą} few {# pasirinktus įrašus} many {# pasirinkto įrašo} other {# pasirinktų įrašų}}",
       "selectEntry": "Pasirinkti įrašą",
       "timeEntries": "Laiko įrašai",
       "title": "Patvirtinimai"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Pažymėti kaip neapmokestinamus",
     "matterRequired": "Pasirinkite bylą",
     "minutes": "Minutės",
+    "moveEntryHint": "Išsaugojus įrašas perkeliamas į šią bylą ir įkainojamas pagal jos tarifus.",
     "narrative": "Aprašas",
     "narrativePlaceholder": "Aprašykite atliktą darbą...",
     "noActiveTimer": "Nėra aktyvaus laikmačio",

@@ -527,6 +527,16 @@
         "wrongStatus": "See kanne pole enam mustand. Värskendage loendit."
       },
       "returnComment": "Tagastamise põhjus",
+      "returnRefusals": {
+        "invalidEntry": "Kontrollige kande töö kuupäeva ja tagastage see seejärel.",
+        "notApprover": "Seda kannet saab tagastada ainult määratud kinnitaja või administraator.",
+        "notFound": "Seda kannet enam ei ole, seega ei saa seda tagastada. Värskendage loendit.",
+        "notSubmitted": "Seda mustandit pole kunagi esitatud, seega pole midagi tagastada.",
+        "runningTimer": "Peatage töötav taimer enne kande tagastamist.",
+        "timePeriodLocked": "See kuu on lukustatud, seega ei saa kannet tagastada. Paluge administraatoril see avada.",
+        "wrongStatus": "Arveldatud või maha kantud aega ei saa kande tegijale tagastada."
+      },
+      "returnSelected": "Tagasta {count, plural, one {# valitud kanne} other {# valitud kannet}}",
       "selectEntry": "Vali kanne",
       "timeEntries": "Ajakanded",
       "title": "Kinnitamine"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Märgi mittearveldatavaks",
     "matterRequired": "Palun valige toimik",
     "minutes": "Minutid",
+    "moveEntryHint": "Salvestamisel liigub kanne sellesse toimikusse ja seda hinnatakse toimiku määrade järgi.",
     "narrative": "Selgitus",
     "narrativePlaceholder": "Kirjeldage tehtud tööd...",
     "noActiveTimer": "Aktiivset taimerit pole",

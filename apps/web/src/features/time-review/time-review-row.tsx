@@ -139,7 +139,7 @@ export const TimeReviewRow = ({
         <Button
           disabled={comment.trim() === ""}
           loading={busy}
-          onClick={() => review.returnToDraft(row, comment)}
+          onClick={() => review.returnToDraft([row], comment)}
           size="sm"
           variant="outline"
         >

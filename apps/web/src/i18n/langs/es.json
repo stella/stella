@@ -527,6 +527,16 @@
         "wrongStatus": "Este registro ya no es un borrador. Actualice la lista."
       },
       "returnComment": "Motivo de devolución",
+      "returnRefusals": {
+        "invalidEntry": "Revise la fecha de trabajo del registro y después devuélvalo.",
+        "notApprover": "Solo el aprobador asignado o un administrador puede devolver este registro.",
+        "notFound": "Este registro ya no existe, por lo que no se puede devolver. Actualice la lista.",
+        "notSubmitted": "Este borrador nunca se envió, así que no hay nada que devolver.",
+        "runningTimer": "Detenga el temporizador en curso antes de devolver este registro.",
+        "timePeriodLocked": "Este mes está bloqueado, por lo que el registro no se puede devolver. Pida a un administrador que lo desbloquee.",
+        "wrongStatus": "El tiempo facturado o dado de baja no se puede devolver a quien lo registró."
+      },
+      "returnSelected": "Devolver {count, plural, one {# registro seleccionado} other {# registros seleccionados}}",
       "selectEntry": "Seleccionar registro",
       "timeEntries": "Registros de tiempo",
       "title": "Aprobaciones"
@@ -719,6 +729,7 @@
     "markNonBillableSelected": "Marcar como no facturable",
     "matterRequired": "Seleccione un asunto",
     "minutes": "Minutos",
+    "moveEntryHint": "Al guardar, el registro pasa a este asunto y se valora con sus tarifas.",
     "narrative": "Descripción",
     "narrativePlaceholder": "Describa el trabajo realizado...",
     "noActiveTimer": "Sin temporizador activo",
