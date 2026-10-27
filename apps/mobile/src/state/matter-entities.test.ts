@@ -69,18 +69,21 @@ const server = (respond: (call: Call) => Response) => {
   return { fetch, calls };
 };
 
-const sourceFor = (fetch: Fetch) =>
-  createAccessTokenSource({
+const sourceFor = (fetch: Fetch) => {
+  const store = createSessionStore({
+    read: async () => SESSION,
+    write: async () => {},
+    clear: async () => {},
+  });
+  return createAccessTokenSource({
     fetch,
     initialAccess: { token: "access-0", expiresAt: Number.MAX_SAFE_INTEGER },
     now: () => 0,
     session: SESSION,
-    store: createSessionStore({
-      read: async () => SESSION,
-      write: async () => {},
-      clear: async () => {},
-    }),
+    generation: store.generation(),
+    store,
   });
+};
 
 describe("listing a matter's entities", () => {
   test("posts the page query and keeps the fields a row shows", async () => {

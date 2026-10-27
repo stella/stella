@@ -34,6 +34,10 @@ export type SessionGeneration = {
   readonly [sessionGenerationBrand]: true;
 };
 
+export type SessionWriteOutcome =
+  | { readonly type: "committed"; readonly generation: SessionGeneration }
+  | { readonly type: "stale" };
+
 export type SessionStore = {
   readonly read: () => Promise<StoredSession | undefined>;
   readonly generation: () => SessionGeneration;
@@ -42,7 +46,7 @@ export type SessionStore = {
   readonly write: (
     session: StoredSession,
     generation: SessionGeneration,
-  ) => Promise<boolean>;
+  ) => Promise<SessionWriteOutcome>;
   readonly clear: () => Promise<void>;
 };
 
@@ -74,10 +78,12 @@ export const createSessionStore = (
     write: async (session, captured) =>
       await enqueue(async () => {
         if (captured !== generation) {
-          return false;
+          return { type: "stale" };
         }
         await persistence.write(session);
-        return true;
+        return captured === generation
+          ? { type: "committed", generation: captured }
+          : { type: "stale" };
       }),
     clear: async () => {
       advance();
@@ -119,6 +125,7 @@ export type AccessTokenSource = {
  */
 export const createAccessTokenSource = ({
   fetch,
+  generation,
   initialAccess,
   now,
   session,
@@ -128,11 +135,11 @@ export const createAccessTokenSource = ({
   readonly initialAccess: AccessToken | undefined;
   readonly now: () => number;
   readonly session: StoredSession;
+  readonly generation: SessionGeneration;
   readonly store: SessionStore;
 }): AccessTokenSource => {
   let current = session;
   let access = initialAccess;
-  const generation = store.generation();
   let refreshing:
     Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
@@ -180,7 +187,7 @@ export const createAccessTokenSource = ({
       if (Result.isError(persisted)) {
         return Result.err(persisted.error);
       }
-      if (!persisted.value) {
+      if (persisted.value.type === "stale") {
         return Result.err(
           new SignedOutError({ message: "The session is no longer current" }),
         );

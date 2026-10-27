@@ -8,7 +8,7 @@ import {
   createAccessTokenSource,
   createSessionStore,
   EARLY_REFRESH_MS,
-  type SessionStore,
+  type SessionGeneration,
   type StoredSession,
 } from "./session";
 
@@ -56,6 +56,51 @@ const memoryStore = (initial: StoredSession | undefined) => {
   return { store, stored: () => stored };
 };
 
+const deferredPersistence = () => {
+  type Pending = { readonly apply: () => void; readonly resolve: () => void };
+  let stored: StoredSession | undefined;
+  const pending: Pending[] = [];
+  const waiters: (() => void)[] = [];
+  const defer = async (apply: () => void) =>
+    await new Promise<void>((resolve) => {
+      pending.push({ apply, resolve });
+      for (const wake of waiters.splice(0)) {
+        wake();
+      }
+    });
+
+  return {
+    adapter: {
+      read: async () => stored,
+      write: async (session: StoredSession) => {
+        await defer(() => {
+          stored = session;
+        });
+      },
+      clear: async () => {
+        await defer(() => {
+          stored = undefined;
+        });
+      },
+    },
+    pending: () => pending.length,
+    reached: async (count: number) => {
+      while (pending.length < count) {
+        await new Promise<void>((resolve) => {
+          waiters.push(resolve);
+        });
+      }
+    },
+    resolve: (index: number) => {
+      const operation = pending.splice(index, 1).at(0);
+      expect(operation).toBeDefined();
+      operation?.apply();
+      operation?.resolve();
+    },
+    stored: () => stored,
+  };
+};
+
 const token = async (source: ReturnType<typeof createAccessTokenSource>) => {
   const result = await source.accessToken();
   return result.isOk() ? result.value : result.error._tag;
@@ -65,12 +110,14 @@ describe("access tokens", () => {
   test("a held token is used until it nears expiry, then refreshed once", async () => {
     let clock = 1_000_000;
     const endpoint = rotatingTokenEndpoint();
+    const memory = memoryStore(SESSION);
     const source = createAccessTokenSource({
       fetch: endpoint.fetch,
       initialAccess: { token: "access-0", expiresAt: clock + 900_000 },
       now: () => clock,
       session: SESSION,
-      store: memoryStore(SESSION).store,
+      generation: memory.store.generation(),
+      store: memory.store,
     });
 
     expect(await token(source)).toBe("access-0");
@@ -90,6 +137,7 @@ describe("access tokens", () => {
       initialAccess: undefined,
       now: () => 0,
       session: SESSION,
+      generation: memory.store.generation(),
       store: memory.store,
     });
 
@@ -116,6 +164,7 @@ describe("access tokens", () => {
       initialAccess: undefined,
       now: () => 0,
       session: SESSION,
+      generation: memory.store.generation(),
       store: memory.store,
     });
 
@@ -137,6 +186,7 @@ describe("access tokens", () => {
       initialAccess: undefined,
       now: () => 0,
       session: SESSION,
+      generation: memory.store.generation(),
       store: memory.store,
     });
 
@@ -157,6 +207,7 @@ describe("access tokens", () => {
       initialAccess: undefined,
       now: () => 0,
       session: SESSION,
+      generation: memory.store.generation(),
       store: memory.store,
     });
 
@@ -178,62 +229,158 @@ describe("access tokens", () => {
     expect(memory.stored()).toBeUndefined();
   });
 
+  test("a superseded sign-in cannot publish after its write resolves", async () => {
+    const persistence = deferredPersistence();
+    const store = createSessionStore(persistence.adapter);
+    let published: StoredSession | undefined;
+    const sessionA = { ...SESSION, refreshToken: "sign-in-a" };
+    const sessionB = { ...SESSION, refreshToken: "sign-in-b" };
+
+    const signIn = async (session: StoredSession) => {
+      const generation = store.advance();
+      const outcome = await store.write(session, generation);
+      if (outcome.type === "committed" && store.isCurrent(outcome.generation)) {
+        published = session;
+      }
+      return outcome;
+    };
+
+    const pendingA = signIn(sessionA);
+    await persistence.reached(1);
+    const pendingB = signIn(sessionB);
+    persistence.resolve(0);
+    expect(await pendingA).toEqual({ type: "stale" });
+    expect(published).toBeUndefined();
+    await persistence.reached(1);
+    persistence.resolve(0);
+
+    expect(await pendingB).toEqual({
+      type: "committed",
+      generation: store.generation(),
+    });
+    expect(published).toEqual(sessionB);
+    expect(persistence.stored()).toEqual(sessionB);
+  });
+
+  test("a sign-out supersedes a sign-in whose write is pending", async () => {
+    const persistence = deferredPersistence();
+    const store = createSessionStore(persistence.adapter);
+    let published: StoredSession | undefined;
+
+    const generation = store.advance();
+    const pendingSignIn = store.write(SESSION, generation).then((outcome) => {
+      if (outcome.type === "committed" && store.isCurrent(outcome.generation)) {
+        published = SESSION;
+      }
+      return outcome;
+    });
+    await persistence.reached(1);
+    const pendingSignOut = store.clear().then(() => {
+      published = undefined;
+      return undefined;
+    });
+    persistence.resolve(0);
+
+    expect(await pendingSignIn).toEqual({ type: "stale" });
+    expect(published).toBeUndefined();
+    await persistence.reached(1);
+    persistence.resolve(0);
+    await pendingSignOut;
+    expect(persistence.stored()).toBeUndefined();
+    expect(published).toBeUndefined();
+  });
+
   test("credentials follow session generations across event interleavings", async () => {
-    type Event =
-      | "refresh-start"
-      | "refresh-resolve"
-      | "refresh-fail"
-      | "sign-out"
-      | "sign-in";
-    const event = fc.constantFrom<Event>(
-      "refresh-start",
-      "refresh-resolve",
-      "refresh-fail",
-      "sign-out",
-      "sign-in",
-    );
+    type Event = "sign-in" | "sign-out" | "resolve";
+    const event = fc.constantFrom<Event>("sign-in", "sign-out", "resolve");
 
     await assertProperty(
       "credentials follow session generations across event interleavings",
       fc.asyncProperty(fc.array(event, { maxLength: 40 }), async (events) => {
-        const memory = memoryStore(undefined);
-        const pending: {
-          generation: ReturnType<SessionStore["generation"]>;
-          session: StoredSession;
-        }[] = [];
+        const persistence = deferredPersistence();
+        const store = createSessionStore(persistence.adapter);
+        const mutations: Promise<void>[] = [];
         let expected: StoredSession | undefined;
+        const model: {
+          completed: number;
+          published:
+            | { session: StoredSession; generation: SessionGeneration }
+            | undefined;
+        } = { completed: 0, published: undefined };
         let sequence = 1;
 
         for (const currentEvent of events) {
           if (currentEvent === "sign-in") {
-            expected = { ...SESSION, refreshToken: `sign-in-${sequence++}` };
-            const generation = memory.store.advance();
-            await memory.store.write(expected, generation);
+            const session = {
+              ...SESSION,
+              refreshToken: `sign-in-${sequence++}`,
+            };
+            expected = session;
+            const generation = store.advance();
+            mutations.push(
+              store
+                .write(session, generation)
+                .then((outcome) => {
+                  if (
+                    outcome.type === "committed" &&
+                    store.isCurrent(outcome.generation)
+                  ) {
+                    model.published = {
+                      session,
+                      generation: outcome.generation,
+                    };
+                  }
+                  return undefined;
+                })
+                .finally(() => {
+                  model.completed += 1;
+                }),
+            );
           } else if (currentEvent === "sign-out") {
             expected = undefined;
-            await memory.store.clear();
-          } else if (currentEvent === "refresh-start") {
-            pending.push({
-              generation: memory.store.generation(),
-              session: {
-                ...SESSION,
-                refreshToken: `refresh-${sequence++}`,
-              },
-            });
-          } else {
-            const refresh = pending.shift();
-            if (refresh !== undefined && currentEvent === "refresh-resolve") {
-              const stored = await memory.store.write(
-                refresh.session,
-                refresh.generation,
-              );
-              if (stored) {
-                expected = refresh.session;
-              }
-            }
+            const clearing = store.clear();
+            const generation = store.generation();
+            mutations.push(
+              clearing
+                .then(() => {
+                  if (store.isCurrent(generation)) {
+                    model.published = undefined;
+                  }
+                  return undefined;
+                })
+                .finally(() => {
+                  model.completed += 1;
+                }),
+            );
+          } else if (persistence.pending() > 0) {
+            persistence.resolve(
+              fc.sample(
+                fc.integer({ min: 0, max: persistence.pending() - 1 }),
+                1,
+              )[0] ?? 0,
+            );
+            await Promise.resolve();
           }
-          expect(memory.stored()).toEqual(expected);
+
+          if (model.published !== undefined) {
+            expect(store.isCurrent(model.published.generation)).toBeTrue();
+          }
         }
+
+        const settleMutations = async (): Promise<void> => {
+          if (model.completed === mutations.length) {
+            return;
+          }
+          if (persistence.pending() > 0) {
+            persistence.resolve(0);
+          }
+          await Promise.resolve();
+          await settleMutations();
+        };
+        await settleMutations();
+        await Promise.all(mutations);
+        expect(persistence.stored()).toEqual(expected);
+        expect(model.published?.session).toEqual(expected);
       }),
     );
   });

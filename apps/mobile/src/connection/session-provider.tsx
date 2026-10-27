@@ -16,6 +16,7 @@ import { createAccessTokenSource } from "@/connection/session";
 import type {
   AccessToken,
   AccessTokenSource,
+  SessionGeneration,
   StoredSession,
 } from "@/connection/session";
 import { signIn as signInToServer } from "@/connection/sign-in";
@@ -55,12 +56,14 @@ const restoredSession: Promise<StoredSession | undefined> = Result.tryPromise(
 const sourceFor = (
   session: StoredSession,
   initialAccess: AccessToken | undefined,
+  generation: SessionGeneration,
 ): AccessTokenSource =>
   createAccessTokenSource({
     fetch,
     initialAccess,
     now: epochMilliseconds,
     session,
+    generation,
     store: deviceSessionStore,
   });
 
@@ -69,7 +72,14 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const [state, setState] = useState<SessionState>(() =>
     restored === undefined
       ? { status: "signed-out", ended: false }
-      : { status: "signed-in", source: sourceFor(restored, undefined) },
+      : {
+          status: "signed-in",
+          source: sourceFor(
+            restored,
+            undefined,
+            deviceSessionStore.generation(),
+          ),
+        },
   );
 
   const value: SessionContextValue = {
@@ -112,12 +122,19 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
         ).unwrapOr(undefined);
         return Result.err(stored.error);
       }
-      if (!stored.value) {
+      if (
+        stored.value.type === "stale" ||
+        !deviceSessionStore.isCurrent(stored.value.generation)
+      ) {
         return Result.ok(undefined);
       }
       setState({
         status: "signed-in",
-        source: sourceFor(signedIn.value.session, signedIn.value.access),
+        source: sourceFor(
+          signedIn.value.session,
+          signedIn.value.access,
+          stored.value.generation,
+        ),
       });
       return Result.ok(undefined);
     },
