@@ -6,6 +6,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import type { PublicCountry } from "@stll/api-contract/public-country-capability";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { section72aSubsection1Blocks } from "@stll/legal-ast/fixtures/cz-141-1961-section-72a";
 import { section128Subsection2Blocks } from "@stll/legal-ast/fixtures/sk-300-2005-section-128";
@@ -23,9 +24,12 @@ import type {
   ProvisionPreviewData,
 } from "./reader-types";
 
+const CZECH_JURISDICTION = "CZE" satisfies PublicCountry;
+const SLOVAK_JURISDICTION = "SVK" satisfies PublicCountry;
+
 const citation = {
   document: {
-    country: "cz",
+    country: CZECH_JURISDICTION.toLowerCase(),
     eli: "/eli/cz/sb/1961/141",
     id: "act",
     slug: null,
@@ -36,7 +40,7 @@ const citation = {
     documentId: "act",
     eli: "/eli/cz/sb/1961/141",
     highlightAnchorId: "par_72a-odst_1",
-    jurisdiction: "CZE",
+    jurisdiction: CZECH_JURISDICTION,
     provisionLabel: "§ 72a odst. 1",
     statuteTitle: "141/1961 Sb., o trestním řízení soudním (trestní řád)",
     versionCount: 1,
@@ -59,7 +63,7 @@ const wordings = [{ target: citation, wording }];
 
 const slovakCitation = {
   document: {
-    country: "SVK",
+    country: SLOVAK_JURISDICTION,
     eli: "/eli/sk/zz/2005/300",
     id: "sk-act",
     slug: null,
@@ -70,7 +74,7 @@ const slovakCitation = {
     documentId: "sk-act",
     eli: "/eli/sk/zz/2005/300",
     highlightAnchorId: "paragraf-128.odsek-2",
-    jurisdiction: "SVK",
+    jurisdiction: SLOVAK_JURISDICTION,
     provisionLabel: "§ 128 ods. 2",
     statuteTitle: "300/2005 Z. z., Trestný zákon",
     versionCount: 1,

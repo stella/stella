@@ -34,6 +34,14 @@ describe("statute list schemes", () => {
     expect(statuteListSchemeFor(" usa ").type).toBe("flat");
   });
 
+  test("case and surrounding whitespace preserve every public jurisdiction's scheme", () => {
+    for (const country of PUBLIC_COUNTRIES) {
+      expect(statuteListSchemeFor(` ${country.toLowerCase()} `)).toBe(
+        STATUTE_LIST_SCHEMES[country],
+      );
+    }
+  });
+
   test("a country outside the public list is a bug, not a flat statute", () => {
     expect(() => statuteListSchemeFor("cz")).toThrow(
       'No statute list scheme for country "cz".',
