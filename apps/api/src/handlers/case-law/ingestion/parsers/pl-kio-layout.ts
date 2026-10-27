@@ -24,7 +24,8 @@
  *   its parts, or by a block the converter closed with no space after it,
  *   runs on into the next block the same way a line does;
  * - a number of up to three digits in type well below the body's, set
- *   against the word before it, is that word's superscript;
+ *   against the word before it, is an index only when its style raises or
+ *   lowers it explicitly;
  * - Word's numbering, which the converter prints as a box flush against the
  *   item's text, is followed by a space;
  * - directional marks, which the converter emits with every line break of a
@@ -398,14 +399,64 @@ const previousContent = (node: AnyNode): AnyNode | null => {
   return previous;
 };
 
+/** The nearest value that `element` or one of its ancestors sets. */
+const inheritedStyleValue = (
+  element: Element,
+  property: string,
+): string | undefined => {
+  let current: AnyNode | null = element;
+  while (current !== null && isTag(current)) {
+    const value = cssDeclarations(styleOf(current)).findLast(
+      (declaration) => declaration.property === property,
+    )?.value;
+    if (value !== undefined) {
+      return value.trim().toLowerCase();
+    }
+    current = current.parent;
+  }
+  return undefined;
+};
+
+type IndexPosition = "sub" | "sup";
+
+const SIGNED_CSS_LENGTH = /^(-?\d+(?:\.\d+)?)(?:pt|px|em|rem|%)?$/iu;
+
+const signedCssLength = (value: string | undefined): number | undefined => {
+  const numeric =
+    value === undefined ? undefined : SIGNED_CSS_LENGTH.exec(value)?.at(1);
+  return numeric === undefined
+    ? undefined
+    : parseDecimalToken(numeric).unwrapOr(undefined);
+};
+
+const indexPositionOf = (span: Element): IndexPosition | undefined => {
+  const verticalAlign = inheritedStyleValue(span, "vertical-align");
+  if (verticalAlign === "sub") {
+    return "sub";
+  }
+  if (verticalAlign === "super") {
+    return "sup";
+  }
+  const baselineShift = signedCssLength(
+    inheritedStyleValue(span, "baseline-shift"),
+  );
+  if (baselineShift === undefined || baselineShift === 0) {
+    return undefined;
+  }
+  return baselineShift > 0 ? "sup" : "sub";
+};
+
 const liftSmallTypeIndices = ($: CheerioAPI, bodySize: number): void => {
   $("span").each((_, span) => {
-    const size = fontStyleOf(styleOf(span)).size;
+    const size =
+      fontStyleOf(styleOf(span)).size ?? inheritedTypefaceOf(span).size;
     const text = textOf(span).trim();
+    const position = indexPositionOf(span);
     if (
       size === undefined ||
       size > bodySize * SMALL_TYPE_RATIO ||
-      !SUPERSCRIPT_TEXT.test(text)
+      !SUPERSCRIPT_TEXT.test(text) ||
+      position === undefined
     ) {
       return;
     }
@@ -416,7 +467,7 @@ const liftSmallTypeIndices = ($: CheerioAPI, bodySize: number): void => {
     while (span.prev !== null && span.prev !== base) {
       $(span.prev).remove();
     }
-    $(span).replaceWith(new Element("sup", {}, [new Text(text)]));
+    $(span).replaceWith(new Element(position, {}, [new Text(text)]));
   });
 };
 

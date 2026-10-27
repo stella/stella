@@ -78,6 +78,50 @@ describe("reading the converter's layout", () => {
     expect(visibleText(annex)).toContain("12");
   });
 
+  test.each([
+    {
+      name: "an explicit subscript",
+      style: "vertical-align:sub",
+      expected: "<sub>2</sub>",
+    },
+    {
+      name: "a small number without vertical alignment",
+      style: "",
+      expected: '<span style="font-size:8pt">2</span>',
+    },
+    {
+      name: "an explicit superscript",
+      style: "vertical-align:super",
+      expected: "<sup>2</sup>",
+    },
+  ])("$name keeps its stated index position", ({ style, expected }) => {
+    const alignment = style === "" ? "" : `;${style}`;
+    const $ = cheerio.load(
+      `<body style="font-size:12pt"><p>CO<span style="font-size:8pt${alignment}">2</span></p></body>`,
+    );
+
+    readPlKioLayout($);
+
+    expect($("p").html()).toBe(`CO${expected}`);
+  });
+
+  test.each([
+    { shift: "2pt", expected: "<sup>2</sup>" },
+    { shift: "-0.25em", expected: "<sub>2</sub>" },
+  ])(
+    "an inherited $shift baseline shift sets the index position",
+    ({ shift, expected }) => {
+      const $ = cheerio.load(
+        `<body style="font-size:12pt"><p style="baseline-shift:${shift}">` +
+          'CO<span style="font-size:8pt">2</span></p></body>',
+      );
+
+      readPlKioLayout($);
+
+      expect($("p").html()).toBe(`CO${expected}`);
+    },
+  );
+
   test("an unstyled final number inherits the body typeface", () => {
     const bodyText = cheerio.load(
       '<body style="font-size:12pt"><p>Document text.</p><p>42</p></body>',
@@ -221,13 +265,9 @@ describe("reading the converter's layout", () => {
           })
         : [],
     );
-    // Square and cubic metres: eight set in small type, one as `<sup>`.
-    expect(raised.toSorted()).toEqual([
-      ...Array.from({ length: 7 }, () => "m^2"),
-      "m^3",
-      "m^3",
-    ]);
-    expect(fulltext).toContain("1m3 piachu");
-    expect(fulltext).not.toContain("1m 3 piachu");
+    // Only the square metre explicitly marked as `<sup>` is raised. The
+    // converter's small type alone does not establish an index.
+    expect(raised).toEqual(["m^2"]);
+    expect(fulltext).toContain("1m 3 piachu");
   });
 });
