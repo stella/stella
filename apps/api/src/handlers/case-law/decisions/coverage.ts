@@ -238,6 +238,20 @@ const MANIFEST_BY_ADAPTER_KEY: ReadonlyMap<
   Object.values(ADAPTER_MANIFESTS).map((manifest) => [manifest.key, manifest]),
 );
 
+/**
+ * The country a source row belongs to, from its adapter's manifest; null for
+ * a key the registry does not know. The coverage page and the corpus status
+ * both place sources through this, so they judge a country by the same set.
+ */
+export const caseLawSourceJurisdiction = (
+  adapterKey: string,
+): CaseLawJurisdiction | null => {
+  const country = MANIFEST_BY_ADAPTER_KEY.get(adapterKey)?.country;
+  return country !== undefined && isCaseLawJurisdiction(country)
+    ? country
+    : null;
+};
+
 type CaseLawCoverageSourceRow = {
   id: SafeId<"caseLawSource">;
   adapterKey: string;
@@ -463,7 +477,8 @@ export const loadCaseLawCoverage = async ({
 
   for (const source of admitted) {
     const manifest = MANIFEST_BY_ADAPTER_KEY.get(source.adapterKey);
-    if (manifest === undefined || !isCaseLawJurisdiction(manifest.country)) {
+    const country = caseLawSourceJurisdiction(source.adapterKey);
+    if (manifest === undefined || country === null) {
       // A row whose adapter is not registered cannot be placed at all: the
       // source table carries no country of its own, and the manifest that
       // would supply one is exactly what is missing. Every figure on this
@@ -475,7 +490,7 @@ export const loadCaseLawCoverage = async ({
       continue;
     }
     const sourceArrivals = arrivals?.get(String(source.id)) ?? UNKNOWN_ARRIVALS;
-    const entry = byCountry.get(manifest.country) ?? {
+    const entry = byCountry.get(country) ?? {
       sources: [],
       stored: 0,
       storedAsOf: null,
@@ -520,7 +535,7 @@ export const loadCaseLawCoverage = async ({
           ? asOf
           : entry.storedAsOf;
     }
-    byCountry.set(manifest.country, entry);
+    byCountry.set(country, entry);
   }
 
   const countries: CaseLawCoverageCountry[] = [];

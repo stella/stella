@@ -11,7 +11,7 @@ import type { HookEndpointContext } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 
-import { isVerifiedClientMetadataDocument } from "@/api/lib/auth/oauth-consent-info";
+import { mayMetadataDocumentClientHoldElevatedScopes } from "@/api/lib/auth/oauth-consent-info";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   OAUTH_REGISTRATION_SCOPE_POLICY,
@@ -227,7 +227,7 @@ export type OAuthScopeClient = {
  * scope the client was not offered is dropped, never granted; when nothing
  * remains, the client's own list applies, as if it had named none, and the
  * token response reports what was granted. Elevated scopes remain only for a
- * client identified by a verified client metadata document.
+ * client identified by a client metadata document whose location allows them.
  */
 export const grantableScopes = (
   client: OAuthScopeClient,
@@ -239,7 +239,10 @@ export const grantableScopes = (
   const candidates = kept !== undefined && kept.length > 0 ? kept : offered;
   const mayHoldElevated =
     Boolean(client.clientDiscoveryId) &&
-    isVerifiedClientMetadataDocument(client.clientId, policy.verifiedOrigins);
+    mayMetadataDocumentClientHoldElevatedScopes(
+      client.clientId,
+      policy.verifiedOrigins,
+    );
   return candidates.filter(
     (scope) => mayHoldElevated || !ELEVATED_REGISTRATION_SCOPES.has(scope),
   );

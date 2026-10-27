@@ -86,6 +86,10 @@ const UNPROJECTED_ANNOTATION_COLUMNS = [
   "workspaceId",
   "verificationRunId",
   "verificationClaimId",
+  // A matter document's mark is listed by the document's own route
+  // (`matter-document-list.ts`), never here.
+  "entityId",
+  "pageTextSha256",
 ] as const satisfies readonly (keyof AnnotationRow)[];
 
 type MissingProjectedAnnotationColumn = UnprojectedColumns<
@@ -117,7 +121,9 @@ type ListReaderAnnotationsProps = Omit<
     v.InferOutput<typeof listAnnotationsQuerySchema>,
     "targetType"
   > & {
-    targetType: ReaderAnnotationTargetType;
+    /** A matter document's marks span the document's versions, so they are
+     *  listed by `listMatterDocumentAnnotations` instead. */
+    targetType: Exclude<ReaderAnnotationTargetType, "matter-document">;
   };
   /**
    * The claim a `verification-claim` listing reads, from the matter route's

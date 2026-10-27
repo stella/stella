@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { aiColumnRunMenu, aiColumnRunScope } from "./ai-column-run.logic";
+import type { AiCellState } from "./ai-cell-state.logic";
+import {
+  AI_COLUMN_RUN_REVEAL,
+  aiColumnRunMenu,
+  aiColumnRunReveal,
+  aiColumnRunScope,
+} from "./ai-column-run.logic";
+import type { AiColumnRunReveal } from "./ai-column-run.logic";
 
 describe("AI column actions follow the visible cells", () => {
   test("a fresh page runs the column, a partial page runs holes or reruns, a completed page reruns", () => {
@@ -38,5 +45,48 @@ describe("AI column actions follow the visible cells", () => {
     expect(
       aiColumnRunScope({ pageRowIds: ["a"], selectedRowIds: ["missing"] }),
     ).toEqual({ type: "page", rowIds: ["a"], count: 1 });
+  });
+});
+
+describe("the header Play stays on screen while it is the only sign of work", () => {
+  const revealFor = {
+    not_run: AI_COLUMN_RUN_REVEAL.pinned,
+    queued: AI_COLUMN_RUN_REVEAL.pinned,
+    running: AI_COLUMN_RUN_REVEAL.pinned,
+    done: AI_COLUMN_RUN_REVEAL.onInteraction,
+    failed: AI_COLUMN_RUN_REVEAL.onInteraction,
+    refused_budget: AI_COLUMN_RUN_REVEAL.onInteraction,
+  } as const satisfies Record<AiCellState["type"], AiColumnRunReveal>;
+  const cellStates = Object.keys(revealFor).filter(
+    (type): type is keyof typeof revealFor => type in revealFor,
+  );
+
+  test("rows that never ran or are in flight pin it; settled rows leave it to hover and focus", () => {
+    for (const type of cellStates) {
+      expect(aiColumnRunReveal({ states: [{ type }], menuOpen: false })).toBe(
+        revealFor[type],
+      );
+      // One pinning row among settled ones still pins the header.
+      expect(
+        aiColumnRunReveal({
+          states: [{ type: "done" }, { type }, { type: "failed" }],
+          menuOpen: false,
+        }),
+      ).toBe(revealFor[type]);
+    }
+    expect(aiColumnRunReveal({ states: [], menuOpen: false })).toBe(
+      AI_COLUMN_RUN_REVEAL.onInteraction,
+    );
+  });
+
+  test("an open column menu pins it whatever the rows show", () => {
+    for (const type of cellStates) {
+      expect(aiColumnRunReveal({ states: [{ type }], menuOpen: true })).toBe(
+        AI_COLUMN_RUN_REVEAL.pinned,
+      );
+    }
+    expect(aiColumnRunReveal({ states: [], menuOpen: true })).toBe(
+      AI_COLUMN_RUN_REVEAL.pinned,
+    );
   });
 });

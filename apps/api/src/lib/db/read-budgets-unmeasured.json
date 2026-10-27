@@ -1,0 +1,510 @@
+[
+  {
+    "id": "job:scheduler.pauseAudit.hourly",
+    "reason": "Reads scheduler and backfill state, a few rows per registered job."
+  },
+  {
+    "id": "job:documentProcessing.dispatchOcr.configuredInterval",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:documentProcessing.dispatchNativeExtraction.twoMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:documentProcessing.recoverDeadlineScouts.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:entityBuffers.reconcileIntents.minutely",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:files.reconcileReservations.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:inboundMail.receive.minutely",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:emailDeliverability.receive.fiveMinute",
+    "reason": "Consumes provider queue messages and updates account refusal metadata; the read-only corpus harness cannot replay these writes, and a rollback-aware tenant fixture is pending."
+  },
+  {
+    "id": "job:fileComparisons.sweepExpired.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:caseLaw.reconcileCorpusUploadIntents.minutely",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:caseLaw.refreshSitemapShards.hourly",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:organizations.recordMissingAccessStates.hourly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:reviewOrganization.reset.nightly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:caseLaw.refreshBrowseFacets.hourly",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:legislation.refreshSitemapShards.hourly",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:legislation.refreshFacetCounts.hourly",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:caseLaw.refreshSourceArrivals.threeHourly",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:caseLaw.reconcileRawSweeps.minutely",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:caseLaw.reconcileRawRows.minutely",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:caseLaw.censusRawObjects.fiveMinute",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:caseLaw.backfillRedactionTombstones.v2",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:agentClients.backfillStorage.minutely",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:backfill.heartbeat.minutely",
+    "reason": "Reads scheduler and backfill state, a few rows per registered job."
+  },
+  {
+    "id": "job:observability.checkDataInvariants.hourly",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:corpusIndex.backfillJobDetail.v1",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "job:workObligations.backfillLegacyTasks.v1",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:workObligations.attentionScout.hourly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:search.repairChatIndex.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:search.repairProjections.oneMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:flows.reconcileOrphanRuns.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:files.repairDerivatives.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:chat.reapOwnerlessTurns.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:auth.sweepRegistrations.hour",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:audit.purgeSystemRuns.day",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:usage.redactWebhookEvents.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:actions.sweepCosts.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:chat.sweepRunLogs.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:chat.purgeSecrets.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:documentReviews.reconcileQueuedRuns.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:listVerifications.reconcileQueuedRuns.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:bilingualTranslations.reconcileQueuedRuns.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:reportExports.reconcileQueued.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:styleSets.reconcilePackageCleanups.fiveMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:templates.cleanDeletionObjects.oneMinute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:search.repairSemanticTimestamps.v2",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:infosoud.syncTrackedCases.nightly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:sanctions.backfillMonitoring.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:sanctions.drainMonitoring.minute",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:sanctions.refreshSources.twoHourly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:desktopEditSessions.expire.hourly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:memory.curator.nightly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:memory.extractor.hourly",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "job:chat.compactThreads.everyFiveMinutes",
+    "reason": "Reads organization data; tenant tables stay out of the corpus fixture and a tenant-scale fixture for this job is pending."
+  },
+  {
+    "id": "mcp:fetch",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_matters",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:search_case_law",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:case_law_coverage",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_content_across_matters",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:read_case_law_decision",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_case_law_citations",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_contact",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:set_practice_jurisdictions",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:open_case_law_decision",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_case_law_decision_blocks",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:preview_cited_provision",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_statute",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_statute_provisions",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:read_provision_history",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:resolve_case_law_decision",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:resolve_law_citation",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:list_templates",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:fill_template",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_filled_template",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:create_template",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:configure_template_fields",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:preview_template_conditions",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_documents",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:read_document",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_document",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:upload_document_version",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:open_document_version_upload",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:compare_documents",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:prepare_file_comparison",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:prepare_file_comparison_from_links",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:open_file_comparison",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_document",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_properties",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:set_field_value",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_matter",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_matter",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_contacts",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_contact",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_contact",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:lookup_business_registry",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:check_counterparty",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_tasks",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_task",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_task",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:link_matter_contact",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_clauses",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_clause",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_clause",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_playbooks",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_playbook",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:run_playbook",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_reader_annotations",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:create_reader_annotation",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:update_reader_annotation",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_reader_annotation",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_time_entries",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:save_time_entry",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:delete_time_entry",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:resolve_rate",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_invoices",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:get_usage",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:search_boe_legislation",
+    "reason": "Reads public corpus tables that the corpus fixture does not seed yet."
+  },
+  {
+    "id": "mcp:list_audit_log",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:add_matter_member",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:remove_matter_member",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:update_organization_settings",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:prepare_feedback",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:submit_feedback",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:list_capabilities",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:describe_capability",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:read_capability",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:write_capability",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  },
+  {
+    "id": "mcp:mint_web_handoff",
+    "reason": "Reads organization data, measured for growth by the read-scaling harness; no absolute read budget yet."
+  }
+]
