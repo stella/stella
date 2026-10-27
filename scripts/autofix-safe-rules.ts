@@ -16,14 +16,11 @@ export const SAFE_AUTOFIX_RULES = {
     "Removes identity import, export and destructuring aliases.",
   "eslint/no-useless-return":
     "Removes a final empty return with the same undefined result.",
-  "eslint/prefer-const": "Changes bindings only when never reassigned.",
   "eslint/prefer-numeric-literals":
     "Replaces literal parseInt calls with equivalent numeric literals.",
   "typescript/array-type": "Changes only erased array type spelling.",
   "typescript/dot-notation":
     "Uses type-checked equivalent constant property access.",
-  "typescript/no-inferrable-types":
-    "Removes annotations already implied by their initializer.",
   "typescript/prefer-as-const": "Uses an equivalent literal const assertion.",
 } as const;
 

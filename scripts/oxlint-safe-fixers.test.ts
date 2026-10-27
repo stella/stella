@@ -183,6 +183,8 @@ test("automatic source fixes preserve exported declaration types", async () => {
     'export const mode: string = "default";',
     "export const attempts: number = 3;",
     "export const enabled: boolean = true;",
+    'export let currentMode = "default";',
+    'export class Configuration { readonly mode: string = "default"; }',
     "",
   ].join("\n");
   await Bun.write(sourcePath, source);
@@ -192,6 +194,7 @@ test("automatic source fixes preserve exported declaration types", async () => {
   expect(before).toContain("mode: string;");
   expect(before).toContain("attempts: number;");
   expect(before).toContain("enabled: boolean;");
+  expect(before).toContain("currentMode: string;");
 
   const fixed = await runOxlint({
     configPath,
