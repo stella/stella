@@ -61,6 +61,21 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
+    scope:
+      "apps/web/src/components/references/citation-chip.tsx, apps/web/src/components/references/decision-citation-chip.dom.test.tsx, apps/web/src/components/legal-reader/annotations/selection-anchor-contract.dom.test.tsx",
+    drops: ["pattern:**/paragraph-reference|**/decision-citation-chip"],
+    reason:
+      "The citation chip owner dispatches each citation kind to its chip, so it and the chip's own test are the web modules that import the chips.",
+  },
+  {
+    rule: "no-restricted-imports",
+    scope: "apps/web/src/i18n/message-locale.ts",
+    drops: ["path:use-intl#useLocale"],
+    reason:
+      "This module owns the UI-language read: it wraps use-intl's useLocale as useMessageLocale so every other web module names which locale it means.",
+  },
+  {
+    rule: "no-restricted-imports",
     scope: "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     drops: ["path:@valibot/to-json-schema+types"],
     reason:

@@ -222,6 +222,8 @@ test("the tick strip opens the panel only when the pointer rests on it", async (
     });
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
   } finally {
+    // Bun discards pending fake timeouts on the switch; fire them first.
+    jest.runOnlyPendingTimers();
     jest.useRealTimers();
     outside.remove();
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
@@ -251,6 +253,7 @@ test("focus inside a hover-opened panel holds it open after the pointer leaves",
         jest.advanceTimersByTime(200);
       });
     } finally {
+      jest.runOnlyPendingTimers();
       jest.useRealTimers();
     }
     expect(tick?.getAttribute("aria-expanded")).toBe("true");
@@ -283,5 +286,49 @@ test("Escape from a panel opened without a focused tick lands on a tick", async 
     expect(ticks[0]?.getAttribute("aria-expanded")).toBe("false");
   } finally {
     await cleanup(rendered.root, rendered.container, rendered.scrollContainer);
+  }
+});
+
+test("a branch the reader closed stays closed when the items are rebuilt", async () => {
+  const nested = [
+    { id: "terms", label: "Terms", level: 0, meta: "1" },
+    { id: "waiver", label: "Waiver", level: 1, meta: "2" },
+    { id: "notices", label: "Notices", level: 0, meta: "3" },
+  ] satisfies OutlineItem[];
+  const container = document.createElement("div");
+  const scrollContainer = document.createElement("div");
+  document.body.append(container, scrollContainer);
+  const root = createRoot(container);
+  const renderItems = async (next: OutlineItem[]) =>
+    await act(async () => {
+      root.render(
+        <OutlineRail
+          items={next}
+          onJump={() => undefined}
+          presentation="panel"
+          resolvePct={() => 50}
+          scrollContainerRef={{ current: scrollContainer }}
+        />,
+      );
+    });
+  try {
+    await renderItems(nested);
+    const collapse = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Collapse"]',
+    );
+    await act(async () => collapse?.click());
+    expect(container.textContent).not.toContain("Waiver");
+
+    // A relayout moves a later heading to another page.
+    await renderItems(
+      nested.map((item) =>
+        item.id === "notices" ? { ...item, meta: "4" } : { ...item },
+      ),
+    );
+
+    expect(container.textContent).not.toContain("Waiver");
+    expect(container.textContent).toContain("4");
+  } finally {
+    await cleanup(root, container, scrollContainer);
   }
 });

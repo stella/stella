@@ -3,6 +3,8 @@ import type { ComponentProps } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
 import type { contactsOptions } from "@/lib/contacts/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { Workspace } from "@/lib/workspaces/types";
@@ -128,7 +130,6 @@ afterEach(() => {
   empty = false;
   heldRead = undefined;
   capturedErrors.length = 0;
-  jest.useRealTimers();
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
@@ -228,8 +229,7 @@ const typeSearch = async (input: HTMLElement) => {
     jest.advanceTimersByTime(301);
   });
   await testing.act(async () => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
+    restoreRealTimers();
   });
 };
 
@@ -356,8 +356,7 @@ test("picker pending read hides creation and only successful absence is empty", 
     jest.advanceTimersByTime(201);
   });
   await testing.act(async () => {
-    jest.runOnlyPendingTimers();
-    jest.useRealTimers();
+    restoreRealTimers();
   });
   await testing.waitFor(() =>
     expect(reads.some((url) => url.searchParams.get("q") === "Eva")).toBe(true),

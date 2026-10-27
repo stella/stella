@@ -838,7 +838,13 @@ describe("the provision card header", () => {
     const header =
       peek.querySelector('[data-slot="provision-card-header"]') ??
       panic("The hover card has no header");
-    expect(headerParts(header)).toEqual(["provision-card-summary", "button"]);
+    expect(headerParts(header)).toEqual([
+      "provision-card-summary",
+      "provision-card-open",
+    ]);
+    expect(
+      header.querySelector('[data-slot="provision-card-open"] > button'),
+    ).not.toBeNull();
     const summary =
       header.querySelector('[data-slot="provision-card-summary"]') ??
       panic("The header has no summary");
@@ -890,6 +896,52 @@ describe("the provision card header", () => {
     expect(
       header.querySelector('[data-slot="provision-card-date"]')?.textContent,
     ).toBe(WORDING_VERSION_LABEL);
+  });
+
+  test("a card's open button waits for its own card, stays reachable by keyboard and shows on touch", async () => {
+    const view = await renderDecision(true);
+    const REVEAL = [
+      "opacity-0",
+      "group-hover/provision-card:opacity-100",
+      "group-focus-within/provision-card:opacity-100",
+      "pointer-coarse:opacity-100",
+    ];
+    const cards = [
+      ...view.container.querySelectorAll<HTMLElement>(
+        '[data-slot="provision-card"]',
+      ),
+    ];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      // The group is the card itself, not the paragraph around it: pointing
+      // at the text must not light every card's button at once.
+      expect(card.classList.contains("group/provision-card")).toBe(true);
+      const slot =
+        card.querySelector<HTMLElement>('[data-slot="provision-card-open"]') ??
+        panic("The card has no open button slot");
+      for (const token of REVEAL) {
+        expect(slot.classList.contains(token)).toBe(true);
+      }
+      const open = within(card).getByRole("button", {
+        name: messages.statutes.openProvision,
+      });
+      expect(slot.contains(open)).toBe(true);
+      // Hidden by opacity alone: still in the tab order, so focus reveals it.
+      expect(open.tabIndex).toBe(0);
+      expect(
+        open.closest("[inert], [hidden], [aria-hidden='true']"),
+      ).toBeNull();
+      act(() => open.focus());
+      // Focus inside the card is what `group-focus-within` reveals it on.
+      expect(open.ownerDocument.activeElement).toBe(open);
+      expect(card.contains(open.ownerDocument.activeElement)).toBe(true);
+    }
+    // The hover card is already what the reader looks at: its button stays.
+    const peek = await openPeek(view, FIRST_CITATION);
+    const peekSlot =
+      peek.querySelector<HTMLElement>('[data-slot="provision-card-open"]') ??
+      panic("The hover card has no open button slot");
+    expect(peekSlot.classList.contains("opacity-0")).toBe(false);
   });
 
   test("drops the hierarchy line when it would not fit on one line", async () => {

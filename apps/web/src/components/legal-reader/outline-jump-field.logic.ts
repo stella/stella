@@ -1,6 +1,6 @@
 import { parseProvisionDesignation } from "@stll/decision-reader/reader-outline";
 import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
-import { stripDiacritics } from "@stll/text-normalize";
+import { foldSearchMatchText } from "@stll/text-normalize";
 import { OUTLINE_EMPHASIS, type OutlineItem } from "@stll/ui/outline-rail";
 
 import { AhoCorasick } from "#aho-corasick";
@@ -61,9 +61,12 @@ type OutlineQuery =
 /** Digits plus any letter suffix, as an act prints them: `10`, `265b`. */
 const BARE_NUMBER_RE = /^\d+[a-z]*$/iu;
 
-/** Fold used for every comparison here: diacritics and case are not meant. */
+/**
+ * Fold used for every comparison here, the app-wide search key: case,
+ * accents and letters such as `ł` or `ß` are not meant.
+ */
 const foldForMatch = (value: string): string =>
-  stripDiacritics(value.toWellFormed()).toLowerCase();
+  foldSearchMatchText(value.toWellFormed());
 
 const parseOutlineQuery = (raw: string): OutlineQuery => {
   const text = raw.trim();
