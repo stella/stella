@@ -192,37 +192,34 @@ type CopyOutputPagesOptions = {
   pageById: ReadonlyMap<string, PagePlanEntry>;
 };
 
-const copyOutputPages = async (
-  { embedded, loaded, output, outputPageIds, pageById }: CopyOutputPagesOptions,
-  index = 0,
-): Promise<void> => {
-  const pageId = outputPageIds.at(index);
-  if (pageId === undefined) {
-    return;
+const copyOutputPages = async ({
+  embedded,
+  loaded,
+  output,
+  outputPageIds,
+  pageById,
+}: CopyOutputPagesOptions): Promise<void> => {
+  for (const pageId of outputPageIds) {
+    const plan = pageById.get(pageId);
+    if (!plan) {
+      throw transformError("Output references an unknown page");
+    }
+    const source = loaded.get(plan.sourceId);
+    if (!source || plan.sourcePageIndex >= source.getPageCount()) {
+      throw transformError("Page index is outside the source document");
+    }
+    const page = plan.scan
+      ? addCleanScanPage({
+          embedded,
+          output,
+          rotation: plan.rotation,
+          scan: plan.scan,
+        })
+      : await copySourcePage({ output, plan, source });
+    if (plan.crop) {
+      applyCrop(page, plan.crop, plan.rotation);
+    }
   }
-  const plan = pageById.get(pageId);
-  if (!plan) {
-    throw transformError("Output references an unknown page");
-  }
-  const source = loaded.get(plan.sourceId);
-  if (!source || plan.sourcePageIndex >= source.getPageCount()) {
-    throw transformError("Page index is outside the source document");
-  }
-  const page = plan.scan
-    ? addCleanScanPage({
-        embedded,
-        output,
-        rotation: plan.rotation,
-        scan: plan.scan,
-      })
-    : await copySourcePage({ output, plan, source });
-  if (plan.crop) {
-    applyCrop(page, plan.crop, plan.rotation);
-  }
-  await copyOutputPages(
-    { embedded, loaded, output, outputPageIds, pageById },
-    index + 1,
-  );
 };
 
 const saveOutputs = async (

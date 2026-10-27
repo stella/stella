@@ -335,11 +335,10 @@ describe("resolveSavedPdfSignTarget", () => {
     content: { type: "file", mimeType },
   });
 
-  test("signs the property's newest file, which the save just made current", () => {
+  test("signs the matching file from the exact version that was saved", () => {
     expect(
       resolveSavedPdfSignTarget({
         fields: [
-          fileField("field-old", "property-1", PDF_MIME),
           fileField("field-other", "property-2", PDF_MIME),
           fileField("field-saved", "property-1", PDF_MIME),
         ],

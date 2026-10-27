@@ -54,7 +54,7 @@ import {
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
 import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
-import { resolveSavedPdfSignTarget } from "@/components/inspector/pdf-signing.logic";
+import { readSavedPdfSignTarget } from "@/components/inspector/pdf-signing";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -103,7 +103,6 @@ import {
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import { workspaceOptions } from "@/lib/workspaces/queries";
-import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
 
 import {
@@ -915,15 +914,15 @@ const LoadedPDFPageOrganizer = ({
   };
 
   /** Upload the edited PDF as a new version; the caller closes the editor. */
-  const saveVersion = async (): Promise<"saved" | "skipped"> => {
+  const saveVersion = async () => {
     const [bytes] = await transform([plan.pages.map((page) => page.id)]);
     if (!bytes) {
-      return "skipped";
+      return { type: "skipped" } as const;
     }
     setOperation({ type: "uploading" });
     const uploadController = new AbortController();
     abortRef.current = uploadController;
-    await withCleanup(
+    return await withCleanup(
       async () => {
         const uploadResult = await uploadEntityVersion({
           workspaceId,
@@ -953,24 +952,23 @@ const LoadedPDFPageOrganizer = ({
           type: "success",
         });
         savedRef.current = true;
-        return uploadResult.type;
+        return uploadResult;
       },
       () => {
         abortRef.current = null;
         setOperation({ type: "idle" });
       },
     );
-    return "saved";
   };
 
   const handleSaveVersion = async () => {
-    if ((await saveVersion()) === "saved") {
+    if ((await saveVersion()).type === ENTITY_VERSION_UPLOAD_RESULT.uploaded) {
       onClose();
     }
   };
 
   /**
-   * Save the edits, then resolve the version that save made current so the
+   * Save the edits, then resolve that exact version from the upload receipt so the
    * sign flow stamps and signs it rather than the version the editor opened.
    * The editor closes either way once the version exists.
    */
@@ -979,16 +977,13 @@ const LoadedPDFPageOrganizer = ({
   ): Promise<PdfSignTarget | null> => {
     const result = await Result.tryPromise({
       try: async () => {
-        if ((await saveVersion()) !== "saved") {
+        const savedVersion = await saveVersion();
+        if (savedVersion.type === "skipped") {
           return Result.ok(null);
         }
         onClose();
-        const entity = await queryClient.query({
-          ...entityOptions(workspaceId, entityId),
-          staleTime: 0,
-        });
-        const saved = resolveSavedPdfSignTarget({
-          fields: entity.fields,
+        const saved = await readSavedPdfSignTarget({
+          entityVersionId: savedVersion.entityVersionId,
           target,
         });
         if (saved === null) {

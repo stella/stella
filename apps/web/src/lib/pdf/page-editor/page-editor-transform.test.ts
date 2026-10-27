@@ -273,6 +273,63 @@ describe("cleaned scan pages", () => {
     expect(crop.height - crop.y).toBeCloseTo(180);
   });
 
+  test("thousands of repeated cleaned pages retain placement and share one embedded image", async () => {
+    const bytes = await sourceBytes();
+    const pageCount = 16_384;
+    const [output] = await transformPagePlan({
+      sources: [{ id: "source", bytes: toArrayBuffer(bytes) }],
+      pages: [
+        {
+          id: "cleaned",
+          sourceId: "source",
+          sourcePageIndex: 0,
+          rotation: 90,
+          crop: { x: 0.1, y: 0.2, width: 0.5, height: 0.6 },
+          scan: {
+            image: {
+              pixels: new Uint8Array([255]),
+              width: 1,
+              height: 1,
+              format: "binary",
+            },
+            pageSize: { widthPoints: 200, heightPoints: 300 },
+            dpi: 144,
+          },
+        },
+      ],
+      outputs: [Array.from({ length: pageCount }, () => "cleaned")],
+    });
+    if (!output) {
+      throw new Error("Expected one transformed output");
+    }
+    const pdf = await PDF.load(output);
+    expect(pdf.getPageCount()).toBe(pageCount);
+    const imageRefs = new Set<string>();
+    for (const page of pdf.getPages()) {
+      expect(page.rotation).toBe(90);
+      const crop = page.getCropBox();
+      expect(crop.x).toBeCloseTo(40);
+      expect(crop.y).toBeCloseTo(30);
+      expect(crop.width - crop.x).toBeCloseTo(120);
+      expect(crop.height - crop.y).toBeCloseTo(150);
+      const resource = page.getResources().get("XObject");
+      const images =
+        resource instanceof PdfRef ? pdf.getObject(resource) : resource;
+      if (!(images instanceof PdfDict)) {
+        throw new Error("Expected an image resource dictionary");
+      }
+      expect([...images.keys()]).toHaveLength(1);
+      for (const key of images.keys()) {
+        const image = images.get(key);
+        if (!(image instanceof PdfRef)) {
+          throw new Error("Expected a shared image reference");
+        }
+        imageRefs.add(image.toString());
+      }
+    }
+    expect(imageRefs.size).toBe(1);
+  });
+
   test("rejects a cleaned image whose pixels do not match its size", () => {
     const scan = cleanScan("grayscale");
     expect(

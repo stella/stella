@@ -7,12 +7,17 @@ import { completeEntityVersionUpload } from "./upload-entity-version.logic";
 describe("entity version upload completion", () => {
   test("finalizes only after storage accepts the file", async () => {
     const events: string[] = [];
-    await completeEntityVersionUpload({
+    const savedVersion = {
+      entityVersionId: "version-a",
+      type: "entity_version",
+    };
+    const result = await completeEntityVersionUpload({
       abort: async () => {
         events.push("abort");
       },
       finalize: async () => {
         events.push("finalize");
+        return savedVersion;
       },
       put: async () => {
         events.push("put");
@@ -21,6 +26,7 @@ describe("entity version upload completion", () => {
     });
 
     expect(events).toEqual(["put", "finalize"]);
+    expect(result).toBe(savedVersion);
   });
 
   test("aborts a rejected storage upload and never finalizes", async () => {

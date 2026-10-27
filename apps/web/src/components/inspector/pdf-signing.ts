@@ -7,15 +7,38 @@ import {
   parsePdfSigningDeadline,
   type PdfSigningOutcome,
   type PdfSigningSessionSnapshot,
+  resolveSavedPdfSignTarget,
 } from "@/components/inspector/pdf-signing.logic";
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 
 export type PdfSignableFile = {
   entityId: string;
+  fieldId: string;
   propertyId: string;
   workspaceId: string;
+};
+
+type ReadSavedPdfSignTargetOptions = {
+  entityVersionId: SafeId<"entityVersion">;
+  target: PdfSignableFile;
+};
+
+/** Resolve the upload receipt's immutable version, even if another save is current. */
+export const readSavedPdfSignTarget = async ({
+  entityVersionId,
+  target,
+}: ReadSavedPdfSignTargetOptions) => {
+  const version = unwrapApiResponse(
+    await api
+      .entities({ workspaceId: toSafeId<"workspace">(target.workspaceId) })
+      .entity({ entityId: toSafeId<"entity">(target.entityId) })
+      .versions({ versionId: entityVersionId })
+      .get(),
+  );
+  return resolveSavedPdfSignTarget({ fields: version.fields, target });
 };
 
 type PdfSigningSessionRef = {
@@ -26,6 +49,7 @@ type PdfSigningSessionRef = {
 /** Omitting `stamp` signs without a visible mark on any page. */
 export const createPdfSigningHandoff = async ({
   entityId,
+  fieldId,
   propertyId,
   stamp,
   workspaceId,
@@ -34,6 +58,7 @@ export const createPdfSigningHandoff = async ({
     .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["pdf-signing-handoffs"].post({
       entityId: toSafeId<"entity">(entityId),
+      fieldId: toSafeId<"field">(fieldId),
       propertyId: toSafeId<"property">(propertyId),
       ...(stamp === undefined ? {} : { stamp }),
     });

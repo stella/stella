@@ -59,7 +59,7 @@ export const resolvePdfSignTarget = ({
 };
 
 type ResolveSavedPdfSignTargetOptions = {
-  /** The document's current fields, read after the save. */
+  /** Fields read from the exact version named by the upload's saved receipt. */
   fields: readonly {
     id: string;
     propertyId: string;
@@ -70,7 +70,7 @@ type ResolveSavedPdfSignTargetOptions = {
 };
 
 /**
- * The version a save just made current for the property being signed. The
+ * The immutable version returned by the save, for the property being signed. The
  * caller already held a sign target, so the permission it implies carries
  * over; the file itself is checked by {@link resolvePdfSignTarget} again.
  */
@@ -78,7 +78,7 @@ export const resolveSavedPdfSignTarget = ({
   fields,
   target,
 }: ResolveSavedPdfSignTargetOptions) => {
-  const field = fields.findLast(
+  const field = fields.find(
     ({ content, propertyId }) =>
       propertyId === target.propertyId && content.type === "file",
   );

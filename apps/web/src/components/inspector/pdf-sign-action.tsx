@@ -24,7 +24,7 @@ import type {
 import { detachedUserAction } from "@/lib/errors/user-toast";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
-export type PdfSignTarget = PdfSignableFile & { fieldId: string };
+export type PdfSignTarget = PdfSignableFile;
 
 // The placement preview renders the page with pdf.js; loading it only when the
 // dialog opens keeps pdf.js out of every surface that merely offers signing

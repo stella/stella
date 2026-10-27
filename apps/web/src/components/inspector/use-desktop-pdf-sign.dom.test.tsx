@@ -21,7 +21,7 @@ const en = (await import("@/i18n/langs/en.json")).default;
 
 const copy = en.workspaces.files.pdfSigning;
 const ID = "90123344-5566-7788-9900-aabbccddeeff";
-const target = { entityId: ID, propertyId: ID, workspaceId: ID };
+const target = { entityId: ID, fieldId: ID, propertyId: ID, workspaceId: ID };
 
 afterEach(async () => {
   await act(async () => {
