@@ -175,6 +175,23 @@ const InlineNotes = ({ items }: { items: MarginItem[] }) => (
   </div>
 );
 
+/**
+ * One comment card in the text's flow, for a surface that lists comments and
+ * no other note kind (a document's comment panel): it draws the comment card
+ * alone, without the dispatch over every note kind.
+ */
+export const InlineCommentNote = ({ item }: { item: CommentMarginItem }) => (
+  <div className="reader-chrome" data-reader-chrome="">
+    <div className="contents" data-margin-note={item.kind}>
+      <CommentNote
+        item={item}
+        placement={{ type: "inline" }}
+        presence="normal"
+      />
+    </div>
+  </div>
+);
+
 type PositionedItem = MarginItem & {
   top: number;
   /** Where the note's text anchor actually is; `top` may sit lower when

@@ -11,7 +11,10 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { saveCommentEdit } from "@/components/legal-reader/annotations/comment-edit";
 import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
-import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import {
+  InlineCommentNote,
+  MarginNotes,
+} from "@/components/legal-reader/margin-notes";
 import type { CommentMarginItem } from "@/components/legal-reader/margin-notes";
 import { DETACHED_REASON } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type { DetachedReason } from "@/components/pdf/annotations/document-mark-anchor.logic";
@@ -214,10 +217,7 @@ export const DocumentMarksPanel = ({
                     page: String(mark.pageNumber),
                   })}
                 </Button>
-                <MarginNotes
-                  items={[commentItem(marks, mark)]}
-                  placement="inline"
-                />
+                <InlineCommentNote item={commentItem(marks, mark)} />
               </li>
             ))}
           </ul>
