@@ -55,6 +55,8 @@ COPY --from=pruner /app/out/full/ .
 COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.css
 COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
+# The API host serves the web app's logo as its favicon (handlers/well-known).
+COPY --from=install-inputs /app/apps/web/public/stella-logo-512.png /app/apps/web/public/stella-logo-512.png
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
 RUN bun apps/api/scripts/generate-capability-runtime.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
