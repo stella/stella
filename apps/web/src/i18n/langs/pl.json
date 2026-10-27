@@ -4311,6 +4311,10 @@
       "visibilityShared": "Udostępnione organizacji",
       "visibilitySharedWithMatter": "Udostępnione w sprawie"
     },
+    "contents": {
+      "aiSection": "{section} (część wygenerowana przez AI)",
+      "headingWithAiSection": "{heading} (część wygenerowana przez AI: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
       "citationOnly": "Tylko odesłanie",

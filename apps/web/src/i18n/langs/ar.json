@@ -4311,6 +4311,10 @@
       "visibilityShared": "مشارك مع المؤسسة",
       "visibilitySharedWithMatter": "مشارك مع الملف القانوني"
     },
+    "contents": {
+      "aiSection": "{section} (قسم مُنشأ بالذكاء الاصطناعي)",
+      "headingWithAiSection": "{heading} (قسم مُنشأ بالذكاء الاصطناعي: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
       "citationOnly": "الإحالة فقط",

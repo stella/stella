@@ -31,6 +31,7 @@ import { SortChips } from "@stll/workspace-ui/sorts";
 import { WorkspaceViewSwitcher } from "@stll/workspace-ui/view-switcher";
 
 import { InlineEdit } from "@/components/inline-edit";
+import { sortDirectionLabels } from "@/components/workspaces/properties/sort-property.logic";
 import {
   GroupByControl,
   KanbanGroupingSettings,
@@ -411,7 +412,11 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
               sorts={activeView.layout.sorts}
               properties={sortProperties}
               maxSorts={VIEW_SORTS_MAX}
-              labels={{ add: t("common.add"), remove: t("common.remove") }}
+              labels={{
+                add: t("common.add"),
+                remove: t("common.remove"),
+                directions: sortDirectionLabels((key) => t(key)),
+              }}
               onUpdate={(sorts) =>
                 onLayoutChange(mergeLayout(activeView.layout, { sorts }))
               }

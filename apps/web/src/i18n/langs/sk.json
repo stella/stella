@@ -4311,6 +4311,10 @@
       "visibilityShared": "Zdieľané s organizáciou",
       "visibilitySharedWithMatter": "Zdieľané so spisom"
     },
+    "contents": {
+      "aiSection": "{section} (časť vygenerovaná AI)",
+      "headingWithAiSection": "{heading} (časť vygenerovaná AI: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citáciou",
       "citationOnly": "Iba citácia",

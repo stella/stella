@@ -4311,6 +4311,10 @@
       "visibilityShared": "Compartido con la organización",
       "visibilitySharedWithMatter": "Compartido con el asunto"
     },
+    "contents": {
+      "aiSection": "{section} (sección generada por IA)",
+      "headingWithAiSection": "{heading} (sección generada por IA: {section})"
+    },
     "copyMenu": {
       "blockQuoteWithCitation": "Cita en bloque con referencia",
       "citationOnly": "Solo referencia",
