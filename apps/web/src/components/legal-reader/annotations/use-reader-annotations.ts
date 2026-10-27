@@ -185,6 +185,7 @@ export const useReaderAnnotations = (
     const claimed = claimGuestAnnotations(storage, migrationOwner);
     if (Result.isError(claimed)) {
       captureGuestClaimFailure(claimed.error);
+
       notifyUserError(
         claimed.error,
         t("legalReader.annotations.guestMigrationFailed"),
