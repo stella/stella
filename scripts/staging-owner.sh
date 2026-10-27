@@ -8,6 +8,7 @@ set -euo pipefail
 : "${GITHUB_RUN_ID:?GITHUB_RUN_ID is required}"
 
 readonly workflow="deploy-staging.yml"
+readonly applying_step="Deploy to staging"
 mode="${STAGING_OWNER_MODE:?STAGING_OWNER_MODE is required}"
 interval="${STAGING_OWNER_INTERVAL_SECONDS:-30}"
 
@@ -36,7 +37,7 @@ ordinary_promote_busy() {
   while IFS= read -r run_id; do
     [[ -n "$run_id" ]] || continue
     jobs="$(api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" --jq \
-      '.jobs[] | select(.name == "Promote staging images" and .status == "in_progress") | .id')" ||
+      ".jobs[] | select(.name == \"Promote staging images\") | select(any(.steps[]; .name == \"${applying_step}\" and .status == \"in_progress\")) | .id")" ||
       read_failed
     [[ -z "$jobs" ]] || return 0
   done <<<"$runs"

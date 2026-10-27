@@ -94,7 +94,7 @@ describe("staging promotion ownership", () => {
     ).toBe(0);
   });
 
-  test("candidate waits for an ordinary promote in progress", async () => {
+  test("candidate waits for an ordinary promotion applying to staging", async () => {
     const result = await runGate("candidate", {
       workflow_runs: [
         {
@@ -103,9 +103,111 @@ describe("staging promotion ownership", () => {
           status: "in_progress",
         },
       ],
-      jobs: [{ name: "Promote staging images", status: "in_progress", id: 2 }],
+      jobs: [
+        {
+          name: "Promote staging images",
+          status: "in_progress",
+          id: 2,
+          steps: [{ name: "Deploy to staging", status: "in_progress" }],
+        },
+      ],
     });
     expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain(
+      "Timed out waiting for an ordinary staging promotion",
+    );
+  });
+
+  for (const candidateStatus of ["queued", "in_progress"]) {
+    test(`ordinary gate waits and candidate gate passes with a ${candidateStatus} proof and an ordinary promotion waiting for ownership`, async () => {
+      const fixture = {
+        workflow_runs: [
+          {
+            id: 1,
+            display_title: "Deploy main to staging abc",
+            status: "in_progress",
+          },
+          {
+            id: 3,
+            display_title: "Staging release proof v1.2.3-rc.1 abc",
+            status: candidateStatus,
+          },
+        ],
+        jobs: [
+          {
+            name: "Promote staging images",
+            status: "in_progress",
+            id: 2,
+            steps: [
+              {
+                name: "Wait for the current staging owner",
+                status: "in_progress",
+              },
+              { name: "Deploy to staging", status: "queued" },
+            ],
+          },
+        ],
+      };
+      const ordinary = await runGate("ordinary", fixture);
+      const candidate = await runGate("candidate", fixture);
+      expect(ordinary.exitCode).toBe(1);
+      expect(ordinary.stderr).toContain(
+        "Timed out waiting for a release-candidate staging proof",
+      );
+      expect(candidate.exitCode).toBe(0);
+    });
+  }
+
+  test("candidate passes while an ordinary promotion waits for ownership", async () => {
+    const result = await runGate("candidate", {
+      workflow_runs: [
+        {
+          id: 1,
+          display_title: "Deploy main to staging abc",
+          status: "in_progress",
+        },
+      ],
+      jobs: [
+        {
+          name: "Promote staging images",
+          status: "in_progress",
+          id: 2,
+          steps: [
+            {
+              name: "Wait for the current staging owner",
+              status: "in_progress",
+            },
+            { name: "Deploy to staging", status: "queued" },
+          ],
+        },
+      ],
+    });
+    expect(result.exitCode).toBe(0);
+  });
+
+  test("the applying step matches the promotion dispatch in the workflow", async () => {
+    const source = await readFile(script, "utf-8");
+    const workflow: unknown = Bun.YAML.parse(
+      await readFile(workflowPath, "utf-8"),
+    );
+    const field = (value: unknown, key: string): unknown =>
+      typeof value === "object" && value !== null
+        ? Reflect.get(value, key)
+        : undefined;
+    const steps = field(
+      field(field(workflow, "jobs"), "promote-staging"),
+      "steps",
+    );
+    if (!Array.isArray(steps)) {
+      throw new TypeError("promote-staging declares no steps");
+    }
+    const dispatches = steps.filter(
+      (step) => field(step, "uses") === "./.github/actions/promote-dispatch",
+    );
+    expect(dispatches).toHaveLength(1);
+    const matchedStep = /readonly applying_step="([^"]+)"/u.exec(source)?.[1];
+    expect(matchedStep).toBeDefined();
+    expect(matchedStep).toBe(field(dispatches.at(0), "name"));
   });
 
   for (const mode of ["candidate", "ordinary"] as const) {
