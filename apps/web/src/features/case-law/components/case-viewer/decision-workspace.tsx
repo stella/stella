@@ -73,7 +73,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -683,8 +683,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
     decisionAnalysisView(analysisState);
 
-  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
-    completeAnalysis?.tree ?? null,
+  // Contents places the sections as they stream in, beside the document's
+  // own headings; with AI notes filtered out it is the headings alone.
+  const analysisContents = useAnalysisReaderOutline(
+    showAiNotes && hasAnalysis ? analysisTree : null,
   );
 
   // The passage the reader was sent to, marked for as long as they are on it.
@@ -922,7 +924,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           textScale={textScale}
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
-          fallbackBreadcrumb={fallbackBreadcrumb}
+          analysis={analysisContents}
           viewport={viewportElement}
           key={decisionId}
         />
