@@ -82,7 +82,6 @@ beforeEach(() => {
   root = createRoot(container);
 });
 afterEach(async () => {
-  jest.useRealTimers();
   await act(async () => {
     root.unmount();
   });
