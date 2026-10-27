@@ -16,8 +16,7 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { createBrowseFacetsCache } from "@/api/lib/legal-search/browse-facets-cache";
-import { corpusIndexBrowseFacets } from "@/api/lib/legal-search/corpus-index-facets";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { corpusIndexBrowseFacetsWithin } from "@/api/lib/legal-search/corpus-index-facets";
 import { isCorpusIndexJurisdiction } from "@/api/lib/legal-search/index-naming";
 import { readPgFtsBrowseFacets } from "@/api/lib/legal-search/pg-fts-browse-facets";
 import { getLegalSearchProvider } from "@/api/lib/legal-search/provider";
@@ -133,13 +132,7 @@ export const readBrowseFacetsWithin = async (
           }),
       });
     case "corpus-index":
-      return await corpusIndexBrowseFacets(query, "unobserved", {
-        readServingTarget: async (jurisdiction) =>
-          await readServingCorpusIndexTargetTx(tx, {
-            family: "case_law",
-            jurisdiction,
-          }),
-      });
+      return await corpusIndexBrowseFacetsWithin(tx, query);
     default:
       return panic("Unhandled legal search engine", engine satisfies never);
   }

@@ -6,9 +6,9 @@ import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
+import type { Transaction } from "@/api/db/root";
 import { caseLawCoverageSummaries } from "@/api/db/schema";
-import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
-import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
+import type { SafeId } from "@/api/lib/branded-types";
 import { readNonRedistributableCaseLawSourceIdsQuery } from "@/api/lib/case-law/non-redistributable-sources";
 import {
   logSchedulerBackfillStatus,
@@ -19,7 +19,6 @@ import {
   type SchedulerTask,
   SchedulerTaskFailure,
 } from "@/api/lib/scheduler/types";
-import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const REFRESH_CASE_LAW_COVERAGE_TASK =
@@ -35,14 +34,29 @@ type CoverageRefreshBatch = {
   value: Result<string, SchedulerTaskFailure>;
 };
 
+/** Maintenance reads use the root transaction already held by the refresh. */
+type CoverageRefreshReadDb = <T>(
+  read: (tx: Pick<Transaction, "execute" | "select">) => Promise<T>,
+) => Promise<T>;
+
+type CoverageRefreshOptions = {
+  createRuntime?: typeof createScriptBackfillRuntime;
+  compute: (
+    readDb: CoverageRefreshReadDb,
+    excludedSourceIds: readonly SafeId<"caseLawSource">[],
+  ) => Promise<{
+    complete: boolean;
+    answer:
+      | { generatedAt: string; countries: readonly unknown[] }
+      | { message: string };
+  }>;
+};
+
 export const createCaseLawCoverageRefreshTask =
   ({
     createRuntime = createScriptBackfillRuntime,
-    compute = computeCaseLawCoverageAnswer,
-  }: {
-    createRuntime?: typeof createScriptBackfillRuntime;
-    compute?: typeof computeCaseLawCoverageAnswer;
-  } = {}): SchedulerTask =>
+    compute,
+  }: CoverageRefreshOptions): SchedulerTask =>
   async ({ db, logger, runId, signal }) => {
     signal.throwIfAborted();
     const refreshSignal = AbortSignal.any([
@@ -93,10 +107,9 @@ export const createCaseLawCoverageRefreshTask =
               const summary = {
                 key: "current",
                 sourcePolicy: JSON.stringify(policy.toSorted(compareCodeUnit)),
-                answer: projectResponseText(answer, coverageResponseSchema),
+                answer,
                 generatedAt: new Date(answer.generatedAt),
               };
-              // audit: skip — derived public summary; the refresh has a system audit below.
               await tx
                 .insert(caseLawCoverageSummaries)
                 .values(summary)
@@ -141,5 +154,3 @@ export const createCaseLawCoverageRefreshTask =
     });
     return undefined;
   };
-
-export const refreshCaseLawCoverageTask = createCaseLawCoverageRefreshTask();

@@ -103,7 +103,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
           );
           expect(complete).toBe(true);
           if ("message" in answer) {
-            return panic("The fixture must produce a coverage answer");
+            panic("The fixture must produce a coverage answer");
           }
           expect(answer.totals.searchable).toBe(1);
           const coverageCountry = answer.countries.find(
@@ -116,7 +116,7 @@ describe.skipIf(!enabled)("coverage computation (postgres)", () => {
             coverageCountry?.availability !==
             CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE
           ) {
-            return panic("The fixture country must be searchable");
+            panic("The fixture country must be searchable");
           }
           expect(coverageCountry.searchable).toBe(1);
           expect(

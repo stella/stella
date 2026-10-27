@@ -72,6 +72,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { projectResponseText } from "@/api/lib/search/project-response-text";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -767,7 +768,7 @@ export const computeCaseLawCoverageAnswer = async (
   // source's last sync against the stated time is comparing like with like.
   const now = new Date();
 
-  return await assembleCaseLawCoverageAnswer({
+  const computation = await assembleCaseLawCoverageAnswer({
     readProvisionProcessing: async () =>
       await caseLawDb(readProvisionPendingCounts, {
         isolation: "repeatable-read",
@@ -838,4 +839,11 @@ export const computeCaseLawCoverageAnswer = async (
       },
     },
   });
+  if (!computation.complete || "message" in computation.answer) {
+    return computation;
+  }
+  return {
+    answer: projectResponseText(computation.answer, coverageResponseSchema),
+    complete: true,
+  };
 };

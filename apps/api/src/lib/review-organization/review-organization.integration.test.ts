@@ -1107,6 +1107,7 @@ describe("review organization reset task", () => {
     });
     // Exercise the registered counting wrapper without a feature gate.
     const task = createSchedulerTaskRegistry(async () => {}, {
+      refreshCaseLawCoverage: () => undefined,
       resetReviewOrganization: reset,
     }).get(RESET_REVIEW_ORGANIZATION_TASK);
     if (task === undefined) {
@@ -1148,6 +1149,7 @@ describe("review organization reset task", () => {
 
     // With time billing back, the registered task completes the sample data.
     const restored = createSchedulerTaskRegistry(async () => {}, {
+      refreshCaseLawCoverage: () => undefined,
       resetReviewOrganization: createResetReviewOrganizationTask({
         readConfig: () => config(fixture.reviewOrgId),
         dependencies: resetDependencies,

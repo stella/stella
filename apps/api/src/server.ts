@@ -9,6 +9,7 @@ import { apiRoutes } from "@/api/api-routes";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import { initBuiltinReportTemplates } from "@/api/handlers/reports/builtin-templates";
@@ -53,6 +54,7 @@ import {
 import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
+import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
@@ -344,6 +346,11 @@ const startServer = async (): Promise<void> => {
       startSchedulerLoop({
         registry: createSchedulerTaskRegistry(
           createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
+          {
+            refreshCaseLawCoverage: createCaseLawCoverageRefreshTask({
+              compute: computeCaseLawCoverageAnswer,
+            }),
+          },
         ),
       }),
     logger,

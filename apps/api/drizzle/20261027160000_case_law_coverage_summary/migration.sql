@@ -10,11 +10,8 @@ CREATE TABLE "case_law_coverage_summaries" (
   CONSTRAINT "case_law_coverage_summaries_policy_array" CHECK (jsonb_typeof("source_policy"::jsonb) = 'array')
 );--> statement-breakpoint
 
--- stella-migration-safety: reviewed row-level-security - applies only to the empty table created in this transaction
 ALTER TABLE "case_law_coverage_summaries" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
--- stella-migration-safety: reviewed row-level-security - applies only to the empty table created in this transaction
 ALTER TABLE "case_law_coverage_summaries" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
--- stella-migration-safety: reviewed create-policy - installs owner access on the empty table created in this transaction
 CREATE POLICY "case_law_coverage_summary_owner_access" ON "case_law_coverage_summaries"
   AS PERMISSIVE FOR ALL TO public
   USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass))
