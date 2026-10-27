@@ -86,15 +86,14 @@ const createRepository = (
 };
 
 const runCommand = (repository: string, base = "HEAD~1") =>
-  Bun.spawnSync(["bun", commandPath, "--base", base], {
-    cwd: repository,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      ...process.env,
-      STELLA_PRE_PUSH_TYPECHECK_REPO_ROOT: repository,
+  Bun.spawnSync(
+    ["bun", commandPath, "--base", base, "--repo-root", repository],
+    {
+      cwd: repository,
+      stdout: "pipe",
+      stderr: "pipe",
     },
-  });
+  );
 
 test("each changed TypeScript file maps only to its owning package", () => {
   expect(
@@ -217,14 +216,22 @@ test("every budget exclusion names a workspace package", () => {
   ).toThrow("budget exclusion names unknown package @stll/unknown");
 });
 
-test("the real command is an immediate no-op when the range has no changes", () => {
-  const result = Bun.spawnSync(["bun", commandPath, "--base", "HEAD"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(result.exitCode).toBe(0);
-  expect(result.stdout.toString()).toBe("");
-  expect(result.stderr.toString()).toBe("");
+test("the command defaults to the repository root when the option is absent", () => {
+  const workingDirectory = mkdtempSync(
+    path.join(os.tmpdir(), "pre-push-typecheck-cwd-"),
+  );
+  try {
+    const result = Bun.spawnSync(["bun", commandPath, "--base", "HEAD"], {
+      cwd: workingDirectory,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toBe("");
+    expect(result.stderr.toString()).toBe("");
+  } finally {
+    rmSync(workingDirectory, { recursive: true, force: true });
+  }
 });
 
 test("the command ignores a deleted package whose directory remains", () => {

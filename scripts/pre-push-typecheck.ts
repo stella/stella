@@ -165,8 +165,12 @@ const main = async () => {
   if (base === undefined || base.startsWith("--")) {
     panic("--base requires a git ref");
   }
+  const repoRootIndex = process.argv.indexOf("--repo-root");
   const repoRoot =
-    process.env["STELLA_PRE_PUSH_TYPECHECK_REPO_ROOT"] ?? REPO_ROOT;
+    repoRootIndex === -1 ? REPO_ROOT : process.argv[repoRootIndex + 1];
+  if (repoRoot === undefined || repoRoot.startsWith("--")) {
+    panic("--repo-root requires a path");
+  }
   let packages: PackageSelection[];
   try {
     const workspaceNames = new Set(
