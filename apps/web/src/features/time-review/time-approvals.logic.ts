@@ -31,13 +31,22 @@ const groupByKey = <T>(items: readonly T[], keyOf: (item: T) => string) => {
   return groups;
 };
 
+/**
+ * What a row would bill: nothing to price for unpriced or non-billable time,
+ * which never reaches an invoice, and zero for no-charge time.
+ */
+export const reviewAmount = (row: TimeReviewRowData): CentsAmount | null =>
+  row.currency === UNPRICED_TIME_ENTRY_CURRENCY || !row.billable
+    ? null
+    : timeEntryAmount(row);
+
 const totalsOf = (rows: readonly ReviewRowWithPerson[]) => {
   let billedMinutes = 0;
   const amounts = new Map<string, number>();
   for (const row of rows) {
     billedMinutes += row.billedMinutes;
-    if (row.currency !== UNPRICED_TIME_ENTRY_CURRENCY) {
-      const amount: CentsAmount = timeEntryAmount(row);
+    const amount = reviewAmount(row);
+    if (amount !== null) {
       amounts.set(row.currency, (amounts.get(row.currency) ?? 0) + amount);
     }
   }

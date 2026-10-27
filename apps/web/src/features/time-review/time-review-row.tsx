@@ -4,7 +4,6 @@ import { useTranslations } from "use-intl";
 
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@stll/api-contract";
 import type { CentsAmount } from "@stll/money";
-import { timeEntryAmount } from "@stll/money";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -15,6 +14,7 @@ import {
   plainDateEpoch,
   SHORT_DATE,
 } from "@/components/billing/format-plain-date";
+import { reviewAmount } from "@/features/time-review/time-approvals.logic";
 import type { TimeReview } from "@/features/time-review/use-time-review";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatMinutes } from "@/lib/workspaces/format-duration";
@@ -30,6 +30,7 @@ export type TimeReviewRowData = {
   billedMinutes: number;
   rateAtEntry: CentsAmount;
   currency: string;
+  billable: boolean;
   noCharge: boolean;
   narrative: string;
   returnComment: string | null;
@@ -49,10 +50,15 @@ const Pricing = ({ row }: { row: TimeReviewRowData }) => {
   if (row.currency === UNPRICED_TIME_ENTRY_CURRENCY) {
     return <span>{t("billing.rates.noRateFound")}</span>;
   }
+  const amount = reviewAmount(row);
   return (
     <>
       <span>{formatCurrencyAmount(row.rateAtEntry, row.currency)}</span>
-      <span>{formatCurrencyAmount(timeEntryAmount(row), row.currency)}</span>
+      <span>
+        {amount === null
+          ? t("billing.nonBillable")
+          : formatCurrencyAmount(amount, row.currency)}
+      </span>
     </>
   );
 };

@@ -118,6 +118,7 @@ const reviewRowOf =
     billedMinutes: entry.billedMinutes,
     rateAtEntry: entry.rateAtEntry,
     currency: entry.currency,
+    billable: entry.billable,
     noCharge: entry.noCharge,
     narrative: entry.narrative,
     returnComment: entry.returnComment,

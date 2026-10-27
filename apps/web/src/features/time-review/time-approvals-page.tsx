@@ -73,6 +73,7 @@ const reviewRowOf = (item: TimeApprovalItem): ReviewRowWithPerson => ({
   billedMinutes: item.billedMinutes,
   rateAtEntry: item.rateAtEntry,
   currency: item.currency,
+  billable: item.billable,
   noCharge: item.noCharge,
   narrative: item.narrative,
   returnComment: item.returnComment,
