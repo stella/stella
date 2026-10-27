@@ -92,6 +92,7 @@ const ownComment: MarginItem = {
   onDelete: () => undefined,
   onToggleVisibility: () => undefined,
   startAnchorId: "p-1",
+  targetType: "decision",
   text: "My own words.",
   updatedAt: "2026-09-01T10:00:00.000Z",
   visibility: "private",

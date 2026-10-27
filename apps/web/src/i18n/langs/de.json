@@ -1027,6 +1027,12 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "marginFilter": {
+      "label": "Filter für zitierte Vorschriften",
+      "paragraph": "{count, plural, =0 {Keine Vorschriften in ¶{paragraph} zitiert} one {# Vorschrift in ¶{paragraph} zitiert} other {# Vorschriften in ¶{paragraph} zitiert}}",
+      "selection": "{count, plural, =0 {Keine Vorschriften in der Auswahl zitiert} one {# Vorschrift in der Auswahl zitiert} other {# Vorschriften in der Auswahl zitiert}}",
+      "unnumberedParagraph": "{count, plural, =0 {Keine Vorschriften in diesem Absatz zitiert} one {# Vorschrift in diesem Absatz zitiert} other {# Vorschriften in diesem Absatz zitiert}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# Entscheidung war hier bereits gespeichert} other {# Entscheidungen waren hier bereits gespeichert}}",
       "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",
@@ -1051,6 +1057,7 @@
       "human": "Mensch",
       "toggleState": "{label}: {state, select, on {ein} other {aus}}"
     },
+    "oldestDecisions": "Älteste Entscheidungen",
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
@@ -1156,6 +1163,8 @@
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",
+      "oldest": "Älteste",
+      "oldestUnavailable": "Eine Suche wird nach Relevanz oder mit den neuesten zuerst sortiert. Leeren Sie die Suche, um die ältesten Entscheidungen zuerst anzuzeigen.",
       "relevance": "Beste Treffer"
     },
     "viewer": {
@@ -1723,21 +1732,8 @@
       "describe-stella-function": "Datensuche vorbereiten",
       "describe_template": "Vorlagenfelder lesen",
       "discover_tools": "Datensuche vorbereiten",
-      "docxCommentSummary": "Kommentar zu {blockId} hinzufügen",
-      "docxDeleteSummary": "{blockId} löschen",
-      "docxDeleteTableColumnSummary": "Tabellenspalte bei {blockId} löschen",
-      "docxDeleteTableRowSummary": "Tabellenzeile bei {blockId} löschen",
       "docxEditMore": "{count, plural, one {# weitere Änderung} other {# weitere Änderungen}}",
       "docxEditSummary": "{count, plural, one {# vorgeschlagene Änderung} other {# vorgeschlagene Änderungen}}",
-      "docxInsertAfterSummary": "Text nach {blockId} einfügen",
-      "docxInsertBeforeSummary": "Text vor {blockId} einfügen",
-      "docxInsertTableColumnSummary": "Tabellenspalte in der Nähe von {blockId} einfügen",
-      "docxInsertTableRowSummary": "Tabellenzeile in der Nähe von {blockId} einfügen",
-      "docxMergeTableCellsSummary": "Tabellenzellen bei {blockId} verbinden",
-      "docxReplaceBlockSummary": "{blockId} ersetzen",
-      "docxReplaceSummary": "„{find}“ durch „{replace}“ ersetzen",
-      "docxSignatureTableSummary": "Signaturtabelle in der Nähe von {blockId} einfügen",
-      "docxSplitTableCellSummary": "Tabellenzelle bei {blockId} teilen",
       "execute-typescript": "Akten-Daten lesen",
       "execute_typescript": "Akten-Daten lesen",
       "expand-chat-history": "Chatverlauf lesen",
@@ -4310,7 +4306,12 @@
       "styleHighlight": "Markierung",
       "styleSquiggly": "Wellenlinie",
       "styleStrikethrough": "Durchstreichung",
-      "visibilityShared": "Mit der Organisation geteilt"
+      "visibilityShared": "Mit der Organisation geteilt",
+      "visibilitySharedWithMatter": "Mit der Akte geteilt"
+    },
+    "contents": {
+      "aiSection": "{section} (KI-generierter Abschnitt)",
+      "headingWithAiSection": "{heading} (KI-generierter Abschnitt: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
@@ -4787,10 +4788,8 @@
   },
   "readerAnswers": {
     "budgetError": "Das Budget für Antworten ist aufgebraucht.",
-    "citation": "¶{paragraph}",
     "expand": "Antwort aufklappen",
     "explain": "Erklären",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Rückfrage stellen",
     "invalidCitations": "{count, plural, one {# Fundstelle konnte nicht überprüft werden.} other {# Fundstellen konnten nicht überprüft werden.}}",
     "loading": "Antwort wird generiert…",
@@ -6476,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Seiten für Dunkelmodus anpassen",
+      "annotations": {
+        "commentedBy": "Kommentar von {name}",
+        "detachedHeading": "Nicht in dieser Version",
+        "detachedOtherVersion": "In Version {version} erstellt; die Seite lautet inzwischen anders.",
+        "detachedTextChanged": "Diese Wörter stehen nicht mehr auf Seite {page}.",
+        "empty": "Wörter im Dokument markieren und dann „Kommentar“ wählen.",
+        "highlightedBy": "Hervorgehoben von {name}",
+        "refusedNoText": "Diese Seite enthält keinen Text zum Markieren. Führen Sie zuerst die Texterkennung für das Dokument aus.",
+        "refusedNotFound": "Diese Wörter wurden im Text der Seite nicht gefunden. Markieren Sie sie erneut.",
+        "refusedTooLong": "Diese Passage ist zu lang zum Markieren. Wählen Sie eine kürzere."
+      },
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
       "evidence": "Beweismittel",
@@ -6660,10 +6670,12 @@
       "selectOperator": "Operator auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
       "singleSelect": "Einfachauswahl",
-      "sortAscending": "Aufsteigend sortieren",
       "sortAscendingDate": "Älteste zuerst",
-      "sortDescending": "Absteigend sortieren",
+      "sortAscendingNumber": "Niedrigste zuerst",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Neueste zuerst",
+      "sortDescendingNumber": "Höchste zuerst",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {In # Option aufteilen} other {In # Optionen aufteilen}}",
       "suggestWithAI": "Mit KI vorschlagen",
       "text": "Text",

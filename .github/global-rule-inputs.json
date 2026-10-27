@@ -2,6 +2,7 @@
   "version": 1,
   "globs": [
     ".github/ci-checks/*.yml",
+    ".github/ci-checks/budgets.json",
     ".github/ci-event-policy.json",
     ".oxlint-plugins/**",
     "apps/api/scripts/*.test.ts",
