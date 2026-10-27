@@ -300,6 +300,54 @@ describe("resource-bound OAuth refresh", () => {
 });
 
 describe("disconnecting a connected app", () => {
+  test("refuses generic consent deletion and revokes the grant through stella disconnect", async () => {
+    const browser = await signInHuman(
+      `disconnect-owner-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const organization = await getAuth().api.createOrganization({
+      body: {
+        name: "Disconnect owner",
+        slug: `disconnect-owner-${Bun.randomUUIDv7()}`,
+      },
+      headers: browser.headers(),
+    });
+    await browser.setActiveOrganization(organization.id);
+    const client = await registerOAuthClient();
+    const grant = await grantOAuthClient(browser, client);
+    const connection = (await listConnections(browser)).find(
+      ({ clientId }) => clientId === client.clientId,
+    );
+    if (!connection) {
+      throw new Error("The granted connection is not listed");
+    }
+
+    const genericDeleteResponse = await getAuth().handler(
+      new Request(getAuthEndpointUrl("oauth2/delete-consent"), {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: browser.cookieHeader(),
+        },
+        body: JSON.stringify({ id: connection.id }),
+      }),
+    );
+
+    expect(genericDeleteResponse.status).toBe(404);
+    expect(await opensMcpContext(grant.accessToken)).toBe(true);
+    expect((await disconnect(browser, connection.id)).status).toBe(200);
+    expect(await opensMcpContext(grant.accessToken)).toBe(false);
+    expect(
+      await testDb.$count(
+        oauthGrantRevocations,
+        and(
+          eq(oauthGrantRevocations.organizationId, organization.id),
+          eq(oauthGrantRevocations.userId, browser.userId),
+          eq(oauthGrantRevocations.oauthClientId, client.clientId),
+        ),
+      ),
+    ).toBe(1);
+  });
+
   test("refuses only the disconnected app's already-issued MCP token", async () => {
     const auth = getAuth();
     const owner = await signInHuman(

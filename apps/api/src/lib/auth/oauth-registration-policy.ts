@@ -189,7 +189,9 @@ export const OAUTH_ENDPOINT_POLICY = {
   "/oauth2/get-clients": "no-scope-change",
   "/oauth2/get-consent": "no-scope-change",
   "/oauth2/get-consents": "no-scope-change",
-  "/oauth2/delete-consent": "no-scope-change",
+  // Consent deletion is owned by `/me/oauth-connections/:id`, which also
+  // revokes the grant's tokens and records the grant revocation audit state.
+  "/oauth2/delete-consent": "disabled",
   "/oauth2/consent-info": "no-scope-change",
 } as const satisfies Record<
   string,
