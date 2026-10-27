@@ -5,6 +5,7 @@ import { getColumns } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -16,6 +17,13 @@ const migrationSql = readFileSync(
   nodePath.resolve(
     import.meta.dir,
     "../../drizzle/20261022120000_case_law_batch_slots/migration.sql",
+  ),
+  "utf-8",
+).replaceAll("--> statement-breakpoint", "");
+const generationMigrationSql = readFileSync(
+  nodePath.resolve(
+    import.meta.dir,
+    "../../drizzle/20261026120200_case_law_extraction_warnings_generation/migration.sql",
   ),
   "utf-8",
 ).replaceAll("--> statement-breakpoint", "");
@@ -47,6 +55,7 @@ const PARSED_GENERATION_COLUMNS = {
   languageGroupKey: "parse-input-or-output",
   decisionDate: "parse-input-or-output",
   decisionType: "parse-input-or-output",
+  extractionWarnings: "parse-input-or-output",
   fulltext: "parse-input-or-output",
   textlessDetailRecheckedAt: "bookkeeping",
   sections: "parse-input-or-output",
@@ -105,7 +114,7 @@ const expectedTriggerFields = Object.entries(PARSED_GENERATION_COLUMNS)
   });
 const comparedRows =
   /IF ROW\((?<before>[\s\S]*?)\) IS DISTINCT FROM ROW\((?<after>[\s\S]*?)\) THEN/u.exec(
-    migrationSql,
+    generationMigrationSql,
   )?.groups;
 const oldComparedRow =
   comparedRows?.["before"] ?? panic("Trigger OLD comparison row is missing");
@@ -283,6 +292,7 @@ test("all actual input and derived mutations invalidate provenance even at the s
   const database = await createLegacyDatabase();
   try {
     await database.exec(migrationSql);
+    await database.exec(generationMigrationSql);
     expect(triggerFields.toSorted(compareCodeUnit)).toEqual(
       expectedTriggerFields.toSorted(compareCodeUnit),
     );
@@ -346,6 +356,44 @@ test("the complete parsed-input group rejects partial stamps", async () => {
       constraint: "case_law_decisions_parsed_source_complete",
     });
     expect(await readProof(database)).toEqual(unknownProof);
+  } finally {
+    await database.close();
+  }
+});
+
+test("the forward migration invalidates changed extraction diagnostics but preserves identical diagnostics", async () => {
+  const database = await createLegacyDatabase();
+  try {
+    await database.exec(migrationSql);
+    await stamp(database);
+    await database.query(
+      "UPDATE case_law_decisions SET extraction_warnings = $1 WHERE id = $2",
+      [
+        JSON.stringify([
+          { rule: "rtf-control", count: 1, firstOffsets: [0] },
+        ] satisfies ExtractionWarnings),
+        DECISION_ID,
+      ],
+    );
+    expect(await readProof(database)).toEqual(knownProof);
+    await database.exec(generationMigrationSql);
+    expect(await readProof(database)).toEqual(knownProof);
+    await database.query(
+      "UPDATE case_law_decisions SET extraction_warnings = $1 WHERE id = $2",
+      [
+        JSON.stringify([
+          { rule: "rtf-control", count: 2, firstOffsets: [0, 10] },
+        ] satisfies ExtractionWarnings),
+        DECISION_ID,
+      ],
+    );
+    expect(await readProof(database)).toEqual(unknownProof);
+    await stamp(database);
+    await database.query(
+      "UPDATE case_law_decisions SET extraction_warnings = extraction_warnings WHERE id = $1",
+      [DECISION_ID],
+    );
+    expect(await readProof(database)).toEqual(knownProof);
   } finally {
     await database.close();
   }

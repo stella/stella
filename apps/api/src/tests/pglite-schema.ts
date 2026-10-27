@@ -1047,7 +1047,21 @@ export const installPgliteCaseLawParsedSourceInvalidation = async (
   if (statements.length !== 2) {
     panic("Expected the parsed-source invalidation function and trigger");
   }
-  for (const statement of statements) {
+  const replacements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261026120200_case_law_extraction_warnings_generation",
+      "migration.sql",
+    ),
+  ).filter((statement) =>
+    executableSql(statement).startsWith(
+      "CREATE OR REPLACE FUNCTION invalidate_case_law_parsed_source",
+    ),
+  );
+  if (replacements.length !== 1) {
+    panic("Expected the latest parsed-source invalidation function");
+  }
+  for (const statement of [...statements, ...replacements]) {
     await db.execute(sql.raw(statement));
   }
 };

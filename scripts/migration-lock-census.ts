@@ -700,13 +700,13 @@ export type MigrationLockAllowance = {
 // statement-form decision here (for example, an additive expand/contract step).
 export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
   {
-    migration: "20261025180100_case_law_extraction_warnings",
+    migration: "20261026120100_case_law_extraction_warnings",
     form: "add-column",
     reason:
       "The non-volatile constant jsonb default uses PostgreSQL's fast-default catalog path without rewriting decision rows; lock acquisition is bounded by 5s and the statement by 30s.",
   },
   {
-    migration: "20261025180100_case_law_extraction_warnings",
+    migration: "20261026120100_case_law_extraction_warnings",
     form: "replace-view",
     reason:
       "The two decision views re-expand their existing SELECT * definitions to include extraction_warnings while preserving the redaction and listing filters; replacement updates view metadata without scanning corpus rows, under 5s lock_timeout and 30s statement_timeout.",
