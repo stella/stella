@@ -105,7 +105,13 @@ const reportUnreconciled = (rows: number): void => {
 /** The runtime owns the transaction, checkpoint, health read and per-batch slot. */
 const repairUntilEmpty = async (
   connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
+  {
+    readVerdict,
+    isPaused,
+    sleep = Bun.sleep,
+    clock,
+    log,
+  }: RepairRuntimeOptions,
 ) => {
   const runtime = createBackfillRuntime({
     name: REPAIR_NAME,
@@ -118,6 +124,7 @@ const repairUntilEmpty = async (
     },
     connection,
     readVerdict,
+    ...(isPaused === undefined ? {} : { isPaused }),
     clock,
     log,
   });
@@ -177,6 +184,7 @@ const validateConstraint = async (
   });
 
 type RepairRuntimeOptions = {
+  isPaused?: (() => Promise<boolean>) | undefined;
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
   clock?: () => number;
@@ -204,7 +212,10 @@ export const createDecisionDateCeilingRepair = (
       ) {
         return await validateConstraint(connection, tables);
       }
-      const pass = await repairUntilEmpty(connection, options);
+      const pass = await repairUntilEmpty(connection, {
+        ...options,
+        isPaused: tables.isPaused,
+      });
       if (pass.isErr()) {
         throw pass.error;
       }

@@ -1,0 +1,5 @@
+{
+  "add-column": "Four nullable pause metadata columns on the bounded online-work registry require catalog-only ACCESS EXCLUSIVE locks; no row rewrite or default, with 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "NOT VALID state and pause checks enforce new writes without scanning existing rows; the bounded metadata table is locked under 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "Pause deadline, audit and rollout-normalization triggers install catalog metadata without executing online work or scanning rows, under 1s lock_timeout and 5s statement_timeout."
+}

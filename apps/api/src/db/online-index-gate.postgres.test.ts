@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 
 import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { rejectionOf } from "@stll/property-testing/rejection";
 import { waitFor } from "@stll/test-kit";
 
 import type { OnlineIndexConfig } from "../env-online-index";
@@ -210,6 +211,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
           index,
           records,
           gate: {
+            readPressure: async () => [],
             config,
             clock,
             ebs: { type: "reader", read: readEbs },
@@ -265,6 +267,55 @@ const repair = async (fixture: Fixture, connection = fixture.connection) => {
 };
 
 describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
+  test("a failed concurrent expression build immediately removes its INVALID artifact and retries", async () => {
+    await withFixture(async (fixture) => {
+      // Read PostgreSQL's canonical expression formatting on an empty table.
+      await fixture.owner.unsafe(`DELETE FROM public.${fixture.table}`);
+      const createSql = `CREATE INDEX CONCURRENTLY ${fixture.name} ON public.${fixture.table} USING btree ((id / other))`;
+      await fixture.owner.unsafe(createSql);
+      const canonical = await indexState(fixture);
+      const definition = canonical?.definition;
+      if (definition === undefined) {
+        throw new TypeError("Expected the expression index definition");
+      }
+      await fixture.owner.unsafe(
+        `DROP INDEX CONCURRENTLY public.${fixture.name}`,
+      );
+      await fixture.owner.unsafe(
+        `INSERT INTO public.${fixture.table} VALUES (1, 0)`,
+      );
+      const index = {
+        name: fixture.name,
+        tableName: fixture.table,
+        definitionBody: definition.slice(definition.indexOf(" ON ") + 1),
+        isUnique: false,
+        createSql,
+      };
+      const run = async () =>
+        await ensureOnlineIndexValid({
+          connection: fixture.connection,
+          reserveObserver: async () => ({
+            ...fixture.observation,
+            release: () => undefined,
+          }),
+          index,
+          gate: fixture.gate,
+        });
+      expect(await rejectionOf(run())).toMatchObject({
+        message: expect.stringContaining("division by zero"),
+      });
+      expect(await indexState(fixture)).toBeUndefined();
+      await fixture.owner.unsafe(
+        `UPDATE public.${fixture.table} SET other = 1`,
+      );
+      expect(await run()).toEqual({ type: "complete" });
+      expect(await indexState(fixture)).toMatchObject({
+        valid: true,
+        ready: true,
+      });
+    });
+  });
+
   test("writer-blocking requests and readers stay bounded, defer, and complete after the writer commits", async () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);
@@ -392,6 +443,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       let polls = 0;
       let readings = 0;
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -470,6 +522,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
             release: () => undefined,
           }),
           gate: {
+            readPressure: async () => [],
             ...fixture.gate,
             ebs: {
               type: "reader",
@@ -566,6 +619,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -596,6 +650,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -703,6 +758,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       await blockBuild(fixture);
       let contenderMustYield = true;
       const second = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: connectionAdapter(fixture.owner),
         observer: fixture.observation,
         tableName: fixture.table,
@@ -724,6 +780,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       });
       let barrierReached = false;
       const first = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -779,6 +836,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         expect(rows.at(0)?.age).toBeGreaterThan(0);
         const config = fixture.gate.config;
         const gate = createOnlineIndexGate({
+          readPressure: async () => [],
           connection: fixture.connection,
           observer: fixture.observation,
           tableName: fixture.table,
@@ -835,6 +893,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         },
       };
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -902,6 +961,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           await blockBuild(fixture);
         }
         const gate = createOnlineIndexGate({
+          readPressure: async () => [],
           connection: fixture.connection,
           observer: fixture.observation,
           tableName: fixture.table,
@@ -1040,6 +1100,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       let clock = fixture.gate.clock();
       let polls = 0;
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -1099,6 +1160,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           ).at(0)?.idle === true,
       });
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -1147,6 +1209,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       });
       expect(await queuedRequests()).toHaveLength(1);
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection: fixture.connection,
         observer: fixture.observation,
         tableName: fixture.table,
@@ -1226,7 +1289,12 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
             ...fixture.observation,
             release: () => undefined,
           }),
-          gate: { ...fixture.gate, clock: () => clock, wait },
+          gate: {
+            readPressure: async () => [],
+            ...fixture.gate,
+            clock: () => clock,
+            wait,
+          },
         });
 
       expect(
@@ -1305,6 +1373,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           },
         };
         const gate = createOnlineIndexGate({
+          readPressure: async () => [],
           connection: fixture.connection,
           observer: observation,
           tableName: fixture.table,
@@ -1374,6 +1443,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         },
       };
       const gate = createOnlineIndexGate({
+        readPressure: async () => [],
         connection,
         observer: fixture.observation,
         tableName: fixture.table,

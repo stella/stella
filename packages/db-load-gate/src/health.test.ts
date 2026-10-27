@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import {
@@ -157,92 +157,32 @@ describe("fail-closed start decisions", () => {
   });
 });
 
-describe("critical readings cancel only consecutively", () => {
-  const cases = [
-    { values: [], expected: "continue" },
-    { values: [10], expected: "continue" },
-    { values: [10, 20], expected: "cancel" },
-    { values: [10, null], expected: "continue" },
-    { values: [null, 10], expected: "continue" },
-    { values: [10, 40], expected: "continue" },
-    { values: [10, 90, 10], expected: "continue" },
-    { values: [90, 10, 20], expected: "cancel" },
-  ] as const;
-  for (const { values, expected } of cases) {
-    test(`${values.join(",")} => ${expected}`, () => {
-      const result = decideWhileRunning(values.map((value) => reading(value)));
-      expect(result.decision).toBe(expected);
-      expectLogged(result);
-    });
-  }
-  test("configured hard floor uses a strict comparison", () => {
-    const config = { ...defaultConfig, hardFloor: 65 };
-    for (const [value, expected] of [
-      [64, "cancel"],
-      [65, "continue"],
-      [66, "continue"],
-    ] as const) {
-      const result = decideWhileRunning([reading(64), reading(value)], config);
-      expect(result.decision).toBe(expected);
-      expectLogged(result);
-    }
-  });
-  test("unknown resets the critical streak", () => {
+describe("critical verdicts cancel only consecutively", () => {
+  test("unknown pressure holds running work after two observations", () => {
+    expect(decideWhileRunning([verdict("unknown")]).decision).toBe("continue");
     expect(
-      decideWhileRunning([reading(10), reading(null), reading(20)]).decision,
-    ).toBe("continue");
-    expect(
-      decideWhileRunning([reading(10), reading(null), reading(20), reading(30)])
-        .decision,
+      decideWhileRunning([verdict("unknown"), verdict("unknown")]).decision,
     ).toBe("cancel");
+    expect(
+      decideWhileRunning([verdict("stop"), verdict("normal")]).decision,
+    ).toBe("continue");
   });
-  test("unknown, non-EBS and non-finite observations cannot cancel", () => {
-    for (const signal of [
-      reading(10, "unknown"),
-      reading(Number.NaN),
-      reading(Infinity),
-      { ...reading(10), indicator: "long_transaction" as const },
-    ]) {
-      expect(decideWhileRunning([reading(10), signal]).decision).toBe(
-        "continue",
-      );
-    }
-  });
-  test("for every history cancellation happens on the second real hard-floor reading, independently of progress", () => {
-    fc.assert(
+  test("running-pressure-cancellation-is-consecutive", () => {
+    assertProperty(
+      "running-pressure-cancellation-is-consecutive",
       fc.property(
-        fc.integer({ min: 1, max: 100 }),
-        fc.array(fc.option(fc.integer({ min: 0, max: 100 }), { nil: null })),
-        fc.record({
-          phase: fc.string(),
-          blocksDone: fc.nat(),
-          blocksTotal: fc.nat(),
-        }),
-        (floor, values, progress) => {
-          const history: Signal[] = [];
-          let previousLow = false;
-          for (const value of values) {
-            history.push(reading(value));
-            const config = {
-              ...defaultConfig,
-              hardFloor: floor,
-              startFloor: Math.max(defaultConfig.startFloor, floor),
-            };
-            const result = decideWhileRunning(history, config, progress);
-            const low = value !== null && value < floor;
-            expect(result.decision).toBe(
-              previousLow && low ? "cancel" : "continue",
-            );
-            expect(result.decision).toBe(
-              decideWhileRunning(history, config).decision,
-            );
-            expect(result.progress).toEqual(progress);
-            expectLogged(result);
-            previousLow = low;
-          }
+        fc.array(fc.constantFrom("normal", "degraded", "stop", "unknown")),
+        (verdictKinds) => {
+          const history = verdictKinds.map(verdict);
+          const recent = verdictKinds.slice(-2);
+          expect(decideWhileRunning(history).decision).toBe(
+            recent.length === 2 &&
+              recent.every((kind) => kind === "stop" || kind === "unknown")
+              ? "cancel"
+              : "continue",
+          );
         },
       ),
-      propertyConfig(),
     );
   });
 });
@@ -669,5 +609,7 @@ test("explicitly unconfigured signals are logged and neutral for all other healt
     expectLogged(decideStart(combined, "index_build"));
     expect(combined.signals).toEqual([disabled, healthyOrBlocking]);
   }
-  expect(decideWhileRunning([disabled, disabled]).decision).toBe("continue");
+  expect(
+    decideWhileRunning([combine([disabled]), combine([disabled])]).decision,
+  ).toBe("continue");
 });

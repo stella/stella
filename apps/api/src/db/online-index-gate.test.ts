@@ -52,6 +52,8 @@ const ebs = (
 
 type HarnessOptions = {
   readings: readonly Signal[];
+  readPressure?: () => Promise<Signal[]>;
+  isPaused?: () => Promise<boolean>;
   phases?: readonly string[];
   tickMs?: number;
   config?: ReturnType<typeof config>;
@@ -71,6 +73,8 @@ type HarnessOptions = {
 
 const makeHarness = ({
   readings,
+  readPressure = async () => [],
+  isPaused = async () => false,
   phases = [],
   tickMs = 30,
   config: gateConfig = config(),
@@ -207,6 +211,8 @@ const makeHarness = ({
     release: () => undefined,
   };
   const gate = createOnlineIndexGate({
+    readPressure,
+    isPaused,
     connection,
     observer,
     tableName: "test_table",
@@ -572,7 +578,7 @@ describe("online index gate", () => {
     await harness.gate.close();
   });
 
-  test("never starts below the configured floor and cancels within one poll after two real low readings", async () => {
+  test("never starts below the configured floor and cancels after consecutive unsafe or unknown verdicts", async () => {
     const metric = fc.oneof(
       fc.integer({ min: 0, max: 39 }).map((value) => ebs(value, "stop")),
       fc.integer({ min: 40, max: 69 }).map((value) => ebs(value, "degraded")),
@@ -610,10 +616,7 @@ describe("online index gate", () => {
           let firstCancelPoll: number | undefined;
           for (const [index, reading] of pollReadings.entries()) {
             consecutiveLow =
-              reading.indicator === "ebs_balance" &&
-              reading.kind !== "unknown" &&
-              reading.value !== null &&
-              reading.value < gateConfig.health.hardFloor
+              reading.kind === "stop" || reading.kind === "unknown"
                 ? consecutiveLow + 1
                 : 0;
             if (consecutiveLow === 2) {
@@ -635,7 +638,7 @@ describe("online index gate", () => {
     );
   });
 
-  test("unknown readings reset the two-reading cancellation streak", async () => {
+  test("unknown readings retain the unsafe cancellation streak", async () => {
     const harness = makeHarness({
       readings: [
         ebs(90),
@@ -651,7 +654,7 @@ describe("online index gate", () => {
         "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
       ),
     ).toBe("retry");
-    expect(harness.pollCount()).toBe(4);
+    expect(harness.pollCount()).toBe(2);
     expect(JSON.stringify(harness.records)).toContain('"value":20');
     await harness.gate.close();
   });
@@ -1081,4 +1084,59 @@ describe("online index configuration", () => {
       }),
     ).toThrow("Health floors must be ordered percentages");
   });
+});
+
+test("pressure and operator pauses reach the detached index watchdog", async () => {
+  for (const indicator of [
+    "cpu_percent",
+    "active_sessions",
+    "replication_lag_ms",
+    "read_iops",
+    "write_iops",
+    "read_bytes_per_second",
+    "write_bytes_per_second",
+  ] as const) {
+    let reads = 0;
+    const harness = makeHarness({
+      readings: [ebs(90)],
+      finishAfterPolls: 4,
+      readPressure: async () => [
+        {
+          indicator,
+          kind: ++reads === 1 ? "normal" : "stop",
+          value: reads === 1 ? 0 : 1_000_000_000,
+          threshold: 1,
+          observedAt: "2026-10-02T12:00:00.000Z",
+          reason: "Injected pressure",
+        },
+      ],
+    });
+    expect(
+      await harness.gate.attempt(
+        "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+      ),
+    ).toBe("retry");
+    expect(harness.pollCount()).toBe(2);
+    await harness.gate.close();
+  }
+  let paused = false;
+  const harness = makeHarness({
+    readings: [ebs(90)],
+    finishAfterPolls: 4,
+    isPaused: async () => paused,
+    onCancel: () => undefined,
+    readPressure: async () => {
+      if (harness.pollCount() > 0) {
+        paused = true;
+      }
+      return [];
+    },
+  });
+  expect(
+    await harness.gate.attempt(
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+    ),
+  ).toBe("retry");
+  expect(harness.pollCount()).toBe(1);
+  await harness.gate.close();
 });

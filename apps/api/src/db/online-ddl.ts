@@ -554,6 +554,7 @@ export const runGatedTableWork = async ({
 
 /** Gated table work as an online repair receives it. */
 export type OnlineTableGate = {
+  isPaused?: (() => Promise<boolean>) | undefined;
   run: (request: GatedTableWorkRequest) => Promise<OnlineMigrationOutcome>;
 };
 
@@ -565,6 +566,7 @@ export const createOnlineTableGate = ({
   GatedTableWorkOptions,
   "connection" | "gate" | "reserveObserver"
 >): OnlineTableGate => ({
+  isPaused: gate?.isPaused,
   run: async (request) =>
     await runGatedTableWork({ ...request, connection, gate, reserveObserver }),
 });

@@ -105,7 +105,13 @@ const readBatchBoundary = async (
 /** A keyset cursor advances atomically with the idempotent range UPDATE. */
 const repairFrom = async (
   connection: OnlineMigrationConnection,
-  { readVerdict, sleep = Bun.sleep, clock, log }: RepairRuntimeOptions,
+  {
+    readVerdict,
+    isPaused,
+    sleep = Bun.sleep,
+    clock,
+    log,
+  }: RepairRuntimeOptions,
 ) => {
   const runtime = createBackfillRuntime({
     name: REPAIR_NAME,
@@ -118,6 +124,7 @@ const repairFrom = async (
     },
     connection,
     readVerdict,
+    ...(isPaused === undefined ? {} : { isPaused }),
     clock,
     log,
   });
@@ -166,6 +173,7 @@ const validateConstraint = async (
   });
 
 type RepairRuntimeOptions = {
+  isPaused?: (() => Promise<boolean>) | undefined;
   readVerdict?: () => Promise<Verdict>;
   sleep?: (milliseconds: number) => Promise<void>;
   clock?: () => number;
@@ -193,7 +201,10 @@ export const createCorpusProjectionDeleteReceiptRepair = (
       ) {
         return await validateConstraint(connection, tables);
       }
-      const pass = await repairFrom(connection, options);
+      const pass = await repairFrom(connection, {
+        ...options,
+        isPaused: tables.isPaused,
+      });
       if (pass.isErr()) {
         throw pass.error;
       }

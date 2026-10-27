@@ -20,6 +20,7 @@
     "oauth:partner-client": "bun run src/scripts/partner-oauth-client.ts",
     "oauth:partner-client-secret": "bun run src/scripts/partner-oauth-client-secret.ts",
     "oauth:service-client": "bun run src/scripts/service-oauth-client.ts",
+    "online:step-pause": "bun run src/scripts/online-work-pause.ts",
     "scheduler:job-pause": "bun run src/scripts/scheduler-job-pause.ts",
     "test:e2e:browser": "playwright test --config e2e/playwright.config.ts",
     "test:postgres": "bun scripts/run-postgres-tests.ts",
@@ -93,6 +94,8 @@
   "dependencies": {
     "@aws-sdk/client-cloudwatch": "^3.1147.0",
     "@aws-sdk/client-lambda": "^3.1147.0",
+    "@aws-sdk/client-pi": "^3.1147.0",
+    "@aws-sdk/client-rds": "^3.1147.0",
     "@aws-sdk/client-s3": "^3.1147.0",
     "@aws-sdk/client-sesv2": "^3.1147.0",
     "@aws-sdk/client-sqs": "^3.1147.0",

@@ -37,6 +37,7 @@ type StoredRow = {
   attempts: number;
   lastError: string | null;
   finishedAt: Date | null;
+  pausedUntil: Date | null;
 };
 
 const createMemoryStore = () => {
@@ -49,23 +50,53 @@ const createMemoryStore = () => {
     rows.set(name, { ...row, ...change });
   };
   const store: OnlineWorkStateStore = {
+    initialize: async (units) => {
+      for (const { name, state } of units) {
+        if (!rows.has(name)) {
+          rows.set(name, {
+            state,
+            attempts: 0,
+            lastError: null,
+            finishedAt: null,
+            pausedUntil: null,
+          });
+        }
+      }
+    },
     readStates: async () =>
-      [...rows].map(([name, { state, attempts, finishedAt }]) => ({
+      [...rows].map(([name, { state, attempts, finishedAt, pausedUntil }]) => ({
         name,
         state,
         attempts,
         finishedAt,
+        pausedUntil,
       })),
-    markBuilding: async ({ name, attempts }) => {
+    markRunning: async ({ name, attempts, at }) => {
+      const current = rows.get(name);
+      if (
+        current?.pausedUntil !== null &&
+        current?.pausedUntil !== undefined &&
+        current.pausedUntil > at
+      ) {
+        return false;
+      }
       rows.set(name, {
-        state: "building",
+        state: "running",
         attempts,
         lastError: null,
         finishedAt: null,
+        pausedUntil: null,
       });
+      return true;
     },
-    markFinalized: async (name) => {
-      update(name, { state: "finalized", lastError: null, finishedAt: START });
+    markDone: async (name) => {
+      update(name, { state: "done", lastError: null, finishedAt: START });
+    },
+    markPending: async (name) => {
+      const row = rows.get(name);
+      if (row?.state === "running") {
+        update(name, { state: "pending" });
+      }
     },
     markFailed: async ({ name, error }) => {
       update(name, { state: "failed", lastError: error, finishedAt: START });
@@ -154,16 +185,63 @@ const createHarness = ({
 };
 
 describe("online work runner", () => {
+  test("an active operator pause skips admission and expiry resumes automatically", async () => {
+    const harness = createHarness({ pending: [FIRST] });
+    harness.rows.set(FIRST, {
+      state: "paused",
+      attempts: 0,
+      lastError: null,
+      finishedAt: null,
+      pausedUntil: new Date(START.getTime() + 60_000),
+    });
+    expect(await harness.tick()).toEqual({ type: "idle" });
+    expect(harness.claims).toEqual([]);
+    expect(await harness.tick(new Date(START.getTime() + 60_000))).toEqual({
+      type: "started",
+      name: FIRST,
+    });
+  });
+
+  test("a pause committed during claim prevents detached work from starting", async () => {
+    const { rows, store } = createMemoryStore();
+    const releases: string[] = [];
+    const runner = createOnlineWorkRunner({
+      names: [FIRST],
+      lifecycle: lifecycleWithPending([FIRST]),
+      store,
+      claim: async () => {
+        rows.set(FIRST, {
+          state: "paused",
+          attempts: 0,
+          lastError: null,
+          finishedAt: null,
+          pausedUntil: new Date(START.getTime() + 60_000),
+        });
+        return {
+          type: "claimed",
+          release: async () => {
+            releases.push(FIRST);
+          },
+          run: async () => panic("Paused work must not start"),
+        };
+      },
+      detach: () => panic("Paused work must not detach"),
+    });
+    expect((await runner(START)).unwrap()).toEqual({ type: "idle" });
+    expect(releases).toEqual([FIRST]);
+    expect(rows.get(FIRST)?.state).toBe("paused");
+  });
+
   test("a tick claims the first pending unit in registry order and records it building", async () => {
     const harness = createHarness();
 
     expect(await harness.tick()).toEqual({ type: "started", name: FIRST });
     expect(harness.claims).toEqual([FIRST]);
     expect(harness.rows.get(FIRST)).toMatchObject({
-      state: "building",
+      state: "running",
       attempts: 1,
     });
-    expect(harness.rows.has(SECOND)).toBe(false);
+    expect(harness.rows.get(SECOND)?.state).toBe("pending");
   });
 
   test("a tick while this process builds claims nothing more", async () => {
@@ -178,7 +256,7 @@ describe("online work runner", () => {
     const harness = createHarness({ lockHeld: true });
 
     expect(await harness.tick()).toEqual({ type: "skipped" });
-    expect(harness.rows.has(FIRST)).toBe(false);
+    expect(harness.rows.get(FIRST)?.state).toBe("pending");
   });
 
   test("a finished unit is finalized, released, and the next tick takes the next unit", async () => {
@@ -188,10 +266,10 @@ describe("online work runner", () => {
     harness.walkOf(FIRST).resolve({ type: "complete" });
     await harness.settle();
 
-    expect(harness.rows.get(FIRST)).toMatchObject({ state: "finalized" });
+    expect(harness.rows.get(FIRST)).toMatchObject({ state: "done" });
     expect(harness.releases).toEqual([FIRST]);
     // The checkpoint is written while the claim still holds the lock.
-    expect(harness.statesAtRelease).toEqual(["finalized"]);
+    expect(harness.statesAtRelease).toEqual(["done"]);
     expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
   });
 
@@ -263,7 +341,7 @@ describe("online work runner", () => {
     expect(walked).toEqual(["a"]);
     expect(gaveUp).toEqual(["b"]);
     expect(holder).toBeNull();
-    expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 1 });
+    expect(rows.get(FIRST)).toMatchObject({ state: "done", attempts: 1 });
   });
 
   test("a failed unit waits for its retry delay, then is claimed again", async () => {
@@ -300,7 +378,7 @@ describe("online work runner", () => {
       name: FIRST,
     });
     expect(harness.rows.get(FIRST)).toMatchObject({
-      state: "building",
+      state: "running",
       attempts: 2,
       lastError: null,
     });
@@ -328,7 +406,7 @@ describe("online work runner", () => {
       .resolve({ type: "deferred", step: FIRST, retryAfterMs: 60_000 });
     await harness.settle();
 
-    expect(harness.rows.get(FIRST)).toMatchObject({ state: "building" });
+    expect(harness.rows.get(FIRST)).toMatchObject({ state: "pending" });
     expect(await harness.tick()).toEqual({ type: "started", name: FIRST });
     expect(harness.claims).toEqual([FIRST, FIRST]);
   });
@@ -341,7 +419,7 @@ describe("online work runner", () => {
       lifecycle: lifecycleWithPending([FIRST]),
       store: {
         ...store,
-        markBuilding: async () => {
+        markRunning: async () => {
           throw new Error("write refused");
         },
       },

@@ -99,3 +99,59 @@ must not become yielded merely because its checkpoint is old. Batch transitions
 are ordinary structured logs, so they cannot inflate the minutely gauge.
 Completed provision-state work rechecks completion under the checkpoint lock
 before clearing status; an obsolete admission leaves current status alone.
+
+## Online work steps
+
+Online work has its own durable per-step pause; pausing the scheduler admission
+job alone cannot stop a unit already detached from its tick. Use the same
+attributed dry-run/apply convention, with a registered step name:
+
+```sh
+bun run online:step-pause -- status --step contacts_invoice_language_check
+bun run online:step-pause -- pause --step contacts_invoice_language_check --for 24h --reason "Maintenance window" --actor operator-id
+bun run online:step-pause -- pause --step contacts_invoice_language_check --for 24h --reason "Maintenance window" --actor operator-id --apply
+bun run online:step-pause -- resume --step contacts_invoice_language_check --reason "Maintenance complete" --actor operator-id --apply
+```
+
+The database bounds deadlines to 72 hours and records the actor, reason, start,
+and deadline in `online_work_state`. A step checks its pause at admission,
+before statements, at backfill boundaries, and at index watchdog heartbeats;
+expiry permits automatic admission again. Completed steps cannot reopen.
+Pressure holds remain automatic governor decisions, separate from operator
+pause deadlines. A deferred unit returns to pending unless an operator pause
+has committed; completion and failure cannot overwrite that pause.
+
+The rollout adapter accepts the foundation runner's `building`/`finalized`
+writes and stores `running`/`done`. Its trigger refuses a legacy claim under an
+active operator pause and preserves a pause against a legacy finish. Remove
+that adapter once every foundation-release task has been replaced.
+
+A foundation task already detached before this rollout has no pause checkpoints.
+Its execution must finish or the old process must be replaced before per-step
+pauses can stop that execution. New claims from old tasks are fenced in the
+database; remove the legacy adapter after the last foundation process is gone.
+
+The shared pressure verdict also reads active sessions and replication lag from
+aggregate PostgreSQL statistics. A caught-up primary with no replicas reports
+zero lag; unavailable statistics, unknown replica positions, and standby reads
+hold maintenance. Rising CPU, read/write IOPS and read/write throughput use the
+same configurable throttle/pause thresholds, set with
+`DB_LOAD_GATE_PRESSURE_THRESHOLDS` as a complete JSON object. Index admission
+requires normal pressure. Backfills shrink and sleep when pressure is degraded;
+stop or unknown pressure holds batches with bounded exponential backoff.
+Two consecutive unsafe or unknown verdicts cancel an index build; a later
+healthy verdict allows a retry. Operator pauses cancel at the next heartbeat.
+
+RDS host readings first use Performance Insights when read-only instance
+discovery reports enabled, seven-day retention and no advanced mode. Discovery
+is refreshed at each ten-minute host refresh; nothing enables monitoring or
+changes retention. Otherwise five standard RDS metrics use one CloudWatch
+`GetMetricData` request. A database refresh claim and snapshot share the result
+across processes, with at most one provider attempt per instance per ten minutes
+(including failed attempts). Every reading keeps its provider timestamp;
+unavailable refreshes retain the last real snapshot until freshness expires.
+This adds at most 144 CloudWatch requests (720 metrics) per day per configured
+instance, or USD 0.216 for 30 days at USD 0.01 per 1,000 metrics. The existing
+EBS reader and its 120-second process cache remain separately accounted for.
+Only `rds:DescribeDBInstances`, `pi:GetResourceMetrics` and
+`cloudwatch:GetMetricData` read permissions are required by these adapters.

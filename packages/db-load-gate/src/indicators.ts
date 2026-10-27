@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
-import { isFreshReading } from "./health";
-import type { HealthConfig, Signal } from "./health";
+import { defaultPressureThresholds, isFreshReading } from "./health";
+import type { HealthConfig, PressureIndicator, Signal } from "./health";
 
 export type EbsBalanceReading = {
   byteBalancePct: number;
@@ -216,3 +216,55 @@ export const busyWindow = ({ now, config }: BusyWindowOptions): Signal => {
     reason: "Configured local busy window",
   };
 };
+
+export type PressureReading = { value: number; observedAt: string };
+type PressureOptions = ReaderOptions<PressureReading> & {
+  indicator: PressureIndicator;
+};
+
+/** All rising-pressure signals use the same freshness and threshold semantics. */
+export const pressureSignal = async (
+  options: PressureOptions,
+): Promise<Signal> => {
+  const reading = await readBounded(options);
+  if (
+    reading === null ||
+    !fresh(reading.observedAt, options.now, options.config) ||
+    !Number.isFinite(reading.value) ||
+    reading.value < 0
+  ) {
+    return unknown(
+      options.indicator,
+      "Missing, failed, timed out, invalid or stale pressure reading",
+    );
+  }
+  const threshold = (options.config.pressure ?? defaultPressureThresholds)[
+    options.indicator
+  ];
+  let kind: Signal["kind"] = "normal";
+  if (reading.value >= threshold.throttle) {
+    kind = "degraded";
+  }
+  if (reading.value >= threshold.pause) {
+    kind = "stop";
+  }
+  return {
+    indicator: options.indicator,
+    kind,
+    value: reading.value,
+    observedAt: reading.observedAt,
+    threshold: kind === "stop" ? threshold.pause : threshold.throttle,
+    reason: "Database pressure",
+  };
+};
+
+export const DATABASE_PRESSURE_SQL = `SELECT active_sessions AS "active_sessions", replication_lag_ms AS "replication_lag_ms", pg_catalog.to_char(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "observedAt" FROM public.stella_database_pressure_indicators()`;
+
+export const operatorPauseSignal = (paused: boolean): Signal => ({
+  indicator: "operator_pause",
+  kind: paused ? "stop" : "normal",
+  value: paused ? 1 : 0,
+  observedAt: null,
+  threshold: 0,
+  reason: paused ? "Operator pause active" : "Operator pause clear",
+});

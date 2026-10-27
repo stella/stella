@@ -37,6 +37,7 @@ import {
   entities,
   entityVersions,
   fields,
+  onlineWorkState,
   pdfSigningSessions,
   workspaceMembers,
   workspaces,
@@ -2541,3 +2542,22 @@ export const lockTimerMatterAccessRows = async ({
       return panic("Invalid timer matter lock scope");
   }
 };
+
+/** Serialize online work claims and operator changes on the same durable row. */
+export const lockOnlineWorkState = async ({
+  tx,
+  name,
+}: {
+  tx: Transaction;
+  name: string;
+}) =>
+  (
+    await tx
+      .select({
+        ...getColumns(onlineWorkState),
+        paused: sql<boolean>`${onlineWorkState.pausedUntil} > clock_timestamp()`,
+      })
+      .from(onlineWorkState)
+      .where(eq(onlineWorkState.name, name))
+      .for("update")
+  ).at(0);

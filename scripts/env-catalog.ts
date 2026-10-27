@@ -139,6 +139,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
+  "DB_LOAD_GATE_PRESSURE_THRESHOLDS",
   "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
   "DB_LOAD_GATE_EBS_SIGNAL",
   "STELLA_MIGRATE_ONLINE_WORK",
@@ -428,6 +429,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "RDS instance whose EBS balances gate heavy maintenance and online index builds. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
   DB_LOAD_GATE_EBS_SIGNAL:
     "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.",
+  DB_LOAD_GATE_PRESSURE_THRESHOLDS:
+    "JSON object of throttle and pause thresholds for active_sessions, replication_lag_ms, cpu_percent, read_iops, write_iops, read_bytes_per_second and write_bytes_per_second. PostgreSQL signals are live; RDS host pressure uses a fleet-wide ten-minute cache. Unavailable or stale readings hold maintenance.",
   DB_LOAD_GATE_START_FLOOR:
     "EBS balance percentage required to start an online index build.",
   DB_LOAD_GATE_HARD_FLOOR:
@@ -825,6 +828,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   DB_LOAD_GATE_MAX_STALENESS_MS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_READ_TIMEOUT_MS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: ENV_CREDENTIAL_KIND.notCredential,
+  DB_LOAD_GATE_PRESSURE_THRESHOLDS: ENV_CREDENTIAL_KIND.notCredential,
   DB_LOAD_GATE_START_FLOOR: ENV_CREDENTIAL_KIND.notCredential,
   DB_NAME: ENV_CREDENTIAL_KIND.notCredential,
   DB_PASSWORD: ENV_CREDENTIAL_KIND.credential,

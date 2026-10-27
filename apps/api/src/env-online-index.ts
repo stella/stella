@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
-import { defaultConfig, validateConfig } from "@stll/db-load-gate/health";
+import {
+  defaultConfig,
+  defaultPressureThresholds,
+  validateConfig,
+} from "@stll/db-load-gate/health";
 import type { HealthConfig } from "@stll/db-load-gate/health";
 
 const integer = (fallback: number, minimum = 1) =>
@@ -17,6 +21,37 @@ const integer = (fallback: number, minimum = 1) =>
 
 /** Online index runner settings, cataloged with the API environment. */
 export const envOnlineIndexServerSchema = {
+  DB_LOAD_GATE_PRESSURE_THRESHOLDS: v.optional(
+    v.pipe(
+      v.string(),
+      v.parseJson(),
+      v.strictObject({
+        active_sessions: v.strictObject({
+          throttle: v.number(),
+          pause: v.number(),
+        }),
+        replication_lag_ms: v.strictObject({
+          throttle: v.number(),
+          pause: v.number(),
+        }),
+        cpu_percent: v.strictObject({
+          throttle: v.number(),
+          pause: v.number(),
+        }),
+        read_iops: v.strictObject({ throttle: v.number(), pause: v.number() }),
+        write_iops: v.strictObject({ throttle: v.number(), pause: v.number() }),
+        read_bytes_per_second: v.strictObject({
+          throttle: v.number(),
+          pause: v.number(),
+        }),
+        write_bytes_per_second: v.strictObject({
+          throttle: v.number(),
+          pause: v.number(),
+        }),
+      }),
+    ),
+    JSON.stringify(defaultPressureThresholds),
+  ),
   DB_LOAD_GATE_START_FLOOR: integer(defaultConfig.startFloor, 0),
   DB_LOAD_GATE_HARD_FLOOR: integer(defaultConfig.hardFloor, 0),
   DB_LOAD_GATE_MAX_STALENESS_MS: integer(defaultConfig.maxStalenessMs),
@@ -83,6 +118,7 @@ export const readOnlineIndexConfig = (
   const env = v.parse(schema, environment);
   const health = {
     ...defaultConfig,
+    pressure: env.DB_LOAD_GATE_PRESSURE_THRESHOLDS,
     startFloor: env.DB_LOAD_GATE_START_FLOOR,
     hardFloor: env.DB_LOAD_GATE_HARD_FLOOR,
     maxStalenessMs: env.DB_LOAD_GATE_MAX_STALENESS_MS,

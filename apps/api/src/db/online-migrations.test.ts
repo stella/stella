@@ -40,6 +40,7 @@ import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitor
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
 const healthyIndexGate = {
+  readPressure: async () => [],
   config: {
     ...readOnlineIndexConfig({}),
     health: { ...defaultConfig, busyWindows: [] },
@@ -227,6 +228,42 @@ describe("online migrations", () => {
       timing: { clock: () => 0, emit: () => undefined },
       reserveObserver: reserveHealthyObserver,
     };
+
+    test("an operator pause prevents acquiring a session or walking a unit", async () => {
+      const index = buildable();
+      const harness = createHarness({ missingIndexes: [index.name] });
+      expect(
+        await claimOnlineWorkUnit(harness.pool, {
+          ...claimOptions,
+          name: index.name,
+          lifecycle: { ...allFinalizedOnlineWork(), [index.name]: PENDING },
+          isPaused: async () => true,
+        }),
+      ).toEqual({ type: "paused" });
+      expect(harness.statements).toEqual([]);
+    });
+
+    test("a pause committed after claim defers detached work before its first statement", async () => {
+      const index = buildable();
+      const harness = createHarness({ missingIndexes: [index.name] });
+      let paused = false;
+      const claim = await claimOnlineWorkUnit(harness.pool, {
+        ...claimOptions,
+        name: index.name,
+        lifecycle: { ...allFinalizedOnlineWork(), [index.name]: PENDING },
+        isPaused: async () => paused,
+      });
+      if (claim.type !== "claimed") {
+        throw new TypeError("Expected an online work claim");
+      }
+      paused = true;
+      const outcome = await claim.run(async (result) => result);
+      expect(outcome).toEqual(
+        Result.ok({ type: "deferred", step: index.name, retryAfterMs: 1000 }),
+      );
+      expect(harness.statements).not.toContain(index.createSql);
+      expect(harness.released()).toBe(true);
+    });
 
     test("builds only the claimed pending unit and releases the lock", async () => {
       const index = buildable();
@@ -1284,12 +1321,18 @@ describe("online migrations", () => {
         pending.push(record);
       },
     });
-    await assertOnlineMigrationsApplied(harness.pool, {
-      log: (record) => {
-        pending.push(record);
-      },
+    expect(
+      await rejectionOf(
+        assertOnlineMigrationsApplied(harness.pool, {
+          log: (record) => {
+            pending.push(record);
+          },
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("finalized but not complete"),
     });
-    expect(pending).toHaveLength(2);
+    expect(pending).toHaveLength(1);
     expect(pending).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1369,12 +1412,18 @@ describe("online migrations", () => {
         pending.push(record);
       },
     });
-    await assertOnlineMigrationsApplied(harness.pool, {
-      log: (record) => {
-        pending.push(record);
-      },
+    expect(
+      await rejectionOf(
+        assertOnlineMigrationsApplied(harness.pool, {
+          log: (record) => {
+            pending.push(record);
+          },
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("finalized but not complete"),
     });
-    expect(pending).toHaveLength(2);
+    expect(pending).toHaveLength(1);
     expect(pending).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1456,13 +1505,19 @@ describe("online migrations", () => {
         pending.push(record);
       },
     });
-    await assertOnlineMigrationsApplied(harness.pool, {
-      repairs: [repair],
-      log: (record) => {
-        pending.push(record);
-      },
+    expect(
+      await rejectionOf(
+        assertOnlineMigrationsApplied(harness.pool, {
+          repairs: [repair],
+          log: (record) => {
+            pending.push(record);
+          },
+        }),
+      ),
+    ).toMatchObject({
+      message: expect.stringContaining("finalized but not complete"),
     });
-    expect(pending).toHaveLength(2);
+    expect(pending).toHaveLength(1);
     expect(pending).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1741,6 +1796,11 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (
+            query.includes("SELECT name, state FROM public.online_work_state")
+          ) {
+            return [];
+          }
           if (query.includes("pg_backend_pid() AS pid")) {
             return [{ pid: 1, database: "test" }];
           }

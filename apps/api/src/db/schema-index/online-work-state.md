@@ -4,16 +4,20 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## online_work_state · `onlineWorkState` · online-work-state.ts:6 · rls
+## online_work_state · `onlineWorkState` · online-work-state.ts:18 · rls
 
-Progress of pending online work, written only by the post-deploy runner.
+Durable progress and operator pauses for registered online work.
 
 ```text
-online_work_state.name         text         pk,not null       online-work-state.ts:9
-online_work_state.state        text         not null          online-work-state.ts:10
-online_work_state.attempts     integer      default,not null  online-work-state.ts:11
-online_work_state.last_error   text         null              online-work-state.ts:12
-online_work_state.started_at   timestamptz  null              online-work-state.ts:13
-online_work_state.finished_at  timestamptz  null              online-work-state.ts:14
-online_work_state.updated_at   timestamptz  default,not null  online-work-state.ts:15
+online_work_state.name          text         pk,not null       online-work-state.ts:21
+online_work_state.state         text         not null          online-work-state.ts:22
+online_work_state.attempts      integer      default,not null  online-work-state.ts:23
+online_work_state.paused_by     text         null              online-work-state.ts:24
+online_work_state.paused_since  timestamptz  null              online-work-state.ts:25
+online_work_state.paused_until  timestamptz  null              online-work-state.ts:26
+online_work_state.pause_reason  text         null              online-work-state.ts:27
+online_work_state.last_error    text         null              online-work-state.ts:28
+online_work_state.started_at    timestamptz  null              online-work-state.ts:29
+online_work_state.finished_at   timestamptz  null              online-work-state.ts:30
+online_work_state.updated_at    timestamptz  default,not null  online-work-state.ts:31
 ```

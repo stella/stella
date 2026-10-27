@@ -305,6 +305,7 @@ describe.skipIf(!enabled)(
                   "later-repair": FINALIZED,
                 },
                 indexGate: {
+                  readPressure: async () => [],
                   config,
                   clock: () => now,
                   log: () => undefined,
@@ -453,6 +454,7 @@ describe.skipIf(!enabled)(
             // The adapter reports every index ready, so only the repair's
             // constraint validation opens the gate, on a session of its own.
             indexGate: {
+              readPressure: async () => [],
               ebs: { type: "disabled" },
               config: {
                 ...readOnlineIndexConfig({}),
