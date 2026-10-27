@@ -20,6 +20,11 @@ const FORBIDDEN = [
   { pattern: /\btsgolint\b/u, reason: "tsgolint" },
   { pattern: /\btypecheck-coverage(?:\.ts)?\b/u, reason: "typecheck-coverage" },
   {
+    pattern:
+      /\bbun["']?(?:\s*,\s*|\s+)["']?(?:--[\w-]+["']?(?:\s*,\s*|\s+)["']?)*(?:check|--check)(?![\w./:-])/u,
+    reason: "Bun compiler",
+  },
+  {
     pattern: /(?:^|[\s"'`,;|&(])(?:tsc|tsgo)(?:[\s"'`,;|&)]|$)/u,
     reason: "TypeScript compiler",
   },
@@ -188,5 +193,57 @@ test("catches a type-aware flag reached through a hook script", () => {
       expect(hookTypecheckViolations(root)).toEqual([
         { file: "scripts/guard.ts", reason: "type-aware oxlint" },
       ]),
+  );
+});
+
+test.each([
+  { extension: "sh", source: "bun check --project=tsconfig.json" },
+  { extension: "sh", source: "bun --check" },
+  {
+    extension: "sh",
+    source: "bun --no-env-file check --project=tsconfig.json",
+  },
+  { extension: "sh", source: '"bun" "check" --project=tsconfig.json' },
+  {
+    extension: "ts",
+    source: 'Bun.spawnSync(["bun", "check", "--project=tsconfig.json"]);',
+  },
+  { extension: "ts", source: 'Bun.spawnSync(["bun", "--check"]);' },
+])(
+  "catches the Bun checker reached through $source",
+  ({ extension, source }) => {
+    const file = `scripts/guard.${extension}`;
+    const runner = extension === "sh" ? "bash" : "bun";
+    withFixture(
+      {
+        "package.json": "{}",
+        "lefthook.yml": `pre-push:\n  commands:\n    guard:\n      run: ${runner} ${file}\n`,
+        [file]: source,
+      },
+      (root) =>
+        expect(hookTypecheckViolations(root)).toEqual([
+          { file, reason: "Bun compiler" },
+        ]),
+    );
+  },
+);
+
+test.each([
+  { extension: "sh", source: "bun scripts/guard.ts --check" },
+  { extension: "sh", source: "bun check-fixtures.ts" },
+  {
+    extension: "ts",
+    source: 'Bun.spawnSync(["bun", "scripts/guard.ts", "--check"]);',
+  },
+])("allows unrelated check arguments in $source", ({ extension, source }) => {
+  const file = `scripts/guard.${extension}`;
+  const runner = extension === "sh" ? "bash" : "bun";
+  withFixture(
+    {
+      "package.json": "{}",
+      "lefthook.yml": `pre-push:\n  commands:\n    guard:\n      run: ${runner} ${file}\n`,
+      [file]: source,
+    },
+    (root) => expect(hookTypecheckViolations(root)).toEqual([]),
   );
 });
