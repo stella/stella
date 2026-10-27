@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, isNull, lte, ne, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -22,6 +22,7 @@ import {
   resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -180,16 +181,16 @@ const readQueuePage = async (
     .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
     .limit(limit + 1);
   // Counted up to a ceiling, so a long backlog costs a bounded scan.
-  const pending = tx
-    .select({ id: timeEntries.id })
-    .from(timeEntries)
-    .leftJoin(workspaces, liveMatter)
-    .where(scope)
-    .limit(LIMITS.timeApprovalPendingCountMax)
-    .as("pending");
-  const [counted] = await tx
-    .select({ count: sql<number>`count(*)`.mapWith(Number) })
-    .from(pending);
+  const pending = await readBounded(
+    tx
+      .select({ id: timeEntries.id })
+      .from(timeEntries)
+      .leftJoin(workspaces, liveMatter)
+      .where(scope),
+    LIMITS.timeApprovalPendingCountMax,
+  );
+  const pendingCount =
+    pending.type === "overflow" ? pending.cap : pending.rows.length;
   const page = createCursorPage({
     rows,
     limit,
@@ -204,7 +205,7 @@ const readQueuePage = async (
   const nameById = new Map(names.map(({ id, name }) => [id, name]));
   return {
     ...page,
-    pendingCount: counted === undefined ? 0 : counted.count,
+    pendingCount,
     items: page.items.map(({ approvedAt, returnedAt, ...entry }) =>
       Object.assign(entry, {
         timekeeperName:

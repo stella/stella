@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/billing/time-entry-authorization";
 import { timeEntryIsRunning } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -118,34 +119,36 @@ const readOwnDrafts = async (
     "organizationId" | "userId" | "startDate" | "endDate"
   >,
 ) =>
-  await tx
-    .select({ ...getColumns(timeEntries), running: timeEntryIsRunning() })
-    .from(timeEntries)
-    .leftJoin(
-      workspaces,
-      and(
-        eq(workspaces.id, timeEntries.workspaceId),
-        eq(workspaces.organizationId, organizationId),
-      ),
-    )
-    .where(
-      and(
-        eq(timeEntries.organizationId, organizationId),
-        eq(timeEntries.userId, userId),
-        eq(timeEntries.status, BILLING_STATUS.DRAFT),
-        gte(timeEntries.dateWorked, startDate),
-        lte(timeEntries.dateWorked, endDate),
-        or(
-          eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
-          and(
-            eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-            ne(workspaces.status, "deleting"),
+  await readBounded(
+    tx
+      .select({ ...getColumns(timeEntries), running: timeEntryIsRunning() })
+      .from(timeEntries)
+      .leftJoin(
+        workspaces,
+        and(
+          eq(workspaces.id, timeEntries.workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      )
+      .where(
+        and(
+          eq(timeEntries.organizationId, organizationId),
+          eq(timeEntries.userId, userId),
+          eq(timeEntries.status, BILLING_STATUS.DRAFT),
+          gte(timeEntries.dateWorked, startDate),
+          lte(timeEntries.dateWorked, endDate),
+          or(
+            eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
+            and(
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+              ne(workspaces.status, "deleting"),
+            ),
           ),
         ),
-      ),
-    )
-    .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id))
-    .limit(LIMITS.timeEntriesApprovalBatchMax + 1);
+      )
+      .orderBy(asc(timeEntries.dateWorked), asc(timeEntries.id)),
+    LIMITS.timeEntriesApprovalBatchMax,
+  );
 
 type Moved = { entry: SubmissionEntry; to: "submitted" | "approved" };
 
@@ -382,7 +385,7 @@ export const submitTimeEntries = async ({
       startDate,
       endDate,
     });
-    if (drafts.length > LIMITS.timeEntriesApprovalBatchMax) {
+    if (drafts.type === "overflow") {
       return Result.err(
         new HandlerError({
           status: 409,
@@ -394,7 +397,7 @@ export const submitTimeEntries = async ({
     }
     const refused: TimeSubmitOutcome[] = [];
     const moves: Moved[] = [];
-    for (const entry of drafts) {
+    for (const entry of drafts.rows) {
       const reason = timeSubmitRefusal({ entry, policy, now });
       if (reason) {
         refused.push({ id: entry.id, status: "refused", reason });
