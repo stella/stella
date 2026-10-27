@@ -730,11 +730,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
-    "count": 4,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/features/chat/chat-runtime-emit.test.ts::tick::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
@@ -3912,11 +3907,6 @@
   {
     "id": "no-unreasoned-timeout::apps/web/src/components/chat/recorded-conversations.dom.test.tsx::<module>::test timeout",
     "count": 4,
-    "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
-  },
-  {
-    "id": "no-unreasoned-timeout::apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx::<module>::test timeout",
-    "count": 1,
     "reason": "Predates the rule: raised timeout or retry without a stated reason; remove it or say why."
   },
   {

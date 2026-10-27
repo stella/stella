@@ -214,6 +214,18 @@ export const raisedTimeoutViolations = (
 };
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
+export const invalidDepthTestEntries = (
+  entries: readonly string[],
+  runnableScriptTests: readonly string[],
+): string[] => {
+  const runnable = new Set(runnableScriptTests);
+  return entries.filter((entry) => !runnable.has(entry)).toSorted();
+};
+
+const scriptRunnerTestFiles = () => [
+  ...new Bun.Glob("scripts/**/*.test.{ts,sh}").scanSync({ cwd: repoRoot }),
+];
+
 const fastSuiteFiles = () => {
   const patterns = [
     "scripts/**/*.test.ts",
@@ -222,7 +234,7 @@ const fastSuiteFiles = () => {
   ];
   const excluded = new Set(Object.keys(depthTests));
   const scriptTests = unlistedTests(
-    [...new Bun.Glob("scripts/**/*.test.ts").scanSync({ cwd: repoRoot })],
+    scriptRunnerTestFiles().filter((file) => file.endsWith(".ts")),
     readCiCheckCommandText(repoRoot),
   );
   const domTests = patterns
@@ -323,6 +335,23 @@ describe("raised timeout detector", () => {
   test("ignores markers and calls inside string literals", () => {
     const source = `const fixture = "// timeout: fixture\\nsetDefaultTimeout(60_000)";`;
     expect(raisedTimeoutViolations("fixture.test.ts", source)).toEqual([]);
+  });
+});
+
+describe("depth-list scope", () => {
+  test("reports entries outside the script runner", () => {
+    expect(
+      invalidDepthTestEntries(
+        ["scripts/depth.test.ts", "apps/web/src/example.dom.test.tsx"],
+        ["scripts/depth.test.ts"],
+      ),
+    ).toEqual(["apps/web/src/example.dom.test.tsx"]);
+  });
+
+  test("contains only files in the script runner's discovery scope", () => {
+    expect(
+      invalidDepthTestEntries(Object.keys(depthTests), scriptRunnerTestFiles()),
+    ).toEqual([]);
   });
 });
 

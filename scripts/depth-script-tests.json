@@ -1,5 +1,4 @@
 {
-  "apps/web/src/features/case-law/components/case-viewer/use-reader-answers.dom.test.tsx": "Exercises the full persisted-claim polling timeout against hanging test servers.",
   "scripts/api-dockerfile-entrypoints.test.ts": "Bundles every API entrypoint to validate the complete bundled import graph.",
   "scripts/api-test-impact.test.ts": "Walks the complete repository import graph twice.",
   "scripts/check-migrations.test.ts": "Runs subprocess, repository, compiler, or exhaustive matrix fixtures that exceed the default per-test budget.",
