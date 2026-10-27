@@ -18,8 +18,9 @@ import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspaceKeys } from "@/lib/workspaces/queries/workspace";
 
 /**
@@ -41,7 +42,7 @@ export const useStartWorkflow = (workspaceId: string) => {
     organizationId: activeOrganizationId,
   });
   const aiAvailabilityQuery = useQuery(aiAvailabilityQueryOptions);
-  const aiAvailabilityView = useQueryView(aiAvailabilityQuery);
+  const aiAvailabilityView = queryView(aiAvailabilityQuery);
   useQueryViewError(aiAvailabilityView, "useStartWorkflow:query");
   const aiAvailability =
     aiAvailabilityView.type === "items" &&

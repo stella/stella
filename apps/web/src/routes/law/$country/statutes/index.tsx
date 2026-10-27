@@ -94,10 +94,11 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   createStatuteListFilters,
   loadPublicStatutesIndex,
@@ -309,12 +310,12 @@ function PublicStatuteFullText({ query }: { query: string }) {
   );
   const { fetchNextPage, hasNextPage, isFetchingNextPage, isPending } =
     dataQuery;
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
   const facetsQuery = useQuery(statuteFacetsOptions(country.toUpperCase()));
-  const facetsView = useQueryView(facetsQuery);
+  const facetsView = queryView(facetsQuery);
   useQueryViewError(facetsView, "PublicStatuteFullText:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const selectType = (documentType: string | undefined) => {
@@ -535,7 +536,7 @@ function PublicStatuteList({
     search.q ?? "",
     dataQuery.data !== undefined && !isPlaceholderData,
   );
-  const dataView = useQueryView(dataQuery, {
+  const dataView = queryView(dataQuery, {
     isEmpty: (data) => data.pages.every((page) => page.items.length === 0),
   });
   const data = dataView.type === "items" ? dataView.items : undefined;
@@ -543,7 +544,7 @@ function PublicStatuteList({
     ...statuteFacetsOptions(country.toUpperCase()),
     placeholderData: keepPreviousData,
   });
-  const facetsView = useQueryView(facetsQuery);
+  const facetsView = queryView(facetsQuery);
   useQueryViewError(facetsView, "PublicStatuteList:query");
   const facets = facetsView.type === "items" ? facetsView.items : undefined;
   const rows = publicLawRowsPhase({ isLoading, isPlaceholderData, routeState });

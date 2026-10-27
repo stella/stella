@@ -19,6 +19,7 @@ import { documentAnnotationScalingScenarios } from "./document-annotations";
 import { exactIconScalingScenario } from "./link-icons";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -40,6 +41,7 @@ const measuredApiScenarios = [
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   ...claimCommentScalingScenarios,
+  mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
 ];
 const measuredApiReads = apiApp.routes
