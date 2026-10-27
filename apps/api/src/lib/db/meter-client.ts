@@ -88,10 +88,9 @@ export const meterSqlClient = <T extends (...args: never[]) => unknown>(
       }
       const descriptor = Reflect.getOwnPropertyDescriptor(target, property);
       if (
-        descriptor !== undefined &&
-        descriptor.configurable === false &&
+        descriptor?.configurable === false &&
         "writable" in descriptor &&
-        descriptor.writable === false
+        !descriptor.writable
       ) {
         return member;
       }
