@@ -139,6 +139,7 @@ const serveWeek = ({
   pendingCount = 0,
   pageSize = 200,
   failLaterPages = false,
+  failSubmitDates = [],
 }: {
   entries: MyTimeEntry[];
   /** Drafts the fake API refuses to submit, with the reason it gives. */
@@ -148,6 +149,8 @@ const serveWeek = ({
   pageSize?: number;
   /** Fail every page request after the first. */
   failLaterPages?: boolean;
+  /** Single dates whose submission request fails. */
+  failSubmitDates?: string[];
   suggestions: {
     matter: typeof LEASE_MATTER;
     date: string;
@@ -284,6 +287,9 @@ const serveWeek = ({
     const start =
       typeof body["startDate"] === "string" ? body["startDate"] : "";
     const end = typeof body["endDate"] === "string" ? body["endDate"] : "";
+    if (start === end && failSubmitDates.includes(start)) {
+      return new Response("unavailable", { status: 503 });
+    }
     const drafts = entries
       .map((entry, index) => ({ entry, index }))
       .filter(
@@ -752,6 +758,69 @@ describe("my week", () => {
         name: messages.timesheets.week.submitAndApprove,
       }),
     ).toBeNull();
+  });
+
+  test("a later day that fails keeps the reasons of drafts refused before it", async () => {
+    const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
+    const drafts = Array.from(
+      { length: TIME_ENTRIES_APPROVAL_BATCH_MAX + 1 },
+      (_, index) =>
+        draftEntry({
+          id: toSafeId<"timeEntry">(`entry-bulk-${index}`),
+          narrative: `Bulk entry ${index}`,
+          dateWorked: index % 2 === 0 ? MONDAY : tuesday,
+        }),
+    );
+    serveWeek({
+      entries: drafts,
+      suggestions: [],
+      refusals: { "entry-bulk-0": "unpriced" },
+      failSubmitDates: [tuesday],
+    });
+    const toasts = spyOn(stellaToast, "add");
+    try {
+      mount();
+      expect(await screen.findByText("Bulk entry 0")).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", {
+            name: messages.timesheets.week.submitWeek,
+          }),
+        );
+      });
+
+      // Monday moved and its refusal is explained; Tuesday's failure is said.
+      expect(
+        await screen.findByText(messages.timesheets.week.refusals.unpriced),
+      ).toBeTruthy();
+      await waitFor(() => {
+        expect(toasts).toHaveBeenCalled();
+      });
+    } finally {
+      toasts.mockRestore();
+    }
+  });
+
+  test("a double click submits the week once", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    mount();
+
+    const submit = await screen.findByRole("button", {
+      name: messages.timesheets.week.submitWeek,
+    });
+    await act(async () => {
+      fireEvent.click(submit);
+      fireEvent.click(submit);
+    });
+
+    await waitFor(() => {
+      expect(
+        calls.filter(
+          ({ method, path }) =>
+            method === "POST" && path === "/time-entries/me/submissions",
+        ),
+      ).toHaveLength(1);
+    });
   });
 
   test("a week with more drafts than one batch is submitted day by day", async () => {

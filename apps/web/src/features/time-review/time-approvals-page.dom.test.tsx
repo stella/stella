@@ -331,6 +331,19 @@ describe("approving time by person", () => {
     expect(await personSection("Beata Kral")).toBeTruthy();
   });
 
+  test("an entry returned before shows its approver why", async () => {
+    serveQueue([
+      submitted("adam-1", {
+        returnComment: "Split the call from the drafting",
+      }),
+    ]);
+    mount();
+
+    expect(
+      await screen.findByText("Returned: Split the call from the drafting"),
+    ).toBeTruthy();
+  });
+
   test("returning an entry sends the reason and takes it off the page", async () => {
     const calls = serveQueue([submitted("adam-1"), submitted("adam-2")]);
     const client = mount();

@@ -7,6 +7,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import type { Week } from "@/components/billing/work-week.logic";
 import type { SubmitWeekRequest } from "@/features/my-week/use-my-week-actions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
@@ -71,7 +72,7 @@ const submitWeekInParts = async ({
     approve,
   });
   if (!Result.isError(whole) || !isTooManyEntries(whole.error)) {
-    return whole;
+    return whole.map(({ results }) => ({ results }));
   }
   const results: SubmitOutcome["results"] = [];
   for (const date of week.days) {
@@ -80,8 +81,10 @@ const submitWeekInParts = async ({
       endDate: date,
       approve,
     });
+    // Earlier days are committed; their outcomes are kept and shown with the
+    // failure, so refused drafts still say why.
     if (Result.isError(day)) {
-      return day;
+      return Result.ok({ results, failure: day.error });
     }
     results.push(...day.value.results);
   }
@@ -102,6 +105,9 @@ export const SubmitWeekActions = ({
   onRefusals,
 }: SubmitWeekActionsProps) => {
   const t = useTranslations();
+  // Both buttons share one flight: a second click before the first settles
+  // starts nothing.
+  const flight = useSingleFlight();
   const run = async (approve: boolean) => {
     const response = await submitWeekInParts({ week, approve, submit });
     if (Result.isError(response)) {
@@ -122,6 +128,10 @@ export const SubmitWeekActions = ({
       }
     }
     onRefusals(refusals);
+    if ("failure" in response.value) {
+      notifyUserError(response.value.failure, t("errors.actionFailed"));
+      return;
+    }
     stellaToast.add({
       title: t("timesheets.week.submitResult", {
         submitted: String(submitted),
@@ -137,8 +147,13 @@ export const SubmitWeekActions = ({
       {canApproveOwn && (
         <Button
           disabled={!canSubmit}
-          loading={submitting}
-          onClick={() => detached(run(true), "my-week.submit-and-approve")}
+          loading={submitting || flight.pending}
+          onClick={() =>
+            detached(
+              flight.run(async () => await run(true)),
+              "my-week.submit-and-approve",
+            )
+          }
           size="sm"
           variant="outline"
         >
@@ -147,8 +162,13 @@ export const SubmitWeekActions = ({
       )}
       <Button
         disabled={!canSubmit}
-        loading={submitting}
-        onClick={() => detached(run(false), "my-week.submit")}
+        loading={submitting || flight.pending}
+        onClick={() =>
+          detached(
+            flight.run(async () => await run(false)),
+            "my-week.submit",
+          )
+        }
         size="sm"
       >
         {t("timesheets.week.submitWeek")}

@@ -107,6 +107,11 @@ export const TimeReviewRow = ({
           <BidiText as="p" className="text-muted-foreground mt-1 text-sm">
             {row.narrative}
           </BidiText>
+          {row.returnComment !== null && (
+            <BidiText as="p" className="mt-1 text-sm">
+              {t("timesheets.week.returned", { comment: row.returnComment })}
+            </BidiText>
+          )}
           {error !== undefined && (
             <p className="text-destructive mt-1 text-sm" role="alert">
               {error}
