@@ -5949,10 +5949,6 @@ const config = defineConfig({
         "packages/ui/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
       ],
-      // Open pull request 6989 rewrites this file's teardown and migrates it.
-      excludeFiles: [
-        "apps/web/src/components/legal-reader/reader-breadcrumb.dom.test.tsx",
-      ],
       rules: {
         "no-dropped-fake-timers/no-dropped-fake-timers": "error",
       },
