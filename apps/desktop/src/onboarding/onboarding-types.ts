@@ -25,7 +25,7 @@ export type DocumentApp = {
   name: string;
 };
 
-export const SCREEN_EDGES = ["top", "bottom", "left", "right"] as const;
+const SCREEN_EDGES = ["top", "bottom", "left", "right"] as const;
 
 /** Where the status icon sits: the screen edge and its centre along that
  *  edge, 0 at its left (or top) end and 1 at the other. */
