@@ -179,7 +179,7 @@ type PublishedVersionsOptions = {
   directories?: readonly (typeof ALL_PACKAGE_ORDER)[number][];
   gitRunner?: GitRunner;
   promotionFetch?: RegistryFetch;
-  githubToken?: string;
+  githubToken?: string | undefined;
   registryFetch?: RegistryFetch;
   log?: (line: string) => void;
 };
