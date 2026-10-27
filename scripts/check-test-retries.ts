@@ -932,6 +932,9 @@ const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
   const specifiers: string[] = [];
   const dynamicImports = new Set<Node>();
   walk(source.program, (node) => {
+    if (isErasedConfigStatement(node)) {
+      return "skip-children";
+    }
     if (
       node.type === "ImportExpression" ||
       node.type === "TSImportEqualsDeclaration" ||
@@ -940,8 +943,12 @@ const runtimeModuleSpecifiers = (source: Source): string[] | undefined => {
     ) {
       dynamicImports.add(node);
     }
+    return undefined;
   });
   for (const statement of source.program.body) {
+    if (isErasedConfigStatement(statement)) {
+      continue;
+    }
     if (statement.type === "ImportDeclaration") {
       if (
         statement.importKind === "type" ||
