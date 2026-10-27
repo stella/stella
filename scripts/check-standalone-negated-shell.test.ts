@@ -547,3 +547,12 @@ test("a group that feeds a pipe does not pass its status on", () => {
     check("scripts/group-last.sh", "if cat | ( ! grep -q x file ); then :; fi"),
   ).toEqual([]);
 });
+
+test("escaped newlines in quotes and substitutions advance the line count", () => {
+  expect(
+    check(
+      "scripts/continued.sh",
+      'out="$(\n  run \\\n    --flag \\\n    "$x \\\n y"\n)"\n! true\necho continued',
+    ),
+  ).toEqual([{ file: "scripts/continued.sh", line: 7, source: "! true" }]);
+});

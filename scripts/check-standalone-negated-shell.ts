@@ -112,6 +112,7 @@ const skipSubstitution = (state: LexState, closing: SubstitutionClose) => {
   while (state.index < source.length && depth > 0) {
     const char = source[state.index];
     if (char === "\\") {
+      state.line += source[state.index + 1] === "\n" ? 1 : 0;
       state.index += Math.min(2, source.length - state.index);
       continue;
     }
@@ -178,6 +179,7 @@ const readQuoted = (state: LexState, kind: QuoteKind) => {
   let value = "";
   while (state.index < source.length && source[state.index] !== quote) {
     if (kind !== "'" && source[state.index] === "\\") {
+      state.line += source[state.index + 1] === "\n" ? 1 : 0;
       value += source[state.index + 1] ?? "";
       state.index += 2;
       continue;
@@ -294,6 +296,7 @@ const readConditionalExpression = (state: LexState) => {
       continue;
     }
     if (char === "\\") {
+      state.line += source[state.index + 1] === "\n" ? 1 : 0;
       state.index += 2;
       continue;
     }
