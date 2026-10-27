@@ -1,5 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
+import * as v from "valibot";
 
 import { cents } from "@stll/money";
 import { Temporal } from "@stll/time";
@@ -129,7 +130,7 @@ const serveQueue = (
         });
       }
       if (request.method === "POST" && path === "/time-entries/approve") {
-        const ids = (body as { ids: string[] }).ids;
+        const { ids } = v.parse(v.object({ ids: v.array(v.string()) }), body);
         queue = queue.filter((item) => !ids.includes(item.id));
         return json({
           results: ids.map((id) => ({ id, status: "approved" })),
@@ -139,7 +140,7 @@ const serveQueue = (
         request.method === "POST" &&
         path === "/time-entries/approval-queue/return"
       ) {
-        const { id } = body as { id: string };
+        const { id } = v.parse(v.object({ id: v.string() }), body);
         queue = queue.filter((item) => item.id !== id);
         return json({ id, status: "draft" });
       }
