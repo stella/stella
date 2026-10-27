@@ -13,12 +13,14 @@ import { Temporal } from "@stll/time";
 import {
   draftRequestEntries,
   draftScalars,
+  materializeStructure,
   partitionRanges,
   resolveStructure,
   reviewItems,
 } from "../src/activity/billing-draft-logic";
 import type {
   DraftableGroup,
+  ResolvedStructureProposal,
   ReviewRow,
 } from "../src/activity/billing-draft-logic";
 import messages from "../src/i18n/langs/en.json";
@@ -252,14 +254,34 @@ describe("accepted proposals become batch items", () => {
   });
   const row = (
     target: DraftableGroup,
-    structure: ReviewRow["structure"] = null,
-  ): ReviewRow => ({
-    group: target,
-    narrative: "Reviewed lease",
-    billable: true,
-    classification,
-    structure,
-  });
+    structure: ResolvedStructureProposal | null = null,
+  ): ReviewRow => {
+    const content = {
+      type: "single",
+      narrative: "Reviewed lease",
+      billable: true,
+      classification,
+    } as const;
+    return {
+      group: target,
+      content:
+        structure === null
+          ? content
+          : {
+              type: "accepted",
+              summary: structure.summary,
+              sourceGroupIds:
+                structure.type === "merge" ? structure.groupIds : [target.id],
+              items: materializeStructure({
+                group: target,
+                content,
+                proposal: structure,
+                groups: [riverside, meridian],
+              }),
+              undoContent: content,
+            },
+    };
+  };
   const part = (durationMinutes: number, narrative: string) => ({
     durationMinutes,
     narrative,

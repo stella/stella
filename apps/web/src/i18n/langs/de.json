@@ -91,7 +91,7 @@
     "selectedRun": "KI-Spalten ausführen für {count, plural, one {# Zeile} other {# Zeilen}}"
   },
   "aiDisclosure": {
-    "billingDrafts": "KI-Abrechnungsentwürfe sind Vorschläge, die stella aus den ausgewählten Einträgen, Ihren früheren Einträgen zum Mandat und den Abrechnungsrichtlinien erstellt. Prüfen Sie jeden Eintrag, bevor Sie ihn erstellen.",
+    "billingDrafts": "KI-Abrechnungsentwürfe sind Vorschläge, die stella aus den ausgewählten Einträgen, Ihren früheren Einträgen zur Akte und den Abrechnungsrichtlinien erstellt. Prüfen Sie jeden Eintrag, bevor Sie ihn erstellen.",
     "caseLaw": "KI-Zusammenfassungen, -Notizen und -Analysen von Gerichtsentscheidungen erstellt stella; sie sind von den Gerichten nicht gebilligt und geben nicht deren eigene Erwägungen wieder. Sie dienen juristischen Fachleuten als Hilfsmittel; maßgeblich bleibt der Text der Entscheidung."
   },
   "appearance": {

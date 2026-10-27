@@ -16,6 +16,10 @@ import type {
 import { Temporal } from "@stll/time";
 
 import { documentName } from "./activity-logic";
+import type {
+  ReviewContent,
+  SingleReviewContent,
+} from "./billing-review-state";
 import type { DayReviewGroup } from "./day-review-logic";
 
 type ActivityRange = { start: string; end: string };
@@ -251,27 +255,9 @@ export type ReviewItem = {
   ranges: ActivityRange[];
 };
 
-/** One review row's editable state, including what an accepted draft set. */
-export type EntryEdit = {
-  selected: boolean;
-  billable: boolean;
-  narrative: string;
-  classification: DesktopTimeEntryClassification | null;
-  structure: AcceptedStructure | null;
-};
+export type ReviewRow = { group: DraftableGroup; content: ReviewContent };
 
-export type ReviewRow = {
-  group: DraftableGroup;
-  narrative: string;
-  billable: boolean;
-  classification: DesktopTimeEntryClassification | null;
-  /** An accepted structural change, with draft ids resolved to group ids. */
-  structure: AcceptedStructure | null;
-};
-
-/** An applied structural change with its draft ids resolved to groups, and
- * the summary the review keeps showing while it is applied. */
-export type AcceptedStructure = { summary: StructureSummary } & (
+export type ResolvedStructureProposal = { summary: StructureSummary } & (
   | Extract<DraftStructure, { type: "split" }>
   | (Omit<Extract<DraftStructure, { type: "merge" }>, "entryIds"> & {
       groupIds: string[];
@@ -288,130 +274,122 @@ const matterOf = ({ id, name, reference, color }: DesktopMatter) => ({
   color,
 });
 
-/** A merge applies only while every group it names is still selected. */
-const effectiveStructure = (
-  row: ReviewRow,
-  selectedIds: ReadonlySet<string>,
-) =>
-  row.structure?.type === "merge" &&
-  !row.structure.groupIds.every((id) => selectedIds.has(id))
-    ? null
-    : row.structure;
-
-/** Groups an applied merge folds into another group's entry. */
-export const absorbedGroupIds = (rows: readonly ReviewRow[]) => {
-  const selectedIds = new Set(rows.map(({ group }) => group.id));
-  return new Set(
-    rows.flatMap((row) => {
-      const structure = effectiveStructure(row, selectedIds);
-      return structure?.type === "merge"
-        ? structure.groupIds.filter((id) => id !== row.group.id)
-        : [];
-    }),
+/** Accepted units retain their original participants even while deselected. */
+export const absorbedGroupIds = (rows: readonly ReviewRow[]) =>
+  new Set(
+    rows.flatMap(({ group, content }) =>
+      content.type === "accepted"
+        ? content.sourceGroupIds.filter((id) => id !== group.id)
+        : [],
+    ),
   );
+
+const singleItem = ({
+  group,
+  content,
+}: {
+  group: DraftableGroup;
+  content: SingleReviewContent;
+}): ReviewItem => ({
+  key: group.id,
+  matter: matterOf(group.matter),
+  durationMinutes: group.roundedTenths * 6,
+  narrative: content.narrative,
+  billable: content.billable,
+  classification: content.classification,
+  ranges: group.ranges,
+});
+
+/** The same materialized items are displayed, edited, and submitted. */
+export const reviewItems = (rows: readonly ReviewRow[]): ReviewItem[] => {
+  const absorbed = absorbedGroupIds(rows);
+  return rows.flatMap(({ group, content }) => {
+    if (absorbed.has(group.id)) {
+      return [];
+    }
+    return content.type === "accepted"
+      ? [...content.items]
+      : [singleItem({ group, content })];
+  });
 };
 
-/**
- * The entries a confirmed batch creates. A merge owner absorbs the other
- * groups it names; a split or move turns one group into consecutive parts.
- */
-export const reviewItems = (rows: readonly ReviewRow[]): ReviewItem[] => {
-  const selectedIds = new Set(rows.map(({ group }) => group.id));
-  const absorbed = absorbedGroupIds(rows);
-  const byGroup = new Map(rows.map((row) => [row.group.id, row]));
-  const items: ReviewItem[] = [];
-  for (const row of rows) {
-    if (absorbed.has(row.group.id)) {
-      continue;
+type MaterializeStructureOptions = {
+  group: DraftableGroup;
+  content: SingleReviewContent;
+  proposal: ResolvedStructureProposal;
+  groups: readonly DraftableGroup[];
+};
+
+/** Resolve geometry once when the person accepts the proposal. */
+export const materializeStructure = ({
+  group,
+  content,
+  proposal,
+  groups,
+}: MaterializeStructureOptions): ReviewItem[] => {
+  const base = singleItem({ group, content });
+  switch (proposal.type) {
+    case "split": {
+      const ranges = partitionRanges(
+        group.ranges,
+        proposal.parts.map(({ durationMinutes }) => durationMinutes),
+      );
+      return proposal.parts.map((part, index) => ({
+        ...part,
+        key: `${group.id}:${index}`,
+        matter: base.matter,
+        ranges: ranges.at(index) ?? panic("Split part has no ranges"),
+      }));
     }
-    const base = {
-      matter: matterOf(row.group.matter),
-      narrative: row.narrative,
-      billable: row.billable,
-      classification: row.classification,
-    };
-    const structure = effectiveStructure(row, selectedIds);
-    if (structure === null) {
-      items.push({
-        ...base,
-        key: row.group.id,
-        durationMinutes: row.group.roundedTenths * 6,
-        ranges: row.group.ranges,
-      });
-      continue;
+    case "move": {
+      const moved = {
+        key: `${group.id}:moved`,
+        matter: matterOf(proposal.targetMatter),
+        durationMinutes: proposal.durationMinutes,
+        narrative: proposal.narrative,
+        billable: proposal.billable,
+        classification: proposal.classification,
+      };
+      const remainder = base.durationMinutes - proposal.durationMinutes;
+      if (remainder <= 0) {
+        return [{ ...moved, ranges: group.ranges }];
+      }
+      const [kept, rest] = partitionRanges(group.ranges, [
+        remainder,
+        proposal.durationMinutes,
+      ]);
+      return [
+        {
+          ...base,
+          durationMinutes: remainder,
+          ranges: kept ?? panic("Move kept no ranges"),
+        },
+        { ...moved, ranges: rest ?? panic("Move moved no ranges") },
+      ];
     }
-    switch (structure.type) {
-      case "split": {
-        const parts = partitionRanges(
-          row.group.ranges,
-          structure.parts.map(({ durationMinutes }) => durationMinutes),
-        );
-        for (const [index, part] of structure.parts.entries()) {
-          items.push({
-            key: `${row.group.id}:${index}`,
-            matter: base.matter,
-            durationMinutes: part.durationMinutes,
-            narrative: part.narrative,
-            billable: part.billable,
-            classification: part.classification,
-            ranges: parts.at(index) ?? panic("Split part has no ranges"),
-          });
-        }
-        break;
-      }
-      case "move": {
-        const totalMinutes = row.group.roundedTenths * 6;
-        const remainder = totalMinutes - structure.durationMinutes;
-        const moved = {
-          key: `${row.group.id}:moved`,
-          matter: matterOf(structure.targetMatter),
-          durationMinutes: structure.durationMinutes,
-          narrative: structure.narrative,
-          billable: structure.billable,
-          classification: structure.classification,
-        };
-        if (remainder <= 0) {
-          items.push({ ...moved, ranges: row.group.ranges });
-          break;
-        }
-        const [kept, rest] = partitionRanges(row.group.ranges, [
-          remainder,
-          structure.durationMinutes,
-        ]);
-        items.push(
-          {
-            ...base,
-            key: row.group.id,
-            durationMinutes: remainder,
-            ranges: kept ?? panic("Move kept no ranges"),
-          },
-          { ...moved, ranges: rest ?? panic("Move moved no ranges") },
-        );
-        break;
-      }
-      case "merge": {
-        const merged = structure.groupIds.map(
-          (id) => byGroup.get(id) ?? panic("Merged group is not selected", id),
-        );
-        items.push({
-          key: row.group.id,
-          matter: base.matter,
+    case "merge": {
+      const merged = proposal.groupIds.map(
+        (id) =>
+          groups.find((candidate) => candidate.id === id) ??
+          panic("Merged group is missing", id),
+      );
+      return [
+        {
+          ...base,
           durationMinutes: merged.reduce(
-            (sum, { group }) => sum + group.roundedTenths * 6,
+            (sum, item) => sum + item.roundedTenths * 6,
             0,
           ),
-          narrative: structure.narrative,
-          billable: structure.billable,
-          classification: structure.classification,
-          ranges: merged.flatMap(({ group }) => group.ranges),
-        });
-        break;
-      }
-      default:
-        return panic("Unknown accepted structure", structure satisfies never);
+          narrative: proposal.narrative,
+          billable: proposal.billable,
+          classification: proposal.classification,
+          ranges: merged.flatMap((item) => item.ranges),
+        },
+      ];
     }
+    default:
+      return panic("Unknown structure proposal", proposal satisfies never);
   }
-  return items;
 };
 
 type DraftsForGroupsOptions = {
@@ -444,7 +422,7 @@ export const resolveStructure = ({
   structure,
   groupIds,
   candidates,
-}: ResolveStructureOptions): AcceptedStructure | null => {
+}: ResolveStructureOptions): ResolvedStructureProposal | null => {
   const summary = summarizeStructure(structure);
   switch (structure.type) {
     case "split":
@@ -495,15 +473,6 @@ export const resolveStructure = ({
 export type DraftResult = {
   draft: DesktopBillingDraft;
   sentGroupIds: readonly string[];
-};
-
-/** A group's AI state: the text before any draft, the draft in use, and a
- * steering proposal awaiting review. */
-export type DraftEntryState = {
-  original: { narrative: string; billable: boolean };
-  result: DraftResult;
-  using: "draft" | "original";
-  proposal: DraftResult | null;
 };
 
 type PreviousDraftTarget = { groupId: string; result: DraftResult };

@@ -1,0 +1,462 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
+import { afterAll, afterEach, expect, test } from "bun:test";
+
+import type {
+  DesktopBillingDraftResponse,
+  DesktopBillingDraftReview,
+} from "@stll/api-contract/desktop-billing-drafts";
+import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
+
+import type { ActivityDaySnapshot } from "../src/activity/activity-types";
+
+GlobalRegistrator.register({ url: "http://localhost/" });
+
+const { act, cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
+const { clearMocks, mockIPC, mockWindows } =
+  await import("@tauri-apps/api/mocks");
+const { ActivityDayReview } = await import("../src/activity/ActivityDayReview");
+const { DesktopIntlProvider, defaultMessages: messages } =
+  await import("../src/i18n");
+
+const FIRST_MATTER_ID = "00000000-0000-4000-8000-000000000001";
+const SECOND_MATTER_ID = "00000000-0000-4000-8000-000000000002";
+const DAY = "2026-10-07";
+const CLIENT_CLASSIFICATION = {
+  type: "activity_group",
+  activityGroup: "client",
+} as const;
+
+const candidates = [
+  {
+    id: FIRST_MATTER_ID,
+    name: "Source matter",
+    reference: "M-001",
+    color: "--option-emerald",
+    clientName: "Client one",
+    signals: {
+      lastWorkedAt: DAY,
+      newlyAssignedAt: null,
+      upcomingDeadline: null,
+    },
+  },
+  {
+    id: SECOND_MATTER_ID,
+    name: "Target matter",
+    reference: "M-002",
+    color: "--option-blue",
+    clientName: "Client two",
+    signals: {
+      lastWorkedAt: DAY,
+      newlyAssignedAt: null,
+      upcomingDeadline: null,
+    },
+  },
+] satisfies DesktopTimeEntryMatterCandidate[];
+
+const segments = [
+  {
+    appIdentifier: "com.example.editor",
+    appName: "Example Editor",
+    matterId: FIRST_MATTER_ID,
+    start: "2026-10-07T09:00:00Z",
+    end: "2026-10-07T10:00:00Z",
+  },
+];
+
+const snapshot = (activitySegments = segments): ActivityDaySnapshot => ({
+  date: DAY,
+  pendingBatch: null,
+  deletionStatus: "available",
+  manualAssignments: [],
+  draftedEntries: [],
+  timeBillingEnabled: true,
+  earliestDate: DAY,
+  latestDate: DAY,
+  excludedApps: [],
+  otherAccountHistoryDays: 0,
+  captureDetails: false,
+  detectCalls: true,
+  appNameOnlyApps: [],
+  browserApps: [],
+  sourceAppVisuals: [],
+  browserTitleApps: [],
+  detailsAccess: "disabled",
+  persistence: "encrypted",
+  recordingStatus: "recording",
+  retention: "month",
+  segments: activitySegments,
+  today: DAY,
+  unreadable: false,
+});
+
+const billingDrafts = {
+  settings: { type: "ready", consent: "granted", preference: null },
+  setConsent: async () => await Promise.resolve(true),
+  setPreference: async () => await Promise.resolve(true),
+} as const;
+
+type DeferredReview = {
+  request: unknown;
+  deferred: ReturnType<typeof Promise.withResolvers<unknown>>;
+};
+
+const installNativeBoundary = () => {
+  const draftRequests: DeferredReview[] = [];
+  const submissions: unknown[] = [];
+  mockWindows("activity");
+  mockIPC(
+    async (command, args) => {
+      switch (command) {
+        case "time_entry_candidates":
+          return candidates;
+        case "billing_draft_create_confirmed": {
+          const deferred = Promise.withResolvers<unknown>();
+          const request =
+            args &&
+            !Array.isArray(args) &&
+            !(args instanceof ArrayBuffer) &&
+            !(args instanceof Uint8Array)
+              ? args["request"]
+              : undefined;
+          draftRequests.push({ request, deferred });
+          return await deferred.promise;
+        }
+        case "time_entry_submit_batch_confirmed": {
+          const request =
+            args &&
+            !Array.isArray(args) &&
+            !(args instanceof ArrayBuffer) &&
+            !(args instanceof Uint8Array)
+              ? args["request"]
+              : undefined;
+          submissions.push(request);
+          const items: unknown[] =
+            typeof request === "object" &&
+            request !== null &&
+            "items" in request &&
+            Array.isArray(request.items)
+              ? request.items
+              : [];
+          return {
+            entries: items.map((_, index) => ({ id: `entry-${index + 1}` })),
+            markerSaved: true,
+          };
+        }
+        case "desktop_report_error":
+          return undefined;
+        default:
+          return panic("Unexpected desktop command", command);
+      }
+    },
+    { shouldMockEvents: true },
+  );
+  return { draftRequests, submissions };
+};
+
+const mountReview = (day = snapshot()) =>
+  render(
+    <DesktopIntlProvider language="en" messages={messages}>
+      <ActivityDayReview
+        snapshot={day}
+        header={<span>Review</span>}
+        billingDrafts={billingDrafts}
+        onCopy={(_text, onSettled) => onSettled(true)}
+        onReviewStatusChange={() => undefined}
+      />
+    </DesktopIntlProvider>,
+  );
+
+const draft = (
+  entryId: string,
+  narrative: string,
+  operations: DesktopBillingDraftResponse["drafts"][number]["operations"] = [],
+) => ({
+  entryId,
+  narrative,
+  classification: CLIENT_CLASSIFICATION,
+  flags: [],
+  matchedEarlierEntryIds: [],
+  operations,
+});
+
+const review = (
+  drafts: DesktopBillingDraftReview["result"]["drafts"],
+): DesktopBillingDraftReview => ({
+  result: { drafts, checkedGuidelines: [] },
+  earlierEntries: [],
+});
+
+const firstDraftRequest = (requests: readonly DeferredReview[]) =>
+  requests.at(0) ?? panic("Expected billing draft request");
+
+const resolveDraft = async (request: DeferredReview, value: unknown) => {
+  await act(async () => {
+    request.deferred.resolve(value);
+    await request.deferred.promise;
+    await Promise.resolve();
+  });
+};
+
+const startDrafting = async (
+  view: ReturnType<typeof mountReview>,
+  requests: readonly DeferredReview[],
+) => {
+  await waitFor(() => expect(view.getByText("Example Editor")).toBeTruthy());
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiDraft }),
+  );
+  await waitFor(() => expect(requests).toHaveLength(1));
+  return firstDraftRequest(requests);
+};
+
+afterEach(() => {
+  cleanup();
+  clearMocks();
+});
+
+afterAll(async () => {
+  await GlobalRegistrator.unregister();
+});
+
+test("accepted split content can be edited and the confirmed payload uses those rows", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountReview();
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft("entry_1", "Draft narrative", [
+        {
+          type: "split",
+          parts: [
+            {
+              durationMinutes: 30,
+              narrative: "First part",
+              classification: CLIENT_CLASSIFICATION,
+              billable: true,
+            },
+            {
+              durationMinutes: 30,
+              narrative: "Second part",
+              classification: CLIENT_CLASSIFICATION,
+              billable: false,
+            },
+          ],
+        },
+      ]),
+    ]),
+  );
+
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiApply }),
+  );
+  const narratives = view.getAllByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  expect(narratives).toHaveLength(2);
+  fireEvent.change(narratives.at(1) ?? panic("Expected second split part"), {
+    target: { value: "Edited second part" },
+  });
+  fireEvent.click(view.getByRole("button", { name: "Create 2 drafts" }));
+
+  await waitFor(() => expect(boundary.submissions).toHaveLength(1));
+  const submission = boundary.submissions.at(0);
+  expect(submission).toMatchObject({
+    items: [
+      {
+        entry: {
+          matterId: FIRST_MATTER_ID,
+          durationMinutes: 30,
+          narrative: "First part",
+          billable: true,
+        },
+      },
+      {
+        entry: {
+          matterId: FIRST_MATTER_ID,
+          durationMinutes: 30,
+          narrative: "Edited second part",
+          billable: false,
+        },
+      },
+    ],
+  });
+});
+
+test("accepted merge keeps edits across deselection and reselects as one submitted item", async () => {
+  const boundary = installNativeBoundary();
+  const firstSegment =
+    segments.at(0) ?? panic("Expected source activity segment");
+  const secondSegment = {
+    ...firstSegment,
+    matterId: SECOND_MATTER_ID,
+    start: "2026-10-07T10:00:00Z",
+    end: "2026-10-07T10:30:00Z",
+  };
+  const view = mountReview(snapshot([...segments, secondSegment]));
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft("entry_1", "Combined work", [
+        {
+          type: "merge",
+          entryIds: ["entry_1", "entry_2"],
+          narrative: "Combined work",
+          classification: CLIENT_CLASSIFICATION,
+          billable: true,
+        },
+      ]),
+      draft("entry_2", "Second source"),
+    ]),
+  );
+
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiApply }),
+  );
+  const refineButtons = view.getAllByRole("button", {
+    name: messages.activity.aiRefine,
+  });
+  expect(refineButtons).toHaveLength(1);
+  expect(refineButtons.at(0)).toHaveProperty("disabled", true);
+  expect(
+    view.queryByPlaceholderText(messages.activity.aiSteerAllPlaceholder),
+  ).toBeNull();
+  const merged = view.getByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  fireEvent.change(merged, { target: { value: "Edited combined work" } });
+  const secondMatter = view.getByRole("checkbox", {
+    name: messages.activity.includeMatter.replace("{matter}", "Target matter"),
+  });
+  fireEvent.click(secondMatter);
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toBeTruthy();
+  fireEvent.click(secondMatter);
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Edited combined work");
+  fireEvent.click(view.getByRole("button", { name: "Create 1 draft" }));
+
+  await waitFor(() => expect(boundary.submissions).toHaveLength(1));
+  expect(boundary.submissions.at(0)).toMatchObject({
+    items: [
+      {
+        entry: {
+          matterId: FIRST_MATTER_ID,
+          durationMinutes: 90,
+          narrative: "Edited combined work",
+          billable: true,
+        },
+      },
+    ],
+  });
+});
+
+test("accepted move can be undone and its edited source and target rows are submitted", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountReview();
+  const request = await startDrafting(view, boundary.draftRequests);
+  await resolveDraft(
+    request,
+    review([
+      draft("entry_1", "Starting narrative", [
+        {
+          type: "move",
+          targetMatterId: SECOND_MATTER_ID,
+          targetMatterName: "Target matter",
+          durationMinutes: 30,
+          narrative: "Moved narrative",
+          classification: CLIENT_CLASSIFICATION,
+          billable: true,
+        },
+      ]),
+    ]),
+  );
+
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiApply }),
+  );
+  expect(
+    view.getByRole("button", { name: messages.activity.aiRefine }),
+  ).toHaveProperty("disabled", true);
+  let narratives = view.getAllByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  expect(narratives).toHaveLength(2);
+  fireEvent.click(view.getByRole("button", { name: messages.activity.aiUndo }));
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Starting narrative");
+  expect(
+    view.getByRole("button", { name: messages.activity.aiRefine }),
+  ).toHaveProperty("disabled", false);
+
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiApply }),
+  );
+  narratives = view.getAllByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  fireEvent.change(narratives.at(0) ?? panic("Expected kept source work"), {
+    target: { value: "Edited kept work" },
+  });
+  fireEvent.change(narratives.at(1) ?? panic("Expected moved target work"), {
+    target: { value: "Edited moved work" },
+  });
+  fireEvent.click(view.getByRole("button", { name: "Create 2 drafts" }));
+
+  await waitFor(() => expect(boundary.submissions).toHaveLength(1));
+  expect(boundary.submissions.at(0)).toMatchObject({
+    items: [
+      {
+        entry: {
+          matterId: FIRST_MATTER_ID,
+          durationMinutes: 30,
+          narrative: "Edited kept work",
+        },
+      },
+      {
+        entry: {
+          matterId: SECOND_MATTER_ID,
+          durationMinutes: 30,
+          narrative: "Edited moved work",
+        },
+      },
+    ],
+  });
+});
+
+test("deferred draft becomes a proposal and undo restores the text edited while it was pending", async () => {
+  const boundary = installNativeBoundary();
+  const view = mountReview();
+  const request = await startDrafting(view, boundary.draftRequests);
+  const narrative = view.getByRole("textbox", {
+    name: messages.activity.entryNarrative,
+  });
+  fireEvent.change(narrative, { target: { value: "Typed while waiting" } });
+  await resolveDraft(request, review([draft("entry_1", "AI suggestion")]));
+
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Typed while waiting");
+  fireEvent.change(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+    { target: { value: "Edited before applying" } },
+  );
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiAccept }),
+  );
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "AI suggestion");
+  fireEvent.click(
+    view.getByRole("button", { name: messages.activity.aiUseOriginal }),
+  );
+  expect(
+    view.getByRole("textbox", { name: messages.activity.entryNarrative }),
+  ).toHaveProperty("value", "Edited before applying");
+});

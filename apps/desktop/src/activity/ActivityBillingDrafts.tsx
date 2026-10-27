@@ -52,11 +52,15 @@ import {
   summarizeStructure,
 } from "./billing-draft-logic";
 import type {
-  AcceptedStructure,
-  DraftEntryState,
   DraftStructure,
+  ResolvedStructureProposal,
   StructureSummary,
 } from "./billing-draft-logic";
+import type {
+  AcceptedReviewContent,
+  DraftEntryState,
+  ReviewContent,
+} from "./billing-review-state";
 
 type BillingDraftSettings =
   | { type: "loading" }
@@ -437,10 +441,9 @@ type EarlierEntry = DesktopBillingDraftReview["earlierEntries"][number];
 
 type EntryReviewProps = {
   state: DraftEntryState;
-  narrative: string;
-  structure: AcceptedStructure | null;
+  content: ReviewContent;
   /** Applying needs the proposal's targets resolved; null when it cannot apply. */
-  proposedStructure: AcceptedStructure | null;
+  proposedStructure: ResolvedStructureProposal | null;
   earlierEntries: ReadonlyMap<string, EarlierEntry>;
   editable: boolean;
   busy: boolean;
@@ -459,8 +462,7 @@ type EntryReviewProps = {
 /** What AI changed for one entry, and every way to take it back. */
 export const BillingDraftEntryReview = ({
   state,
-  narrative,
-  structure,
+  content,
   proposedStructure,
   earlierEntries,
   editable,
@@ -479,20 +481,71 @@ export const BillingDraftEntryReview = ({
   const t = useTranslations("activity");
   const tDisclosure = useTranslations("aiDisclosure");
   const { draft } = state.result;
+  const narrative =
+    content.type === "single"
+      ? content.narrative
+      : content.items.map((item) => item.narrative).join("\n");
+  const structure = content.type === "accepted" ? content : null;
+  if (state.using === "proposal") {
+    return (
+      <div className="mt-1 flex flex-col gap-2 px-2">
+        <AiLabel
+          label={t("aiDraftLabel")}
+          disclosure={tDisclosure("billingDrafts")}
+        />
+        <ProposalReview
+          current={narrative}
+          proposal={draft}
+          disabled={!editable || busy}
+          canAccept={content.type === "single"}
+          onAccept={onAcceptProposal}
+          onDismiss={onDismissProposal}
+        />
+        <StructureLine
+          proposal={null}
+          applicable={false}
+          applied={structure}
+          disabled={!editable || busy}
+          onApply={onApplyStructure}
+          onUndo={onUndoStructure}
+        />
+      </div>
+    );
+  }
   if (state.using === "original") {
     return (
-      <p className="text-muted-foreground mt-1 flex items-center gap-1 px-2 text-xs">
-        {t("aiUsingOriginal")} ·
-        <Button
-          size="xs"
-          variant="link"
-          className="h-auto px-0.5"
+      <div className="mt-1 flex flex-col gap-2 px-2">
+        <p className="text-muted-foreground flex items-center gap-1 text-xs">
+          {t("aiUsingOriginal")} ·
+          <Button
+            size="xs"
+            variant="link"
+            className="h-auto px-0.5"
+            disabled={!editable || busy}
+            onClick={onUseDraft}
+          >
+            {t("aiUseDraft")}
+          </Button>
+        </p>
+        {state.proposal ? (
+          <ProposalReview
+            current={narrative}
+            proposal={state.proposal.draft}
+            disabled={!editable || busy}
+            canAccept={content.type === "single"}
+            onAccept={onAcceptProposal}
+            onDismiss={onDismissProposal}
+          />
+        ) : null}
+        <StructureLine
+          proposal={null}
+          applicable={false}
+          applied={structure}
           disabled={!editable || busy}
-          onClick={onUseDraft}
-        >
-          {t("aiUseDraft")}
-        </Button>
-      </p>
+          onApply={onApplyStructure}
+          onUndo={onUndoStructure}
+        />
+      </div>
     );
   }
   const matched = draft.matchedEarlierEntryIds.flatMap((id) => {
@@ -522,7 +575,7 @@ export const BillingDraftEntryReview = ({
           size="xs"
           variant="link"
           className="h-auto gap-1 px-0.5"
-          disabled={!editable || busy}
+          disabled={!editable || busy || content.type !== "single"}
           onClick={onRefine}
         >
           <AiActionIcon aria-hidden="true" className="size-3" />
@@ -577,11 +630,12 @@ export const BillingDraftEntryReview = ({
           current={narrative}
           proposal={state.proposal.draft}
           disabled={!editable || busy}
+          canAccept={content.type === "single"}
           onAccept={onAcceptProposal}
           onDismiss={onDismissProposal}
         />
       ) : null}
-      {refining ? (
+      {refining && content.type === "single" ? (
         <BillingDraftSteerInput
           id={`billing-draft-refine-${draft.entryId}`}
           disabled={busy}
@@ -632,7 +686,7 @@ const ClassificationCodes = ({
 type StructureLineProps = {
   proposal: DraftStructure | null;
   applicable: boolean;
-  applied: AcceptedStructure | null;
+  applied: AcceptedReviewContent | null;
   disabled: boolean;
   onApply: () => void;
   onUndo: () => void;
@@ -754,6 +808,7 @@ type ProposalReviewProps = {
   current: string;
   proposal: DesktopBillingDraftResponse["drafts"][number];
   disabled: boolean;
+  canAccept: boolean;
   onAccept: () => void;
   onDismiss: () => void;
 };
@@ -764,6 +819,7 @@ const ProposalReview = ({
   current,
   proposal,
   disabled,
+  canAccept,
   onAccept,
   onDismiss,
 }: ProposalReviewProps) => {
@@ -791,7 +847,7 @@ const ProposalReview = ({
         </p>
       ) : null}
       <div className="flex gap-1.5">
-        <Button size="xs" disabled={disabled} onClick={onAccept}>
+        <Button size="xs" disabled={disabled || !canAccept} onClick={onAccept}>
           {t("aiAccept")}
         </Button>
         <Button

@@ -28,19 +28,16 @@ import {
 } from "./ActivityBillingDrafts";
 import type { BillingDraftSettingsControl } from "./ActivityBillingDrafts";
 import {
+  absorbedGroupIds,
   draftRequestEntries,
   draftsByGroup,
-  draftScalars,
   draftStructure,
   previousDraftResult,
   resolveStructure,
 } from "./billing-draft-logic";
-import type {
-  DraftableGroup,
-  DraftEntryState,
-  DraftResult,
-  EntryEdit,
-} from "./billing-draft-logic";
+import type { DraftableGroup, DraftResult } from "./billing-draft-logic";
+import { canAcceptStructure } from "./billing-review-state";
+import type { EntryEdit, ReviewAction } from "./billing-review-state";
 
 type DraftingStatus =
   { type: "idle" } | { type: "drafting"; groupIds: readonly string[] };
@@ -78,24 +75,28 @@ const draftStatus = ({
   return undrafted > DESKTOP_BILLING_DRAFT_LIMITS.entries ? "tooMany" : "draft";
 };
 
-/** The scalar outcome of a draft applied to an entry; structure stays a
- * separate, explicit acceptance. */
-const withDraft = (edit: EntryEdit, { draft }: DraftResult) => {
-  const scalars = draftScalars(draft);
-  return {
-    narrative: scalars.narrative,
-    classification: scalars.classification,
-    billable: scalars.billable ?? edit.billable,
-    structure: null,
-  };
+type DraftOffersOptions = {
+  groups: readonly DraftableGroup[];
+  sentEdits: ReadonlyMap<string, EntryEdit>;
+  review: DesktopBillingDraftReview;
 };
 
-const originalEdit = (state: DraftEntryState) => ({
-  narrative: state.original.narrative,
-  billable: state.original.billable,
-  classification: null,
-  structure: null,
-});
+const draftOffers = ({ groups, sentEdits, review }: DraftOffersOptions) => {
+  const sentGroupIds = groups.map(({ id }) => id);
+  const results = draftsByGroup({ groupIds: sentGroupIds, review });
+  return groups.map((group) => {
+    const initial =
+      sentEdits.get(group.id) ?? panic("Draft lost its starting revision");
+    const draft = results.get(group.id) ?? panic("Draft missing for group");
+    const result: DraftResult = { draft, sentGroupIds };
+    return {
+      groupId: group.id,
+      initial,
+      expectedRevision: initial.revision,
+      result,
+    };
+  });
+};
 
 type BillingDraftSessionOptions = {
   snapshot: ActivityDaySnapshot;
@@ -105,7 +106,7 @@ type BillingDraftSessionOptions = {
   matters: readonly DesktopTimeEntryMatterCandidate[];
   editable: boolean;
   editFor: (group: DraftableGroup) => EntryEdit;
-  update: (group: DraftableGroup, change: Partial<EntryEdit>) => void;
+  dispatch: (action: ReviewAction) => void;
   onError: (message: string | null) => void;
 };
 
@@ -122,13 +123,10 @@ export const useBillingDraftSession = ({
   matters,
   editable,
   editFor,
-  update,
+  dispatch,
   onError,
 }: BillingDraftSessionOptions) => {
   const t = useTranslations("activity");
-  const [drafts, setDrafts] = useState<ReadonlyMap<string, DraftEntryState>>(
-    new Map(),
-  );
   const [drafting, setDrafting] = useState<DraftingStatus>({ type: "idle" });
   const [consentPrompt, setConsentPrompt] = useState<ConsentPrompt>("closed");
   const [refining, setRefining] = useState<string | null>(null);
@@ -138,22 +136,32 @@ export const useBillingDraftSession = ({
   const [guidelines, setGuidelines] = useState<readonly CheckedGuideline[]>([]);
   const draftRequest = useRef(0);
   const busy = drafting.type === "drafting";
-  const undrafted = selected.filter((group) => !drafts.has(group.id));
-
-  const setDraftState = (groupId: string, state: DraftEntryState) =>
-    setDrafts((current) => new Map(current).set(groupId, state));
+  const drafts = new Map(
+    eligible.flatMap((group) => {
+      const draft = editFor(group).draft;
+      return draft === null ? [] : [[group.id, draft] as const];
+    }),
+  );
+  const absorbed = absorbedGroupIds(
+    eligible.map((group) => ({ group, content: editFor(group).content })),
+  );
+  const canDraft = (group: DraftableGroup) =>
+    editFor(group).content.type === "single" && !absorbed.has(group.id);
+  const undrafted = selected.filter(
+    (group) => canDraft(group) && !drafts.has(group.id),
+  );
 
   const applyReview = ({
     review,
     groups,
     steer,
+    sentEdits,
   }: {
     review: DesktopBillingDraftReview;
+    sentEdits: ReadonlyMap<string, EntryEdit>;
     groups: readonly DraftableGroup[];
     steer: string | null;
   }) => {
-    const sentGroupIds = groups.map(({ id }) => id);
-    const results = draftsByGroup({ groupIds: sentGroupIds, review });
     setEarlierEntries((current) => {
       const next = new Map(current);
       for (const entry of review.earlierEntries) {
@@ -168,38 +176,22 @@ export const useBillingDraftSession = ({
       }
       return [...next.values()];
     });
-    const next = new Map(drafts);
-    for (const group of groups) {
-      const draft = results.get(group.id) ?? panic("Draft missing for group");
-      const result: DraftResult = { draft, sentGroupIds };
-      const existing = drafts.get(group.id);
-      if (steer !== null && existing) {
-        next.set(group.id, { ...existing, proposal: result });
-        continue;
-      }
-      const edit = editFor(group);
-      next.set(group.id, {
-        original: existing?.original ?? {
-          narrative: edit.narrative,
-          billable: edit.billable,
-        },
-        result,
-        using: "draft",
-        proposal: null,
-      });
-      update(group, withDraft(edit, result));
-    }
-    setDrafts(next);
+    dispatch({
+      type: "offer-results",
+      mode: steer === null ? "initial" : "steer",
+      offers: draftOffers({ groups, sentEdits, review }),
+    });
     setRefining(null);
   };
 
   const requestDrafts = ({
-    groups,
+    groups: requestedGroups,
     steer,
   }: {
     groups: readonly DraftableGroup[];
     steer: string | null;
   }) => {
+    const groups = requestedGroups.filter(canDraft);
     if (groups.length === 0 || busy) {
       return;
     }
@@ -215,6 +207,9 @@ export const useBillingDraftSession = ({
             })),
           )
         : null;
+    const sentEdits = new Map(
+      groups.map((group) => [group.id, editFor(group)]),
+    );
     const request = ++draftRequest.current;
     onError(null);
     setDrafting({ type: "drafting", groupIds: groups.map(({ id }) => id) });
@@ -260,7 +255,7 @@ export const useBillingDraftSession = ({
         onError(t("aiDraftFailed"));
         return undefined;
       }
-      applyReview({ review: parsed.value, groups, steer });
+      applyReview({ review: parsed.value, groups, steer, sentEdits });
       return undefined;
     });
   };
@@ -301,7 +296,7 @@ export const useBillingDraftSession = ({
     }
     requestDrafts({
       groups: selected.filter(
-        (group) => drafts.get(group.id)?.using === "draft",
+        (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),
       ),
       steer,
     });
@@ -310,13 +305,7 @@ export const useBillingDraftSession = ({
   const undoAll = () => {
     draftRequest.current += 1;
     setDrafting({ type: "idle" });
-    for (const group of eligible) {
-      const state = drafts.get(group.id);
-      if (state) {
-        update(group, originalEdit(state));
-      }
-    }
-    setDrafts(new Map());
+    dispatch({ type: "undo-all" });
     setRefining(null);
     setGuidelines([]);
   };
@@ -329,18 +318,57 @@ export const useBillingDraftSession = ({
     if (!state) {
       return null;
     }
+    const edit = editFor(group);
+    const target = { groupId: group.id, initial: edit };
+    const structure = draftStructure(state.result.draft);
+    const proposedStructure = structure
+      ? resolveStructure({
+          structure,
+          groupIds: state.result.sentGroupIds,
+          candidates: matters,
+        })
+      : null;
+    const acceptance =
+      proposedStructure === null
+        ? null
+        : ({
+            type: "accept-structure",
+            ...target,
+            proposal: proposedStructure,
+            groups: eligible.map((entry) => ({
+              group: entry,
+              initial: editFor(entry),
+            })),
+          } as const satisfies ReviewAction);
+    const applicable =
+      acceptance !== null &&
+      canAcceptStructure(
+        new Map(eligible.map((entry) => [entry.id, editFor(entry)])),
+        acceptance,
+      );
     return (
-      <SessionEntryReview
+      <BillingDraftEntryReview
         state={state}
-        edit={editFor(group)}
-        matters={matters}
+        content={edit.content}
+        proposedStructure={applicable ? proposedStructure : null}
         earlierEntries={earlierEntries}
         editable={editable}
         busy={busy}
         refining={refining === group.id}
-        onState={(next) => setDraftState(group.id, next)}
-        onEdit={(change) => update(group, change)}
-        onRefining={(next) => setRefining(next ? group.id : null)}
+        onUseOriginal={() => dispatch({ type: "use-original", ...target })}
+        onUseDraft={() => dispatch({ type: "use-draft", ...target })}
+        onAcceptProposal={() => dispatch({ type: "apply-proposal", ...target })}
+        onDismissProposal={() =>
+          dispatch({ type: "dismiss-proposal", ...target })
+        }
+        onApplyStructure={() => {
+          if (acceptance !== null) {
+            dispatch(acceptance);
+          }
+        }}
+        onUndoStructure={() => dispatch({ type: "undo-structure", ...target })}
+        onRefine={() => setRefining(group.id)}
+        onCancelRefine={() => setRefining(null)}
         onSteer={(steer) => requestDrafts({ groups: [group], steer })}
       />
     );
@@ -350,7 +378,9 @@ export const useBillingDraftSession = ({
     snapshot.timeBillingEnabled && billingDrafts.settings.type === "ready";
   const steering =
     billingDrafts.settings.type === "ready" &&
-    [...drafts.values()].some(({ using }) => using === "draft");
+    eligible.some(
+      (group) => drafts.get(group.id)?.using === "draft" && canDraft(group),
+    );
   const preference =
     billingDrafts.settings.type === "ready"
       ? billingDrafts.settings.preference
@@ -391,102 +421,4 @@ export const useBillingDraftSession = ({
       />
     ),
   };
-};
-
-type SessionEntryReviewProps = {
-  state: DraftEntryState;
-  edit: EntryEdit;
-  matters: readonly DesktopTimeEntryMatterCandidate[];
-  earlierEntries: ReadonlyMap<string, EarlierEntry>;
-  editable: boolean;
-  busy: boolean;
-  refining: boolean;
-  onState: (state: DraftEntryState) => void;
-  onEdit: (change: Partial<EntryEdit>) => void;
-  onRefining: (refining: boolean) => void;
-  onSteer: (steer: string) => void;
-};
-
-/** One entry's draft and the actions that move between it, its original and
- * a pending proposal. */
-const SessionEntryReview = ({
-  state,
-  edit,
-  matters,
-  earlierEntries,
-  editable,
-  busy,
-  refining,
-  onState,
-  onEdit,
-  onRefining,
-  onSteer,
-}: SessionEntryReviewProps) => {
-  const structure = draftStructure(state.result.draft);
-  const proposedStructure = structure
-    ? resolveStructure({
-        structure,
-        groupIds: state.result.sentGroupIds,
-        candidates: matters,
-      })
-    : null;
-  return (
-    <BillingDraftEntryReview
-      state={state}
-      narrative={edit.narrative}
-      structure={edit.structure}
-      proposedStructure={proposedStructure}
-      earlierEntries={earlierEntries}
-      editable={editable}
-      busy={busy}
-      refining={refining}
-      onUseOriginal={() => {
-        onState({
-          original: state.original,
-          result: state.result,
-          using: "original",
-          proposal: null,
-        });
-        onEdit(originalEdit(state));
-      }}
-      onUseDraft={() => {
-        onState({
-          original: state.original,
-          result: state.result,
-          using: "draft",
-          proposal: state.proposal,
-        });
-        onEdit(withDraft(edit, state.result));
-      }}
-      onAcceptProposal={() => {
-        if (!state.proposal) {
-          return;
-        }
-        onState({
-          original: state.original,
-          result: state.proposal,
-          using: "draft",
-          proposal: null,
-        });
-        onEdit(withDraft(edit, state.proposal));
-      }}
-      onDismissProposal={() =>
-        onState({
-          original: state.original,
-          result: state.result,
-          using: state.using,
-          proposal: null,
-        })
-      }
-      onApplyStructure={() => {
-        if (proposedStructure) {
-          onEdit({ structure: proposedStructure });
-        }
-      }}
-      onUndoStructure={() => onEdit({ structure: null })}
-      onRefine={() => onRefining(true)}
-      onCancelRefine={() => onRefining(false)}
-      onSteer={onSteer}
-    />
-  );
 };

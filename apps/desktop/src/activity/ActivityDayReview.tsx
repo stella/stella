@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -43,9 +43,11 @@ import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { ActivityTimeline } from "./ActivityTimeline";
 import type { TimelineSegment } from "./ActivityTimeline";
 import { absorbedGroupIds, reviewItems } from "./billing-draft-logic";
-import type { EntryEdit, ReviewItem } from "./billing-draft-logic";
+import type { ReviewItem } from "./billing-draft-logic";
 import { useBillingDraftSession } from "./billing-draft-session";
 import type { DraftStatus, ReviewBarDrafts } from "./billing-draft-session";
+import { initialReviewEdit, reviewReducer } from "./billing-review-state";
+import type { EntryEdit, ReviewAction } from "./billing-review-state";
 import "./day-review.css";
 import { canAssign, matchDay } from "./day-review-logic";
 import type {
@@ -108,7 +110,10 @@ const canDiscardPending = (
 const useReviewEdits = () => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const [edits, setEdits] = useState<ReadonlyMap<string, EntryEdit>>(new Map());
+  const [edits, dispatch] = useReducer(
+    reviewReducer,
+    new Map<string, EntryEdit>(),
+  );
   const narrative = (group: DayReviewGroup) =>
     group.evidence.length
       ? t("narrativeEvidence", {
@@ -120,25 +125,16 @@ const useReviewEdits = () => {
             { type: "conjunction" },
           ),
         });
-  const initial = (group: DayReviewGroup): EntryEdit => ({
-    selected: true,
-    billable: true,
-    narrative: narrative(group),
-    classification: null,
-    structure: null,
-  });
+  const initial = (group: DayReviewGroup) =>
+    initialReviewEdit({
+      type: "single",
+      billable: true,
+      narrative: narrative(group),
+      classification: null,
+    });
   return {
-    editFor: (group: DayReviewGroup) =>
-      edits.get(group.matter?.id ?? "unmatched") ?? initial(group),
-    update: (group: DayReviewGroup, change: Partial<EntryEdit>) => {
-      const key = group.matter?.id ?? "unmatched";
-      setEdits((current) =>
-        new Map(current).set(key, {
-          ...(current.get(key) ?? initial(group)),
-          ...change,
-        }),
-      );
-    },
+    editFor: (group: DayReviewGroup) => edits.get(group.id) ?? initial(group),
+    dispatch,
   };
 };
 
@@ -263,7 +259,7 @@ export const ActivityDayReview = ({
     manualAssignments: snapshot.manualAssignments,
     draftedEntries: [...snapshot.draftedEntries, ...localDrafts],
   });
-  const { editFor, update } = useReviewEdits();
+  const { editFor, dispatch } = useReviewEdits();
   const editable = submission.type === "editing" || submission.type === "saved";
   const eligible = day.groups.filter(
     (
@@ -272,9 +268,14 @@ export const ActivityDayReview = ({
       group.matter !== null,
   );
   const selected = eligible.filter((group) => editFor(group).selected);
-  const rows = selected.map((group) => ({ group, ...editFor(group) }));
+  const rows = selected.map((group) => ({
+    group,
+    content: editFor(group).content,
+  }));
   const items = reviewItems(rows);
-  const absorbed = absorbedGroupIds(rows);
+  const absorbed = absorbedGroupIds(
+    eligible.map((group) => ({ group, content: editFor(group).content })),
+  );
   const selectionExceedsLimit = items.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
   const selectedTenths = selected.reduce(
     (sum, group) => sum + group.roundedTenths,
@@ -288,7 +289,7 @@ export const ActivityDayReview = ({
     matters,
     editable,
     editFor,
-    update,
+    dispatch,
     onError: setError,
   });
   const hours = (value: number) =>
@@ -455,7 +456,7 @@ export const ActivityDayReview = ({
       <ReviewEntries
         groups={day.groups}
         editFor={editFor}
-        update={update}
+        dispatch={dispatch}
         matters={matters}
         snapshot={snapshot}
         editable={editable}
@@ -805,10 +806,73 @@ export const ActivityMatterHeading = ({
   </>
 );
 
+type ReviewItemFieldsProps = {
+  item: ReviewItem;
+  structured: boolean;
+  editable: boolean;
+  onNarrative: (narrative: string) => void;
+  onBillable: (billable: boolean) => void;
+};
+
+const ReviewItemFields = ({
+  item,
+  structured,
+  editable,
+  onNarrative,
+  onBillable,
+}: ReviewItemFieldsProps) => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  return (
+    <div className="mt-2" id={`review-item-${item.key}`}>
+      {structured ? (
+        <p className="text-muted-foreground flex items-center gap-2 text-xs">
+          <MatterIcon matter={item.matter} className="size-3" />
+          <bdi>{item.matter.name}</bdi>
+          {t("hours", {
+            hours: format.number(item.durationMinutes / 60, {
+              maximumFractionDigits: 1,
+            }),
+          })}
+        </p>
+      ) : null}
+      <Textarea
+        className="hover:border-input focus-visible:border-ring min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"
+        rows={1}
+        aria-label={t("entryNarrative")}
+        aria-describedby={`review-item-${item.key}`}
+        value={item.narrative}
+        maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
+        disabled={!editable}
+        onChange={(event) => onNarrative(event.target.value)}
+      />
+      <Label className="text-muted-foreground gap-1.5 text-xs">
+        <Button
+          role="switch"
+          aria-label={t("entryBillable")}
+          aria-describedby={`review-item-${item.key}`}
+          aria-checked={item.billable}
+          disabled={!editable}
+          size="icon-xs"
+          variant="ghost"
+          className={`h-4 w-7 rounded-full border-0 ${item.billable ? "bg-primary" : "bg-input"}`}
+          onClick={() => onBillable(!item.billable)}
+        >
+          <span
+            aria-hidden="true"
+            className={`bg-primary-foreground absolute start-0.5 size-3 rounded-full transition-transform motion-reduce:transition-none ${item.billable ? "translate-x-2.5 rtl:-translate-x-2.5" : ""}`}
+          />
+        </Button>
+        {t("entryBillable")}
+      </Label>
+    </div>
+  );
+};
+
 const ReviewEntries = ({
   groups,
   editFor,
-  update,
+  dispatch,
   matters,
   snapshot,
   editable,
@@ -821,7 +885,7 @@ const ReviewEntries = ({
 }: {
   groups: readonly DayReviewGroup[];
   editFor: (group: DayReviewGroup) => EntryEdit;
-  update: (group: DayReviewGroup, change: Partial<EntryEdit>) => void;
+  dispatch: (action: ReviewAction) => void;
   matters: readonly DesktopTimeEntryMatterCandidate[];
   snapshot: ActivityDaySnapshot;
   editable: boolean;
@@ -934,7 +998,14 @@ const ReviewEntries = ({
                 aria-label={t("includeMatter", { matter: matter.name })}
                 checked={edit.selected}
                 disabled={!editable}
-                onCheckedChange={(value) => update(group, { selected: value })}
+                onCheckedChange={(selected) =>
+                  dispatch({
+                    type: "set-selected",
+                    groupId: group.id,
+                    initial: edit,
+                    selected,
+                  })
+                }
               />
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
@@ -970,18 +1041,34 @@ const ReviewEntries = ({
                   </p>
                 ) : (
                   <>
-                    <Textarea
-                      className="hover:border-input focus-visible:border-ring mt-2 min-h-9 resize-none border-transparent bg-transparent px-2 py-1.5 text-sm"
-                      rows={1}
-                      aria-label={t("entryNarrative")}
-                      aria-describedby={`review-matter-${matter.id}`}
-                      value={edit.narrative}
-                      maxLength={DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH}
-                      disabled={!editable}
-                      onChange={(event) =>
-                        update(group, { narrative: event.target.value })
-                      }
-                    />
+                    {reviewItems([
+                      { group: { ...group, matter }, content: edit.content },
+                    ]).map((item) => (
+                      <ReviewItemFields
+                        key={item.key}
+                        item={item}
+                        structured={edit.content.type === "accepted"}
+                        editable={editable}
+                        onNarrative={(narrative) =>
+                          dispatch({
+                            type: "set-narrative",
+                            groupId: group.id,
+                            initial: edit,
+                            itemKey: item.key,
+                            narrative,
+                          })
+                        }
+                        onBillable={(billable) =>
+                          dispatch({
+                            type: "set-billable",
+                            groupId: group.id,
+                            initial: edit,
+                            itemKey: item.key,
+                            billable,
+                          })
+                        }
+                      />
+                    ))}
                     {draftReview({ ...group, matter })}
                   </>
                 )}
@@ -993,25 +1080,6 @@ const ReviewEntries = ({
                     {t("roundedSixMinutes")}
                   </span>
                 </div>
-                <Label className="text-muted-foreground gap-1.5 text-xs">
-                  <Button
-                    role="switch"
-                    aria-label={t("entryBillable")}
-                    aria-describedby={`review-matter-${matter.id}`}
-                    aria-checked={edit.billable}
-                    disabled={!editable}
-                    size="icon-xs"
-                    variant="ghost"
-                    className={`h-4 w-7 rounded-full border-0 ${edit.billable ? "bg-primary" : "bg-input"}`}
-                    onClick={() => update(group, { billable: !edit.billable })}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`bg-primary-foreground absolute start-0.5 size-3 rounded-full transition-transform motion-reduce:transition-none ${edit.billable ? "translate-x-2.5 rtl:-translate-x-2.5" : ""}`}
-                    />
-                  </Button>
-                  {t("entryBillable")}
-                </Label>
               </div>
             </div>
           );
