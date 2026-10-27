@@ -1051,6 +1051,7 @@
       "human": "Humanas",
       "toggleState": "{label}: {state, select, on {ligado} other {desligado}}"
     },
+    "oldestDecisions": "Decisões mais antigas",
     "pagination": {
       "goToPage": "Ir para a página {page}",
       "label": "Páginas de resultados",
@@ -1112,8 +1113,7 @@
       "runEstimate": "{rows, plural, one {# decisão} other {# decisões}} × {columns, plural, one {# pergunta} other {# perguntas}} nesta página: {cells, plural, one {será gerada # resposta} other {serão geradas # respostas}}.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Perguntas salvas",
-      "title": "Tabelas de pesquisa",
-      "updated": "Última edição em {date}"
+      "title": "Tabelas de pesquisa"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1157,8 @@
     "showWholeHeadnote": "Mostrar a ementa completa",
     "sort": {
       "newest": "Mais recentes",
+      "oldest": "Mais antigas",
+      "oldestUnavailable": "Uma busca é ordenada por relevância ou das mais recentes para as mais antigas. Limpe a busca para ver primeiro as decisões mais antigas.",
       "relevance": "Mais relevantes"
     },
     "viewer": {
@@ -6661,10 +6663,12 @@
       "selectOperator": "Selecione o operador",
       "setPromptPlaceholder": "Defina um prompt para extrair as informações",
       "singleSelect": "Seleção única",
-      "sortAscending": "Classificar em ordem crescente",
       "sortAscendingDate": "Mais antigo primeiro",
-      "sortDescending": "Classificar em ordem decrescente",
+      "sortAscendingNumber": "Menor primeiro",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "O mais novo primeiro",
+      "sortDescendingNumber": "Maior primeiro",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Dividir em # opção} other {Dividir em # opções}}",
       "suggestWithAI": "Sugerir com IA",
       "text": "Texto",

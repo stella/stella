@@ -1051,6 +1051,7 @@
       "human": "بشرية",
       "toggleState": "{label}: {state, select, on {تشغيل} other {إيقاف}}"
     },
+    "oldestDecisions": "أقدم الأحكام",
     "pagination": {
       "goToPage": "الانتقال إلى الصفحة {page}",
       "label": "صفحات النتائج",
@@ -1112,8 +1113,7 @@
       "runEstimate": "{rows, plural, zero {لا أحكام} one {حكم واحد} two {حكمان} few {# أحكام} many {# حكمًا} other {# حكم}} × {columns, plural, zero {لا أسئلة} one {سؤال واحد} two {سؤالان} few {# أسئلة} many {# سؤالًا} other {# سؤال}} في هذه الصفحة: ستُنتَج {cells, plural, zero {لا إجابات} one {إجابة واحدة} two {إجابتان} few {# إجابات} many {# إجابة} other {# إجابة}}.",
       "runTitle": "الإجابة عن هذه الصفحة",
       "savedQuestions": "الأسئلة المحفوظة",
-      "title": "جداول البحث",
-      "updated": "آخر تعديل {date}"
+      "title": "جداول البحث"
     },
     "results": {
       "excerpt": {
@@ -1157,6 +1157,8 @@
     "showWholeHeadnote": "عرض خلاصة الحكم كاملة",
     "sort": {
       "newest": "الأحدث",
+      "oldest": "الأقدم",
+      "oldestUnavailable": "تُرتَّب نتائج البحث حسب الصلة أو الأحدث أولًا. امسح البحث لعرض أقدم الأحكام أولًا.",
       "relevance": "الأكثر صلة"
     },
     "viewer": {
@@ -6661,10 +6663,12 @@
       "selectOperator": "اختر المُعامِل",
       "setPromptPlaceholder": "اضبط موجِّهًا لاستخراج المعلومات",
       "singleSelect": "اختيار مفرد",
-      "sortAscending": "ترتيب تصاعدي",
       "sortAscendingDate": "الأقدم أولًا",
-      "sortDescending": "ترتيب تنازلي",
+      "sortAscendingNumber": "الأدنى أولًا",
+      "sortAscendingText": "من أ إلى ي",
       "sortDescendingDate": "الأحدث أولًا",
+      "sortDescendingNumber": "الأعلى أولًا",
+      "sortDescendingText": "من ي إلى أ",
       "splitOptions": "{count, plural, zero {التقسيم إلى خيارات} one {التقسيم إلى خيار واحد} two {التقسيم إلى خيارين} few {التقسيم إلى # خيارات} many {التقسيم إلى # خيارًا} other {التقسيم إلى # خيار}}",
       "suggestWithAI": "اقترح بالذكاء الاصطناعي",
       "text": "نص",
