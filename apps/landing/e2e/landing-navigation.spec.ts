@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import { PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS } from "./wait-budgets";
+
 // Class guard: landing islands must survive ClientRouter (view transition)
 // navigation round-trips. Astro swaps the whole document on soft navigation,
 // which re-runs island hydration, IntersectionObserver-gated loops, and the
@@ -77,7 +79,7 @@ const expectHealthyOpeningScene = async (page: Page) => {
   await expect
     .poll(async () => page.evaluate(readOpeningSceneHealth), {
       message: "opening scene reaches its healthy interactive state",
-      timeout: 20_000,
+      timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
     })
     .toEqual(HEALTHY);
 };
@@ -227,7 +229,7 @@ for (const viewport of CARD_FIT_VIEWPORTS) {
     await expect
       .poll(async () => page.evaluate(readCompanionCardFit, CARD_FIT_CHECKS), {
         message: "companion card content fits its card box",
-        timeout: 20_000,
+        timeout: PLAYWRIGHT_EXPECT_TIMEOUT_20_SECONDS_MS,
       })
       .toEqual([]);
   });

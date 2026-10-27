@@ -14,6 +14,7 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { expect, test } from "../helpers/test";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 
 const SECTION_COUNT = 6;
 const PARAGRAPHS_PER_SECTION = 3;
@@ -180,7 +181,7 @@ const openDecision = async (page: Page) => {
   }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
   await expect(
     page.locator('[data-slot="reader-document-column"]'),
-  ).toBeVisible({ timeout: 30_000 });
+  ).toBeVisible({ timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS });
 };
 
 /** The floating row that holds the heading trail and the zoom triad. */
