@@ -1,11 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
-import { definitelyFalse } from "./github-expression";
+import { definitelyFalse, evaluate } from "./github-expression";
 import {
   MAIN_ONLY_BUN_CACHE_SAVE,
   usesDefaultCacheScope,
@@ -1138,41 +1144,256 @@ test("npm and desktop consume the production receipt guard", () => {
   }
 });
 
-test("desktop reruns keep installers and the updater receipt already published", () => {
-  const workflow = Bun.YAML.parse(
+describe("desktop recovery", () => {
+  const workflow: unknown = Bun.YAML.parse(
     readFileSync(
       new URL("../.github/workflows/release-desktop.yml", import.meta.url),
       "utf-8",
     ),
   );
-  const decision = workflow.jobs.resolve.steps.find(
-    (step: { id?: string }) => step.id === "diff",
-  );
-  const work = mkdtempSync(path.join(tmpdir(), "stella-desktop-idempotence-"));
-  try {
-    const stub = path.join(work, "gh-retry.sh");
+  const jobs =
+    isRecord(workflow) && isRecord(workflow["jobs"]) ? workflow["jobs"] : {};
+  const job = (name: string) => {
+    const value = jobs[name];
+    expect(isRecord(value), name).toBe(true);
+    return isRecord(value) ? value : {};
+  };
+  const stepRun = (jobName: string, stepName: string) => {
+    const steps = job(jobName)["steps"];
+    const step = Array.isArray(steps)
+      ? steps.find(
+          (value: unknown) => isRecord(value) && value["name"] === stepName,
+        )
+      : undefined;
+    const run = isRecord(step) ? step["run"] : undefined;
+    expect(typeof run, `${jobName}/${stepName}`).toBe("string");
+    return typeof run === "string" ? run : "";
+  };
+  const current = "v1.2.3";
+  const previous = "v1.2.2";
+  const createFixture = (root: string) => {
+    const git = (...args: string[]) => {
+      const result = Bun.spawnSync(["git", ...args], { cwd: root });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+    };
+    git("init", "-q", "--initial-branch=main", "--template=");
+    git("config", "user.name", "Desktop recovery fixture");
+    git("config", "user.email", "desktop@example.test");
+    git("config", "commit.gpgsign", "false");
+    git("config", "tag.gpgsign", "false");
+    writeFileSync(path.join(root, "VERSION"), "1.2.2\n");
+    git("add", ".");
+    git("commit", "-qm", "previous desktop release");
+    git("tag", previous);
+    writeFileSync(path.join(root, "VERSION"), "1.2.3\n");
+    git("add", "VERSION");
+    git("commit", "-qm", "API release without desktop changes");
+    git("tag", current);
+    mkdirSync(path.join(root, "scripts"));
+    for (const source of [
+      "detect-desktop-release-changes.sh",
+      "release-channel.sh",
+      "promote-desktop-release.sh",
+      "check-desktop-release-policy.sh",
+    ]) {
+      writeFileSync(
+        path.join(root, "scripts", source),
+        readFileSync(new URL(source, import.meta.url), "utf-8"),
+      );
+    }
+    const bin = path.join(root, "bin");
+    mkdirSync(bin);
+    writeFileSync(path.join(root, "latest"), previous);
     writeFileSync(
-      stub,
-      "printf '%s\\n' latest.json Stella-macos-universal.dmg Stella-windows-x64-setup.exe\n",
+      path.join(root, "latest.json"),
+      JSON.stringify({ version: current.slice(1) }),
     );
-    const output = path.join(work, "output");
-    const result = Bun.spawnSync(["bash", "-c", decision.run], {
-      env: {
-        ...process.env,
-        CURRENT_TAG: "v1.2.3",
-        EVENT_NAME: "workflow_dispatch",
-        GH_RETRY_SCRIPT: stub,
-        GITHUB_OUTPUT: output,
-      },
-    });
-    expect(result.exitCode, result.stderr.toString()).toBe(0);
-    expect(readFileSync(output, "utf-8")).toBe(
-      "should_build=false\nalready_published=true\n",
+    writeFileSync(
+      path.join(root, "gh.sh"),
+      `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$TEST_ROOT/gh-calls"
+release_json() {
+  jq -nc --arg tag "$1" '{tag_name:$tag,draft:false,prerelease:false,assets:[{name:"Stella-macos-universal.dmg"},{name:"Stella-windows-x64-setup.exe"},{name:"latest.json"}]}'
+}
+case "$*" in
+  'release view '*) printf '%s\\n' latest.json Stella-macos-universal.dmg Stella-windows-x64-setup.exe ;;
+  'release download '*)
+    mkdir -p assets
+    for asset in Stella-macos-universal.dmg Stella-windows-x64-setup.exe latest.json; do printf fixture > "assets/$asset"; done
+    ;;
+  'release upload '*) printf '%s\\n' "$*" >> "$TEST_ROOT/uploads" ;;
+  'release edit '*)
+    if [[ "$FAIL_LATEST" == true ]]; then echo 'Latest publication failed after asset upload' >&2; exit 1; fi
+    printf '%s' "$CURRENT_TAG" > "$TEST_ROOT/latest"
+    ;;
+  'api repos/stella/stella/releases/tags/'*) release_json "$CURRENT_TAG" ;;
+  'api repos/stella/stella/releases/latest') release_json "$(cat "$TEST_ROOT/latest")" ;;
+  *) echo "Unexpected desktop request: $*" >&2; exit 1 ;;
+esac
+`,
     );
-    expect(workflow.jobs["carry-forward"].if).toContain(
-      "needs.resolve.outputs.already_published != 'true'",
+    writeFileSync(
+      path.join(bin, "curl"),
+      '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$TEST_ROOT/download-checks"\n',
+      { mode: 0o755 },
     );
-  } finally {
-    rmSync(work, { recursive: true, force: true });
-  }
+    writeFileSync(
+      path.join(bin, "aws"),
+      `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$TEST_ROOT/cdn-calls"
+if [[ "$FAIL_CDN" == true ]]; then echo 'Updater publication failed after asset upload' >&2; exit 1; fi
+if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
+`,
+      { mode: 0o755 },
+    );
+    const run = (script: string, env: Record<string, string> = {}) =>
+      Bun.spawnSync(["bash", "-e", "-o", "pipefail", "-c", script], {
+        cwd: root,
+        env: {
+          ...process.env,
+          CURRENT_TAG: current,
+          PREVIOUS_TAG: previous,
+          RELEASE_REF: current,
+          GH_REPO: "stella/stella",
+          GH_TOKEN: "fixture-token",
+          GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
+          GITHUB_OUTPUT: path.join(root, "output"),
+          BUCKET: "fixture-downloads",
+          DIST_ID: "fixture-distribution",
+          CHANNEL: "prod",
+          TEST_ROOT: root,
+          PATH: `${bin}:${process.env.PATH}`,
+          FAIL_LATEST: "false",
+          FAIL_CDN: "false",
+          ...env,
+        },
+      });
+    const read = (file: string) => readFileSync(path.join(root, file), "utf-8");
+    const decide = (event: string) => {
+      writeFileSync(path.join(root, "output"), "");
+      const result = run(
+        stepRun("resolve", "Decide whether desktop changed since previous tag"),
+        { EVENT_NAME: event },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return Object.fromEntries(
+        read("output")
+          .trim()
+          .split("\n")
+          .map((line) => line.split("=")),
+      );
+    };
+    return { run, read, decide };
+  };
+  const withFixture = (
+    check: (fixture: ReturnType<typeof createFixture>) => void,
+  ) => {
+    const root = mkdtempSync(path.join(tmpdir(), "stella-desktop-recovery-"));
+    try {
+      check(createFixture(root));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  };
+
+  test("a manual rerun repairs updater and Latest publication after installers already exist", () =>
+    withFixture((fixture) => {
+      const mirror = stepRun("manifest", "Mirror latest.json to downloads CDN");
+      const failed = fixture.run(mirror, { FAIL_CDN: "true" });
+      expect(failed.exitCode).toBe(1);
+      expect(failed.stderr.toString()).toContain(
+        "Updater publication failed after asset upload",
+      );
+      expect(fixture.read("latest")).toBe(previous);
+
+      const output = fixture.decide("workflow_dispatch");
+      expect(output["should_build"]).toBe("true");
+      expect(
+        evaluate(conditionOf(job("build")), {
+          values: {
+            "needs.resolve.outputs.should_build": output["should_build"],
+          },
+        }),
+      ).toBe(true);
+      const publicationValues = {
+        "needs.resolve.outputs.should_build": output["should_build"],
+        "needs.resolve.outputs.channel": "prod",
+        "needs.build.result": "success",
+        "needs.verify-production.result": "success",
+        "needs.manifest.result": "failure",
+      };
+      expect(
+        evaluate(conditionOf(job("manifest")), {
+          values: publicationValues,
+          status: { always: true },
+        }),
+      ).toBe(true);
+      expect(
+        evaluate(conditionOf(job("promote-latest")), {
+          status: { always: true },
+          values: publicationValues,
+        }),
+      ).toBe(false);
+      const mirrored = fixture.run(mirror);
+      expect(mirrored.exitCode, mirrored.stderr.toString()).toBe(0);
+      expect(JSON.parse(fixture.read("updater"))).toEqual({
+        version: current.slice(1),
+      });
+      expect(
+        evaluate(conditionOf(job("promote-latest")), {
+          status: { always: true },
+          values: { ...publicationValues, "needs.manifest.result": "success" },
+        }),
+      ).toBe(true);
+      const promoted = fixture.run(
+        stepRun("promote-latest", "Promote release to latest"),
+      );
+      expect(promoted.exitCode, promoted.stderr.toString()).toBe(0);
+      expect(fixture.read("latest")).toBe(current);
+      expect(fixture.read("download-checks")).toContain(
+        "releases/latest/download/Stella-macos-universal.dmg",
+      );
+      expect(fixture.read("download-checks")).toContain(
+        "releases/latest/download/Stella-windows-x64-setup.exe",
+      );
+    }));
+
+  test("a workflow rerun repairs Latest through carry-forward after asset publication succeeded", () =>
+    withFixture((fixture) => {
+      const promote = stepRun("carry-forward", "Promote release to latest");
+      const failed = fixture.run(promote, { FAIL_LATEST: "true" });
+      expect(failed.exitCode).toBe(1);
+      expect(failed.stderr.toString()).toContain(
+        "Latest publication failed after asset upload",
+      );
+      expect(fixture.read("latest")).toBe(previous);
+      const output = fixture.decide("workflow_run");
+      expect(output["should_build"]).toBe("false");
+      expect(output["previous_tag"]).toBe(previous);
+      expect(
+        evaluate(conditionOf(job("carry-forward")), {
+          values: {
+            "needs.resolve.outputs.should_build": output["should_build"],
+            "needs.resolve.outputs.channel": "prod",
+          },
+        }),
+      ).toBe(true);
+      const copied = fixture.run(
+        stepRun("carry-forward", "Copy previous stable desktop assets forward"),
+        { PREVIOUS_TAG: output["previous_tag"] },
+      );
+      expect(copied.exitCode, copied.stderr.toString()).toBe(0);
+      expect(fixture.read("uploads")).toContain(
+        `release upload ${current} assets/`,
+      );
+      expect(fixture.read("uploads")).toContain("--clobber");
+      const recovered = fixture.run(promote);
+      expect(recovered.exitCode, recovered.stderr.toString()).toBe(0);
+      expect(fixture.read("latest")).toBe(current);
+      expect(fixture.read("download-checks")).toContain(
+        "releases/latest/download/Stella-macos-universal.dmg",
+      );
+    }));
 });

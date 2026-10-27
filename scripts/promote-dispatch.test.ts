@@ -51,9 +51,9 @@ elif phase=='existing':
  if '--slurp' in args:payload=pages
  else:payload=pages[0]
 elif phase=='lookup':payload={'workflow_runs':[
- {'id':444,'created_at':'2026-01-01T00:00:00Z','display_title':'Promote v1.2.3 → staging'},
- {'id':555,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3-rc.1 → staging'},
- {'id':777,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3 → staging'}]}
+ {'id':444,'created_at':'2026-01-01T00:00:00Z','display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV']},
+ {'id':555,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3-rc.1 → '+os.environ['TARGET_ENV']},
+ {'id':777,'created_at':'2026-10-07T12:00:01Z','display_title':'Promote v1.2.3 → '+os.environ['TARGET_ENV']}]}
 elif phase=='poll':
  completed=attempt>= (3 if os.environ['FAILURE_PHASE']=='poll' else 2)
  payload={'status':'completed' if completed else 'in_progress','conclusion':'success' if completed else None,'html_url':'https://github.com/example/infra/actions/runs/777'}
@@ -84,16 +84,20 @@ else:
 type PromotionScenarioOptions = {
   failurePhase: "lookup" | "poll" | "none";
   failureKind: "transport" | "unknown";
+  targetEnvironment: "production" | "staging";
   priorRun?: "none" | "success" | "active" | "failed";
   priorRunPage?: 1 | 2;
-  servingProduction?: boolean;
+  expectedSha?: string;
+  deployedSha?: string;
 };
 const promotionScenario = async ({
   failurePhase,
   failureKind,
+  targetEnvironment,
   priorRun = "none",
   priorRunPage = 1,
-  servingProduction = false,
+  expectedSha = "",
+  deployedSha = "a".repeat(40),
 }: PromotionScenarioOptions) => {
   const action = v.parse(
     v.object({
@@ -114,7 +118,7 @@ const promotionScenario = async ({
       openssl: FAKE_OPENSSL,
       date: FAKE_DATE,
       sleep: FAKE_SLEEP,
-      curl: `#!/bin/sh\nprintf '{"status":"ok","commit":"${"a".repeat(40)}"}\\n'\n`,
+      curl: `#!/bin/sh\nprintf '{"status":"ok","commit":"${deployedSha}"}\\n'\n`,
     })) {
       const executable = path.join(directory, name);
       await writeFile(executable, source);
@@ -129,7 +133,7 @@ const promotionScenario = async ({
         FAILURE_PHASE: failurePhase,
         PRIOR_RUN: priorRun,
         PRIOR_RUN_PAGE: String(priorRunPage),
-        EXPECTED_SHA: servingProduction ? "a".repeat(40) : "",
+        EXPECTED_SHA: expectedSha,
         FAILURE_KIND: failureKind,
         GITHUB_ACTION_PATH: actionPath,
         APP_CLIENT_ID: "fixture-app",
@@ -137,7 +141,7 @@ const promotionScenario = async ({
         INFRA_REPO: "example/infra",
         WORKFLOW_FILE: "promote-release.yml",
         RELEASE_REF: "v1.2.3",
-        TARGET_ENV: servingProduction ? "production" : "staging",
+        TARGET_ENV: targetEnvironment,
         RUN_MIGRATIONS: "true",
         FRONTEND: "false",
         IMAGE_DIGEST: "",
@@ -161,7 +165,10 @@ const promotionScenario = async ({
       "token POST 1 ok",
     ]);
     expect(calls.filter((call) => call.startsWith("dispatch "))).toEqual(
-      priorRun === "success" || priorRun === "active" || servingProduction
+      targetEnvironment === "production" &&
+        (priorRun === "success" ||
+          priorRun === "active" ||
+          (expectedSha !== "" && expectedSha === deployedSha))
         ? []
         : ["dispatch POST 1 ok"],
     );
@@ -175,6 +182,7 @@ test("promotion watches the exact dispatched run through completion", async () =
   const result = await promotionScenario({
     failurePhase: "none",
     failureKind: "unknown",
+    targetEnvironment: "staging",
   });
   expect(result.exit).toBe(0);
   expect(result.stdout).toContain("Found dispatched run: 777");
@@ -193,6 +201,7 @@ test.each(["lookup", "poll"] as const)(
     const result = await promotionScenario({
       failurePhase,
       failureKind: "transport",
+      targetEnvironment: "staging",
     });
     expect(result.calls).toContain(`${failurePhase} GET 1 failed`);
     expect(result.exit).toBe(0);
@@ -215,6 +224,7 @@ test.each(["lookup", "poll"] as const)(
     const result = await promotionScenario({
       failurePhase,
       failureKind: "unknown",
+      targetEnvironment: "staging",
     });
     expect(result.exit).toBe(1);
     expect(
@@ -230,10 +240,11 @@ test.each(["lookup", "poll"] as const)(
 );
 
 for (const priorRun of ["success", "active", "failed"] as const) {
-  test(`promotion reuses a ${priorRun} receipt only when it can still succeed`, async () => {
+  test(`production retries ${priorRun} receipts only when they can still succeed`, async () => {
     const result = await promotionScenario({
       failurePhase: "none",
       failureKind: "unknown",
+      targetEnvironment: "production",
       priorRun,
     });
     expect(result.exit).toBe(0);
@@ -247,7 +258,9 @@ test("production already serving the exact API and web SHA never dispatches agai
   const result = await promotionScenario({
     failurePhase: "none",
     failureKind: "unknown",
-    servingProduction: true,
+    targetEnvironment: "production",
+    expectedSha: "a".repeat(40),
+    deployedSha: "a".repeat(40),
   });
   expect(result.exit).toBe(0);
   expect(
@@ -259,6 +272,7 @@ test("a successful promotion on the second page prevents another dispatch", asyn
   const result = await promotionScenario({
     failurePhase: "none",
     failureKind: "unknown",
+    targetEnvironment: "production",
     priorRun: "success",
     priorRunPage: 2,
   });
@@ -271,3 +285,27 @@ test("a successful promotion on the second page prevents another dispatch", asyn
     0,
   );
 });
+
+for (const priorRun of ["success", "active"] as const) {
+  test(`staging dispatches again after an old ${priorRun} receipt when a different SHA is deployed`, async () => {
+    const expectedSha = "a".repeat(40);
+    const deployedSha = "b".repeat(40);
+    expect(deployedSha).not.toBe(expectedSha);
+    const result = await promotionScenario({
+      failurePhase: "none",
+      failureKind: "unknown",
+      targetEnvironment: "staging",
+      priorRun,
+      expectedSha,
+      deployedSha,
+    });
+    expect(result.exit).toBe(0);
+    expect(
+      result.calls.filter((call) => call.startsWith("dispatch POST")),
+    ).toEqual(["dispatch POST 1 ok"]);
+    expect(
+      result.calls.filter((call) => call.startsWith("existing ")),
+    ).toHaveLength(0);
+    expect(result.stdout).toContain("Found dispatched run: 777");
+  });
+}

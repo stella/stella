@@ -69,7 +69,6 @@ jobs:
       release_sha: ${{ steps.ref.outputs.sha }}
       app_version: ${{ steps.ref.outputs.version }}
       should_build: ${{ steps.diff.outputs.should_build }}
-      already_published: ${{ steps.diff.outputs.already_published }}
       # Previous same-channel release the skip decision compared
       # against (empty when none). Consumed by carry-forward to copy
       # that release's desktop assets onto a skipped stable release.
@@ -214,15 +213,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          assets=$(bash "$GH_RETRY_SCRIPT" release view "$CURRENT_TAG" --json assets --jq '.assets[].name')
-          if grep -Fxq latest.json <<< "$assets" \
-            && grep -Eq '^Stella-macos-.*\.dmg$' <<< "$assets" \
-            && grep -Fxq Stella-windows-x64-setup.exe <<< "$assets"; then
-            echo "Desktop assets already published for $CURRENT_TAG."
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-            echo "already_published=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -699,7 +689,7 @@ jobs:
     # /releases/latest and their release objects aren't deep-linked, so
     # a skipped prerelease needs no carry-forward (today's behaviour).
     needs: resolve
-    if: ${{ needs.resolve.outputs.should_build == 'false' && needs.resolve.outputs.already_published != 'true' && needs.resolve.outputs.channel == 'prod' }}
+    if: ${{ needs.resolve.outputs.should_build == 'false' && needs.resolve.outputs.channel == 'prod' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:

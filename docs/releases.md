@@ -196,9 +196,9 @@ by the RC run.
    Stable npm publication checks out the exact RC-proved release SHA, builds
    and packs the CLI using the unchanged version-codegen and trusted-publishing
    workflow, then runs the plain-Node smoke and production compatibility canary
-   on that tarball. Package versions remain Changesets-owned. Desktop skips
-   installers and `latest.json` already attached to the release; GitHub Latest
-   advances only after the desktop assets are ready.
+   on that tarball. Package versions remain Changesets-owned. Desktop reruns
+   resume the build or carry-forward path and its publication steps. GitHub
+   Latest advances only after the desktop assets are ready.
 10. Squash-merge the release pull request through the ordinary queue once its
     checks pass. Its release-branch commit is not an ancestor of `main`; the
     squash merge does not retag, rebuild or refresh the release branch. Autofix
