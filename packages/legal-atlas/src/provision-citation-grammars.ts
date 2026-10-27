@@ -16,6 +16,7 @@
  */
 import { panic } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "@stll/api-contract/statute-gazette";
@@ -724,7 +725,7 @@ const profileAbbreviations = (
 };
 
 const slovakWorkEli = ({ number, year }: GazetteWork) =>
-  `https://www.slov-lex.sk/eli/sk/zz/${year}/${String(Number(number))}`;
+  `https://www.slov-lex.sk/eli/sk/zz/${year}/${String(parseIntegerToken(number, { sign: "unsigned" }).unwrap("Gazette numbers contain only bounded decimal digits"))}`;
 
 const slovakCollection = (printed: string | undefined) => {
   const key = printed?.replace(/\s+/gu, "").toLowerCase();
@@ -853,8 +854,12 @@ export const PROVISION_CITATION_GRAMMARS = {
       eli: slovakWorkEli,
       identifier: ({ number, year, collection }) =>
         formatWorkIdentifier({
-          number: Number(number),
-          year: Number(year),
+          number: parseIntegerToken(number, { sign: "unsigned" }).unwrap(
+            "Gazette numbers contain only bounded decimal digits",
+          ),
+          year: parseIntegerToken(year, { sign: "unsigned" }).unwrap(
+            "Gazette years contain four decimal digits",
+          ),
           collection: slovakCollection(collection),
         }),
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?<collection>${SK_PROFILE.collections
