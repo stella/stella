@@ -257,22 +257,23 @@ const baseContext = (userId: SafeId<"user">) => ({
   workspaceId: ids.wsA1,
 });
 
-const listFor = async (userId: SafeId<"user">) =>
+const listFor = async (userId: SafeId<"user">, date = DAY) =>
   await listTimeSuggestions.handler(
     asTestRaw<ListCtx>({
       ...baseContext(userId),
-      query: { date: DAY, timezoneId: TIMEZONE },
+      query: { date, timezoneId: TIMEZONE },
     }),
   );
 
 const decide = async (
   fingerprint: string,
   decision: DecisionCtx["body"]["decision"],
+  date = DAY,
 ) =>
   await createTimeSuggestionDecision.handler(
     asTestRaw<DecisionCtx>({
       ...baseContext(ids.userA1),
-      body: { fingerprint, date: DAY, timezoneId: TIMEZONE, decision },
+      body: { fingerprint, date, timezoneId: TIMEZONE, decision },
     }),
   );
 
@@ -729,5 +730,74 @@ describe("time entry suggestions integration", () => {
         .where(eq(timeEntrySuggestions.userId, ids.userA1)),
     );
     expect(visible.isOk() && visible.value).toEqual([]);
+  });
+  test("an accepted suggestion's tail past midnight covers the next day's first minutes", async () => {
+    const nextDay = Temporal.PlainDate.from(DAY).add({ days: 1 }).toString();
+    const lateId = createSafeId<"chatMessage">();
+    const laterId = createSafeId<"chatMessage">();
+    const nextDayId = createSafeId<"chatMessage">();
+    messageIds.push(lateId, laterId, nextDayId);
+    const message = (
+      id: SafeId<"chatMessage">,
+      createdAt: Date,
+      text: string,
+    ) => ({
+      id,
+      threadId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      role: "user" as const,
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text" as const, content: text }],
+      }),
+      createdAt,
+    });
+    // 23:50 to 23:57 plus the five-minute tail runs to 00:02 the next day.
+    await testDb
+      .insert(chatMessages)
+      .values([
+        message(lateId, at("23:50:00"), "late"),
+        message(laterId, at("23:57:00"), "later"),
+      ]);
+    try {
+      const listed = await listFor(ids.userA1);
+      if (!isListResponse(listed)) {
+        throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
+      }
+      const late = listed.items.find((item) =>
+        JSON.stringify(item.evidence).includes(laterId),
+      );
+      if (!late) {
+        throw new Error("expected the late suggestion");
+      }
+      expect(
+        await decide(late.fingerprint, {
+          type: "accept",
+          durationMinutes: late.durationMinutes,
+          narrative: "late work",
+        }),
+      ).toMatchObject({ status: "accepted" });
+
+      await testDb
+        .insert(chatMessages)
+        .values(message(nextDayId, new Date(`${nextDay}T00:01:00Z`), "early"));
+      const nextListed = await listFor(ids.userA1, nextDay);
+      if (!isListResponse(nextListed)) {
+        throw new Error(
+          `unexpected list response: ${JSON.stringify(nextListed)}`,
+        );
+      }
+      // 00:01 to 00:06, of which the minute to 00:02 was billed yesterday.
+      expect(
+        nextListed.items.find((item) =>
+          JSON.stringify(item.evidence).includes(nextDayId),
+        ),
+      ).toMatchObject({ engagedMinutes: 4 });
+    } finally {
+      // The decision and its entry go with the suite's own cleanup.
+      await testDb
+        .delete(chatMessages)
+        .where(inArray(chatMessages.id, [lateId, laterId, nextDayId]));
+    }
   });
 });

@@ -226,6 +226,11 @@ type SuggestionReadScope = {
   userId: SafeId<"user">;
   startDate: string;
   endDate: string;
+  /**
+   * First booked day whose decisions can matter: the day before the range,
+   * since an accepted suggestion's tail can run past midnight into it.
+   */
+  decidedFromDate: string;
   /** Range bounds as ISO instants of whole calendar days. */
   rangeStart: string;
   rangeEnd: string;
@@ -423,7 +428,7 @@ const readDecidedEvidence = async (
       and(
         inArray(timeEntrySuggestions.workspaceId, scope.workspaceIds),
         eq(timeEntrySuggestions.userId, scope.userId),
-        gte(timeEntrySuggestions.dateWorked, scope.startDate),
+        gte(timeEntrySuggestions.dateWorked, scope.decidedFromDate),
         lte(timeEntrySuggestions.dateWorked, scope.endDate),
       ),
     );
@@ -698,12 +703,22 @@ const groupByMatterAndDay = ({
       scopeFor(row.workspaceId, date).recorded.push(row);
     }
   }
-  // Only a day that has new activity needs its accepted windows.
+  // An accepted window covers every day its clock overlaps, so a tail past
+  // midnight also covers the next day; only a day with new activity needs it.
   for (const row of decidedRows) {
     const window = acceptedWindow(row);
-    const scope = scopes.get(`${row.dateWorked}\n${row.workspaceId}`);
-    if (window !== null && scope !== undefined) {
-      scope.accepted.push(window);
+    if (window === null) {
+      continue;
+    }
+    for (const { date, start, end } of dayBounds) {
+      const scope = scopes.get(`${date}\n${row.workspaceId}`);
+      if (
+        scope !== undefined &&
+        window.startedAt < end &&
+        window.endedAt > start
+      ) {
+        scope.accepted.push(window);
+      }
     }
   }
   return [...scopes.values()];
@@ -784,6 +799,9 @@ export const loadTimeSuggestionRange = async function* ({
     userId,
     startDate,
     endDate,
+    decidedFromDate: Temporal.PlainDate.from(startDate)
+      .subtract({ days: 1 })
+      .toString(),
     // Range bounds are whole seconds computed from the calendar, never read
     // back from a timestamp column, so the cast keeps the comparison at
     // column precision without a cursor codec.
