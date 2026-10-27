@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  beforeEach,
   describe,
   expect,
   mock,
@@ -218,6 +219,10 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+beforeEach(() => {
+  streamChatStub.mockClear();
+});
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;

@@ -17,6 +17,11 @@ import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+  loadOrgAIConfigMock.mockClear();
+});
+
 /**
  * Registry-driven canary corpus over the MCP anonymized surface (plan 049,
  * Phase 0). This is the structural guard for the bug class both shipped

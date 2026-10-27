@@ -1043,6 +1043,12 @@
       "matchedIn": "تطابق باللغة {language}"
     },
     "loadingMore": "جارٍ تحميل المزيد...",
+    "marginFilter": {
+      "label": "تصفية الأحكام المستشهد بها",
+      "paragraph": "{count, plural, =0 {لا توجد أحكام مستشهد بها في ¶{paragraph}} zero {لا توجد أحكام مستشهد بها في ¶{paragraph}} one {حكم واحد مستشهد به في ¶{paragraph}} two {حكمان مستشهد بهما في ¶{paragraph}} few {# أحكام مستشهد بها في ¶{paragraph}} many {# حكمًا مستشهدًا به في ¶{paragraph}} other {# حكم مستشهد به في ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {لا توجد أحكام مستشهد بها في التحديد} zero {لا توجد أحكام مستشهد بها في التحديد} one {حكم واحد مستشهد به في التحديد} two {حكمان مستشهد بهما في التحديد} few {# أحكام مستشهد بها في التحديد} many {# حكمًا مستشهدًا به في التحديد} other {# حكم مستشهد به في التحديد}}",
+      "unnumberedParagraph": "{count, plural, =0 {لا توجد أحكام مستشهد بها في هذه الفقرة} zero {لا توجد أحكام مستشهد بها في هذه الفقرة} one {حكم واحد مستشهد به في هذه الفقرة} two {حكمان مستشهد بهما في هذه الفقرة} few {# أحكام مستشهد بها في هذه الفقرة} many {# حكمًا مستشهدًا به في هذه الفقرة} other {# حكم مستشهد به في هذه الفقرة}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, zero {لم يكن أي حكم محفوظًا هنا} one {حكم واحد كان محفوظًا هنا بالفعل} two {حكمان كانا محفوظين هنا بالفعل} few {# أحكام كانت محفوظة هنا بالفعل} many {# حكمًا كان محفوظًا هنا بالفعل} other {# حكم كان محفوظًا هنا بالفعل}}",
       "empty": "لا يوجد اجتهاد قضائي محفوظ في هذا الملف بعد.",
@@ -4316,7 +4322,12 @@
       "styleHighlight": "تمييز",
       "styleSquiggly": "خط متموج",
       "styleStrikethrough": "يتوسطه خط",
-      "visibilityShared": "مشارك مع المؤسسة"
+      "visibilityShared": "مشارك مع المؤسسة",
+      "visibilitySharedWithMatter": "مشارك مع الملف القانوني"
+    },
+    "contents": {
+      "aiSection": "{section} (قسم مُنشأ بالذكاء الاصطناعي)",
+      "headingWithAiSection": "{heading} (قسم مُنشأ بالذكاء الاصطناعي: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "اقتباس كتلي مع الإحالة",
@@ -6480,6 +6491,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "تهيئة الصفحات للوضع الداكن",
+      "annotations": {
+        "commentedBy": "تعليق من {name}",
+        "detachedHeading": "ليست في هذا الإصدار",
+        "detachedOtherVersion": "أُنشئ في الإصدار {version}؛ وقد تغيّر نص الصفحة منذ ذلك الحين.",
+        "detachedTextChanged": "لم تعد هذه الكلمات في الصفحة {page}.",
+        "empty": "حدّد كلمات في المستند، ثم اختر تعليق.",
+        "highlightedBy": "تمييز بواسطة {name}",
+        "refusedNoText": "لا يوجد في هذه الصفحة نص يمكن تمييزه. شغّل التعرّف على النص في المستند أولًا.",
+        "refusedNotFound": "لم يُعثر على هذه الكلمات في نص الصفحة. حدّدها مرة أخرى.",
+        "refusedTooLong": "هذا المقطع أطول من أن يُميَّز. حدّد مقطعًا أقصر."
+      },
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل المستند",
       "evidence": "التبرير",

@@ -1043,6 +1043,12 @@
       "matchedIn": "Találat {language} nyelven"
     },
     "loadingMore": "Betöltés folyamatban...",
+    "marginFilter": {
+      "label": "Hivatkozott rendelkezések szűrője",
+      "paragraph": "{count, plural, =0 {Nincs hivatkozott rendelkezés itt: ¶{paragraph}} one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {A kijelölésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
+      "unnumberedParagraph": "{count, plural, =0 {Ebben a bekezdésben nincs hivatkozott rendelkezés} one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# határozat már el volt mentve ide} other {# határozat már el volt mentve ide}}",
       "empty": "Ebben az ügyben még nincs mentett ítélkezési gyakorlat.",
@@ -4316,7 +4322,12 @@
       "styleHighlight": "Kiemelés",
       "styleSquiggly": "Hullámos vonal",
       "styleStrikethrough": "Áthúzás",
-      "visibilityShared": "Megosztva a szervezettel"
+      "visibilityShared": "Megosztva a szervezettel",
+      "visibilitySharedWithMatter": "Megosztva az üggyel"
+    },
+    "contents": {
+      "aiSection": "{section} (AI által generált szakasz)",
+      "headingWithAiSection": "{heading} (AI által generált szakasz: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokkidézet hivatkozással",
@@ -6480,6 +6491,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Oldalak igazítása sötét módhoz",
+      "annotations": {
+        "commentedBy": "Megjegyzés: {name}",
+        "detachedHeading": "Nem ebben a verzióban",
+        "detachedOtherVersion": "A(z) {version}. verzióban készült; az oldal szövege azóta megváltozott.",
+        "detachedTextChanged": "Ezek a szavak már nincsenek a(z) {page}. oldalon.",
+        "empty": "Jelöljön ki szavakat a dokumentumban, majd válassza a Megjegyzés lehetőséget.",
+        "highlightedBy": "Kiemelte: {name}",
+        "refusedNoText": "Ezen az oldalon nincs megjelölhető szöveg. Először futtassa a szövegfelismerést a dokumentumon.",
+        "refusedNotFound": "Ezek a szavak nem találhatók az oldal szövegében. Jelölje ki őket újra.",
+        "refusedTooLong": "Ez a szakasz túl hosszú a megjelöléshez. Válasszon rövidebbet."
+      },
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Dokumentum részletei",
       "evidence": "Bizonyíték",

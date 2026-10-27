@@ -300,6 +300,7 @@ export const ReaderAnswerCard = ({
                 </Button>
                 <AnnotationVisibilityToggle
                   shareLabel={t("readerAnswers.share")}
+                  targetType="decision"
                   visibility={answer.visibility}
                   disabled={busy}
                   onToggle={() =>

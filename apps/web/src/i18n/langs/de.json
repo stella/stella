@@ -1043,6 +1043,12 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "marginFilter": {
+      "label": "Filter für zitierte Vorschriften",
+      "paragraph": "{count, plural, =0 {Keine Vorschriften in ¶{paragraph} zitiert} one {# Vorschrift in ¶{paragraph} zitiert} other {# Vorschriften in ¶{paragraph} zitiert}}",
+      "selection": "{count, plural, =0 {Keine Vorschriften in der Auswahl zitiert} one {# Vorschrift in der Auswahl zitiert} other {# Vorschriften in der Auswahl zitiert}}",
+      "unnumberedParagraph": "{count, plural, =0 {Keine Vorschriften in diesem Absatz zitiert} one {# Vorschrift in diesem Absatz zitiert} other {# Vorschriften in diesem Absatz zitiert}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# Entscheidung war hier bereits gespeichert} other {# Entscheidungen waren hier bereits gespeichert}}",
       "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",
@@ -4316,7 +4322,12 @@
       "styleHighlight": "Markierung",
       "styleSquiggly": "Wellenlinie",
       "styleStrikethrough": "Durchstreichung",
-      "visibilityShared": "Mit der Organisation geteilt"
+      "visibilityShared": "Mit der Organisation geteilt",
+      "visibilitySharedWithMatter": "Mit der Akte geteilt"
+    },
+    "contents": {
+      "aiSection": "{section} (KI-generierter Abschnitt)",
+      "headingWithAiSection": "{heading} (KI-generierter Abschnitt: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blockzitat mit Fundstelle",
@@ -6480,6 +6491,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Seiten für Dunkelmodus anpassen",
+      "annotations": {
+        "commentedBy": "Kommentar von {name}",
+        "detachedHeading": "Nicht in dieser Version",
+        "detachedOtherVersion": "In Version {version} erstellt; die Seite lautet inzwischen anders.",
+        "detachedTextChanged": "Diese Wörter stehen nicht mehr auf Seite {page}.",
+        "empty": "Wörter im Dokument markieren und dann „Kommentar“ wählen.",
+        "highlightedBy": "Hervorgehoben von {name}",
+        "refusedNoText": "Diese Seite enthält keinen Text zum Markieren. Führen Sie zuerst die Texterkennung für das Dokument aus.",
+        "refusedNotFound": "Diese Wörter wurden im Text der Seite nicht gefunden. Markieren Sie sie erneut.",
+        "refusedTooLong": "Diese Passage ist zu lang zum Markieren. Wählen Sie eine kürzere."
+      },
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Dokumentdetails",
       "evidence": "Beweismittel",

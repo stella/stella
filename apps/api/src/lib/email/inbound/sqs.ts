@@ -7,12 +7,13 @@ import {
   sanitizeErrorAttributesForOutput,
 } from "@stll/errors";
 
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import type { receiveAndDeleteSesInboundMail } from "@/api/lib/email/inbound/ses";
 import {
   drainSnsQueue,
   parseSnsQueueBody,
   type SnsQueueDelivery,
-  type SnsQueueDisposition,
+  type SnsQueueHandled,
 } from "@/api/lib/email/sns-queue-drain";
 import type { logger as appLogger } from "@/api/lib/observability/logger";
 
@@ -20,6 +21,12 @@ import type { logger as appLogger } from "@/api/lib/observability/logger";
 // read, authentication and persistence budgets. The lease must outlast the
 // batch so a later run cannot take a message that is still being filed.
 const VISIBILITY_TIMEOUT_SECONDS = 600;
+
+/**
+ * Recipient filings one run may spend; the continuation drains the rest. A
+ * message names at most INBOUND_MAIL_LIMITS.recipients recipients.
+ */
+export const RECIPIENT_FILINGS_PER_RUN = 500;
 
 // SES publishes this once when a receipt rule's topic is configured.
 const SES_SETUP_NOTIFICATION = "AMAZON_SES_SETUP_NOTIFICATION";
@@ -161,7 +168,7 @@ export const drainInboundMailQueue = async ({
     body,
     deliveryId,
     receiveCount,
-  }: SnsQueueDelivery): Promise<SnsQueueDisposition> => {
+  }: SnsQueueDelivery): Promise<SnsQueueHandled> => {
     const parsed = parseInboundQueueMessage({ body, topicArn });
     if (parsed.isErr()) {
       counts.poison += 1;
@@ -171,7 +178,7 @@ export const drainInboundMailQueue = async ({
         "error.reason": parsed.error.reason,
       });
       logger.error("inbound_mail.queue.poison", fields);
-      return "keep";
+      return { disposition: "keep", work: 0 };
     }
     const notification = parsed.value;
     switch (notification.type) {
@@ -180,7 +187,7 @@ export const drainInboundMailQueue = async ({
         logger.info("inbound_mail.queue.setup_notification", {
           "queue.delivery_id": deliveryId,
         });
-        return "acknowledge";
+        return { disposition: "acknowledge", work: 0 };
       case "received":
         break;
       default:
@@ -197,7 +204,8 @@ export const drainInboundMailQueue = async ({
         "error.reason": outcome.error.reason,
       });
       logger.warn("inbound_mail.queue.retry", fields);
-      return "keep";
+      // A failed receive may have filed some recipients before it stopped.
+      return { disposition: "keep", work: INBOUND_MAIL_LIMITS.recipients };
     }
     // Outcomes are terminal: recipient filing/drop, or a prior raw deletion.
     for (const delivery of outcome.value) {
@@ -226,7 +234,7 @@ export const drainInboundMailQueue = async ({
         }),
       });
     }
-    return "acknowledge";
+    return { disposition: "acknowledge", work: outcome.value.length };
   };
 
   const drained = await drainSnsQueue({
@@ -234,6 +242,7 @@ export const drainInboundMailQueue = async ({
     queueUrl,
     visibilityTimeoutSeconds: VISIBILITY_TIMEOUT_SECONDS,
     handle,
+    workBudget: RECIPIENT_FILINGS_PER_RUN,
     signal,
     logger,
     logPrefix: "inbound_mail.queue",

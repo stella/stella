@@ -9,6 +9,7 @@ import { formatDecisionParagraphRange } from "@stll/api-contract/decision-paragr
 import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
+import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text";
 import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
@@ -30,6 +31,7 @@ import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
+import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
@@ -71,7 +73,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -79,6 +81,7 @@ import {
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
+import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
@@ -86,11 +89,15 @@ import { decisionParagraphLanding } from "@/features/case-law/components/case-vi
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
-  READER_ASIDE_RESIZE_SLOT,
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
+import {
+  MarginCitationFilterBar,
+  useMarginCitationFilter,
+} from "@/features/case-law/components/case-viewer/margin-citation-filter";
 import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference.logic";
+import { READER_ASIDE_RESIZE_SLOT } from "@/features/case-law/components/case-viewer/reader-aside-slots";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -176,7 +183,7 @@ type DecisionWorkspaceBaseProps = {
  * thing this component can decide.
  */
 type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "gated";
+  aiMode: typeof DECISION_AI_MODE.gated;
   /**
    * Opens the account gate. Absent while a member's workspace loads: the
    * column then names the layer without offering a run nobody owns yet.
@@ -185,7 +192,7 @@ type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "enabled";
+  aiMode: typeof DECISION_AI_MODE.enabled;
   ensureAIAvailable: () => Promise<boolean>;
 };
 
@@ -364,6 +371,20 @@ const decisionAnalysisView = (
 
   return { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis };
 };
+
+/** The cited-provision cards as margin notes, when the margin shows them. */
+const provisionMarginItems = (
+  shown: boolean,
+  cards: readonly DecisionProvisionCard[],
+): ProvisionMarginItem[] =>
+  shown
+    ? cards.map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
+        citations,
+        id: `provision:${id}`,
+        kind: "provision",
+        startAnchorId,
+      }))
+    : [];
 
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { decision, decisionId, initialAnchorId, landingSessionId } = props;
@@ -663,8 +684,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
     decisionAnalysisView(analysisState);
 
-  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
-    completeAnalysis?.tree ?? null,
+  // Contents places the sections as they stream in, beside the document's
+  // own headings; with AI notes filtered out it is the headings alone.
+  const analysisContents = useAnalysisReaderOutline(
+    showAiNotes && hasAnalysis ? analysisTree : null,
   );
 
   // The passage the reader was sent to, marked for as long as they are on it.
@@ -690,6 +713,19 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
     sessionId: landingSessionId,
+  });
+
+  const marginBlocks = visibleDecisionBlocks(ast, decision.caseNumberType);
+  const showsMarginProvisions =
+    provisions.expandProvisions && answerPlacement === "gutter";
+  const marginCitations = useMarginCitationFilter({
+    blocks: marginBlocks,
+    cards: prepareDecisionProvisionCards({
+      blocks: marginBlocks,
+      provisionAnchors,
+    }),
+    landingKey: landingRoute,
+    landingParagraphId: resolvedLandingAnchorId,
   });
 
   const jumpToAnchor = (anchorId: string, endAnchorId = anchorId) => {
@@ -838,17 +874,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const visibleMarginItems = [
     ...(answerPlacement === "gutter" ? answerNotes : []),
     ...(hasAnalysis && showAiNotes ? marginItems : []),
-    ...(provisions.expandProvisions && answerPlacement === "gutter"
-      ? prepareDecisionProvisionCards({
-          blocks: visibleDecisionBlocks(ast, decision.caseNumberType),
-          provisionAnchors,
-        }).map(({ citations, id, startAnchorId }): ProvisionMarginItem => ({
-          citations,
-          id: `provision:${id}`,
-          kind: "provision",
-          startAnchorId,
-        }))
-      : []),
+    ...provisionMarginItems(
+      showsMarginProvisions,
+      marginCitations.visibleCards,
+    ),
     ...exampleMarginItems,
     ...annotations.notes,
   ];
@@ -868,7 +897,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   }[];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    // A member's page shows the gated reader while the authenticated one
+    // loads, then replaces it; the mode names which reader is on screen.
+    <div
+      className="flex h-full flex-col overflow-hidden"
+      data-ai-mode={props.aiMode}
+    >
       {/* The margin's panel holds the toggle. Below `lg` neither is drawn
           and the provisions open under their paragraphs, so the header holds
           it, as the inspector's pane does. */}
@@ -881,17 +915,22 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
+      {/* At `lg` the notes column stands at the text's inline start, so the
+          layout's margin is that column's width and the controls bar and the
+          docked composer start past it; below `lg` the grid is one column
+          and the margin is zero. */}
       <div
         className={cn(
           LEGAL_READER_LAYOUT_CLASS_NAME,
-          "relative min-h-0 flex-1",
+          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
         )}
+        style={{ "--reader-aside-width": `${panelWidth}px` }}
       >
         <LegalReaderControls
           textScale={textScale}
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
-          fallbackBreadcrumb={fallbackBreadcrumb}
+          analysis={analysisContents}
           viewport={viewportElement}
           key={decisionId}
         />
@@ -917,22 +956,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             pressed={provisions.expandProvisions}
           />
         </div>
-        {/* The text column is the grid's inline-end column at every width, so
-            the bar's corner of this box is the text's corner, as in the
-            inspector's reader. */}
-
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        {/* The composer centres on the text column, not on the pane: at `lg`
-            the analysis column stands beside the text, so the docked
-            composer's start inset is that column's width; below `lg` the
-            grid is one column and the inset is zero. */}
-        <div
-          className="h-full [--docked-composer-inset-start:0px] lg:[--docked-composer-inset-start:var(--reader-aside-width)]"
-          style={{ "--reader-aside-width": `${panelWidth}px` }}
-        >
+        {/* The composer centres on the text column, not on the pane. */}
+        <div className="h-full [--docked-composer-inset-start:var(--reader-margin-width)]">
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
             aiMode={props.aiMode}
@@ -1007,7 +1036,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
+                  gridTemplateColumns:
+                    "var(--reader-aside-width) minmax(0, 1fr)",
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
@@ -1071,6 +1101,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                     are measured against the space the layers above them leave
                     free instead of against the whole column. */}
                   <div className="relative flex-1">
+                    {showsMarginProvisions && (
+                      <MarginCitationFilterBar
+                        count={marginCitations.visibleCards.length}
+                        filter={marginCitations.filter}
+                        onShowAll={marginCitations.showAll}
+                        paragraphNumber={marginCitations.paragraphNumber}
+                      />
+                    )}
                     {visibleMarginItems.length > 0 && (
                       <MarginNotes
                         items={visibleMarginItems}
@@ -1098,8 +1136,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                         return;
                       }
 
+                      // The handle is on the column's inline end, which is
+                      // its left edge in a right-to-left layout.
+                      const bounds = aside.getBoundingClientRect();
                       const newWidth =
-                        event.clientX - aside.getBoundingClientRect().left;
+                        getComputedStyle(aside).direction === "rtl"
+                          ? bounds.right - event.clientX
+                          : event.clientX - bounds.left;
                       setPanelWidth(Math.min(400, Math.max(120, newWidth)));
                     }}
                     onPointerUp={() => {
@@ -1114,10 +1157,14 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   </div>
                 </aside>
 
+                {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- a click in a paragraph focuses it for the margin; the keyboard path is the paragraph's permalink, whose Enter click bubbles here */}
                 <main
                   className={cn(
                     "reader-paper min-w-0 pb-8",
                     LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME,
+                  )}
+                  onClick={containedEventHandler((event) =>
+                    marginCitations.focusParagraphAt(event.target),
                   )}
                   ref={attachContent}
                   data-slot="reader-document-column"
@@ -1198,6 +1245,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               ? t("readerAnswers.selectionError")
               : undefined
           }
+          onSelectedSpansChange={marginCitations.selectSpans}
           scrollContainerRef={mainRef}
           target={annotationTarget}
         />
