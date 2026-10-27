@@ -61,6 +61,18 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:read",
     handler: "apps/api/src/handlers/entities/get.ts",
   },
+  "GET /v1/chat/threads": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/threads/list.ts",
+  },
+  "GET /v1/chat/threads/:threadId/messages": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/messages/list.ts",
+  },
+  "GET /v1/chat/threads/:threadId/messages/older": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/chat/older-messages/list.ts",
+  },
 } as const satisfies Record<
   string,
   {

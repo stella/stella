@@ -833,7 +833,9 @@
     "suggestions": {
       "actionCount": "{count, plural, zero {# darbību} one {# darbība} other {# darbības}}",
       "activeVsLogged": "Aktivitāte: {active} · Reģistrēts: {logged}",
+      "alreadyCovered": "Jau ietverts reģistrētajā laikā",
       "chatEvidence": "{count, plural, zero {# ziņojumu} one {# ziņojums} other {# ziņojumi}} sarunā „{title}”",
+      "engagedTime": "{duration} aktīvā laika",
       "keyboardHint": "Enter pieņem, E ļauj rediģēt pirms pieņemšanas, Delete noraida",
       "privacyNote": "Šos ieteikumus redzat tikai jūs. Nekas netiek reģistrēts, kamēr to nepieņemat.",
       "title": "Ieteikumi, balstoti uz jūsu aktivitāti",
@@ -5886,6 +5888,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Iekšējais darbs"
+    },
+    "week": {
+      "allLogged": "Viss ir reģistrēts. Jauna aktivitāte parādīsies šeit, kamēr strādājat.",
+      "days": "Nedēļas dienas",
+      "entriesTitle": "Reģistrētais laiks",
+      "nextWeek": "Nākamā nedēļa",
+      "noActivity": "Pagaidām nav ko reģistrēt. Strādājiet lietā, un jūsu aktivitāte parādīsies šeit apstiprināšanai.",
+      "pendingCount": "{count, plural, zero {# ieteikumu} one {# ieteikums} other {# ieteikumi}}",
+      "previousWeek": "Iepriekšējā nedēļa",
+      "range": "{start} – {end}",
+      "title": "Mana nedēļa",
+      "totals": "Reģistrēts: {logged} · apmaksājams: {billable}"
     }
   },
   "translate": {

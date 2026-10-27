@@ -833,7 +833,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# akcia} few {# akcie} other {# akcií}}",
       "activeVsLogged": "Aktivita {active} · Vykázané {logged}",
+      "alreadyCovered": "Už pokryté zaznamenaným časom",
       "chatEvidence": "{count, plural, one {# správa} few {# správy} other {# správ}} v konverzácii „{title}“",
+      "engagedTime": "{duration} skutočnej aktivity",
       "keyboardHint": "Enter prijme, E upraví pred prijatím, Delete zamietne",
       "privacyNote": "Vidíte ich len vy. Nič sa nezaznamená, kým návrh neprijmete.",
       "title": "Návrhy z vašej aktivity",
@@ -5886,6 +5888,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Interná práca"
+    },
+    "week": {
+      "allLogged": "Všetko je vykázané. Nová aktivita sa tu zobrazí počas práce.",
+      "days": "Dni v týždni",
+      "entriesTitle": "Vykázaný čas",
+      "nextWeek": "Nasledujúci týždeň",
+      "noActivity": "Zatiaľ nie je čo vykázať. Pracujte v spise a vaša aktivita sa tu zobrazí na prijatie.",
+      "pendingCount": "{count, plural, one {# návrh} few {# návrhy} many {# návrhu} other {# návrhov}}",
+      "previousWeek": "Predchádzajúci týždeň",
+      "range": "{start} – {end}",
+      "title": "Môj týždeň",
+      "totals": "Vykázané {logged} · fakturovateľné {billable}"
     }
   },
   "translate": {

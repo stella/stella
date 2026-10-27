@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   timeEntryActionLabel,
   timeEntryNarrativeExcerpt,
-} from "./time-entry-copy.logic";
+} from "@/components/billing/time-entry-copy.logic";
 
 describe("time entry action copy", () => {
   test("bounds long narratives without splitting Unicode code points", () => {

@@ -833,7 +833,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# művelet} other {# művelet}}",
       "activeVsLogged": "Tevékenység: {active} · Rögzítve: {logged}",
+      "alreadyCovered": "Már lefedi a rögzített idő",
       "chatEvidence": "{count, plural, one {# üzenet} other {# üzenet}} a(z) „{title}” beszélgetésben",
+      "engagedTime": "{duration} aktív idő",
       "keyboardHint": "Az Enter elfogadja, az E elfogadás előtt szerkeszti, a Delete elveti",
       "privacyNote": "Ezeket csak Ön látja. Semmit nem rögzítünk, amíg el nem fogadja.",
       "title": "Javaslatok a tevékenysége alapján",
@@ -5886,6 +5888,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Belső munka"
+    },
+    "week": {
+      "allLogged": "Minden rögzítve van. Az új tevékenység munka közben itt jelenik meg.",
+      "days": "A hét napjai",
+      "entriesTitle": "Rögzített idő",
+      "nextWeek": "Következő hét",
+      "noActivity": "Még nincs mit rögzíteni. Dolgozzon egy ügyben, és a tevékenysége itt jelenik meg elfogadásra.",
+      "pendingCount": "{count, plural, one {# javaslat} other {# javaslat}}",
+      "previousWeek": "Előző hét",
+      "range": "{start} – {end}",
+      "title": "A hetem",
+      "totals": "Rögzítve: {logged} · számlázható: {billable}"
     }
   },
   "translate": {

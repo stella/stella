@@ -833,7 +833,9 @@
     "suggestions": {
       "actionCount": "{count, plural, one {# action} other {# actions}}",
       "activeVsLogged": "{active} active · {logged} logged",
+      "alreadyCovered": "Already covered by logged time",
       "chatEvidence": "{count, plural, one {# message} other {# messages}} in “{title}”",
+      "engagedTime": "{duration} engaged",
       "keyboardHint": "Enter accepts, E edits before accepting, Delete dismisses",
       "privacyNote": "Only you can see these. Nothing is recorded until you accept it.",
       "title": "Suggested from your activity",
@@ -5886,6 +5888,18 @@
   "timesheets": {
     "day": {
       "internalWork": "Internal work"
+    },
+    "week": {
+      "allLogged": "Everything here is logged. New activity shows up as you work.",
+      "days": "Days of the week",
+      "entriesTitle": "Logged time",
+      "nextWeek": "Next week",
+      "noActivity": "Nothing to log yet. Work in a matter and your activity shows up here to accept.",
+      "pendingCount": "{count, plural, one {# suggestion} other {# suggestions}}",
+      "previousWeek": "Previous week",
+      "range": "{start} – {end}",
+      "title": "My week",
+      "totals": "{logged} logged · {billable} billable"
     }
   },
   "translate": {

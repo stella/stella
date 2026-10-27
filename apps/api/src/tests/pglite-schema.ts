@@ -171,10 +171,12 @@ const executableSql = (statement: string): string =>
 
 /**
  * PGlite ships no `unaccent`, so the production `legislation_title_fold`
- * (migration 20260901130000) cannot be installed verbatim. This double is
- * generated from the fold table the unaccent parity test pins against the
- * real extension: NFD plus combining-mark removal for everything Unicode can
- * decompose, then the table's rules for the letters it cannot (`ł`, `ß`, `ø`).
+ * (migration 20260901130000) and `search_fold` (migration 20261026210000)
+ * cannot be installed verbatim. This double is generated from the fold table
+ * the unaccent parity test pins against the real extension: NFD plus
+ * combining-mark removal for everything Unicode can decompose, then the
+ * table's rules for the letters it cannot (`ł`, `ß`, `ø`). It approximates
+ * the extension for Latin text only; the Postgres suites hold the real one.
  */
 const asciiFoldPgliteExpression = (): string => {
   const entries = Object.entries(ASCII_FOLD_TABLE);
@@ -190,8 +192,10 @@ const asciiFoldPgliteExpression = (): string => {
   return expression;
 };
 
-const legislationTitleFoldPgliteSql = (): string =>
-  `CREATE OR REPLACE FUNCTION legislation_title_fold(input text)
+const FOLD_FUNCTIONS = ["legislation_title_fold", "search_fold"] as const;
+
+const foldFunctionPgliteSql = (name: (typeof FOLD_FUNCTIONS)[number]): string =>
+  `CREATE OR REPLACE FUNCTION ${name}(input text)
 RETURNS text
 LANGUAGE sql
 IMMUTABLE
@@ -265,7 +269,9 @@ export const installPgliteSchemaPrerequisites = async (
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
   await db.execute(sql.raw(arabicNormalizeFunctionSql()));
   await db.execute(sql.raw(unaccentPgliteSql()));
-  await db.execute(sql.raw(legislationTitleFoldPgliteSql()));
+  for (const name of FOLD_FUNCTIONS) {
+    await db.execute(sql.raw(foldFunctionPgliteSql(name)));
+  }
   await db.execute(sql.raw(fieldFindTextFunctionSql()));
   await db.execute(
     sql.raw(

@@ -875,13 +875,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/handlers/time-entries/suggestions/load.ts",
-    "function": "module/loadTimeSuggestions",
-    "kind": "constant-limit",
-    "count": 2,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/handlers/time-entries/summary/get.ts",
     "function": "module/readTimeEntrySummary/createSafeHandler[1]",
     "kind": "constant-limit",
