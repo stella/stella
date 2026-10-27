@@ -27,6 +27,7 @@ import {
 
 const PRELOAD = path.join(import.meta.dir, "flaky-test-quarantine-preload.ts");
 const FIXTURE = "pkg/flaky.test.ts";
+const FIXTURE_SELECTION_ENV = "FLAKY_TEST_FIXTURE_SELECTION";
 const SOURCE = `import { describe, expect, it, test } from "bun:test";
 import { existsSync } from "node:fs";
 
@@ -87,7 +88,7 @@ if (reportDir && registry.entries.length > 0 && !existsSync(reportDir)) {
   throw new Error("quarantine preload did not initialize in the package runner");
 }
 const result = Bun.spawnSync({
-  cmd: [process.execPath, "test", "./${FIXTURE}"],
+  cmd: [process.execPath, "test", ...(process.env["${FIXTURE_SELECTION_ENV}"] === "only" ? ["--only"] : []), "./${FIXTURE}"],
   stdout: "inherit",
   stderr: "inherit",
 });
@@ -112,6 +113,7 @@ const entry = (name: string): QuarantineEntry => ({
 type RunOptions = {
   names: readonly string[];
   source?: string;
+  selection?: "all" | "only";
   // Makes the fixture's unquarantined test fail too.
   failUnquarantined?: boolean;
   reportDir?: "set" | "unset";
@@ -120,6 +122,7 @@ type RunOptions = {
 const run = ({
   names,
   source = SOURCE,
+  selection = "all",
   failUnquarantined = false,
   reportDir = "set",
 }: RunOptions) => {
@@ -146,6 +149,7 @@ const run = ({
     env: {
       ...inherited,
       BUN_OPTIONS: `--preload=${PRELOAD}`,
+      [FIXTURE_SELECTION_ENV]: selection,
       [QUARANTINE_REGISTRY_ENV]: path.join(
         root,
         "scripts/flaky-test-quarantine.json",
@@ -223,6 +227,7 @@ describe("outer", () => {
     (modifier) => {
       const result = run({
         names: ["sentinel"],
+        selection: modifier === "only" ? "only" : "all",
         source: `import { expect, test } from "bun:test";
 test("sentinel", () => {});
 test.${modifier}.each([1])("native row %i", (value) => {
@@ -231,7 +236,7 @@ test.${modifier}.each([1])("native row %i", (value) => {
       });
       expect(result.output).not.toContain("ERR_INVALID_THIS");
       expect(result.output).not.toContain("is not a function");
-      expect(result.exitCode).toBe(0);
+      expect(result.exitCode, result.output).toBe(0);
     },
   );
 
@@ -240,6 +245,7 @@ test.${modifier}.each([1])("native row %i", (value) => {
     (modifier) => {
       const result = run({
         names: ["sentinel"],
+        selection: modifier === "only" ? "only" : "all",
         source: `import { describe, expect, test } from "bun:test";
 test("sentinel", () => {});
 describe.${modifier}.each([1])("native scope %i", (value) => {
@@ -250,7 +256,7 @@ describe.${modifier}.each([1])("native scope %i", (value) => {
       });
       expect(result.output).not.toContain("ERR_INVALID_THIS");
       expect(result.output).not.toContain("is not a function");
-      expect(result.exitCode).toBe(0);
+      expect(result.exitCode, result.output).toBe(0);
     },
   );
 
