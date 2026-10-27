@@ -1,5 +1,13 @@
 # @stll/workspace-ui
 
+## 0.14.0
+
+### Minor Changes
+
+- [#7018](https://github.com/stella/stella/pull/7018) [`16d1f58`](https://github.com/stella/stella/commit/16d1f58e9f0670401d13294d3199afedd92a4b9d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sort chips name their direction with the caller's wording for the property's sort kind. `SortableProperty` takes a required `sortKind` and `SortChipsLabels` a total `directions` record, both typed by the new `@stll/workspace-ui/column-sort` entry (`ColumnSortKind`, `SortDirection`, `SortDirectionLabels`). `sortDirectionHint` and its hard-coded `A→Z` / `1→9` / arrow hints are removed.
+
+- [#6956](https://github.com/stella/stella/pull/6956) [`650aa33`](https://github.com/stella/stella/commit/650aa3349fafcc7b0c69fc9e9375ed4eb52a369b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/workspace-ui/formatting` with `WorkspaceUiFormattingProvider`. Field values and column calculations format numbers, money and dates in the locale it supplies instead of `use-intl`'s locale, so a host can keep the UI language and the regional format apart. Rendering them outside the provider throws.
+
 ## 0.13.2
 
 ### Patch Changes

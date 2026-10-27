@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.0.1
+
+### Patch Changes
+
+- [#7018](https://github.com/stella/stella/pull/7018) [`16d1f58`](https://github.com/stella/stella/commit/16d1f58e9f0670401d13294d3199afedd92a4b9d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The case-law search `sort` option's description now says that `newest` lists undated decisions last instead of leaving them out.
+
 ## 6.0.0
 
 ### Major Changes
