@@ -94,8 +94,11 @@ const consumeRateLimitMock = mock(async () => ({
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
-const { featureOmittedCapabilityIds, mapHandlerResult } =
-  await import("@/api/mcp/capability-tools");
+const {
+  CAPABILITY_TOOL_HANDLERS,
+  featureOmittedCapabilityIds,
+  mapHandlerResult,
+} = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
 const { capabilityHandlerContext } =
@@ -2630,6 +2633,55 @@ describe("capability executor credential permission set", () => {
     });
     expect(consumeRateLimitMock).not.toHaveBeenCalled();
   });
+});
+
+describe("capability dispatch refusal precedence", () => {
+  const cases = [
+    {
+      capability: "organization-settings.update",
+      confirm: false,
+      memberRole: "member" as const,
+    },
+    {
+      capability: "matters.delete",
+      confirm: true,
+      memberRole: "intern" as const,
+    },
+  ];
+
+  for (const { capability, confirm, memberRole } of cases) {
+    test(`${capability} reports the endpoint member grant before agent access through HTTP dispatch`, async () => {
+      const args = { capability, confirm, input: {} };
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        toolName: MCP_CAPABILITY_EXECUTORS.write,
+        args,
+        context: createContext({
+          grantedScopes: MCP_OAUTH_SCOPES,
+          memberRole,
+          toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        }),
+      });
+
+      expect(errorEnvelope(result).code).toBe("permission_denied");
+    });
+
+    test(`${capability} reports the endpoint member grant before agent access through the direct executor`, async () => {
+      const args = { capability, confirm, input: {} };
+      const result = await CAPABILITY_TOOL_HANDLERS[
+        MCP_CAPABILITY_EXECUTORS.write
+      ]({
+        args,
+        context: createContext({
+          grantedScopes: MCP_OAUTH_SCOPES,
+          memberRole,
+          toolConfirmation: TOOL_CONFIRMATION.unavailable,
+        }),
+      });
+
+      expect(mappedError(result).code).toBe("permission_denied");
+    });
+  }
 });
 
 // --- fix-2: route-level admin gate moved into the handler config -------------

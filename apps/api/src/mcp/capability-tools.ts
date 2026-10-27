@@ -1902,7 +1902,12 @@ const decideCapabilityCall = ({
 
 type CapabilityGate =
   | { type: "refused"; result: McpToolResponse }
-  | { type: "passed"; entry: CatalogEntry };
+  | {
+      type: "passed";
+      decision: AgentCallDecision;
+      endpoint: EndpointDefinition;
+      entry: CatalogEntry;
+    };
 
 /**
  * The gates a capability call passes before agent access, in dispatch order.
@@ -1913,10 +1918,12 @@ const capabilityGate = async ({
   id,
   access,
   context,
+  confirmed,
 }: {
   id: string;
   access: keyof typeof MCP_CAPABILITY_EXECUTORS;
   context: McpRequestContext;
+  confirmed: boolean;
 }): Promise<CapabilityGate> => {
   const refused = (result: McpToolResponse) =>
     ({ type: "refused", result }) as const;
@@ -1980,7 +1987,32 @@ const capabilityGate = async ({
     return refused(transportBlock);
   }
 
-  // 4. Scopes: the session must hold every scope in the capability catalog. Read
+  const loaded = await loadEndpointGuarded(
+    id,
+    MCP_CAPABILITY_EXECUTORS[access],
+  );
+  if (!loaded.ok) {
+    return refused(loaded.result);
+  }
+
+  // 4. Member grant: use the live endpoint's route permission, so capability
+  // dispatch cannot drift from HTTP route access. This deliberately precedes
+  // OAuth consent and agent-access policy: permission_denied wins for callers
+  // whose role cannot perform the operation.
+  const permissions = loaded.endpoint.config.permissions;
+  if (
+    permissions !== undefined &&
+    !hasEffectiveAuthority(context, permissions)
+  ) {
+    return refused(
+      structuredErrorResult({
+        code: "permission_denied",
+        message: `Your member role does not permit capability "${id}"`,
+      }),
+    );
+  }
+
+  // 5. Scopes: the session must hold every scope in the capability catalog. Read
   // capabilities now resolve to a read scope (see the exporter's access-keyed
   // resolution), so a `stella:read` grant reaches them directly.
   const requiredScopes = requiredScopesOf(entry);
@@ -2000,7 +2032,14 @@ const capabilityGate = async ({
       }),
     );
   }
-  return { type: "passed", entry };
+  // 6. Agent access is last in the common authorization gate, after both forms
+  // of caller authority above.
+  return {
+    type: "passed",
+    decision: decideCapabilityCall({ id, context, confirmed }),
+    endpoint: loaded.endpoint,
+    entry,
+  };
 };
 
 /**
@@ -2023,17 +2062,12 @@ export const invokedCapabilityAgentRefusal = async ({
     id: parsed.output.capability,
     access,
     context,
+    confirmed: "confirm" in parsed.output && parsed.output.confirm === true,
   });
   if (gate.type === "refused") {
     return null;
   }
-  return finalAgentRefusal(
-    decideCapabilityCall({
-      id: gate.entry.id,
-      context,
-      confirmed: "confirm" in parsed.output && parsed.output.confirm === true,
-    }),
-  );
+  return finalAgentRefusal(gate.decision);
 };
 
 type InvokeCapabilityOptions = {
@@ -2066,17 +2100,22 @@ const invokeCapabilityHandler = async ({
   } = parsed.output;
   const confirm = "confirm" in parsed.output && parsed.output.confirm === true;
 
-  // 1-4. Existence, availability, executor, disposition, transport, scopes.
-  const gate = await capabilityGate({ id, access, context });
+  // 1-6. Resolve the endpoint, then enforce its member grant, OAuth scopes,
+  // and agent-access policy in that order.
+  const gate = await capabilityGate({
+    id,
+    access,
+    context,
+    confirmed: confirm,
+  });
   if (gate.type === "refused") {
     return gate.result;
   }
-  const { entry } = gate;
+  const { decision, endpoint, entry } = gate;
 
-  // 5. Agent access. A missing confirmation is reported only after the
+  // 6. Agent access. A missing confirmation is reported only after the
   // target resolves (`capabilityReferenceRefusal`), so it never answers for a
   // resource the caller cannot see; every other refusal is final here.
-  const decision = decideCapabilityCall({ id, context, confirmed: confirm });
   const finalRefusal = finalAgentRefusal(decision);
   if (finalRefusal !== null) {
     return structuredErrorResult(finalRefusal);
@@ -2107,6 +2146,7 @@ const invokeCapabilityHandler = async ({
               ? bindApprovedMcpAuditContext(context)
               : context,
           entry,
+          endpoint,
           id,
           input,
           validateOnly,
@@ -2359,6 +2399,7 @@ const capabilityReferenceRefusal = async ({
 
 const executeInvoke = async ({
   context,
+  endpoint,
   entry,
   id,
   input: publicInput,
@@ -2366,21 +2407,13 @@ const executeInvoke = async ({
   decision,
 }: {
   context: AuthorizedMcpRequestContext;
+  endpoint: EndpointDefinition;
   entry: CatalogEntry;
   id: string;
   input: InvokeInput;
   validateOnly: boolean;
   decision: AgentCallDecision;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(
-    id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
-  if (!loaded.ok) {
-    return loaded.result;
-  }
-  const endpoint = loaded.endpoint;
-
   const isWorkspace = entry.handlerKind === "workspace";
   const validated = await validateInvokeInput({
     config: endpoint.config,
@@ -2484,24 +2517,13 @@ const executeInvoke = async ({
     });
   }
 
-  // 9. Authority. The safe wrapper checks the member role on its own, but only
-  // the role: a machine API key's permission set lives on the MCP session, so
-  // this is the one place the two can be ANDed. Every grant this call spends is
-  // checked here, the config's and the purpose's alike, because a handler that
-  // decides a grant from the request reads the role by itself. It runs on both
-  // paths and before the limiter below, so a caller who may not perform the
-  // capability is refused without consuming anyone else's budget. Configs
-  // without permissions (session-kind) skip the check, exactly as their wrapper
-  // does.
-  const permissions = endpoint.config.permissions;
-  const requiredPermissions = [
-    ...(permissions === undefined ? [] : [permissions]),
-    ...(purposeRequirement === null ? [] : [purposeRequirement.permission]),
-  ];
+  // 9. Purpose-dependent authority. The endpoint's own permission was already
+  // checked by capabilityGate before OAuth and agent-access policy. A purpose
+  // grant can only be derived after input validation, so enforce that additional
+  // grant here before rate limiting and execution.
   if (
-    requiredPermissions.some(
-      (required) => !hasEffectiveAuthority(context, required),
-    )
+    purposeRequirement !== null &&
+    !hasEffectiveAuthority(context, purposeRequirement.permission)
   ) {
     return structuredErrorResult({
       code: "permission_denied",
