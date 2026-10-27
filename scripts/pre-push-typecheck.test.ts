@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 import {
@@ -36,6 +38,63 @@ const select = (files: string[]) =>
       return manifest;
     },
   );
+
+const commandPath = path.join(import.meta.dirname, "pre-push-typecheck.ts");
+
+const git = (repository: string, ...arguments_: string[]) => {
+  const result = Bun.spawnSync(["git", ...arguments_], {
+    cwd: repository,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "Pre-push test",
+      GIT_AUTHOR_EMAIL: "pre-push@example.com",
+      GIT_COMMITTER_NAME: "Pre-push test",
+      GIT_COMMITTER_EMAIL: "pre-push@example.com",
+    },
+  });
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.toString());
+  }
+};
+
+const createRepository = (
+  packages: Record<string, { typecheck: string; source?: string }>,
+) => {
+  const repository = mkdtempSync(path.join(os.tmpdir(), "pre-push-typecheck-"));
+  mkdirSync(path.join(repository, "apps", "web"), { recursive: true });
+  writeFileSync(
+    path.join(repository, "apps", "web", "package.json"),
+    JSON.stringify({ name: "@stll/web" }),
+  );
+  for (const [name, { typecheck, source = "export {};\n" }] of Object.entries(
+    packages,
+  )) {
+    const directory = path.join(repository, "packages", name);
+    mkdirSync(path.join(directory, "src"), { recursive: true });
+    writeFileSync(
+      path.join(directory, "package.json"),
+      JSON.stringify({ name: `@test/${name}`, scripts: { typecheck } }),
+    );
+    writeFileSync(path.join(directory, "src", "index.ts"), source);
+  }
+  git(repository, "init", "--quiet");
+  git(repository, "add", ".");
+  git(repository, "commit", "--quiet", "-m", "initial");
+  return repository;
+};
+
+const runCommand = (repository: string, base = "HEAD~1") =>
+  Bun.spawnSync(["bun", commandPath, "--base", base], {
+    cwd: repository,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      STELLA_PRE_PUSH_TYPECHECK_REPO_ROOT: repository,
+    },
+  });
 
 test("each changed TypeScript file maps only to its owning package", () => {
   expect(
@@ -159,16 +218,89 @@ test("every budget exclusion names a workspace package", () => {
 });
 
 test("the real command is an immediate no-op when the range has no changes", () => {
-  const result = Bun.spawnSync(
-    [
-      "bun",
-      path.join(import.meta.dirname, "pre-push-typecheck.ts"),
-      "--base",
-      "HEAD",
-    ],
-    { stdout: "pipe", stderr: "pipe" },
-  );
+  const result = Bun.spawnSync(["bun", commandPath, "--base", "HEAD"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   expect(result.exitCode).toBe(0);
   expect(result.stdout.toString()).toBe("");
   expect(result.stderr.toString()).toBe("");
+});
+
+test("the command ignores a deleted package whose directory remains", () => {
+  const repository = createRepository({ removed: { typecheck: "exit 7" } });
+  try {
+    rmSync(path.join(repository, "packages", "removed"), { recursive: true });
+    mkdirSync(path.join(repository, "packages", "removed", "node_modules"), {
+      recursive: true,
+    });
+    git(repository, "add", "--all");
+    git(repository, "commit", "--quiet", "-m", "remove package");
+
+    const result = runCommand(repository);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toBe("");
+    expect(result.stderr.toString()).toBe("");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test("the command selects both packages when a TypeScript file moves", () => {
+  const repository = createRepository({
+    source: {
+      typecheck: 'echo "CHECKED_SOURCE"',
+      source: "export const sourceOnly = true;\n",
+    },
+    destination: { typecheck: 'echo "CHECKED_DESTINATION"' },
+  });
+  try {
+    git(
+      repository,
+      "mv",
+      "packages/source/src/index.ts",
+      "packages/destination/src/moved.ts",
+    );
+    git(repository, "add", "--all");
+    git(repository, "commit", "--quiet", "-m", "move source");
+
+    const result = runCommand(repository);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("checking @test/source");
+    expect(result.stdout.toString()).toContain("CHECKED_SOURCE");
+    expect(result.stdout.toString()).toContain("checking @test/destination");
+    expect(result.stdout.toString()).toContain("CHECKED_DESTINATION");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+});
+
+test("a package selection error reports the failure and leaves checking to CI", () => {
+  const result = Bun.spawnSync(["bun", commandPath, "--base", "missing-ref"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString()).toMatch(
+    /^pre-push-typecheck: package selection failed \(.+\); CI checks the packages\n$/u,
+  );
+  expect(result.stderr.toString()).toBe("");
+});
+
+test("a typecheck that runs and fails blocks the command", () => {
+  const repository = createRepository({ failing: { typecheck: "exit 7" } });
+  try {
+    writeFileSync(
+      path.join(repository, "packages", "failing", "src", "index.ts"),
+      "export const changed = true;\n",
+    );
+    git(repository, "add", "--all");
+    git(repository, "commit", "--quiet", "-m", "change package");
+
+    const result = runCommand(repository);
+    expect(result.exitCode).toBe(7);
+    expect(result.stdout.toString()).toContain("checking @test/failing");
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
 });

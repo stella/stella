@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -79,6 +79,10 @@ type PackageManifest = {
   scripts?: { typecheck?: unknown };
 };
 
+class PackageSelectionError extends TaggedError("PackageSelectionError")<{
+  message: string;
+}> {}
+
 export const selectTouchedPackages = (
   changedFiles: readonly string[],
   manifestExists: (directory: string) => boolean,
@@ -123,25 +127,34 @@ export const changedFilesAgainst = (
   const mergeBase = Bun.spawnSync(["git", "merge-base", base, "HEAD"], {
     cwd,
     stdout: "pipe",
-    stderr: "inherit",
+    stderr: "pipe",
   });
   if (mergeBase.exitCode !== 0) {
-    process.exit(childExitStatus(mergeBase));
+    throw new PackageSelectionError({
+      message:
+        mergeBase.stderr.toString().trim() ||
+        `git merge-base exited ${childExitStatus(mergeBase)}`,
+    });
   }
   const diff = Bun.spawnSync(
     [
       "git",
       "diff",
+      "--no-renames",
       "--name-only",
       "-z",
       "--diff-filter=ACMRD",
       mergeBase.stdout.toString().trim(),
       "HEAD",
     ],
-    { cwd, stdout: "pipe", stderr: "inherit" },
+    { cwd, stdout: "pipe", stderr: "pipe" },
   );
   if (diff.exitCode !== 0) {
-    process.exit(childExitStatus(diff));
+    throw new PackageSelectionError({
+      message:
+        diff.stderr.toString().trim() ||
+        `git diff exited ${childExitStatus(diff)}`,
+    });
   }
   return diff.stdout.toString().split("\0").filter(Boolean);
 };
@@ -152,47 +165,58 @@ const main = async () => {
   if (base === undefined || base.startsWith("--")) {
     panic("--base requires a git ref");
   }
-  const workspaceNames = new Set(
-    ["apps", "packages"].flatMap((workspaceDirectory) =>
-      readdirSync(path.join(REPO_ROOT, workspaceDirectory), {
-        withFileTypes: true,
-      })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => {
-          const manifest: PackageManifest = JSON.parse(
-            readFileSync(
-              path.join(
-                REPO_ROOT,
-                workspaceDirectory,
-                entry.name,
-                "package.json",
-              ),
-              "utf-8",
-            ),
-          );
-          return manifest.name;
+  const repoRoot =
+    process.env["STELLA_PRE_PUSH_TYPECHECK_REPO_ROOT"] ?? REPO_ROOT;
+  let packages: PackageSelection[];
+  try {
+    const workspaceNames = new Set(
+      ["apps", "packages"].flatMap((workspaceDirectory) =>
+        readdirSync(path.join(repoRoot, workspaceDirectory), {
+          withFileTypes: true,
         })
-        .filter((name): name is string => typeof name === "string"),
-    ),
-  );
-  validateTypecheckBudgetExclusions(
-    TYPECHECK_BUDGET_EXCLUSIONS,
-    workspaceNames,
-  );
-  const packages = selectTouchedPackages(
-    changedFilesAgainst(base),
-    (directory) => existsSync(path.join(REPO_ROOT, directory, "package.json")),
-    (directory) =>
-      JSON.parse(
-        readFileSync(path.join(REPO_ROOT, directory, "package.json"), "utf-8"),
+          .filter((entry) => entry.isDirectory())
+          .flatMap((entry) => {
+            const manifestPath = path.join(
+              repoRoot,
+              workspaceDirectory,
+              entry.name,
+              "package.json",
+            );
+            if (!existsSync(manifestPath)) {
+              return [];
+            }
+            const manifest: PackageManifest = JSON.parse(
+              readFileSync(manifestPath, "utf-8"),
+            );
+            return typeof manifest.name === "string" ? [manifest.name] : [];
+          }),
       ),
-  );
+    );
+    validateTypecheckBudgetExclusions(
+      TYPECHECK_BUDGET_EXCLUSIONS,
+      workspaceNames,
+    );
+    packages = selectTouchedPackages(
+      changedFilesAgainst(base, repoRoot),
+      (directory) => existsSync(path.join(repoRoot, directory, "package.json")),
+      (directory) =>
+        JSON.parse(
+          readFileSync(path.join(repoRoot, directory, "package.json"), "utf-8"),
+        ),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(
+      `pre-push-typecheck: package selection failed (${message}); CI checks the packages`,
+    );
+    return 0;
+  }
 
   return runSelectedPackages(
     packages,
     async (workspace) => {
       const child = Bun.spawn(["bun", "run", "typecheck"], {
-        cwd: path.join(REPO_ROOT, workspace.directory),
+        cwd: path.join(repoRoot, workspace.directory),
         stdin: "inherit",
         stdout: "inherit",
         stderr: "inherit",
