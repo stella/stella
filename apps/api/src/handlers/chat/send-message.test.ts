@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
+import { roles } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,9 +18,11 @@ import {
   chatToolGrants,
   chatTurns,
 } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
 import { CHAT_RUN_MODE } from "@/api/handlers/chat/chat-schema";
 import { processChatTurnOwnership } from "@/api/handlers/chat/chat-turn-run";
+import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import {
   ChatSendLifecycle,
   createSendMessage,
@@ -36,18 +39,25 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import { isMemberRole } from "@/api/lib/member-roles";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
 } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { getTanStackTextModelInfoForTask } from "@/api/lib/tanstack-ai-models";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -56,6 +66,8 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "./types";
 import type { UploadedChatFile } from "./upload-files";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 beforeEach(() => {
   compactMessagesForContextMock.mockClear();
@@ -1796,8 +1808,12 @@ describe("assistant turn settlement", () => {
     failAssistantInsertOnce = false,
     onSafeDbTransaction,
     connectableCount = 0,
+    memberRole = sessionMemberRole("owner"),
+    providerConfig = orgAIConfig,
   }: {
     connectableCount?: number;
+    memberRole?: SendMessageCtx["memberRole"];
+    providerConfig?: OrgAIConfig | null;
     failAssistantInsertOnce?: boolean;
     onSafeDbTransaction?: (() => void) | undefined;
   } = {}) => {
@@ -1889,51 +1905,54 @@ describe("assistant turn settlement", () => {
       },
     });
 
-    const result = await send.handler(
-      createContext({
-        contextMatterIds: [],
-        onSafeDbTransaction,
-        transaction: {
-          selectDistinctOn: () => connectorQuery,
-          insert: withRunLogInsert(insert),
-          query: {
-            chatMessages: { findFirst: async () => null },
-            chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: {
-              findFirst: async () => ({
-                chatModel: null,
-                contextMatterIds: [],
-                dataWorkspaceIds: [],
-                id: threadId,
-                messages: [],
-                rollbackToken: null,
-                title: "Existing thread",
-                webSearchEnabled: false,
-                workspaceId: null,
-              }),
-            },
-            chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
-            },
-            organizationSettings: { findFirst: async () => null },
+    const context = createContext({
+      contextMatterIds: [],
+      onSafeDbTransaction,
+      transaction: {
+        selectDistinctOn: () => connectorQuery,
+        insert: withRunLogInsert(insert),
+        query: {
+          chatMessages: { findFirst: async () => null },
+          chatThreadCompactions: { findFirst: async () => null },
+          chatThreads: {
+            findFirst: async () => ({
+              chatModel: null,
+              contextMatterIds: [],
+              dataWorkspaceIds: [],
+              id: threadId,
+              messages: [],
+              rollbackToken: null,
+              title: "Existing thread",
+              webSearchEnabled: false,
+              workspaceId: null,
+            }),
           },
-          select: withThreadNameReads(selectWithThreadLock),
-          update: withRunLogUpdate(update),
+          chatTurns: {
+            findFirst: async ({
+              where,
+            }: {
+              where?: { status?: { eq?: string } };
+            }) =>
+              where?.status?.eq === "running" ? undefined : { id: turnId },
+          },
+          organizationSettings: { findFirst: async () => null },
         },
-      }),
-    );
+        select: withThreadNameReads(selectWithThreadLock),
+        update: withRunLogUpdate(update),
+      },
+    });
+    const result = await send.handler({
+      ...context,
+      memberRole,
+      orgAIConfig: providerConfig,
+    });
     expect(streamResponse).toHaveBeenCalledTimes(1);
     if (onFinish === undefined) {
       throw new Error(
         `the send did not reach streaming: ${JSON.stringify(result)}`,
       );
     }
-    return { onFinish, turnUpdates, providerPrompt };
+    return { onFinish, turnUpdates, providerPrompt, streamResponse };
   };
 
   test("an unrelated send proceeds with 21 connectable connectors and a bounded deterministic hint", async () => {
@@ -1949,6 +1968,57 @@ describe("assistant turn settlement", () => {
       expect.objectContaining({ status: "failed" }),
     );
   });
+
+  test.each(
+    Object.keys(roles)
+      .filter(isMemberRole)
+      .filter(
+        (role) =>
+          hasMemberPermission(sessionMemberRole(role), CHAT_TURN_PERMISSIONS) &&
+          !hasMemberPermission(sessionMemberRole(role), {
+            organizationSettings: ["update"],
+          }),
+      ),
+  )(
+    "a %s chat turn uses the default provider without settings access",
+    async (role) => {
+      testState.patchConfig({
+        AI_PROVIDER: "openrouter",
+        OPENROUTER_API_KEY: "test-instance-key",
+        REQUIRE_PERSONAL_AI_KEY: false,
+      });
+      const memberRole = sessionMemberRole(role);
+      expect(
+        hasMemberPermission(memberRole, { organizationSettings: ["update"] }),
+      ).toBe(false);
+      const { onFinish, turnUpdates, streamResponse } =
+        await startStreamingTurn({
+          memberRole,
+          providerConfig: null,
+        });
+      const dispatched = streamResponse.mock.calls.at(0)?.at(0);
+      if (dispatched === undefined) {
+        throw new Error("The chat turn did not dispatch a provider request");
+      }
+      expect(dispatched.orgAIConfig).toBeNull();
+      expect(
+        getTanStackTextModelInfoForTask("chat", dispatched.orgAIConfig, {
+          dataClass: "customer",
+          organizationId,
+          modelTier: MANAGED_MODEL_TIER.standard,
+        }),
+      ).toMatchObject({ provider: "openrouter", keySource: "instance" });
+      await onFinish({
+        outcome: { type: "completed" },
+        responseMessage: completedMessage([
+          { type: "text", content: "Completed response" },
+        ]),
+      });
+      expect(turnUpdates).toContainEqual(
+        expect.objectContaining({ status: "completed" }),
+      );
+    },
+  );
 
   /** The rejection `onFinish` reports to the stream, captured as a value. */
   const settlementFailure = async (

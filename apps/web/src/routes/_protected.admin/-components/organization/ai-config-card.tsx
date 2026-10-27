@@ -18,6 +18,7 @@ import {
   getProviderValues,
   hasUsableOpenAIKey,
 } from "@/components/ai-config-role-models.logic";
+import { AIProviderSettingsBoundary } from "@/components/ai-provider-settings-boundary";
 import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SettingsPageHeader } from "@/components/settings-page-header";
@@ -40,7 +41,13 @@ import { useAIConfigForm } from "./use-ai-config-form";
 import type { AIConfigReadState } from "./use-ai-config-form";
 import { WebSearchKeysCard } from "./web-search-keys-card";
 
-export const AIConfigCard = () => {
+export const AIConfigCard = () => (
+  <AIProviderSettingsBoundary>
+    <AIConfigCardContent />
+  </AIProviderSettingsBoundary>
+);
+
+const AIConfigCardContent = () => {
   const t = useTranslations();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",

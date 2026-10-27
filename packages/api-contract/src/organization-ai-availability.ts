@@ -14,3 +14,35 @@ export type OrganizationAIAvailability = {
   deferredServiceTierAvailable: boolean;
   mockAnswers: boolean;
 };
+
+export type AIProviderSettingsResolution =
+  | { type: "orgSettings" }
+  | {
+      type: "defaultProvider";
+      reason: "notPermitted" | "notConfigured" | "unavailable";
+    };
+
+type ResolveAIProviderSettingsOptions = {
+  orgConfigured: boolean;
+  providerConfiguration: OrganizationAIAvailability["providerConfiguration"];
+  readStatus: "ready" | "unavailable";
+};
+
+/** Configuration reads never decide whether a member is entitled to use AI. */
+export const resolveAIProviderSettings = ({
+  orgConfigured,
+  providerConfiguration,
+  readStatus,
+}: ResolveAIProviderSettingsOptions): AIProviderSettingsResolution => {
+  if (readStatus === "unavailable") {
+    return { type: "defaultProvider", reason: "unavailable" };
+  }
+  if (orgConfigured) {
+    return { type: "orgSettings" };
+  }
+  return {
+    type: "defaultProvider",
+    reason:
+      providerConfiguration === "allowed" ? "notConfigured" : "notPermitted",
+  };
+};

@@ -6,7 +6,6 @@
  * organization's settings row present.
  */
 
-import { Result } from "better-result";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -419,7 +418,7 @@ describe("absent and unreadable settings", () => {
     ).toEqual({ searchApiKey: null, fetchApiKey: null });
   });
 
-  test("the auth read reports an unreadable config instead of throwing", async () => {
+  test("the auth read uses the default provider for unreadable settings", async () => {
     const scope = requestScope(corruptOrgId, ids.userA1);
 
     expect(
@@ -432,38 +431,84 @@ describe("absent and unreadable settings", () => {
       ),
     ).toEqual({
       orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu",
       promptCachingEnabled: false,
     });
   });
 
-  test("the AI-call reads throw on an unreadable config", async () => {
+  test("AI-call reads use defaults for unreadable settings", async () => {
     const scope = requestScope(corruptOrgId, ids.userA1);
-
-    const config = await Result.tryPromise(
-      async () =>
+    expect(
+      (
         await scope(
           async (tx) =>
             await loadOrgAIConfig(tx, {
               organizationId: corruptOrgId,
               userId: ids.userA1,
             }),
-        ),
-    );
-    const settings = await Result.tryPromise(
-      async () =>
+        )
+      ).unwrap(),
+    ).toBeNull();
+    expect(
+      (
         await scope(
           async (tx) =>
             await loadOrgAISettings(tx, {
               organizationId: corruptOrgId,
               userId: ids.userA1,
             }),
-        ),
-    );
+        )
+      ).unwrap(),
+    ).toEqual({
+      orgAIConfig: null,
+      promptCachingEnabled: false,
+      managedAIResidency: "eu",
+    });
+  });
 
-    expect(Result.isError(config)).toBe(true);
-    expect(Result.isError(settings)).toBe(true);
+  test("a failed settings read falls back while still checking current membership", async () => {
+    const scope = requestScope(ids.orgA, ids.userA1);
+    let settingsFailures = 0;
+    const read = async (userId: SafeId<"user">) =>
+      await scope(async (tx) => {
+        const reader = new Proxy(tx, {
+          get(target, property, receiver) {
+            if (property !== "select") {
+              return Reflect.get(target, property, receiver);
+            }
+            return new Proxy(target.select, {
+              apply(select, _thisArgument, args) {
+                const selection: unknown = args.at(0);
+                if (
+                  typeof selection === "object" &&
+                  selection !== null &&
+                  "aiConfigEncrypted" in selection
+                ) {
+                  settingsFailures += 1;
+                  throw new Error("Settings read unavailable");
+                }
+                return Reflect.apply(select, target, args);
+              },
+            });
+          },
+        });
+        return await loadOrgSettingsForAuth(reader, {
+          organizationId: ids.orgA,
+          userId,
+        });
+      });
+    expect(await read(ids.userA1)).toEqual({
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      promptCachingEnabled: true,
+      managedAIResidency: "eu",
+    });
+    expect(await read(ids.userB1)).toMatchObject({
+      orgAIConfig: null,
+      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
+    });
+    expect(settingsFailures).toBe(2);
   });
 });
 

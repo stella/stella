@@ -7,6 +7,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { OrganizationAIAvailability } from "@stll/api-contract/organization-ai-availability";
+import { resolveAIProviderSettings } from "@stll/api-contract/organization-ai-availability";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -96,7 +97,6 @@ export const AIAvailabilityProvider = ({
 const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const [open, setOpen] = useState(false);
   const t = useTranslations();
-  const tErrors = useTranslations("errors");
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const availabilityOptions = useMemo(
@@ -123,16 +123,19 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
           fingerprintKey: "AIAvailabilityRoot:failure",
           scope: { type: "handler", handlerId: "AIAvailabilityRoot:failure" },
         });
-        // Callers read `false` as "do not proceed" and stop there, so without
-        // this the action the user just triggered would appear to do nothing.
-        notifyUserError(error, tErrors("actionFailed"));
         return null;
       });
 
-    // A failed availability check is not evidence that no key is configured,
-    // so it must not open the configure-key dialog.
+    // Availability is advisory: the send endpoint owns provider selection and
+    // remains the authority when this independent settings read fails.
     if (availability === null) {
-      return false;
+      return (
+        resolveAIProviderSettings({
+          orgConfigured: false,
+          providerConfiguration: "permission_required",
+          readStatus: "unavailable",
+        }).type === "defaultProvider"
+      );
     }
 
     if (availability.available) {
@@ -150,7 +153,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, queryClient, t, tErrors]);
+  }, [availabilityOptions, queryClient, t]);
 
   const openIfAIUnavailable = useCallback(() => {
     if (
@@ -216,12 +219,11 @@ const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
 export const AIUnavailableDialogTrigger = () => {
   const availability = use(AIUnavailableContext);
   const { openAIKeyDialog } = useAIKeyGate();
-  const t = useTranslations();
   if (availability === null) {
     return null;
   }
   if (availability.providerConfiguration !== "allowed") {
-    return <p>{t(aiUnavailableMessageKey(availability))}</p>;
+    return null;
   }
   return <OpenAIKeyDialogOnMount open={openAIKeyDialog} />;
 };
@@ -259,7 +261,7 @@ export const RequireAIKey = ({
     dataView.type === "error" ||
     (dataView.type === "items" && dataView.refetchError !== undefined)
   ) {
-    return <QueryViewFeedback view={dataView} />;
+    return children;
   }
 
   if (data?.available) {
@@ -300,18 +302,6 @@ export const RequireAIKey = ({
 };
 
 function aiUnavailableMessageKey(availability: OrganizationAIAvailability) {
-  switch (availability.providerConfiguration) {
-    case "permission_required":
-      return "ai.keyRequired.permissionRequired" as const;
-    case "account_restricted":
-      return "ai.keyRequired.accountRestricted" as const;
-    case "allowed":
-      break;
-    default:
-      availability.providerConfiguration satisfies never;
-      return panic("Unhandled AI provider configuration capability");
-  }
-
   switch (availability.unavailableReason) {
     case "member_assignment_required":
       return "ai.keyRequired.seatRequired" as const;
