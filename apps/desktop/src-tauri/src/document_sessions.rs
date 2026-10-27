@@ -230,7 +230,19 @@ fn retire_copy(
       source,
       path,
       synced_sha,
-    } => (source, path, synced_sha),
+    } => {
+      // The reader moved or deleted the set-aside copy: nothing is left to recover.
+      if editor_state == EditorState::Closed {
+        match local_store::open_private(local_store::OpenMode::Read, path) {
+          Ok(_) => {}
+          Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(CopyRetirement::Removed);
+          }
+          Err(error) => return Err(error.to_string()),
+        }
+      }
+      (source, path, synced_sha)
+    }
     CopyRetirement::Removed => return Ok(CopyRetirement::Removed),
   };
   if let Some(expected) = synced_sha {

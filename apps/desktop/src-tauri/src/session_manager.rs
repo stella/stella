@@ -803,7 +803,7 @@ impl SessionManager {
           (
             EditorState::Missing,
             EditorState::Missing,
-            CopyRetirement::Pending { .. },
+            CopyRetirement::Pending { .. } | CopyRetirement::Quarantined { .. },
           ) => EditorState::Closed,
           (_, observed, _) => observed,
         };
@@ -2527,6 +2527,16 @@ impl SessionManager {
     session.sse_listener = Some(handle);
   }
 
+  fn holds_pending_recovery(&self, folder: &Path) -> bool {
+    self.retired_sessions.iter().any(|record| {
+      matches!(
+        &record.copy,
+        document_sessions::CopyRetirement::Pending { source, .. }
+          if source.starts_with(folder)
+      )
+    })
+  }
+
   async fn write_managed_copy(
     &self,
     folder_name: &str,
@@ -2538,7 +2548,15 @@ impl SessionManager {
       .as_ref()
       .ok_or("Connect your account to edit documents")?;
     let edit_root = self.edit_root.join(owner.as_str());
-    let session_folder = edit_root.join(sanitize_path_segment(folder_name));
+    let mut session_folder = edit_root.join(sanitize_path_segment(folder_name));
+    // A retired editor may still hold unsynced work in this folder until its
+    // copy is quarantined; a new copy never replaces it.
+    if self.holds_pending_recovery(&session_folder) {
+      session_folder = edit_root.join(sanitize_path_segment(&format!(
+        "{folder_name}-{}",
+        uuid::Uuid::new_v4()
+      )));
+    }
     let file_path = session_folder.join(file_name);
     let buffer = buffer.to_vec();
     tokio::task::spawn_blocking(move || {
@@ -3271,6 +3289,38 @@ mod tests {
     std::fs::remove_dir_all(manager.edit_root).unwrap();
   }
 
+  #[tokio::test]
+  async fn a_new_copy_never_replaces_a_retired_editors_unsynced_work() {
+    let mut manager = test_manager();
+    manager.edit_root =
+      std::env::temp_dir().join(format!("stella-edit-{}", uuid::Uuid::new_v4()));
+    // Account A's editor was retired by a switch to B and back; its working
+    // copy is still waiting to be quarantined.
+    let preserved = PathBuf::from(
+      manager
+        .write_managed_copy("session", "document.docx", b"unsynced edits")
+        .await
+        .unwrap(),
+    );
+    let mut stored = persisted_session_for_test("session");
+    stored.file_path = preserved.to_string_lossy().into_owned();
+    let mut record = RetiredSession::plan(stored, &manager.quarantine_root()).unwrap();
+    record.token = document_sessions::TokenRetirement::Deleted;
+    manager.retired_sessions.push(record);
+
+    let reopened = PathBuf::from(
+      manager
+        .write_managed_copy("session", "document.docx", b"server version")
+        .await
+        .unwrap(),
+    );
+
+    assert_ne!(reopened.parent(), preserved.parent());
+    assert_eq!(std::fs::read(&preserved).unwrap(), b"unsynced edits");
+    assert_eq!(std::fs::read(&reopened).unwrap(), b"server version");
+    std::fs::remove_dir_all(manager.edit_root).unwrap();
+  }
+
   fn persisted_session_for_test(id: &str) -> PersistedDesktopSession {
     PersistedDesktopSession {
       editor_state: EditorState::Unknown,
@@ -3419,6 +3469,37 @@ mod tests {
     let recovery = manager.get_snapshot().document_recovery;
     assert!(!recovery.pending);
     assert!(recovery.edits.is_empty());
+    std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
+  }
+
+  #[tokio::test]
+  async fn missing_quarantined_copy_retires_after_two_observations_across_a_restart() {
+    let (mut manager, source, destination) = missing_copy_manager();
+    let synced_sha = match &manager.retired_sessions[0].copy {
+      CopyRetirement::Pending { synced_sha, .. } => synced_sha.clone(),
+      _ => unreachable!(),
+    };
+    manager.retired_sessions[0].copy = CopyRetirement::Quarantined {
+      source,
+      path: destination,
+      synced_sha,
+    };
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert_eq!(
+      manager.retired_sessions[0].editor_state,
+      EditorState::Missing
+    );
+    let loaded = session_store::load_session_store(&manager.store_path).await;
+    manager.retired_sessions = loaded.retired_sessions;
+    manager
+      .retry_retired_sessions(RetirementPass::ObserveEditors)
+      .await
+      .unwrap();
+    assert!(manager.retired_sessions.is_empty());
+    assert!(manager.get_snapshot().document_recovery.edits.is_empty());
     std::fs::remove_dir_all(manager.store_path.parent().unwrap()).unwrap();
   }
 
