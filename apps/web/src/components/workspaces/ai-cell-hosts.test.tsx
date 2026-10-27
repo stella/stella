@@ -412,6 +412,46 @@ describe("AI table host census", () => {
       }
     },
   );
+  test.each([
+    { form: "property", entry: "cell: renderer" },
+    { form: "method", entry: "cell() { return <SyntheticCell />; }" },
+    { form: "shorthand", entry: "cell" },
+    { form: "getter", entry: "get cell() { return renderer; }" },
+  ])(
+    "discovers $form cell factories and their adapter dependencies",
+    ({ entry }) => {
+      const sources = new Map([
+        [
+          "synthetic/adapter.tsx",
+          'import { AiCell } from "@/components/workspaces/ai-cell"; export const SyntheticCell = () => <AiCell state={{type: "running"}} />;',
+        ],
+        [
+          "synthetic/factory.tsx",
+          `import { SyntheticCell } from "./adapter"; const renderer = () => <SyntheticCell />; const cell = renderer; export const columns = (kind) => { switch(kind) { case "question": return { ${entry} }; } };`,
+        ],
+        [
+          "synthetic/host.tsx",
+          'import { PublicLawTable } from "@/components/public-law-table/public-law-table"; import { columns } from "./factory"; export const Host = () => <PublicLawTable columns={columns("question")} />;',
+        ],
+      ]);
+      const valid = sourceCensus(sources);
+      expect(valid.hosts.map((host) => host.file)).toEqual(["synthetic/host"]);
+      expect([...valid.adapters]).toEqual(["SyntheticCell"]);
+      assertHostsUseSharedAdapters(valid);
+      sources.set(
+        "synthetic/adapter.tsx",
+        "export const SyntheticCell = () => <span />;",
+      );
+      const broken = sourceCensus(sources);
+      expect(broken.hosts.map((host) => host.file)).toEqual(
+        valid.hosts.map((host) => host.file),
+      );
+      expect(() => assertHostsUseSharedAdapters(broken)).toThrow(
+        "must reach a shared AI adapter",
+      );
+    },
+  );
+
   test("discovers aliased and namespace table hosts even when their shared adapter is removed", () => {
     const sources = new Map([
       [
