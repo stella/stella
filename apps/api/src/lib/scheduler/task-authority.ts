@@ -229,6 +229,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "memory-curator.ts",
     "Ages memories by their timestamps, recorded as a service.",
   ),
+  "onlineWork.runPending": platform(
+    "online-work-runner.ts",
+    "Database schema maintenance.",
+  ),
   "memory.extractor": {
     authority: "member-run",
     module: `${TASKS}/memory-extractor.ts`,

@@ -523,6 +523,24 @@ describe("online index gate", () => {
     await harness.gate.close();
   });
 
+  test("holds every build on a missing EBS setting", async () => {
+    const harness = makeHarness({
+      readings: [],
+      ebsSource: { type: "missing" },
+    });
+
+    expect(
+      await harness.gate.attempt(
+        "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+      ),
+    ).toBe("wait");
+    expect(harness.statements).not.toContain(
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+    );
+    expect(JSON.stringify(harness.records)).toContain('"kind":"unknown"');
+    await harness.gate.close();
+  });
+
   test("starts at the configured floor and logs the values and effective thresholds", async () => {
     const gateConfig = config({
       health: { ...config().health, startFloor: 80, hardFloor: 30 },

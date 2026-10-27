@@ -23,6 +23,10 @@ import {
   DATABASE_COMPONENT_KEYS,
   hasSecureDatabaseTransport,
 } from "@/api/db-url";
+import {
+  MIGRATE_ONLINE_WORK_MODE,
+  MIGRATE_ONLINE_WORK_MODES,
+} from "@/api/db/migrate-online-work-mode";
 import { CASE_LAW_DERIVED_AI_MODES } from "@/api/lib/case-law/derived-ai-mode";
 import { CASE_LAW_SEARCH_GUIDANCE_MODES } from "@/api/lib/case-law/search-guidance-mode";
 import { resolveConfigurationPlaceholders } from "@/api/lib/configuration-placeholders";
@@ -138,6 +142,10 @@ export const envBaseServerSchema = {
   // parser-output-unchanged: database load-gate settings; no parser reads them
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: v.optional(v.string()),
   DB_LOAD_GATE_EBS_SIGNAL: v.optional(v.picklist(["disabled"])),
+  STELLA_MIGRATE_ONLINE_WORK: v.optional(
+    v.picklist(MIGRATE_ONLINE_WORK_MODES),
+    MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED,
+  ),
   DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema(),
   DATABASE_RLS_POOL_MAX: databasePoolMaxSchema(),
   PUBLIC_LAW_DATABASE_URL: v.optional(postgresUrlSchema()),

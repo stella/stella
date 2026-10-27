@@ -12,6 +12,7 @@ import {
   euCompletionReceipts,
   folioCollabRooms,
   legalReaderAnswerMessages,
+  onlineWorkState,
   pdfSigningSessions,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
@@ -151,6 +152,20 @@ const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
   table: legalReaderAnswerMessages,
   edges: { streaming: ["complete", "failed"], complete: [], failed: [] },
   initial: ["streaming", "complete"],
+});
+
+export const ONLINE_WORK_STATE_TRANSITIONS = defineScopedTransitions({
+  table: onlineWorkState,
+  key: "name",
+  scope: [],
+  stateColumn: "state",
+  edges: {
+    building: ["building", "finalized", "failed"],
+    finalized: [],
+    failed: ["building"],
+  },
+  initial: ["building"],
+  sameStateUpsert: "update",
 });
 
 const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
@@ -406,6 +421,7 @@ export const TRANSITIONS = {
   mcpOAuthState: { unmanaged: UNMANAGED_REASONS.antiForgery },
   mcpUserConnections: { unmanaged: UNMANAGED_REASONS.connection },
   officeFileEvidence: { unmanaged: UNMANAGED_REASONS.workerRun },
+  onlineWorkState: ONLINE_WORK_STATE_TRANSITIONS,
   organizationAccessStates: { unmanaged: UNMANAGED_REASONS.projection },
   organizationConfiguredAccess: { unmanaged: UNMANAGED_REASONS.projection },
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },

@@ -89,6 +89,7 @@
     "check:dead-columns": "bun scripts/check-dead-columns.ts",
     "check:projection-totality": "bun scripts/check-projection-totality.ts",
     "check:aggregate-locks": "bun scripts/check-aggregate-locks.ts",
+    "check:online-work-lifecycle": "bun scripts/check-online-work-lifecycle.ts",
     "check:aggregate-mutations": "bun scripts/check-aggregate-mutations.ts",
     "check:write-contracts": "bun scripts/check-write-contracts.ts",
     "check:split-buttons": "bun scripts/check-split-buttons.ts",

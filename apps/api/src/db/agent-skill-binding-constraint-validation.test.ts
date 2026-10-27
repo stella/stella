@@ -67,10 +67,15 @@ test("the schema's binding indexes are built concurrently by the online owner", 
     const declaration = ONLINE_MIGRATION_INDEXES.find(
       ({ name }) => name === config.name,
     );
-    if (declaration === undefined || config.where === undefined) {
+    if (
+      declaration === undefined ||
+      !("createSql" in declaration) ||
+      typeof declaration.createSql !== "string" ||
+      config.where === undefined
+    ) {
       panic("A partial skill binding index has no online declaration");
     }
-    expect(declaration.tableName).toBe(table.name);
+    expect<string>(declaration.tableName).toBe(table.name);
     expect(declaration.isUnique).toBe(config.unique);
     expect(declaration.createSql).toContain("CREATE INDEX CONCURRENTLY");
     expect(declaration.definitionBody).toContain(

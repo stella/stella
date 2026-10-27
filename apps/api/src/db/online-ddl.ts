@@ -105,7 +105,7 @@ export type OnlineIndexDeclaration = RequiredMigrationIndex & {
    * The declared build, read only by `createIndexConcurrently`. An index
    * without one belongs to a schema migration rather than the online phase.
    */
-  createSql?: string;
+  createSql?: string | undefined;
 };
 
 type OnlineBuildDeclaration = OnlineIndexDeclaration & { createSql: string };

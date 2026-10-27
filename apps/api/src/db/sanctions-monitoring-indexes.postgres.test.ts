@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
+import type { OnlineIndexDeclaration } from "./online-ddl";
 import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -34,19 +35,21 @@ if (!runPostgresTests) {
             next_attempt_at timestamptz NOT NULL, scheduled_at timestamptz NOT NULL
           ) ON COMMIT DROP
         `);
-        const definitions = ONLINE_MIGRATION_INDEXES.filter(
-          ({ tableName }) => tableName === "sanctions_contact_marks",
-        ).map(({ createSql }) => {
-          if (createSql === undefined) {
-            return panic("Retry indexes declare their creation SQL");
-          }
-          return createSql
-            .replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX")
-            .replace(
-              'public."sanctions_contact_marks"',
-              'pg_temp."monitoring_retry_index_plan"',
-            );
-        });
+        const onlineIndexes: readonly OnlineIndexDeclaration[] =
+          ONLINE_MIGRATION_INDEXES;
+        const definitions = onlineIndexes
+          .filter(({ tableName }) => tableName === "sanctions_contact_marks")
+          .map(({ createSql }) => {
+            if (createSql === undefined) {
+              return panic("Retry indexes declare their creation SQL");
+            }
+            return createSql
+              .replace("CREATE INDEX CONCURRENTLY", "CREATE INDEX")
+              .replace(
+                'public."sanctions_contact_marks"',
+                'pg_temp."monitoring_retry_index_plan"',
+              );
+          });
         await tx.execute(sql.raw(definitions.join(";")));
         // A substantial tenant backlog exercises LIMIT's ordered index path;
         // a nearly exhausted queue can legitimately favor a bitmap scan and sort.

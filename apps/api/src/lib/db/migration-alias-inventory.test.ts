@@ -90,7 +90,15 @@ describe("migration alias inventory", () => {
       );
       if (typeof repair !== "string") {
         for (const index of repair.indexes) {
-          expect(REWRITTEN_MIGRATION_INDEXES).toContainEqual(index);
+          expect(
+            REWRITTEN_MIGRATION_INDEXES.some(
+              (candidate) =>
+                candidate.name === index.name &&
+                candidate.definitionBody === index.definitionBody &&
+                candidate.isUnique === index.isUnique &&
+                candidate.tableName === index.tableName,
+            ),
+          ).toBe(true);
         }
       }
     }

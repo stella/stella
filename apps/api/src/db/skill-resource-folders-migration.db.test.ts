@@ -20,6 +20,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
 
+import { MIGRATE_ONLINE_WORK_MODE } from "./migrate-online-work-mode";
 import { runMigrations } from "./migration-runner";
 
 const migrationName = "20261010005100_standard_skill_resource_folders";
@@ -210,6 +211,7 @@ const withPreCutoverDatabase = async (
             const connection = await openScratch().sql.reserve();
             try {
               const result = await runMigrations({
+                onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
                 connection,
                 databaseUrl: scratchUrl,
                 migrationsFolder: bundle,

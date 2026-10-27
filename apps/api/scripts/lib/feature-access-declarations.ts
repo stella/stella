@@ -871,6 +871,15 @@ const moduleFacts = (
     },
   };
 };
+/**
+ * Schema maintenance: the online migration walk runs DDL and constraint
+ * validation over every table for the system and reads no feature data on a
+ * caller's behalf, so an entry point that drives it uses no feature through it.
+ */
+const SCHEMA_MAINTENANCE_MODULES: ReadonlySet<string> = new Set([
+  "apps/api/src/db/online-migrations.ts",
+]);
+
 type EndpointOptions = {
   endpoint: DeclarationOptions["endpoints"][number];
   registry: FeatureRegistry;
@@ -914,7 +923,7 @@ const inspectEndpoint = ({
     visited.add(module);
     // Descriptor registries do not invoke their handlers. Dispatch owners
     // admit the selected descriptor before invocation, not the whole caller.
-    if (dispatchModules.has(module)) {
+    if (dispatchModules.has(module) || SCHEMA_MAINTENANCE_MODULES.has(module)) {
       return;
     }
     const ast = graph.sourceFile(module);
