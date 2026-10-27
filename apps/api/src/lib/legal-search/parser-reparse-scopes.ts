@@ -141,11 +141,11 @@ export const PARSER_VERSION_SCOPES = {
     },
   },
   [ADAPTER_KEYS.SK_COURTS]: {
-    version: 19,
+    version: 20,
     scope: {
       type: "all",
       reason:
-        "paragraph text and block boundaries are recomputed from the stored PDF (a line the layout wrapped inside a sentence no longer opens a numbered point or a signature), a decision title set over several lines is one heading, and repeated section headings get unique anchors; paragraphs have no feature storage of their own",
+        "PDF paragraph gaps, lettered items and the bounded first-page metadata table change paragraph text and block boundaries; PDF bytes must be fetched again because this adapter's stored raw contains listing/detail metadata only, and ordinary metadata replay does not rebuild the document",
     },
   },
   [ADAPTER_KEYS.SK_US]: {
