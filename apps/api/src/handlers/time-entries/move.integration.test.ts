@@ -64,7 +64,7 @@ beforeAll(async () => {
       [ids.userA1, ids.userA2, ids.userAdmin].map((userId) => ({
         organizationId: ids.orgA,
         userId,
-        featureId: "time-billing",
+        featureId: "time-billing" as const,
       })),
     )
     .onConflictDoNothing();
