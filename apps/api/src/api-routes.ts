@@ -87,7 +87,7 @@ import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
 import { syntheticRoute } from "@/api/handlers/synthetic/routes";
-import { tasksRoute } from "@/api/handlers/tasks/routes";
+import { myTasksRoute, tasksRoute } from "@/api/handlers/tasks/routes";
 import { templatePacksRoute } from "@/api/handlers/template-packs/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
 import {
@@ -270,6 +270,7 @@ export const apiRoutes = mount([
       entityViewsRoute,
       listsRoute,
       tasksRoute,
+      myTasksRoute,
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,
