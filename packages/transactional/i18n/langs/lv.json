@@ -7,6 +7,19 @@
     "ignore": "Ja negaidījāt šo uzaicinājumu, varat droši ignorēt šo e-pastu.",
     "subject": "Jūs esat uzaicināts pievienoties {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Skatīt kredītrēķinu} advance {Skatīt avansa rēķinu} other {Skatīt rēķinu}}",
+    "amountDue": "Apmaksājamā summa: {amount}",
+    "body": "{firmName} jums nosūtīja {documentType, select, credit_note {kredītrēķinu} advance {avansa rēķinu} other {rēķinu}}. Atveriet saiti, lai skatītu informāciju un lejupielādētu PDF.",
+    "dueDate": "Apmaksas termiņš: {date}",
+    "expires": "Saite ir derīga līdz {date}.",
+    "heading": "{documentType, select, credit_note {Kredītrēķins} advance {Avansa rēķins} other {Rēķins}} {invoiceNumber}",
+    "ignore": "Šo e-pastu stella piegādāja sūtītāja {firmName} vārdā. Ja to negaidījāt, varat to ignorēt.",
+    "messageFrom": "Ziņa no sūtītāja {firmName}",
+    "preview": "{firmName} jums nosūtīja {documentType, select, credit_note {kredītrēķinu} advance {avansa rēķinu} other {rēķinu}} {invoiceNumber}",
+    "reply": "Lai sazinātos ar sūtītāju {firmName}, atbildiet uz šo e-pastu.",
+    "subject": "{documentType, select, credit_note {Kredītrēķins} advance {Avansa rēķins} other {Rēķins}} {invoiceNumber}, sūtītājs {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Pārskatīt sesijas",
     "body": "Jūsu kontā tika pieteicies no jaunas ierīces vai atrašanās vietas.",

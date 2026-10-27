@@ -38,6 +38,7 @@ const FIELD_LABELS = {
   city: "contacts.fields.billingAddressCity",
   postalCode: "contacts.fields.billingAddressPostalCode",
   country: "common.country",
+  email: "billing.sellerProfiles.replyEmail",
   iban: "common.anonymizationLabels.iban",
   bic: "billing.sellerProfiles.bic",
   accountNumber: "common.anonymizationLabels.bankAccountNumber",
@@ -66,6 +67,7 @@ export const SellerProfileForm = ({
   const schema = sellerProfileFormSchema({
     required: t("common.required"),
     invalidField: t("errors.actionFailed"),
+    invalidEmail: t("contacts.communication.invalidEmail"),
     invalidIban: t("billing.sellerProfiles.invalidIban"),
     invalidBic: t("billing.sellerProfiles.invalidBic"),
     invalidCurrency: t("billing.sellerProfiles.invalidCurrency"),
@@ -137,6 +139,7 @@ export const SellerProfileForm = ({
                       dir={
                         name === "iban" ||
                         name === "bic" ||
+                        name === "email" ||
                         name === "accountNumber" ||
                         name === "defaultCurrency"
                           ? "ltr"
@@ -212,6 +215,7 @@ function sellerProfileDefaults(profile: SellerProfile | undefined) {
     city: profile?.city ?? "",
     postalCode: profile?.postalCode ?? "",
     country: profile?.country ?? "",
+    email: profile?.email ?? "",
     iban: profile?.iban ?? "",
     bic: profile?.bic ?? "",
     accountNumber: profile?.accountNumber ?? "",

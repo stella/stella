@@ -54,6 +54,28 @@ export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
   });
 
 /**
+ * The emails an invoice was sent with, newest first, with the client's
+ * addresses a new send starts from. Keyed under the invoice, so every
+ * invoice invalidation refreshes it.
+ */
+export const invoiceSendsOptions = (workspaceId: string, invoiceId: string) =>
+  queryOptions({
+    queryKey: [...invoicesKeys.byId(workspaceId, invoiceId), "sends"],
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .invoices({ workspaceId })({ invoiceId })
+        .sends.get({ fetch: { signal } });
+
+      return unwrapApiResponse(response);
+    },
+  });
+
+export type InvoiceSends = Awaited<
+  ReturnType<NonNullable<ReturnType<typeof invoiceSendsOptions>["queryFn"]>>
+>;
+
+/**
  * What a new invoice in the matter starts from: unbilled entries and
  * expenses, the seller, buyer, VAT and payment term with their sources.
  * Always refetched on open, since billing elsewhere changes what is unbilled.

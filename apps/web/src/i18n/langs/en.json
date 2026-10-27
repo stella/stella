@@ -698,11 +698,47 @@
       "linkedExpenses": "Linked expenses",
       "linkedTimeEntries": "Linked time entries",
       "markPaid": "Mark paid",
+      "markSent": "Mark as sent",
       "noEntries": "No entries linked to this invoice",
       "noInvoices": "No invoices yet",
       "paidAt": "Paid at",
       "removeEntries": "Remove entries",
       "send": "Send",
+      "sendByEmail": "Send by email",
+      "sending": {
+        "failed": "The invoice could not be sent",
+        "historyEmpty": "This invoice has not been sent by email yet.",
+        "historyTitle": "Sent by email",
+        "linkInfo": "The recipients get a secure link to view and download the invoice. Nothing is attached to the email.",
+        "linkStatus": {
+          "active": "Link active",
+          "expired": "Link expired",
+          "failed": "Not delivered",
+          "revoked": "Link revoked"
+        },
+        "loadFailed": "The sending history could not be loaded.",
+        "message": "Message (optional)",
+        "messagePlaceholder": "A short note for the recipients",
+        "messageTooLong": "The message can have at most {max, number} characters.",
+        "notDelivered": "Not delivered to {addresses}",
+        "notOpened": "Not opened yet",
+        "opened": "Opened {date}",
+        "recipients": "Send to",
+        "recipientsHint": "One address per line or separated by commas, at most {max, number}.",
+        "recipientsInvalid": "Check the email addresses.",
+        "recipientsRequired": "Add at least one email address.",
+        "recipientsTooMany": "Send to at most {max, number} addresses at once.",
+        "replyTo": "Replies go to {address}.",
+        "revoke": "Revoke link",
+        "revokeConfirm": "The recipients will no longer be able to open the invoice with this link. Send the invoice again to give them a new one.",
+        "revokeTitle": "Revoke this link?",
+        "revoked": "Link revoked",
+        "sendAgain": "Send again",
+        "sent": "Invoice sent",
+        "sentBy": "{date}, sent by {name}",
+        "sentPartial": "Invoice sent, but these addresses could not be reached: {addresses}",
+        "title": "Send invoice {number}"
+      },
       "statuses": {
         "draft": "Draft",
         "finalized": "Finalized",
@@ -814,6 +850,7 @@
       "legalName": "Legal name",
       "registerEntry": "Register entry",
       "registrationId": "Registration ID",
+      "replyEmail": "Email for replies",
       "setDefault": "Make default",
       "title": "Seller profiles",
       "vatPayerHelp": "Invoices from this seller charge VAT. Turn off for a registered person who has a VAT ID but is not a VAT payer.",
@@ -3874,6 +3911,31 @@
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
     "title": "Inspector"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "Download ISDOC",
+      "peppol_sk": "Download e-invoice (Peppol)",
+      "ubl": "Download e-invoice (UBL)"
+    },
+    "downloadFailed": "The file could not be downloaded",
+    "failure": {
+      "busy": {
+        "body": "Wait a minute and open the link again.",
+        "title": "Too many attempts"
+      },
+      "error": {
+        "body": "Try again later. If it keeps failing, ask the sender to send the invoice again.",
+        "title": "The invoice could not be opened"
+      },
+      "unavailable": {
+        "body": "It may have expired or been withdrawn. Ask the sender for a new link.",
+        "title": "This link is no longer available"
+      }
+    },
+    "paid": "This invoice has been paid.",
+    "paymentQr": "Payment QR code",
+    "validUntil": "This link is valid until {date}."
   },
   "knowledge": {
     "agentSkills": {

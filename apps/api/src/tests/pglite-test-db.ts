@@ -41,6 +41,7 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFlowTransitions,
+  installPgliteInvoiceLinks,
   installPgliteInvoiceObjects,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
@@ -823,6 +824,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCaseLawObservationFence(db);
   await installPgliteCaseLawParsedSourceInvalidation(db);
   await installPglitePdfSigningTokenScopes(db);
+  await installPgliteInvoiceLinks(db);
   await installPgliteDesktopPresenceRls(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);

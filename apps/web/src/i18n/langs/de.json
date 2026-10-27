@@ -698,11 +698,47 @@
       "linkedExpenses": "Verknüpfte Ausgaben",
       "linkedTimeEntries": "Verknüpfte Zeiteinträge",
       "markPaid": "Als bezahlt markieren",
+      "markSent": "Als gesendet markieren",
       "noEntries": "Keine Einträge mit dieser Rechnung verknüpft",
       "noInvoices": "Noch keine Rechnungen",
       "paidAt": "Bezahlt am",
       "removeEntries": "Einträge entfernen",
       "send": "Senden",
+      "sendByEmail": "Per E-Mail senden",
+      "sending": {
+        "failed": "Die Rechnung konnte nicht gesendet werden",
+        "historyEmpty": "Diese Rechnung wurde noch nicht per E-Mail gesendet.",
+        "historyTitle": "Per E-Mail gesendet",
+        "linkInfo": "Die Empfänger erhalten einen sicheren Link, um die Rechnung anzusehen und herunterzuladen. Der E-Mail wird nichts angehängt.",
+        "linkStatus": {
+          "active": "Link aktiv",
+          "expired": "Link abgelaufen",
+          "failed": "Nicht zugestellt",
+          "revoked": "Link widerrufen"
+        },
+        "loadFailed": "Der Versandverlauf konnte nicht geladen werden.",
+        "message": "Nachricht (optional)",
+        "messagePlaceholder": "Eine kurze Notiz für die Empfänger",
+        "messageTooLong": "Die Nachricht darf höchstens {max, number} Zeichen haben.",
+        "notDelivered": "Nicht zugestellt an {addresses}",
+        "notOpened": "Noch nicht geöffnet",
+        "opened": "Geöffnet am {date}",
+        "recipients": "Empfänger",
+        "recipientsHint": "Eine Adresse pro Zeile oder durch Kommas getrennt, höchstens {max, number}.",
+        "recipientsInvalid": "Prüfen Sie die E-Mail-Adressen.",
+        "recipientsRequired": "Geben Sie mindestens eine E-Mail-Adresse ein.",
+        "recipientsTooMany": "Senden Sie an höchstens {max, number} Adressen auf einmal.",
+        "replyTo": "Antworten gehen an {address}.",
+        "revoke": "Link widerrufen",
+        "revokeConfirm": "Die Empfänger können die Rechnung mit diesem Link nicht mehr öffnen. Senden Sie die Rechnung erneut, um ihnen einen neuen Link zu geben.",
+        "revokeTitle": "Diesen Link widerrufen?",
+        "revoked": "Der Link wurde widerrufen",
+        "sendAgain": "Erneut senden",
+        "sent": "Rechnung gesendet",
+        "sentBy": "{date}, gesendet von {name}",
+        "sentPartial": "Rechnung gesendet, aber diese Adressen waren nicht erreichbar: {addresses}",
+        "title": "Rechnung {number} senden"
+      },
       "statuses": {
         "draft": "Entwurf",
         "finalized": "Abgeschlossen",
@@ -814,6 +850,7 @@
       "legalName": "Offizieller Name",
       "registerEntry": "Registereintrag",
       "registrationId": "Registrierungsnummer",
+      "replyEmail": "E-Mail für Antworten",
       "setDefault": "Als Standard festlegen",
       "title": "Verkäuferprofile",
       "vatPayerHelp": "Rechnungen dieses Verkäufers weisen Umsatzsteuer aus. Ausschalten für eine registrierte Person, die eine Umsatzsteuer-ID hat, aber nicht umsatzsteuerpflichtig ist.",
@@ -3874,6 +3911,31 @@
     "showPane": "Bereich anzeigen",
     "swapViews": "Hauptansicht und Seitenleiste tauschen",
     "title": "Inspektor"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "ISDOC herunterladen",
+      "peppol_sk": "E-Rechnung herunterladen (Peppol)",
+      "ubl": "E-Rechnung herunterladen (UBL)"
+    },
+    "downloadFailed": "Die Datei konnte nicht heruntergeladen werden",
+    "failure": {
+      "busy": {
+        "body": "Warten Sie eine Minute und öffnen Sie den Link erneut.",
+        "title": "Zu viele Versuche"
+      },
+      "error": {
+        "body": "Versuchen Sie es später erneut. Wenn es weiter fehlschlägt, bitten Sie den Absender, die Rechnung erneut zu senden.",
+        "title": "Die Rechnung konnte nicht geöffnet werden"
+      },
+      "unavailable": {
+        "body": "Er ist möglicherweise abgelaufen oder wurde widerrufen. Bitten Sie den Absender um einen neuen Link.",
+        "title": "Dieser Link ist nicht mehr verfügbar"
+      }
+    },
+    "paid": "Diese Rechnung ist bezahlt.",
+    "paymentQr": "QR-Code für die Zahlung",
+    "validUntil": "Dieser Link ist bis {date} gültig."
   },
   "knowledge": {
     "agentSkills": {

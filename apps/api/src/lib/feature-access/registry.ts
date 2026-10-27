@@ -166,6 +166,21 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
           admission: "isDeploymentFeatureEnabled",
           specifier: "@/api/lib/deployment-feature",
         },
+        {
+          // A recipient opens an emailed invoice without an account, so the
+          // sender's enrolment at send time stands; the link works only
+          // while the deployment offers the feature.
+          type: "admitted",
+          module: "apps/api/src/handlers/invoice-links/view.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
+        {
+          type: "admitted",
+          module: "apps/api/src/handlers/invoice-links/download.ts",
+          admission: "isDeploymentFeatureEnabled",
+          specifier: "@/api/lib/deployment-feature",
+        },
       ],
     },
   },

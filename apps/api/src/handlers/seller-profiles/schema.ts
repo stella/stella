@@ -4,6 +4,7 @@ import { PARTY_IDENTIFIER_MAX_LENGTH } from "@stll/api-contract";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { emailAddressSchema } from "@/api/lib/email/normalized-email";
 
 const name = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
 const registrationId = v.pipe(
@@ -22,6 +23,15 @@ const addressLine = v.pipe(v.string(), v.maxLength(512));
 const city = v.pipe(v.string(), v.maxLength(256));
 const postalCode = v.pipe(v.string(), v.maxLength(32));
 const country = v.pipe(v.string(), v.maxLength(128));
+const email = v.pipe(
+  v.string(),
+  v.trim(),
+  v.maxLength(320),
+  emailAddressSchema,
+  v.description(
+    "Where replies to invoices sent by email go; without it, they go to the member who sent the invoice.",
+  ),
+);
 const iban = v.pipe(v.string(), v.minLength(15), v.maxLength(42));
 const bic = v.pipe(
   v.string(),
@@ -49,6 +59,7 @@ export const createSellerProfileBody = v.object({
   city: v.optional(city),
   postalCode: v.optional(postalCode),
   country: v.optional(country),
+  email: v.optional(email),
   iban: v.optional(iban),
   bic: v.optional(bic),
   accountNumber: v.optional(accountNumber),
@@ -69,6 +80,7 @@ export const updateSellerProfileBody = v.object({
   city: v.optional(v.nullable(city)),
   postalCode: v.optional(v.nullable(postalCode)),
   country: v.optional(v.nullable(country)),
+  email: v.optional(v.nullable(email)),
   iban: v.optional(v.nullable(iban)),
   bic: v.optional(v.nullable(bic)),
   accountNumber: v.optional(v.nullable(accountNumber)),
@@ -89,6 +101,7 @@ export const SELLER_PROFILE_EDITABLE_FIELDS = [
   "city",
   "postalCode",
   "country",
+  "email",
   "iban",
   "bic",
   "accountNumber",

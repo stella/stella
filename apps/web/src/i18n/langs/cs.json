@@ -698,11 +698,47 @@
       "linkedExpenses": "Přiřazené výdaje",
       "linkedTimeEntries": "Přiřazené časové záznamy",
       "markPaid": "Označit jako zaplaceno",
+      "markSent": "Označit jako odeslanou",
       "noEntries": "K této faktuře nejsou přiřazeny žádné záznamy",
       "noInvoices": "Zatím žádné faktury",
       "paidAt": "Zaplaceno dne",
       "removeEntries": "Odebrat záznamy",
       "send": "Odeslat",
+      "sendByEmail": "Odeslat e-mailem",
+      "sending": {
+        "failed": "Fakturu se nepodařilo odeslat",
+        "historyEmpty": "Tato faktura zatím nebyla odeslána e-mailem.",
+        "historyTitle": "Odesláno e-mailem",
+        "linkInfo": "Příjemci dostanou zabezpečený odkaz, přes který si fakturu zobrazí a stáhnou. K e-mailu se nic nepřikládá.",
+        "linkStatus": {
+          "active": "Odkaz je platný",
+          "expired": "Platnost odkazu vypršela",
+          "failed": "Nedoručeno",
+          "revoked": "Odkaz zrušen"
+        },
+        "loadFailed": "Historii odeslání se nepodařilo načíst.",
+        "message": "Zpráva (nepovinné)",
+        "messagePlaceholder": "Krátká poznámka pro příjemce",
+        "messageTooLong": "Zpráva může mít nejvýše {max, number} znaků.",
+        "notDelivered": "Nedoručeno na {addresses}",
+        "notOpened": "Zatím neotevřeno",
+        "opened": "Otevřeno {date}",
+        "recipients": "Příjemci",
+        "recipientsHint": "Každou adresu na samostatný řádek nebo oddělené čárkou, nejvýše {max, number}.",
+        "recipientsInvalid": "Zkontrolujte e-mailové adresy.",
+        "recipientsRequired": "Zadejte alespoň jednu e-mailovou adresu.",
+        "recipientsTooMany": "Najednou lze odeslat nejvýše na {max, number} adres.",
+        "replyTo": "Odpovědi přijdou na {address}.",
+        "revoke": "Zrušit odkaz",
+        "revokeConfirm": "Příjemci už fakturu přes tento odkaz neotevřou. Pokud jim chcete dát nový odkaz, odešlete fakturu znovu.",
+        "revokeTitle": "Zrušit tento odkaz?",
+        "revoked": "Odkaz byl zrušen",
+        "sendAgain": "Odeslat znovu",
+        "sent": "Faktura odeslána",
+        "sentBy": "{date}, odesílatel: {name}",
+        "sentPartial": "Faktura odeslána, ale na tyto adresy ji nebylo možné doručit: {addresses}",
+        "title": "Odeslat fakturu {number}"
+      },
       "statuses": {
         "draft": "Koncept",
         "finalized": "Finalizovaná",
@@ -814,6 +850,7 @@
       "legalName": "Oficiální název",
       "registerEntry": "Zápis v rejstříku",
       "registrationId": "Registrační číslo",
+      "replyEmail": "E-mail pro odpovědi",
       "setDefault": "Nastavit jako výchozí",
       "title": "Profily dodavatelů",
       "vatPayerHelp": "Faktury tohoto dodavatele účtují DPH. Vypněte u identifikované osoby, která má DIČ, ale není plátcem DPH.",
@@ -3874,6 +3911,31 @@
     "showPane": "Zobrazit panel",
     "swapViews": "Prohodit hlavní zobrazení a boční panel",
     "title": "Inspektor"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "Stáhnout ISDOC",
+      "peppol_sk": "Stáhnout e-fakturu (Peppol)",
+      "ubl": "Stáhnout e-fakturu (UBL)"
+    },
+    "downloadFailed": "Soubor se nepodařilo stáhnout",
+    "failure": {
+      "busy": {
+        "body": "Počkejte minutu a otevřete odkaz znovu.",
+        "title": "Příliš mnoho pokusů"
+      },
+      "error": {
+        "body": "Zkuste to později. Pokud potíže přetrvávají, požádejte odesílatele o nové odeslání faktury.",
+        "title": "Fakturu se nepodařilo otevřít"
+      },
+      "unavailable": {
+        "body": "Mohla vypršet jeho platnost nebo byl zrušen. Požádejte odesílatele o nový odkaz.",
+        "title": "Tento odkaz už není dostupný"
+      }
+    },
+    "paid": "Tato faktura je uhrazená.",
+    "paymentQr": "QR kód pro platbu",
+    "validUntil": "Odkaz je platný do {date}."
   },
   "knowledge": {
     "agentSkills": {

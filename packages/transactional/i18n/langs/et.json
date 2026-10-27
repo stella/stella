@@ -7,6 +7,19 @@
     "ignore": "Kui te ei oodanud seda kutset, võite selle e-kirja eirata.",
     "subject": "Teid on kutsutud liituma organisatsiooniga {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Vaata kreeditarvet} advance {Vaata ettemaksuarvet} other {Vaata arvet}}",
+    "amountDue": "Tasumisele kuulub: {amount}",
+    "body": "{firmName} saatis teile {documentType, select, credit_note {kreeditarve} advance {ettemaksuarve} other {arve}}. Avage link, et näha üksikasju ja laadida alla PDF.",
+    "dueDate": "Maksetähtaeg: {date}",
+    "expires": "Link kehtib kuni {date}.",
+    "heading": "{documentType, select, credit_note {Kreeditarve} advance {Ettemaksuarve} other {Arve}} {invoiceNumber}",
+    "ignore": "stella edastas selle e-kirja saatja {firmName} nimel. Kui te seda ei oodanud, võite selle tähelepanuta jätta.",
+    "messageFrom": "Sõnum saatjalt {firmName}",
+    "preview": "{firmName} saatis teile {documentType, select, credit_note {kreeditarve} advance {ettemaksuarve} other {arve}} {invoiceNumber}",
+    "reply": "Saatjaga {firmName} ühenduse võtmiseks vastake sellele e-kirjale.",
+    "subject": "{documentType, select, credit_note {Kreeditarve} advance {Ettemaksuarve} other {Arve}} {invoiceNumber}, saatja {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Vaata seansse",
     "body": "Teie kontole logiti sisse uuest seadmest või asukohast.",

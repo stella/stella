@@ -805,6 +805,31 @@ const applyTransition = async (
   return Result.ok({ id: row.id });
 };
 
+type SendFinalizedInvoiceOptions = Pick<
+  ApplyTransitionOptions,
+  | "actorUserId"
+  | "invoiceId"
+  | "now"
+  | "organizationId"
+  | "recordAuditEvent"
+  | "workspaceId"
+>;
+
+/**
+ * The send transition, for a caller that delivered the invoice itself (an
+ * emailed link): finalized to sent, with the same lock and audit.
+ */
+export const sendFinalizedInvoice = async (
+  tx: Transaction,
+  options: SendFinalizedInvoiceOptions,
+) =>
+  await applyTransition(tx, {
+    ...options,
+    action: "send",
+    resolvedVatRate: null,
+    transition: TRANSITIONS.send,
+  });
+
 const transitionInvoiceHandler = (rateSource: VatRateSource) =>
   createSafeHandler(
     {

@@ -7,6 +7,19 @@
     "ignore": "Ha nem számított erre a meghívóra, nyugodtan figyelmen kívül hagyhatja ezt az e-mailt.",
     "subject": "Meghívást kapott a(z) {organizationName} szervezetbe"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Jóváíró számla megtekintése} advance {Előlegszámla megtekintése} other {Számla megtekintése}}",
+    "amountDue": "Fizetendő: {amount}",
+    "body": "{firmName} {documentType, select, credit_note {jóváíró számlát} advance {előlegszámlát} other {számlát}} küldött Önnek. Nyissa meg a linket a részletekért és a PDF letöltéséhez.",
+    "dueDate": "Fizetési határidő: {date}",
+    "expires": "A link eddig érvényes: {date}.",
+    "heading": "{documentType, select, credit_note {Jóváíró számla} advance {Előlegszámla} other {Számla}} {invoiceNumber}",
+    "ignore": "Ezt az e-mailt a stella kézbesítette a következő nevében: {firmName}. Ha nem számított rá, figyelmen kívül hagyhatja.",
+    "messageFrom": "Üzenet a feladótól: {firmName}",
+    "preview": "{firmName} {documentType, select, credit_note {jóváíró számlát} advance {előlegszámlát} other {számlát}} küldött: {invoiceNumber}",
+    "reply": "Ha kapcsolatba szeretne lépni a feladóval ({firmName}), válaszoljon erre az e-mailre.",
+    "subject": "{documentType, select, credit_note {Jóváíró számla} advance {Előlegszámla} other {Számla}} {invoiceNumber}, feladó: {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Munkamenetek áttekintése",
     "body": "Fiókjába új eszközről vagy helyről jelentkeztek be.",

@@ -226,6 +226,10 @@ const RETAINED_MEMBER_COLUMNS = {
   "audit_logs.approved_by_user_id": "Audit approval history.",
   "buffer_object_cleanup_intents.writer_user_id":
     "Storage erasure receipt; retained for cleanup.",
+  "invoice_sends.revoked_by_user_id":
+    "Invoice delivery history: who withdrew the link.",
+  "invoice_sends.sent_by_user_id":
+    "Invoice delivery history; the link stops working once the account is deleted.",
   "time_entries.approved_by_user_id": "Billing approval history.",
   "time_entries.returned_by_user_id": "Billing return history.",
   "usage_allocations.seat_scope_user_id":

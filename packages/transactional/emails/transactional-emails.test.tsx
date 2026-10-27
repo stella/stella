@@ -5,6 +5,8 @@ import { UI_LOCALES } from "@stll/locales";
 
 import * as BetterAuthOTP from "./better-auth-otp";
 import { subject as otpSubject } from "./better-auth-otp-subject";
+import * as InvoiceLink from "./invoice-link";
+import { subject as invoiceLinkSubject } from "./invoice-link-subject";
 import * as NewDeviceLogin from "./new-device-login";
 import { subject as newDeviceLoginSubject } from "./new-device-login-subject";
 import * as OrganizationInvitation from "./organization-invitation";
@@ -235,6 +237,86 @@ describe("user-supplied strings are HTML-escaped in the rendered output", () => 
         }}
         reporter={{ via: "mcp", userId: "user_1", organizationId: "org_1" }}
         serverVersion="1.2.3"
+      />,
+    );
+    expect(html).not.toContain(INJECTION);
+    expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("invoice link email", () => {
+  const LINK =
+    "https://app.stella.test/invoice-link#0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+  const DOCUMENT_TYPES = ["invoice", "advance", "credit_note"] as const;
+
+  const props = (
+    overrides: Partial<InvoiceLink.InvoiceLinkEmailProps> = {},
+  ): InvoiceLink.InvoiceLinkEmailProps => ({
+    lang: "en",
+    documentType: "invoice",
+    invoiceNumber: "2026-0042",
+    firmName: "Example Law Office",
+    amountDue: "EUR 1,250.00",
+    dueDate: "14 November 2026",
+    expiresOn: "26 December 2026",
+    message: null,
+    link: LINK,
+    ...overrides,
+  });
+
+  test("every locale and document type renders the link, number and firm", async () => {
+    for (const lang of LOCALES) {
+      for (const documentType of DOCUMENT_TYPES) {
+        const html = await render(
+          <InvoiceLink.Email {...props({ lang, documentType })} />,
+        );
+        expect(html, `${lang} ${documentType}`).toContain(`href="${LINK}"`);
+        expect(html, `${lang} ${documentType}`).toContain("2026-0042");
+        expect(html, `${lang} ${documentType}`).toContain("Example Law Office");
+        const title = invoiceLinkSubject(lang, {
+          documentType,
+          invoiceNumber: "2026-0042",
+          firmName: "Example Law Office",
+        });
+        expect(title, `${lang} ${documentType}`).toContain("2026-0042");
+        expect(title, `${lang} ${documentType}`).toContain(
+          "Example Law Office",
+        );
+        expectNoIntlErrors();
+      }
+    }
+  });
+
+  test("names the document type in the subject", () => {
+    expect(
+      invoiceLinkSubject("cs", {
+        documentType: "credit_note",
+        invoiceNumber: "D-7",
+        firmName: "Kancelář",
+      }),
+    ).toBe("Dobropis D-7 od Kancelář");
+    expect(
+      invoiceLinkSubject("en", {
+        documentType: "advance",
+        invoiceNumber: "Z-1",
+        firmName: "Firm",
+      }),
+    ).toBe("Advance invoice Z-1 from Firm");
+  });
+
+  test("omits the amount and due date when nothing is due", async () => {
+    const html = await render(
+      <InvoiceLink.Email {...props({ amountDue: null, dueDate: null })} />,
+    );
+    expect(html).not.toContain("Amount due");
+    expect(html).not.toContain("Due date");
+  });
+
+  test("escapes the firm name and the sender's message", async () => {
+    const INJECTION = "<script>alert('xss')</script>";
+    const html = await render(
+      <InvoiceLink.Email
+        {...props({ firmName: INJECTION, message: INJECTION })}
       />,
     );
     expect(html).not.toContain(INJECTION);

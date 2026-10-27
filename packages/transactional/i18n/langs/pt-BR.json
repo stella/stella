@@ -7,6 +7,19 @@
     "ignore": "Se você não esperava este convite, pode ignorar este e-mail com segurança.",
     "subject": "Você foi convidado para participar de {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Ver nota de crédito} advance {Ver fatura de adiantamento} other {Ver fatura}}",
+    "amountDue": "Valor a pagar: {amount}",
+    "body": "{firmName} enviou a você {documentType, select, credit_note {uma nota de crédito} advance {uma fatura de adiantamento} other {uma fatura}}. Abra o link para ver os detalhes e baixar o PDF.",
+    "dueDate": "Vencimento: {date}",
+    "expires": "O link é válido até {date}.",
+    "heading": "{documentType, select, credit_note {Nota de crédito} advance {Fatura de adiantamento} other {Fatura}} {invoiceNumber}",
+    "ignore": "O stella entregou este e-mail em nome de {firmName}. Se você não o esperava, pode ignorá-lo.",
+    "messageFrom": "Mensagem de {firmName}",
+    "preview": "{firmName} enviou a você {documentType, select, credit_note {a nota de crédito} advance {a fatura de adiantamento} other {a fatura}} {invoiceNumber}",
+    "reply": "Responda a este e-mail para entrar em contato com {firmName}.",
+    "subject": "{documentType, select, credit_note {Nota de crédito} advance {Fatura de adiantamento} other {Fatura}} {invoiceNumber} de {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Revisar sessões",
     "body": "Sua conta recebeu um acesso de um novo dispositivo ou local.",

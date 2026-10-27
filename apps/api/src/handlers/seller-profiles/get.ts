@@ -32,6 +32,7 @@ const SELLER_PROFILE_GET_COLUMNS = {
   city: true,
   postalCode: true,
   country: true,
+  email: true,
   iban: true,
   bic: true,
   accountNumber: true,

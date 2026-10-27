@@ -81,6 +81,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Desktop billing routes enforce authenticated activity and billing feature decisions on every deployment",
   ],
   [
+    "/public/invoice-links",
+    "Invoice links have no member to enrol; each handler answers a deployment without time billing like a dead link",
+  ],
+  [
     "/v1/search-history",
     "Personal search history is available on every deployment",
   ],

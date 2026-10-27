@@ -7,6 +7,19 @@
     "ignore": "Wenn Sie diese Einladung nicht erwartet haben, können Sie diese E-Mail ignorieren.",
     "subject": "Sie wurden eingeladen, {organizationName} beizutreten"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Gutschrift ansehen} advance {Vorschussrechnung ansehen} other {Rechnung ansehen}}",
+    "amountDue": "Offener Betrag: {amount}",
+    "body": "{firmName} hat Ihnen {documentType, select, credit_note {eine Gutschrift} advance {eine Vorschussrechnung} other {eine Rechnung}} gesendet. Öffnen Sie den Link, um die Details zu sehen und das PDF herunterzuladen.",
+    "dueDate": "Fällig am: {date}",
+    "expires": "Der Link ist bis {date} gültig.",
+    "heading": "{documentType, select, credit_note {Gutschrift} advance {Vorschussrechnung} other {Rechnung}} {invoiceNumber}",
+    "ignore": "stella hat diese E-Mail im Auftrag von {firmName} zugestellt. Wenn Sie sie nicht erwartet haben, können Sie sie ignorieren.",
+    "messageFrom": "Nachricht von {firmName}",
+    "preview": "{firmName} hat Ihnen {documentType, select, credit_note {die Gutschrift} advance {die Vorschussrechnung} other {die Rechnung}} {invoiceNumber} gesendet",
+    "reply": "Antworten Sie auf diese E-Mail, um {firmName} zu kontaktieren.",
+    "subject": "{documentType, select, credit_note {Gutschrift} advance {Vorschussrechnung} other {Rechnung}} {invoiceNumber} von {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Sitzungen überprüfen",
     "body": "Ihr Konto wurde von einem neuen Gerät oder Standort aus angemeldet.",

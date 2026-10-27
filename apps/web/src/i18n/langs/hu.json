@@ -698,11 +698,47 @@
       "linkedExpenses": "Kapcsolt kiadások",
       "linkedTimeEntries": "Kapcsolt időbejegyzések",
       "markPaid": "Fizetettnek jelöl",
+      "markSent": "Megjelölés elküldöttként",
       "noEntries": "Nincs ehhez a számlához kapcsolt tétel",
       "noInvoices": "Még nincsenek számlák",
       "paidAt": "Fizetve",
       "removeEntries": "Tételek eltávolítása",
       "send": "Küldés",
+      "sendByEmail": "Küldés e-mailben",
+      "sending": {
+        "failed": "A számlát nem sikerült elküldeni",
+        "historyEmpty": "Ezt a számlát még nem küldték el e-mailben.",
+        "historyTitle": "E-mailben elküldve",
+        "linkInfo": "A címzettek biztonságos linket kapnak a számla megtekintéséhez és letöltéséhez. Az e-mailhez semmi nincs csatolva.",
+        "linkStatus": {
+          "active": "A link aktív",
+          "expired": "A link lejárt",
+          "failed": "Nem kézbesítve",
+          "revoked": "A link visszavonva"
+        },
+        "loadFailed": "A küldési előzményeket nem sikerült betölteni.",
+        "message": "Üzenet (nem kötelező)",
+        "messagePlaceholder": "Rövid megjegyzés a címzetteknek",
+        "messageTooLong": "Az üzenet legfeljebb {max, number} karakter lehet.",
+        "notDelivered": "Nem kézbesítve: {addresses}",
+        "notOpened": "Még nincs megnyitva",
+        "opened": "Megnyitva: {date}",
+        "recipients": "Címzettek",
+        "recipientsHint": "Soronként egy cím vagy vesszővel elválasztva, legfeljebb {max, number}.",
+        "recipientsInvalid": "Ellenőrizze az e-mail-címeket.",
+        "recipientsRequired": "Adjon meg legalább egy e-mail-címet.",
+        "recipientsTooMany": "Egyszerre legfeljebb {max, number} címre küldhet.",
+        "replyTo": "A válaszok ide érkeznek: {address}.",
+        "revoke": "Link visszavonása",
+        "revokeConfirm": "A címzettek ezzel a linkkel már nem nyithatják meg a számlát. Küldje el újra a számlát, hogy új linket kapjanak.",
+        "revokeTitle": "Visszavonja ezt a linket?",
+        "revoked": "A linket visszavonta",
+        "sendAgain": "Újraküldés",
+        "sent": "Számla elküldve",
+        "sentBy": "{date}, küldő: {name}",
+        "sentPartial": "Számla elküldve, de ezekre a címekre nem sikerült kézbesíteni: {addresses}",
+        "title": "{number} számla küldése"
+      },
       "statuses": {
         "draft": "Tervezet",
         "finalized": "Véglegesített",
@@ -814,6 +850,7 @@
       "legalName": "Hivatalos név",
       "registerEntry": "Cégjegyzékbejegyzés",
       "registrationId": "Nyilvántartási szám",
+      "replyEmail": "E-mail-cím válaszokhoz",
       "setDefault": "Beállítás alapértelmezettként",
       "title": "Eladói profilok",
       "vatPayerHelp": "Az eladó számlái áfát számítanak fel. Kapcsolja ki olyan nyilvántartott személynél, akinek van áfaazonosítója, de nem áfaalany.",
@@ -3874,6 +3911,31 @@
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
     "title": "Ellenőrző panel"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "ISDOC letöltése",
+      "peppol_sk": "E-számla letöltése (Peppol)",
+      "ubl": "E-számla letöltése (UBL)"
+    },
+    "downloadFailed": "A fájlt nem sikerült letölteni",
+    "failure": {
+      "busy": {
+        "body": "Várjon egy percet, majd nyissa meg újra a linket.",
+        "title": "Túl sok próbálkozás"
+      },
+      "error": {
+        "body": "Próbálja újra később. Ha továbbra sem sikerül, kérje meg a feladót, hogy küldje el újra a számlát.",
+        "title": "A számlát nem sikerült megnyitni"
+      },
+      "unavailable": {
+        "body": "Lehet, hogy lejárt vagy visszavonták. Kérjen új linket a feladótól.",
+        "title": "Ez a link már nem érhető el"
+      }
+    },
+    "paid": "Ez a számla ki van fizetve.",
+    "paymentQr": "Fizetési QR-kód",
+    "validUntil": "Ez a link eddig érvényes: {date}."
   },
   "knowledge": {
     "agentSkills": {

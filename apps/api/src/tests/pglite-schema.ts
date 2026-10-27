@@ -770,6 +770,45 @@ export const installPglitePdfSigningTokenScopes = async (
   }
 };
 
+const INVOICE_SENDS_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261027210000_invoice_sends",
+  "migration.sql",
+);
+
+const INVOICE_LINK_STATEMENT_PREFIXES = [
+  'ALTER TABLE "invoice_sends" FORCE ROW LEVEL SECURITY',
+  'CREATE FUNCTION "invoice_link_scope"',
+  'REVOKE ALL ON FUNCTION "invoice_link_scope"',
+  'GRANT EXECUTE ON FUNCTION "invoice_link_scope"',
+  'CREATE FUNCTION "invoice_sends_organization_count"',
+  'REVOKE ALL ON FUNCTION "invoice_sends_organization_count"',
+  'GRANT EXECUTE ON FUNCTION "invoice_sends_organization_count"',
+] as const;
+
+/**
+ * Install what schema push cannot say about invoice sends: forced row
+ * security, the token lookup an invoice link goes through, and the
+ * organization-wide send count.
+ */
+export const installPgliteInvoiceLinks = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    INVOICE_SENDS_MIGRATION_PATH,
+  ).filter((statement) =>
+    INVOICE_LINK_STATEMENT_PREFIXES.some((prefix) =>
+      executableSql(statement).startsWith(prefix),
+    ),
+  );
+  if (statements.length !== INVOICE_LINK_STATEMENT_PREFIXES.length) {
+    panic("Invoice link migration statements are missing");
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Schema push omits the scoped, owner-executed run-id collision lookup. */
 export const installPgliteChatTurnRunIdLookup = async (
   db: PgliteSchemaDb,

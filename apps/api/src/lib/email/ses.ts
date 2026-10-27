@@ -44,11 +44,12 @@ export const createSESTransport = (
   });
 
   return {
-    async send({ from, to, subject, html, text }) {
+    async send({ from, to, subject, html, text, replyTo }) {
       await client.send(
         new SendEmailCommand({
           FromEmailAddress: from,
           Destination: { ToAddresses: [to] },
+          ...(replyTo === undefined ? {} : { ReplyToAddresses: [replyTo] }),
           ...(config.configurationSetName && {
             ConfigurationSetName: config.configurationSetName,
           }),

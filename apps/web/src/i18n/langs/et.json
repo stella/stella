@@ -698,11 +698,47 @@
       "linkedExpenses": "Seotud kulud",
       "linkedTimeEntries": "Seotud ajakirjed",
       "markPaid": "Märgi makstuks",
+      "markSent": "Märgi saadetuks",
       "noEntries": "Selle arvega pole kirjeid seotud",
       "noInvoices": "Arveid pole veel",
       "paidAt": "Tasutud",
       "removeEntries": "Eemalda kirjed",
       "send": "Saada",
+      "sendByEmail": "Saada e-postiga",
+      "sending": {
+        "failed": "Arvet ei õnnestunud saata",
+        "historyEmpty": "Seda arvet pole veel e-postiga saadetud.",
+        "historyTitle": "Saadetud e-postiga",
+        "linkInfo": "Saajad saavad turvalise lingi arve vaatamiseks ja allalaadimiseks. E-kirjale ei lisata midagi.",
+        "linkStatus": {
+          "active": "Link on aktiivne",
+          "expired": "Link on aegunud",
+          "failed": "Toimetamata",
+          "revoked": "Link on tühistatud"
+        },
+        "loadFailed": "Saatmise ajalugu ei õnnestunud laadida.",
+        "message": "Sõnum (valikuline)",
+        "messagePlaceholder": "Lühike märkus saajatele",
+        "messageTooLong": "Sõnumis võib olla kõige rohkem {max, number} märki.",
+        "notDelivered": "Toimetamata: {addresses}",
+        "notOpened": "Pole veel avatud",
+        "opened": "Avatud {date}",
+        "recipients": "Saajad",
+        "recipientsHint": "Üks aadress rea kohta või komadega eraldatult, kõige rohkem {max, number}.",
+        "recipientsInvalid": "Kontrollige e-posti aadresse.",
+        "recipientsRequired": "Lisage vähemalt üks e-posti aadress.",
+        "recipientsTooMany": "Korraga saab saata kõige rohkem {max, number} aadressile.",
+        "replyTo": "Vastused saadetakse aadressile {address}.",
+        "revoke": "Tühista link",
+        "revokeConfirm": "Saajad ei saa selle lingiga enam arvet avada. Uue lingi andmiseks saatke arve uuesti.",
+        "revokeTitle": "Kas tühistada see link?",
+        "revoked": "Link tühistati",
+        "sendAgain": "Saada uuesti",
+        "sent": "Arve saadetud",
+        "sentBy": "{date}, saatja {name}",
+        "sentPartial": "Arve saadetud, kuid neile aadressidele ei õnnestunud seda toimetada: {addresses}",
+        "title": "Saada arve {number}"
+      },
       "statuses": {
         "draft": "Mustand",
         "finalized": "Lõpetatud",
@@ -814,6 +850,7 @@
       "legalName": "Ametlik nimi",
       "registerEntry": "Registrikanne",
       "registrationId": "Registrikood",
+      "replyEmail": "E-post vastuste jaoks",
       "setDefault": "Määra vaikimisi",
       "title": "Müüja profiilid",
       "vatPayerHelp": "Selle müüja arved sisaldavad käibemaksu. Lülitage välja registreeritud isiku puhul, kellel on käibemaksukohustuslase number, kuid kes ei ole maksukohustuslane.",
@@ -3874,6 +3911,31 @@
     "showPane": "Kuva paneel",
     "swapViews": "Vaheta põhivaade ja külgpaneel",
     "title": "Inspektor"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "Laadi alla ISDOC",
+      "peppol_sk": "Laadi alla e-arve (Peppol)",
+      "ubl": "Laadi alla e-arve (UBL)"
+    },
+    "downloadFailed": "Faili ei õnnestunud alla laadida",
+    "failure": {
+      "busy": {
+        "body": "Oodake minut ja avage link uuesti.",
+        "title": "Liiga palju katseid"
+      },
+      "error": {
+        "body": "Proovige hiljem uuesti. Kui see ikka ei õnnestu, paluge saatjal arve uuesti saata.",
+        "title": "Arvet ei õnnestunud avada"
+      },
+      "unavailable": {
+        "body": "See võib olla aegunud või tühistatud. Küsige saatjalt uut linki.",
+        "title": "See link pole enam saadaval"
+      }
+    },
+    "paid": "See arve on tasutud.",
+    "paymentQr": "Makse QR-kood",
+    "validUntil": "See link kehtib kuni {date}."
   },
   "knowledge": {
     "agentSkills": {

@@ -698,11 +698,47 @@
       "linkedExpenses": "Susietos išlaidos",
       "linkedTimeEntries": "Susieti laiko įrašai",
       "markPaid": "Pažymėti kaip apmokėtą",
+      "markSent": "Pažymėti kaip išsiųstą",
       "noEntries": "Nėra įrašų, susietų su šia sąskaita",
       "noInvoices": "Sąskaitų dar nėra",
       "paidAt": "Apmokėta",
       "removeEntries": "Pašalinti įrašus",
       "send": "Siųsti",
+      "sendByEmail": "Siųsti el. paštu",
+      "sending": {
+        "failed": "Sąskaitos išsiųsti nepavyko",
+        "historyEmpty": "Ši sąskaita dar nebuvo išsiųsta el. paštu.",
+        "historyTitle": "Išsiųsta el. paštu",
+        "linkInfo": "Gavėjai gauna saugią nuorodą sąskaitai peržiūrėti ir atsisiųsti. Prie laiško nieko neprisegama.",
+        "linkStatus": {
+          "active": "Nuoroda aktyvi",
+          "expired": "Nuorodos galiojimas baigėsi",
+          "failed": "Nepristatyta",
+          "revoked": "Nuoroda atšaukta"
+        },
+        "loadFailed": "Siuntimo istorijos įkelti nepavyko.",
+        "message": "Žinutė (neprivaloma)",
+        "messagePlaceholder": "Trumpa pastaba gavėjams",
+        "messageTooLong": "Žinutėje gali būti ne daugiau kaip {max, number} simbolių.",
+        "notDelivered": "Nepristatyta: {addresses}",
+        "notOpened": "Dar neatidaryta",
+        "opened": "Atidaryta {date}",
+        "recipients": "Gavėjai",
+        "recipientsHint": "Po vieną adresą eilutėje arba atskirti kableliais, ne daugiau kaip {max, number}.",
+        "recipientsInvalid": "Patikrinkite el. pašto adresus.",
+        "recipientsRequired": "Įveskite bent vieną el. pašto adresą.",
+        "recipientsTooMany": "Vienu metu galima siųsti ne daugiau kaip {max, number} adresams.",
+        "replyTo": "Atsakymai bus siunčiami adresu {address}.",
+        "revoke": "Atšaukti nuorodą",
+        "revokeConfirm": "Gavėjai nebegalės atidaryti sąskaitos šia nuoroda. Norėdami suteikti naują nuorodą, išsiųskite sąskaitą dar kartą.",
+        "revokeTitle": "Atšaukti šią nuorodą?",
+        "revoked": "Nuoroda buvo atšaukta",
+        "sendAgain": "Siųsti dar kartą",
+        "sent": "Sąskaita išsiųsta",
+        "sentBy": "{date}, siuntėjas: {name}",
+        "sentPartial": "Sąskaita išsiųsta, bet šiais adresais jos pristatyti nepavyko: {addresses}",
+        "title": "Siųsti sąskaitą {number}"
+      },
       "statuses": {
         "draft": "Juodraštis",
         "finalized": "Užbaigta",
@@ -814,6 +850,7 @@
       "legalName": "Oficialus pavadinimas",
       "registerEntry": "Registro įrašas",
       "registrationId": "Registracijos numeris",
+      "replyEmail": "El. paštas atsakymams",
       "setDefault": "Nustatyti kaip numatytąjį",
       "title": "Pardavėjo profiliai",
       "vatPayerHelp": "Šio pardavėjo sąskaitose taikomas PVM. Išjunkite registruotam asmeniui, kuris turi PVM mokėtojo kodą, bet nėra PVM mokėtojas.",
@@ -3874,6 +3911,31 @@
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
     "title": "Inspektorius"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "Atsisiųsti ISDOC",
+      "peppol_sk": "Atsisiųsti e. sąskaitą (Peppol)",
+      "ubl": "Atsisiųsti e. sąskaitą (UBL)"
+    },
+    "downloadFailed": "Failo atsisiųsti nepavyko",
+    "failure": {
+      "busy": {
+        "body": "Palaukite minutę ir atidarykite nuorodą dar kartą.",
+        "title": "Per daug bandymų"
+      },
+      "error": {
+        "body": "Bandykite vėliau. Jei vis tiek nepavyksta, paprašykite siuntėjo išsiųsti sąskaitą dar kartą.",
+        "title": "Sąskaitos atidaryti nepavyko"
+      },
+      "unavailable": {
+        "body": "Jos galiojimas galėjo baigtis arba ji buvo atšaukta. Paprašykite siuntėjo naujos nuorodos.",
+        "title": "Ši nuoroda nebepasiekiama"
+      }
+    },
+    "paid": "Ši sąskaita apmokėta.",
+    "paymentQr": "Mokėjimo QR kodas",
+    "validUntil": "Ši nuoroda galioja iki {date}."
   },
   "knowledge": {
     "agentSkills": {

@@ -28,6 +28,7 @@ export const SELLER_PROFILE_LIMITS = {
   city: 256,
   postalCode: 32,
   country: 128,
+  email: 320,
   iban: 42,
   bic: 11,
   accountNumber: 64,
@@ -38,6 +39,7 @@ export const SELLER_PROFILE_LIMITS = {
 type SellerProfileValidationMessages = {
   required: string;
   invalidField: string;
+  invalidEmail: string;
   invalidIban: string;
   invalidBic: string;
   invalidCurrency: string;
@@ -73,6 +75,16 @@ export const sellerProfileFormSchema = (
       city: optionalText(SELLER_PROFILE_LIMITS.city),
       postalCode: optionalText(SELLER_PROFILE_LIMITS.postalCode),
       country: optionalText(SELLER_PROFILE_LIMITS.country),
+      email: v.pipe(
+        v.string(),
+        v.trim(),
+        v.check(
+          (value) => value === "" || v.is(v.pipe(v.string(), v.email()), value),
+          messages.invalidEmail,
+        ),
+        v.maxLength(SELLER_PROFILE_LIMITS.email, messages.invalidField),
+        v.transform((value) => (value === "" ? undefined : value)),
+      ),
       iban: v.pipe(
         v.string(),
         v.trim(),
@@ -130,6 +142,7 @@ export const sellerProfileFormSchema = (
         city,
         postalCode,
         country,
+        email,
         iban,
         bic,
         accountNumber,
@@ -150,6 +163,7 @@ export const sellerProfileFormSchema = (
           ...(city === undefined ? {} : { city }),
           ...(postalCode === undefined ? {} : { postalCode }),
           ...(country === undefined ? {} : { country }),
+          ...(email === undefined ? {} : { email }),
           ...(iban === undefined ? {} : { iban }),
           ...(bic === undefined ? {} : { bic }),
           ...(accountNumber === undefined ? {} : { accountNumber }),

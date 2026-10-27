@@ -84,6 +84,7 @@ export const sendSellerProfileCommand = async (
           city: command.values.city ?? null,
           postalCode: command.values.postalCode ?? null,
           country: command.values.country ?? null,
+          email: command.values.email ?? null,
           iban: command.values.iban ?? null,
           bic: command.values.bic ?? null,
           accountNumber: command.values.accountNumber ?? null,

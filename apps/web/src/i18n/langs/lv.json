@@ -698,11 +698,47 @@
       "linkedExpenses": "Saistītie izdevumi",
       "linkedTimeEntries": "Saistītie laika ieraksti",
       "markPaid": "Atzīmēt kā apmaksātu",
+      "markSent": "Atzīmēt kā nosūtītu",
       "noEntries": "Nav ierakstu, kas saistīti ar šo rēķinu",
       "noInvoices": "Rēķinu vēl nav",
       "paidAt": "Apmaksāts",
       "removeEntries": "Noņemt ierakstus",
       "send": "Sūtīt",
+      "sendByEmail": "Sūtīt pa e-pastu",
+      "sending": {
+        "failed": "Rēķinu neizdevās nosūtīt",
+        "historyEmpty": "Šis rēķins vēl nav nosūtīts pa e-pastu.",
+        "historyTitle": "Nosūtīts pa e-pastu",
+        "linkInfo": "Saņēmēji saņem drošu saiti rēķina skatīšanai un lejupielādei. E-pastam nekas netiek pievienots.",
+        "linkStatus": {
+          "active": "Saite ir aktīva",
+          "expired": "Saites derīgums beidzies",
+          "failed": "Nav piegādāts",
+          "revoked": "Saite atsaukta"
+        },
+        "loadFailed": "Sūtīšanas vēsturi neizdevās ielādēt.",
+        "message": "Ziņa (nav obligāta)",
+        "messagePlaceholder": "Īsa piezīme saņēmējiem",
+        "messageTooLong": "Ziņā var būt ne vairāk kā {max, number} rakstzīmes.",
+        "notDelivered": "Nav piegādāts: {addresses}",
+        "notOpened": "Vēl nav atvērts",
+        "opened": "Atvērts {date}",
+        "recipients": "Saņēmēji",
+        "recipientsHint": "Viena adrese katrā rindā vai atdalītas ar komatiem, ne vairāk kā {max, number}.",
+        "recipientsInvalid": "Pārbaudiet e-pasta adreses.",
+        "recipientsRequired": "Pievienojiet vismaz vienu e-pasta adresi.",
+        "recipientsTooMany": "Vienlaikus var sūtīt ne vairāk kā {max, number} adresēm.",
+        "replyTo": "Atbildes tiks sūtītas uz {address}.",
+        "revoke": "Atsaukt saiti",
+        "revokeConfirm": "Saņēmēji vairs nevarēs atvērt rēķinu ar šo saiti. Lai dotu viņiem jaunu saiti, nosūtiet rēķinu vēlreiz.",
+        "revokeTitle": "Vai atsaukt šo saiti?",
+        "revoked": "Saite tika atsaukta",
+        "sendAgain": "Sūtīt vēlreiz",
+        "sent": "Rēķins nosūtīts",
+        "sentBy": "{date}, sūtītājs: {name}",
+        "sentPartial": "Rēķins nosūtīts, bet uz šīm adresēm to neizdevās piegādāt: {addresses}",
+        "title": "Sūtīt rēķinu {number}"
+      },
       "statuses": {
         "draft": "Melnraksts",
         "finalized": "Pabeigts",
@@ -814,6 +850,7 @@
       "legalName": "Juridiskais nosaukums",
       "registerEntry": "Ieraksts reģistrā",
       "registrationId": "Reģistrācijas numurs",
+      "replyEmail": "E-pasts atbildēm",
       "setDefault": "Iestatīt kā noklusējumu",
       "title": "Pārdevēja profili",
       "vatPayerHelp": "Šī pārdevēja rēķinos tiek piemērots PVN. Izslēdziet reģistrētai personai, kurai ir PVN numurs, bet kura nav PVN maksātāja.",
@@ -3874,6 +3911,31 @@
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
     "title": "Inspektors"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "Lejupielādēt ISDOC",
+      "peppol_sk": "Lejupielādēt e-rēķinu (Peppol)",
+      "ubl": "Lejupielādēt e-rēķinu (UBL)"
+    },
+    "downloadFailed": "Failu neizdevās lejupielādēt",
+    "failure": {
+      "busy": {
+        "body": "Pagaidiet minūti un atveriet saiti vēlreiz.",
+        "title": "Pārāk daudz mēģinājumu"
+      },
+      "error": {
+        "body": "Mēģiniet vēlāk. Ja tas joprojām neizdodas, lūdziet sūtītājam nosūtīt rēķinu vēlreiz.",
+        "title": "Rēķinu neizdevās atvērt"
+      },
+      "unavailable": {
+        "body": "Tās derīgums var būt beidzies vai tā ir atsaukta. Lūdziet sūtītājam jaunu saiti.",
+        "title": "Šī saite vairs nav pieejama"
+      }
+    },
+    "paid": "Šis rēķins ir apmaksāts.",
+    "paymentQr": "Maksājuma QR kods",
+    "validUntil": "Šī saite ir derīga līdz {date}."
   },
   "knowledge": {
     "agentSkills": {

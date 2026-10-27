@@ -71,6 +71,10 @@ import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
 import { InvoiceLineEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-line-editor";
+import {
+  InvoiceSendsSection,
+  SendInvoiceForm,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-sends";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -222,6 +226,9 @@ const InvoiceDetail = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [sendDialog, setSendDialog] = useState<SendDialogState>({
+    type: "closed",
+  });
   const canUpdateInvoice = usePermissions({ invoice: ["update"] });
 
   const { data: invoice } = useSuspenseQuery(
@@ -366,6 +373,7 @@ const InvoiceDetail = ({
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}
             onEdit={() => setEditOpen(true)}
+            onSend={() => setSendDialog({ type: "open", recipients: null })}
             onTransition={(action) => transitionMutation.mutate(action)}
           />
         </div>
@@ -657,6 +665,38 @@ const InvoiceDetail = ({
         </>
       )}
 
+      {invoiceStatus !== "draft" && (
+        <InvoiceSendsSection
+          canSend={canUpdateInvoice && invoiceStatus !== "void"}
+          invoiceId={invoiceId}
+          onSendAgain={(recipients) =>
+            setSendDialog({ type: "open", recipients })
+          }
+          workspaceId={workspaceId}
+        />
+      )}
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setSendDialog({ type: "closed" });
+          }
+        }}
+        open={sendDialog.type === "open"}
+      >
+        <DialogPopup className="max-w-md">
+          {sendDialog.type === "open" && invoice.invoiceNumber !== null ? (
+            <SendInvoiceForm
+              invoiceId={invoiceId}
+              invoiceNumber={invoice.invoiceNumber}
+              onClose={() => setSendDialog({ type: "closed" })}
+              recipients={sendDialog.recipients}
+              workspaceId={workspaceId}
+            />
+          ) : null}
+        </DialogPopup>
+      </Dialog>
+
       {/* Edit dialog */}
       <Dialog onOpenChange={setEditOpen} open={editOpen}>
         <DialogPopup className="max-w-md">
@@ -677,6 +717,9 @@ const InvoiceDetail = ({
   );
 };
 
+type SendDialogState =
+  { type: "closed" } | { type: "open"; recipients: readonly string[] | null };
+
 const InfoCell = ({ label, value }: { label: string; value: string }) => (
   <div>
     <p className="text-muted-foreground text-xs">{label}</p>
@@ -689,6 +732,7 @@ const InvoiceActions = ({
   onTransition,
   onEdit,
   onDelete,
+  onSend,
 }: {
   invoiceStatus: InvoiceStatus;
   onTransition: (
@@ -696,6 +740,7 @@ const InvoiceActions = ({
   ) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onSend: () => void;
 }) => {
   const t = useTranslations("billing.invoices");
   const rootT = useTranslations();
@@ -739,13 +784,19 @@ const InvoiceActions = ({
       return (
         <>
           {canUpdateInvoice && (
+            <Button onClick={onSend} size="sm" variant="outline">
+              <SendIcon className="size-3.5" />
+              {t("send")}
+            </Button>
+          )}
+          {canUpdateInvoice && (
             <Button
               onClick={() => onTransition("send")}
               size="sm"
-              variant="outline"
+              variant="ghost"
             >
-              <SendIcon className="size-3.5" />
-              {t("send")}
+              <CheckIcon className="size-3.5" />
+              {t("markSent")}
             </Button>
           )}
           {canUpdateInvoice && (
@@ -775,6 +826,12 @@ const InvoiceActions = ({
       return (
         <>
           {canUpdateInvoice && (
+            <Button onClick={onSend} size="sm" variant="ghost">
+              <SendIcon className="size-3.5" />
+              {t("sendByEmail")}
+            </Button>
+          )}
+          {canUpdateInvoice && (
             <Button
               onClick={() => onTransition("mark_paid")}
               size="sm"
@@ -799,15 +856,21 @@ const InvoiceActions = ({
       );
     case "paid":
       return canUpdateInvoice ? (
-        <ConfirmAction
-          description={t("confirmVoid")}
-          onConfirm={() => onTransition("void")}
-        >
-          <Button size="sm" variant="destructive">
-            <XCircleIcon className="size-3.5" />
-            {t("void")}
+        <>
+          <Button onClick={onSend} size="sm" variant="ghost">
+            <SendIcon className="size-3.5" />
+            {t("sendByEmail")}
           </Button>
-        </ConfirmAction>
+          <ConfirmAction
+            description={t("confirmVoid")}
+            onConfirm={() => onTransition("void")}
+          >
+            <Button size="sm" variant="destructive">
+              <XCircleIcon className="size-3.5" />
+              {t("void")}
+            </Button>
+          </ConfirmAction>
+        </>
       ) : null;
     case "void":
       return null;

@@ -10,6 +10,9 @@ import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
 import readInvoices from "@/api/handlers/invoices/list";
 import exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import prefillInvoice from "@/api/handlers/invoices/prefill";
+import sendInvoice from "@/api/handlers/invoices/sends/create";
+import listInvoiceSends from "@/api/handlers/invoices/sends/list";
+import revokeInvoiceSend from "@/api/handlers/invoices/sends/revoke";
 import transitionInvoice from "@/api/handlers/invoices/transition";
 import updateInvoice from "@/api/handlers/invoices/update";
 import { routes } from "@/api/http/route";
@@ -34,6 +37,8 @@ export const invoicesRoute = routes(
       DELETE: deleteInvoiceLine,
     },
     "/:invoiceId/pdf": { POST: exportInvoicePdf },
+    "/:invoiceId/sends": { GET: listInvoiceSends, POST: sendInvoice },
+    "/:invoiceId/sends/:sendId/revoke": { POST: revokeInvoiceSend },
   },
   {
     prefix: "/invoices/:workspaceId",

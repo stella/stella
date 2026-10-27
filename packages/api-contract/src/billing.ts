@@ -53,6 +53,13 @@ export const EXPENSE_CATEGORIES = [
   "other",
 ] as const;
 
+/** What one emailed invoice send may carry. */
+export const INVOICE_SEND_LIMITS = {
+  minRecipients: 1,
+  maxRecipients: 10,
+  messageMaxChars: 2000,
+} as const;
+
 /** Languages in which Stella can render an invoice document. */
 export const INVOICE_LANGUAGES = [
   "ar",

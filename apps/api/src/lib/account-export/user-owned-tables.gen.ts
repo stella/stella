@@ -56,6 +56,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "folio_collab_rooms",
   "infosoud_tracked_cases",
   "invitation",
+  "invoice_sends",
   "legal_list_claim_review_events",
   "legal_list_fact_details",
   "legal_list_generation_runs",

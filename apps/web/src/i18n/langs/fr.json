@@ -698,11 +698,47 @@
       "linkedExpenses": "Dépenses liées",
       "linkedTimeEntries": "Entrées de temps liées",
       "markPaid": "Marquer comme payée",
+      "markSent": "Marquer comme envoyée",
       "noEntries": "Aucune entrée liée à cette facture",
       "noInvoices": "Aucune facture",
       "paidAt": "Payée le",
       "removeEntries": "Retirer les entrées",
       "send": "Envoyer",
+      "sendByEmail": "Envoyer par e-mail",
+      "sending": {
+        "failed": "La facture n'a pas pu être envoyée",
+        "historyEmpty": "Cette facture n'a pas encore été envoyée par e-mail.",
+        "historyTitle": "Envoyée par e-mail",
+        "linkInfo": "Les destinataires reçoivent un lien sécurisé pour consulter et télécharger la facture. Rien n'est joint à l'e-mail.",
+        "linkStatus": {
+          "active": "Lien actif",
+          "expired": "Lien expiré",
+          "failed": "Non remise",
+          "revoked": "Lien révoqué"
+        },
+        "loadFailed": "L'historique des envois n'a pas pu être chargé.",
+        "message": "Message (facultatif)",
+        "messagePlaceholder": "Une courte note pour les destinataires",
+        "messageTooLong": "Le message peut contenir au maximum {max, number} caractères.",
+        "notDelivered": "Non remise à {addresses}",
+        "notOpened": "Pas encore ouverte",
+        "opened": "Ouverte le {date}",
+        "recipients": "Destinataires",
+        "recipientsHint": "Une adresse par ligne ou séparées par des virgules, {max, number} au maximum.",
+        "recipientsInvalid": "Vérifiez les adresses e-mail.",
+        "recipientsRequired": "Ajoutez au moins une adresse e-mail.",
+        "recipientsTooMany": "Envoyez à {max, number} adresses au maximum à la fois.",
+        "replyTo": "Les réponses arrivent à {address}.",
+        "revoke": "Révoquer le lien",
+        "revokeConfirm": "Les destinataires ne pourront plus ouvrir la facture avec ce lien. Renvoyez la facture pour leur donner un nouveau lien.",
+        "revokeTitle": "Révoquer ce lien ?",
+        "revoked": "Le lien a été révoqué",
+        "sendAgain": "Renvoyer",
+        "sent": "Facture envoyée",
+        "sentBy": "{date}, envoyée par {name}",
+        "sentPartial": "Facture envoyée, mais ces adresses n'ont pas pu être atteintes : {addresses}",
+        "title": "Envoyer la facture {number}"
+      },
       "statuses": {
         "draft": "Brouillon",
         "finalized": "Finalisée",
@@ -814,6 +850,7 @@
       "legalName": "Dénomination légale",
       "registerEntry": "Inscription au registre",
       "registrationId": "Numéro d’immatriculation",
+      "replyEmail": "E-mail pour les réponses",
       "setDefault": "Définir par défaut",
       "title": "Profils de vendeur",
       "vatPayerHelp": "Les factures de ce vendeur facturent la TVA. Désactivez pour une personne identifiée qui a un numéro de TVA sans être assujettie.",
@@ -3874,6 +3911,31 @@
     "showPane": "Afficher le volet",
     "swapViews": "Échanger la vue principale et le panneau latéral",
     "title": "Inspecteur"
+  },
+  "invoiceLink": {
+    "downloadEInvoice": {
+      "isdoc": "Télécharger l'ISDOC",
+      "peppol_sk": "Télécharger la facture électronique (Peppol)",
+      "ubl": "Télécharger la facture électronique (UBL)"
+    },
+    "downloadFailed": "Le fichier n'a pas pu être téléchargé",
+    "failure": {
+      "busy": {
+        "body": "Patientez une minute puis rouvrez le lien.",
+        "title": "Trop de tentatives"
+      },
+      "error": {
+        "body": "Réessayez plus tard. Si le problème persiste, demandez à l'expéditeur de renvoyer la facture.",
+        "title": "La facture n'a pas pu être ouverte"
+      },
+      "unavailable": {
+        "body": "Il a peut-être expiré ou été révoqué. Demandez un nouveau lien à l'expéditeur.",
+        "title": "Ce lien n'est plus disponible"
+      }
+    },
+    "paid": "Cette facture est payée.",
+    "paymentQr": "QR code de paiement",
+    "validUntil": "Ce lien est valable jusqu'au {date}."
   },
   "knowledge": {
     "agentSkills": {

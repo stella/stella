@@ -7,6 +7,19 @@
     "ignore": "Jei nesitikėjote šio kvietimo, galite nepaisyti šio el. laiško.",
     "subject": "Jūs pakviesti prisijungti prie {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {Peržiūrėti kreditinę sąskaitą faktūrą} advance {Peržiūrėti išankstinę sąskaitą faktūrą} other {Peržiūrėti sąskaitą faktūrą}}",
+    "amountDue": "Mokėtina suma: {amount}",
+    "body": "{firmName} atsiuntė jums {documentType, select, credit_note {kreditinę sąskaitą faktūrą} advance {išankstinę sąskaitą faktūrą} other {sąskaitą faktūrą}}. Atidarykite nuorodą, kad pamatytumėte išsamią informaciją ir atsisiųstumėte PDF.",
+    "dueDate": "Apmokėjimo terminas: {date}",
+    "expires": "Nuoroda galioja iki {date}.",
+    "heading": "{documentType, select, credit_note {Kreditinė sąskaita faktūra} advance {Išankstinė sąskaita faktūra} other {Sąskaita faktūra}} {invoiceNumber}",
+    "ignore": "Šį laišką stella pristatė siuntėjo {firmName} vardu. Jei jo nesitikėjote, galite jį ignoruoti.",
+    "messageFrom": "Siuntėjo {firmName} žinutė",
+    "preview": "{firmName} atsiuntė jums {documentType, select, credit_note {kreditinę sąskaitą faktūrą} advance {išankstinę sąskaitą faktūrą} other {sąskaitą faktūrą}} {invoiceNumber}",
+    "reply": "Norėdami susisiekti su siuntėju {firmName}, atsakykite į šį laišką.",
+    "subject": "{documentType, select, credit_note {Kreditinė sąskaita faktūra} advance {Išankstinė sąskaita faktūra} other {Sąskaita faktūra}} {invoiceNumber}, siuntėjas {firmName}"
+  },
   "newDeviceLogin": {
     "action": "Peržiūrėti sesijas",
     "body": "Prie jūsų paskyros buvo prisijungta iš naujo įrenginio ar vietos.",

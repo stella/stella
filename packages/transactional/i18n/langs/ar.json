@@ -7,6 +7,19 @@
     "ignore": "إذا لم تكن تتوقع هذه الدعوة، فيمكنك تجاهل هذا البريد الإلكتروني بأمان.",
     "subject": "تمت دعوتك للانضمام إلى {organizationName}"
   },
+  "invoiceLink": {
+    "action": "{documentType, select, credit_note {عرض الإشعار الدائن} advance {عرض فاتورة الدفعة المقدمة} other {عرض الفاتورة}}",
+    "amountDue": "المبلغ المستحق: {amount}",
+    "body": "أرسل إليك {firmName} {documentType, select, credit_note {إشعارًا دائنًا} advance {فاتورة دفعة مقدمة} other {فاتورة}}. افتح الرابط لعرض التفاصيل وتنزيل ملف PDF.",
+    "dueDate": "تاريخ الاستحقاق: {date}",
+    "expires": "الرابط صالح حتى {date}.",
+    "heading": "{documentType, select, credit_note {الإشعار الدائن} advance {فاتورة الدفعة المقدمة} other {الفاتورة}} {invoiceNumber}",
+    "ignore": "سلّم stella هذه الرسالة نيابةً عن {firmName}. إذا لم تكن تتوقعها، يمكنك تجاهلها.",
+    "messageFrom": "رسالة من {firmName}",
+    "preview": "أرسل إليك {firmName} {documentType, select, credit_note {الإشعار الدائن} advance {فاتورة الدفعة المقدمة} other {الفاتورة}} {invoiceNumber}",
+    "reply": "للتواصل مع {firmName}، قم بالرد على هذه الرسالة.",
+    "subject": "{documentType, select, credit_note {الإشعار الدائن} advance {فاتورة الدفعة المقدمة} other {الفاتورة}} {invoiceNumber} من {firmName}"
+  },
   "newDeviceLogin": {
     "action": "مراجعة الجلسات",
     "body": "تم تسجيل الدخول إلى حسابك من جهاز أو موقع جديد.",
