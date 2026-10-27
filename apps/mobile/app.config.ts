@@ -125,6 +125,8 @@ const appConfigBase = ({
   version: APP_VERSION,
   orientation: "default",
   scheme: VARIANT_CONFIG[variant].scheme,
+  // The web's favicon edge to edge (`scripts/generate-mobile-app-icon.ts`).
+  icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   ios: {
     bundleIdentifier: VARIANT_CONFIG[variant].identifier,

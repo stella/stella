@@ -2,11 +2,11 @@ import { useState, useTransition } from "react";
 
 import { panic, Result } from "better-result";
 import { KeyboardAvoidingView, Platform, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { ScreenHeading } from "@/components/empty-state-screen";
 import { Button } from "@/components/ui/button";
+import { SafeAreaView } from "@/components/ui/safe-area-view";
 import { Text, TextInput } from "@/components/ui/text";
 import { useSession } from "@/connection/session-provider";
 import type { SignInError } from "@/connection/sign-in";
@@ -35,7 +35,7 @@ const SignInScreen = () => {
   }
 
   return (
-    <SafeAreaView className="bg-background flex-1">
+    <SafeAreaView>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         className="flex-1 justify-center gap-3 px-4"

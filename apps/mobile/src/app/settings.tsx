@@ -1,11 +1,11 @@
 import { useTransition } from "react";
 
 import { ScrollView, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
 import { ScreenHeading, screenStyles } from "@/components/empty-state-screen";
 import { Button } from "@/components/ui/button";
+import { SafeAreaView } from "@/components/ui/safe-area-view";
 import { Text } from "@/components/ui/text";
 import { useSession } from "@/connection/session-provider";
 
@@ -17,7 +17,7 @@ const SettingsScreen = () => {
     state.status === "signed-in" ? state.source.session().serverUrl : null;
 
   return (
-    <SafeAreaView className="bg-background flex-1" edges={["top"]}>
+    <SafeAreaView edges={["top"]}>
       <ScrollView contentContainerStyle={screenStyles.content}>
         <ScreenHeading title={t("tabs.settings")} />
         <View className="gap-2">
