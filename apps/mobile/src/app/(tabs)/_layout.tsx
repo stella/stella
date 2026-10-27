@@ -1,50 +1,64 @@
-import { NativeTabs } from "expo-router/unstable-native-tabs";
+import { Tabs } from "expo-router";
 import { useTranslations } from "use-intl";
 
+import { MattersNavIcon } from "@/components/ui/matter-icon";
+import { CogIcon, ListTodoIcon, MessageSquareIcon } from "@/icons.gen";
 import { useAppColors } from "@/theme";
 
 /**
- * The platform's own tab bar (iOS's, with its glass), each tab an SF Symbol
- * that fills when selected, tinted with the web's primary.
+ * The app's sections, each drawn with the web navigation's glyph
+ * (apps/web workspace-primary-nav.ts): chat's bubble, tasks' list, the
+ * matters layers and settings' cog. `tab-icons.test.ts` holds them equal.
  */
 const TabLayout = () => {
   const colors = useAppColors();
   const t = useTranslations("tabs");
 
   return (
-    <NativeTabs
-      iconColor={{ default: colors.muted, selected: colors.accent }}
-      tintColor={colors.accent}
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        sceneStyle: { backgroundColor: colors.background },
+        tabBarActiveTintColor: colors.text,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarLabelStyle: { fontFamily: "DMSans-Medium", fontSize: 11 },
+        tabBarStyle: {
+          backgroundColor: colors.background,
+          borderTopColor: colors.border,
+        },
+      }}
     >
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon
-          md="chat"
-          sf={{
-            default: "bubble.left.and.bubble.right",
-            selected: "bubble.left.and.bubble.right.fill",
-          }}
-        />
-        <NativeTabs.Trigger.Label>{t("chat")}</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks">
-        <NativeTabs.Trigger.Icon md="checklist" sf="checklist" />
-        <NativeTabs.Trigger.Label>{t("tasks")}</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="matters">
-        <NativeTabs.Trigger.Icon
-          md="folder"
-          sf={{ default: "folder", selected: "folder.fill" }}
-        />
-        <NativeTabs.Trigger.Label>{t("matters")}</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Icon
-          md="settings"
-          sf={{ default: "gearshape", selected: "gearshape.fill" }}
-        />
-        <NativeTabs.Trigger.Label>{t("settings")}</NativeTabs.Trigger.Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+      <Tabs.Screen
+        name="index"
+        options={{
+          tabBarIcon: ({ color }) => (
+            <MessageSquareIcon color={color} size={22} />
+          ),
+          title: t("chat"),
+        }}
+      />
+      <Tabs.Screen
+        name="tasks"
+        options={{
+          tabBarIcon: ({ color }) => <ListTodoIcon color={color} size={22} />,
+          title: t("tasks"),
+        }}
+      />
+      <Tabs.Screen
+        name="matters"
+        options={{
+          tabBarIcon: ({ color }) => <MattersNavIcon color={color} size={22} />,
+          title: t("matters"),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          tabBarIcon: ({ color }) => <CogIcon color={color} size={22} />,
+          title: t("settings"),
+        }}
+      />
+    </Tabs>
   );
 };
 

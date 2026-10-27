@@ -23,3 +23,7 @@ const LIGHT = appColors(UI_COLORS.light);
 const DARK = appColors(UI_COLORS.dark);
 
 export const useAppColors = () => (useColorScheme() === "dark" ? DARK : LIGHT);
+
+/** Every web token for the current colour scheme, for props a class cannot reach. */
+export const useUiColors = (): UiColors =>
+  useColorScheme() === "dark" ? UI_COLORS.dark : UI_COLORS.light;

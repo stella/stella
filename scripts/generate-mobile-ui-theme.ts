@@ -113,9 +113,14 @@ export const mobileUiTheme = (uiCss: string, tailwindCss: string) => {
   );
   const light = declarationsOf(uiCss, ":root");
   const dark = new Map([...light, ...declarationsOf(uiCss, ".dark")]);
+  // The option palette (`--option-blue`, ...) paints a matter's colour and
+  // other user-chosen tints, so it comes along as `option-blue`, ...
+  const options = [...light.keys()]
+    .filter((name) => name.startsWith("--option-"))
+    .map((name): [string, string] => [name.slice(2), name]);
   const colorsFor = (scope: Scope) =>
     Object.fromEntries(
-      [...semanticColorsOf(uiCss)].map(([name, source]) => [
+      [...semanticColorsOf(uiCss), ...options].map(([name, source]) => [
         name,
         toSrgb(substitute(`var(${source})`, [scope, palette])),
       ]),
