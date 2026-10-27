@@ -6,7 +6,7 @@ import {
   type Node,
   parseSource,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 const ROUTES_DIRECTORY = path.resolve(import.meta.dirname, "../../src/routes");
 const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";

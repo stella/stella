@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { parseSource } from "@stll/scripts/src/syntax-tree.ts";
+import { parseSource } from "@stll/scripts/src/syntax-tree";
 
 import {
   declaredAppFrameScope,

@@ -9,7 +9,7 @@ import {
   parseSource,
   type StaticMemberExpression,
   walk,
-} from "@stll/scripts/src/syntax-tree.ts";
+} from "@stll/scripts/src/syntax-tree";
 
 const E2E_ROOT = path.resolve(import.meta.dirname, "..");
 const READINESS_LIFECYCLES = new Set(["commit", "domcontentloaded"]);
