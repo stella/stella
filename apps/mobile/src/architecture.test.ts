@@ -204,3 +204,35 @@ describe("the app's colours", () => {
     ).toEqual([]);
   });
 });
+
+describe("the app's text", () => {
+  const screens = readdirSync(SOURCE_ROOT, { recursive: true })
+    .map(String)
+    .filter(
+      (name) =>
+        name.endsWith(".tsx") &&
+        !name.includes(".test.") &&
+        name !== path.join("components", "ui", "text.tsx"),
+    )
+    .toSorted();
+
+  test("finds the screens to scan", () => {
+    expect(screens).toContain(path.join("app", "sign-in.tsx"));
+  });
+
+  // React Native's own Text has neither the web's typeface nor its colours;
+  // the app's Text (components/ui/text.tsx) has both.
+  test.each(screens)("%s sets text through the app's Text", (name) => {
+    const source = readFileSync(path.join(SOURCE_ROOT, name), "utf-8");
+    const fromReactNative = [
+      ...source.matchAll(/import \{([^}]*)\} from "react-native";/gu),
+    ].flatMap((match) =>
+      (match[1] ?? "").split(",").map((part) => part.trim()),
+    );
+    expect(
+      fromReactNative.filter(
+        (imported) => imported === "Text" || imported === "TextInput",
+      ),
+    ).toEqual([]);
+  });
+});

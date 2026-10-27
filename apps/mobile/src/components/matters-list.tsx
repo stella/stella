@@ -1,7 +1,7 @@
 import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, StyleSheet } from "react-native";
+import { ActivityIndicator } from "react-native";
 
 import { LoadedMatters } from "@/components/loaded-matters";
 import { epochMilliseconds } from "@/connection/clock";
@@ -34,17 +34,9 @@ export const MattersList = ({ source }: { source: AccessTokenSource }) => {
 
   return (
     <Suspense
-      fallback={
-        <ActivityIndicator color={colors.accent} style={styles.loading} />
-      }
+      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
     >
       <LoadedMatters load={load} onReload={reload} refreshing={refreshing} />
     </Suspense>
   );
 };
-
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-  },
-});

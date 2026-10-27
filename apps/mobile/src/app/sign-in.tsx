@@ -1,27 +1,19 @@
 import { useState, useTransition } from "react";
 
 import { panic, Result } from "better-result";
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-} from "react-native";
+import { KeyboardAvoidingView, Platform, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
-import { ScreenHeading, screenStyles } from "@/components/empty-state-screen";
+import { ScreenHeading } from "@/components/empty-state-screen";
+import { Button } from "@/components/ui/button";
+import { Text, TextInput } from "@/components/ui/text";
 import { useSession } from "@/connection/session-provider";
 import type { SignInError } from "@/connection/sign-in";
 import { PREFILLED_SERVER_URL } from "@/env";
-import { useAppColors } from "@/theme";
 
 const SignInScreen = () => {
   const t = useTranslations("signIn");
-  const colors = useAppColors();
   const { signIn, state } = useSession();
   const [serverUrl, setServerUrl] = useState(PREFILLED_SERVER_URL);
   const [failure, setFailure] = useState<SignInFailure | null>(null);
@@ -43,17 +35,15 @@ const SignInScreen = () => {
   }
 
   return (
-    <SafeAreaView
-      style={[screenStyles.screen, { backgroundColor: colors.background }]}
-    >
+    <SafeAreaView className="bg-background flex-1">
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={[screenStyles.content, styles.form]}
+        className="flex-1 justify-center gap-3 px-4"
       >
         <ScreenHeading description={t("description")} title={t("title")} />
-        <Text style={[styles.label, { color: colors.text }]}>
-          {t("serverLabel")}
-        </Text>
+        <View className="mt-4">
+          <Text variant="label">{t("serverLabel")}</Text>
+        </View>
         <TextInput
           accessibilityLabel={t("serverLabel")}
           autoCapitalize="none"
@@ -64,51 +54,23 @@ const SignInScreen = () => {
           onChangeText={setServerUrl}
           onSubmitEditing={submit}
           placeholder={t("serverPlaceholder")}
-          placeholderTextColor={colors.muted}
           returnKeyType="go"
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
-              color: colors.text,
-            },
-          ]}
           textContentType="URL"
           value={serverUrl}
         />
         {notice === null ? null : (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[styles.notice, { color: colors.text }]}
-          >
+          <Text accessibilityLiveRegion="polite" variant="error">
             {notice}
           </Text>
         )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{
-            busy: pending,
-            disabled: pending || serverUrl.trim() === "",
-          }}
+        <Button
+          className="mt-2"
           disabled={pending || serverUrl.trim() === ""}
+          label={t("submit")}
+          loading={pending}
           onPress={submit}
-          style={({ pressed }) => [
-            styles.button,
-            {
-              backgroundColor: colors.accent,
-              opacity: pressed || pending ? 0.7 : 1,
-            },
-          ]}
-        >
-          {pending ? (
-            <ActivityIndicator color={colors.card} />
-          ) : (
-            <Text style={[styles.buttonLabel, { color: colors.card }]}>
-              {t("submit")}
-            </Text>
-          )}
-        </Pressable>
+          size="lg"
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -150,36 +112,3 @@ function failureOf(error: SignInError): SignInFailure | null {
       return panic("Unhandled sign-in error");
   }
 }
-
-const styles = StyleSheet.create({
-  button: {
-    alignItems: "center",
-    borderRadius: 14,
-    justifyContent: "center",
-    minHeight: 50,
-  },
-  buttonLabel: {
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  form: {
-    gap: 12,
-    justifyContent: "center",
-  },
-  input: {
-    borderRadius: 14,
-    borderWidth: 1,
-    fontSize: 16,
-    minHeight: 48,
-    paddingHorizontal: 16,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: "600",
-    marginTop: 12,
-  },
-  notice: {
-    fontSize: 15,
-    lineHeight: 21,
-  },
-});

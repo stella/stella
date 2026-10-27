@@ -9,6 +9,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
+const { withUniwindConfig } = require("uniwind/metro");
 
 const config = getDefaultConfig(__dirname);
 const NODE_MODULES = `${path.sep}node_modules${path.sep}`;
@@ -34,4 +35,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) =>
     platform,
   );
 
-module.exports = config;
+// Tailwind classes, compiled to native styles, over the web's tokens.
+module.exports = withUniwindConfig(config, {
+  cssEntryFile: "./global.css",
+  dtsFile: "./uniwind-types.d.ts",
+});

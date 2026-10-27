@@ -1,0 +1,12 @@
+/* The app's Tailwind (uniwind): the web's tokens, generated from @stll/ui. */
+@import "tailwindcss";
+@import "uniwind";
+@import "./ui-theme.gen.css";
+
+@theme {
+  /* The web's typeface, DM Sans, by the names the expo-font plugin embeds. */
+  --font-sans: "DMSans-Regular";
+  --font-medium: "DMSans-Medium";
+  --font-semibold: "DMSans-SemiBold";
+  --font-bold: "DMSans-Bold";
+}

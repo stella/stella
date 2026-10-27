@@ -146,7 +146,22 @@ const appConfigBase = ({
   runtimeVersion,
   updates: updatesFor(variant, signingCertificatePresent),
   // Scene life cycle: iOS 27 asserts at launch without it.
-  plugins: ["expo-router", "./plugins/with-scene-lifecycle.ts"],
+  plugins: [
+    "expo-router",
+    "./plugins/with-scene-lifecycle.ts",
+    // DM Sans, the web's typeface, embedded in the build.
+    [
+      "expo-font",
+      {
+        fonts: [
+          "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
+          "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
+          "@expo-google-fonts/dm-sans/600SemiBold/DMSans_600SemiBold.ttf",
+          "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
+        ],
+      },
+    ],
+  ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
