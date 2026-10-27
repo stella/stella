@@ -183,6 +183,7 @@ const generateSkillDraft = createSafeRootHandler(
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Could not generate skill draft. Please try again.",
           cause,
         });
@@ -197,6 +198,7 @@ const generateSkillDraft = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "Skill draft was empty. Please try again.",
         }),
       );
