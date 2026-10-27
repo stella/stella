@@ -69,7 +69,11 @@ const exactMemberCall = (
     return null;
   }
   const body = value.arguments.at(0);
-  if (body?.type === "SpreadElement" || !shorthandBody(body, argument)) {
+  if (
+    body === undefined ||
+    body.type === "SpreadElement" ||
+    !shorthandBody(body, argument)
+  ) {
     return null;
   }
   return directProperty(value.callee, name);
