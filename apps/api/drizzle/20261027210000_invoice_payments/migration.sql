@@ -62,7 +62,7 @@ CREATE POLICY "review_reset_owner_select" ON "invoice_payments" FOR SELECT TO PU
 CREATE POLICY "review_reset_owner_delete" ON "invoice_payments" FOR DELETE TO PUBLIC USING (
   current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.invoice_payments'::regclass)
   AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
-);;--> statement-breakpoint
+);--> statement-breakpoint
 
 -- The online backfill (apps/api/src/lib/billing/invoice-payment-backfill.ts) runs as
 -- the owner: it reads every payment and inserts only the recorder-less
