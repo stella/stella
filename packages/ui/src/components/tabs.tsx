@@ -69,12 +69,16 @@ const TabsList = ({
         // this element's scroll origin. `safe center` falls back to start
         // alignment once the strip overflows, because plain centring puts the
         // leading tabs at a negative offset, outside the scrollable area.
-        // Scrolling one axis computes the other to `auto` anyway, hence both,
-        // but containment stays per axis so a wheel over a horizontal strip
-        // still scrolls the page. The bar itself stays hidden: it would take
-        // block size from the strip on appearing and paint over the indicator
-        // anchored to the strip's edge.
-        "scrollbar-none overflow-auto data-[orientation=horizontal]:overscroll-x-contain data-[orientation=vertical]:overscroll-y-contain [&::-webkit-scrollbar]:hidden",
+        // Only the strip's own axis scrolls: the cross axis is `hidden`, not
+        // `auto`, because a tab or action button a pixel taller than the strip
+        // otherwise lets touch drag it up and down. Containment stays per axis
+        // so a wheel over a horizontal strip still scrolls the page. The bar
+        // itself stays hidden: it would take block size from the strip on
+        // appearing and paint over the indicator anchored to the strip's edge.
+        // The horizontal axes stay unprefixed so a consumer's `overflow-*`
+        // still replaces them through tailwind-merge.
+        "scrollbar-none overflow-x-auto overflow-y-hidden data-[orientation=horizontal]:overscroll-x-contain [&::-webkit-scrollbar]:hidden",
+        "data-[orientation=vertical]:overflow-x-hidden data-[orientation=vertical]:overflow-y-auto data-[orientation=vertical]:overscroll-y-contain",
         "data-[orientation=vertical]:flex-col",
         variant === "default"
           ? "bg-muted text-foreground-label rounded-lg p-0.5"
