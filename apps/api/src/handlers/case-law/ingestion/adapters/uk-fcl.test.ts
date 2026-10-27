@@ -485,3 +485,16 @@ test("reconciliation revisions require a valid feed entry belonging to the paylo
     updated: entry.updated,
   });
 });
+
+test.each(["", "invalid"])(
+  "source field inventory preserves typed listing errors for %j",
+  async (listing) => {
+    expect(
+      await rejectionOf(
+        Promise.resolve(
+          ukFclAdapter.sourceFields.listSourceFields({ listing, document }),
+        ),
+      ),
+    ).toBeInstanceOf(ParseXmlError);
+  },
+);

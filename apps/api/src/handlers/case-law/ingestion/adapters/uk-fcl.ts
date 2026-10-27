@@ -485,19 +485,23 @@ export const ukFclAdapter = defineSourceAdapter({
   sourceFields: {
     status: "declared",
     fields: UK_FCL_SOURCE_FIELDS,
-    listSourceFields: (parts: SourceRawParts) => [
-      ...new Set(
-        readUkFclFeed(parts["listing"] ?? "", PER_PAGE)
-          .unwrap()
-          .entries.flatMap((entry) => Object.keys(entry.fields)),
-      ),
-      ...Array.from(
-        slimdom
-          .parseXmlDocument(parts["document"] ?? "")
-          .getElementsByTagNameNS("*", "*"),
-        (element) => `{${element.namespaceURI ?? ""}}${element.localName}`,
-      ),
-    ],
+    listSourceFields: async (parts: SourceRawParts) => {
+      const listed = readUkFclFeed(parts["listing"] ?? "", PER_PAGE);
+      if (listed.isErr()) {
+        return await Promise.reject(listed.error);
+      }
+      return [
+        ...new Set(
+          listed.value.entries.flatMap((entry) => Object.keys(entry.fields)),
+        ),
+        ...Array.from(
+          slimdom
+            .parseXmlDocument(parts["document"] ?? "")
+            .getElementsByTagNameNS("*", "*"),
+          (element) => `{${element.namespaceURI ?? ""}}${element.localName}`,
+        ),
+      ];
+    },
   },
   reparseStoredRaw: reparseUkFclStoredRaw,
   async getTotalCount(signal) {
@@ -540,7 +544,9 @@ export const ukFclAdapter = defineSourceAdapter({
       }),
     tipWindowDays: UK_FCL_COURTS.length * 2,
     nextSlice(value) {
-      const { year, court } = parseSlice(value).unwrap();
+      const { year, court } = parseSlice(value).unwrap(
+        "Slice traversal receives coordinates produced by this adapter's slice walk",
+      );
       const next = slice({
         year: year + (court + 1 === UK_FCL_COURTS.length ? 1 : 0),
         court: (court + 1) % UK_FCL_COURTS.length,
@@ -551,7 +557,9 @@ export const ukFclAdapter = defineSourceAdapter({
         : next;
     },
     previousSlice(value) {
-      const { year, court } = parseSlice(value).unwrap();
+      const { year, court } = parseSlice(value).unwrap(
+        "Slice traversal receives coordinates produced by this adapter's slice walk",
+      );
       const previous = slice({
         year: year - (court === 0 ? 1 : 0),
         court: (court + UK_FCL_COURTS.length - 1) % UK_FCL_COURTS.length,
