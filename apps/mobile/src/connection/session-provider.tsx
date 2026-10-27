@@ -64,12 +64,22 @@ const sourceFor = (
     store: deviceSessionStore,
   });
 
+/**
+ * The restored session's token source, made once for every render: React may
+ * render the provider more than once before it mounts, and two sources would
+ * each refresh the same rotating grant, so one would be refused and end it.
+ */
+const restoredSource: Promise<AccessTokenSource | undefined> =
+  restoredSession.then((session) =>
+    session === undefined ? undefined : sourceFor(session, undefined),
+  );
+
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
-  const restored = use(restoredSession);
+  const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
     restored === undefined
       ? { status: "signed-out", ended: false }
-      : { status: "signed-in", source: sourceFor(restored, undefined) },
+      : { status: "signed-in", source: restored },
   );
 
   const value: SessionContextValue = {

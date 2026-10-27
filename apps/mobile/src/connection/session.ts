@@ -78,25 +78,58 @@ export const createAccessTokenSource = ({
   let refreshing:
     Promise<Result<string, SignedOutError | TokenError>> | undefined;
 
-  const refresh = async (): Promise<
-    Result<string, SignedOutError | TokenError>
-  > => {
+  /**
+   * After the server refuses `presented`: another run of the app (a reload
+   * during development, a render React threw away) may have rotated the
+   * grant first and kept its successor, which this source then adopts and
+   * presents once. Only a keychain still holding the refused token means
+   * the grant itself ended. Never throws: a keychain that cannot be read or
+   * cleared still ends in a signed-out session.
+   */
+  const afterRefusal = async (
+    presented: string,
+    oauthError: string,
+    adopted: boolean,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const kept = await Result.tryPromise(async () => await store.read());
+    const successor = Result.isOk(kept) ? kept.value : undefined;
+    if (
+      !adopted &&
+      successor !== undefined &&
+      successor.refreshToken !== presented &&
+      successor.issuer === current.issuer &&
+      successor.clientId === current.clientId
+    ) {
+      current = successor;
+      return await refresh(true);
+    }
+    (
+      await Result.tryPromise(async () => {
+        await store.clear();
+      })
+    ).unwrapOr(undefined);
+    return Result.err(
+      new SignedOutError({
+        message: `The server ended the session: ${oauthError}`,
+      }),
+    );
+  };
+
+  const refresh = async (
+    adopted = false,
+  ): Promise<Result<string, SignedOutError | TokenError>> => {
+    const presented = current.refreshToken;
     const refreshed = await refreshTokens({
       fetch,
       clientId: current.clientId,
-      refreshToken: current.refreshToken,
+      refreshToken: presented,
       resource: current.resource,
       tokenEndpoint: current.tokenEndpoint,
     });
     if (Result.isError(refreshed)) {
       const { oauthError } = refreshed.error;
       if (oauthError !== undefined && TERMINAL_REFRESH_ERRORS.has(oauthError)) {
-        await store.clear();
-        return Result.err(
-          new SignedOutError({
-            message: `The server ended the session: ${oauthError}`,
-          }),
-        );
+        return await afterRefusal(presented, oauthError, adopted);
       }
       return Result.err(refreshed.error);
     }
