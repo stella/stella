@@ -100,3 +100,25 @@ test("the staging status writer finds both staging titles for their commit", () 
   expect(deploys(candidateStaging, "c".repeat(40))).toBe("false");
   expect(deploys(`Staging release proof ${SHA}`, SHA)).toBe("false");
 });
+
+test("the release health check accepts each proof workflow's rendered title", () => {
+  const source = read("check-release-main-health.sh");
+  const patterns = new Map(
+    [
+      ...source.matchAll(
+        /validate_workflow_status "[^"]+" "\.github\/workflows\/([^"]+)" "([^"]+)"/gu,
+      ),
+    ].map(([, workflow, pattern]) => [workflow, pattern]),
+  );
+  for (const [workflow, title] of [
+    ["deploy-staging.yml", candidateStaging],
+    ["main-heavy.yml", heavy],
+    ["main-pr-depth.yml", prDepth],
+  ] as const) {
+    const pattern = patterns.get(workflow);
+    expect(pattern, workflow).toBeDefined();
+    expect(new RegExp(`^(${pattern ?? ""}) ${SHA}$`, "u").test(title)).toBe(
+      true,
+    );
+  }
+});

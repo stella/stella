@@ -337,7 +337,7 @@ case "$*" in
   *actions/workflows/deploy-staging.yml/runs?*)
     jq -cn --arg sha "$DEPLOY_SHA" '{workflow_runs: [{id: 9, event: "workflow_dispatch", head_sha: $sha,
       head_branch: "main", path: ".github/workflows/deploy-staging.yml",
-      display_title: ("Staging release proof " + $sha), repository: {full_name: "stella/stella"}}]}' ;;
+      display_title: ("Deploy main to staging " + $sha), repository: {full_name: "stella/stella"}}]}' ;;
   *commits/*/statuses?*)
     jq -cn --arg run "\${STUB_STATUS_OWNER_RUN:-9}" '[[{context: "staging/verified", state: "pending",
       creator: {login: "github-actions[bot]", type: "Bot"},

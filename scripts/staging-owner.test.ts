@@ -20,7 +20,7 @@ afterEach(async () => {
   );
 });
 
-const runGate = async (mode: "candidate" | "ordinary", fixture: object) => {
+const runGate = async (mode: "candidate" | "ordinary", fixture: unknown) => {
   const workspace = await mkdtemp(path.join(tmpdir(), "staging-owner-"));
   workspaces.push(workspace);
   const retry = path.join(workspace, "gh-retry.sh");

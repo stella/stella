@@ -137,7 +137,7 @@ test("only the eligibility verdict starts the job that holds the release environ
   const finalize = job("finalize");
   expect(field(finalize, "needs")).toBe("finalize-eligibility");
   expect(field(finalize, "if")).toBe(
-    "needs.finalize-eligibility.outputs.sha != ''",
+    "github.event_name == 'workflow_run' && needs.finalize-eligibility.outputs.sha != ''",
   );
   expect(field(finalize, "environment")).toBe("release-app");
   expect(JSON.stringify(finalize)).toContain(

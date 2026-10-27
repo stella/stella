@@ -65,16 +65,17 @@ validate_workflow_status() {
     .id == $id and .html_url == $url and .repository.full_name == $repo and
     .path == $workflow and .head_branch == "main" and
     (.event == "push" or .event == "workflow_dispatch" or .event == "schedule") and
-    .display_title == ($title + $sha) and
+    (.display_title | test("^(" + $title + ") " + $sha + "$")) and
     (.event == "workflow_dispatch" or .head_sha == $sha) and
     .status == "completed" and .conclusion == "success"
   ' <<< "$run" >/dev/null || refuse "$code: run provenance or conclusion does not match"
 }
 if [[ "$proof" != "$sha" || -n "$rc_tags" ]]; then
-  validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof " "RELEASE_STAGING_NOT_GREEN"
+  # Title patterns follow each workflow's run-name (scripts/proof-run-titles.test.ts).
+  validate_workflow_status "staging/verified" ".github/workflows/deploy-staging.yml" "Staging release proof v[0-9]+[.][0-9]+[.][0-9]+-rc[.][1-9][0-9]*|Deploy main to staging" "RELEASE_STAGING_NOT_GREEN"
 fi
 if [[ "$receipt" != true ]]; then
-  validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites " "RELEASE_HEAVY_NOT_GREEN"
-  validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks " "RELEASE_PR_DEPTH_NOT_GREEN"
+  validate_workflow_status "main/heavy" ".github/workflows/main-heavy.yml" "Main heavy suites" "RELEASE_HEAVY_NOT_GREEN"
+  validate_workflow_status "main/pr-depth" ".github/workflows/main-pr-depth.yml" "Main PR-depth checks" "RELEASE_PR_DEPTH_NOT_GREEN"
 fi
 bash "$script_dir/check-release-open-incidents.sh" "$repo"

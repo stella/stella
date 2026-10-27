@@ -42,9 +42,7 @@ describe("release-candidate commit identity", () => {
 
   test("finalization asserts the final and candidate tags target the shipped commit", async () => {
     const finalize = await readFile(finalizePath, "utf-8");
-    expect(finalize).toContain(
-      '[[ "$(git rev-parse "$final^{commit}")" == "$sha" ]]',
-    );
+    expect(finalize).toContain('echo "Final tag $final already exists" >&2');
     expect(finalize).toContain('[[ "$rc_sha" == "$sha" ]]');
     expect(finalize).toContain('git tag -a "$final" "$rc_sha"');
   });

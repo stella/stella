@@ -66,7 +66,11 @@ export const finalize = (fixture: ProofFixture = {}) => {
       "#!/usr/bin/env bash\nexit 0\n",
     );
     const contexts = [
-      ["staging/verified", "deploy-staging.yml", "Staging release proof "],
+      [
+        "staging/verified",
+        "deploy-staging.yml",
+        "Staging release proof v1.2.3-rc.2 ",
+      ],
       ["main/heavy", "main-heavy.yml", "Main heavy suites "],
       ["main/pr-depth", "main-pr-depth.yml", "Main PR-depth checks "],
     ] as const;

@@ -1139,8 +1139,6 @@ const VERSION_READERS: Record<string, string> = {
     "VERSION changed against the merge base; compared with npm, not with tags",
   "scripts/check-npm-publish-lag.ts":
     "VERSION bounds the newest strictly lower final tag across all release branches",
-  "scripts/check-published-versions.ts":
-    "VERSION labels an untagged bump only when no final tag contains it",
   "scripts/check-railway-template-shape.ts": "watch pattern",
   "scripts/check-release-candidate.sh":
     "the pending version commit; its tag is the one to create",

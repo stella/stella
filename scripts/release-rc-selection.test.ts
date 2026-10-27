@@ -169,7 +169,7 @@ esac
       {
         context: "staging/verified",
         workflow: "deploy-staging.yml",
-        title: "Staging release proof ",
+        title: "Staging release proof v1.2.3-rc.1 ",
       },
       {
         context: "main/heavy",

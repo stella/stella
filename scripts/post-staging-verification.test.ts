@@ -49,7 +49,7 @@ esac
           html_url: `https://github.com/${repository}/actions/runs/${id}`,
           head_branch: "main",
           path: ".github/workflows/deploy-staging.yml",
-          display_title: `Staging release proof ${dispatchSha}`,
+          display_title: `Deploy main to staging ${dispatchSha}`,
           event: "workflow_dispatch",
           head_sha: dispatchSha,
           repository: { full_name: repository },

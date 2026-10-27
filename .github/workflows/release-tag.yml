@@ -217,7 +217,7 @@ jobs:
   finalize:
     name: Finalize the proven release candidate
     needs: finalize-eligibility
-    if: needs.finalize-eligibility.outputs.sha != ''
+    if: github.event_name == 'workflow_run' && needs.finalize-eligibility.outputs.sha != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: release-app
