@@ -1009,56 +1009,54 @@ test("hovering a plain-text paste option previews the clip without formatting", 
   await expectPastePreview(page, "original");
 });
 
-for (const run of Array.from({ length: 30 }, (_, index) => index + 1)) {
-  test(`arrow-highlighting a plain-text paste option previews the clip without formatting (repeat ${String(run)})`, async ({
-    page,
-  }) => {
-    await openClipboard(page, "en");
-    await page
-      .locator(
-        `[data-clipboard-id="${FORMATTED_CLIP.id}"] [data-clipboard-more-trigger]`,
-      )
-      .focus();
-    await page.keyboard.press("Enter");
-    const pasteTextAs = page.getByRole("menuitem", { name: "Paste text as" });
-    await expect(pasteTextAs).toBeVisible();
-    // Engines differ in which item, if any, an Enter-opened menu highlights, so
-    // the walk starts from the submenu trigger.
-    await pasteTextAs.focus();
-    await expect(pasteTextAs).toBeFocused();
-    await page.keyboard.press("ArrowRight");
-    const original = page.getByRole("menuitem", {
-      name: "Original formatting",
-    });
-    const plainText = page.getByRole("menuitem", { name: "Plain text" });
-    await expect(original).toBeFocused();
-    await expectPastePreview(page, "original");
-    await page.keyboard.press("ArrowDown");
-    await expect(plainText).toBeFocused();
-    await expectPastePreview(page, "plainText");
-    await page.keyboard.press("ArrowUp");
-    await expect(original).toBeFocused();
-    await expectPastePreview(page, "original");
-    await page.keyboard.press("ArrowDown");
-    await expectPastePreview(page, "plainText");
-    await page.keyboard.press("ArrowLeft");
-    await expect(plainText).toBeHidden();
-    await expect(pasteTextAs).toBeFocused();
-    await expectPastePreview(page, "original");
-
-    // Reopening the submenu moves focus in asynchronously; ArrowDown before it
-    // lands stays on the closed trigger.
-    await page.keyboard.press("ArrowRight");
-    await expect(original).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await expect(plainText).toBeFocused();
-    await expectPastePreview(page, "plainText");
-    await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("menu")).toHaveCount(0);
-    await expectPastePreview(page, "original");
+test("arrow-highlighting a plain-text paste option previews the clip without formatting", async ({
+  page,
+}) => {
+  await openClipboard(page, "en");
+  await page
+    .locator(
+      `[data-clipboard-id="${FORMATTED_CLIP.id}"] [data-clipboard-more-trigger]`,
+    )
+    .focus();
+  await page.keyboard.press("Enter");
+  const pasteTextAs = page.getByRole("menuitem", { name: "Paste text as" });
+  await expect(pasteTextAs).toBeVisible();
+  // Engines differ in which item, if any, an Enter-opened menu highlights, so
+  // the walk starts from the submenu trigger.
+  await pasteTextAs.focus();
+  await expect(pasteTextAs).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  const original = page.getByRole("menuitem", {
+    name: "Original formatting",
   });
-}
+  const plainText = page.getByRole("menuitem", { name: "Plain text" });
+  await expect(original).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.keyboard.press("ArrowDown");
+  await expect(plainText).toBeFocused();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("ArrowUp");
+  await expect(original).toBeFocused();
+  await expectPastePreview(page, "original");
+  await page.keyboard.press("ArrowDown");
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("ArrowLeft");
+  await expect(plainText).toBeHidden();
+  await expect(pasteTextAs).toBeFocused();
+  await expectPastePreview(page, "original");
+
+  // Reopening the submenu moves focus in asynchronously; ArrowDown before it
+  // lands stays on the closed trigger.
+  await page.keyboard.press("ArrowRight");
+  await expect(original).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(plainText).toBeFocused();
+  await expectPastePreview(page, "plainText");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expectPastePreview(page, "original");
+});
 
 test("the plain-text format shortcut previews the clip until it is left", async ({
   page,
