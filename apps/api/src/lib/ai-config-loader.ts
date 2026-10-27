@@ -32,6 +32,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -48,8 +49,14 @@ const AI_SETTINGS_READ_FAILURE = failureSink({
   expected: [],
 });
 
-/** The one capability the loaders need: a single `organization_settings` select. */
+/** The one capability needed to query organization settings. */
 export type OrgSettingsReader = Pick<Transaction, "select">;
+
+/** Runtime settings reads isolate SQL failures from the caller's transaction. */
+type RecoverableOrgSettingsReader = Pick<
+  Transaction,
+  "select" | "execute" | "transaction"
+>;
 
 /**
  * Whose AI work the config is loaded for: the organization, and the member
@@ -79,11 +86,16 @@ const queryAISettingsRow = async (
     .then((rows) => rows.at(0));
 
 const selectAISettingsRow = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   organizationId: SafeId<"organization">,
 ) => {
+  // PostgreSQL aborts the current transaction on a failed statement. Catch
+  // outside the nested transaction so its rollback restores the caller first.
   const result = await Result.tryPromise(async () =>
-    queryAISettingsRow(db, organizationId),
+    withAggregateSavepoint(
+      db,
+      async (tx) => await queryAISettingsRow(tx, organizationId),
+    ),
   );
   if (Result.isOk(result)) {
     return { type: "ready", row: result.value } as const;
@@ -203,7 +215,7 @@ const readAIConfiguration = async <Settings>({
  * from the instance provider without a config of its own is an error result.
  */
 export const loadOrgAIConfig = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   reader: OrgAIConfigReader,
 ): Promise<Result<OrgAIConfig | null, HandlerError<403>>> => {
   const checkedReader = snapshotOperationInput(reader);
@@ -242,7 +254,7 @@ export type OrgAISettings = {
  * use platform defaults, with the same member and organization access checks.
  */
 export const loadOrgAISettings = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   reader: OrgAIConfigReader,
 ): Promise<Result<OrgAISettings, HandlerError<403>>> => {
   const checkedReader = snapshotOperationInput(reader);
@@ -279,7 +291,7 @@ export type OrgSettingsForAuth = {
  * organization access checks still run before the default can serve AI work.
  */
 export const loadOrgSettingsForAuth = async (
-  db: OrgSettingsReader,
+  db: RecoverableOrgSettingsReader,
   { organizationId, userId }: OrgAIConfigReader,
 ): Promise<OrgSettingsForAuth> => {
   const settings = await selectAISettingsRow(db, organizationId);

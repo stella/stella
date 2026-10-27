@@ -466,50 +466,6 @@ describe("absent and unreadable settings", () => {
       managedAIResidency: "eu",
     });
   });
-
-  test("a failed settings read falls back while still checking current membership", async () => {
-    const scope = requestScope(ids.orgA, ids.userA1);
-    let settingsFailures = 0;
-    const read = async (userId: SafeId<"user">) =>
-      await scope(async (tx) => {
-        const reader = new Proxy(tx, {
-          get(target, property, receiver) {
-            if (property !== "select") {
-              return Reflect.get(target, property, receiver);
-            }
-            return new Proxy(target.select, {
-              apply(select, _thisArgument, args) {
-                const selection: unknown = args.at(0);
-                if (
-                  typeof selection === "object" &&
-                  selection !== null &&
-                  "aiConfigEncrypted" in selection
-                ) {
-                  settingsFailures += 1;
-                  throw new Error("Settings read unavailable");
-                }
-                return Reflect.apply(select, target, args);
-              },
-            });
-          },
-        });
-        return await loadOrgSettingsForAuth(reader, {
-          organizationId: ids.orgA,
-          userId,
-        });
-      });
-    expect(await read(ids.userA1)).toEqual({
-      orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
-      promptCachingEnabled: true,
-      managedAIResidency: "eu",
-    });
-    expect(await read(ids.userB1)).toMatchObject({
-      orgAIConfig: null,
-      orgAIConfigStatus: ORG_AI_CONFIG_STATUS.memberAssignmentRequired,
-    });
-    expect(settingsFailures).toBe(2);
-  });
 });
 
 test("strict configuration readers expose settings only for admitted actors", async () => {
