@@ -62,6 +62,7 @@ export const SplitButton = (props: SplitButtonProps) => {
         "pointer-coarse:min-h-11 pointer-coarse:min-w-11",
       )}
       size="sm"
+      tooltip={menuLabel}
       variant="ghost"
     />
   );
@@ -85,6 +86,8 @@ export const SplitButton = (props: SplitButtonProps) => {
         disabled={primaryDisabled}
         onClick={onPrimaryClick}
         size="sm"
+        // A `primaryLabel` names content that may be a bare glyph.
+        tooltip={primaryLabel}
         variant="ghost"
       >
         {children}

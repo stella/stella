@@ -358,6 +358,7 @@ const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
       )}
       size="xs"
       title={t("templates.checkTemplate")}
+      tooltip={t("templates.checkTemplate")}
       variant={hasErrors ? "destructive-ghost" : "ghost"}
     >
       {issueCount === 0 ? (

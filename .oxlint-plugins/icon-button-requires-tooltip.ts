@@ -4,6 +4,11 @@
 // not help sighted users discover unfamiliar icon actions. Stella's UI pattern
 // is to wrap icon-only actions in the shared Tooltip component, or to use a
 // component-level `tooltip` prop when the primitive provides one.
+//
+// `aria-label` or `title` counts as the tooltip only where `Button` turns it
+// into one: on a `Button` with a static icon size, or on a trigger rendered as
+// one (the trigger hands its props to that Button). A text-size Button and an
+// overlay trigger derive none, so their icon-only uses need `tooltip`.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
@@ -25,18 +30,10 @@ const INTERACTIVE_ELEMENTS = new Set([
 
 const TOOLTIP_ELEMENTS = new Set(["Tooltip", "TooltipRoot"]);
 const TOOLTIP_ATTRS = new Set(["tooltip"]);
-const AUTO_TOOLTIP_ELEMENTS = new Set([
-  "AlertDialogClose",
-  "AlertDialogTrigger",
-  "Button",
-  "DialogClose",
-  "DialogTrigger",
-  "MenuTrigger",
-  "PopoverTrigger",
-  "SheetClose",
-  "SheetTrigger",
-]);
 const AUTO_TOOLTIP_ATTRS = new Set(["aria-label", "title"]);
+// `BUTTON_SIZE_CONTENT` in packages/ui/src/components/button.tsx types every
+// icon size with this prefix and only those.
+const ICON_SIZE_PREFIX = "icon";
 const NATIVE_TOOLTIP_ATTRS = new Set(["title"]);
 
 const getJsxName = (node: unknown): string | null => {
@@ -151,6 +148,29 @@ const isLikelyIconExpression = (node: unknown): boolean => {
   );
 };
 
+const isIconElement = (node: unknown): boolean => {
+  if (!isAstNode(node) || node.type !== "JSXElement") {
+    return false;
+  }
+  const name = getElementName(node);
+  if (name === null) {
+    return false;
+  }
+  return (
+    name === "svg" ||
+    name === "DirectionalIcon" ||
+    name === "StellaMark" ||
+    name.endsWith("Icon")
+  );
+};
+
+// A child component that is not an icon (`CopyFeedback`, a badge, a chip) may
+// render a label the rule cannot see, so it counts as visible text.
+const isOpaqueComponent = (node: unknown): boolean => {
+  const name = getElementName(node);
+  return name !== null && /^\p{Lu}/u.test(name) && !isIconElement(node);
+};
+
 const hasVisibleText = (node: unknown): boolean => {
   if (!isAstNode(node)) {
     return false;
@@ -201,22 +221,8 @@ const hasVisibleText = (node: unknown): boolean => {
   }
 
   const children = Array.isArray(node.children) ? node.children : [];
-  return children.some(hasVisibleText);
-};
-
-const isIconElement = (node: unknown): boolean => {
-  if (!isAstNode(node) || node.type !== "JSXElement") {
-    return false;
-  }
-  const name = getElementName(node);
-  if (name === null) {
-    return false;
-  }
-  return (
-    name === "svg" ||
-    name === "DirectionalIcon" ||
-    name === "StellaMark" ||
-    name.endsWith("Icon")
+  return children.some(
+    (child) => isOpaqueComponent(child) || hasVisibleText(child),
   );
 };
 
@@ -245,7 +251,7 @@ const isIconSizeButton = (node: unknown): boolean => {
 
   const size = findAttribute(openingElement, "size");
   const sizeValue = getStaticStringValue(size?.value);
-  if (typeof sizeValue === "string" && sizeValue.startsWith("icon")) {
+  if (typeof sizeValue === "string" && sizeValue.startsWith(ICON_SIZE_PREFIX)) {
     return true;
   }
 
@@ -269,6 +275,34 @@ const getRenderElement = (openingElement: unknown): unknown => {
   return value;
 };
 
+// A `size` the rule cannot read statically is not an icon size: fail closed.
+const isStaticIconSizeButton = (openingElement: unknown): boolean => {
+  if (
+    getJsxName(isAstNode(openingElement) ? openingElement.name : null) !==
+    "Button"
+  ) {
+    return false;
+  }
+  const sizeValue = getStaticStringValue(
+    findAttribute(openingElement, "size")?.value,
+  );
+  return sizeValue?.startsWith(ICON_SIZE_PREFIX) === true;
+};
+
+const hasImplicitTooltip = (
+  openingElement: unknown,
+  renderOpeningElement: unknown,
+): boolean => {
+  if (isStaticIconSizeButton(openingElement)) {
+    return hasAttribute(openingElement, AUTO_TOOLTIP_ATTRS);
+  }
+  return (
+    isStaticIconSizeButton(renderOpeningElement) &&
+    (hasAttribute(openingElement, AUTO_TOOLTIP_ATTRS) ||
+      hasAttribute(renderOpeningElement, AUTO_TOOLTIP_ATTRS))
+  );
+};
+
 const hasTooltip = (node: unknown): boolean => {
   let current = isAstNode(node) ? node : null;
   while (isAstNode(current)) {
@@ -282,13 +316,6 @@ const hasTooltip = (node: unknown): boolean => {
         return true;
       }
       if (
-        name !== null &&
-        AUTO_TOOLTIP_ELEMENTS.has(name) &&
-        hasAttribute(openingElement, AUTO_TOOLTIP_ATTRS)
-      ) {
-        return true;
-      }
-      if (
         name === "button" &&
         hasAttribute(openingElement, NATIVE_TOOLTIP_ATTRS)
       ) {
@@ -299,14 +326,10 @@ const hasTooltip = (node: unknown): boolean => {
       if (hasAttribute(renderOpeningElement, TOOLTIP_ATTRS)) {
         return true;
       }
-      const renderElementName = getJsxName(renderOpeningElement?.name);
-      if (
-        renderElementName !== null &&
-        AUTO_TOOLTIP_ELEMENTS.has(renderElementName) &&
-        hasAttribute(renderOpeningElement, AUTO_TOOLTIP_ATTRS)
-      ) {
+      if (hasImplicitTooltip(openingElement, renderOpeningElement)) {
         return true;
       }
+      const renderElementName = getJsxName(renderOpeningElement?.name);
       if (
         renderElementName === "button" &&
         hasAttribute(renderOpeningElement, NATIVE_TOOLTIP_ATTRS)

@@ -32,11 +32,45 @@ test("checks icon sized render controls", async () => {
   ).toEqual([1]);
 });
 
-test("accepts primitive automatic tooltips and native titles", async () => {
+test("accepts icon-size automatic tooltips, explicit tooltips and native titles", async () => {
   expect(
     await lintSingleRule(
       "icon-button-requires-tooltip",
-      'const a = <Button aria-label="Open"><PlusIcon /></Button>;\nconst b = <button title="Open"><PlusIcon /></button>;\nconst c = <PopoverTrigger tooltip="Open"><PlusIcon /></PopoverTrigger>;',
+      [
+        'const a = <Button aria-label="Open" size="icon"><PlusIcon /></Button>;',
+        'const b = <button title="Open"><PlusIcon /></button>;',
+        'const c = <PopoverTrigger tooltip="Open"><PlusIcon /></PopoverTrigger>;',
+        'const d = <MenuTrigger aria-label="Open" render={<Button size="icon-xs" />}><PlusIcon /></MenuTrigger>;',
+        'const e = <Button aria-label="Open" size="sm" tooltip="Open"><PlusIcon /></Button>;',
+      ].join("\n"),
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([]);
+});
+
+// `Button` turns a label into a tooltip only at an icon size, and an overlay
+// trigger never does; a size the rule cannot read is not proven an icon size.
+test("a label is no tooltip where Button derives none", async () => {
+  expect(
+    await lintSingleRule(
+      "icon-button-requires-tooltip",
+      [
+        'const a = <Button aria-label="Open"><PlusIcon /></Button>;',
+        'const b = <Button aria-label="Open" size="sm"><PlusIcon /></Button>;',
+        'const c = <PopoverTrigger aria-label="Open"><PlusIcon /></PopoverTrigger>;',
+        'const d = <MenuTrigger aria-label="Open" render={<Button size="xs" />}><PlusIcon /></MenuTrigger>;',
+        'const e = <Button aria-label="Open" size={size}><PlusIcon /></Button>;',
+      ].join("\n"),
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([1, 2, 3, 4, 5]);
+});
+
+test("counts a non-icon component as a possible visible label", async () => {
+  expect(
+    await lintSingleRule(
+      "icon-button-requires-tooltip",
+      'const a = <Button aria-label="Copy" size="sm"><CopyFeedback label="Copy" /><ChevronDownIcon /></Button>;',
       { sourcePath: "source.tsx" },
     ),
   ).toEqual([]);
