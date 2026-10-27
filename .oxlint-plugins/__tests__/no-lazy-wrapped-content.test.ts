@@ -68,6 +68,18 @@ const cases = [
     lines: [4],
   },
   {
+    title:
+      "allows a parameter that shadows the lazy component's name in a function rendering it elsewhere",
+    source: `${HEADER}${LAZY}function Page({ LazyChat, children, signedIn }) {\nif (!signedIn) {\nreturn <Viewer>{children}</Viewer>;\n}\nreturn <LazyChat>{children}</LazyChat>;\n}`,
+    lines: [],
+  },
+  {
+    title:
+      "allows a local that shadows the lazy component's name under a fallback drawing the same data",
+    source: `${HEADER}${LAZY}const Page = ({ decision, Reader: LazyChat }) => (\n<Suspense fallback={<Viewer decision={decision} />}>\n<LazyChat decision={decision} />\n</Suspense>\n);`,
+    lines: [],
+  },
+  {
     title: "allows lazy content that only it renders",
     source: `${HEADER}${LAZY}const Page = ({ children, fallbackText }) => (\n<Suspense fallback={<Plain>{fallbackText ?? children}</Plain>}>\n<LazyChat>{children}</LazyChat>\n</Suspense>\n);`,
     lines: [],

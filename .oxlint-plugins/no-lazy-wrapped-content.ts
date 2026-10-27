@@ -51,7 +51,7 @@
 // through a value computed separately for each parent (`fallback ?? children`).
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import type { SourceCode } from "@oxlint/plugins";
+import type { ESTree, SourceCode } from "@oxlint/plugins";
 
 import type { AstNode } from "./utils.ts";
 import {
@@ -59,6 +59,7 @@ import {
   getImportedName,
   isAstNode,
   isIdentifier,
+  resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -162,14 +163,15 @@ const isSuspenseName = (name: unknown, react: ReactBindings): boolean => {
   );
 };
 
-const openingNameOf = (element: AstNode): string | null => {
+const isJsxIdentifier = (node: unknown): node is ESTree.JSXIdentifier =>
+  isAstNode(node) &&
+  node.type === "JSXIdentifier" &&
+  typeof node.name === "string";
+
+const openingIdentifierOf = (element: AstNode): ESTree.JSXIdentifier | null => {
   const opening = element.openingElement;
-  if (!isAstNode(opening) || !isAstNode(opening.name)) {
-    return null;
-  }
-  return opening.name.type === "JSXIdentifier" &&
-    typeof opening.name.name === "string"
-    ? opening.name.name
+  return isAstNode(opening) && isJsxIdentifier(opening.name)
+    ? opening.name
     : null;
 };
 
@@ -429,19 +431,29 @@ export default eslintCompatPlugin({
             }
           },
           "Program:exit"() {
-            const lazyComponents = new Set(
+            // Where each lazy binding is declared: an element counts only when
+            // its name resolves to one of these, not to a parameter or local
+            // that shadows it.
+            const lazyDeclarations = new Set(
               declarators.flatMap((node) =>
                 isIdentifier(node.id) && initializesLazy(node.init, react)
-                  ? [node.id.name]
+                  ? [node.id.range[0]]
                   : [],
               ),
             );
-            if (lazyComponents.size === 0) {
+            if (lazyDeclarations.size === 0) {
               return;
             }
             const isLazyElement = (element: AstNode) => {
-              const name = openingNameOf(element);
-              return name !== null && lazyComponents.has(name);
+              const name = openingIdentifierOf(element);
+              const variable =
+                name === null ? null : resolveVariable(context, name);
+              return (
+                variable !== null &&
+                variable.identifiers.some((identifier) =>
+                  lazyDeclarations.has(identifier.range[0]),
+                )
+              );
             };
             const { sourceCode } = context;
 
