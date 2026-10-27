@@ -442,6 +442,86 @@ const RETRY_WRAPPER =
   "const enableRetries = config => ({ ...config, retries: 2 });";
 
 test.each([
+  ["argument parameter", "overrides = { retries: 2 }", "", "overrides", "top"],
+  [
+    "local argument",
+    "",
+    "const overrides = { retries: 2 };",
+    "{ retries: 0 }, overrides",
+    "top",
+  ],
+  [
+    "destructured argument",
+    "{ settings: overrides } = { settings: { retries: 2 } }",
+    "",
+    "overrides",
+    "top",
+  ],
+  [
+    "local spread",
+    "",
+    "const overrides = { retries: 2 };",
+    "{ retries: 0, ...overrides }",
+    "nested",
+  ],
+  [
+    "project parameter",
+    'projects = [{ name: "browser", retries: 2 }]',
+    "",
+    "{ retries: 0, projects }",
+    "nested",
+  ],
+  [
+    "local use",
+    "",
+    "const use = { retries: 2 };",
+    "{ retries: 0, use }",
+    "nested",
+  ],
+  [
+    "device parameter",
+    'devices = { "Desktop Chrome": { retries: 2 } }',
+    "",
+    '{ retries: 0, projects: [{ use: { ...devices["Desktop Chrome"] } }] }',
+    "nested",
+  ],
+])(
+  "helper-local bindings never resolve to module values: %s",
+  (_name, parameters, declarations, argumentsSource, location) => {
+    expect(
+      config(`
+        import { defineConfig, devices } from "@playwright/test";
+        const overrides = { retries: 0 };
+        const projects = [];
+        const use = {};
+        function sharedConfig(${parameters}) {
+          ${declarations}
+          return defineConfig(${argumentsSource});
+        }
+        export default sharedConfig();
+      `),
+    ).toContainEqual({
+      file: "apps/example/playwright.config.ts",
+      message: location === "top" ? UNREADABLE_HELPER.message : NOT_INSPECTABLE,
+    });
+  },
+);
+
+test("helper binding scopes preserve unshadowed module values", () => {
+  expect(
+    config(`
+      import { defineConfig } from "@playwright/test";
+      const overrides = { retries: 0 };
+      function sharedConfig({ overrides: unused } = { overrides: { retries: 2 } }) {
+        function nested() { const overrides = { retries: 2 }; return overrides; }
+        return defineConfig(overrides);
+      }
+      export default sharedConfig();
+    `),
+  ).toEqual([]);
+});
+
+test.each([
   [
     "transforming wrapper",
     `${RETRY_WRAPPER}
