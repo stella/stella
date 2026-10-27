@@ -609,6 +609,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
   },
+  "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
     kind: "not-per-user",
     reason: "the caller is recorded for usage only",
