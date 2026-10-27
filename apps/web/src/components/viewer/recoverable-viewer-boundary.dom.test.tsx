@@ -61,10 +61,6 @@ afterEach(async () => {
   await act(async () => {
     cleanup();
   });
-  // Fire what is still pending before the real clock returns: Bun drops it
-  // otherwise, and React's scheduler would wait on it in the next test.
-  jest.runOnlyPendingTimers();
-  jest.useRealTimers();
   sessionArea().clear();
 });
 afterAll(async () => {
