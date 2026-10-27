@@ -156,9 +156,14 @@ describe("PanelTrigger", () => {
     expect(iconClasses).toHaveLength(2);
     expect(iconClasses[0]).toContain("panel-left");
     expect(iconClasses[1]).toContain("panel-right");
-    expect(iconClasses[0]?.replaceAll("panel-left", "panel-right")).toBe(
-      iconClasses[1],
-    );
+    // lucide names each glyph in its classes, and the left panel also by its
+    // older alias, `lucide-sidebar`; past those names the icons match.
+    const unnamed = (classes: string | undefined) =>
+      classes
+        ?.split(" ")
+        .filter((name) => !/^lucide-(?:panel-|sidebar)/u.test(name))
+        .join(" ");
+    expect(unnamed(iconClasses[0])).toBe(unnamed(iconClasses[1]));
   });
 });
 
