@@ -112,6 +112,47 @@ test("imported configuration arguments are verified before composition", () => {
   }
 });
 
+test("imported configuration composition requires static module construction", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "test-retries-construction-"));
+  const file = "apps/example/playwright.config.ts";
+  const caller = `import { defineConfig } from "@playwright/test";
+    import base from "./base-config";
+    export default defineConfig(base, { retries: 0 });`;
+  const declaration = `import { defineConfig } from "@playwright/test";
+    const projects = [{ name: "browser", retries: 0 }];`;
+  const exported = "export default defineConfig({ retries: 0, projects });";
+  try {
+    mkdirSync(path.join(root, "apps/example"), { recursive: true });
+    const baseFile = path.join(root, "apps/example/base-config.ts");
+    writeFileSync(baseFile, `${declaration} ${exported}`);
+    const scan = (source = caller) =>
+      findTestRetryViolations(new Map([[file, source]]), root);
+    expect(scan()).toEqual([]);
+
+    for (const construction of [
+      "projects[0].retries = 2;",
+      "projects[0].retries++;",
+      "Object.assign(projects[0], { retries: 2 });",
+      "const changed = projects.push({ name: 'other', retries: 2 });",
+    ]) {
+      writeFileSync(baseFile, `${declaration} ${construction} ${exported}`);
+      expect(scan()).toEqual([UNREADABLE_CONFIG]);
+    }
+
+    writeFileSync(baseFile, `${declaration} ${exported}`);
+    expect(
+      scan(
+        caller.replace(
+          "export default",
+          "base.projects[0].retries = 2; export default",
+        ),
+      ),
+    ).toEqual([UNREADABLE_CONFIG]);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test("follows literal config spreads and rejects a later override", () => {
   expect(
     config(`import { defineConfig } from "@playwright/test";
