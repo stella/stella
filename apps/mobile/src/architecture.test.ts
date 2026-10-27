@@ -18,7 +18,11 @@ const SOURCE_ROOT = import.meta.dir;
  * unchanged under Bun, which is what lets the API's end-to-end test sign the
  * real app code in against the real server.
  */
-const DEVICE_MODULES = new Set(["platform.ts", "session-provider.tsx"]);
+const DEVICE_MODULES = new Set([
+  "platform.ts",
+  "restored-session.ts",
+  "session-provider.tsx",
+]);
 
 const importsOf = (source: string): string[] =>
   [
