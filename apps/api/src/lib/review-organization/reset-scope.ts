@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { eq, inArray, sql } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
@@ -12,12 +14,18 @@ import {
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import {
+  WORKSPACE_DELETION_RETAINED_STAGES,
+  WORKSPACE_DELETION_RETAINED_TABLES,
+} from "@/api/lib/organization-storage-teardown";
 import { inOrder } from "@/api/lib/review-organization/in-order";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Organization-scoped tables the reset leaves in place, each with its reason.
  * Every other table that holds organization data is cleared: listed in
- * `REVIEW_RESET_CLEARED_TABLES`, or removed by a cascade from one that is.
+ * `REVIEW_RESET_CLEARED_TABLES` or `REVIEW_RESET_BILLING_TABLES`, or removed
+ * by a cascade from one that is.
  * `reset-scope.test.ts` fails when a table is in neither.
  */
 export const REVIEW_RESET_KEPT_TABLES = {
@@ -102,8 +110,6 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "clause_variants",
   "clause_versions",
   "clauses",
-  "invoice_lines",
-  "invoices",
   "contact_extraction_uploads",
   "contact_import_requests",
   "contact_relationships",
@@ -127,7 +133,6 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "document_translation_units",
   "entity_version_ai_summaries",
   "entity_views",
-  "expenses",
   "extracted_content",
   "extraction_runs",
   "file_chat_threads",
@@ -174,7 +179,6 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "template_versions",
   "templates",
   "time_daily_targets",
-  "time_entries",
   "time_entry_suggestions",
   "time_entry_timer_states",
   "time_timer_confirmations",
@@ -199,14 +203,96 @@ export const REVIEW_RESET_MATTER_TABLE = "workspaces";
 /** Tables without an organization column the sweep empties by hand first. */
 export const REVIEW_RESET_MANUAL_TABLES = ["user_files"] as const;
 
-const removedCount = (rows: unknown[]): number => {
-  const first = rows.at(0);
-  return typeof first === "object" &&
-    first !== null &&
-    "n" in first &&
-    typeof first.n === "number"
-    ? first.n
-    : 0;
+const retainedTables: ReadonlySet<PgTable> = new Set(
+  WORKSPACE_DELETION_RETAINED_TABLES,
+);
+
+const isBillingRoot = (table: PgTable) =>
+  !getTableConfig(table).foreignKeys.some(
+    (key) =>
+      key.onDelete === "cascade" &&
+      key.reference().foreignTable !== table &&
+      retainedTables.has(key.reference().foreignTable),
+  );
+
+/**
+ * Billing records outlive an authorized matter deletion, which refuses a
+ * matter that still has them (`WORKSPACE_DELETION_RETAINED_TABLES`), so the
+ * reset empties them before the matters, as the owner, stage by stage
+ * (`WORKSPACE_DELETION_RETAINED_STAGES`). Only the roots are named: a
+ * retained table that cascades from another goes with it.
+ */
+const REVIEW_RESET_BILLING_STAGES = WORKSPACE_DELETION_RETAINED_STAGES.map(
+  (stage) =>
+    stage.filter(isBillingRoot).map((table) => getTableConfig(table).name),
+);
+
+export const REVIEW_RESET_BILLING_TABLES = REVIEW_RESET_BILLING_STAGES.flat();
+
+/**
+ * Delete the organization's rows from `names` in one statement, so
+ * restrictive references among them are checked once all are gone. Returns
+ * the rows removed per table.
+ */
+const removeOrganizationRows = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+  names: readonly string[],
+): Promise<Map<string, number>> => {
+  const removals = names.map((name, index) => ({
+    name,
+    alias: sql.identifier(`removed_${index}`),
+  }));
+  // audit: skip - one step of the reset's table deletes; totals go to the system audit
+  const rows = executedRows(
+    await tx.execute(
+      sql`WITH ${sql.join(
+        removals.map(
+          ({ name, alias }) =>
+            sql`${alias} AS (DELETE FROM ${sql.identifier(name)} WHERE organization_id = ${organizationId} RETURNING 1)`,
+        ),
+        sql`, `,
+      )} SELECT ${sql.join(
+        removals.map(
+          ({ name, alias }) =>
+            sql`(SELECT count(*)::int FROM ${alias}) AS ${sql.identifier(name)}`,
+        ),
+        sql`, `,
+      )}`,
+    ),
+  );
+  const counts = rows.at(0);
+  return new Map(
+    removals.map(({ name }) => [
+      name,
+      isRecord(counts) && typeof counts[name] === "number" ? counts[name] : 0,
+    ]),
+  );
+};
+
+/**
+ * Empty the review organization's billing records while its matters still
+ * stand, so the authorized matter deletion that follows can take them: one
+ * statement per stage. None of these tables forces row security on its owner
+ * (`reset-scope.test.ts`). Returns the rows removed per table.
+ */
+export const clearReviewOrganizationBilling = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<Map<string, number>> => {
+  const removed = new Map<string, number>();
+  const cleared = await inOrder(REVIEW_RESET_BILLING_STAGES, async (stage) => {
+    for (const [name, rows] of await removeOrganizationRows(
+      tx,
+      organizationId,
+      stage,
+    )) {
+      removed.set(name, rows);
+    }
+    return Result.ok(undefined);
+  });
+  cleared.unwrap("The billing stages report no errors");
+  return removed;
 };
 
 /**
@@ -264,13 +350,10 @@ export const sweepReviewOrganization = async (
   );
   const swept = await inOrder(REVIEW_RESET_CLEARED_TABLES, async (name) => {
     const clear = async (deleteTx: Transaction) => {
-      // audit: skip - one table of the reset sweep; totals go to the system audit
-      const rows = executedRows(
-        await deleteTx.execute(
-          sql`WITH removed AS (DELETE FROM ${sql.identifier(name)} WHERE organization_id = ${organizationId} RETURNING 1) SELECT count(*)::int AS n FROM removed`,
-        ),
-      );
-      removed.set(name, removedCount(rows));
+      const rows = await removeOrganizationRows(deleteTx, organizationId, [
+        name,
+      ]);
+      removed.set(name, rows.get(name) ?? 0);
     };
     // Explicit owner cleanup policies cover user and feature-hidden rows.
     // The remaining application policies use the entire organization matter set.
