@@ -3,6 +3,7 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { fetchWithTimeout } from "@stll/fetch";
 import { isNonNullObject } from "@stll/template-conditions/path";
 
@@ -78,6 +79,7 @@ const sessionExpirySchema = v.nullish(
   v.pipe(
     v.string(),
     v.isoTimestamp(),
+    API_STORABLE_INSTANT_CHECK,
     v.transform((value) => new Date(value)),
   ),
   null,

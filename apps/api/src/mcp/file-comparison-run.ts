@@ -42,6 +42,7 @@ import {
   detectFileEncryption,
   ENCRYPTED_CONTENT_MESSAGE,
 } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
 import { headObject, S3ObjectMissingError } from "@/api/lib/s3-presign";
 import {
@@ -55,9 +56,9 @@ import type {
 } from "@/api/lib/uploads/file-comparison/deliver-redline";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
 import { withTimeout } from "@/api/lib/with-timeout";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { notFoundResult, structuredErrorResult } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const PREPARE_HINT =
@@ -103,7 +104,7 @@ const DEFAULT_FILE_COMPARISON_RUN_DEPENDENCIES: FileComparisonRunDependencies =
 export type FileComparisonRunOptions = {
   baseTrackedChanges: TrackedChangeDisposition;
   baseUploadId: SafeId<"fileComparisonUpload">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   granularity: CompareGranularity;
   mode: CompareMode;
   outputMode: UploadsOutputMode;
@@ -166,7 +167,7 @@ const discardInput = async ({
   status,
   uploadId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   deleteObject: FileComparisonRunDependencies["deleteObject"];
   signal: AbortSignal;
   status: "consumed" | "failed";
@@ -210,10 +211,13 @@ const discardInput = async ({
   );
   if (Result.isError(removed)) {
     // The object is gone and the row is expired, so the sweep removes it.
-    captureError(removed.error, {
-      fileComparisonUploadId: uploadId,
-      stage: "file-comparison.discard-row",
-    });
+    captureError(
+      removed.error,
+      handlerErrorContext("mcp.discardInput.removed_error", {
+        fileComparisonUploadId: uploadId,
+        stage: "file-comparison.discard-row",
+      }),
+    );
   }
 };
 
@@ -234,7 +238,7 @@ const loadInput = async ({
   row,
   signal,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: FileComparisonRunDependencies;
   path: string;
   row: InputRow;
@@ -417,7 +421,7 @@ const deliver = async ({
   targetName,
 }: {
   compared: CompareResult;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: FileComparisonRunDependencies;
   outputMode: UploadsOutputMode;
   signal: AbortSignal;
@@ -442,10 +446,13 @@ const deliver = async ({
     dependencies,
   );
   if (Result.isError(delivered)) {
-    captureError(delivered.error.cause, {
-      stage: "file-comparison.deliver",
-      step: delivered.error.step,
-    });
+    captureError(
+      delivered.error.cause,
+      handlerErrorContext("mcp.deliver.delivered_error_cause", {
+        stage: "file-comparison.deliver",
+        step: delivered.error.step,
+      }),
+    );
     return {
       status: "error",
       response: structuredErrorResult({
@@ -471,7 +478,7 @@ const recordComparisonAudit = async ({
 }: {
   base: InputRow;
   changeCount: number | null;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   target: InputRow;
 }): Promise<void> => {
   const recorded = await Result.tryPromise(
@@ -495,10 +502,13 @@ const recordComparisonAudit = async ({
       }),
   );
   if (Result.isError(recorded)) {
-    captureError(recorded.error, {
-      fileComparisonUploadId: base.id,
-      stage: "file-comparison.audit",
-    });
+    captureError(
+      recorded.error,
+      handlerErrorContext("mcp.recordComparisonAudit.recorded_error", {
+        fileComparisonUploadId: base.id,
+        stage: "file-comparison.audit",
+      }),
+    );
   }
 };
 
@@ -508,7 +518,7 @@ const loadInputRows = async ({
   targetUploadId,
 }: {
   baseUploadId: SafeId<"fileComparisonUpload">;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   targetUploadId: SafeId<"fileComparisonUpload">;
 }): Promise<Result<InputRow[], unknown>> =>
   await Result.tryPromise(

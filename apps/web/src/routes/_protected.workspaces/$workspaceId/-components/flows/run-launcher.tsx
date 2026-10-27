@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { FLOW_RUN_INPUT_ENTITIES_MAX } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
@@ -24,6 +24,7 @@ import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog
 import { runSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import type { RunSizeConfirmationDetail } from "@/components/usage/run-size-confirmation";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";

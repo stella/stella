@@ -1,6 +1,6 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { eq, sql } from "drizzle-orm";
-import { status, t } from "elysia";
+import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -25,6 +25,7 @@ import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-sub
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
+import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -47,7 +48,7 @@ import {
   corpusCarriesDocument,
   publicRowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import {
@@ -62,6 +63,7 @@ import {
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -97,8 +99,16 @@ export const readDecisionTextColumnWritten = definePublicLawSharedQuery(
   },
 );
 
-export const readDecisionQuerySchema = t.Object({
-  citationsCursor: t.Optional(tPaginationCursor()),
+export const readDecisionQuerySchema = v.object({
+  citationsCursor: v.optional(
+    v.pipe(
+      paginationCursorSchema(),
+      v.check(
+        (cursor) => decodeDecisionCitationCursor(cursor) !== null,
+        "Invalid cursor",
+      ),
+    ),
+  ),
 });
 
 type ReadDecisionOptions = {
@@ -637,10 +647,13 @@ const containPayloadUnavailable = async <TPayload>(
     );
   }
 
-  captureError(raised, {
-    decisionId,
-    step: "readDecision.corpusPayloadUnavailable",
-  });
+  captureError(
+    raised,
+    handlerErrorContext("decisions.containPayloadUnavailable.raised", {
+      decisionId,
+      step: "readDecision.corpusPayloadUnavailable",
+    }),
+  );
   return { payload: null, unavailable: true };
 };
 

@@ -64,7 +64,13 @@ export const AnswerEditPanel = ({
     if (Result.isOk(refreshed)) {
       return true;
     }
-    getAnalytics().captureError(refreshed.error);
+    getAnalytics().captureError(refreshed.error, {
+      fingerprintKey: "AnswerEditPanel.refreshAnswer:failure",
+      scope: {
+        type: "handler",
+        handlerId: "AnswerEditPanel.refreshAnswer:failure",
+      },
+    });
     if (active.current) {
       setState({ status: "stale" });
     }
@@ -93,7 +99,10 @@ export const AnswerEditPanel = ({
       setState({ status: "proposal", proposal: result.value });
       return;
     }
-    getAnalytics().captureError(result.error);
+    getAnalytics().captureError(result.error, {
+      fingerprintKey: "AnswerEditPanel:failure",
+      scope: { type: "handler", handlerId: "AnswerEditPanel:failure" },
+    });
     if (APIError.is(result.error) && result.error.status === 409) {
       setState({ status: "stale" });
       await refreshAnswer();
@@ -133,7 +142,10 @@ export const AnswerEditPanel = ({
     if (!active.current) {
       return;
     }
-    getAnalytics().captureError(result.error);
+    getAnalytics().captureError(result.error, {
+      fingerprintKey: "AnswerEditPanel.save:failure",
+      scope: { type: "handler", handlerId: "AnswerEditPanel.save:failure" },
+    });
     if (APIError.is(result.error) && result.error.status === 409) {
       setState({ status: "stale" });
       await refreshAnswer();

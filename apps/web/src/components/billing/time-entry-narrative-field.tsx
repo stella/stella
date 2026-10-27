@@ -19,6 +19,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
 import { SavedTimeNarratives } from "@/components/billing/saved-time-narratives";
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -91,7 +92,13 @@ export const TimeEntryNarrativeField = ({
     setIsPolishing(false);
 
     if (Result.isError(requestResult)) {
-      analytics.captureError(requestResult.error);
+      analytics.captureError(requestResult.error, {
+        fingerprintKey: "TimeEntryNarrativeField.polishNarrative:failure",
+        scope: {
+          type: "handler",
+          handlerId: "TimeEntryNarrativeField.polishNarrative:failure",
+        },
+      });
       notifyUserError(requestResult.error, tAi("editWithAI"), {
         description: userErrorFromThrown(
           requestResult.error,
@@ -150,6 +157,7 @@ export const TimeEntryNarrativeField = ({
         <Label htmlFor={`${id}-language`}>{tCommon("language")}</Label>
         <Combobox<LanguagePick>
           autoHighlight
+          filter={matchesComboboxItem}
           isItemEqualToValue={(a, b) => a.code === b.code}
           items={languageOptions}
           itemToStringLabel={(item) => item.label}

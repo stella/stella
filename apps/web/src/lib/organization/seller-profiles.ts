@@ -2,7 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -14,7 +14,7 @@ const listSellerProfiles = async (
   cursor: string | undefined,
   signal: AbortSignal,
 ) =>
-  unwrapEden(
+  unwrapApiResponse(
     await api["seller-profiles"].get({
       query: { ...(cursor === undefined ? {} : { cursor }) },
       fetch: { signal },
@@ -40,7 +40,7 @@ export const sellerProfileOptions = ({
   queryOptions({
     queryKey: [...sellerProfilesKeys.all(organizationId), "profile", id],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api["seller-profiles"]({
           sellerProfileId: toSafeId<"sellerProfile">(id),
         }).get({ fetch: { signal } }),
@@ -64,14 +64,14 @@ export const sendSellerProfileCommand = async (
   command: SellerProfileCommand,
 ) => {
   if (command.type === "create") {
-    return unwrapEden(await api["seller-profiles"].post(command.values));
+    return unwrapApiResponse(await api["seller-profiles"].post(command.values));
   }
   const profile = api["seller-profiles"]({
     sellerProfileId: toSafeId<"sellerProfile">(command.id),
   });
   switch (command.type) {
     case "update":
-      return unwrapEden(
+      return unwrapApiResponse(
         await profile.patch({
           ...command.values,
           registrationId: command.values.registrationId ?? null,
@@ -91,9 +91,9 @@ export const sendSellerProfileCommand = async (
         }),
       );
     case "default":
-      return unwrapEden(await profile.default.post());
+      return unwrapApiResponse(await profile.default.post());
     case "archive":
-      return unwrapEden(await profile.archive.post());
+      return unwrapApiResponse(await profile.archive.post());
     default:
       command satisfies never;
       return panic("Unexpected seller profile command");

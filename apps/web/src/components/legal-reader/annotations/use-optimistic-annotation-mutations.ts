@@ -78,22 +78,24 @@ const rowsOfSame = (
       row.groupId === target.groupId);
 };
 
+/** The row as the server will store it, `updatedAt` included. */
 const applyChange = (
   row: ReaderAnnotation,
   change: UpdateAnnotationInput,
 ): ReaderAnnotation => {
+  const updatedAt = Temporal.Now.instant().toString();
   switch (change.change) {
     case "body": {
-      return row.body === null ? row : { ...row, body: change.body };
+      return row.body === null ? row : { ...row, body: change.body, updatedAt };
     }
     case "color": {
-      return { ...row, color: change.color };
+      return { ...row, color: change.color, updatedAt };
     }
     case "style": {
-      return { ...row, style: change.style };
+      return { ...row, style: change.style, updatedAt };
     }
     case "visibility": {
-      return { ...row, visibility: change.visibility };
+      return { ...row, visibility: change.visibility, updatedAt };
     }
     default: {
       change satisfies never;
@@ -103,6 +105,7 @@ const applyChange = (
 };
 
 type OptimisticAnnotationRequests<TCreate, TCreated, TChange> = {
+  handlerId: string;
   /** The cached rows the changes land in at once. */
   queryKey: DataTag<QueryKey, ReaderAnnotation[], Error>;
   /** Stores a new mark on the server. */
@@ -146,6 +149,7 @@ export const useOptimisticAnnotationMutations = <
   TChange extends UpdateAnnotationInput,
 >({
   create: createRequest,
+  handlerId,
   pendingInput,
   queryKey,
   remove: removeRequest,
@@ -165,7 +169,7 @@ export const useOptimisticAnnotationMutations = <
   ): Promise<{ previous: ReaderAnnotation[] | undefined }> =>
     await patchAnnotationCache(queryClient, queryKey, patch);
 
-  const settle = {
+  const settle = (operation: "create" | "update" | "delete") => ({
     onError: (
       error: unknown,
       _input: unknown,
@@ -174,13 +178,16 @@ export const useOptimisticAnnotationMutations = <
       if (context !== undefined) {
         queryClient.setQueryData(queryKey, context.previous);
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useOptimisticAnnotationMutations:failure",
+        scope: { type: "handler", handlerId: `${handlerId}.${operation}` },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey });
     },
-  };
+  });
 
   const create = useMutation({
     mutationFn: createRequest,
@@ -202,7 +209,7 @@ export const useOptimisticAnnotationMutations = <
         }),
       ]);
     },
-    ...settle,
+    ...settle("create"),
   });
 
   const update = useMutation({
@@ -214,7 +221,7 @@ export const useOptimisticAnnotationMutations = <
           touched(row) ? applyChange(row, input) : row,
         );
       }),
-    ...settle,
+    ...settle("update"),
   });
 
   const remove = useMutation({
@@ -224,7 +231,7 @@ export const useOptimisticAnnotationMutations = <
         const touched = rowsOfSame(rows, id);
         return rows.filter((row) => !touched(row));
       }),
-    ...settle,
+    ...settle("delete"),
   });
 
   return {

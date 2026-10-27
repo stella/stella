@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.51.0",
+  "version": "0.52.1",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -233,7 +233,7 @@
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
     "@stll/typescript-config": "workspace:*",
     "@tailwindcss/vite": "catalog:",

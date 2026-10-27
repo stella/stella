@@ -3,8 +3,10 @@ import type {
   ProvisionPlacementFailureKind,
   ProvisionPlacementFailureReason,
 } from "@stll/api-contract/provision-placement";
+import type { ExceptionScope } from "@stll/errors";
 
 import type { ErrorReference } from "@/lib/analytics/error-reference";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import type { KeyActionDurationBucketMs } from "@/lib/analytics/key-action-timing";
 
 export const WEB_ANALYTICS_EVENTS = {
@@ -25,6 +27,7 @@ export const WEB_ANALYTICS_EVENTS = {
   feedbackDialogOpened: "feedback_dialog_opened",
   feedbackReportSubmitted: "feedback_report_submitted",
   provisionPlacementGaps: "provision_placement_gaps",
+  caseLawAnalysisTiming: "case_law_analysis_timing",
   pageHangSuspected: "web_page_hang_suspected",
   longAnimationFrame: "web_long_animation_frame",
   inspectorRestoreRecovered: "inspector_restore_recovered",
@@ -36,20 +39,26 @@ export const WEB_ANALYTICS_EVENTS = {
 export type WebAnalyticsEvent =
   (typeof WEB_ANALYTICS_EVENTS)[keyof typeof WEB_ANALYTICS_EVENTS];
 
-// An Eden treaty error envelope carries the API status and body unparsed;
+// An API client error envelope carries the API status and raw body;
 // captured raw, analytics loses both. Callers convert it with `toAPIError`.
-type EdenErrorEnvelope = { status: number; value: unknown };
+type ApiErrorEnvelope = { status: number; value: unknown };
 
-export type NotEdenErrorEnvelope<E> = E extends Error
+export type NotApiErrorEnvelope<E> = E extends Error
   ? E
-  : E extends EdenErrorEnvelope
+  : E extends ApiErrorEnvelope
     ? never
     : E;
 
+type ErrorCaptureOptions = {
+  scope: ExceptionScope;
+  fingerprintKey: ExceptionFingerprintKey;
+  context?: ErrorCaptureContext;
+};
+
 export type Analytics = {
   captureError: <E>(
-    error: E & NotEdenErrorEnvelope<E>,
-    context?: ErrorCaptureContext,
+    error: E & NotApiErrorEnvelope<E>,
+    options: ErrorCaptureOptions,
   ) => void;
   capturePageViewed: (properties: PageViewedProperties) => void;
   capturePageHangSuspected: (properties: PageHangSuspectedProperties) => void;
@@ -63,6 +72,9 @@ export type Analytics = {
   ) => void;
   captureProvisionPlacementGaps: (
     properties: ProvisionPlacementGapsProperties,
+  ) => void;
+  captureCaseLawAnalysisTiming: (
+    properties: CaseLawAnalysisTimingProperties,
   ) => void;
   captureInspectorRestoreRecovered: (
     properties: InspectorRestoreRecoveredProperties,
@@ -178,7 +190,14 @@ type ProvisionPlacementGapsProperties = {
   count: number;
 };
 
-type AnalyticsResetOptions = {
+type CaseLawAnalysisTimingProperties = {
+  ms_to_first_section: number | null;
+  ms_to_done: number | null;
+  outcome: "done" | "error" | "left";
+  from_store: boolean;
+};
+
+export type AnalyticsResetOptions = {
   onlyIfIdentified?: boolean;
 };
 

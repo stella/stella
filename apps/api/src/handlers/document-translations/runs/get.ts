@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { documentTranslationRuns } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
@@ -19,7 +19,9 @@ const config = {
     reason: "document_processing",
     consumesServices: false,
   },
-  params: workspaceParams({ runId: tSafeId("documentTranslationRun") }),
+  params: workspaceParams({
+    runId: resourceIdSchema("documentTranslationRun"),
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 const readDocumentTranslationRun = createSafeHandler(

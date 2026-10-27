@@ -74,9 +74,6 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/**/*.css",
       "apps/web/**/*.{ts,tsx,js,jsx}",
       "apps/web/package.json",
-      "packages/mcp-apps/**/*.css",
-      "packages/mcp-apps/**/*.{ts,tsx,js,jsx}",
-      "packages/mcp-apps/package.json",
       "apps/desktop/**/*.css",
       "apps/desktop/**/*.{ts,tsx,js,jsx}",
       "apps/desktop/package.json",
@@ -102,6 +99,23 @@ const GENERATOR_DECLARATIONS = [
     write: ["bun", "scripts/generate-tailwind-classes.ts", "--write"],
     check: ["bun", "scripts/generate-tailwind-classes.ts", "--check"],
     autofix: true,
+    after: [],
+  },
+  {
+    id: "failure-tags",
+    outputKind: "committed",
+    outputs: ["apps/api/src/lib/observability/failure-tags.gen.ts"],
+    inputs: [
+      "apps/api/src/**/*.ts",
+      "apps/api/src/**/*.tsx",
+      "packages/*/src/**/*.ts",
+      "packages/*/src/**/*.tsx",
+      "scripts/failure-tags.ts",
+      "scripts/generate-failure-tags.ts",
+    ],
+    write: ["bun", "scripts/generate-failure-tags.ts", "--write"],
+    check: ["bun", "scripts/generate-failure-tags.ts"],
+    autofix: false,
     after: [],
   },
   {
@@ -321,6 +335,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/document-version-upload-transport.ts",
       "packages/cli/src/generated/mcp-contract.ts",
       "packages/cli/src/generated/registry-snapshot.json",
+      ...CI_GENERATED_OUTPUTS.cliRegistry,
       "packages/cli/src/generated/resource-tree.ts",
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
@@ -396,6 +411,8 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "apps/api/src/mcp/app-browser-contracts.ts",
       "apps/api/src/mcp/app-contracts.ts",
+      "apps/api/src/mcp/web-handoff-link-contract.ts",
+      "apps/api/src/mcp/write-result-omission.ts",
       "apps/api/src/mcp/decision-reader-contract.ts",
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
@@ -520,6 +537,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/build-visual-sandbox.ts",
       "apps/api/scripts/visual-sandbox-build-options.ts",
       "packages/api-contract/**",
+      "packages/errors/**",
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "build:visual-sandbox"],
@@ -574,7 +592,10 @@ const GENERATOR_DECLARATIONS = [
     // spelled out; a test binds them to scripts/ci-job-classification/inputs.ts.
     id: "ci-job-classification-digests",
     outputKind: "committed",
-    outputs: [".github/ci-job-classification-decisions/**"],
+    outputs: [
+      ".github/ci-job-classification-decisions/**",
+      ".github/ci-job-classification-sources.json",
+    ],
     inputs: [
       ".github/workflows/**",
       ".github/actions/**",
@@ -592,7 +613,9 @@ const GENERATOR_DECLARATIONS = [
     // The check reads git history, so it cannot load the offline network
     // preload every `--check` command must use; it runs as the default mode.
     checkedWith: ["bun", "scripts/check-ci-job-classification.ts"],
-    autofix: true,
+    // Its outputs live under .github/, which the autofix action may not
+    // modify, so pull requests refresh them by hand.
+    autofix: false,
     after: [],
   },
   {

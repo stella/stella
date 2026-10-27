@@ -52,7 +52,7 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { expensesQueryRoot } from "@/lib/resource-query-roots.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -165,6 +165,11 @@ const RowText = ({
 type InvoiceComposerProps = {
   workspaceId: string;
   prefill: InvoicePrefill;
+  /**
+   * Draft time entries and expenses on the matter the viewer may approve;
+   * zero for someone who cannot approve them.
+   */
+  pendingApprovalCount: number;
 };
 
 /**
@@ -176,6 +181,7 @@ type InvoiceComposerProps = {
 export const InvoiceComposer = ({
   workspaceId,
   prefill,
+  pendingApprovalCount,
 }: InvoiceComposerProps) => {
   const t = useTranslations();
   const currency = prefill.currency;
@@ -242,13 +248,26 @@ export const InvoiceComposer = ({
     return (
       <div className="text-muted-foreground flex flex-col items-start gap-2 p-6 text-sm">
         <p>{t("billing.invoiceComposer.nothingToBill")}</p>
-        <Link
-          className="text-foreground underline underline-offset-4"
-          params={{ workspaceId }}
-          to="/workspaces/$workspaceId/timesheets"
-        >
-          {t("billing.timesheets")}
-        </Link>
+        {pendingApprovalCount > 0 ? (
+          <Link
+            className="text-foreground underline underline-offset-4"
+            params={{ workspaceId }}
+            search={{ view: "approvals" }}
+            to="/workspaces/$workspaceId/timesheets"
+          >
+            {t("billing.invoiceComposer.pendingApprovals", {
+              count: pendingApprovalCount,
+            })}
+          </Link>
+        ) : (
+          <Link
+            className="text-foreground underline underline-offset-4"
+            params={{ workspaceId }}
+            to="/workspaces/$workspaceId/timesheets"
+          >
+            {t("billing.timesheets")}
+          </Link>
+        )}
       </div>
     );
   }
@@ -381,7 +400,7 @@ const useComposerSubmit = ({
       });
       return await submitComposedInvoice({
         issue,
-        create: async () => unwrapEden(await invoices.put(body)),
+        create: async () => unwrapApiResponse(await invoices.put(body)),
         finalize: async (id) => {
           const finalized = await invoices({
             invoiceId: toSafeId<"invoice">(id),

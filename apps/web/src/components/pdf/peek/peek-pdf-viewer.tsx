@@ -46,6 +46,8 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
+import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
+import { PDF_SELECTION_CHAT } from "@/components/pdf/pdf-selection-toolbar";
 import { resolvePendingPdfCitationPageId } from "@/components/pdf/peek/pdf-citation-navigation.logic";
 import {
   fetchPrintPdf,
@@ -310,7 +312,14 @@ const PeekPdfViewerContent = ({
       activeFile={{ entityId, fileFieldId: fieldId, fileName: file.fileName }}
       workspaceId={workspaceId}
     >
-      {viewport}
+      <PdfSelectionActions
+        chat={PDF_SELECTION_CHAT.fileChat}
+        fileFieldId={fieldId}
+        fileName={file.fileName}
+        workspaceId={workspaceId}
+      >
+        {viewport}
+      </PdfSelectionActions>
     </FileViewerWithAI>
   );
 };
@@ -622,7 +631,13 @@ const PeekDocxViewer = ({
         fetchPrintPdf({ workspaceId, fieldId })
           .then(printPdfBuffer)
           .catch((error: unknown) => {
-            analytics.captureError(error);
+            analytics.captureError(error, {
+              fingerprintKey: "PeekDocxViewer.print:failure",
+              scope: {
+                type: "handler",
+                handlerId: "PeekDocxViewer.print:failure",
+              },
+            });
           }),
         "peek-pdf-viewer.fetch-print-pdf",
       );

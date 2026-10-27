@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { Static } from "elysia";
+import type * as v from "valibot";
 
 import type {
   AgendaItemWireFields,
@@ -1450,7 +1450,7 @@ type QueryMatterEntityCursorPageOptions = Pick<
   | "previewableForAi"
 > & {
   workspaceId: SafeId<"workspace">;
-  body: Static<typeof entityReadPageBodySchema>;
+  body: v.InferOutput<typeof entityReadPageBodySchema>;
   queryEntitiesImpl: typeof queryEntities;
 };
 

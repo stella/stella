@@ -29,6 +29,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   REGISTRY_DEFAULT_FORMAT,
@@ -421,6 +422,7 @@ const CompanyLookupConfig = ({
         <FieldLabel>{t("templates.fieldLookupRegistry")}</FieldLabel>
         <Combobox<LookupRegistryOption>
           autoHighlight
+          filter={matchesComboboxItem}
           items={options}
           itemToStringLabel={(option) => option.label}
           onValueChange={(option) => {
@@ -810,7 +812,7 @@ type BindingCatalogData = Exclude<
 
 /** One pickable source in the binding catalog (the matter's client, a party, the
  *  matter, an attorney, or the firm), with its bindable fields and any extra
- *  selector (party `roles`, attorney `refs`). Derived from the Eden response so
+ *  selector (party `roles`, attorney `refs`). Derived from the API response so
  *  it tracks the backend catalog. */
 type CatalogSource = BindingCatalogData["sources"][number];
 

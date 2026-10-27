@@ -11,6 +11,7 @@ import {
   withResponsesReasoningPairedToCalls,
 } from "@/api/lib/chat/provider-bound-reasoning";
 import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
+import { assertToolResultCallIdsKnown } from "@/api/lib/chat/tool-history-pairing";
 import { emitReasoningReplayDroppedMetric } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -281,11 +282,10 @@ const closeToolCalls = (
       });
     }
   }
-  for (const id of results.keys()) {
-    if (!calls.has(id)) {
-      panic("Tool result has no matching call");
-    }
-  }
+  assertToolResultCallIdsKnown({
+    callIds: calls,
+    resultCallIds: results.keys(),
+  });
   const closed: ModelMessage[] = [];
   for (const message of messages) {
     if (message.role === "tool") {

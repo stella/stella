@@ -32,6 +32,7 @@ const isRecord = (value: unknown): value is JsonRecord =>
 
 const readAt = (revision: string, file: string): string | undefined => {
   const result = spawnSync("git", ["show", `${revision}:${file}`], {
+    maxBuffer: 2 ** 30,
     encoding: "utf-8",
   });
   return result.status === 0 ? result.stdout : undefined;

@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   InfoSoudAPIError,
@@ -11,9 +11,9 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export { getInfoSoudClient } from "@/api/lib/infosoud/client";
 
-export const infosoudLookupBodySchema = t.Object({
-  courtCode: t.String({ minLength: 1, maxLength: 16 }),
-  spisZn: t.String({ minLength: 1, maxLength: 64 }),
+export const infosoudLookupBodySchema = v.object({
+  courtCode: v.pipe(v.string(), v.minLength(1), v.maxLength(16)),
+  spisZn: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 });
 
 export const toInfoSoudLookupError = (error: unknown): HandlerError => {
