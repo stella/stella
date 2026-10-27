@@ -368,7 +368,19 @@ const installFixtureNetwork = () => {
             activeSkill: null,
             activeTurnId: null,
             attachedFiles: { fileCount: 0, files: [] },
-            context: null,
+            context: {
+              estimatedTokens: 0,
+              triggerTokens: 0,
+              cacheStableTokens: 0,
+              summarizedMessageCount: 0,
+              breakdown: {
+                promptTokens: 0,
+                toolTokens: 0,
+                summaryTokens: 0,
+                attachmentTokens: 0,
+                conversationTokens: 0,
+              },
+            },
             contextMatterIds: [],
             forkProvenance: { type: "none" },
             lastActivityAt: null,
@@ -397,6 +409,7 @@ const installFixtureNetwork = () => {
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({
           unavailable: [],
+          unavailableHere: [],
         } satisfies WebApiRoutes["chat"]["skill-availability"]["get"]["response"][200]);
       }
       if (pathname === "/v1/chat/threads") {
@@ -1480,47 +1493,6 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
     },
   );
 };
-const declareChatComposerCases = (fixture: FixtureRuntime) => {
-  if (fixture.suite !== "chat-composer") {
-    return;
-  }
-  test("direct chat route mounts its editable composer through the actual member frame", async () => {
-    const { getByRole } = await import("@testing-library/dom");
-    fixture.state.audience = "member";
-    const { router, queryClient, caughtErrors } =
-      fixture.createFixtureRouter("/chat");
-    await fixture.initializeI18n();
-    try {
-      await fixture.act(async () => {
-        await router.load();
-        fixture.render(<fixture.RouterProvider router={router} />, {
-          container: document,
-          onCaughtError: (error) => {
-            caughtErrors.push(
-              error instanceof Error ? error : panic(String(error)),
-            );
-          },
-        });
-      });
-      await fixture.waitFor(() => {
-        const composer = getByRole(document.body, "textbox", {
-          name: /^Type your question/u,
-        });
-        expect(composer.getAttribute("contenteditable")).toBe("true");
-        expect(router.state.location.pathname).toBe("/chat");
-        expect(caughtErrors).toEqual([]);
-        expect(fixture.unexpectedRequests).toEqual([]);
-      });
-    } finally {
-      await fixture.act(async () => {
-        fixture.cleanup();
-        await queryClient.cancelQueries();
-        queryClient.clear();
-      });
-    }
-  });
-};
-
 /** Actual ancestors and public initial pages; leaf guards use recorded fixture data. */
 export const declareRouteShellProviderFixture = async (
   options: RouteShellProviderFixtureOptions,
@@ -1532,7 +1504,6 @@ export const declareRouteShellProviderFixture = async (
   declareLeafCases(fixture);
   await declareLawCases(fixture);
   declareProfessionalUseCases(fixture);
-  declareChatComposerCases(fixture);
   if (options.suite === "case-search") {
     const { declareCaseSearchNavigationCases } =
       await import("./case-search-navigation-fixture");
@@ -1572,4 +1543,5 @@ export const declareRouteShellProviderFixture = async (
       );
     }
   });
+  return fixture;
 };
