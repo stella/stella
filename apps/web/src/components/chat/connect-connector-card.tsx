@@ -29,7 +29,8 @@ import {
   openMcpOAuthWindow,
   subscribeToMcpOAuthOutcome,
 } from "@/lib/mcp-oauth-channel";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type ConnectConnectorPart = Extract<
   RegisteredChatUIToolCallPart,
@@ -78,7 +79,7 @@ const useConnectorSummary = (
     ...mcpConnectorsOptions(organizationId),
     enabled: connectorSlug !== undefined,
   });
-  const catalogView = useQueryView(catalogQuery);
+  const catalogView = queryView(catalogQuery);
   useQueryViewError(catalogView, "ConnectConnectorCard:catalogue");
   const connector =
     catalogView.type === "items"
