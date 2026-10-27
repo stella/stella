@@ -4906,7 +4906,7 @@
           }
         },
         "status": {
-          "enum": ["draft", "approved", "billed", "written_off"],
+          "enum": ["draft", "submitted", "approved", "billed", "written_off"],
           "type": "string",
           "description": "List only entries with this status"
         },
