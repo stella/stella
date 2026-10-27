@@ -21,7 +21,7 @@ const OTHER_FIELD = "field-version-2";
 
 /** A page as LibPDF reads it: one box per unit, none for the line breaks. */
 const pageOf = (text: string, sha256 = `sha:${text}`): MarkPageText => ({
-  boxesByOffset: [...text].map((unit, index) =>
+  boxesByOffset: Array.from(text, (unit, index) =>
     unit === "\n" ? null : { x: index * 10, y: 700, width: 10, height: 12 },
   ),
   sha256,

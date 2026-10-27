@@ -168,7 +168,7 @@ const selectWithin = async (
 };
 
 const libpdfPage = (text: string) => ({
-  boxesByOffset: [...text].map((unit, index) =>
+  boxesByOffset: Array.from(text, (unit, index) =>
     unit === "\n" ? null : { x: index * 6, y: 700, width: 6, height: 12 },
   ),
   sha256: "page-digest",
@@ -231,9 +231,12 @@ test("the selection bar hands a highlight or a comment on the passage to the mar
           reference: null,
         }}
         marking={{
-          onComment: (passage) => comments.push(passage),
-          onHighlight: (passage, { color }) =>
-            highlights.push({ passage, color }),
+          onComment: (passage) => {
+            comments.push(passage);
+          },
+          onHighlight: (passage, { color }) => {
+            highlights.push({ passage, color });
+          },
         }}
         pageNumberOf={(pageId) => PAGE_IDS.indexOf(pageId) + 1}
         rootRef={rootRef}
