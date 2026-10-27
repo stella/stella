@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
 import path from "node:path";
-import { createServer } from "vite";
+import { createServer, mergeConfig } from "vite";
 import type { ViteDevServer } from "vite";
 
+import desktopViteConfig from "../vite.config";
 import { DESKTOP_WINDOW_SIZES } from "./desktop-window-sizes";
 
 // The real stylesheet, compiled the way the app gets it: the desktop Vite
@@ -17,12 +18,15 @@ let css: string;
 let scanned: Set<string>;
 
 beforeAll(async () => {
-  server = await createServer({
-    appType: "custom",
-    configFile: path.join(import.meta.dirname, "../vite.config.ts"),
-    logLevel: "silent",
-    server: { hmr: false, middlewareMode: true, watch: null },
-  });
+  // Merged the way Vite merges inline options over a loaded config file.
+  server = await createServer(
+    mergeConfig(desktopViteConfig, {
+      appType: "custom",
+      configFile: false,
+      logLevel: "silent",
+      server: { hmr: false, middlewareMode: true, watch: null },
+    }),
+  );
   const result = await server.transformRequest(STYLESHEET);
   if (result === null) {
     throw new TypeError("The desktop stylesheet did not compile");
