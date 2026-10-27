@@ -78,17 +78,17 @@ export const LoadedMatters = ({
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded: open }}
-              className="flex-row items-center gap-1.5 pt-4 pb-1 active:opacity-60"
+              className="flex-row items-center gap-2 pt-6 pb-1 active:opacity-60"
               disabled={searching}
               onPress={() => {
                 toggleGroup(section.key);
               }}
             >
-              <Chevron color={colors.muted} size={14} />
-              <Text className="flex-1" variant="section">
+              <Text className="flex-1" numberOfLines={1} variant="headline">
                 {section.client ?? t("personal")}
               </Text>
-              <Text variant="section">{section.count}</Text>
+              <Text variant="caption">{section.count}</Text>
+              <Chevron color={colors.muted} size={18} />
             </Pressable>
           );
         }}
