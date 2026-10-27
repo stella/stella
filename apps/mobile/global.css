@@ -6,7 +6,9 @@
 @theme {
   /* The web's typeface, DM Sans, by the names the expo-font plugin embeds. */
   --font-sans: "DMSans-Regular";
-  --font-medium: "DMSans-Medium";
-  --font-semibold: "DMSans-SemiBold";
-  --font-bold: "DMSans-Bold";
+  /* Each weight is its own embedded face: iOS does not derive one from a
+     weight, so `font-sans-bold` names the face, not `font-bold`. */
+  --font-sans-medium: "DMSans-Medium";
+  --font-sans-semibold: "DMSans-SemiBold";
+  --font-sans-bold: "DMSans-Bold";
 }

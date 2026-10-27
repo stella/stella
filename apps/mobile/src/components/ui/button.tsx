@@ -42,7 +42,9 @@ export const Button = ({
             color={variant === "default" ? colors.onAccent : colors.text}
           />
         ) : null}
-        <Text className={`font-medium ${labelClass}`}>{label}</Text>
+        <Text className={labelClass} variant="button">
+          {label}
+        </Text>
       </View>
     </Pressable>
   );
