@@ -715,6 +715,31 @@ const DYNAMIC_CONFIG_NODE_TYPES = new Set([
   "ClassExpression",
 ]);
 
+const isErasedConfigStatement = (statement: Node): boolean => {
+  if (
+    statement.type === "TSTypeAliasDeclaration" ||
+    statement.type === "TSInterfaceDeclaration"
+  ) {
+    return true;
+  }
+  if (statement.type !== "ExportNamedDeclaration") {
+    return false;
+  }
+  if (statement.declaration !== null) {
+    return (
+      statement.declaration.type === "TSTypeAliasDeclaration" ||
+      statement.declaration.type === "TSInterfaceDeclaration"
+    );
+  }
+  return (
+    statement.exportKind === "type" ||
+    (statement.specifiers.length > 0 &&
+      statement.specifiers.every(
+        (specifier) => specifier.exportKind === "type",
+      ))
+  );
+};
+
 // Named policy data must retain the value of its literal initializer.
 // Restrict its construction module before resolving bindings, so statements
 // and calls cannot change those objects before composition.
@@ -723,7 +748,8 @@ const staticConfigModule = (source: Source): boolean => {
     if (
       statement.type === "ImportDeclaration" ||
       statement.type === "ExportDefaultDeclaration" ||
-      statement.type === "EmptyStatement"
+      statement.type === "EmptyStatement" ||
+      isErasedConfigStatement(statement)
     ) {
       return true;
     }
@@ -741,6 +767,9 @@ const staticConfigModule = (source: Source): boolean => {
   }
   let readable = true;
   walk(source.program, (node) => {
+    if (isErasedConfigStatement(node)) {
+      return "skip-children";
+    }
     if (
       DYNAMIC_CONFIG_NODE_TYPES.has(node.type) ||
       (node.type === "UnaryExpression" && node.operator === "delete") ||

@@ -136,6 +136,66 @@ test("local configuration arguments require static construction", () => {
   ).toEqual([UNREADABLE_CONFIG]);
 });
 
+test.each([
+  ["type alias", "type Policy = { retries: number };"],
+  ["interface", "interface Policy { retries: number }"],
+  ["exported type alias", "export type Policy = { retries: number };"],
+  ["exported interface", "export interface Policy { retries: number }"],
+  [
+    "type-only named export",
+    "type Policy = { retries: number }; export type { Policy };",
+  ],
+  [
+    "inline type-only named export",
+    "type Policy = { retries: number }; export { type Policy };",
+  ],
+])(
+  "erased declarations preserve local named configuration: %s",
+  (_name, declaration) => {
+    expect(
+      config(`import { defineConfig } from "@playwright/test";
+      ${declaration}
+      const projects = [{ name: "browser", retries: 0 }];
+      const policy = { retries: 0, projects };
+      export default defineConfig(policy);`),
+    ).toEqual([]);
+  },
+);
+
+test("erased declarations preserve imported named configuration", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "test-retries-types-"));
+  const file = "apps/example/playwright.config.ts";
+  const source = `import { defineConfig } from "@playwright/test";
+    import base from "./base-config";
+    export default defineConfig(base);`;
+  try {
+    mkdirSync(path.join(root, "apps/example"), { recursive: true });
+    const baseFile = path.join(root, "apps/example/base-config.ts");
+    const declarations = `
+      type Policy = { retries: number };
+      interface Project { name: string; retries: number }
+      export type ExportedPolicy = Policy;
+      export interface ExportedProject extends Project {}
+      export type { Policy };
+      export { type Project };
+    `;
+    const policy = `const projects = [{ name: "browser", retries: 0 }];
+      export default { retries: 0, projects };`;
+    const scan = () => findTestRetryViolations(new Map([[file, source]]), root);
+
+    writeFileSync(baseFile, `${declarations} ${policy}`);
+    expect(scan()).toEqual([]);
+
+    writeFileSync(
+      baseFile,
+      `${declarations} ${policy} projects[0].retries = 2;`,
+    );
+    expect(scan()).toEqual([UNREADABLE_CONFIG]);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
 test("imported configuration composition requires static module construction", () => {
   const root = mkdtempSync(path.join(tmpdir(), "test-retries-construction-"));
   const file = "apps/example/playwright.config.ts";
