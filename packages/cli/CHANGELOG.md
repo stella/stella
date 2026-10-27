@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 6.0.2
+
+### Patch Changes
+
+- [#7041](https://github.com/stella/stella/pull/7041) [`38a1dc9`](https://github.com/stella/stella/commit/38a1dc9c439f037dee25d10112da9f26d6cfa2d9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose explicit case-law facet selection; searches omit facets unless requested.
+
 ## 6.0.1
 
 ### Patch Changes
