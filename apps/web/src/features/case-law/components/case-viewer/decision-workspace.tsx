@@ -86,11 +86,11 @@ import { decisionParagraphLanding } from "@/features/case-law/components/case-vi
 import {
   clickOpensVisitorOffer,
   NOTES_FILTER_SHOWS_AI,
-  READER_ASIDE_RESIZE_SLOT,
   resolveVisitorOffer,
 } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import type { NotesFilter } from "@/features/case-law/components/case-viewer/decision-workspace.logic";
 import { paragraphRangeIndices } from "@/features/case-law/components/case-viewer/paragraph-reference.logic";
+import { READER_ASIDE_RESIZE_SLOT } from "@/features/case-law/components/case-viewer/reader-aside-slots";
 import { useDecisionAnnotationSurface } from "@/features/case-law/components/case-viewer/use-decision-annotation-surface";
 import { useDecisionCitationAnchors } from "@/features/case-law/components/case-viewer/use-decision-citation-anchors";
 import { useDecisionProvisionAnchors } from "@/features/case-law/components/case-viewer/use-decision-provision-anchors";
@@ -881,11 +881,16 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>
+      {/* At `lg` the notes column stands at the text's inline start, so the
+          layout's margin is that column's width and the controls bar and the
+          docked composer start past it; below `lg` the grid is one column
+          and the margin is zero. */}
       <div
         className={cn(
           LEGAL_READER_LAYOUT_CLASS_NAME,
-          "relative min-h-0 flex-1",
+          "relative min-h-0 flex-1 lg:[--reader-margin-width:var(--reader-aside-width)]",
         )}
+        style={{ "--reader-aside-width": `${panelWidth}px` }}
       >
         <LegalReaderControls
           textScale={textScale}
@@ -917,22 +922,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
             pressed={provisions.expandProvisions}
           />
         </div>
-        {/* The text column is the grid's inline-end column at every width, so
-            the bar's corner of this box is the text's corner, as in the
-            inspector's reader. */}
-
         {/* The composer floats over the text here as it does in the inspector's
             reader, bound to the same decision and so to the same conversation.
             The annotation toolbar stays outside it: it belongs to the marks on
             the text, not to the chat. */}
-        {/* The composer centres on the text column, not on the pane: at `lg`
-            the analysis column stands beside the text, so the docked
-            composer's start inset is that column's width; below `lg` the
-            grid is one column and the inset is zero. */}
-        <div
-          className="h-full [--docked-composer-inset-start:0px] lg:[--docked-composer-inset-start:var(--reader-aside-width)]"
-          style={{ "--reader-aside-width": `${panelWidth}px` }}
-        >
+        {/* The composer centres on the text column, not on the pane. */}
+        <div className="h-full [--docked-composer-inset-start:var(--reader-margin-width)]">
           <LegalReaderAIChat
             activeLegal={activeLegalFromReaderTarget(annotationTarget)}
             aiMode={props.aiMode}
@@ -1007,7 +1002,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                 {...textScale.rootProps}
                 style={{
                   ...textScale.rootProps.style,
-                  gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
+                  gridTemplateColumns:
+                    "var(--reader-aside-width) minmax(0, 1fr)",
                 }}
               >
                 {/* Before a visitor has an account, the notes column is the
@@ -1098,8 +1094,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                         return;
                       }
 
+                      // The handle is on the column's inline end, which is
+                      // its left edge in a right-to-left layout.
+                      const bounds = aside.getBoundingClientRect();
                       const newWidth =
-                        event.clientX - aside.getBoundingClientRect().left;
+                        getComputedStyle(aside).direction === "rtl"
+                          ? bounds.right - event.clientX
+                          : event.clientX - bounds.left;
                       setPanelWidth(Math.min(400, Math.max(120, newWidth)));
                     }}
                     onPointerUp={() => {
