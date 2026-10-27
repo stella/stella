@@ -91,8 +91,12 @@ const setup = (
               },
             }),
           },
-    delete: () => ({
-      where: async () => await Promise.resolve(),
+    delete: (table: unknown) => ({
+      where: async () => {
+        if (table === mcpOAuthState) {
+          states.length = 0;
+        }
+      },
     }),
     query: {
       mcpOAuthClients: {
@@ -180,6 +184,19 @@ test("connects using configured connector metadata", async () => {
     expect(setupResult.reviews).toEqual([]);
     expect(setupResult.audits).toEqual([]);
   }
+});
+
+test("a repeated connect leaves one pending authorization", async () => {
+  const fixture = setup(issuer);
+
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    type: "oauth2",
+  });
+  expect(await fixture.handler.handler(fixture.context)).toMatchObject({
+    type: "oauth2",
+  });
+
+  expect(fixture.states).toHaveLength(1);
 });
 
 test("curated approval for another issuer requires administrator approval", async () => {

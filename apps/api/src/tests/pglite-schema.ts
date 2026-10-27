@@ -1154,7 +1154,7 @@ export const installPgliteChatStoredContentEgress = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261023164000_chat_stored_content_egress",
+      "20261027070400_chat_stored_content_egress",
       "migration.sql",
     ),
   ).filter((statement) =>

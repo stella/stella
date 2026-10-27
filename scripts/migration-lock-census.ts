@@ -724,19 +724,13 @@ export const MIGRATION_LOCK_ALLOWANCES: readonly MigrationLockAllowance[] = [
       "Installing the row-level provenance invalidation trigger is a catalog-only change without a corpus scan, with acquisition bounded by transaction-local 1s lock_timeout and execution by 30s statement_timeout.",
   },
   {
-    migration: "20261023151000_mcp_oauth_current_state",
+    migration: "20261027070300_mcp_oauth_current_state",
     form: "lock-share-row-exclusive",
     reason:
-      "Pending OAuth attempt writes wait from deduplication through the unique index build so no duplicate lands in between; reads continue, and the table holds only short-lived pending attempts, under 1s lock_timeout and 30s statement_timeout.",
+      "Pending OAuth attempt writes wait while duplicate rows are removed; reads continue, and the table holds only short-lived pending attempts, under 1s lock_timeout and 30s statement_timeout.",
   },
   {
-    migration: "20261023151000_mcp_oauth_current_state",
-    form: "create-index",
-    reason:
-      "The unique index must cover the rows this transaction just deduplicated under its table lock; the table holds only short-lived pending OAuth attempts, so the write block is brief, under 1s lock_timeout and 30s statement_timeout.",
-  },
-  {
-    migration: "20261023164000_chat_stored_content_egress",
+    migration: "20261027070400_chat_stored_content_egress",
     form: "create-trigger",
     reason:
       "Each egress backstop trigger is a catalog-only creation that reads no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 5s lock_timeout and 30s statement_timeout.",

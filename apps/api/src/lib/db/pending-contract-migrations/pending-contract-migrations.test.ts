@@ -54,4 +54,28 @@ describe("pending contract migrations", () => {
       expect(migration.name > (required ?? "")).toBe(true);
     }
   });
+
+  test("OAuth current-state uniqueness remains contract-only", () => {
+    const contract = PENDING_CONTRACT_MIGRATIONS.find(
+      ({ name }) => name === "20261027070500_mcp_oauth_current_state_contract",
+    );
+    expect(contract).toBeDefined();
+    const contractSql = readFileSync(
+      pendingContractSqlPath(contract ?? PENDING_CONTRACT_MIGRATIONS[0]),
+      "utf-8",
+    );
+    const expandSql = readFileSync(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261027070300_mcp_oauth_current_state",
+        "migration.sql",
+      ),
+      "utf-8",
+    );
+    const uniqueIndex =
+      'CREATE UNIQUE INDEX "mcp_oauth_state_org_connector_user_uidx"';
+
+    expect(contractSql).toContain(uniqueIndex);
+    expect(expandSql).not.toContain(uniqueIndex);
+  });
 });
