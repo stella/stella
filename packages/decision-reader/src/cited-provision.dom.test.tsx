@@ -6,8 +6,14 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import type { PublicCountry } from "@stll/api-contract/public-country-capability";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { section72aSubsection1Blocks } from "@stll/legal-ast/fixtures/cz-141-1961-section-72a";
+import { section128Subsection2Blocks } from "@stll/legal-ast/fixtures/sk-300-2005-section-128";
+import {
+  E_SBIRKA_LIST_SCHEME,
+  SLOV_LEX_LIST_SCHEME,
+} from "@stll/legal-ast/statute-list";
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import { fakeReaderAdapters } from "./decision-text.test";
@@ -18,9 +24,12 @@ import type {
   ProvisionPreviewData,
 } from "./reader-types";
 
+const CZECH_JURISDICTION = "CZE" satisfies PublicCountry;
+const SLOVAK_JURISDICTION = "SVK" satisfies PublicCountry;
+
 const citation = {
   document: {
-    country: "cz",
+    country: CZECH_JURISDICTION.toLowerCase(),
     eli: "/eli/cz/sb/1961/141",
     id: "act",
     slug: null,
@@ -31,7 +40,7 @@ const citation = {
     documentId: "act",
     eli: "/eli/cz/sb/1961/141",
     highlightAnchorId: "par_72a-odst_1",
-    jurisdiction: "CZE",
+    jurisdiction: CZECH_JURISDICTION,
     provisionLabel: "§ 72a odst. 1",
     statuteTitle: "141/1961 Sb., o trestním řízení soudním (trestní řád)",
     versionCount: 1,
@@ -52,7 +61,51 @@ const wording = {
 
 const wordings = [{ target: citation, wording }];
 
+const slovakCitation = {
+  document: {
+    country: SLOVAK_JURISDICTION,
+    eli: "/eli/sk/zz/2005/300",
+    id: "sk-act",
+    slug: null,
+    versionValidFrom: "2026-08-18",
+  },
+  payload: {
+    anchorId: "paragraf-128",
+    documentId: "sk-act",
+    eli: "/eli/sk/zz/2005/300",
+    highlightAnchorId: "paragraf-128.odsek-2",
+    jurisdiction: SLOVAK_JURISDICTION,
+    provisionLabel: "§ 128 ods. 2",
+    statuteTitle: "300/2005 Z. z., Trestný zákon",
+    versionCount: 1,
+    versionValidFrom: "2026-08-18",
+  },
+  preview: null,
+} satisfies CitedProvisionTarget;
+
+const slovakWording = {
+  anchorId: "paragraf-128",
+  blocks: section128Subsection2Blocks.map(({ anchorId, id, plainText }) => ({
+    anchorId,
+    id,
+    text: plainText,
+  })),
+  citedAnchorId: "paragraf-128.odsek-2",
+  documentId: "sk-act",
+  heading: null,
+  headings: [],
+  language: "sk",
+} satisfies ProvisionPreviewData;
+
 const LETTERS = ["a) ", "b) ", "c) ", "d) "];
+
+const paragraphClasses = (root: Element) =>
+  [...root.querySelectorAll("p")].map((paragraph) => paragraph.className);
+
+const listMarkers = (root: Element) =>
+  [...root.querySelectorAll(".reader-list-marker")].map(
+    (marker) => marker.textContent,
+  );
 
 const mount = async (children: ReactNode) => {
   const container = document.createElement("div");
@@ -242,6 +295,7 @@ describe("a cited provision's wording", () => {
             block={block}
             key={block.id}
             rangesByPieceId={{}}
+            statuteLists={E_SBIRKA_LIST_SCHEME}
             variant="statute"
           />
         ))}
@@ -250,13 +304,53 @@ describe("a cited provision's wording", () => {
     const card = await mount(
       <CitedProvisionPeek provision={citation} wordings={wordings} />,
     );
-    const classes = (root: Element) =>
-      [...root.querySelectorAll("p")].map((paragraph) => paragraph.className);
-    expect(classes(reader)).toEqual(classes(wordingOf(card)));
+    expect(paragraphClasses(reader)).toEqual(paragraphClasses(wordingOf(card)));
+    expect(listMarkers(reader)).toEqual(LETTERS);
+  });
+
+  test("a Slovak provision nests and hangs its letters in the reader and the card alike", async () => {
+    const reader = await mount(
+      <article>
+        {section128Subsection2Blocks.map((block) => (
+          <BlockRenderer
+            activeMatchIndex={-1}
+            anchorPresentation="embedded"
+            block={block}
+            key={block.id}
+            rangesByPieceId={{}}
+            statuteLists={SLOV_LEX_LIST_SCHEME}
+            variant="statute"
+          />
+        ))}
+      </article>,
+    );
+    const card = await mount(
+      <CitedProvisionPeek
+        provision={slovakCitation}
+        wordings={[{ target: slovakCitation, wording: slovakWording }]}
+      />,
+    );
+    const paragraphs = [...reader.querySelectorAll("p")];
+    // The designator stored as its own run hangs, and the text reads as stored.
+    expect(paragraphs.map((paragraph) => paragraph.textContent)).toEqual(
+      section128Subsection2Blocks.map(({ plainText }) => plainText),
+    );
+    expect(listMarkers(reader)).toEqual(LETTERS);
     expect(
-      [...reader.querySelectorAll(".reader-list-marker")].map(
-        (marker) => marker.textContent,
-      ),
-    ).toEqual(LETTERS);
+      paragraphs.map((paragraph) => ({
+        hangs: paragraph.classList.contains("reader-list-hang"),
+        indented: paragraph.classList.contains("ms-4"),
+      })),
+    ).toEqual([
+      { hangs: false, indented: false },
+      { hangs: true, indented: true },
+      { hangs: true, indented: true },
+      { hangs: true, indented: true },
+      { hangs: true, indented: true },
+      // The tail closes the lead-in's sentence, under the lead-in.
+      { hangs: false, indented: false },
+    ]);
+    expect(paragraphClasses(reader)).toEqual(paragraphClasses(wordingOf(card)));
+    expect(listMarkers(wordingOf(card))).toEqual(LETTERS);
   });
 });
