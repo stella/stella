@@ -21,9 +21,7 @@ export const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
 );
 
-export class IngestedAstRejectedError extends TaggedError(
-  "IngestedAstRejectedError",
-)<{
+class IngestedAstRejectedError extends TaggedError("IngestedAstRejectedError")<{
   message: string;
   source: string;
   parserVersion: number | null;
