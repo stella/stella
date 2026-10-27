@@ -666,11 +666,23 @@ const returnedExpression = (
   if (body.type !== "BlockStatement") {
     return body;
   }
-  const returns = body.body.filter(
-    (statement) => statement.type === "ReturnStatement",
-  );
+  let returnCount = 0;
+  walk(body, (node) => {
+    // A nested function owns its returns; control-flow blocks do not.
+    if (
+      node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ArrowFunctionExpression"
+    ) {
+      return "skip-children";
+    }
+    if (node.type === "ReturnStatement") {
+      returnCount += 1;
+    }
+    return undefined;
+  });
   const last = body.body.at(-1);
-  return returns.length === 1 &&
+  return returnCount === 1 &&
     last?.type === "ReturnStatement" &&
     last.argument !== null
     ? last.argument

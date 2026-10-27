@@ -461,7 +461,7 @@ test("reads a config built by a repository helper from what the helper returns",
             ],
           });
         export function blockConfig() {
-          const testDir = ".";
+          const testDir = (() => { return "."; })();
           return defineConfig({ testDir, retries: ${String(retries)} });
         }
         export const notAConfig = 1;
