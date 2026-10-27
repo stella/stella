@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Nicht zitiert} one {Einmal zitiert} other {#-mal zitiert}}",
       "dateUnavailable": "Datum nicht verfügbar",
       "decisionCount": "{count, plural, =0 {Keine Entscheidungen} one {# Entscheidung} other {# Entscheidungen}}",
+      "goToMention": "Zur {number}. Erwähnung springen",
+      "goToParagraph": "Zu Randnummer {paragraph} springen",
       "lastNegative": "zuletzt ablehnend zitiert {year}",
+      "mentionMark": "{number}. Erwähnung",
+      "mentionsInDecision": "{count, plural, one {In dieser Entscheidung einmal zitiert} other {In dieser Entscheidung #-mal zitiert}}",
       "negativeCount": "{count, plural, one {# ablehnend} other {# ablehnend}}",
       "none": "Noch keine Zitierungen erfasst.",
+      "notInStella": "Noch nicht in stella",
       "openAtCitation": "An der Zitatstelle öffnen",
       "openDecision": "Entscheidung öffnen",
       "paragraphLabel": "Randnummer {paragraph}",
@@ -1022,6 +1027,12 @@
       "matchedIn": "Treffer auf {language}"
     },
     "loadingMore": "Weitere werden geladen…",
+    "marginFilter": {
+      "label": "Filter für zitierte Vorschriften",
+      "paragraph": "{count, plural, =0 {Keine Vorschriften in ¶{paragraph} zitiert} one {# Vorschrift in ¶{paragraph} zitiert} other {# Vorschriften in ¶{paragraph} zitiert}}",
+      "selection": "{count, plural, =0 {Keine Vorschriften in der Auswahl zitiert} one {# Vorschrift in der Auswahl zitiert} other {# Vorschriften in der Auswahl zitiert}}",
+      "unnumberedParagraph": "{count, plural, =0 {Keine Vorschriften in diesem Absatz zitiert} one {# Vorschrift in diesem Absatz zitiert} other {# Vorschriften in diesem Absatz zitiert}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# Entscheidung war hier bereits gespeichert} other {# Entscheidungen waren hier bereits gespeichert}}",
       "empty": "In dieser Akte ist noch keine Rechtsprechung abgelegt.",
@@ -1043,8 +1054,10 @@
     },
     "notesFilter": {
       "ai": "KI",
-      "human": "Mensch"
+      "human": "Mensch",
+      "toggleState": "{label}: {state, select, on {ein} other {aus}}"
     },
+    "oldestDecisions": "Älteste Entscheidungen",
     "pagination": {
       "goToPage": "Zu Seite {page} wechseln",
       "label": "Ergebnisseiten",
@@ -1106,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# Entscheidung} other {# Entscheidungen}} × {columns, plural, one {# Frage} other {# Fragen}} auf dieser Seite: {cells, plural, one {# Antwort wird erzeugt} other {# Antworten werden erzeugt}}.",
       "runTitle": "Diese Seite beantworten",
       "savedQuestions": "Gespeicherte Fragen",
-      "title": "Recherchetabellen",
-      "updated": "Zuletzt bearbeitet {date}"
+      "title": "Recherchetabellen"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1163,8 @@
     "showWholeHeadnote": "Ganzen Leitsatz anzeigen",
     "sort": {
       "newest": "Neueste",
+      "oldest": "Älteste",
+      "oldestUnavailable": "Eine Suche wird nach Relevanz oder mit den neuesten zuerst sortiert. Leeren Sie die Suche, um die ältesten Entscheidungen zuerst anzuzeigen.",
       "relevance": "Beste Treffer"
     },
     "viewer": {
@@ -1166,6 +1180,7 @@
       "citedDecisionPassage": "Textstelle in der Entscheidung",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Zum Absatz springen} other {Zu den Absätzen springen}}",
       "judgeRole": {
         "advocateGeneral": "Generalanwalt",
         "dissenting": "Sondervotum",
@@ -1717,21 +1732,8 @@
       "describe-stella-function": "Datensuche vorbereiten",
       "describe_template": "Vorlagenfelder lesen",
       "discover_tools": "Datensuche vorbereiten",
-      "docxCommentSummary": "Kommentar zu {blockId} hinzufügen",
-      "docxDeleteSummary": "{blockId} löschen",
-      "docxDeleteTableColumnSummary": "Tabellenspalte bei {blockId} löschen",
-      "docxDeleteTableRowSummary": "Tabellenzeile bei {blockId} löschen",
       "docxEditMore": "{count, plural, one {# weitere Änderung} other {# weitere Änderungen}}",
       "docxEditSummary": "{count, plural, one {# vorgeschlagene Änderung} other {# vorgeschlagene Änderungen}}",
-      "docxInsertAfterSummary": "Text nach {blockId} einfügen",
-      "docxInsertBeforeSummary": "Text vor {blockId} einfügen",
-      "docxInsertTableColumnSummary": "Tabellenspalte in der Nähe von {blockId} einfügen",
-      "docxInsertTableRowSummary": "Tabellenzeile in der Nähe von {blockId} einfügen",
-      "docxMergeTableCellsSummary": "Tabellenzellen bei {blockId} verbinden",
-      "docxReplaceBlockSummary": "{blockId} ersetzen",
-      "docxReplaceSummary": "„{find}“ durch „{replace}“ ersetzen",
-      "docxSignatureTableSummary": "Signaturtabelle in der Nähe von {blockId} einfügen",
-      "docxSplitTableCellSummary": "Tabellenzelle bei {blockId} teilen",
       "execute-typescript": "Akten-Daten lesen",
       "execute_typescript": "Akten-Daten lesen",
       "expand-chat-history": "Chatverlauf lesen",
@@ -2228,6 +2230,7 @@
     "selectARole": "Rolle auswählen",
     "selectAll": "Alle auswählen",
     "selectDate": "Datum wählen…",
+    "selected": "Ausgewählt",
     "sessions": "Sitzungen",
     "settings": "Einstellungen",
     "showAll": "Alle anzeigen",
@@ -4272,6 +4275,8 @@
       "commentPlaceholder": "Kommentar schreiben…",
       "commentText": "Kommentartext",
       "commentedPassage": "Kommentierte Textstelle",
+      "editComment": "Kommentar bearbeiten",
+      "editedAt": "Bearbeitet {time}",
       "guestAuthor": "Sie",
       "guestLimitReached": "Dieser Tab kann bis zu {count} Hervorhebungen und Notizen speichern. Erstellen Sie ein Konto, um mehr zu speichern.",
       "guestMigrationComplete": "Hervorhebungen und Notizen gespeichert.",
@@ -4778,10 +4783,8 @@
   },
   "readerAnswers": {
     "budgetError": "Das Budget für Antworten ist aufgebraucht.",
-    "citation": "¶{paragraph}",
     "expand": "Antwort aufklappen",
     "explain": "Erklären",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Rückfrage stellen",
     "invalidCitations": "{count, plural, one {# Fundstelle konnte nicht überprüft werden.} other {# Fundstellen konnten nicht überprüft werden.}}",
     "loading": "Antwort wird generiert…",
@@ -6291,6 +6294,7 @@
       "deleteAll": "Alle löschen",
       "deleteAllConfirm": "Alle {count} Einträge in „{column}“ löschen?",
       "hideColumn": "Spalte ausblenden",
+      "moveFailed": "{failed, plural, one {# von {total} Elementen konnte nicht verschoben werden.} other {# von {total} Elementen konnten nicht verschoben werden.}}",
       "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
       "uploadDocument": "Dokument hochladen",
@@ -6350,7 +6354,6 @@
           "approvedBy": "Genehmigt von",
           "channel": "Kanal",
           "dateTime": "Datum und Uhrzeit",
-          "eventId": "Ereignis-ID",
           "notAvailable": "Nicht verfügbar",
           "openTarget": "Element öffnen",
           "runId": "Ausführungs-ID",
@@ -6533,6 +6536,11 @@
       },
       "passwordLabel": "PDF-Passwort eingeben",
       "previousPage": "Vorherige Seite",
+      "selection": {
+        "explainPassagePrompt": "Erkläre diese Passage aus {citation}:\n\n„{quote}“",
+        "pageLocator": "S. {page}",
+        "pageRangeLocator": "S. {start}–{end}"
+      },
       "showOriginal": "Originalseiten anzeigen",
       "unlock": "Entsperren"
     },
@@ -6646,10 +6654,12 @@
       "selectOperator": "Operator auswählen",
       "setPromptPlaceholder": "Prompt zum Extrahieren der Informationen festlegen",
       "singleSelect": "Einfachauswahl",
-      "sortAscending": "Aufsteigend sortieren",
       "sortAscendingDate": "Älteste zuerst",
-      "sortDescending": "Absteigend sortieren",
+      "sortAscendingNumber": "Niedrigste zuerst",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Neueste zuerst",
+      "sortDescendingNumber": "Höchste zuerst",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {In # Option aufteilen} other {In # Optionen aufteilen}}",
       "suggestWithAI": "Mit KI vorschlagen",
       "text": "Text",

@@ -29,6 +29,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   REGISTRY_DEFAULT_FORMAT,
@@ -421,6 +422,7 @@ const CompanyLookupConfig = ({
         <FieldLabel>{t("templates.fieldLookupRegistry")}</FieldLabel>
         <Combobox<LookupRegistryOption>
           autoHighlight
+          filter={matchesComboboxItem}
           items={options}
           itemToStringLabel={(option) => option.label}
           onValueChange={(option) => {

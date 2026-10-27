@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Necitováno} one {Citováno jednou} few {Citováno #krát} other {Citováno #krát}}",
       "dateUnavailable": "Datum neuvedeno",
       "decisionCount": "{count, plural, =0 {Žádná rozhodnutí} one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}}",
+      "goToMention": "Přejít na {number}. zmínku",
+      "goToParagraph": "Přejít na bod {paragraph}",
       "lastNegative": "poslední negativní citace v roce {year}",
+      "mentionMark": "{number}. zmínka",
+      "mentionsInDecision": "{count, plural, one {V tomto rozhodnutí citováno jednou} few {V tomto rozhodnutí citováno #krát} other {V tomto rozhodnutí citováno #krát}}",
       "negativeCount": "{count, plural, one {# negativní} few {# negativní} many {# negativních} other {# negativních}}",
       "none": "Zatím nejsou zaznamenány žádné citace.",
+      "notInStella": "Zatím není ve stelle",
       "openAtCitation": "Otevřít na místě citace",
       "openDecision": "Otevřít rozhodnutí",
       "paragraphLabel": "Bod {paragraph}",
@@ -1022,6 +1027,12 @@
       "matchedIn": "Shoda v jazyce {language}"
     },
     "loadingMore": "Načítání dalších...",
+    "marginFilter": {
+      "label": "Filtr citovaných ustanovení",
+      "paragraph": "{count, plural, =0 {V ¶{paragraph} není citováno žádné ustanovení} one {# ustanovení citované v ¶{paragraph}} few {# ustanovení citovaná v ¶{paragraph}} many {# ustanovení citovaného v ¶{paragraph}} other {# ustanovení citovaných v ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Ve výběru není citováno žádné ustanovení} one {# ustanovení citované ve výběru} few {# ustanovení citovaná ve výběru} many {# ustanovení citovaného ve výběru} other {# ustanovení citovaných ve výběru}}",
+      "unnumberedParagraph": "{count, plural, =0 {V tomto odstavci není citováno žádné ustanovení} one {# ustanovení citované v tomto odstavci} few {# ustanovení citovaná v tomto odstavci} many {# ustanovení citovaného v tomto odstavci} other {# ustanovení citovaných v tomto odstavci}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# rozhodnutí zde už bylo uloženo} few {# rozhodnutí zde už byla uložena} other {# rozhodnutí zde už bylo uloženo}}",
       "empty": "V tomto spisu zatím není uložena žádná judikatura.",
@@ -1043,8 +1054,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Lidské"
+      "human": "Lidské",
+      "toggleState": "{label}: {state, select, on {zapnuto} other {vypnuto}}"
     },
+    "oldestDecisions": "Nejstarší rozhodnutí",
     "pagination": {
       "goToPage": "Přejít na stránku {page}",
       "label": "Stránky výsledků",
@@ -1106,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# rozhodnutí} few {# rozhodnutí} other {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázek}} na této stránce: {cells, plural, one {vznikne # odpověď} few {vzniknou # odpovědi} other {vznikne # odpovědí}}.",
       "runTitle": "Odpovědět na této stránce",
       "savedQuestions": "Uložené otázky",
-      "title": "Rešeršní tabulky",
-      "updated": "Naposledy upraveno {date}"
+      "title": "Rešeršní tabulky"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1163,8 @@
     "showWholeHeadnote": "Zobrazit celou právní větu",
     "sort": {
       "newest": "Nejnovější",
+      "oldest": "Nejstarší",
+      "oldestUnavailable": "Vyhledávání řadí výsledky podle relevance nebo od nejnovějších. Chcete-li zobrazit nejdříve nejstarší rozhodnutí, vymažte vyhledávání.",
       "relevance": "Nejrelevantnější"
     },
     "viewer": {
@@ -1166,6 +1180,7 @@
       "citedDecisionPassage": "Pasáž v rozhodnutí",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Přejít na odstavec} few {Přejít na odstavce} other {Přejít na odstavce}}",
       "judgeRole": {
         "advocateGeneral": "Generální advokát",
         "dissenting": "Odlišné stanovisko",
@@ -1717,21 +1732,8 @@
       "describe-stella-function": "Připravuji vyhledání dat",
       "describe_template": "Čtení polí vzoru",
       "discover_tools": "Připravuji vyhledání dat",
-      "docxCommentSummary": "Přidat komentář k {blockId}",
-      "docxDeleteSummary": "Smazat {blockId}",
-      "docxDeleteTableColumnSummary": "Smazat sloupec tabulky u {blockId}",
-      "docxDeleteTableRowSummary": "Smazat řádek tabulky u {blockId}",
       "docxEditMore": "{count, plural, one {# další úprava} few {# další úpravy} other {# dalších úprav}}",
       "docxEditSummary": "{count, plural, one {# navržená úprava} few {# navržené úpravy} other {# navržených úprav}}",
-      "docxInsertAfterSummary": "Vložit text za {blockId}",
-      "docxInsertBeforeSummary": "Vložit text před {blockId}",
-      "docxInsertTableColumnSummary": "Vložit sloupec tabulky poblíž {blockId}",
-      "docxInsertTableRowSummary": "Vložit řádek tabulky poblíž {blockId}",
-      "docxMergeTableCellsSummary": "Sloučit buňky tabulky u {blockId}",
-      "docxReplaceBlockSummary": "Nahradit {blockId}",
-      "docxReplaceSummary": "Nahradit „{find}“ za „{replace}“",
-      "docxSignatureTableSummary": "Vložit podpisovou tabulku poblíž {blockId}",
-      "docxSplitTableCellSummary": "Rozdělit buňku tabulky u {blockId}",
       "execute-typescript": "Čtu data spisu",
       "execute_typescript": "Čtu data spisu",
       "expand-chat-history": "Čtení historie chatu",
@@ -2228,6 +2230,7 @@
     "selectARole": "Vyberte roli",
     "selectAll": "Vybrat vše",
     "selectDate": "Vybrat datum…",
+    "selected": "Vybráno",
     "sessions": "Sezení",
     "settings": "Nastavení",
     "showAll": "Zobrazit vše",
@@ -4272,6 +4275,8 @@
       "commentPlaceholder": "Napište komentář…",
       "commentText": "Text komentáře",
       "commentedPassage": "Okomentovaná pasáž",
+      "editComment": "Upravit komentář",
+      "editedAt": "Upraveno {time}",
       "guestAuthor": "Vy",
       "guestLimitReached": "Tato karta může obsahovat nejvýše {count} zvýraznění a poznámek. Vytvořte si účet a uložte další.",
       "guestMigrationComplete": "Zvýraznění a poznámky byly uloženy.",
@@ -4778,10 +4783,8 @@
   },
   "readerAnswers": {
     "budgetError": "Rozpočet na odpovědi je vyčerpán.",
-    "citation": "¶{paragraph}",
     "expand": "Rozbalit odpověď",
     "explain": "Vysvětlit",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Položit doplňující otázku",
     "invalidCitations": "{count, plural, one {# citaci se nepodařilo ověřit.} few {# citace se nepodařilo ověřit.} other {# citací se nepodařilo ověřit.}}",
     "loading": "Generování odpovědi…",
@@ -6291,6 +6294,7 @@
       "deleteAll": "Smazat vše",
       "deleteAllConfirm": "Smazat všechny {count} položky ve sloupci „{column}“?",
       "hideColumn": "Skrýt sloupec",
+      "moveFailed": "{failed, plural, one {# z {total} položek se nepodařilo přesunout.} few {# z {total} položek se nepodařilo přesunout.} other {# z {total} položek se nepodařilo přesunout.}}",
       "readOnlyGrouping": "Toto seskupení je jen pro čtení",
       "selectPropertyHint": "Vyberte vlastnost pro seskupení v panelu nástrojů",
       "uploadDocument": "Nahrát dokument",
@@ -6350,7 +6354,6 @@
           "approvedBy": "Schválil(a)",
           "channel": "Kanál",
           "dateTime": "Datum a čas",
-          "eventId": "ID události",
           "notAvailable": "Není k dispozici",
           "openTarget": "Otevřít položku",
           "runId": "ID běhu",
@@ -6533,6 +6536,11 @@
       },
       "passwordLabel": "Zadejte heslo PDF",
       "previousPage": "Předchozí strana",
+      "selection": {
+        "explainPassagePrompt": "Vysvětli tuto pasáž z {citation}:\n\n„{quote}“",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Zobrazit původní stránky",
       "unlock": "Odemknout"
     },
@@ -6646,10 +6654,12 @@
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
       "singleSelect": "Jednoduchý výběr",
-      "sortAscending": "Řadit vzestupně",
       "sortAscendingDate": "Od nejstarších",
-      "sortDescending": "Řadit sestupně",
+      "sortAscendingNumber": "Od nejnižší hodnoty",
+      "sortAscendingText": "A → Ž",
       "sortDescendingDate": "Od nejnovějších",
+      "sortDescendingNumber": "Od nejvyšší hodnoty",
+      "sortDescendingText": "Ž → A",
       "splitOptions": "{count, plural, one {Rozdělit na # možnost} few {Rozdělit na # možnosti} other {Rozdělit na # možností}}",
       "suggestWithAI": "Navrhnout pomocí AI",
       "text": "Text",

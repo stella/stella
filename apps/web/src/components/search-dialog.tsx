@@ -184,6 +184,10 @@ import {
   shouldShowSearchPreview,
 } from "@/lib/search.logic";
 import { navigateToWorkspaceReveal } from "@/lib/workspaces/reveal-navigation";
+import {
+  getCurrentWorkspaceDocument,
+  useCurrentWorkspaceView,
+} from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchSummaryCitation = {
   id: string;
@@ -585,6 +589,7 @@ export const SearchDialog = ({
   const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const router = useRouter();
+  const currentView = useCurrentWorkspaceView();
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
@@ -1265,8 +1270,8 @@ export const SearchDialog = ({
         }
         await navigate(options);
       },
-      pathname: router.state.location.pathname,
       queryClient,
+      router,
       targetWorkspaceId: location.workspaceId,
     });
   };
@@ -1291,7 +1296,12 @@ export const SearchDialog = ({
     if (!isSearchRecentsScopeCurrent(searchRecentsScope)) {
       return;
     }
-    await openEntityInInspector(entityId, label, workspaceId);
+    await openEntityInInspector({
+      documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+      entityId,
+      label,
+      workspaceId,
+    });
   };
 
   const openRecentFile = (file: RecentFileWithIdentity) => {
@@ -1337,7 +1347,7 @@ export const SearchDialog = ({
         await openEntityLocation(location);
         return;
       }
-      await navigate(getRecentFileRoute({ ...file, fileFieldId }));
+      await navigate(getRecentFileRoute({ ...file, currentView, fileFieldId }));
     });
   };
 
@@ -1364,6 +1374,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(
@@ -1482,6 +1493,7 @@ export const SearchDialog = ({
       }
       navigateAfterClose(async () => {
         const { fileFieldId, route } = await resolveEntityDocumentRoute({
+          currentView,
           hit,
           resolveCurrentFileFieldId: async () =>
             await queryClient.query(

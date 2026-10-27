@@ -16,7 +16,6 @@ export type CaseLawCoverage = Extract<
 
 export type CaseLawCoverageCountry = CaseLawCoverage["countries"][number];
 export type CaseLawCoverageSource = CaseLawCoverageCountry["sources"][number];
-export type CaseLawCoverageHealth = CaseLawCoverageCountry["health"];
 type CaseLawCoverageAvailability = CaseLawCoverageCountry["availability"];
 export type CaseLawSourceCompleteness = CaseLawCoverageSource["completeness"];
 /** The two arms that carry both numbers, and so can carry a ratio. */
@@ -25,32 +24,6 @@ export type CaseLawMeasuredCompleteness = Extract<
   { reportedBy: string }
 >;
 type CaseLawTotalReporter = CaseLawMeasuredCompleteness["reportedBy"];
-
-/**
- * One word per freshness state. The dot beside it carries the same state as a
- * tone, never on its own: colour is the second reading of the word, not the
- * only one.
- */
-export const CASE_LAW_COVERAGE_HEALTH_LABEL_KEYS = {
-  current: "caseLaw.coverage.healthCurrent",
-  delayed: "caseLaw.coverage.healthDelayed",
-  disabled: "caseLaw.coverage.healthDisabled",
-  stalled: "caseLaw.coverage.healthStalled",
-  unknown: "caseLaw.coverage.healthUnknown",
-} as const satisfies Record<CaseLawCoverageHealth, TranslationKey>;
-
-/**
- * `disabled` and `unknown` are neutral on purpose: a source switched off on
- * purpose, and one that has never run, are not faults and must not read as
- * one beside a court that genuinely stopped answering.
- */
-export const CASE_LAW_COVERAGE_HEALTH_TONES = {
-  current: "success",
-  delayed: "warning",
-  disabled: "neutral",
-  stalled: "destructive",
-  unknown: "neutral",
-} as const satisfies Record<CaseLawCoverageHealth, ReviewStatusTone>;
 
 export const CASE_LAW_COVERAGE_AVAILABILITY_LABEL_KEYS = {
   "in-preparation": "caseLaw.coverage.inPreparation",

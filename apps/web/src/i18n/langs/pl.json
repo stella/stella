@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
       "dateUnavailable": "Data niedostępna",
       "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
+      "goToMention": "Przejdź do wzmianki {number}",
+      "goToParagraph": "Przejdź do punktu {paragraph}",
       "lastNegative": "ostatnie negatywne powołanie w {year} r.",
+      "mentionMark": "wzmianka {number}",
+      "mentionsInDecision": "{count, plural, one {Cytowane raz w tym orzeczeniu} few {Cytowane # razy w tym orzeczeniu} many {Cytowane # razy w tym orzeczeniu} other {Cytowane # razy w tym orzeczeniu}}",
       "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
+      "notInStella": "Jeszcze nie ma go w stelli",
       "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
       "paragraphLabel": "Punkt {paragraph}",
@@ -1022,6 +1027,12 @@
       "matchedIn": "Dopasowanie w języku {language}"
     },
     "loadingMore": "Ładowanie kolejnych...",
+    "marginFilter": {
+      "label": "Filtr przywołanych przepisów",
+      "paragraph": "{count, plural, =0 {Brak przepisów przywołanych w ¶{paragraph}} one {# przepis przywołany w ¶{paragraph}} few {# przepisy przywołane w ¶{paragraph}} many {# przepisów przywołanych w ¶{paragraph}} other {# przepisu przywołanego w ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Brak przepisów przywołanych w zaznaczonym fragmencie} one {# przepis przywołany w zaznaczonym fragmencie} few {# przepisy przywołane w zaznaczonym fragmencie} many {# przepisów przywołanych w zaznaczonym fragmencie} other {# przepisu przywołanego w zaznaczonym fragmencie}}",
+      "unnumberedParagraph": "{count, plural, =0 {Brak przepisów przywołanych w tym akapicie} one {# przepis przywołany w tym akapicie} few {# przepisy przywołane w tym akapicie} many {# przepisów przywołanych w tym akapicie} other {# przepisu przywołanego w tym akapicie}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# orzeczenie było już tutaj zapisane} few {# orzeczenia były już tutaj zapisane} many {# orzeczeń było już tutaj zapisanych} other {# orzeczeń było już tutaj zapisanych}}",
       "empty": "W tej sprawie nie zapisano jeszcze żadnego orzeczenia.",
@@ -1043,8 +1054,10 @@
     },
     "notesFilter": {
       "ai": "AI",
-      "human": "Ludzkie"
+      "human": "Ludzkie",
+      "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
     },
+    "oldestDecisions": "Najstarsze orzeczenia",
     "pagination": {
       "goToPage": "Przejdź do strony {page}",
       "label": "Strony wyników",
@@ -1106,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
       "runTitle": "Odpowiedz na tej stronie",
       "savedQuestions": "Zapisane pytania",
-      "title": "Tabele badawcze",
-      "updated": "Ostatnia edycja {date}"
+      "title": "Tabele badawcze"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1163,8 @@
     "showWholeHeadnote": "Pokaż całą tezę",
     "sort": {
       "newest": "Najnowsze",
+      "oldest": "Najstarsze",
+      "oldestUnavailable": "Wyniki wyszukiwania są sortowane według trafności lub od najnowszych. Aby zobaczyć najpierw najstarsze orzeczenia, wyczyść wyszukiwanie.",
       "relevance": "Najtrafniejsze"
     },
     "viewer": {
@@ -1166,6 +1180,7 @@
       "citedDecisionPassage": "Fragment orzeczenia",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Przejdź do akapitu} few {Przejdź do akapitów} many {Przejdź do akapitów} other {Przejdź do akapitów}}",
       "judgeRole": {
         "advocateGeneral": "Rzecznik generalny",
         "dissenting": "Zdanie odrębne",
@@ -1717,21 +1732,8 @@
       "describe-stella-function": "Przygotowywanie odczytu danych",
       "describe_template": "Odczytywanie pól szablonu",
       "discover_tools": "Przygotowywanie odczytu danych",
-      "docxCommentSummary": "Dodaj komentarz do {blockId}",
-      "docxDeleteSummary": "Usuń {blockId}",
-      "docxDeleteTableColumnSummary": "Usuń kolumnę tabeli przy {blockId}",
-      "docxDeleteTableRowSummary": "Usuń wiersz tabeli przy {blockId}",
       "docxEditMore": "{count, plural, one {# kolejna zmiana} few {# kolejne zmiany} many {# kolejnych zmian} other {# kolejnej zmiany}}",
       "docxEditSummary": "{count, plural, one {# proponowana zmiana} few {# proponowane zmiany} many {# proponowanych zmian} other {# proponowanej zmiany}}",
-      "docxInsertAfterSummary": "Wstaw tekst po {blockId}",
-      "docxInsertBeforeSummary": "Wstaw tekst przed {blockId}",
-      "docxInsertTableColumnSummary": "Wstaw kolumnę tabeli w pobliżu {blockId}",
-      "docxInsertTableRowSummary": "Wstaw wiersz tabeli w pobliżu {blockId}",
-      "docxMergeTableCellsSummary": "Scal komórki tabeli przy {blockId}",
-      "docxReplaceBlockSummary": "Zastąp {blockId}",
-      "docxReplaceSummary": "Zastąp „{find}” tekstem „{replace}”",
-      "docxSignatureTableSummary": "Wstaw tabelę podpisów w pobliżu {blockId}",
-      "docxSplitTableCellSummary": "Podziel komórkę tabeli przy {blockId}",
       "execute-typescript": "Odczytywanie danych sprawy",
       "execute_typescript": "Odczytywanie danych sprawy",
       "expand-chat-history": "Odczytywanie historii czatu",
@@ -2228,6 +2230,7 @@
     "selectARole": "Wybierz rolę",
     "selectAll": "Zaznacz wszystkie",
     "selectDate": "Wybierz datę…",
+    "selected": "Zaznaczone",
     "sessions": "Sesje",
     "settings": "Ustawienia",
     "showAll": "Pokaż wszystko",
@@ -4272,6 +4275,8 @@
       "commentPlaceholder": "Napisz komentarz…",
       "commentText": "Treść komentarza",
       "commentedPassage": "Skomentowany fragment",
+      "editComment": "Edytuj komentarz",
+      "editedAt": "Edytowano {time}",
       "guestAuthor": "Ty",
       "guestLimitReached": "Ta karta może pomieścić do {count} wyróżnień i notatek. Utwórz konto, aby zapisać więcej.",
       "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
@@ -4778,10 +4783,8 @@
   },
   "readerAnswers": {
     "budgetError": "Budżet na odpowiedzi został wyczerpany.",
-    "citation": "¶{paragraph}",
     "expand": "Rozwiń odpowiedź",
     "explain": "Wyjaśnij",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Zadaj dodatkowe pytanie",
     "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
     "loading": "Generowanie odpowiedzi…",
@@ -6291,6 +6294,7 @@
       "deleteAll": "Usuń wszystkie",
       "deleteAllConfirm": "Usunąć wszystkie {count} elementy z kolumny „{column}”?",
       "hideColumn": "Ukryj kolumnę",
+      "moveFailed": "{failed, plural, one {Nie udało się przenieść # z {total} elementów.} few {Nie udało się przenieść # z {total} elementów.} many {Nie udało się przenieść # z {total} elementów.} other {Nie udało się przenieść # z {total} elementów.}}",
       "readOnlyGrouping": "To grupowanie jest tylko do odczytu",
       "selectPropertyHint": "Wybierz właściwość do grupowania na pasku narzędzi",
       "uploadDocument": "Prześlij dokument",
@@ -6350,7 +6354,6 @@
           "approvedBy": "Zatwierdził(a)",
           "channel": "Kanał",
           "dateTime": "Data i godzina",
-          "eventId": "ID zdarzenia",
           "notAvailable": "Niedostępne",
           "openTarget": "Otwórz element",
           "runId": "ID uruchomienia",
@@ -6533,6 +6536,11 @@
       },
       "passwordLabel": "Wprowadź hasło do pliku PDF",
       "previousPage": "Poprzednia strona",
+      "selection": {
+        "explainPassagePrompt": "Wyjaśnij ten fragment {citation}:\n\n„{quote}”",
+        "pageLocator": "s. {page}",
+        "pageRangeLocator": "s. {start}–{end}"
+      },
       "showOriginal": "Pokaż oryginalne strony",
       "unlock": "Odblokuj"
     },
@@ -6646,10 +6654,12 @@
       "selectOperator": "Wybierz operator",
       "setPromptPlaceholder": "Ustaw prompt do wyodrębnienia informacji",
       "singleSelect": "Jednokrotny wybór",
-      "sortAscending": "Sortuj rosnąco",
       "sortAscendingDate": "Od najstarszych",
-      "sortDescending": "Sortuj malejąco",
+      "sortAscendingNumber": "Od najniższych",
+      "sortAscendingText": "A → Ż",
       "sortDescendingDate": "Od najnowszych",
+      "sortDescendingNumber": "Od najwyższych",
+      "sortDescendingText": "Ż → A",
       "splitOptions": "{count, plural, one {Podziel na # opcję} few {Podziel na # opcje} many {Podziel na # opcji} other {Podziel na # opcji}}",
       "suggestWithAI": "Zaproponuj z AI",
       "text": "Tekst",
