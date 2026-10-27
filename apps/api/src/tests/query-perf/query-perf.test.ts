@@ -179,5 +179,5 @@ describe.skipIf(!enabled)("query perf gate on PostgreSQL under RLS", () => {
       baselinePath: new URL("baseline.json", import.meta.url),
       outputPath: process.env["GITHUB_OUTPUT"],
     });
-  }, 420_000);
+  }, 420_000); // timeout: two fresh PostgreSQL profiles each have a 150-second deadline, plus database setup and teardown.
 });
