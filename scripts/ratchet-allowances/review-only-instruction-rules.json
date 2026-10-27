@@ -1,5 +1,5 @@
 {
   "metric": "review-only-instruction-rules",
-  "delta": 156,
+  "delta": 171,
   "reason": "The metric starts here. Each instruction rule enforced only by a reader is now tagged [review] and counted, so the count can fall as rules gain a lint, check or test."
 }
