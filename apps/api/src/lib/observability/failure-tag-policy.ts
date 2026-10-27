@@ -471,6 +471,7 @@ export const TAGGED_FAILURE_REASON = {
   WorkflowRunStateReplyError: "tagged_failure",
   WorkflowRunStateUnavailableError: "tagged_failure",
   WorkflowValidationError: "tagged_failure",
+  WorkspaceBillingHistoryError: "conflict",
   WorkspaceStorageTeardownBoundError: "tagged_failure",
   WorkspaceStorageTeardownStateError: "tagged_failure",
   WorktreeEnvLinkError: "tagged_failure",

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { LOCALES, parseGlossary } from "./glossary-gen";
+import { isPlainRecord } from "./i18n-check";
 import {
   buildForbiddenRules,
+  findBareErrors,
   findDroppedExactSelectors,
   findDroppedPlurals,
   findForbiddenGuidance,
@@ -13,6 +15,7 @@ import {
   findMissingPluralCategories,
   findPlaceholderMismatch,
   hasInvalidCapitalizedStella,
+  isBareErrorMessage,
   isSuppressed,
 } from "./i18n-lint";
 import type { LintBaseline } from "./i18n-lint";
@@ -827,6 +830,63 @@ describe("terminology: matter transfers", () => {
         realRules,
         "errors.example",
       ),
+    ).toEqual([]);
+  });
+});
+
+describe("bare error messages", () => {
+  test("a message that only says something failed is bare", () => {
+    for (const message of [
+      "Error",
+      "Error:",
+      "error.",
+      "Something went  wrong",
+      "An unexpected error occurred!",
+      "Oops\u2026",
+      "Action failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(true);
+    }
+  });
+
+  test("a message that says what failed or what to do is not bare", () => {
+    for (const message of [
+      "Something went wrong. Try again, or reload the page if it keeps happening.",
+      "Something went wrong. Please try again.",
+      "Recent activity could not be loaded.",
+      "Failed",
+    ]) {
+      expect(isBareErrorMessage(message)).toBe(false);
+    }
+  });
+
+  test("reports the keys of bare messages", () => {
+    expect(
+      findBareErrors({
+        "common.somethingWentWrong":
+          "Something went wrong. Try again, or reload the page if it keeps happening.",
+        "billing.saveFailed": "Something went wrong",
+        "common.error": "Error",
+      }),
+    ).toEqual(["billing.saveFailed", "common.error"]);
+  });
+
+  test("the MCP app catalog has no bare message", async () => {
+    const catalogPath = path.resolve(
+      import.meta.dir,
+      "../../api-contract/src/mcp-app-messages.json",
+    );
+    const catalog: unknown = JSON.parse(await Bun.file(catalogPath).text());
+    const en = isPlainRecord(catalog) ? catalog["en"] : undefined;
+    if (!isPlainRecord(en)) {
+      throw new Error(`${catalogPath} has no en messages`);
+    }
+    expect(
+      Object.entries(en)
+        .filter(
+          ([, value]) => typeof value === "string" && isBareErrorMessage(value),
+        )
+        .map(([key]) => key),
     ).toEqual([]);
   });
 });

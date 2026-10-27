@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  MOBILE_REDIRECT_URI,
   MOBILE_SCOPES,
+  mobileRedirectUri,
 } from "@stll/api-contract/mobile-client";
 
 import { buildAuthorizeUrl, readAuthorizationCallback } from "./authorize";
 import type { AuthorizationServerMetadata } from "./discovery";
 
 const ISSUER = "https://stella.example.com/api/auth";
+const REDIRECT_URI = mobileRedirectUri("preview");
 
 const metadata = {
   issuer: ISSUER,
@@ -17,8 +18,11 @@ const metadata = {
   code_challenge_methods_supported: ["S256"],
 } satisfies AuthorizationServerMetadata;
 
-const redirectWith = (parameters: Record<string, string>) => {
-  const url = new URL(MOBILE_REDIRECT_URI);
+const redirectWith = (
+  parameters: Record<string, string>,
+  redirectUri = REDIRECT_URI,
+) => {
+  const url = new URL(redirectUri);
   for (const [name, value] of Object.entries(parameters)) {
     url.searchParams.set(name, value);
   }
@@ -31,6 +35,7 @@ const read = (callbackUrl: string, issuerRequired = false) => {
     expectedIssuer: ISSUER,
     expectedState: "attempt-state",
     issuerRequired,
+    redirectUri: REDIRECT_URI,
   });
   return result.isOk()
     ? { code: result.value }
@@ -44,6 +49,7 @@ describe("authorization request", () => {
         clientId: "client",
         codeChallenge: "challenge",
         metadata,
+        redirectUri: REDIRECT_URI,
         resource: "https://stella.example.com/v1",
         state: "attempt-state",
       }),
@@ -52,7 +58,7 @@ describe("authorization request", () => {
     expect(Object.fromEntries(url.searchParams)).toEqual({
       response_type: "code",
       client_id: "client",
-      redirect_uri: MOBILE_REDIRECT_URI,
+      redirect_uri: REDIRECT_URI,
       code_challenge: "challenge",
       code_challenge_method: "S256",
       state: "attempt-state",
@@ -129,5 +135,14 @@ describe("authorization callback", () => {
       ),
     ).toEqual({ failure: "malformed" });
     expect(read("not a url")).toEqual({ failure: "malformed" });
+    // Another build's redirect answers that build, not this one.
+    expect(
+      read(
+        redirectWith(
+          { code: "the-code", state: "attempt-state" },
+          mobileRedirectUri("production"),
+        ),
+      ),
+    ).toEqual({ failure: "malformed" });
   });
 });

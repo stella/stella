@@ -1410,6 +1410,11 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // The mobile app's Expo config reads its variant and signing from the build.
+  "APP_VARIANT",
+  "APPLE_TEAM_ID",
+  "MOBILE_BUILD_NUMBER",
+  "MOBILE_PROFILE_UUID",
   // Invocation-local handoff values are removed before test/native entry points run.
   "STELLA_TEST_PROCESS_STARTUP_GATE",
   "STELLA_TEST_NATIVE_COMMAND",
@@ -1801,13 +1806,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "FIX_BRANCH",
   // Shell fixtures for the dependency-audit gate and remediation scripts.
   "TEST_AUDIT_STATUS",
-  "TEST_CONCURRENT_SHA",
+  "TEST_ASSESS_STATUS",
   "TEST_FIX_AVAILABLE",
   "TEST_OPEN_PRS",
   "TEST_ADVISORIES_REMAIN",
   "TEST_STALE",
   "TEST_PIN_REWRITE",
-  "TEST_LS_REMOTE_FAILS_ONCE",
   "WXT_STELLA_ORIGINS",
 ]);
 

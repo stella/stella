@@ -2640,6 +2640,30 @@ export const caseLawSourceArrivals = p.pgTable(
   ],
 );
 
+/** The complete coverage answer, replaced atomically by the governed refresh. */
+export const caseLawCoverageSummaries = p.pgTable(
+  "case_law_coverage_summaries",
+  {
+    key: p.text().primaryKey(),
+    sourcePolicy: p.text("source_policy").notNull(),
+    answer: jsonb().notNull(),
+    generatedAt: timestamptz("generated_at").notNull(),
+  },
+  (t) => [
+    p.check("case_law_coverage_summaries_singleton", sql`${t.key} = 'current'`),
+    p.check(
+      "case_law_coverage_summaries_policy_array",
+      sql`jsonb_typeof(${t.sourcePolicy}::text::jsonb) = 'array'`,
+    ),
+    p.pgPolicy("case_law_coverage_summary_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_coverage_summaries'::regclass)`,
+    }),
+  ],
+);
+
 /**
  * Where the standing resolution walk had got to.
  *

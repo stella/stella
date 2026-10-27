@@ -124,6 +124,8 @@ const previewHeading = v.strictObject({
 });
 export const provisionPreviewOutput = v.strictObject({
   url: v.nullable(v.string()),
+  /** The statute's country, whose publisher grammar its anchors are in. */
+  country: v.string(),
   documentId: v.string(),
   language: v.string(),
   anchorId: v.string(),

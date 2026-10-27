@@ -1,9 +1,6 @@
 import { Result } from "better-result";
 
-import {
-  MOBILE_REDIRECT_URI,
-  MOBILE_SCOPES,
-} from "@stll/api-contract/mobile-client";
+import { MOBILE_SCOPES } from "@stll/api-contract/mobile-client";
 
 import type { AuthorizationServerMetadata } from "./discovery";
 import { AuthorizationError } from "./errors";
@@ -13,19 +10,22 @@ export const buildAuthorizeUrl = ({
   clientId,
   codeChallenge,
   metadata,
+  redirectUri,
   resource,
   state,
 }: {
   readonly clientId: string;
   readonly codeChallenge: string;
   readonly metadata: AuthorizationServerMetadata;
+  /** This build's redirect (`mobileRedirectUri`). */
+  readonly redirectUri: string;
   readonly resource: string;
   readonly state: string;
 }): string => {
   const url = new URL(metadata.authorization_endpoint);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", MOBILE_REDIRECT_URI);
+  url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("code_challenge", codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
   url.searchParams.set("state", state);
@@ -50,15 +50,17 @@ export const readAuthorizationCallback = ({
   expectedIssuer,
   expectedState,
   issuerRequired,
+  redirectUri,
 }: {
   readonly callbackUrl: string;
   readonly expectedIssuer: string;
   readonly expectedState: string;
   /** `authorization_response_iss_parameter_supported` from the server's metadata. */
   readonly issuerRequired: boolean;
+  readonly redirectUri: string;
 }): Result<string, AuthorizationError> => {
   const url = parseUrl(callbackUrl);
-  const redirect = new URL(MOBILE_REDIRECT_URI);
+  const redirect = new URL(redirectUri);
   if (
     url === null ||
     url.protocol !== redirect.protocol ||

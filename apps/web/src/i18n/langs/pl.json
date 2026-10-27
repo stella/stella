@@ -508,14 +508,20 @@
     "amount": "Kwota",
     "amountMustBePositive": "Kwota musi być większa od zera",
     "approval": {
+      "approveAll": "{count, plural, one {Zatwierdź # wpis} few {Zatwierdź # wpisy} many {Zatwierdź wszystkie # wpisów} other {Zatwierdź wszystkie # wpisu}}",
       "approveSelected": "Zatwierdź {count, plural, one {# zaznaczony wpis} few {# zaznaczone wpisy} many {# zaznaczonych wpisów} other {# zaznaczonego wpisu}}",
+      "billedTotal": "Rozliczono {duration}",
       "empty": "W tej sprawie nic nie czeka na zatwierdzenie.",
+      "emptyWeek": "W tym tygodniu nic nie czeka na zatwierdzenie. Przesłany czas pojawi się tutaj.",
+      "everyone": "Wszyscy",
       "failed": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
       "myTime": "Mój czas",
+      "pending": "{count, plural, one {# wpis do zatwierdzenia} few {# wpisy do zatwierdzenia} many {# wpisów do zatwierdzenia} other {# wpisu do zatwierdzenia}}",
       "refusals": {
         "invalidEntry": "Dodaj opis i sprawdź datę pracy, a potem zatwierdź wpis.",
         "notApprover": "Ten wpis może zatwierdzić tylko przypisany zatwierdzający lub administrator.",
         "notFound": "Ten wpis już nie istnieje. Odśwież listę.",
+        "notSubmitted": "Ten wpis nie został jeszcze przesłany. Najpierw musi go przesłać jego autor.",
         "runningTimer": "Zatrzymaj działający stoper przed zatwierdzeniem wpisu.",
         "unpriced": "Ten wpis nie ma stawki. Ustaw stawkę dla tej sprawy, a potem zatwierdź wpis.",
         "wrongStatus": "Ten wpis nie jest już wersją roboczą. Odśwież listę."
@@ -530,6 +536,17 @@
     "batchActions": "Działania zbiorcze",
     "billable": "Rozliczalne",
     "billedAmount": "Kwota rozliczona",
+    "clientComposer": {
+      "flatFeeNote": "Sprawy z wynagrodzeniem ryczałtowym rozliczaj na stronie faktur danej sprawy.",
+      "includeMatter": "Uwzględnij {matterName}",
+      "invalidPeriod": "Wybierz datę końcową nie wcześniejszą niż początkowa.",
+      "loadFailed": "Nie udało się wczytać niezafakturowanej pracy. Spróbuj ponownie.",
+      "matterSubtotal": "Suma sprawy z VAT: {amount} · {share} faktury",
+      "periodEnd": "Koniec okresu",
+      "periodStart": "Początek okresu",
+      "title": "Wystaw fakturę klientowi",
+      "visibility": "Ta faktura jest widoczna tylko dla osób z dostępem do wszystkich uwzględnionych spraw i administratorów rozliczeń."
+    },
     "codes": {
       "activity": "Czynność",
       "activityCode": "Kod czynności",
@@ -673,6 +690,11 @@
       "invoiceDate": "Data wystawienia",
       "invoiceDetail": "Szczegóły faktury",
       "invoiceNumber": "Numer faktury",
+      "lineOverrides": {
+        "editedRecorded": "Zmieniono · zapisano: {description}, {quantity} × {rate}",
+        "quantity": "Ilość",
+        "resetRecorded": "Przywróć zapisane wartości"
+      },
       "linkedExpenses": "Powiązane wydatki",
       "linkedTimeEntries": "Powiązane wpisy czasu",
       "markPaid": "Oznacz jako zapłaconą",
@@ -811,13 +833,16 @@
       "approved": "Zatwierdzony",
       "billed": "Zafakturowany",
       "draft": "Wersja robocza",
+      "submitted": "Przesłano",
       "written_off": "Odpisany"
     },
     "stopTimer": "Zatrzymaj",
     "suggestions": {
       "actionCount": "{count, plural, one {# działanie} few {# działania} many {# działań} other {# działania}}",
       "activeVsLogged": "Aktywność: {active} · Zarejestrowano: {logged}",
+      "alreadyCovered": "Już pokryte zarejestrowanym czasem",
       "chatEvidence": "{count, plural, one {# wiadomość} few {# wiadomości} many {# wiadomości} other {# wiadomości}} w rozmowie „{title}”",
+      "engagedTime": "{duration} aktywnej pracy",
       "keyboardHint": "Enter akceptuje, E edytuje przed akceptacją, Delete odrzuca",
       "privacyNote": "Widzisz je tylko Ty. Nic nie zostaje zapisane, dopóki nie zaakceptujesz sugestii.",
       "title": "Sugestie na podstawie Twojej aktywności",
@@ -2077,7 +2102,6 @@
       "orLetUsKnowAt": "albo napisz do nas na",
       "viewDocumentation": "Zobacz dokumentację"
     },
-    "error": "Błąd",
     "expenses": "Wydatki",
     "export": {
       "citations": "Cytowania",
@@ -2151,6 +2175,7 @@
     "lastUpdated": "Ostatnia aktualizacja",
     "layoutResetAfterProblem": "Po wystąpieniu problemu przywrócono domyślny układ.",
     "legalDatabase": "Baza danych prawnych",
+    "loadFailed": "Nie udało się wczytać.",
     "loadMore": "Załaduj więcej",
     "loading": "Ładowanie",
     "logTime": "Zarejestruj czas",
@@ -2239,7 +2264,7 @@
     "showMore": "Pokaż więcej",
     "showSecretValue": "Pokaż tajną wartość",
     "signOut": "Wyloguj się",
-    "somethingWentWrong": "Coś poszło nie tak",
+    "somethingWentWrong": "Coś poszło nie tak. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "sort": "Sortuj",
     "source": "Źródło",
     "stale": "Nieaktualne",
@@ -2716,7 +2741,7 @@
       "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
       "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
     },
-    "actionFailed": "Akcja nie powiodła się",
+    "actionFailed": "Nie udało się. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
       "caseLawCountryUnavailable": "Orzecznictwo tego kraju nie jest dostępne. Wybierz inny kraj.",
@@ -3267,7 +3292,7 @@
     "saveSerializeFailedTitle": "Nie udało się utworzyć pliku DOCX",
     "savingDocument": "Zapisywanie...",
     "showDetails": "Pokaż szczegóły",
-    "somethingWentWrong": "Coś poszło nie tak",
+    "somethingWentWrong": "Coś poszło nie tak. Spróbuj ponownie lub odśwież stronę, jeśli problem się powtarza.",
     "synced": "Zsynchronizowano",
     "syncing": "Synchronizowanie",
     "tableBordersAll": "Wszystkie krawędzie",
@@ -5870,6 +5895,28 @@
   "timesheets": {
     "day": {
       "internalWork": "Praca wewnętrzna"
+    },
+    "week": {
+      "allLogged": "Wszystko jest zarejestrowane. Nowa aktywność pojawi się tutaj w trakcie pracy.",
+      "days": "Dni tygodnia",
+      "entriesTitle": "Zarejestrowany czas",
+      "nextWeek": "Następny tydzień",
+      "noActivity": "Na razie nie ma nic do zarejestrowania. Pracuj w sprawie, a Twoja aktywność pojawi się tutaj do zaakceptowania.",
+      "pendingCount": "{count, plural, one {# sugestia} few {# sugestie} many {# sugestii} other {# sugestii}}",
+      "previousWeek": "Poprzedni tydzień",
+      "range": "{start} – {end}",
+      "refusals": {
+        "invalidEntry": "Sprawdź datę pracy, a potem prześlij ten wpis.",
+        "narrativeRequired": "Dodaj opis, a potem prześlij ten wpis.",
+        "runningTimer": "Zatrzymaj działający licznik czasu, a potem prześlij ten wpis.",
+        "unpriced": "Ten wpis nie ma stawki. Poproś o stawkę dla sprawy, a potem go prześlij."
+      },
+      "returned": "Zwrócono: {comment}",
+      "submitAndApprove": "Prześlij i zatwierdź",
+      "submitResult": "Przesłano: {submitted} · zatwierdzono: {approved} · do poprawy: {refused}",
+      "submitWeek": "Prześlij tydzień",
+      "title": "Mój tydzień",
+      "totals": "Zarejestrowano: {logged} · rozliczalne: {billable}"
     }
   },
   "translate": {
@@ -6494,6 +6541,36 @@
       "pageEditor": {
         "addPDF": "Dodaj PDF",
         "applyCrop": "Zastosuj przycięcie",
+        "cleanScan": {
+          "applied": "Zastosowano oczyszczoną wersję",
+          "apply": "Zastosuj",
+          "applyAll": "Zastosuj wszystkie",
+          "applyPage": "Zastosuj oczyszczoną stronę {number}",
+          "cleaned": "Oczyszczona",
+          "cleaning": "Oczyszczanie strony",
+          "contentCrop": "Przytnij do treści",
+          "description": "{count, plural, one {Sprawdź oczyszczoną stronę, zanim jej użyjesz. Dokument zmieni się dopiero wtedy.} few {Sprawdź każdą z # oczyszczonych stron, zanim ich użyjesz. Dokument zmieni się dopiero wtedy.} many {Sprawdź każdą z # oczyszczonych stron, zanim ich użyjesz. Dokument zmieni się dopiero wtedy.} other {Sprawdź każdą z # oczyszczonych stron, zanim ich użyjesz. Dokument zmieni się dopiero wtedy.}}",
+          "deskew": "Wyprostuj",
+          "failedEngine": "Oczyszczanie nie powiodło się. Strona pozostaje bez zmian.",
+          "failedRender": "Nie udało się przygotować strony do oczyszczenia. Pozostaje bez zmian.",
+          "failedTimeout": "Oczyszczanie trwało zbyt długo. Strona pozostaje bez zmian.",
+          "heading": "Oczyść skan",
+          "output": "Tryb koloru",
+          "outputBinary": "Czarno-biały",
+          "outputGrayscale": "Skala szarości",
+          "pageLimit": "Jednocześnie można oczyścić najwyżej {max} stron. Zaznacz mniej stron.",
+          "preview": "Oczyszczona strona {number}",
+          "progress": "Przetworzono {done} z {total} stron",
+          "reject": "Zachowaj oryginał",
+          "rejectPage": "Zachowaj oryginalną stronę {number}",
+          "rejected": "Zachowano oryginał",
+          "scope": "{count, plural, =0 {Wyprostuj i oczyść wszystkie strony} one {Wyprostuj i oczyść zaznaczoną stronę} few {Wyprostuj i oczyść # zaznaczone strony} many {Wyprostuj i oczyść # zaznaczonych stron} other {Wyprostuj i oczyść # zaznaczonych stron}}",
+          "unrecognized": "Strona nie została rozpoznana jako skan. Pozostaje bez zmian.",
+          "unrecognizedNoContent": "Na tej stronie nie znaleziono treści. Pozostaje bez zmian.",
+          "unrecognizedNoPage": "Nie udało się znaleźć krawędzi strony. Strona pozostaje bez zmian.",
+          "unrecognizedTooLarge": "Strona jest za duża, aby ją oczyścić. Pozostaje bez zmian.",
+          "use": "{count, plural, =0 {Użyj oczyszczonych stron} one {Użyj # oczyszczonej strony} few {Użyj # oczyszczonych stron} many {Użyj # oczyszczonych stron} other {Użyj # oczyszczonych stron}}"
+        },
         "crop": "Przytnij",
         "cropAdvanced": "Zaawansowane",
         "cropBottom": "Dół (mm)",
@@ -6541,7 +6618,10 @@
         "saveVersion": "Zapisz wersję",
         "selectAll": "Zaznacz wszystko",
         "selectPage": "Zaznacz stronę {number}",
+        "signAfterSave": "Zapisuje zmiany stron jako nową wersję, a następnie ją podpisuje",
+        "signSavedVersionMissing": "Nowa wersja została zapisana, ale nie udało się jej otworzyć do podpisu. Podpisz ją w podglądzie dokumentu.",
         "signatureWarning": "Edycja tego pliku PDF unieważni podpisy cyfrowe.",
+        "signatureWarningWithSign": "Edycja unieważnia istniejące podpisy cyfrowe. Podpisanie stąd najpierw zapisuje zmiany, a potem podpisuje nową wersję.",
         "sourceLimit": "Łączny rozmiar plików PDF nie może przekroczyć 100 MB.",
         "title": "Edytuj strony",
         "undo": "Cofnij edycję strony",

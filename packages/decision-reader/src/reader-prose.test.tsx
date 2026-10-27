@@ -5,6 +5,7 @@ import type {
   ParagraphBlock,
   ParagraphRole,
 } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 
 import { renderReaderFixture } from "./decision-text.test";
 import {
@@ -73,18 +74,25 @@ describe("running text alignment", () => {
     );
   });
 
+  /** Each reader, with the list scheme a statute reader draws its lists by. */
+  const READER_CORPORA = {
+    "case-law": { variant: "case-law" },
+    statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+  } as const;
+
   test("every paragraph takes its alignment from exactly one source", () => {
     // The prose class is unlayered CSS, so it would override a Tailwind
     // alignment utility on the same element rather than defer to it.
     const roles = [undefined, ...PARAGRAPH_ROLES];
-    for (const variant of ["case-law", "statute"] as const) {
+    for (const corpus of Object.values(READER_CORPORA)) {
+      const { variant } = corpus;
       for (const role of roles) {
         const markup = renderReaderFixture(
           <BlockRenderer
             activeMatchIndex={-1}
             block={paragraph(role)}
             rangesByPieceId={{}}
-            variant={variant}
+            {...corpus}
           />,
         );
         const [classes] = paragraphClasses(markup);
