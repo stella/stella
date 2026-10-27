@@ -413,6 +413,63 @@ test("offline closure inspects extensionless modules while preserving inert asse
   }
 });
 
+test("offline closure classifies text-suffixed modules by the import edge loader", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-loader-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    const payload = path.join(directory, "payload.txt");
+    writeFileSync(
+      entry,
+      [
+        "import defaultText from './payload.txt';",
+        "import explicitText from './payload.txt' with { type: 'text' };",
+        "import './payload.txt' with { type: 'js' };",
+        "await import('./payload.txt', { with: { type: 'js' } });",
+        "import data from './data.json' with { type: 'json' };",
+        "void defaultText; void explicitText; void data;",
+      ].join("\n"),
+    );
+    writeFileSync(payload, "export const request = Bun.fetch;");
+    writeFileSync(
+      path.join(directory, "data.json"),
+      JSON.stringify({ source: "Bun.spawn(['curl'])" }),
+    );
+
+    const violations = offlineImportGraphViolations({
+      entries: [entry],
+      repositoryRoot: directory,
+    });
+    expect(violations).toHaveLength(1);
+    expect(violations.at(0)?.message).toContain("payload.txt: Bun.fetch");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("offline closure rejects a dynamic import loader it cannot enumerate", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-loader-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    writeFileSync(
+      entry,
+      "const loader = 'js'; await import('./payload.txt', { with: { type: loader } });",
+    );
+    writeFileSync(
+      path.join(directory, "payload.txt"),
+      "export const value = 1;",
+    );
+
+    expect(
+      offlineImportGraphViolations({
+        entries: [entry],
+        repositoryRoot: directory,
+      }).at(0)?.message,
+    ).toContain("Import loader cannot be enumerated");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("a dynamic module allowance remains exact", () => {
   const source = "await import(target)";
   const directory = mkdtempSync(path.join(tmpdir(), "offline-dynamic-"));
