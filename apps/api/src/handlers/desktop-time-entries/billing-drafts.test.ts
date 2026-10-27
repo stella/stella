@@ -22,6 +22,7 @@ import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
@@ -65,19 +66,12 @@ beforeEach(() => {
     ],
   });
 });
-const body: DesktopBillingDraftRequest = {
-  entries: [
-    {
-      entryId: "entry_1",
-      matterId: MATTER_ID,
-      date: "2026-10-09",
-      timezone: "Europe/Prague",
-      durationMinutes: 30,
-      appNames: ["Editor"],
-      evidence: { documentNames: ["Agreement"], windowTitles: [] },
-    },
-  ],
-};
+const body = createDesktopBillingDraftRequest({
+  matterId: MATTER_ID,
+  entry: {
+    evidence: { documentNames: ["Agreement"], windowTitles: [] },
+  },
+});
 const context = {
   matters: [
     {

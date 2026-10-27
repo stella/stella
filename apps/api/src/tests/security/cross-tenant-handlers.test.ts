@@ -201,6 +201,7 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import type { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { createDesktopBillingDraftRequest } from "@/api/tests/helpers/desktop-billing-draft";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { serveForTest } from "@/api/tests/helpers/test-server";
@@ -3784,18 +3785,16 @@ const desktopDraftRequest = (matterId: string) =>
   new Request("http://localhost/drafts", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      entries: [
-        {
-          entryId: `selected-${matterId}`,
-          matterId,
+    body: JSON.stringify(
+      createDesktopBillingDraftRequest({
+        matterId,
+        entry: {
           date: DESKTOP_ENTRY.dateWorked,
           timezone: DESKTOP_ENTRY.timezoneId,
           durationMinutes: DESKTOP_ENTRY.durationMinutes,
-          appNames: ["Editor"],
         },
-      ],
-    }),
+      }),
+    ),
   });
 
 /** A request as the desktop app sends it: its HTTP client names itself on
