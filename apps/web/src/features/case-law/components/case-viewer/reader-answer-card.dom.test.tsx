@@ -18,6 +18,8 @@ const { cleanup, render, fireEvent, act, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { ReaderAnswerCard } = await import("./reader-answer-card");
 const { resolveReaderAnswerCitation } =
   await import("./reader-answer-citation.logic");
@@ -197,7 +199,9 @@ const mount = (
       timeZone="UTC"
     >
       <FormattingProvider locale={locale} timeZone="UTC">
-        <ReaderAnswerCard {...updated} />
+        <WebReaderPresentationProvider>
+          <ReaderAnswerCard {...updated} />
+        </WebReaderPresentationProvider>
       </FormattingProvider>
     </IntlProvider>
   );
@@ -212,15 +216,15 @@ test("citations preserve both decision and paragraph identity and each action ca
     ),
   ).toEqual(["paragraph", "decision"]);
   fireEvent.click(getByRole("button", { name: "Paragraph 5" }));
-  const decisionChip = getByRole("button", {
+  const decisionChip = getByRole("link", {
     name: "Synthetic Supreme Court, SYN 12/2026, Jan 12, 2026, paragraph 6",
   });
   expect(decisionChip.getAttribute("href")).toBe(
     `${citedDecision.readerUrl}#p-6`,
   );
-  fireEvent.click(decisionChip);
+  fireEvent.focus(decisionChip);
   fireEvent.click(
-    await findByRole("link", { name: messages.common.openInStella }),
+    await findByRole("button", { name: messages.common.openInSidePanel }),
   );
   const message = answer.messages.at(0);
   if (message === undefined) {
