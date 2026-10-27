@@ -192,6 +192,8 @@ test("citation previews cap block count and serialize within their derived byte 
       const text = fragment.repeat(8000);
       const heading = { id: text, anchorId: text, level: 1 as const, text };
       const result = projectProvisionPreview({
+        country: text,
+        url: text,
         documentId: id,
         language: text,
         anchorId: text,
@@ -264,6 +266,8 @@ test("reader plain text keeps literal markup and entities as text", () => {
       (tokens, repeat) => {
         const text = tokens.join("").repeat(repeat);
         const preview = projectProvisionPreview({
+          country: "CZE",
+          url: null,
           documentId: id,
           language: "cs",
           anchorId: "par_1",
