@@ -106,6 +106,7 @@
     "ai-provider-canary.yml/require-provider-coverage": "main",
     "cancel-stale-merge-groups.yml/cancel": "main",
     "release-tag.yml/tag": "main",
+    "release-tag.yml/finalize-eligibility": "main",
     "release-tag.yml/finalize": "main",
     "release-tag.yml/marketing-freshness": "main",
     "catalogue-upstream.yml/catalogue-upstream": "main",

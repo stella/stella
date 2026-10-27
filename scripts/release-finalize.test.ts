@@ -39,28 +39,14 @@ test("a missing RC performs no writes", () => {
   expect(proof.publications).toBe("");
 });
 
-test("an existing final tag reconciles an unpublished RC without pushing again", () => {
-  const proof = finalize({ finalTag: "candidate", rcPublication: "draft" });
-  expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
-  expect(proof.finalSha).toBe(proof.sha);
-  expect(proof.pushes).toBe("");
-  expect(proof.publications).toContain("release edit v1.2.3-rc.2");
-});
-
-test("an existing final tag and published RC perform no writes", () => {
-  const proof = finalize({ finalTag: "candidate", rcPublication: "published" });
-  expect(proof.result.exitCode, proof.result.stderr.toString()).toBe(0);
-  expect(proof.pushes).toBe("");
-  expect(proof.publications).toBe("");
-});
-
-test("an existing final tag on another SHA refuses RC publication", () => {
-  const proof = finalize({ finalTag: "previous", rcPublication: "draft" });
-  expect(proof.result.exitCode).not.toBe(0);
-  expect(proof.result.stderr.toString()).toContain(
-    "Final tag v1.2.3 does not target",
-  );
-  expect(proof.finalSha).not.toBe(proof.sha);
-  expect(proof.pushes).toBe("");
-  expect(proof.publications).toBe("");
-});
+for (const finalTag of ["candidate", "previous"] as const) {
+  test(`an existing final tag (${finalTag} SHA) refuses without writes`, () => {
+    const proof = finalize({ finalTag, rcPublication: "draft" });
+    expect(proof.result.exitCode).not.toBe(0);
+    expect(proof.result.stderr.toString()).toContain(
+      "Final tag v1.2.3 already exists",
+    );
+    expect(proof.pushes).toBe("");
+    expect(proof.publications).toBe("");
+  });
+}

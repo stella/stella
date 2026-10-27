@@ -44,10 +44,9 @@ permissions:
   issues: read
   pull-requests: read
 
-concurrency:
-  group: release-tag
-  cancel-in-progress: false
-
+# Concurrency is per tag-writing job: GitHub keeps only the newest pending run
+# of a group, so a workflow-level group would let any completed main run
+# supersede a pending candidate tag or finalization.
 jobs:
   tag:
     name: Push release candidate tag
@@ -55,6 +54,9 @@ jobs:
     runs-on: ubuntu-24.04
     environment: release-app
     timeout-minutes: 15
+    concurrency:
+      group: release-candidate-tag
+      cancel-in-progress: false
     outputs:
       sha: ${{ steps.candidate.outputs.sha }}
     steps:
@@ -185,20 +187,21 @@ jobs:
           git tag -a "$tag" "$RELEASE_SHA" -m "$tag"
           git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$tag"
 
-  finalize:
-    name: Finalize the proven release candidate
+  # Runs without the release environment. The source facts stay in the job
+  # condition; the script names every refusal, including those facts.
+  finalize-eligibility:
+    name: Decide whether the proof run finalizes a release candidate
     if: >-
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.event == 'workflow_dispatch' &&
       (github.event.workflow_run.path == '.github/workflows/deploy-staging.yml' ||
        github.event.workflow_run.path == '.github/workflows/main-heavy.yml' ||
-       github.event.workflow_run.path == '.github/workflows/main-pr-depth.yml') &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.conclusion == 'success'
+       github.event.workflow_run.path == '.github/workflows/main-pr-depth.yml')
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    environment: release-app
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.eligibility.outputs.sha }}
     steps:
       - name: Checkout trusted finalization tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -207,20 +210,29 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Read the exact proof commit from the trusted run title
-        id: proof
-        env:
-          RUN_TITLE: ${{ github.event.workflow_run.display_title }}
-        run: |
-          set -euo pipefail
-          if [[ "$RUN_TITLE" =~ ^(Staging\ release\ proof|Main\ heavy\ suites|Main\ PR-depth\ checks)\ ([0-9a-f]{40})$ ]]; then
-            echo "sha=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
-          else
-            echo "Not a release proof run."
-          fi
+      - name: Decide eligibility
+        id: eligibility
+        run: bash scripts/release-finalize-eligibility.sh "$GITHUB_EVENT_PATH" "$GITHUB_REPOSITORY" >> "$GITHUB_OUTPUT"
+
+  finalize:
+    name: Finalize the proven release candidate
+    needs: finalize-eligibility
+    if: needs.finalize-eligibility.outputs.sha != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release-app
+    concurrency:
+      group: release-finalize
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted finalization tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Mint App token
-        if: steps.proof.outputs.sha != ''
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
@@ -231,11 +243,10 @@ jobs:
           permission-contents: write
 
       - name: Move the final tag to the proven RC commit
-        if: steps.proof.outputs.sha != ''
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          RELEASE_SHA: ${{ steps.proof.outputs.sha }}
+          RELEASE_SHA: ${{ needs.finalize-eligibility.outputs.sha }}
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "stella-release-deployer[bot]"
