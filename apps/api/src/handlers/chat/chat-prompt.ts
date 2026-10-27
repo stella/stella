@@ -145,6 +145,7 @@ import {
 import { allowsDerivedAi } from "@/api/lib/legal-search/corpus-source";
 import { readCorpusPayloadOrFallback } from "@/api/lib/legal-search/corpus-storage";
 import { canonicalLegislationTextSource } from "@/api/lib/legal-search/legislation-canonical-source";
+import { legislationDocumentStatusToday } from "@/api/lib/legal-search/legislation-current-version";
 import {
   publishedLegislationDocumentFor,
   redistributableLegislationVersionFor,
@@ -2695,7 +2696,7 @@ export const buildActiveStatuteSection = async ({
                   documentType: legislationDocuments.documentType,
                   eli: legislationDocuments.eli,
                   language: legislationDocuments.language,
-                  status: legislationDocuments.status,
+                  status: legislationDocumentStatusToday,
                   title: legislationDocuments.title,
                   versionValidFrom: legislationDocuments.versionValidFrom,
                   versionValidTo: legislationDocuments.versionValidTo,
