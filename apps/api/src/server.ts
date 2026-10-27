@@ -346,11 +346,9 @@ const startServer = async (): Promise<void> => {
       startSchedulerLoop({
         registry: createSchedulerTaskRegistry(
           createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
-          {
-            refreshCaseLawCoverage: createCaseLawCoverageRefreshTask({
-              compute: computeCaseLawCoverageAnswer,
-            }),
-          },
+          createCaseLawCoverageRefreshTask({
+            compute: computeCaseLawCoverageAnswer,
+          }),
         ),
       }),
     logger,

@@ -1106,10 +1106,13 @@ describe("review organization reset task", () => {
       rlsDatabase: rlsDatabase(),
     });
     // Exercise the registered counting wrapper without a feature gate.
-    const task = createSchedulerTaskRegistry(async () => {}, {
-      refreshCaseLawCoverage: () => undefined,
-      resetReviewOrganization: reset,
-    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    const task = createSchedulerTaskRegistry(
+      async () => {},
+      () => undefined,
+      {
+        resetReviewOrganization: reset,
+      },
+    ).get(RESET_REVIEW_ORGANIZATION_TASK);
     if (task === undefined) {
       panic("The reset task must be registered without a feature gate");
     }
@@ -1148,14 +1151,17 @@ describe("review organization reset task", () => {
     });
 
     // With time billing back, the registered task completes the sample data.
-    const restored = createSchedulerTaskRegistry(async () => {}, {
-      refreshCaseLawCoverage: () => undefined,
-      resetReviewOrganization: createResetReviewOrganizationTask({
-        readConfig: () => config(fixture.reviewOrgId),
-        dependencies: resetDependencies,
-        rlsDatabase: rlsDatabase(),
-      }),
-    }).get(RESET_REVIEW_ORGANIZATION_TASK);
+    const restored = createSchedulerTaskRegistry(
+      async () => {},
+      () => undefined,
+      {
+        resetReviewOrganization: createResetReviewOrganizationTask({
+          readConfig: () => config(fixture.reviewOrgId),
+          dependencies: resetDependencies,
+          rlsDatabase: rlsDatabase(),
+        }),
+      },
+    ).get(RESET_REVIEW_ORGANIZATION_TASK);
     if (restored === undefined) {
       panic("The restored reset task must remain registered");
     }

@@ -305,17 +305,13 @@ const SCHEDULER_TASKS = {
 >;
 
 type SchedulerTaskRegistryOptions = {
-  refreshCaseLawCoverage: SchedulerTask;
   resetReviewOrganization?: SchedulerTask;
 };
 
-const schedulerTasks = ({
-  reapOwnerlessChatTurns,
-  refreshCaseLawCoverage,
-}: {
-  reapOwnerlessChatTurns: SchedulerTask;
-  refreshCaseLawCoverage: SchedulerTask;
-}) => ({
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
   [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
@@ -330,24 +326,17 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(
-    schedulerTasks({
-      reapOwnerlessChatTurns: noopTask,
-      refreshCaseLawCoverage: noopTask,
-    }),
-  ),
+  Object.keys(schedulerTasks(noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
-  options: SchedulerTaskRegistryOptions,
+  refreshCaseLawCoverage: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
     Object.entries(
-      schedulerTasks({
-        reapOwnerlessChatTurns,
-        refreshCaseLawCoverage: options.refreshCaseLawCoverage,
-      }),
+      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
     ).map(([name, registered]) => {
       const entry =
         name === RESET_REVIEW_ORGANIZATION_TASK

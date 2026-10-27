@@ -22,9 +22,7 @@ test("the complete scheduler registry counts each task invocation independently"
     queryCountLogger.logQuery("select 2", []);
     expect(currentQueryCount()).toBe(2);
   };
-  const registry = createSchedulerTaskRegistry(countedTask, {
-    refreshCaseLawCoverage: countedTask,
-  });
+  const registry = createSchedulerTaskRegistry(countedTask, countedTask);
   expect(new Set(registry.keys())).toEqual(
     new Set(REGISTERED_SCHEDULER_TASK_NAMES),
   );

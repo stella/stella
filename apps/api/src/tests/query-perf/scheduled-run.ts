@@ -89,11 +89,12 @@ export const measureScheduledJobRun = async ({
     return panic(`${jobId} runs ${job.task}, not ${taskName}`);
   }
   const task =
-    createSchedulerTaskRegistry(noopTask, {
-      refreshCaseLawCoverage: createCaseLawCoverageRefreshTask({
+    createSchedulerTaskRegistry(
+      noopTask,
+      createCaseLawCoverageRefreshTask({
         compute: computeCaseLawCoverageAnswer,
       }),
-    }).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
+    ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   const captured: CapturedStatement[] = [];
   const logger: Logger = {
     logQuery: (text, params) => {
