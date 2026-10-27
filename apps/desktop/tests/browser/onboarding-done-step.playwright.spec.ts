@@ -32,7 +32,7 @@ test.afterEach(async ({ page }) => {
   expect(await unexpectedNativeCalls(page)).toEqual([]);
 });
 
-const readDrawing = (page: Page) =>
+const readDrawing = async (page: Page) =>
   page.evaluate(() => {
     const icon = document.querySelector("[data-tray-icon]");
     const bar = document.querySelector("[data-tray-bar]");
