@@ -5482,6 +5482,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -12143,6 +12144,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
@@ -15979,6 +15981,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "status": {
           "enum": [
             "draft",
+            "submitted",
             "approved",
             "billed",
             "written_off"
