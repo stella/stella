@@ -19,6 +19,7 @@ import {
 import { type MyTimeEntry, MyWeekDay } from "@/features/my-week/my-week-day";
 import { MyWeekHeader } from "@/features/my-week/my-week-header";
 import {
+  loadedMinutes,
   pendingCountByDay,
   shiftWeeks,
   weekOf,
@@ -146,6 +147,11 @@ export const MyWeek = ({
   const entries = pages
     .flatMap((page) => page.items)
     .filter((entry) => entry.dateWorked === date);
+  const loggedMinutes = totals.byDay.get(date) ?? 0;
+  // The week's entries are paged; a day is complete once its loaded entries
+  // add up to the server's total for it, or no page is left.
+  const entriesComplete =
+    !entriesQuery.hasNextPage || loadedMinutes(entries) >= loggedMinutes;
   const suggestionDay = suggestionRange.days.find((day) => day.date === date);
   const suggestions = suggestionDay === undefined ? [] : suggestionDay.matters;
   const matterId = dialogMatterId(dialog);
@@ -219,7 +225,8 @@ export const MyWeek = ({
           notes={refusalNotes}
           date={date}
           entries={entries}
-          loggedMinutes={totals.byDay.get(date) ?? 0}
+          entriesComplete={entriesComplete}
+          loggedMinutes={loggedMinutes}
           onAccept={(matter, suggestion, narrative) =>
             detached(
               actions.fromRow(

@@ -124,12 +124,14 @@ const serveWeek = ({
   suggestions,
   refusals = {},
   pendingCount = 0,
+  pageSize = 200,
 }: {
   entries: MyTimeEntry[];
   /** Drafts the fake API refuses to submit, with the reason it gives. */
   refusals?: Record<string, TimeSubmitRefusal>;
   /** Submitted entries waiting for the signed-in approver. */
   pendingCount?: number;
+  pageSize?: number;
   suggestions: {
     matter: typeof LEASE_MATTER;
     date: string;
@@ -144,14 +146,18 @@ const serveWeek = ({
   const inRange = (date: string, start: string, end: string) =>
     date >= start && date <= end;
 
-  const entryPage = (start: string, end: string) => {
-    const items = entries.filter((entry) =>
+  const entryPage = (start: string, end: string, cursor: string | null) => {
+    const inWeek = entries.filter((entry) =>
       inRange(entry.dateWorked, start, end),
     );
-    const days = [...new Set(items.map((entry) => entry.dateWorked))]
+    const offset = cursor === null ? 0 : Number(cursor);
+    const items = inWeek.slice(offset, offset + pageSize);
+    const more = offset + pageSize < inWeek.length;
+    // Day totals cover the whole week on every page, as the API's do.
+    const days = [...new Set(inWeek.map((entry) => entry.dateWorked))]
       .toSorted()
       .map((dateWorked) => {
-        const day = items.filter((entry) => entry.dateWorked === dateWorked);
+        const day = inWeek.filter((entry) => entry.dateWorked === dateWorked);
         return {
           dateWorked,
           loggedMinutes: day.reduce(
@@ -167,8 +173,8 @@ const serveWeek = ({
     const loggedMinutes = days.reduce((sum, day) => sum + day.loggedMinutes, 0);
     return {
       items,
-      nextCursor: null,
-      limit: 200,
+      nextCursor: more ? String(offset + pageSize) : null,
+      limit: pageSize,
       days,
       loggedTodayMinutes: loggedMinutes,
       dailyTargetMinutes: null,
@@ -317,7 +323,7 @@ const serveWeek = ({
         url.searchParams.get("date") ?? url.searchParams.get("startDate") ?? "";
       const end = url.searchParams.get("endDate") ?? start;
       if (request.method === "GET" && path === "/time-entries/me") {
-        return json(entryPage(start, end));
+        return json(entryPage(start, end, url.searchParams.get("cursor")));
       }
       if (request.method === "GET" && path === "/time-entries/me/suggestions") {
         return json(suggestionRange(start, end));
@@ -542,6 +548,41 @@ describe("my week", () => {
       durationMinutes: 45,
       narrativeLanguage: "cs",
     });
+  });
+
+  test("a day whose entries are on a later page is not shown as empty", async () => {
+    const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
+    serveWeek({
+      entries: [
+        draftEntry(),
+        draftEntry({
+          id: "entry-2",
+          dateWorked: tuesday,
+          narrative: "Draft the termination notice",
+        }),
+      ],
+      suggestions: [],
+      pageSize: 1,
+    });
+    mount(tuesday);
+
+    expect(
+      await screen.findByRole("button", { name: messages.common.loadMore }),
+    ).toBeTruthy();
+    expect(screen.queryByText(messages.timesheets.week.noActivity)).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.loadMore }),
+      );
+    });
+
+    expect(
+      await screen.findByText("Draft the termination notice"),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText(messages.timesheets.week.allLogged),
+    ).toBeTruthy();
   });
 
   test("only drafts are editable from the week", async () => {
