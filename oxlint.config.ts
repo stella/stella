@@ -1839,6 +1839,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/query-data-requires-state.ts",
     "./.oxlint-plugins/no-strict-route-read-in-chrome.ts",
+    "./.oxlint-plugins/no-route-context-in-panel-tabs.ts",
     "./.oxlint-plugins/require-schema-form-options.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
@@ -4869,6 +4870,26 @@ const config = defineConfig({
       ],
       rules: {
         "no-strict-route-read-in-chrome/no-strict-route-read-in-chrome":
+          "error",
+      },
+    },
+    {
+      // Tabs can remain open while another route family is active. Context
+      // belongs to shared providers, including for tabs owned outside inspector.
+      files: [
+        ".oxlint-plugins/__fixtures__/no-route-context-in-panel-tabs.fixture.tsx",
+        "apps/web/src/**/*inspector*.tsx",
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/components/inspector/**/*.ts",
+        "apps/web/src/features/knowledge/playbook-editor/playbook-draft-view.tsx",
+        "apps/web/src/features/knowledge/views/tools/tool-detail-panel-view.tsx",
+        "apps/web/src/components/workspaces/tasks/task-detail-panel.tsx",
+        "apps/web/src/components/workspaces/matter-metadata-sheet.tsx",
+        "apps/web/src/components/workspaces/hooks/use-start-workflow.ts",
+        "apps/web/src/components/workspaces/hooks/use-create-b-boxes.ts",
+      ],
+      rules: {
+        "no-route-context-in-panel-tabs/no-route-context-in-panel-tabs":
           "error",
       },
     },

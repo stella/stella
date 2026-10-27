@@ -124,7 +124,7 @@ import { useTemplateNavStore } from "@/stores/knowledge/template-nav-store";
 const STUDIO_FACETS = ["fields", "guidance", "history", "fill"] as const;
 
 type StudioFacet = (typeof STUDIO_FACETS)[number];
-type TemplateStudioPayload = { templateId: string };
+export type TemplateStudioPayload = { templateId: string };
 
 function TemplateStudioInspectorView({
   tab,
