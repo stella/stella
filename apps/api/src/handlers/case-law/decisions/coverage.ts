@@ -300,7 +300,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         reportedTotalOrigin: caseLawSources.reportedTotalOrigin,
         storedTotal: caseLawSources.storedTotal,
         storedTotalAsOf: caseLawSources.storedTotalAsOf,
-        courts: sql<CoverageCourt[] | null>`(
+        courts: sql<CoverageCourt[]>`coalesce((
           WITH population AS (
             SELECT f.value AS court, f.total AS decisions
             FROM ${caseLawBrowseFacetCounts} AS f
@@ -334,7 +334,7 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
           SELECT jsonb_agg(jsonb_build_object('court', court, 'decisions', decisions)
             ORDER BY decisions DESC, court ASC)
           FROM bounded
-        )`,
+        ), '[]'::jsonb)`,
         decisionYearFrom: sql<number | null>`(
           SELECT extract(year FROM coverage_decisions.decision_date)::integer
           FROM ${publishedCaseLawDecisions} AS coverage_decisions
@@ -374,18 +374,14 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         pendingTextCount,
       ]),
     );
-    return sources.map((source) => {
-      const courts = source.courts ?? [];
-      return {
-        ...source,
-        courts,
-        pendingTextCount: countsBySource.get(source.id) ?? 0,
-        publishedDecisions: courts.reduce(
-          (total, row) => total + row.decisions,
-          0,
-        ),
-      };
-    });
+    return sources.map((source) => ({
+      ...source,
+      pendingTextCount: countsBySource.get(source.id) ?? 0,
+      publishedDecisions: source.courts.reduce(
+        (total, row) => total + row.decisions,
+        0,
+      ),
+    }));
   },
 );
 
