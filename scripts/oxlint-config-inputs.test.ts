@@ -82,7 +82,7 @@ test("every named lint cache input is loaded or read by the lint", () => {
 // Oxlint runs JS plugins under Node, whose ES module loader resolves a
 // relative import only by its full file name; an extensionless one stops the
 // whole lint from loading.
-test("every relative import the lint plugins load names its file", () => {
+test("every relative import in the lint module closure names its file", () => {
   expect(closure.relativeImports.length).toBeGreaterThan(100);
   expect(
     closure.relativeImports
