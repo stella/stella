@@ -147,10 +147,8 @@ const appConfigBase = ({
   },
   runtimeVersion,
   updates: updatesFor(variant, signingCertificatePresent),
-  // Scene life cycle: iOS 27 asserts at launch without it.
   plugins: [
     "expo-router",
-    "./plugins/with-scene-lifecycle.ts",
     // DM Sans, the web's typeface, embedded in the build.
     [
       "expo-font",

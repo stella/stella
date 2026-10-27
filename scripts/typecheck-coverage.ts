@@ -96,10 +96,6 @@ const OXC_PROJECT_PROXIES = [
     target: "apps/mobile/tsconfig.scripts.json",
   },
   {
-    config: "apps/mobile/plugins/tsconfig.json",
-    target: "apps/mobile/tsconfig.scripts.json",
-  },
-  {
     config: "apps/web/scripts/tsconfig.json",
     target: "tsconfig.tooling.json",
   },
