@@ -1027,6 +1027,12 @@
       "matchedIn": "Correspondência em {language}"
     },
     "loadingMore": "Carregando mais...",
+    "marginFilter": {
+      "label": "Filtro de dispositivos citados",
+      "paragraph": "{count, plural, =0 {Nenhum dispositivo citado no ¶{paragraph}} one {# dispositivo citado no ¶{paragraph}} many {# de dispositivos citados no ¶{paragraph}} other {# dispositivos citados no ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Nenhum dispositivo citado na seleção} one {# dispositivo citado na seleção} many {# de dispositivos citados na seleção} other {# dispositivos citados na seleção}}",
+      "unnumberedParagraph": "{count, plural, =0 {Nenhum dispositivo citado neste parágrafo} one {# dispositivo citado neste parágrafo} many {# de dispositivos citados neste parágrafo} other {# dispositivos citados neste parágrafo}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# decisão já estava salva aqui} other {# decisões já estavam salvas aqui}}",
       "empty": "Ainda não há jurisprudência salva neste caso.",
@@ -4300,7 +4306,12 @@
       "styleHighlight": "Destaque",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartilhado com a organização"
+      "visibilityShared": "Compartilhado com a organização",
+      "visibilitySharedWithMatter": "Compartilhado com o caso"
+    },
+    "contents": {
+      "aiSection": "{section} (seção gerada por IA)",
+      "headingWithAiSection": "{heading} (seção gerada por IA: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Citação em bloco com referência",
@@ -6464,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo escuro",
+      "annotations": {
+        "commentedBy": "Comentário de {name}",
+        "detachedHeading": "Fora desta versão",
+        "detachedOtherVersion": "Criado na versão {version}; a página agora diz outra coisa.",
+        "detachedTextChanged": "Estas palavras não estão mais na página {page}.",
+        "empty": "Selecione palavras no documento e escolha Comentário.",
+        "highlightedBy": "Destacado por {name}",
+        "refusedNoText": "Esta página não tem texto para marcar. Execute primeiro o reconhecimento de texto no documento.",
+        "refusedNotFound": "Estas palavras não foram encontradas no texto da página. Selecione-as novamente.",
+        "refusedTooLong": "Este trecho é longo demais para marcar. Selecione um mais curto."
+      },
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes do documento",
       "evidence": "Justificativa",

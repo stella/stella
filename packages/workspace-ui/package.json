@@ -37,6 +37,7 @@
     "./feature-previews": "./src/feature-previews/index.ts",
     "./field-value": "./src/field-value.tsx",
     "./field-value-logic": "./src/field-value-logic.ts",
+    "./formatting": "./src/formatting.tsx",
     "./kanban-grouping-picker": "./src/kanban-grouping-picker.tsx",
     "./kanban-view": "./src/kanban-view.ts",
     "./property-icon": "./src/property-icon.tsx",
@@ -85,7 +86,8 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   },
   "peerDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",

@@ -1027,6 +1027,12 @@
       "matchedIn": "Zhoda v jazyku {language}"
     },
     "loadingMore": "Načítavajú sa ďalšie...",
+    "marginFilter": {
+      "label": "Filter citovaných ustanovení",
+      "paragraph": "{count, plural, =0 {V ¶{paragraph} nie je citované žiadne ustanovenie} one {# ustanovenie citované v ¶{paragraph}} few {# ustanovenia citované v ¶{paragraph}} many {# ustanovenia citovaného v ¶{paragraph}} other {# ustanovení citovaných v ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Vo výbere nie je citované žiadne ustanovenie} one {# ustanovenie citované vo výbere} few {# ustanovenia citované vo výbere} many {# ustanovenia citovaného vo výbere} other {# ustanovení citovaných vo výbere}}",
+      "unnumberedParagraph": "{count, plural, =0 {V tomto odseku nie je citované žiadne ustanovenie} one {# ustanovenie citované v tomto odseku} few {# ustanovenia citované v tomto odseku} many {# ustanovenia citovaného v tomto odseku} other {# ustanovení citovaných v tomto odseku}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# rozhodnutie tu už bolo uložené} few {# rozhodnutia tu už boli uložené} other {# rozhodnutí tu už bolo uložených}}",
       "empty": "V tomto spise zatiaľ nie je uložená žiadna judikatúra.",
@@ -4300,7 +4306,12 @@
       "styleHighlight": "Zvýraznenie",
       "styleSquiggly": "Vlnovka",
       "styleStrikethrough": "Prečiarknutie",
-      "visibilityShared": "Zdieľané s organizáciou"
+      "visibilityShared": "Zdieľané s organizáciou",
+      "visibilitySharedWithMatter": "Zdieľané so spisom"
+    },
+    "contents": {
+      "aiSection": "{section} (časť vygenerovaná AI)",
+      "headingWithAiSection": "{heading} (časť vygenerovaná AI: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokový citát s citáciou",
@@ -6464,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Prispôsobiť stránky pre tmavý režim",
+      "annotations": {
+        "commentedBy": "Komentár: {name}",
+        "detachedHeading": "Mimo túto verziu",
+        "detachedOtherVersion": "Vytvorené vo verzii {version}; text strany sa medzitým zmenil.",
+        "detachedTextChanged": "Tieto slová už na strane {page} nie sú.",
+        "empty": "Označte slová v dokumente a zvoľte Komentár.",
+        "highlightedBy": "Zvýraznenie: {name}",
+        "refusedNoText": "Na tejto strane nie je text na označenie. Najprv na dokumente spustite rozpoznávanie textu.",
+        "refusedNotFound": "Tieto slová sa v texte strany nenašli. Označte ich znova.",
+        "refusedTooLong": "Táto pasáž je na označenie príliš dlhá. Vyberte kratšiu."
+      },
       "backToPeek": "Späť do náhľadu",
       "entitySidebar": "Detaily dokumentu",
       "evidence": "Príloha",

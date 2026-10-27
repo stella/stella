@@ -1027,6 +1027,12 @@
       "matchedIn": "Atitikmuo {language} kalba"
     },
     "loadingMore": "Kraunama daugiau...",
+    "marginFilter": {
+      "label": "Cituojamų nuostatų filtras",
+      "paragraph": "{count, plural, =0 {¶{paragraph} necituojama jokių nuostatų} one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
+      "selection": "{count, plural, =0 {Pažymėtame tekste necituojama jokių nuostatų} one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
+      "unnumberedParagraph": "{count, plural, =0 {Šioje pastraipoje necituojama jokių nuostatų} one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
       "empty": "Šioje byloje kol kas neišsaugota jokios teismų praktikos.",
@@ -4300,7 +4306,12 @@
       "styleHighlight": "Paryškinimas",
       "styleSquiggly": "Banguota linija",
       "styleStrikethrough": "Perbraukimas",
-      "visibilityShared": "Bendrinama su organizacija"
+      "visibilityShared": "Bendrinama su organizacija",
+      "visibilitySharedWithMatter": "Bendrinama su byla"
+    },
+    "contents": {
+      "aiSection": "{section} (DI sugeneruota dalis)",
+      "headingWithAiSection": "{heading} (DI sugeneruota dalis: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Blokinė citata su nuoroda",
@@ -6464,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",
+      "annotations": {
+        "commentedBy": "Komentaras: {name}",
+        "detachedHeading": "Ne šioje versijoje",
+        "detachedOtherVersion": "Sukurta {version} versijoje; puslapio tekstas nuo tada pasikeitė.",
+        "detachedTextChanged": "Šių žodžių {page} puslapyje nebėra.",
+        "empty": "Pažymėkite dokumento žodžius ir pasirinkite Komentaras.",
+        "highlightedBy": "Paryškino: {name}",
+        "refusedNoText": "Šiame puslapyje nėra teksto, kurį būtų galima pažymėti. Pirmiausia paleiskite dokumento teksto atpažinimą.",
+        "refusedNotFound": "Šių žodžių puslapio tekste nerasta. Pažymėkite juos dar kartą.",
+        "refusedTooLong": "Ši ištrauka per ilga pažymėti. Pasirinkite trumpesnę."
+      },
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Dokumento informacija",
       "evidence": "Įrodymas",

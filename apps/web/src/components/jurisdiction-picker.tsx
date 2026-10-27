@@ -13,7 +13,7 @@ import { cn } from "@stll/ui/utils";
 
 import { filterJurisdictionOptions } from "@/components/jurisdiction-picker.logic";
 import Tooltip from "@/components/tooltip";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
@@ -36,7 +36,7 @@ export const JurisdictionPicker = ({
 }: JurisdictionPickerProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [query, setQuery] = useState("");
   const selectedCodes = selected.map(
     (jurisdiction) => jurisdiction.countryCode,

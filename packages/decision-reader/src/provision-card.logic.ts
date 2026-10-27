@@ -77,6 +77,8 @@ type ProvisionCitation = { id: string; target: CitedProvisionTarget };
  * first citation's, stable while the paragraph is.
  */
 export type ProvisionCardCitations = {
+  /** Every citation the card stands for, repeats included, in text order. */
+  citationIds: string[];
   citations: CitedProvisionTarget[];
   id: string;
   provision: ProvisionInVersionKey;
@@ -99,9 +101,10 @@ export const provisionCardsOf = (
       isSameProvisionInVersion(candidate.provision, provision),
     );
     if (card === undefined) {
-      cards.push({ citations: [target], id, provision });
+      cards.push({ citationIds: [id], citations: [target], id, provision });
       continue;
     }
+    card.citationIds.push(id);
     if (
       card.citations.some((cited) => citedAnchor(cited) === citedAnchor(target))
     ) {

@@ -2,11 +2,16 @@ import { createRef } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { Result } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "https://app.example.test/law" });
 const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
