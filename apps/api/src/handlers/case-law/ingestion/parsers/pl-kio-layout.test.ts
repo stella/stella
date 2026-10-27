@@ -140,6 +140,30 @@ describe("reading the converter's layout", () => {
     expect(textWithWeight("400")).toBe(`${"W".repeat(20)}Aaaa nnnnnn`);
   });
 
+  test("paragraph breaks preserve their enclosing inline formatting", () => {
+    const $ = cheerio.load(
+      "<p><span>Introductory text<br>1. First point<br>2. Second point</span></p>",
+    );
+
+    readPlKioLayout($);
+
+    expect($("p").length).toBe(3);
+    expect(
+      $("p")
+        .toArray()
+        .map((paragraph) => $(paragraph).text()),
+    ).toEqual(["Introductory text", "1. First point", "2. Second point"]);
+    expect(
+      $("p")
+        .toArray()
+        .map((paragraph) => $(paragraph).html()),
+    ).toEqual([
+      "<span>Introductory text</span>",
+      "<span>1. First point</span>",
+      "<span>2. Second point</span>",
+    ]);
+  });
+
   test("a paragraph runs on across a page only when page furniture alone lies between", () => {
     const $ = cheerio.load(
       [

@@ -705,11 +705,28 @@ const joinerOf = (previous: BlockLine, line: BlockLine): string =>
 
 /** Move everything after `br` into a new block of the same kind, after it. */
 const splitAt = ($: CheerioAPI, br: Element): void => {
-  const block = br.parent;
+  const ancestors: Element[] = [];
+  let block = br.parent;
+  while (block !== null && isTag(block) && block.name !== "p") {
+    ancestors.push(block);
+    block = block.parent;
+  }
   if (block === null || !isTag(block) || block.name !== "p") {
     return;
   }
-  const moved = block.children.slice(block.children.indexOf(br) + 1);
+
+  let branch: AnyNode = br;
+  let moved: AnyNode[] = [];
+  for (const ancestor of ancestors) {
+    const reopened = new Element(ancestor.name, { ...ancestor.attribs }, []);
+    $(reopened).append(
+      moved,
+      ancestor.children.slice(ancestor.children.indexOf(branch) + 1),
+    );
+    moved = [reopened];
+    branch = ancestor;
+  }
+  moved.push(...block.children.slice(block.children.indexOf(branch) + 1));
   const opened = new Element("p", { ...block.attribs }, []);
   $(block).after(opened);
   $(opened).append(moved);
