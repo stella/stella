@@ -4,8 +4,11 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
+// Other test files share Bun's module registry and the event SDK imports core.
+const actualCore = { ...(await import("@tauri-apps/api/core")) };
 const pending: ReturnType<typeof Promise.withResolvers<unknown>>[] = [];
 await mock.module("@tauri-apps/api/core", () => ({
+  ...actualCore,
   invoke: async (command: string) => {
     if (command === "desktop_report_error") {
       return undefined;
@@ -18,6 +21,8 @@ await mock.module("@tauri-apps/api/core", () => ({
     return await request.promise;
   },
 }));
+
+const sdkEvent = await import("@tauri-apps/api/event");
 
 const { act, cleanup, render } = await import("@testing-library/react");
 const { flushSync } = await import("react-dom");
@@ -43,6 +48,15 @@ afterEach(() => {
 afterAll(async () => {
   mock.restore();
   await GlobalRegistrator.unregister();
+});
+
+test("the native command mock preserves exports required by the event SDK", async () => {
+  const mockedCore = await import("@tauri-apps/api/core");
+  expect(Object.keys(mockedCore).toSorted()).toEqual(
+    Object.keys(actualCore).toSorted(),
+  );
+  expect(mockedCore.transformCallback).toBe(actualCore.transformCallback);
+  expect(sdkEvent.listen).toBeFunction();
 });
 
 test("a settings validation continuation cannot restore a disabled account's response", async () => {
