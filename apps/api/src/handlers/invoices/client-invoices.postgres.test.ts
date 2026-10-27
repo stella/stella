@@ -74,6 +74,7 @@ import {
   NO_DB,
   type TestHandlerContextOverrides,
 } from "@/api/tests/helpers/handler-context";
+import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 import { clientInvoicePrefillScalingScenario } from "@/api/tests/read-scaling/client-invoice-prefill";
@@ -107,9 +108,7 @@ if (!databaseUrl || !runPostgres) {
 
     cleanUp(async () => {
       if (orgIds.length > 0) {
-        await db
-          .delete(invoices)
-          .where(inArray(invoices.organizationId, orgIds));
+        await deleteMatterBillingRecords(db, { organizationIds: orgIds });
         await db
           .delete(workspaces)
           .where(inArray(workspaces.organizationId, orgIds));
