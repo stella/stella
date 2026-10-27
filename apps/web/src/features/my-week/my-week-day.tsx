@@ -33,6 +33,8 @@ type MyWeekDayProps = SuggestionActions & {
   date: string;
   loggedMinutes: number;
   entries: MyTimeEntry[];
+  /** False while some of the day's entries sit on week pages not yet loaded. */
+  entriesComplete: boolean;
   suggestions: MySuggestionMatter[];
   busyFingerprints: ReadonlySet<string>;
   canDecide: boolean;
@@ -152,6 +154,7 @@ export const MyWeekDay = ({
   date,
   loggedMinutes,
   entries,
+  entriesComplete,
   suggestions,
   busyFingerprints,
   canDecide,
@@ -198,7 +201,7 @@ export const MyWeekDay = ({
           ))}
         </ul>
       )}
-      {!pending && (
+      {!pending && entriesComplete && (
         <p className="text-muted-foreground rounded-lg border border-dashed py-8 text-center text-sm">
           {entries.length === 0 ? t("noActivity") : t("allLogged")}
         </p>
