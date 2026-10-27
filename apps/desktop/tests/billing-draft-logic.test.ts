@@ -175,14 +175,11 @@ describe("draft request", () => {
   });
 });
 
-const PARTITION_PROPERTY =
-  "billing draft range partitions conserve time, keep order and never overlap";
-
 test(
-  PARTITION_PROPERTY,
+  "billing draft range partitions conserve time, keep order and never overlap",
   () => {
     assertProperty(
-      PARTITION_PROPERTY,
+      "billing draft range partitions conserve time, keep order and never overlap",
       fc.property(
         fc
           .array(
