@@ -16,6 +16,8 @@ import {
   fields,
   fileComparisonUploads,
   folioCollabRooms,
+  invoiceLines,
+  invoices,
   pendingUploads,
   propertyDependencies,
   styleSets,
@@ -121,6 +123,43 @@ export class WorkspaceStorageTeardownBoundError extends TaggedError(
   message: string;
   workspaceId: SafeId<"workspace">;
 }> {}
+
+export class WorkspaceBillingHistoryError extends TaggedError(
+  "WorkspaceBillingHistoryError",
+)<{
+  message: string;
+  workspaceId: SafeId<"workspace">;
+}> {}
+
+// These rows retain their matter identity and billing snapshots. The same
+// policy drives the deletion fence and the foreign-key coverage census.
+export const WORKSPACE_DELETION_RETAINED_TABLES = [
+  invoices,
+  invoiceLines,
+] as const;
+
+/**
+ * The matter still has rows that outlive it. The deletion fence reads this
+ * inside its status transition, under the matter row lock, so concurrent
+ * billing inserts cannot pass their foreign-key check until it completes.
+ */
+export const workspaceRetainsBillingHistory = ({
+  organizationId,
+  workspaceId,
+}: {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+}) =>
+  sql`EXISTS (${sql.join(
+    WORKSPACE_DELETION_RETAINED_TABLES.map(
+      (table) => sql`
+        SELECT 1 FROM ${table}
+        WHERE ${table.workspaceId} = ${workspaceId}
+          AND ${table.organizationId} = ${organizationId}
+      `,
+    ),
+    sql` UNION ALL `,
+  )})`;
 
 class WorkspaceStorageTeardownStateError extends TaggedError(
   "WorkspaceStorageTeardownStateError",

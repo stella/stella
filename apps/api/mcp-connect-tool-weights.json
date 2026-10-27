@@ -257,9 +257,9 @@
       "name": "list_time_entries",
       "nameChars": 17,
       "descriptionChars": 587,
-      "inputSchemaChars": 1585,
-      "totalChars": 2189,
-      "estimatedTokens": 862
+      "inputSchemaChars": 1597,
+      "totalChars": 2201,
+      "estimatedTokens": 867
     },
     {
       "name": "lookup_business_registry",
@@ -552,10 +552,10 @@
     {
       "name": "search_case_law",
       "nameChars": 15,
-      "descriptionChars": 799,
-      "inputSchemaChars": 4940,
-      "totalChars": 5754,
-      "estimatedTokens": 2330
+      "descriptionChars": 499,
+      "inputSchemaChars": 5147,
+      "totalChars": 5661,
+      "estimatedTokens": 2316
     },
     {
       "name": "search_legislation",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127472,
-    "estimatedTokens": 50515
+    "characters": 127391,
+    "estimatedTokens": 50506
   }
 }

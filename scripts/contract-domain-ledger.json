@@ -1080,10 +1080,6 @@
     "reason": "Existing CREATABLE_CONTENT_TYPES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/workspaces/table/find-highlight.logic.test.ts::<module>::minLength:1::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/components/workspaces/table/workspace-table/skeleton-rows.logic.ts::SKELETON_ROW_KEYS::domain:[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\",\"g\",\"h\",\"i\",\"j\",\"k\",\"l\"]::1",
     "reason": "Existing SKELETON_ROW_KEYS domain; contract ownership pending migration."
   },

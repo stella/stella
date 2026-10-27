@@ -84,6 +84,7 @@ export const authorizeDesktopLinkGrant = async (
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop account is unavailable",
         cause,
       }),

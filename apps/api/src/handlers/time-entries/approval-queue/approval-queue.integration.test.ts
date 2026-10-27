@@ -26,6 +26,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
@@ -47,6 +48,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import submit from "../me/submissions/create";
 import updateTimeEntry from "../update";
 import approve from "./approve";
 import list from "./list";
@@ -57,6 +59,7 @@ type ApproveCtx = Parameters<typeof approve.handler>[0];
 type ListCtx = Parameters<typeof list.handler>[0];
 type ReturnCtx = Parameters<typeof returnEntry.handler>[0];
 type UpdateCtx = Parameters<typeof updateTimeEntry.handler>[0];
+type SubmitCtx = Parameters<typeof submit.handler>[0];
 let db: TestDatabase;
 let ids: TestIds;
 const entryIds: SafeId<"timeEntry">[] = [];
@@ -147,6 +150,8 @@ const seedEntry = async (
     rateAtEntry: cents(0),
     currency: "USD",
     narrative: "Recorded work",
+    // Entries reach an approver once their timekeeper submits them.
+    status: "submitted",
     ...overrides,
   });
   entryIds.push(id);
@@ -167,7 +172,7 @@ const context = (actor = ids.userA2, role: "member" | "owner" = "member") => {
     });
   return {
     request,
-    route: "/time-entries/approval-queue",
+    route: "/v1/time-entries/approval-queue" satisfies ApiRoutePath,
     session: { activeOrganizationId: ids.orgA },
     user: { id: actor },
     memberRole: sessionMemberRole(role),
@@ -197,6 +202,13 @@ const listFor = async (
   actor = ids.userA2,
   role: "member" | "owner" = "member",
 ) => await list.handler(asTestRaw<ListCtx>({ ...context(actor, role), query }));
+const submitFor = async (actor: SafeId<"user">, approveOwn = false) =>
+  await submit.handler(
+    asTestRaw<SubmitCtx>({
+      ...context(actor),
+      body: { startDate: DAY, endDate: DAY, approve: approveOwn },
+    }),
+  );
 const stored = async (id: SafeId<"timeEntry">) =>
   await db.query.timeEntries.findFirst({ where: { id: { eq: id } } });
 
@@ -247,7 +259,7 @@ describe("approval queue authorization", () => {
         { id: unassigned, status: "refused" },
       ],
     });
-    expect((await stored(assigned))?.status).toBe("draft");
+    expect((await stored(assigned))?.status).toBe("submitted");
     expect(await approveFor([unassigned], ids.userAdmin, "owner")).toEqual({
       results: [{ id: unassigned, status: "approved" }],
     });
@@ -285,8 +297,8 @@ describe("approval queue authorization", () => {
         reason: expect.any(String),
       });
     }
-    expect((await stored(foreign))?.status).toBe("draft");
-    expect((await stored(otherApprover))?.status).toBe("draft");
+    expect((await stored(foreign))?.status).toBe("submitted");
+    expect((await stored(otherApprover))?.status).toBe("submitted");
     expect(await returnFor(otherApprover, "Please revise")).toMatchObject({
       code: 409,
     });
@@ -336,6 +348,17 @@ describe("return and reapproval lifecycle", () => {
       narrative: "Clarified work",
       returnComment: "Please clarify the work",
       returnedAt: returned?.returnedAt,
+    });
+    // A returned draft goes back through its timekeeper before approval.
+    expect(await approveFor([id])).toEqual({
+      results: [{ id, status: "refused", reason: "not_submitted" }],
+    });
+    expect(await submitFor(ids.userA1)).toEqual({
+      results: [{ id, status: "submitted" }],
+    });
+    expect(await stored(id)).toMatchObject({
+      status: "submitted",
+      returnComment: "Please clarify the work",
     });
     expect(await approveFor([id])).toEqual({
       results: [{ id, status: "approved" }],
@@ -443,7 +466,7 @@ describe("approval lifecycle guards", () => {
     expect(await returnFor(approvedId, "Please revise")).toMatchObject({
       code: 409,
     });
-    expect((await stored(id))?.status).toBe("draft");
+    expect((await stored(id))?.status).toBe("submitted");
     expect((await stored(approvedId))?.status).toBe("approved");
   });
 
@@ -480,8 +503,8 @@ describe("approval lifecycle guards", () => {
         (row) => row.status === "refused" && row.reason === "running_timer",
       ),
     ).toBe(true);
-    expect((await stored(own))?.status).toBe("draft");
-    expect((await stored(other))?.status).toBe("draft");
+    expect((await stored(own))?.status).toBe("submitted");
+    expect((await stored(other))?.status).toBe("submitted");
   });
 });
 
@@ -787,7 +810,7 @@ describe("internal work approvals", () => {
     expect(await approveFor([unassigned], ids.userAdmin, "owner")).toEqual({
       results: [{ id: unassigned, status: "approved" }],
     });
-    expect((await stored(foreign))?.status).toBe("draft");
+    expect((await stored(foreign))?.status).toBe("submitted");
   });
 
   test("internal approvals still refuse locked months", async () => {
@@ -802,7 +825,7 @@ describe("internal work approvals", () => {
     expect(await approveFor([id])).toMatchObject({
       results: [{ id, status: "refused", reason: "time_period_locked" }],
     });
-    expect((await stored(id))?.status).toBe("draft");
+    expect((await stored(id))?.status).toBe("submitted");
   });
 });
 
@@ -842,7 +865,7 @@ describe("approval with a credential narrowed below its owner's role", () => {
       ),
     ).toMatchObject({ results: [{ id: unassigned, status: "refused" }] });
     expect(await stored(unassigned)).toMatchObject({
-      status: "draft",
+      status: "submitted",
       approvedByUserId: null,
     });
 
@@ -865,7 +888,7 @@ describe("approval with a credential narrowed below its owner's role", () => {
         key("member", { timeEntry: ["read"] }),
       ),
     ).toMatchObject({ results: [{ id: assigned, status: "refused" }] });
-    expect((await stored(assigned))?.status).toBe("draft");
+    expect((await stored(assigned))?.status).toBe("submitted");
 
     expect(
       await approveWith(

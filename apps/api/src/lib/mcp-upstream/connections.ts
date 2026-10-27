@@ -249,6 +249,7 @@ const bindMcpConnection = (
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "MCP connection resource does not match the connector URL",
         }),
       );
