@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -130,7 +134,8 @@ let signingKeyFetches = 0;
 // The verifier loads the signing keys over HTTP; serve that one address from
 // the real auth handler so the token path runs unchanged, and count it.
 const passThroughFetch = globalThis.fetch;
-const fetchSpy = spyOn(globalThis, "fetch");
+let fetchSpy: Mock<typeof globalThis.fetch>;
+let serveJwks: typeof fetch;
 
 /** Count every transaction one database boundary opens. */
 const countTransactions = (
@@ -152,21 +157,19 @@ beforeAll(async () => {
   countTransactions(rootDb, rootDb.transaction.bind(rootDb));
   countTransactions(rlsDb, rlsDb.transaction.bind(rlsDb));
   const jwksUrl = getAuthEndpointUrl("jwks");
-  fetchSpy.mockImplementation(
-    Object.assign(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const request =
-          input instanceof Request
-            ? new Request(input, init)
-            : new Request(String(input), init);
-        if (request.url === jwksUrl) {
-          signingKeyFetches += 1;
-          return await getAuth().handler(request);
-        }
-        return await passThroughFetch(input, init);
-      },
-      { preconnect: passThroughFetch.preconnect },
-    ),
+  serveJwks = Object.assign(
+    async (input: string | URL | Request, init?: RequestInit) => {
+      const request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
+      if (request.url === jwksUrl) {
+        signingKeyFetches += 1;
+        return await getAuth().handler(request);
+      }
+      return await passThroughFetch(input, init);
+    },
+    { preconnect: passThroughFetch.preconnect },
   );
 });
 
@@ -293,6 +296,14 @@ const credentialTypeOf = async (credential: string) => {
     ? (authenticated.value satisfies McpSession).credential?.type
     : undefined;
 };
+
+beforeEach(() => {
+  fetchSpy = spyOn(globalThis, "fetch").mockImplementation(serveJwks);
+});
+
+afterEach(() => {
+  mock.restore();
+});
 
 describe("MCP request authentication and session context run a fixed query plan", () => {
   test("each credential type issues its pinned statements on every request", async () => {

@@ -16,6 +16,11 @@
 //   back to Base UI's `Intl.Collator` filter: it compares equal-length
 //   windows (`strasse` never finds `Straße`) and answers per runtime locale.
 //   `mode="none"` (no filtering) and a spread (props from elsewhere) pass.
+// - a call to one of the fold's own building blocks (`stripDiacritics`,
+//   `foldToAscii`, `applyArabicFolds`, ...): a search key assembled from them
+//   is a second fold that drifts from `foldSearchMatchText` (the reader's find
+//   once missed `Straße` for `strasse` that way). Marks mapped back to the
+//   original text come from `foldSearchMatchTextWithOffsets`.
 // Accepted: a constant argument (a string literal or a SCREAMING_CASE name),
 // which compares against a fixed token such as a file extension or a URL
 // prefix rather than a query; and keys built any other way.
@@ -59,6 +64,15 @@ const LITERAL_KEY_HELPERS = new Set([
   "findSearchMatchKeyRanges",
 ]);
 const CONSTANT_NAME = /^[A-Z][A-Z0-9_]*$/u;
+// Partial folds @stll/text-normalize exports for its SQL-parity and slug
+// contracts; a search key built from them is a second `foldSearchMatchText`.
+const FOLD_PRIMITIVES = new Set([
+  "applyArabicFolds",
+  "applyArabicFoldsWithOffsets",
+  "arabicNormalize",
+  "foldToAscii",
+  "stripDiacritics",
+]);
 
 const calledMethod = (call: AstNode): string | null => {
   const callee = unwrapExpression(call.callee);
@@ -178,6 +192,8 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           fold: 'Match user-typed text with createSearchQueryMatcher or filterBySearchQuery from @stll/text-normalize/search-query-matcher. A lowercase compare folds case only, so "dvorak" misses "Dvořák" and "strasse" misses "Straße".',
+          localFold:
+            "Fold search text with foldSearchMatchText, or foldSearchMatchTextWithOffsets for marks mapped back to the original, from @stll/text-normalize. A fold assembled from its building blocks drifts from the key every list filter and the reader match on.",
           collator:
             'Pass filter={matchesComboboxItem} from @/components/combobox-filter.logic (or filter={null} when the caller filters). Base UI\'s default collator filter never finds "strasse" in "Straße" and depends on the runtime locale.',
         },
@@ -196,6 +212,10 @@ export default eslintCompatPlugin({
               return;
             }
             const helper = calleeName(call);
+            if (helper !== null && FOLD_PRIMITIVES.has(helper)) {
+              context.report({ node, messageId: "localFold" });
+              return;
+            }
             if (helper !== null && LITERAL_KEY_HELPERS.has(helper)) {
               if (
                 callArguments(call).some((argument) =>

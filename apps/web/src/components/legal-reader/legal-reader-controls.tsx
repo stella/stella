@@ -3,7 +3,7 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 
 import { LegalReaderBreadcrumb } from "./legal-reader-breadcrumb";
-import type { ReaderBreadcrumbModel } from "./reader-breadcrumb-paths";
+import type { ReaderAnalysisOutline } from "./reader-contents.logic";
 import type { useWebReaderTextScale } from "./use-web-reader-text-scale";
 
 /**
@@ -20,7 +20,7 @@ export const LEGAL_READER_CONTENT_CLEARANCE_CLASS_NAME =
 type LegalReaderControlsProps = {
   blocks: readonly Block[];
   content: HTMLElement | null;
-  fallbackBreadcrumb?: ReaderBreadcrumbModel | undefined;
+  analysis?: ReaderAnalysisOutline | undefined;
   viewport: HTMLElement | null;
   textScale: ReturnType<typeof useWebReaderTextScale>;
 };
@@ -28,7 +28,7 @@ type LegalReaderControlsProps = {
 export const LegalReaderControls = ({
   blocks,
   content,
-  fallbackBreadcrumb,
+  analysis,
   viewport,
   textScale,
 }: LegalReaderControlsProps) => (
@@ -42,8 +42,8 @@ export const LegalReaderControls = ({
   >
     <LegalReaderBreadcrumb
       blocks={blocks}
+      analysis={analysis}
       content={content}
-      fallback={fallbackBreadcrumb}
       viewport={viewport}
     />
   </FloatingZoomControls>

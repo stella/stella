@@ -192,6 +192,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-stable-geometry.fixture.ts", [
     "require-stable-geometry/require-stable-geometry",
   ]),
+  fixtureRuleOverride("no-raw-e2e-router-push.fixture.ts", [
+    "no-raw-e2e-router-push/no-raw-e2e-router-push",
+  ]),
   fixtureRuleOverride("no-raw-api-error-telemetry.fixture.ts", [
     "no-raw-api-error-telemetry/no-raw-api-error-telemetry",
   ]),
@@ -501,6 +504,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/require-module-mock-reset",
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
     "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
@@ -738,17 +742,43 @@ const webCrossWorkspaceImports = [
 // Bans reaching sideways into an application, into a private workspace
 // package, and back into itself through the package name (the intra-package
 // graph is relative, so a self-reference would only survive in-repo).
+const uiAppCodeImportBan = {
+  group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+  message:
+    "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+};
+
 const uiStandaloneImports = [
   {
     group: ["@stll/*", "@stll/*/**"],
     message:
       "@stll/ui must build standalone; it may not import another workspace package, including itself by name.",
   },
+  uiAppCodeImportBan,
+];
+
+// Workspace packages that exist only to help tests, each a devDependency of
+// @stll/ui. A ui test file may import them: tsdown builds no test file (see packages/ui/tsdown.config.ts), so the
+// dependency is a devDependency that never ships. Production src stays banned,
+// and so does every package not named here.
+const UI_TEST_HELPER_PACKAGES = ["@stll/property-testing"] as const;
+
+const UI_TEST_FILES = [
+  "packages/ui/src/**/*.test.{ts,tsx}",
+  "packages/ui/src/**/*.dom.test.tsx",
+];
+
+const uiTestStandaloneImports = [
   {
-    group: ["@/*", "@/**", "apps/*", "apps/**", "**/apps/**"],
+    group: [
+      "@stll/*",
+      "@stll/*/**",
+      ...UI_TEST_HELPER_PACKAGES.flatMap((name) => [`!${name}`, `!${name}/**`]),
+    ],
     message:
-      "@stll/ui must not reach into application code; move the shared part into the package or keep the component in the app.",
+      "@stll/ui tests may import only the workspace test-helper packages; any other workspace package, including @stll/ui by name, would break the standalone build.",
   },
+  uiAppCodeImportBan,
 ];
 
 // The all-locales folio catalog entries (and their `getFolioMessages`) bundle
@@ -791,6 +821,26 @@ const webCitationChipImport = {
   group: ["**/paragraph-reference", "**/decision-citation-chip"],
   message:
     "Render citations through '@/components/references/citation-chip', which picks the chip by citation kind.",
+};
+
+// use-intl's useLocale is the UI language, which differs from the formatting
+// locale whenever the reader picks a regional format. Each has one named owner,
+// so a call site states which one it reads.
+const webUseIntlLocaleImport = {
+  name: "use-intl",
+  importNames: ["useLocale"],
+  message:
+    "Read the UI language with useMessageLocale from '@/i18n/message-locale', or the formatting locale with useFormattingLocale from '@/i18n/formatting-context'.",
+};
+
+// The package formats in the host's formatting locale, which reaches it
+// through WorkspaceUiFormattingProvider; use-intl's formatter and locale are
+// the UI language.
+const workspaceUiUseIntlFormattingImport = {
+  name: "use-intl",
+  importNames: ["useFormatter", "useLocale"],
+  message:
+    "Import useFormatter or useFormattingLocale from './formatting', which format in the host's formatting locale rather than the UI language.",
 };
 
 const apiSafeIdBrandingImport = {
@@ -1915,6 +1965,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/require-json-import-attribute.ts",
     "./.oxlint-plugins/require-stable-geometry.ts",
+    "./.oxlint-plugins/no-raw-e2e-router-push.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-disabled-tooltip-trigger.ts",
@@ -2117,6 +2168,15 @@ const config = defineConfig({
       },
     },
     {
+      // A member's decision page swaps its gated fallback reader for the
+      // authenticated one; the navigation owner waits for the one that stays.
+      files: ["apps/web/e2e/**/*.ts"],
+      excludeFiles: ["apps/web/e2e/helpers/decision-reader.ts"],
+      rules: {
+        "no-raw-e2e-router-push/no-raw-e2e-router-push": "error",
+      },
+    },
+    {
       // Plugin fixtures include intentional lexical reads and class references
       // before declaration to exercise rule diagnostics.
       files: [".oxlint-plugins/__fixtures__/**"],
@@ -2209,6 +2269,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
     },
@@ -3943,6 +4004,26 @@ const config = defineConfig({
       },
     },
     {
+      files: UI_TEST_FILES,
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              uiPragmaticDragAdapterImport,
+            ],
+            patterns: [
+              ...uiTestStandaloneImports,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
       // The kanban package's drag-and-drop owner: the one module that may
       // call the adapter's `draggable`/`dropTargetForElements` directly. The
       // rest of the package's import restrictions still apply.
@@ -3973,6 +4054,22 @@ const config = defineConfig({
       // bundler from paying for re-exports it does not touch.
       files: ["packages/ui/src/index.ts"],
       rules: { "oxc/no-barrel-file": "off" },
+    },
+    {
+      files: ["packages/workspace-ui/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              workspaceUiUseIntlFormattingImport,
+            ],
+          },
+        ],
+      },
     },
     {
       files: ["apps/web/src/hooks/use-effect.ts"],
@@ -4092,6 +4189,37 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
+            ],
+            patterns: [
+              {
+                group: webLocalApiImportGroup,
+                message: "Use '@/lib/api-contract' instead of '@/api/'.",
+              },
+              ...webCrossWorkspaceImports,
+              webDatePickerImport,
+              webCitationChipImport,
+              pragmaticDragAdapterDeepImportBan,
+            ],
+          },
+        ],
+      },
+    },
+    {
+      // The UI-language owner: the one web module that reads use-intl's
+      // useLocale. Every other apps/web import restriction still applies.
+      files: ["apps/web/src/i18n/message-locale.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              noZodImport,
+              noClassicTypeScriptImport,
+              ...noRetiredHttpFrameworkImports,
+              webPragmaticDragAdapterImport,
+              ...webFolioAllLocalesImports,
+              webUseIntlFormatterImport,
             ],
             patterns: [
               {
@@ -4130,6 +4258,7 @@ const config = defineConfig({
               ...noRetiredHttpFrameworkImports,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4360,6 +4489,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4395,6 +4525,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4425,6 +4556,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@tanstack/react-router",
                 importNames: ["getRouteApi", "useRouteContext"],
@@ -4463,6 +4595,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
             ],
             patterns: [
               {
@@ -4512,6 +4645,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@/lib/api",
                 importNames: ["api"],
@@ -4559,6 +4693,7 @@ const config = defineConfig({
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
+              webUseIntlLocaleImport,
               {
                 name: "@/routes/-auth-context",
                 message:
@@ -5817,14 +5952,14 @@ const config = defineConfig({
     },
     {
       // The packages whose tests render React in happy-dom, where component
-      // libraries keep module state behind their timeouts. @stll/ui must
-      // build standalone, so it cannot import the shared helper.
+      // libraries keep module state behind their timeouts.
       files: [
         "apps/desktop/**/*.{ts,tsx}",
         "apps/web/**/*.{ts,tsx}",
         "packages/decision-reader/**/*.{ts,tsx}",
         "packages/mcp-apps/**/*.{ts,tsx}",
         "packages/render-probe/**/*.{ts,tsx}",
+        "packages/ui/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-dropped-fake-timers.fixture.ts",
       ],
       // Open pull request 6989 rewrites this file's teardown and migrates it.
@@ -6376,15 +6511,20 @@ const config = defineConfig({
     },
     {
       // Client-side "does this text match what the user typed" goes through
-      // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize,
+      // createSearchQueryMatcher / filterBySearchQuery in @stll/text-normalize/search-query-matcher,
       // which fold case, accents and ß/ł/ø alike in every UI locale; a
-      // lowercase-only compare misses "Dvořák" for "dvorak". The table find
-      // highlighter is exempt: it marks what the server's accent-sensitive
-      // ILIKE matched, and marking more would claim matches the server never
-      // made. Tests compute expected values independently of the owner, and
-      // the design system's browser fixtures render primitives bare.
+      // lowercase-only compare misses "Dvořák" for "dvorak". The decision
+      // reader's find and query marks fold through the same key. The table
+      // find highlighter is exempt: it marks what the server's
+      // accent-sensitive ILIKE matched, and marking more would claim matches
+      // the server never made. The contact import derives custom field ids
+      // from labels with stripDiacritics, an id rather than a match, and ids
+      // already minted must not change. Tests compute expected values
+      // independently of the owner, and the design system's browser fixtures
+      // render primitives bare.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
+        "packages/decision-reader/src/**/*.{ts,tsx}",
         "packages/ui/src/**/*.{ts,tsx}",
         "packages/workspace-ui/src/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-case-folded-search-match.fixture.tsx",
@@ -6392,6 +6532,7 @@ const config = defineConfig({
       excludeFiles: [
         "**/*.test.{ts,tsx}",
         "apps/web/src/components/workspaces/table/find-highlight.logic.ts",
+        "apps/web/src/routes/_protected.contacts/-import-candidate.ts",
         "packages/ui/src/components/fixtures/**",
       ],
       rules: {

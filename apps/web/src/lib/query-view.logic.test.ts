@@ -1,12 +1,16 @@
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { FetchStatus } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
 import { queryView, queryViewError } from "./query-view.logic";
+
+beforeEach(() => {
+  refetch.mockClear();
+});
 
 const FETCH_STATUSES: readonly FetchStatus[] = ["idle", "fetching", "paused"];
 const readError = new Error("Read failed");

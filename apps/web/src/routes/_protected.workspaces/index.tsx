@@ -37,7 +37,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
@@ -128,7 +128,7 @@ const MattersContent = ({
   resetExternalState: boolean;
 }) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const { data, isFetching } = useSuspenseQuery(
     workspacesRouteOptions(activeOrganizationId),
