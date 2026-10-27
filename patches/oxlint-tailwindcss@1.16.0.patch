@@ -60,7 +60,7 @@ index 6d9820c..8fd6062 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3794,6 +3814,20 @@ function packageVersionFrom(fromDir, name) {
+@@ -3794,6 +3814,34 @@ function packageVersionFrom(fromDir, name) {
  	}
  }
  /**
@@ -71,7 +71,21 @@ index 6d9820c..8fd6062 100644
 +*/
 +function workspaceStylesheetFrom(fromDir, spec) {
 +	try {
-+		const resolved = (0, node_fs.realpathSync)((0, node_module.createRequire)((0, node_path.join)(fromDir, "noop.js")).resolve(spec));
++		const { nodePath } = resolveTailwindNodeFor((0, node_path.join)(fromDir, "noop.css"));
++		if (nodePath === null) return null;
++		const engineRequire = (0, node_module.createRequire)(nodePath);
++		const { ResolverFactory } = engineRequire("enhanced-resolve");
++		const resolver = ResolverFactory.createResolver({
++			fileSystem: engineRequire("node:fs"),
++			useSyncFileSystemCalls: true,
++			extensions: [".css"],
++			mainFields: ["style"],
++			conditionNames: ["style"],
++			modules: ["node_modules", ...(process.env.NODE_PATH ? process.env.NODE_PATH.split(node_path.delimiter) : [])]
++		});
++		const match = resolver.resolveSync({}, fromDir, spec);
++		if (typeof match !== "string") return null;
++		const resolved = (0, node_fs.realpathSync)(match);
 +		return resolved.endsWith(".css") && !/[\\/]node_modules[\\/]/.test(resolved) ? resolved : null;
 +	} catch {
 +		return null;
@@ -81,7 +95,7 @@ index 6d9820c..8fd6062 100644
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
  * not only the entry file:
-@@ -3806,7 +3840,9 @@ function packageVersionFrom(fromDir, name) {
+@@ -3806,7 +3854,9 @@ function packageVersionFrom(fromDir, name) {
  *   - the installed version of every PACKAGE the CSS imports or loads as a
  *     plugin (`tw-animate-css`, `@tailwindcss/typography`): the engine version
  *     folded into the hash says nothing about them, so upgrading one used to
@@ -92,7 +106,7 @@ index 6d9820c..8fd6062 100644
  *
  * Best-effort: an unreadable file contributes nothing and an unresolvable
  * package contributes `name@?` — neither can be what the build loads either.
-@@ -3841,6 +3877,12 @@ function hashableContent(entryPath, entryContent) {
+@@ -3841,6 +3891,12 @@ function hashableContent(entryPath, entryContent) {
  		for (const spec of collect(IMPORT_RE)) {
  			if (!isPathSpecifier(spec)) {
  				addPackage(spec);
@@ -105,7 +119,7 @@ index 6d9820c..8fd6062 100644
  				continue;
  			}
  			const importPath = (0, node_path.resolve)(baseDir, spec);
-@@ -4099,7 +4141,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4099,7 +4155,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -114,7 +128,7 @@ index 6d9820c..8fd6062 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4107,6 +4149,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4107,6 +4163,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -122,7 +136,7 @@ index 6d9820c..8fd6062 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4612,6 +4655,7 @@ var DesignSystemWorker = class {
+@@ -4612,6 +4669,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -130,7 +144,7 @@ index 6d9820c..8fd6062 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5549,6 +5593,73 @@ function answersFor(cache) {
+@@ -5549,6 +5607,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -204,7 +218,7 @@ index 6d9820c..8fd6062 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5569,12 +5680,15 @@ function answersFor(cache) {
+@@ -5569,12 +5694,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -300,7 +314,7 @@ index 61c6242..766a1af 100644
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3797,6 +3817,20 @@ function packageVersionFrom(fromDir, name) {
+@@ -3797,6 +3817,34 @@ function packageVersionFrom(fromDir, name) {
  	}
  }
  /**
@@ -311,7 +325,21 @@ index 61c6242..766a1af 100644
 +*/
 +function workspaceStylesheetFrom(fromDir, spec) {
 +	try {
-+		const resolved = realpathSync(createRequire(join(fromDir, "noop.js")).resolve(spec));
++		const { nodePath } = resolveTailwindNodeFor(join(fromDir, "noop.css"));
++		if (nodePath === null) return null;
++		const engineRequire = createRequire(nodePath);
++		const { ResolverFactory } = engineRequire("enhanced-resolve");
++		const resolver = ResolverFactory.createResolver({
++			fileSystem: engineRequire("node:fs"),
++			useSyncFileSystemCalls: true,
++			extensions: [".css"],
++			mainFields: ["style"],
++			conditionNames: ["style"],
++			modules: ["node_modules", ...(process.env.NODE_PATH ? process.env.NODE_PATH.split(engineRequire("node:path").delimiter) : [])]
++		});
++		const match = resolver.resolveSync({}, fromDir, spec);
++		if (typeof match !== "string") return null;
++		const resolved = realpathSync(match);
 +		return resolved.endsWith(".css") && !/[\\/]node_modules[\\/]/.test(resolved) ? resolved : null;
 +	} catch {
 +		return null;
@@ -321,7 +349,7 @@ index 61c6242..766a1af 100644
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
  * not only the entry file:
-@@ -3809,7 +3843,9 @@ function packageVersionFrom(fromDir, name) {
+@@ -3809,7 +3857,9 @@ function packageVersionFrom(fromDir, name) {
  *   - the installed version of every PACKAGE the CSS imports or loads as a
  *     plugin (`tw-animate-css`, `@tailwindcss/typography`): the engine version
  *     folded into the hash says nothing about them, so upgrading one used to
@@ -332,7 +360,7 @@ index 61c6242..766a1af 100644
  *
  * Best-effort: an unreadable file contributes nothing and an unresolvable
  * package contributes `name@?` — neither can be what the build loads either.
-@@ -3844,6 +3880,12 @@ function hashableContent(entryPath, entryContent) {
+@@ -3844,6 +3894,12 @@ function hashableContent(entryPath, entryContent) {
  		for (const spec of collect(IMPORT_RE)) {
  			if (!isPathSpecifier(spec)) {
  				addPackage(spec);
@@ -345,7 +373,7 @@ index 61c6242..766a1af 100644
  				continue;
  			}
  			const importPath = resolve(baseDir, spec);
-@@ -4102,7 +4144,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4102,7 +4158,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -354,7 +382,7 @@ index 61c6242..766a1af 100644
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4110,6 +4152,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4110,6 +4166,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -362,7 +390,7 @@ index 61c6242..766a1af 100644
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4615,6 +4658,7 @@ var DesignSystemWorker = class {
+@@ -4615,6 +4672,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -370,7 +398,7 @@ index 61c6242..766a1af 100644
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5552,6 +5596,73 @@ function answersFor(cache) {
+@@ -5552,6 +5610,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -444,7 +472,7 @@ index 61c6242..766a1af 100644
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5572,12 +5683,15 @@ function answersFor(cache) {
+@@ -5572,12 +5697,15 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -460,7 +488,7 @@ index 61c6242..766a1af 100644
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
-@@ -10787,4 +10901,4 @@ const plugin = definePlugin({
+@@ -10787,4 +10915,4 @@ const plugin = definePlugin({
  	}
  });
  //#endregion
