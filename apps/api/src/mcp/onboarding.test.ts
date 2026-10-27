@@ -17,6 +17,12 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  readOverviewHandlerMock.mockReset();
+  readWorkspaceContactsHandlerMock.mockReset();
+  readWorkspaceHandlerMock.mockReset();
+});
+
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const readWorkspaceHandlerMock = mock();

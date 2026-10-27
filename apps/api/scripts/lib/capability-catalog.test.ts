@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type {
   Middleware,
   RouteDefinition,
   RouteEntry,
 } from "../../src/http/route";
+import { fileSchema } from "../../src/lib/custom-schema";
+import { toRouteJsonSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import type { RouteGate } from "../../src/lib/route-gates";
 import {
   checkCapabilityRouteGates,
@@ -1037,14 +1040,8 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
 });
 
 describe("schemaContainsBinaryFormat", () => {
-  test("detects a t.File-shaped field (format: binary) at any depth", () => {
-    // Exactly how t.File({ maxSize }) serializes.
-    const file = {
-      default: "File",
-      maxSize: "50m",
-      type: "string",
-      format: "binary",
-    };
+  test("detects a file field (format: binary) at any depth", () => {
+    const file = toRouteJsonSchema(fileSchema({ maxBytes: 50 * 1024 * 1024 }));
     expect(schemaContainsBinaryFormat(file)).toBe(true);
     expect(
       schemaContainsBinaryFormat({
@@ -1053,14 +1050,11 @@ describe("schemaContainsBinaryFormat", () => {
     ).toBe(true);
   });
 
-  test("detects t.Files (array items with format: binary)", () => {
-    // Exactly how t.Files() serializes.
+  test("detects a list of files (array items with format: binary)", () => {
     expect(
-      schemaContainsBinaryFormat({
-        elysiaMeta: "Files",
-        type: "array",
-        items: { default: "Files", type: "string", format: "binary" },
-      }),
+      schemaContainsBinaryFormat(
+        toRouteJsonSchema(v.array(fileSchema({ maxBytes: 1024 }))),
+      ),
     ).toBe(true);
   });
 

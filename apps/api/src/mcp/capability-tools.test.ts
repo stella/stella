@@ -65,6 +65,11 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+beforeEach(() => {
+  consumeRateLimitMock.mockReset();
+  loadOrgSettingsMock.mockClear();
+});
+
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
@@ -324,7 +329,7 @@ let analytics: RecordingAnalytics;
 beforeEach(() => {
   analytics = installRecordingAnalytics();
   loadOrgSettingsMock.mockClear();
-  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockReset();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
   disabledFeatures.clear();
 });

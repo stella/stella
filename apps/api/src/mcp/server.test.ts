@@ -103,6 +103,29 @@ const listMcpToolsMock = mock(
 const listMcpResourcesMock = mock((): Resource[] => []);
 const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
+beforeEach(() => {
+  actionSizePolicyMock.mockReset();
+  actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
+  authenticateMcpRequestMock.mockReset();
+  captureErrorMock.mockReset();
+  observeTransportFailureMock.mockReset();
+  getMcpToolDefinitionMock.mockReset();
+  getMcpToolRequiredScopesHintMock.mockReset();
+  getMcpToolRequiredScopesHintMock.mockImplementation(
+    (_toolName: string): readonly ToolScope[] | undefined => undefined,
+  );
+  handleMcpToolCallMock.mockReset();
+  listMcpToolsMock.mockReset();
+  listMcpToolsMock.mockImplementation(async () => []);
+  listMcpResourcesMock.mockReset();
+  listMcpResourcesMock.mockImplementation(() => []);
+  readMcpResourceMock.mockReset();
+  readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
+  resolveMcpSessionContextMock.mockReset();
+  resetAnalyticsForTesting();
+  resetMetricLineSinkForTesting();
+});
+
 const mcpHandlerDependencies = {
   actionSizePolicy: actionSizePolicyMock,
   agentAccessRefusal: async () => null,
@@ -230,29 +253,6 @@ type McpJsonRpcFailure = {
 };
 
 describe("handleMcpHttpRequest", () => {
-  beforeEach(() => {
-    actionSizePolicyMock.mockReset();
-    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
-    authenticateMcpRequestMock.mockReset();
-    captureErrorMock.mockReset();
-    observeTransportFailureMock.mockReset();
-    getMcpToolDefinitionMock.mockReset();
-    getMcpToolRequiredScopesHintMock.mockReset();
-    getMcpToolRequiredScopesHintMock.mockImplementation(
-      (_toolName: string): readonly ToolScope[] | undefined => undefined,
-    );
-    handleMcpToolCallMock.mockReset();
-    listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(async () => []);
-    listMcpResourcesMock.mockReset();
-    listMcpResourcesMock.mockImplementation(() => []);
-    readMcpResourceMock.mockReset();
-    readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
-    resolveMcpSessionContextMock.mockReset();
-    resetAnalyticsForTesting();
-    resetMetricLineSinkForTesting();
-  });
-
   test("a real MCP transport request emits exactly one phase record", async () => {
     const toolProjectionDelayMs = 100;
     const lines: string[] = [];
@@ -2222,17 +2222,6 @@ describe("handleMcpHttpRequest", () => {
 });
 
 describe("MCP transport conformance", () => {
-  beforeEach(() => {
-    actionSizePolicyMock.mockReset();
-    actionSizePolicyMock.mockImplementation(() => Result.ok(undefined));
-    authenticateMcpRequestMock.mockReset();
-    captureErrorMock.mockReset();
-    observeTransportFailureMock.mockReset();
-    listMcpToolsMock.mockReset();
-    listMcpToolsMock.mockImplementation(async () => []);
-    resolveMcpSessionContextMock.mockReset();
-  });
-
   const authenticateSession = () => {
     authenticateMcpRequestMock.mockResolvedValue(
       Result.ok({

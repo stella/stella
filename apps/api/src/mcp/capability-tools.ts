@@ -162,8 +162,8 @@ type CatalogEntry = {
   scope: string;
   additionalScopes?: readonly string[];
   /**
-   * When true, this capability's REST route resolves workspace access through
-   * `validateWorkspaceAccessIncludingArchived` (e.g. `matters.unarchive`), so
+   * When true, this capability's REST route admits archived matters
+   * (`workspaceStatus: "active-or-archived"`, e.g. `matters.unarchive`), so
    * the generic write gate must let it run against an archived workspace.
    */
   allowsArchivedWorkspace?: boolean;
@@ -2153,7 +2153,7 @@ const invokeCapabilityHandler = async ({
  * - Agent access (tools.ts `decideAgentCall`): gate 5, the capability's own
  *   agent access through the same resolver.
  * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
- *   mirrors `validateWorkspaceAccess`(-IncludingArchived per fix-4 flag).
+ *   mirrors the route's `workspaceStatus` (archived admitted per that flag).
  * - Member permissions + usage preflight: run inside the safe-handler wrapper
  *   (`endpoint.handler`), the same code path REST uses; validateOnly
  *   additionally mirrors the permission gate explicitly (the wrapper is not

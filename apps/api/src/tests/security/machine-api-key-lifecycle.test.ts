@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -7,6 +7,11 @@ import {
   loadOrganizationMachineApiKey,
 } from "@/api/handlers/api-keys/mint";
 import { toSafeId } from "@/api/lib/branded-types";
+
+beforeEach(() => {
+  findOrganizationMachineApiKey.mockReset();
+  updateApiKey.mockReset();
+});
 
 /**
  * Organization-scoped machine-key lifecycle.

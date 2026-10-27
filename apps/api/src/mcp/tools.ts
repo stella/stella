@@ -8,6 +8,7 @@ import { DOCUMENT_VERSION_UPLOAD_CAPABILITY_IDS } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import {
@@ -705,16 +706,21 @@ export const handleMcpToolCall = async ({
   toolName,
   dependencies,
 }: McpToolCallArgs): Promise<CallToolResult> =>
-  await observeMcpToolCall({
-    context,
-    mode,
-    toolName,
+  await runWithStatementCeiling({
+    kind: "mcp",
+    key: toolName,
     run: async () =>
-      await dispatchMcpToolCall({
-        args,
+      observeMcpToolCall({
         context,
         mode,
         toolName,
-        ...(dependencies === undefined ? {} : { dependencies }),
+        run: async () =>
+          await dispatchMcpToolCall({
+            args,
+            context,
+            mode,
+            toolName,
+            ...(dependencies === undefined ? {} : { dependencies }),
+          }),
       }),
   });
