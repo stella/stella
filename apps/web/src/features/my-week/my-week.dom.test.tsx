@@ -122,9 +122,12 @@ const serveWeek = ({
   entries,
   suggestions,
   pageSize = 200,
+  failLaterPages = false,
 }: {
   entries: MyTimeEntry[];
   pageSize?: number;
+  /** Fail every page request after the first. */
+  failLaterPages?: boolean;
   suggestions: {
     matter: typeof LEASE_MATTER;
     date: string;
@@ -291,7 +294,11 @@ const serveWeek = ({
         url.searchParams.get("date") ?? url.searchParams.get("startDate") ?? "";
       const end = url.searchParams.get("endDate") ?? start;
       if (request.method === "GET" && path === "/time-entries/me") {
-        return json(entryPage(start, end, url.searchParams.get("cursor")));
+        const cursor = url.searchParams.get("cursor");
+        if (failLaterPages && cursor !== null) {
+          return new Response("unavailable", { status: 503 });
+        }
+        return json(entryPage(start, end, cursor));
       }
       if (request.method === "GET" && path === "/time-entries/me/suggestions") {
         return json(suggestionRange(start, end));
@@ -558,6 +565,38 @@ describe("my week", () => {
       ).toBeTruthy();
     },
   );
+
+  test("a failed later page says so and keeps the loaded entries", async () => {
+    const tuesday = Temporal.PlainDate.from(MONDAY).add({ days: 1 }).toString();
+    serveWeek({
+      entries: [
+        draftEntry(),
+        draftEntry({
+          id: toSafeId<"timeEntry">("entry-2"),
+          dateWorked: tuesday,
+          narrative: "Draft the termination notice",
+        }),
+      ],
+      suggestions: [],
+      pageSize: 1,
+      failLaterPages: true,
+    });
+    mount();
+
+    expect(await screen.findByText("Review lease schedule")).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: messages.common.loadMore }),
+      );
+    });
+
+    expect(
+      (await screen.findByText(messages.errors.actionFailed)).getAttribute(
+        "role",
+      ),
+    ).toBe("alert");
+    expect(screen.getByText("Review lease schedule")).toBeTruthy();
+  });
 
   test("only drafts are editable from the week", async () => {
     serveWeek({

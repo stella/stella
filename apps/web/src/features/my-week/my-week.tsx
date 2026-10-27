@@ -118,6 +118,7 @@ export const MyWeek = ({
 }: MyWeekProps) => {
   const tBilling = useTranslations("billing");
   const tCommon = useTranslations("common");
+  const tErrors = useTranslations("errors");
   const queries = myWeekQueries({ organizationId, userId, timezoneId, date });
   const { week } = queries;
   const entriesQuery = useSuspenseInfiniteQuery(queries.entries);
@@ -233,6 +234,11 @@ export const MyWeek = ({
               {tCommon("loadMore")}
             </Button>
           </div>
+        )}
+        {entriesQuery.isFetchNextPageError && (
+          <p className="text-destructive pb-4 text-center text-sm" role="alert">
+            {tErrors("actionFailed")}
+          </p>
         )}
       </ScrollArea>
       <Dialog
