@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { API_CALENDAR_DATE_CHECK } from "@stll/api-contract/api-date";
 import { numberFromString } from "@stll/api-contract/http-input";
+import { compareCodeUnit } from "@stll/collation";
 import { parsePlainDate } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
@@ -302,16 +303,19 @@ const listMyTimeEntries = createSafeRootHandler(
             ),
           )
           .where(dayScope)
-          .groupBy(timeEntries.dateWorked)
-          // SAFETY: grouped by work date inside a validated range, so the
-          // result holds at most LIMITS.timeRangeDaysMax rows.
-          // oxlint-disable-next-line require-query-limit/require-query-limit -- one row per work date of a range of at most timeRangeDaysMax days; see SAFETY above
-          .orderBy(asc(timeEntries.dateWorked));
+          // One row per work date of a range of at most timeRangeDaysMax days.
+          .groupBy(timeEntries.dateWorked);
         const summary = summaries.at(0);
         if (summary === undefined) {
           return panic("Daily time aggregate returned no row");
         }
-        return { rows, summary, days };
+        return {
+          rows,
+          summary,
+          days: days.toSorted((left, right) =>
+            compareCodeUnit(left.dateWorked, right.dateWorked),
+          ),
+        };
       }),
     );
 
