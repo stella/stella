@@ -299,7 +299,7 @@ const mountsDockedChatProvider = (file: string): boolean => {
   return found;
 };
 
-const isServerEndpoint = (source: ParsedSource): boolean => {
+export const isServerEndpoint = (source: ParsedSource): boolean => {
   let serverHandlers = false;
   visitPropertyAssignments(source.program, (node) => {
     if (
