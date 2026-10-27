@@ -475,6 +475,22 @@ test("a headings-less decision marks its analysis trail as AI-generated", async 
     expect(navigation.querySelector('[aria-live="polite"]')?.textContent).toBe(
       "Facts (AI-generated section) › Procedural history (AI-generated section)",
     );
+    await act(async () => {
+      fireEvent.click(trigger);
+      jest.advanceTimersByTime(50);
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    // One Escape from the row the list focuses closes it: no row tooltip
+    // opens on that focus to take the key first.
+    const focused =
+      document.activeElement ?? panic("Contents moved focus nowhere");
+    expect(focused.closest('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="tooltip-popup"]')).toBeNull();
+    await act(async () => {
+      fireEvent.keyDown(focused, { key: "Escape" });
+      jest.advanceTimersByTime(50);
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
   } finally {
     cleanup();
     viewport.remove();

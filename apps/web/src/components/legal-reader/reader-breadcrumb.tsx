@@ -91,6 +91,9 @@ const ReaderContentsList = ({
       )}
       data-contents-anchor={anchorId}
       onClick={() => onSelect(anchorId)}
+      // The row shows its title; a tooltip of its accessible name would open
+      // on the focus the list takes and swallow the Escape that closes it.
+      tooltip={false}
       variant="ghost"
     >
       {children}
@@ -259,6 +262,9 @@ export const ReaderBreadcrumb = ({
           <Button
             aria-label={nameOf(title)}
             className="min-h-11 w-full justify-start text-start whitespace-normal"
+            // As in Contents: the row shows its title, and a tooltip would
+            // take the list's Escape.
+            tooltip={false}
             onClick={() => {
               onJump(anchorId);
               close();
