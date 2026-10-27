@@ -911,9 +911,14 @@
       "citedSummary": "{count, plural, =0 {Sin citas} one {Citada una vez} other {Citada # veces}}",
       "dateUnavailable": "Fecha no disponible",
       "decisionCount": "{count, plural, =0 {Ninguna resolución} one {# resolución} other {# resoluciones}}",
+      "goToMention": "Ir a la mención {number}",
+      "goToParagraph": "Ir al apartado {paragraph}",
       "lastNegative": "última cita negativa en {year}",
+      "mentionMark": "mención {number}",
+      "mentionsInDecision": "{count, plural, one {Citada una vez en esta resolución} other {Citada # veces en esta resolución}}",
       "negativeCount": "{count, plural, one {# negativa} many {# negativas} other {# negativas}}",
       "none": "Aún no hay citas registradas.",
+      "notInStella": "Aún no está en stella",
       "openAtCitation": "Abrir en la cita",
       "openDecision": "Abrir la resolución",
       "paragraphLabel": "Apartado {paragraph}",
@@ -1022,6 +1027,12 @@
       "matchedIn": "Coincidencia en {language}"
     },
     "loadingMore": "Cargando más...",
+    "marginFilter": {
+      "label": "Filtro de disposiciones citadas",
+      "paragraph": "{count, plural, =0 {Ninguna disposición citada en el ¶{paragraph}} one {# disposición citada en el ¶{paragraph}} many {# de disposiciones citadas en el ¶{paragraph}} other {# disposiciones citadas en el ¶{paragraph}}}",
+      "selection": "{count, plural, =0 {Ninguna disposición citada en la selección} one {# disposición citada en la selección} many {# de disposiciones citadas en la selección} other {# disposiciones citadas en la selección}}",
+      "unnumberedParagraph": "{count, plural, =0 {Ninguna disposición citada en este párrafo} one {# disposición citada en este párrafo} many {# de disposiciones citadas en este párrafo} other {# disposiciones citadas en este párrafo}}"
+    },
     "matterLinks": {
       "alreadySaved": "{count, plural, one {# resolución ya estaba guardada aquí} other {# resoluciones ya estaban guardadas aquí}}",
       "empty": "Todavía no hay jurisprudencia guardada en este asunto.",
@@ -1043,8 +1054,10 @@
     },
     "notesFilter": {
       "ai": "IA",
-      "human": "Humanas"
+      "human": "Humanas",
+      "toggleState": "{label}: {state, select, on {activado} other {desactivado}}"
     },
+    "oldestDecisions": "Resoluciones más antiguas",
     "pagination": {
       "goToPage": "Ir a la página {page}",
       "label": "Páginas de resultados",
@@ -1106,8 +1119,7 @@
       "runEstimate": "{rows, plural, one {# resolución} other {# resoluciones}} × {columns, plural, one {# pregunta} other {# preguntas}} en esta página: {cells, plural, one {se generará # respuesta} other {se generarán # respuestas}}.",
       "runTitle": "Responder esta página",
       "savedQuestions": "Preguntas guardadas",
-      "title": "Tablas de investigación",
-      "updated": "Última edición {date}"
+      "title": "Tablas de investigación"
     },
     "results": {
       "excerpt": {
@@ -1151,6 +1163,8 @@
     "showWholeHeadnote": "Mostrar el sumario completo",
     "sort": {
       "newest": "Más recientes",
+      "oldest": "Más antiguas",
+      "oldestUnavailable": "Una búsqueda se ordena por relevancia o de la más reciente a la más antigua. Borre la búsqueda para ver primero las resoluciones más antiguas.",
       "relevance": "Más relevantes"
     },
     "viewer": {
@@ -1166,6 +1180,7 @@
       "citedDecisionPassage": "Pasaje de la resolución",
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ir al párrafo} other {Ir a los párrafos}}",
       "judgeRole": {
         "advocateGeneral": "Abogado General",
         "dissenting": "Voto particular",
@@ -1717,21 +1732,8 @@
       "describe-stella-function": "Preparando búsqueda de datos",
       "describe_template": "Leyendo campos de la plantilla",
       "discover_tools": "Preparando búsqueda de datos",
-      "docxCommentSummary": "Añadir un comentario a {blockId}",
-      "docxDeleteSummary": "Eliminar {blockId}",
-      "docxDeleteTableColumnSummary": "Eliminar columna de tabla en {blockId}",
-      "docxDeleteTableRowSummary": "Eliminar fila de tabla en {blockId}",
       "docxEditMore": "{count, plural, one {# edición más} many {# ediciones más} other {# ediciones más}}",
       "docxEditSummary": "{count, plural, one {# edición propuesta} many {# ediciones propuestas} other {# ediciones propuestas}}",
-      "docxInsertAfterSummary": "Insertar texto después de {blockId}",
-      "docxInsertBeforeSummary": "Insertar texto antes de {blockId}",
-      "docxInsertTableColumnSummary": "Insertar columna de tabla cerca de {blockId}",
-      "docxInsertTableRowSummary": "Insertar fila de tabla cerca de {blockId}",
-      "docxMergeTableCellsSummary": "Combinar celdas de tabla en {blockId}",
-      "docxReplaceBlockSummary": "Reemplazar {blockId}",
-      "docxReplaceSummary": "Reemplazar «{find}» por «{replace}»",
-      "docxSignatureTableSummary": "Insertar una tabla de firmas cerca de {blockId}",
-      "docxSplitTableCellSummary": "Dividir celda de tabla en {blockId}",
       "execute-typescript": "Leyendo datos del asunto",
       "execute_typescript": "Leyendo datos del asunto",
       "expand-chat-history": "Leyendo el historial del chat",
@@ -4273,6 +4275,8 @@
       "commentPlaceholder": "Escribe un comentario…",
       "commentText": "Texto del comentario",
       "commentedPassage": "Pasaje comentado",
+      "editComment": "Editar comentario",
+      "editedAt": "Editado {time}",
       "guestAuthor": "Tú",
       "guestLimitReached": "Esta pestaña puede contener hasta {count} resaltados y notas. Crea una cuenta para guardar más.",
       "guestMigrationComplete": "Resaltados y notas guardados.",
@@ -4302,7 +4306,12 @@
       "styleHighlight": "Resaltado",
       "styleSquiggly": "Ondulado",
       "styleStrikethrough": "Tachado",
-      "visibilityShared": "Compartido con la organización"
+      "visibilityShared": "Compartido con la organización",
+      "visibilitySharedWithMatter": "Compartido con el asunto"
+    },
+    "contents": {
+      "aiSection": "{section} (sección generada por IA)",
+      "headingWithAiSection": "{heading} (sección generada por IA: {section})"
     },
     "copyMenu": {
       "blockQuoteWithCitation": "Cita en bloque con referencia",
@@ -4779,10 +4788,8 @@
   },
   "readerAnswers": {
     "budgetError": "Se ha agotado el presupuesto para respuestas.",
-    "citation": "¶{paragraph}",
     "expand": "Expandir respuesta",
     "explain": "Explicar",
-    "externalCitation": "{decision} · ¶{paragraph}",
     "followUp": "Hacer una pregunta de seguimiento",
     "invalidCitations": "{count, plural, one {No se pudo verificar # cita.} many {No se pudieron verificar # citas.} other {No se pudieron verificar # citas.}}",
     "loading": "Generando respuesta…",
@@ -6352,7 +6359,6 @@
           "approvedBy": "Aprobado por",
           "channel": "Canal",
           "dateTime": "Fecha y hora",
-          "eventId": "ID del evento",
           "notAvailable": "No disponible",
           "openTarget": "Abrir elemento",
           "runId": "ID de ejecución",
@@ -6469,6 +6475,17 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo oscuro",
+      "annotations": {
+        "commentedBy": "Comentario de {name}",
+        "detachedHeading": "Fuera de esta versión",
+        "detachedOtherVersion": "Creado en la versión {version}; la página ahora dice otra cosa.",
+        "detachedTextChanged": "Estas palabras ya no están en la página {page}.",
+        "empty": "Selecciona palabras del documento y elige Comentario.",
+        "highlightedBy": "Resaltado por {name}",
+        "refusedNoText": "Esta página no tiene texto que marcar. Ejecuta primero el reconocimiento de texto del documento.",
+        "refusedNotFound": "Estas palabras no aparecen en el texto de la página. Vuelve a seleccionarlas.",
+        "refusedTooLong": "Este pasaje es demasiado largo para marcarlo. Selecciona uno más corto."
+      },
       "backToPeek": "Volver a la vista previa",
       "entitySidebar": "Detalles del documento",
       "evidence": "Prueba documental",
@@ -6653,10 +6670,12 @@
       "selectOperator": "Seleccionar operador",
       "setPromptPlaceholder": "Defina una instrucción para extraer la información",
       "singleSelect": "Selección única",
-      "sortAscending": "Orden ascendente",
       "sortAscendingDate": "Más antiguos primero",
-      "sortDescending": "Orden descendente",
+      "sortAscendingNumber": "Menor primero",
+      "sortAscendingText": "A → Z",
       "sortDescendingDate": "Más recientes primero",
+      "sortDescendingNumber": "Mayor primero",
+      "sortDescendingText": "Z → A",
       "splitOptions": "{count, plural, one {Dividir en # opción} other {Dividir en # opciones}}",
       "suggestWithAI": "Sugerir con IA",
       "text": "Texto",

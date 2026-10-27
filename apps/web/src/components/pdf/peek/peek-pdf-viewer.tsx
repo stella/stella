@@ -44,6 +44,7 @@ import { useDocxBlockScroll } from "@/components/docx/use-docx-block-scroll";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
+import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
 import { PageAnonymization } from "@/components/pdf/page-anonymization";
 import { PageCitation } from "@/components/pdf/page-citation";
 import { PdfSelectionActions } from "@/components/pdf/pdf-selection-actions";
@@ -314,6 +315,8 @@ const PeekPdfViewerContent = ({
     >
       <PdfSelectionActions
         chat={PDF_SELECTION_CHAT.fileChat}
+        entityId={entityId}
+        file={file}
         fileFieldId={fieldId}
         fileName={file.fileName}
         workspaceId={workspaceId}
@@ -722,6 +725,7 @@ const PeekPageOverlays = ({
         pageNumber={page.proxy.pageNumber}
         scale={page.viewport.scale}
       />
+      <DocumentMarkPageLayer pageId={pageId} />
     </>
   );
 };

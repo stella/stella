@@ -22,6 +22,17 @@ export const answerEditStates = CHAT_ANSWER_EDIT_STATES;
 
 export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 
+/** Composer states with a reference chip, each in a 300px-wide composer,
+ * keyed to the composer variant they render. */
+export const composerReferenceVariants = {
+  "compact-long": "compact",
+  "large-long": "large",
+  "compact-short": "compact",
+  "compact-token": "compact",
+} as const;
+
+export const composerReferenceStates = Object.keys(composerReferenceVariants);
+
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
@@ -35,6 +46,10 @@ export const visualRegistry = {
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
+  "chat-composer-reference": {
+    label: "Chat composer references",
+    layout: "plain",
+  },
   "chat-status": { label: "Chat status motion", layout: "plain" },
   "chat-continuation-error": {
     label: "Chat continuation recovery",

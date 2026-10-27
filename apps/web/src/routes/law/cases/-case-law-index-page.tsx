@@ -13,8 +13,8 @@ import { useTranslations } from "use-intl";
 import { namedDecisionsOf } from "@stll/api-contract/decision-query-intent";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
+  type DecisionSort,
   SEARCH_TOTAL_NOT_COUNTED,
-  type SearchSort,
 } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -48,7 +48,6 @@ import {
   CASE_LAW_FILTER_KEYS,
   clearedCaseLawFilters,
   decisionDateRange,
-  decisionSortOrder,
   isStrictSearch,
   STRICT_SEARCH_VALUE,
   validDecisionDate,
@@ -94,6 +93,10 @@ import {
   useDecisionBrowseFacets,
 } from "@/features/case-law/decision-filter-facets";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
+import {
+  decisionDateOrder,
+  decisionOrder,
+} from "@/features/case-law/decision-order.logic";
 import { useOpenDecisionInspector } from "@/features/case-law/decision-row-host";
 import {
   createDecisionFiltersFromSearch,
@@ -113,8 +116,9 @@ import { caseLawWarningSurfaces } from "@/features/case-law/search-warnings.logi
 import { useCaseLawRefine } from "@/features/case-law/use-case-law-refine";
 import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
+import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import {
   searchTiming,
@@ -243,7 +247,7 @@ export function PublicCaseLawIndex({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const uiLocale = useLocale();
+  const uiLocale = useMessageLocale();
   const search = Route.useSearch({
     select: ({
       country,
@@ -692,14 +696,23 @@ export function PublicCaseLawIndex({
   });
   const askScope = useCaseLawAskScope(countryParam);
 
-  // No sort control where no order applies: a browse listing is newest-first
-  // by definition, and an identifier lookup is answered by the identity path,
-  // which ranks by relevance whatever the URL asks for. Offering a choice the
-  // answer ignores would also mark the date column as sorted when it is not.
-  const sortable = intent.type === "text";
-  const sort: SearchSort | null = sortable
-    ? decisionSortOrder(search.sort)
-    : null;
+  // One resolution of the order for the whole page: the toolbar, the date
+  // header and the listing's heading all read it. No order applies to an
+  // identifier lookup, which the identity path ranks whatever the URL asks
+  // for; offering a choice the answer ignores would also mark the date column
+  // as sorted when it is not.
+  const order = decisionOrder(intent, search.sort);
+  const changeSort = (next: DecisionSort) => {
+    detached(
+      searchNavigation((previous) => ({ ...previous, sort: next })),
+      "cases.sort-navigate",
+    );
+  };
+  const dateOrder = decisionDateOrder({
+    order,
+    onSortChange: changeSort,
+    unavailableReason: t("caseLaw.sort.oldestUnavailable"),
+  });
 
   // The pane below claims the page's height, so on a normal viewport nothing
   // overflows here and the table owns the only scroll. The page scroller stays
@@ -760,19 +773,8 @@ export function PublicCaseLawIndex({
           layout={layout}
           onLayoutChange={setLayout}
           sort={
-            sort === null ? undefined : (
-              <DecisionSortControl
-                onSortChange={(next) => {
-                  detached(
-                    searchNavigation((previous) => ({
-                      ...previous,
-                      sort: next,
-                    })),
-                    "cases.sort-navigate",
-                  );
-                }}
-                sort={sort}
-              />
+            order.type === "identity" ? undefined : (
+              <DecisionSortControl onSortChange={changeSort} order={order} />
             )
           }
           summary={
@@ -782,8 +784,8 @@ export function PublicCaseLawIndex({
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
               <CaseLawResultsSummary
                 exactCount={exact.length}
-                intent={intent}
                 isRefreshing={isRefreshing}
+                order={order}
                 page={pager.currentPage}
                 relaxedHitCount={pageData?.relaxedHitCount}
                 total={searchTotal}
@@ -835,6 +837,7 @@ export function PublicCaseLawIndex({
         ) : (
           <>
             <DecisionTable
+              dateOrder={dateOrder}
               decisions={find.rows}
               emptyState={
                 intent.type === "text" ? (

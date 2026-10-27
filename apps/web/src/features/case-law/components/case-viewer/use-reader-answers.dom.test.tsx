@@ -1,7 +1,7 @@
 import type { PropsWithChildren } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { DetachedWindowAPI } from "happy-dom";
 
@@ -26,6 +26,8 @@ const { act, cleanup, fireEvent, render, renderHook, waitFor } =
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { IntlProvider: MessagesProvider } = await import("use-intl");
+const { default: csMessages } = await import("@/i18n/langs/cs.json");
 const { toSafeId } = await import("@/lib/safe-id");
 const { useReaderAnswers } = await import("./use-reader-answers");
 const {
@@ -88,9 +90,11 @@ const setup = () => {
     <StrictMode>
       <QueryClientProvider client={client}>
         <AuthenticatedUserProvider user={user}>
-          <FormattingProvider locale="cs" timeZone="UTC">
-            {children}
-          </FormattingProvider>
+          <MessagesProvider locale="cs" messages={csMessages} timeZone="UTC">
+            <FormattingProvider locale="cs" timeZone="UTC">
+              {children}
+            </FormattingProvider>
+          </MessagesProvider>
         </AuthenticatedUserProvider>
       </QueryClientProvider>
     </StrictMode>
@@ -461,7 +465,8 @@ test.each(["create", "follow-up", "regenerate"] as const)(
           onDelete={() => undefined}
           onVisibility={() => undefined}
           onCitation={() => undefined}
-          citationLabel={(citation) => citation.paragraphId}
+          citationTarget={() => ({ type: "unresolved" })}
+          language="en"
         />
       </IntlProvider>,
     );
@@ -596,11 +601,11 @@ test("selecting decision text and clicking Explain opens the persisted margin an
           activeAnnotation={null}
           activeSpans={[]}
           controller={{
-            create: async () => undefined,
+            create: async () => Result.ok(undefined),
             redo: async () => undefined,
-            remove: async () => undefined,
+            remove: async () => Result.ok(undefined),
             undo: async () => undefined,
-            update: async () => undefined,
+            update: async () => Result.ok(undefined),
           }}
           mode="authenticated"
           onClearActive={() => undefined}
@@ -655,7 +660,8 @@ test("selecting decision text and clicking Explain opens the persisted margin an
               void answers.setVisibility(answer.id, visibility);
             }}
             onCitation={() => undefined}
-            citationLabel={(citation) => citation.paragraphId}
+            citationTarget={() => ({ type: "unresolved" })}
+            language="en"
             busy={answers.busyAnswerIds.has(answer.id)}
           />
         ))}
@@ -731,7 +737,7 @@ test("selecting decision text and clicking Explain opens the persisted margin an
       decisionId: "decision-1",
       kind: "explain",
       anchor,
-      locale: "cs",
+      locale: "en",
     });
   } finally {
     testDocument.getSelection()?.removeAllRanges();
